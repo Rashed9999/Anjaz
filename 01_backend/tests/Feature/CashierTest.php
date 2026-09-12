@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\MerchantProduct;
 use App\Models\MerchantSale;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use App\Services\CashierService;
 use App\Services\MoneyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -97,6 +99,7 @@ class CashierTest extends TestCase
     public function daily_report_aggregates_by_method_and_outstanding_credit(): void
     {
         $this->svc->recordSale(merchant: $this->merchant, total: '1000', paymentMethod: 'cash');
+        $this->paidRequest('TX1', '500');
         $this->svc->recordSale(merchant: $this->merchant, total: '500', paymentMethod: 'amial_pay', paidTransactionId: 'TX1');
         $this->svc->recordSale(merchant: $this->merchant, total: '700', paymentMethod: 'credit', customer: ['name' => 'x', 'phone' => '+967700100002']);
 
@@ -207,5 +210,57 @@ class CashierTest extends TestCase
 
         // ربط ثانٍ لا يجد بيعاً معلّقاً → null بأمان
         $this->assertNull($this->svc->linkPayment($sale->sale_ulid, 'TX-000', $this->merchant->id));
+    }
+
+    /** @test */
+    public function amial_pay_reference_must_be_a_paid_qr_for_the_same_merchant_and_amount(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('مرجع أميال باي غير صالح');
+
+        $this->svc->recordSale(
+            merchant: $this->merchant,
+            total: '500',
+            paymentMethod: 'amial_pay',
+            paidTransactionId: 'FAKE-REFERENCE',
+        );
+    }
+
+    /** @test */
+    public function a_paid_qr_reference_cannot_be_used_twice(): void
+    {
+        $this->paidRequest('TX-ONE-USE', '500');
+
+        $this->svc->recordSale(
+            merchant: $this->merchant,
+            total: '500',
+            paymentMethod: 'amial_pay',
+            paidTransactionId: 'TX-ONE-USE',
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('تم استخدام رمز الدفع هذا');
+        $this->svc->recordSale(
+            merchant: $this->merchant,
+            total: '500',
+            paymentMethod: 'amial_pay',
+            paidTransactionId: 'TX-ONE-USE',
+        );
+    }
+
+    private function paidRequest(string $transactionId, string $amount): PaymentRequest
+    {
+        return PaymentRequest::create([
+            'request_ulid' => (string) Str::ulid(),
+            'short_code' => strtoupper(Str::random(8)),
+            'requester_user_id' => $this->merchant->id,
+            'amount' => MoneyService::normalize($amount),
+            'share_method' => PaymentRequest::SHARE_QR,
+            'status' => 'paid',
+            'paid_transaction_id' => $transactionId,
+            'paid_at' => now(),
+            'expires_at' => now()->addDay(),
+            'zone_code' => 'SOUTH',
+        ]);
     }
 }

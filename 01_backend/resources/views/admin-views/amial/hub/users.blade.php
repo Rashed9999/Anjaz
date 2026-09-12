@@ -109,52 +109,99 @@
 
 {{-- ===== Modal: إضافة مستخدم ===== --}}
 <div class="modal fade" id="modal-add" tabindex="-1">
-    <div class="modal-dialog"><div class="modal-content">
-        <div class="modal-header"><h5 class="modal-title">إضافة حساب جديد</h5>
+    <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+        <div class="modal-header"><div><h5 class="modal-title mb-1">ملف فتح {{ $hubType == 3 ? 'منشأة' : ($hubType == 1 ? 'وكيل' : 'عميل') }}</h5>
+            <small class="text-muted">نموذج واحد: تُحفظ البيانات في الحساب ونسخة إلكترونية قابلة للطباعة في الأرشيف.</small></div>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body">
-            <div class="mb-2"><label class="form-label">الاسم الأول</label>
-                <input class="form-control" id="add-fname"></div>
-            <div class="mb-2"><label class="form-label">الاسم الأخير</label>
-                <input class="form-control" id="add-lname"></div>
-            <div class="mb-2"><label class="form-label">الهاتف</label>
-                <input class="form-control" id="add-phone" dir="ltr" placeholder="9677xxxxxxxx"></div>
-            <div class="mb-2"><label class="form-label">كلمة السر (8+ أحرف)</label>
-                <input class="form-control" id="add-password" dir="ltr"></div>
-            <div class="mb-2"><label class="form-label">رمز PIN للمعاملات (4 أرقام — الافتراضي 1234)</label>
-                <input class="form-control" id="add-pin" dir="ltr" maxlength="4" placeholder="1234"></div>
+        <form class="modal-body" id="opening-dossier-form" enctype="multipart/form-data">
+            <div class="alert alert-warning small py-2">الحساب يُنشأ <strong>قيد مراجعة الامتثال</strong>، ولا تُعدّ الورقة الموقعة أو إدخال الموظف تحققاً من ملكية الهاتف. لا تُحفظ كلمة السر أو PIN في الأرشيف.</div>
+            <div class="accordion" id="opening-dossier-sections">
+                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#opening-owner">1. صاحب الحساب والاتصال</button></h2>
+                    <div id="opening-owner" class="accordion-collapse collapse show"><div class="accordion-body"><div class="row g-3">
+                        <div class="col-md-4"><label class="form-label">الاسم الأول *</label><input class="form-control" name="f_name" required></div>
+                        <div class="col-md-4"><label class="form-label">اسم الأب</label><input class="form-control" name="father_name"></div>
+                        <div class="col-md-4"><label class="form-label">الاسم الأخير *</label><input class="form-control" name="l_name" required></div>
+                        <div class="col-md-6"><label class="form-label">الاسم بالإنجليزية</label><input class="form-control" name="name_en" dir="ltr"></div>
+                        <div class="col-md-3"><label class="form-label">الجنس *</label><select class="form-select" name="gender" required><option value="">اختر</option><option value="male">ذكر</option><option value="female">أنثى</option><option value="other">آخر</option></select></div>
+                        <div class="col-md-3"><label class="form-label">تاريخ الميلاد *</label><input class="form-control" name="date_of_birth" type="date" required></div>
+                        <div class="col-md-3"><label class="form-label">مفتاح الدولة *</label><input class="form-control" name="dial_country_code" value="+967" dir="ltr" required></div>
+                        <div class="col-md-4"><label class="form-label">رقم الجوال *</label><input class="form-control" name="phone" dir="ltr" placeholder="771234567" required></div>
+                        <div class="col-md-5"><label class="form-label">البريد الإلكتروني</label><input class="form-control" name="email" type="email" dir="ltr"></div>
+                    </div></div></div></div>
+                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-identity">2. الهوية والعنوان</button></h2>
+                    <div id="opening-identity" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3">
+                        <div class="col-md-3"><label class="form-label">نوع الهوية *</label><select class="form-select" name="identification_type" required><option value="">اختر</option><option value="nid">بطاقة شخصية</option><option value="passport">جواز سفر</option><option value="driving_licence">رخصة قيادة</option><option value="trade_license">ترخيص تجاري</option></select></div>
+                        <div class="col-md-3"><label class="form-label">رقم الهوية *</label><input class="form-control" name="identification_number" required></div>
+                        <div class="col-md-3"><label class="form-label">تاريخ الإصدار</label><input class="form-control" name="identification_issue_date" type="date"></div>
+                        <div class="col-md-3"><label class="form-label">تاريخ الانتهاء</label><input class="form-control" name="identification_expiry_date" type="date"></div>
+                        <div class="col-md-4"><label class="form-label">مكان الإصدار</label><input class="form-control" name="id_place_of_issue"></div>
+                        <div class="col-md-4"><label class="form-label">بلد الميلاد</label><input class="form-control" name="country_of_birth" value="اليمن"></div>
+                        <div class="col-md-4"><label class="form-label">الحالة الاجتماعية</label><select class="form-select" name="marital_status"><option value="">غير محدد</option><option value="single">أعزب</option><option value="married">متزوج</option><option value="divorced">مطلق</option><option value="widowed">أرمل</option></select></div>
+                        <div class="col-md-6"><label class="form-label">العنوان التفصيلي *</label><input class="form-control" name="address" required></div>
+                        <div class="col-md-3"><label class="form-label">محافظة السكن</label><select class="form-select" name="residence_governorate"><option value="">اختر</option>@foreach(\App\Support\YemenGovernorates::all() as $governorate)<option value="{{ $governorate['code'] }}">{{ $governorate['name'] }}</option>@endforeach</select></div>
+                        <div class="col-md-3"><label class="form-label">المديرية *</label><input class="form-control" name="residence_district" required></div>
+                        <div class="col-md-6"><label class="form-label">المنطقة / الحي</label><input class="form-control" name="residence_area"></div>
+                        <div class="col-md-6"><label class="form-label">علامة مميزة</label><input class="form-control" name="residence_landmark"></div>
+                        <div class="col-md-3"><label class="form-label">وجه الهوية *</label><input class="form-control" name="identity_front" type="file" accept="image/*,application/pdf" required></div>
+                        <div class="col-md-3"><label class="form-label">ظهر الهوية *</label><input class="form-control" name="identity_back" type="file" accept="image/*,application/pdf" required></div>
+                        <div class="col-md-3"><label class="form-label">صورة شخصية *</label><input class="form-control" name="selfie" type="file" accept="image/*" required></div>
+                        <div class="col-md-3"><label class="form-label">إثبات العنوان</label><input class="form-control" name="address_proof" type="file" accept="image/*,application/pdf"></div>
+                    </div></div></div></div>
+                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-financial">3. العمل والامتثال والمراجع</button></h2>
+                    <div id="opening-financial" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3">
+                        <div class="col-md-4"><label class="form-label">المهنة</label><input class="form-control" name="occupation"></div><div class="col-md-4"><label class="form-label">جهة العمل</label><input class="form-control" name="employer_name"></div><div class="col-md-4"><label class="form-label">المسمى الوظيفي</label><input class="form-control" name="job_title"></div>
+                        <div class="col-md-6"><label class="form-label">عنوان العمل</label><input class="form-control" name="work_address"></div>
+                        <div class="col-md-3"><label class="form-label">مصدر الدخل *</label><select class="form-select" name="income_source" required><option value="">اختر</option><option value="salary">راتب</option><option value="business">تجارة</option><option value="remittance">حوالات</option><option value="investment">استثمار</option><option value="rent">إيجار</option><option value="other">أخرى</option></select></div>
+                        <div class="col-md-3"><label class="form-label">الغرض من الحساب *</label><select class="form-select" name="account_purpose" required><option value="">اختر</option><option value="payments">مدفوعات</option><option value="remittance">حوالات</option><option value="business">تجارة</option><option value="savings">ادخار</option><option value="salary">راتب</option><option value="other">أخرى</option></select></div>
+                        <div class="col-md-4"><label class="form-label">الدخل الشهري</label><input class="form-control" name="monthly_income" type="number" min="0"></div><div class="col-md-2"><label class="form-label">العملة</label><input class="form-control" name="monthly_income_currency" value="YER" maxlength="3" dir="ltr"></div>
+                        <div class="col-md-3"><label class="form-label">شخص سياسي بارز؟ *</label><select class="form-select" name="is_pep" required><option value="">اختر</option><option value="0">لا</option><option value="1">نعم</option></select></div><div class="col-md-9"><label class="form-label">المنصب أو الصلة (إن وجدت)</label><input class="form-control" name="pep_position"></div>
+                        <div class="col-md-4"><label class="form-label">مرجع أول: الاسم</label><input class="form-control" name="kin_name"></div><div class="col-md-4"><label class="form-label">جوال المرجع</label><input class="form-control" name="kin_phone" dir="ltr"></div><div class="col-md-4"><label class="form-label">الصلة</label><input class="form-control" name="kin_relation"></div>
+                        <div class="col-md-4"><label class="form-label">مرجع ثانٍ: الاسم</label><input class="form-control" name="kin2_name"></div><div class="col-md-4"><label class="form-label">جوال المرجع</label><input class="form-control" name="kin2_phone" dir="ltr"></div><div class="col-md-4"><label class="form-label">الصلة</label><input class="form-control" name="kin2_relation"></div>
+                    </div></div></div></div>
+                @if($hubType == 3)
+                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-business">4. هوية المنشأة</button></h2>
+                    <div id="opening-business" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3">
+                        <div class="col-md-6"><label class="form-label">اسم المنشأة / المتجر *</label><input class="form-control" name="store_name" required></div>
+                        <div class="col-md-3"><label class="form-label">نوع النشاط *</label>{{-- AMIAL-VERTICAL-OOP-004 — **القائمةُ تُولَّد من مصدر الأسماء.**
 
-            @if($hubType == 3)
-            {{-- حقول التاجر: تفتح لوحة القطاع الصحيحة والباقة في التطبيق --}}
-            <div class="mb-2"><label class="form-label">اسم المتجر</label>
-                <input class="form-control" id="add-store"></div>
-            <div class="mb-2"><label class="form-label">نوع النشاط</label>
-                <select class="form-select" id="add-biz">
-                    <option value="retail">بقالة / سوبرماركت</option>
-                    <option value="quick_sale">بيع سريع (بسطة/خضار/أسماك)</option>
-                    <option value="fuel">محطة وقود</option>
-                    <option value="pharmacy">صيدلية</option>
-                    <option value="wholesale">جملة</option>
-                    <option value="restaurant">مطعم</option>
-                </select></div>
-            <div class="mb-2"><label class="form-label">الباقة</label>
-                <select class="form-select" id="add-plan">
-                    <option value="free">مجاني</option>
-                    <option value="starter">البداية</option>
-                    <option value="business">الأعمال</option>
-                    <option value="merchant_pro">تاجر محترف</option>
-                    <option value="enterprise">مؤسسة</option>
-                </select></div>
-            @endif
+                                 كانت ستّةَ خياراتٍ مكتوبةً بيدها، وهجاؤها
+                                 يخالف ما تعرضه اللوحاتُ الأخرى («محطة وقود»
+                                 هنا و«محطّة وقود» في ٣٦٠). **فالتاجرُ يُنشَأ
+                                 باسمٍ ويُعرَض بآخر.** والأخطرُ أنّ قطاعاً
+                                 يُضاف في الشيفرة لا يظهر هنا أبداً: يُنشئه
+                                 المديرُ فلا يجده في القائمة. --}}
+                            <select class="form-select" name="business_type" required><option value="">اختر</option>@foreach(\App\Domain\Verticals\VerticalRegistry::labels() as $bizCode => $bizLabel)<option value="{{ $bizCode }}">{{ $bizLabel }}</option>@endforeach</select></div>
+                        <div class="col-md-3"><label class="form-label">الباقة</label><select class="form-select" name="plan"><option value="free">مجاني — 0 ر.س</option><option value="business">الأعمال — 35 ر.س</option><option value="enterprise">مؤسسة — 99 ر.س</option></select></div>
+                        <div class="col-md-4"><label class="form-label">رقم السجل / الترخيص *</label><input class="form-control" name="business_registration_number" required></div><div class="col-md-4"><label class="form-label">الشكل القانوني</label><input class="form-control" name="business_legal_form" placeholder="مؤسسة فردية، شركة…"></div><div class="col-md-4"><label class="form-label">فئة النشاط</label><input class="form-control" name="business_category"></div>
+                        <div class="col-md-6"><label class="form-label">المفوض بالتوقيع *</label><input class="form-control" name="authorized_signatory_name" required></div><div class="col-md-6"><label class="form-label">هوية المفوض *</label><input class="form-control" name="authorized_signatory_id" required></div>
+                    </div></div></div></div>
+                @endif
+                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-consent">{{ $hubType == 3 ? '5' : '4' }}. الإقرار والأرشفة</button></h2>
+                    <div id="opening-consent" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3"><div class="col-md-6"><label class="form-label">نسخة النموذج الورقي الموقّع (اختياري)</label><input class="form-control" name="signed_paper_form" type="file" accept="application/pdf,image/jpeg,image/png"><small class="text-muted">PDF أو JPG/PNG حتى 8MB. تُشفّر النسخة وتُربط بهذا الملف.</small></div><div class="col-md-6"><label class="form-label">بيانات الدخول الأولية</label><input class="form-control mb-2" name="password" type="password" minlength="8" placeholder="كلمة سر مؤقتة (8 أحرف على الأقل)" required dir="ltr"><input class="form-control" name="pin" inputmode="numeric" maxlength="4" placeholder="PIN معاملات من 4 أرقام (اختياري)" dir="ltr"></div><div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="declaration_accepted" value="1" id="declaration-accepted" required><label class="form-check-label" for="declaration-accepted">أقرّ بأن البيانات قُدّمت من صاحبها أو مفوضه، وبأنه اطّلع على الموافقات المطلوبة. ستُراجع الهوية والهاتف قبل اعتماد الحساب.</label></div></div></div></div></div>
+            </div>
+            {{-- ══════════════════════════════════════════════════════════
+                 AMIAL-HUB-MODAL-NEST-001 — **`</div>` واحدٌ كان ناقصاً،
+                 وبه ماتت ثلاثُ نوافذَ في ثلاث صفحات.**
 
-            <div class="alert alert-info small py-2">
-                الحساب يُنشأ جاهزاً للدخول من التطبيق فوراً: الهاتف + كلمة السر أعلاه،
-                وPIN المعاملات المدخل، والتوثيق معتمد تلقائياً.
+                 `<div class="accordion" id="opening-dossier-sections">`
+                 فُتح ولم يُغلَق، فابتلع `#modal-add` كلَّ ما بعده:
+                 `#modal-transfer` و`#modal-edit` و`#modal-tx` صارت
+                 **أبناءً له**. وهو `display:none` ما لم يُفتَح، والابنُ
+                 تحت أبٍ مخفيٍّ لا يُرسَم مهما فُتح.
+
+                 فتُضغط «✏️ تعديل» فتُضاف `.show` إلى عنصرٍ **مقاسُه
+                 صفرٌ في صفر** — لا نافذةَ ولا زرَّ حفظٍ ولا خطأ في أيّ
+                 سجلّ. وهو ما وصل بنصّه: «جرّبتهم لا يعملو».
+
+                 وقِيس في متصفّحٍ حقيقيّ:
+                   #modal-edit → أبوه #modal-add · العرض ٠ · الارتفاع ٠
+                   بين الافتتاحين: <div>=٨٢ و</div>=٨١ — الفرقُ واحد.
+            ══════════════════════════════════════════════════════════ --}}
             </div>
             <div class="text-danger small" id="add-error"></div>
-        </div>
+        </form>
         <div class="modal-footer">
-            <button class="btn btn-primary" id="add-submit">إنشاء الحساب</button>
+            <button class="btn btn-primary" id="add-submit">حفظ ملف الفتح وإنشاء الحساب</button>
         </div>
     </div></div>
 </div>
@@ -174,6 +221,149 @@
         </div>
         <div class="modal-footer">
             <button class="btn btn-primary" id="transfer-submit">تنفيذ التحويل</button>
+        </div>
+    </div></div>
+</div>
+
+{{-- ═══════════════════════════════════════════════════════════════════
+     AMIAL-ADMIN-EDIT-001 — **نافذةُ تعديل الحساب وفكِّه.**
+
+     الثمنُ بنصّ صاحب المشروع: «دخلتُ للحساب من لوحة الأدمن أردتُ رفعَ
+     مستنداتٍ من أجل يعمل — لا طريقة للرفع … أنني أصرخُ من شهر يجب
+     إضافة زرّ لتعديل حساب المستخدم».
+
+     **وثلاثةُ أقسامٍ بترتيب المعالجة لا بترتيب الجداول:**
+       ① ما ينقص — يُقرأ أوّلاً، فمن لا يعرف الناقصَ يجرّب ويعيد.
+       ② الوثائق — رفعٌ واعتمادٌ في موضعٍ واحد.
+       ③ البيانات — وفيها محافظةُ السكن، وهي **الغموضُ بعينه**:
+          بدونها يُعتمد الحسابُ ويبقى غيرَ مستقبِل.
+     ══════════════════════════════════════════════════════════════════ --}}
+<div class="modal fade" id="modal-edit" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="edit-title">تعديل الحساب</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div id="edit-loading" class="text-muted py-3">جارٍ قراءة حالة الحساب…</div>
+
+            <div id="edit-body" class="d-none">
+                {{-- ① ما ينقص --}}
+                <div class="mb-4">
+                    <h6 class="fw-bold mb-2">ما ينقص هذا الحساب ليعمل</h6>
+                    <div id="edit-blockers"></div>
+                </div>
+
+                {{-- ② الوثائق --}}
+                <div class="mb-4">
+                    <h6 class="fw-bold mb-2">وثائق الهويّة</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead class="table-light"><tr>
+                                <th>الوثيقة</th><th>الحالة</th><th class="text-end">الاعتماد</th>
+                            </tr></thead>
+                            <tbody id="edit-docs"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="row g-2 align-items-end">
+                        <div class="col-sm-5">
+                            <label class="form-label small">نوع الوثيقة</label>
+                            <select class="form-select form-select-sm" id="edit-doc-type"></select>
+                        </div>
+                        <div class="col-sm-5">
+                            <label class="form-label small">الملفّ (صورة أو PDF — حتّى 8 ميجا)</label>
+                            <input class="form-control form-control-sm" id="edit-doc-file" type="file"
+                                   accept="image/*,application/pdf">
+                        </div>
+                        <div class="col-sm-2 d-grid">
+                            <button class="btn btn-sm btn-outline-primary" id="edit-doc-upload">رفع</button>
+                        </div>
+                    </div>
+                    <div class="form-text">
+                        الرفعُ لا يعتمد. المستندُ يُراجَع ويُعتمد قراراً منفصلاً — وهو ما يمنع
+                        توثيقَ حسابٍ بضغطةٍ واحدة.
+                    </div>
+                </div>
+
+                {{-- ③ البيانات --}}
+                <div>
+                    <h6 class="fw-bold mb-2">بيانات الحساب</h6>
+                    <div class="row g-2">
+                        <div class="col-sm-6">
+                            <label class="form-label small">الاسم الأوّل</label>
+                            <input class="form-control form-control-sm" id="ed-f_name">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small">اسم العائلة</label>
+                            <input class="form-control form-control-sm" id="ed-l_name">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">الاسم بالإنجليزيّة</label>
+                            <input class="form-control form-control-sm" id="ed-name_en" dir="ltr">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">اسم الأب</label>
+                            <input class="form-control form-control-sm" id="ed-father_name">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">اسم الجدّ</label>
+                            <input class="form-control form-control-sm" id="ed-grandfather_name">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small">محافظة السكن</label>
+                            <select class="form-select form-select-sm" id="ed-residence_governorate"></select>
+                            <div class="form-text" id="edit-zone-hint"></div>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small">المديريّة</label>
+                            <input class="form-control form-control-sm" id="ed-residence_district">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small">الحيّ / المنطقة</label>
+                            <input class="form-control form-control-sm" id="ed-residence_area">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small">أقرب معلَم</label>
+                            <input class="form-control form-control-sm" id="ed-residence_landmark">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">المهنة</label>
+                            <input class="form-control form-control-sm" id="ed-occupation">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">الجنس</label>
+                            <select class="form-select form-select-sm" id="ed-gender">
+                                <option value="">—</option>
+                                <option value="male">ذكر</option>
+                                <option value="female">أنثى</option>
+                            </select>
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">مصدر الدخل</label>
+                            <select class="form-select form-select-sm" id="ed-income_source"></select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">الغرض من فتح الحساب</label>
+                            <select class="form-select form-select-sm" id="ed-account_purpose"></select>
+                        </div>
+                    </div>
+
+                    {{-- الهاتفُ يُعرَض ولا يُعدَّل — وسببُه مكتوبٌ لا مسكوتٌ عنه. --}}
+                    <div class="alert alert-secondary small mt-3 mb-0">
+                        <strong>الهاتف:</strong> <span dir="ltr" id="edit-phone"></span> —
+                        لا يُعدَّل من هنا. هو مفتاحُ الدخول ومعرّفُ التحويل، وتغييرُه يُسلّم
+                        حساباً بتاريخه الماليّ لشخصٍ آخر. وله مسارُه الخاصّ بموافقةٍ وسجلّ.
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-danger small mt-2" id="edit-error"></div>
+            <div class="text-success small mt-2" id="edit-ok"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline-success" id="edit-approve-account">اعتماد الحساب</button>
+            <button class="btn btn-primary" id="edit-save">حفظ البيانات</button>
         </div>
     </div></div>
 </div>
@@ -387,6 +577,8 @@
                 <td>${u.is_active ? '<span class="badge bg-success">نشِط</span>' : '<span class="badge bg-danger">مجمَّد</span>'}</td>
                 <td class="text-nowrap">
                     <button class="btn btn-sm btn-primary" data-act="open" data-id="${u.id}">التفاصيل</button>
+                    <button class="btn btn-sm btn-outline-secondary" data-act="edit"
+                            data-id="${u.id}" data-name="${esc(u.name)}">✏️ تعديل</button>
                     ${isMerchants ? centerMenu(u) : ''}
                     ${isAgents ? networkMenu(u) : ''}
                     ${transferControl(u)}
@@ -447,8 +639,37 @@
         }
 
         const btn = e.target.closest('button[data-act]');
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-HUB-ROW-SWALLOW-001 — **«تظهر قائمة و تختفي».**
+        //
+        // **الثمنُ الذي دُفع، بنصّ صاحب المشروع:** «ضغطت على فتح المركز
+        // تظهر قائمة و تختفي لا أعلم ما هي».
+        //
+        // **وقِيس في متصفّحٍ حقيقيّ** (‏Playwright على الصفحة المُصيَّرة):
+        // الضغطُ على سهم «فتح المركز» **ينتقل إلى `/hub/account/7`** بدل
+        // أن يفتح القائمة. فتفتحها Bootstrap لجزءٍ من ثانية ثمّ تذهب
+        // الصفحةُ كلُّها — وهو بالضبط «تظهر وتختفي».
+        //
+        // **والسبب:** زرُّ السهم `dropdown-toggle-split` **بلا
+        // `data-act`**، و`closest` تصعد إلى الأجداد لا إلى الإخوة —
+        // فلا تجد زرَّ «فتح المركز» المجاور، فيصير `btn = null`،
+        // فيلتقط الصفُّ (`tr[data-act="open"]`) الضغطةَ وينقل.
+        //
+        // **وهي المرّةُ الثالثة لهذا النمط في هذا الملفّ** (القاعدة
+        // التاسعة: زرٌّ لم يُضغط ليس مبنيّاً — وقياسُ ما بعد الضغطة «أين
+        // ذهبت» لا «هل ظهر خطأ»). وقد عولجت مرّتين **بإضافة اسمٍ إلى
+        // قائمةٍ مكتوبة** — فعادت مع أوّل عنصرٍ جديد.
+        //
+        // **فالحدُّ الآن على الصنف لا على الأسماء:** أيُّ عنصرٍ تفاعليٍّ
+        // يُحسم قبل الصفّ، فلا يبتلع الصفُّ ضغطةً على زرٍّ أو رابطٍ أو
+        // مطواةٍ تُضاف غداً.
+        // ══════════════════════════════════════════════════════════════
+        const interactive = e.target.closest(
+            'button, a, input, select, textarea, label, [data-bs-toggle]');
+
         // فتح صفحة التفاصيل: زر «التفاصيل»، أو الضغط على الصفّ خارج الأزرار
-        const row = btn ? null : e.target.closest('tr[data-act="open"]');
+        const row = interactive ? null : e.target.closest('tr[data-act="open"]');
         // AMIAL-MERCHANT-CENTER-001 — **«فتح المركز» غيرُ «التفاصيل»**:
         // التفاصيل ملفُّ حسابٍ لأيّ دور، والمركزُ لوحةُ تاجرٍ كاملةً بأقسامها
         // الإحدى عشرة وأفعالها. ويُحسم قبل الصفّ لئلّا يبتلع الصفُّ الضغطة.
@@ -469,6 +690,9 @@
                 const j = await post(`${base}/users/${id}/toggle-active`, {reason});
                 alert(j.message); loadUsers();
             } catch (err) { alert(err.message); }
+
+        } else if (btn.dataset.act === 'edit') {
+            openEdit(id, btn.dataset.name);
 
         } else if (btn.dataset.act === 'transfer') {
             transferUserId = id;
@@ -498,6 +722,230 @@
         }
     });
 
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-ADMIN-EDIT-001 — نافذةُ التعديل: تُقرأ الحالةُ ثمّ يُفعَل.
+    //
+    // **ولا تُعاد رسمُ الحقول من قيمٍ محلّيّة بعد كلّ فعل** — تُعاد
+    // القراءةُ من الخادم: رفعُ وثيقةٍ يغيّر «ما ينقص»، واعتمادُها
+    // يغيّره، وحفظُ المحافظة يغيّر المنطقةَ المتوقَّعة. فشاشةٌ تُحدّث
+    // نفسَها بالتخمين تقول «تمّ» على ما لم يتمّ.
+    // ══════════════════════════════════════════════════════════════════
+    let editUserId = null;
+    let editFields = [];
+
+    const ZONE_LABELS = {
+        SOUTH: 'داخل نطاق الخدمة', NORTH: 'خارج نطاق الخدمة',
+        MIDDLE: 'خارج نطاق الخدمة', OTHER: 'خارج نطاق الخدمة',
+        UNKNOWN: 'غير معروفة',
+    };
+
+    // **والرمزُ بلا ترجمةٍ يُعرَض خاماً ولا يُخترَع له معنى** — ترجمةٌ
+    // مخترَعةٌ في ملفّ امتثالٍ تُمرّر القارئَ واثقاً من معنىً لم يقصده أحد.
+    const INCOME_LABELS = {
+        salary: 'راتب', business: 'تجارة', investment: 'استثمار',
+        rent: 'إيجارات', asset_sale: 'بيع أصول', inheritance: 'ميراث',
+        remittance: 'حوالات', other: 'أخرى',
+    };
+    const PURPOSE_LABELS = {
+        savings: 'ادّخار', salary: 'استلام راتب', business: 'أعمال',
+        remittance: 'حوالات', payments: 'مدفوعات', other: 'أخرى',
+    };
+
+    function fillOptions(elId, values, labels) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        el.innerHTML = '<option value="">— لم يُحدَّد —</option>'
+            + (values || []).map(v =>
+                `<option value="${esc(v)}">${esc(labels[v] || v)}</option>`).join('');
+    }
+
+    function openEdit(id, name) {
+        editUserId = id;
+        document.getElementById('edit-title').textContent = `تعديل الحساب — ${name || '#' + id}`;
+        document.getElementById('edit-error').textContent = '';
+        document.getElementById('edit-ok').textContent = '';
+        document.getElementById('edit-loading').classList.remove('d-none');
+        document.getElementById('edit-body').classList.add('d-none');
+        new bootstrap.Modal('#modal-edit').show();
+        loadEdit();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-HUB-EDIT-SILENT-001 — **نافذةٌ تُفتح ولا تمتلئ تُقرأ «لم تُفتح».**
+    //
+    // **الثمنُ الذي دُفع:** قال صاحبُ المشروع «تعديل لم يفتح». وقِيس في
+    // متصفّحٍ حقيقيّ فإذا النافذةُ **تُفتح** — لكنّها تبقى على «جارٍ قراءة
+    // حالة الحساب…» إن سقط أيُّ سطرٍ في التعبئة.
+    //
+    // فهذه دالّةٌ غيرُ متزامنةٍ تُنادى بلا `await` ولا `catch`: أيُّ حقلٍ
+    // ناقصٍ في الردّ (‏`d.documents` مثلاً) يرمي، **والاستثناءُ يضيع في
+    // وعدٍ لا يمسكه أحد** — فلا رسالةَ ولا سجلَّ ولا أثر. والمستعمل يرى
+    // مستطيلاً رمادياً إلى الأبد ويقول «لم تُفتح»، وهو محقّ.
+    //
+    // **وصمتٌ في وجه المستعمل أسوأ من خطأٍ مكتوب**: الخطأُ يُوقفه ليسأل،
+    // والصمتُ يُرسله يبحث عن عطلٍ في مكانٍ آخر — أو يعيد الضغطَ عشراً.
+    // ══════════════════════════════════════════════════════════════════
+    async function loadEdit() {
+        try {
+            await loadEditInner();
+        } catch (err) {
+            document.getElementById('edit-loading').classList.add('d-none');
+            document.getElementById('edit-error').textContent =
+                'تعذّرت قراءةُ بيانات الحساب: ' + (err && err.message ? err.message : err);
+        }
+    }
+
+    async function loadEditInner() {
+        const r = await fetch(`${base}/users/${editUserId}/readiness.json`,
+            {headers: {'Accept': 'application/json'}});
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            document.getElementById('edit-loading').classList.add('d-none');
+            document.getElementById('edit-error').textContent = j.message || ('خطأ ' + r.status);
+            return;
+        }
+        const d = j.data;
+
+        // ① ما ينقص
+        const blockers = document.getElementById('edit-blockers');
+        blockers.innerHTML = d.can_receive
+            ? '<div class="alert alert-success py-2 mb-0 small">لا يمنعُ هذا الحسابَ شيء — '
+              + 'موثَّقٌ وداخلَ النطاق ونشِط، ويستقبل التحويلات.</div>'
+            : '<ul class="list-group list-group-flush small">'
+              + d.blockers.map(b =>
+                  `<li class="list-group-item px-0 py-1">⛔ ${esc(b.text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</li>`
+                ).join('') + '</ul>';
+
+        // ② الوثائق
+        document.getElementById('edit-docs').innerHTML = d.documents.map(doc => `
+            <tr>
+                <td>${esc(doc.label)}</td>
+                <td>${doc.usable
+                    ? `<span class="badge bg-success">${esc(doc.status_label)}</span>`
+                    : `<span class="badge bg-${doc.id ? 'warning text-dark' : 'secondary'}">${esc(doc.status_label)}</span>`}</td>
+                <td class="text-end">${doc.id && !doc.usable
+                    ? `<button class="btn btn-sm btn-outline-success" data-doc-approve="${doc.id}">اعتماد</button>`
+                    : (doc.id ? '' : '<span class="text-muted small">—</span>')}</td>
+            </tr>`).join('');
+
+        const typeSel = document.getElementById('edit-doc-type');
+        typeSel.innerHTML = d.doc_types.map(t =>
+            `<option value="${esc(t.value)}">${esc(t.label)}</option>`).join('');
+
+        // ③ البيانات
+        //
+        // **والحقولُ تُرسَم ممّا وصل لا ممّا كُتب في الشاشة.** حقلٌ يُحذف
+        // من الخادم ويبقى مرسوماً هنا يقرأ `null.value` فيموت المعالجُ
+        // صامتاً — تُضغط الأزرارُ ولا يحدث شيء. (القاعدة التاسعة.)
+        const p = d.profile;
+        editFields = Object.keys(p);
+
+        fillOptions('ed-income_source', d.income_sources, INCOME_LABELS);
+        fillOptions('ed-account_purpose', d.account_purposes, PURPOSE_LABELS);
+
+        for (const k of Object.keys(p)) {
+            const el = document.getElementById('ed-' + k);
+            if (el && k !== 'residence_governorate') el.value = p[k] ?? '';
+        }
+
+        // **والمحافظةُ ومعها منطقتُها** — فمن اختار شمالاً يعرف قبل الحفظ
+        // أنّ الحسابَ لن يستقبل، ولا يظنّ العطلَ في مكانٍ آخر.
+        const gov = document.getElementById('ed-residence_governorate');
+        gov.innerHTML = '<option value="">— لم تُحدَّد —</option>'
+            + d.governorates.map(g =>
+                `<option value="${esc(g.code)}" data-zone="${esc(g.zone)}"
+                    ${g.code === p.residence_governorate ? 'selected' : ''}>${esc(g.name)}</option>`
+              ).join('');
+        gov.onchange = showZoneHint;
+        showZoneHint();
+
+        document.getElementById('edit-phone').textContent = d.phone || '';
+        document.getElementById('edit-approve-account').disabled = d.kyc === 1;
+        document.getElementById('edit-loading').classList.add('d-none');
+        document.getElementById('edit-body').classList.remove('d-none');
+    }
+
+    function showZoneHint() {
+        const sel = document.getElementById('ed-residence_governorate');
+        const zone = sel.selectedOptions[0]?.dataset.zone || 'UNKNOWN';
+        const hint = document.getElementById('edit-zone-hint');
+        hint.textContent = sel.value
+            ? `المنطقة المشتقّة: ${ZONE_LABELS[zone] || zone}`
+            : 'بلا محافظةٍ يبقى الحسابُ خارجَ النطاق ولو اعتُمدت وثائقُه.';
+        hint.className = 'form-text ' + (zone === 'SOUTH' ? 'text-success' : 'text-danger');
+    }
+
+    document.getElementById('edit-docs').addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-doc-approve]');
+        if (!btn) return;
+        document.getElementById('edit-error').textContent = '';
+        document.getElementById('edit-ok').textContent = '';
+        try {
+            const j = await post(
+                `{{ url('admin/amial/kyc') }}/documents/${btn.dataset.docApprove}/approve`, {});
+            document.getElementById('edit-ok').textContent = j.message || 'اعتُمد المستند';
+            await loadEdit(); loadUsers();
+        } catch (err) { document.getElementById('edit-error').textContent = err.message; }
+    });
+
+    document.getElementById('edit-doc-upload').addEventListener('click', async () => {
+        const errEl = document.getElementById('edit-error');
+        const okEl = document.getElementById('edit-ok');
+        errEl.textContent = ''; okEl.textContent = '';
+
+        const fileInput = document.getElementById('edit-doc-file');
+        if (!fileInput.files.length) { errEl.textContent = 'اختر ملفّاً أوّلاً'; return; }
+
+        const form = new FormData();
+        form.append('doc_type', document.getElementById('edit-doc-type').value);
+        form.append('file', fileInput.files[0]);
+
+        try {
+            const r = await fetch(`${base}/users/${editUserId}/documents`, {
+                method: 'POST', headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
+                body: form,
+            });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(j.message || ('خطأ ' + r.status));
+            okEl.textContent = j.message || 'رُفعت الوثيقة';
+            fileInput.value = '';
+            await loadEdit(); loadUsers();
+        } catch (err) { errEl.textContent = err.message; }
+    });
+
+    document.getElementById('edit-save').addEventListener('click', async () => {
+        const errEl = document.getElementById('edit-error');
+        const okEl = document.getElementById('edit-ok');
+        errEl.textContent = ''; okEl.textContent = '';
+
+        // ما وصل من الخادم هو ما يُرسَل إليه — لا قائمةٌ ثانيةٌ تفترق عنه.
+        const body = {};
+        for (const k of editFields) {
+            const el = document.getElementById('ed-' + k);
+            if (el) body[k] = el.value || null;
+        }
+
+        try {
+            const j = await post(`${base}/users/${editUserId}/profile`, body);
+            okEl.textContent = j.message || 'حُدّثت البيانات';
+            await loadEdit(); loadUsers();
+        } catch (err) { errEl.textContent = err.message; }
+    });
+
+    document.getElementById('edit-approve-account').addEventListener('click', async () => {
+        const errEl = document.getElementById('edit-error');
+        const okEl = document.getElementById('edit-ok');
+        errEl.textContent = ''; okEl.textContent = '';
+
+        if (!confirm('اعتمادُ الحساب يرفع حدودَه ويفتح استقبالَ التحويلات. متابعة؟')) return;
+
+        try {
+            const j = await post(`${base}/users/${editUserId}/kyc`, {status: 1});
+            okEl.textContent = j.message || 'اعتُمد الحساب';
+            await loadEdit(); loadUsers();
+        } catch (err) { errEl.textContent = err.message; }
+    });
+
     document.getElementById('transfer-submit').addEventListener('click', async () => {
         const errEl = document.getElementById('transfer-error');
         errEl.textContent = '';
@@ -516,19 +964,14 @@
         const errEl = document.getElementById('add-error');
         errEl.textContent = '';
         try {
-            const payload = {
-                f_name: document.getElementById('add-fname').value,
-                l_name: document.getElementById('add-lname').value,
-                phone: document.getElementById('add-phone').value,
-                password: document.getElementById('add-password').value,
-                pin: document.getElementById('add-pin').value || undefined,
-            };
-            if (slug === 'merchants') {
-                payload.store_name = document.getElementById('add-store').value;
-                payload.business_type = document.getElementById('add-biz').value;
-                payload.plan = document.getElementById('add-plan').value;
-            }
-            const j = await post(`${base}/${slug}/users`, payload);
+            const form = document.getElementById('opening-dossier-form');
+            if (!form.reportValidity()) return;
+            const r = await fetch(`${base}/${slug}/users`, {
+                method: 'POST', headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
+                body: new FormData(form),
+            });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(j.message || ('خطأ ' + r.status));
             bootstrap.Modal.getInstance(document.getElementById('modal-add')).hide();
             alert(j.message); loadUsers();
         } catch (err) { errEl.textContent = err.message; }

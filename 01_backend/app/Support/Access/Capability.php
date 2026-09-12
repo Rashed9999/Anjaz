@@ -88,7 +88,23 @@ final class Capability
     public function group(string $v): self { $this->group = $v; return $this; }
     public function icon(string $v): self { $this->icon = $v; return $this; }
     public function minPlan(?string $v): self { $this->minPlan = $v; return $this; }
-    public function businessTypes(array $v): self { $this->businessTypes = $v; return $this; }
+    /**
+     * يضيّق نطاق القدرة عند استدعائه أكثر من مرة، ولا يوسّعه عرضاً.
+     *
+     * في سجل القدرات قد تُكتب قاعدة عامة ثم قاعدة قطاعية أدق في السلسلة
+     * نفسها. الاستبدال كان يجعل الاستدعاء الأخير يفتح القدرة لقطاعات لا
+     * تملك مساراتها (مثل مركز التجزئة داخل الصيدلية). تقاطع النطاقين
+     * يحافظ على القيد الأدق ويجعل تكرار السلسلة آمناً.
+     */
+    public function businessTypes(array $v): self
+    {
+        $v = array_values(array_unique($v));
+        $this->businessTypes = $this->businessTypes === []
+            ? $v
+            : array_values(array_intersect($this->businessTypes, $v));
+
+        return $this;
+    }
     public function permissions(array $v): self { $this->permissions = $v; return $this; }
     public function routes(array $v): self { $this->routes = $v; return $this; }
     public function limit(?string $v): self { $this->limitKey = $v; return $this; }
@@ -123,13 +139,41 @@ final class Capability
     public function screenRoute(): ?string { return $this->screen; }
     public function appliesToAllBusinessTypes(): bool { return $this->businessTypes === []; }
 
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-VERTICAL-COMPOSE-001 — **قائمةُ المنح هي المصدر، لا قائمتان.**
+     *
+     * `businessTypes([...])` هنا مكتوبةٌ بالاسم في الشيفرة، فلا تعرف
+     * قطاعاً أنشأته الإدارةُ بعد آخر نشرة. ولو بقيت وحدَها لَوقع أخبثُ
+     * صور العطل: القطاعُ يمنح «كاشير» في اللوحة، و`FeatureAccessService`
+     * **ينزعها بصمتٍ** في السطر التالي لأنّ القدرةَ لا تُعلن رمزَه —
+     * فيُنشأ قطاعٌ ويُختار له عشرُ قدراتٍ ولا تصل واحدةٌ منها، بلا خطأٍ
+     * في أيّ سجلّ.
+     *
+     * **فالفصلُ:** الستّةُ المبنيّةُ تُقرأ من القائمة المكتوبة — ولا
+     * يتغيّر لها شيء، ويُثبته `CapabilityBoxAgreementGuardTest`. وما
+     * أنشأته الإدارةُ يُسأل عنه **مربّعَه**: أَمنحتَه هذه القدرة؟
+     *
+     * وهذا ليس تخفيفاً للحارس بل تضييقٌ له: الانطباقُ صار مشتقّاً من
+     * المنح لا مصدراً ثانياً بجانبه، **فلا يفترقان أصلاً**.
+     * ══════════════════════════════════════════════════════════════════
+     */
     public function appliesTo(?string $businessType): bool
     {
         if ($this->businessTypes === []) {
             return true;
         }
 
-        return $businessType !== null && in_array($businessType, $this->businessTypes, true);
+        if ($businessType === null) {
+            return false;
+        }
+
+        if (in_array($businessType, $this->businessTypes, true)) {
+            return true;
+        }
+
+        return \App\Domain\Verticals\VerticalRegistry::isAdminDefined($businessType)
+            && \App\Domain\Verticals\VerticalRegistry::find($businessType)?->grants($this->code) === true;
     }
 
     /** أيحرس هذا المسارَ؟ — يُقارَن بالبادئة بعد تطبيع الشرطات. */

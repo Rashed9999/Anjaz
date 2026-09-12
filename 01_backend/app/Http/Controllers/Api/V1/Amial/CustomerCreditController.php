@@ -8,6 +8,9 @@ use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\CustomerCreditService;
+use App\Services\Merchant\MerchantPermissionService;
+use App\Support\Merchant\MerchantPermissions as P;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -28,10 +31,78 @@ class CustomerCreditController extends Controller
 {
     public function __construct(
         private readonly CustomerCreditService $credit,
+        private readonly MerchantPermissionService $perm,
     ) {}
+
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-CREDIT-AT-TILL-001 — **دَينُ العميل يُقرأ قبل أن يُزاد.**
+     *
+     * كان دفترُ الديون شاشةً أخرى، **والبائعُ يبيع آجلاً وهو لا يعرف كم
+     * على الزبون**. فيبيع لمن عليه أربعون ألفاً وحدُّه ثلاثون، ولا يُكتشف
+     * التجاوزُ إلّا حين يفتح المالكُ الدفترَ بعد أيّام.
+     *
+     * **والحدُّ لا يُفرَض هنا بل يُقال.** ثلاثةُ أسبابٍ مقيسة: كثيرٌ من
+     * الحسابات حدُّها صفرٌ (أي غير مضبوط) فمنعُها يُقفل البيعَ الآجلَ على
+     * الجميع · والبائعُ قد يكون صاحبَ المتجر نفسَه فيقرّر · والقرارُ
+     * التجاريُّ ليس قرارَ شيفرة. **فالمعلومةُ تصل، والقرارُ لصاحبه.**
+     *
+     * **والقدرةُ `debts` المجّانيّة لا `customers` المدفوعة** — وهو نفسُ
+     * التعليل المكتوب في مسارات هذه المجموعة: من باع بالآجل يجب أن يعرف
+     * دينَ زبونه مهما كانت باقتُه. ولو حُرست بـ`customers` لَصار الحاجزُ
+     * على المعلومة التي تمنع الخسارة.
+     *
+     * GET /merchant/credit/lookup?phone=77XXXXXXX
+     * ══════════════════════════════════════════════════════════════════
+     */
+    public function lookup(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $phone = trim((string) $request->query('phone', ''));
+        if ($phone === '') {
+            return $this->error('VALIDATION', 'أدخل رقم العميل', 422);
+        }
+
+        $account = CustomerCreditAccount::where('merchant_user_id', $merchant->id)
+            ->whereIn('customer_phone', \App\Support\Phone::variants($phone))
+            ->first();
+
+        // **وعميلٌ جديدٌ ليس عميلاً عليه صفر** — الفرقُ يُقال للبائع:
+        // «لا حسابَ بعد» غيرُ «لا دينَ عليه». (القاعدة السابعة.)
+        if (! $account) {
+            return $this->ok([
+                'found' => false,
+                'customer_name' => null,
+                'current_balance' => null,
+                'credit_limit' => null,
+                'remaining' => null,
+                'is_over_limit' => false,
+            ]);
+        }
+
+        $balance = (string) $account->current_balance;
+        $limit = (string) $account->credit_limit;
+        $hasLimit = bccomp($limit, '0', 4) > 0;
+
+        return $this->ok([
+            'found' => true,
+            'customer_name' => $account->customer_name,
+            'current_balance' => $balance,
+            // **وحدٌّ صفرٌ يعني «غير مضبوط» لا «ممنوعٌ من الآجل»** —
+            // فيُرسَل `null` ولا يُحسب متبقٍّ سالبٌ من عدم.
+            'credit_limit' => $hasLimit ? $limit : null,
+            'remaining' => $hasLimit ? bcsub($limit, $balance, 4) : null,
+            'is_over_limit' => $hasLimit && bccomp($balance, $limit, 4) >= 0,
+            'is_active' => (bool) $account->is_active,
+        ]);
+    }
 
     public function dashboard(Request $request): JsonResponse
     {
+        if ($deny = $this->guard($request, P::LEDGER_VIEW)) return $deny;
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -41,6 +112,7 @@ class CustomerCreditController extends Controller
 
     public function listCustomers(Request $request): JsonResponse
     {
+        if ($deny = $this->guard($request, P::LEDGER_VIEW)) return $deny;
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -63,6 +135,7 @@ class CustomerCreditController extends Controller
 
     public function upsertCustomer(Request $request): JsonResponse
     {
+        if ($deny = $this->guard($request, P::SETTINGS_MANAGE)) return $deny;
         $v = Validator::make($request->all(), [
             'phone' => 'required|string|max:32',
             'name' => 'required|string|max:120',
@@ -90,6 +163,7 @@ class CustomerCreditController extends Controller
 
     public function showCustomer(Request $request, int $id): JsonResponse
     {
+        if ($deny = $this->guard($request, P::LEDGER_VIEW)) return $deny;
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -108,6 +182,7 @@ class CustomerCreditController extends Controller
 
     public function statement(Request $request, int $id): JsonResponse
     {
+        if ($deny = $this->guard($request, P::LEDGER_VIEW)) return $deny;
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -127,6 +202,7 @@ class CustomerCreditController extends Controller
     /** AMIAL-CREDIT-PDF-001 — تصدير كشف الحساب PDF. */
     public function statementPdf(Request $request, int $id)
     {
+        if ($deny = $this->guard($request, P::LEDGER_VIEW)) return $deny;
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -165,6 +241,7 @@ class CustomerCreditController extends Controller
             'note' => 'sometimes|nullable|string|max:255',
         ]);
         if ($v->fails()) return $this->validationError($v);
+        if ($deny = $this->guard($request, P::CASH_MOVE, (string) $request->input('amount'))) return $deny;
 
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
@@ -196,6 +273,7 @@ class CustomerCreditController extends Controller
             'note' => 'sometimes|nullable|string|max:255',
         ]);
         if ($v->fails()) return $this->validationError($v);
+        if ($deny = $this->guard($request, P::RETAIL_RETURN_CREATE, (string) $request->input('amount'))) return $deny;
 
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
@@ -227,6 +305,7 @@ class CustomerCreditController extends Controller
             'note' => 'required|string|max:255',
         ]);
         if ($v->fails()) return $this->validationError($v);
+        if ($deny = $this->guard($request, P::ADJUSTMENT_REQUEST)) return $deny;
 
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
@@ -252,6 +331,16 @@ class CustomerCreditController extends Controller
     }
 
     // ---- helpers ----
+
+    private function guard(Request $request, string $permission, ?string $amount = null): ?JsonResponse
+    {
+        try {
+            $this->perm->assert($request->user(), $permission, [], $amount);
+            return null;
+        } catch (DomainException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        }
+    }
 
     /** يرجّع [merchant(User), posUserId(?int)] أو JsonResponse عند الخطأ. */
     private function resolveMerchant(Request $request): array|JsonResponse

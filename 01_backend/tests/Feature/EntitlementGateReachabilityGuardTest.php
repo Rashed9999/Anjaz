@@ -227,21 +227,55 @@ class EntitlementGateReachabilityGuardTest extends TestCase
             $src = (string) preg_replace('~//[^\n]*|/\*.*?\*/~s', '',
                 (string) file_get_contents($f->getPathname()));
 
-            // **صيغتان في المتحكّمات:** `hasFeature(...)` القديمة، و
-            // `gate($user, A::F_X)` الجديدة — والثانيةُ تعرف وضعَ الظلّ.
-            // ونسيانُ إحداهما يجعل الحارسَ يعدّ محروساً مكشوفاً.
-            if (! preg_match_all(
-                '~(?:hasFeature|gate)\([^,]+,\s*(?:A|AccessConstants)::(F_[A-Z_]+)~',
+            // ══════════════════════════════════════════════════════════
+            // **أربعُ صيغٍ في المتحكّمات، لا اثنتان.**
+            //
+            // كان هنا `(?:hasFeature|gate)\(…، A::F_X` وحدَه — أي
+            // **صيغةَ الثابت فقط**. فأخرج الحارسُ:
+            //
+            //     «قدراتٌ مدفوعةٌ لها شاشةٌ ولا يحرسها الخادمُ بشيء:
+            //      low_stock_alerts (باقة business · شاشة ‎/retail)»
+            //
+            // **وهي محروسةٌ في ثلاثة مواضع:** `RetailVerticalController`
+            // بـ`gate($request->user(), 'low_stock_alerts')`، و
+            // `PharmacyController` و`WholesaleController` بـ
+            // `denyUnless($request, 'low_stock_alerts')`. الأولى بنصٍّ
+            // لا بثابت، **والثانيةُ صيغةٌ لا يعرفها التعبيرُ أصلاً**.
+            //
+            // **وحارسٌ يكذب أسوأُ من غيابه:** يُرسل من يصدّقه ليضيف
+            // حاجزاً ثانياً فوق حاجزٍ قائم، أو — وهو الأسوأ — يُعوّده
+            // أن يتجاهل اللافتةَ يومَ تصدق. (القاعدة الثانية.)
+            // ══════════════════════════════════════════════════════════
+            $found = false;
+
+            // ① صيغةُ الثابت: gate($u, A::F_X) · hasFeature($u, A::F_X)
+            if (preg_match_all(
+                '~(?:hasFeature|gate|denyUnless)\([^,]+,\s*(?:A|AccessConstants)::(F_[A-Z_]+)~',
                 $src, $m)) {
-                continue;
+                $found = true;
+
+                foreach ($m[1] as $const) {
+                    $name = \App\Support\Access\AccessConstants::class . '::' . $const;
+
+                    if (defined($name)) {
+                        $out[constant($name)] = true;
+                    }
+                }
             }
 
-            foreach ($m[1] as $const) {
-                $name = \App\Support\Access\AccessConstants::class . '::' . $const;
+            // ② صيغةُ النصّ: gate($u, 'code') · denyUnless($r, 'code')
+            if (preg_match_all(
+                '~(?:hasFeature|gate|denyUnless)\([^,]+,\s*\'([a-z0-9_]+)\'~',
+                $src, $m)) {
+                $found = true;
 
-                if (defined($name)) {
-                    $out[constant($name)] = true;
+                foreach ($m[1] as $code) {
+                    $out[$code] = true;
                 }
+            }
+
+            if (! $found) {
+                continue;
             }
         }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-WD-HISTORY-001 — «سجل طلبات السحب»:
@@ -74,7 +75,7 @@ class _WithdrawHistoryScreenState extends State<WithdrawHistoryScreen> {
 
   String _fmtDate(dynamic raw) {
     try {
-      final d = DateTime.parse('$raw').toLocal();
+      final d = DateConverterHelper.fromApi('$raw');
       final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
       final ampm = d.hour < 12 ? 'ص' : 'م';
       return '${d.year}/${d.month}/${d.day} • '

@@ -14,7 +14,7 @@ class FeeScheme extends Model
     protected $table = 'fee_schemes';
 
     protected $fillable = [
-        'code', 'label', 'zone_code', 'applies_to',
+        'code', 'label', 'zone_code', 'applies_to', 'plan',
         'fee_type', 'percent_rate', 'fixed_amount', 'min_fee', 'max_fee',
         'agent_commission_percent', 'agent_commission_fixed', 'bearer',
         'version', 'is_active', 'effective_from', 'effective_to',

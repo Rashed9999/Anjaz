@@ -93,6 +93,8 @@ class CashierRefundTest extends TestCase
             'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
         ]);
 
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TX12345', '3000');
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '3000',
@@ -265,6 +267,8 @@ class CashierRefundTest extends TestCase
             'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
         ]);
 
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TX99', '10000');
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '10000',
@@ -302,6 +306,8 @@ class CashierRefundTest extends TestCase
             'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
         ]);
 
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TX44', '2000');
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '2000',

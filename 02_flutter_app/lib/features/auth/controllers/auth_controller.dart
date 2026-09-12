@@ -286,7 +286,6 @@ class AuthController extends GetxController implements GetxService {
 
         Get.find<AuthController>().bioAthPinSetup(signUpBody.password).then((value) {
 
-          UserShortDataModel? userData = Get.find<AuthController>().getUserData();
           Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
         });
 

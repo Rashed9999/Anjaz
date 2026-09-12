@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use App\Models\Merchant\PosDevice;
 use App\Models\Merchant\PosDeviceSession;
 use App\Models\PosUser;
+use App\Models\User;
+use App\Services\Merchant\MerchantPermissionService;
 use App\Services\OpsAlertService;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -47,6 +49,23 @@ class EnsurePosDevice
     /** ترويسةُ هويّة الجهاز — والقيمةُ معرِّفُ تثبيتٍ لا سرّ. */
     public const HEADER = 'x-pos-device';
 
+    /**
+     * اسمُ سمةِ الطلب التي تحمل الجهازَ المتحقَّقَ منه.
+     *
+     * **ولا يُقرأ إلّا من هنا**: من بحث عن الجهاز بنفسِه في خدمةٍ قد
+     * يجد غيرَ الذي فُحص — والبوّابةُ هي التي أثبتت أنّه غيرُ ملغىً
+     * ومطابقٌ للجلسة.
+     */
+    public const ATTRIBUTE = 'amial_pos_device';
+
+    /** الجهازُ المتحقَّقُ منه لهذا الطلب، أو `null` إن لم تمرّ البوّابة. */
+    public static function deviceOf(Request $request): ?PosDevice
+    {
+        $d = $request->attributes->get(self::ATTRIBUTE);
+
+        return $d instanceof PosDevice ? $d : null;
+    }
+
     public function __construct(private OpsAlertService $ops) {}
 
     public function handle(Request $request, Closure $next): mixed
@@ -68,7 +87,7 @@ class EnsurePosDevice
         // ══════════════════════════════════════════════════════════════
         // لا ربط. **والتاجرُ نفسُه لا يحتاج مقعداً** — المقعدُ للأجهزة
         // العاملة على نقطة البيع، ومالكُ الحساب يدير من أيّ متصفّح.
-        if (! $this->isPosActor($user->id)) {
+        if (! $this->isPosActor($user)) {
             return $next($request);
         }
 
@@ -122,6 +141,13 @@ class EnsurePosDevice
 
         $this->touch($session, $device);
 
+        // AMIAL-SHIFT-DEVICE-001 — **الجهازُ يُمرَّر لا يُعاد البحثُ عنه.**
+        //
+        // كان يُفحَص هنا ثمّ يُنسى، فالخدماتُ خلفه لا تعرف على أيّ صندوقٍ
+        // تعمل — وهو سببُ انفصال الجهاز عن المال. وبحثٌ ثانٍ في الخدمة
+        // يفتح بابَ اختلافٍ بين ما فُحص وما استُعمل.
+        $request->attributes->set(self::ATTRIBUTE, $device);
+
         return $next($request);
     }
 
@@ -156,9 +182,31 @@ class EnsurePosDevice
         }
     }
 
-    private function isPosActor(int $userId): bool
+    /**
+     * **صفُّ `pos_users` وحدَه لا يجعل صاحبَه موظّفَ نقطةِ بيع.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * قد يبقى لصاحب المنشأة ربطٌ قديمٌ في `pos_users` من تجربةٍ أو
+     * استيرادٍ سابق. وقراءةُ الصفّ وحدَه تجعله **موظَّفاً في منشأته**،
+     * فيُطلَب منه مقعدُ جهازٍ ويُردّ بـ403.
+     *
+     * **والبابُ يُقفل عليه من الطرفين**: التسجيلُ فعلُ مالكِ المقعد
+     * (مكتوبٌ في `config/amial.php`)، والوسيطُ على مجموعة `auth:api`
+     * كلِّها — فلا يصل إلى شاشة الأجهزة ليُسجّل، ولا إلى غيرها. حسابٌ
+     * مسدودٌ بلا مخرجٍ إلّا الدعم. وهو بعينه ما حذّر منه شرطُ الخروج:
+     * «فالإنفاذُ الفوريُّ يُقفل المتاجرَ لا يحميها».
+     *
+     * **والمِلكيّةُ تُسأل من مصدرها الواحد** — `merchantIdFor` التي
+     * تقدّم `MerchantProfile` على كلّ ربطٍ تابع. وسؤالٌ ثانٍ هنا يعني
+     * تعريفين للمالك يفترقان أوّلَ ما يتغيّر أحدُهما.
+     */
+    private function isPosActor(User $user): bool
     {
-        return PosUser::where('user_id', $userId)->where('is_active', true)->exists();
+        if (! PosUser::where('user_id', $user->id)->where('is_active', true)->exists()) {
+            return false;
+        }
+
+        return ! app(MerchantPermissionService::class)->isOwner($user);
     }
 
     /**

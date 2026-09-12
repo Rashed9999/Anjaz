@@ -39,7 +39,16 @@ class MerchantPaymentController extends Controller
 
         $channel = $request->input('channel', 'qr');
         $code = $channel === 'pos' ? 'MERCHANT_POS' : 'MERCHANT_QR';
-        $b = $this->fees->calculate($code, (string)$request->input('amount'), ['applies_to' => 'merchant']);
+
+        // **والمعاينةُ تُسأل بباقة السائل نفسِها** — ومعاينةٌ تُخالف ما
+        // يُخصَم أسوأ من غيابها: يقرأ التاجرُ رقماً ثمّ يُخصَم غيرُه،
+        // فيظنّ العطلَ سرقةً. (والمسارُ الحيُّ أدناه يسأل بها كذلك.)
+        $b = $this->fees->calculate($code, (string) $request->input('amount'), [
+            'applies_to' => 'merchant',
+            'plan' => \App\Support\Access\AccessConstants::canonicalPlan(
+                \App\Models\MerchantProfile::where('user_id', $request->user()?->id)
+                    ->value('subscription_plan')),
+        ]);
 
         return $this->ok([
             'amount' => $b['amount'],
@@ -134,7 +143,16 @@ class MerchantPaymentController extends Controller
 
         // معاينة الأرقام للعرض/الإيصال
         $code = $channel === 'pos' ? 'MERCHANT_POS' : 'MERCHANT_QR';
-        $b = $this->fees->calculate($code, (string)$request->input('amount'), ['applies_to' => 'merchant']);
+
+        // AMIAL-FEE-PLAN-001 — **الباقةُ تُمرَّر، وإلّا فالميزةُ حبرٌ على ورق.**
+        //
+        // بلا هذا السطر يُضبَط سعرُ «البداية» في الشاشة ولا يُطبَّق على
+        // تاجرٍ واحد: يقرأ المحرّكُ النسخةَ العامّةَ أبداً.
+        $b = $this->fees->calculate($code, (string) $request->input('amount'), [
+            'applies_to' => 'merchant',
+            'plan' => \App\Support\Access\AccessConstants::canonicalPlan(
+                $profile->subscription_plan ?? null),
+        ]);
 
         // AMIAL-CASHIER-001 — ربط بيع الكاشير المعلّق (إن مُرّر sale_ulid)
         $linkedSale = null;

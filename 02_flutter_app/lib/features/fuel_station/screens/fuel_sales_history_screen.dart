@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:open_file/open_file.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 
 import 'package:intl/intl.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -114,7 +115,7 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
 
   Widget _saleCard(Map<String, dynamic> sale) {
     final createdAt = sale['created_at'] != null
-        ? DateTime.tryParse(sale['created_at'])
+        ? DateConverterHelper.tryFromApi(sale['created_at'].toString())
         : null;
     final method = sale['payment_method']?.toString() ?? '';
     final methodLabel = method == 'cash' ? 'نقدي'

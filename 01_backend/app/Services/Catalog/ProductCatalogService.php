@@ -68,7 +68,7 @@ class ProductCatalogService
         return null;
     }
 
-    public function isGlobal(string $barcode): bool
+    private function isGlobal(string $barcode): bool
     {
         return $this->rejectionReason($barcode) === null;
     }

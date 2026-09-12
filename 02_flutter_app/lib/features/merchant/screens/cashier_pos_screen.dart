@@ -1,12 +1,17 @@
+import 'package:amial_pay/features/merchant/widgets/quick_calculator_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
+import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_payment_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_scan_screen.dart';
 import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
 import 'package:amial_pay/features/merchant/services/offline_sale_queue.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/features/merchant/widgets/shift_gate.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-POS-001 — «المبيعات» (التصميم 36):
@@ -23,15 +28,22 @@ class CashierPosScreen extends StatefulWidget {
 class _CashierPosScreenState extends State<CashierPosScreen> {
   CashierController get c => Get.find<CashierController>();
   final _search = TextEditingController();
-  String _category = 'الكل';
+  String _category = 'الكل'.tr;
 
   final _offline = Get.find<OfflineSaleQueue>();
 
   @override
   void initState() {
     super.initState();
+    if (Get.isRegistered<AccessController>() &&
+        (Get.find<AccessController>().isFuel || Get.find<AccessController>().isPharmacy)) {
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       c.loadProducts();
+      // AMIAL-HELD-SALE-001 — التذاكرُ تُقرأ عند فتح الشبّاك، فيرى الكاشيرُ
+      // ما تركه هو أو زميلُه.
+      c.loadHeldTickets();
       // AMIAL-OFFLINE-POS-001 — حاول مزامنة أي مبيعات معلّقة عند فتح الكاشير.
       _offline.refreshCount().then((n) { if (n > 0) _offline.sync(); });
     });
@@ -49,7 +61,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
       final cat = '${p['category'] ?? ''}'.trim();
       if (cat.isNotEmpty) set.add(cat);
     }
-    return ['الكل', ...set];
+    return ['الكل'.tr, ...set];
   }
 
   List<Map<String, dynamic>> get _visible {
@@ -60,7 +72,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
         return false;
       }
       if (q.isNotEmpty &&
-          !'${p['name']}'.contains(q) &&
+          !'${p['display_name'] ?? p['name']}'.contains(q) &&
           !'${p['barcode'] ?? ''}'.contains(q)) {
         return false;
       }
@@ -74,7 +86,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('إدخال مبلغ يدوي'),
+        title: Text('إدخال مبلغ يدوي'.tr),
         content: TextField(
           controller: amount,
           autofocus: true,
@@ -82,21 +94,21 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             hintText: '0',
-            suffixText: 'ر.ي',
+            suffixText: 'ر.ي'.tr,
           ),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء')),
+              child: Text('إلغاء'.tr)),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
                 backgroundColor: AmialColors.primary,
                 foregroundColor: Colors.white),
-            child: const Text('متابعة للدفع'),
+            child: Text('متابعة للدفع'.tr),
           ),
         ],
       ),
@@ -122,9 +134,9 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
           child: Obx(() {
             if (c.cart.isEmpty) {
               // أُفرغت السلة من داخل الورقة
-              return const SizedBox(
+              return SizedBox(
                   height: 120,
-                  child: Center(child: Text('السلة فارغة')));
+                  child: Center(child: Text('السلة فارغة'.tr)));
             }
             final count = c.cart.fold<int>(0, (s, l) => s + l.qty);
             return Column(mainAxisSize: MainAxisSize.min, children: [
@@ -150,7 +162,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                           fontWeight: FontWeight.bold,
                           color: AmialColors.primary)),
                 ),
-                const Text('مراجعة الطلب',
+                Text('مراجعة الطلب'.tr,
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
               ]),
               const SizedBox(height: 14),
@@ -180,7 +192,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                             color: AmialColors.primary)),
-                    const Text('الإجمالي المطلوب',
+                    Text('الإجمالي المطلوب'.tr,
                         style: TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w600)),
                   ],
@@ -193,7 +205,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   Get.to(() => CashierPaymentScreen(total: c.cartTotal));
                 },
                 icon: const Icon(Icons.arrow_back),
-                label: const Text('متابعة للدفع',
+                label: Text('متابعة للدفع'.tr,
                     style:
                         TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 style: FilledButton.styleFrom(
@@ -211,7 +223,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                 },
                 icon: const Icon(Icons.delete_sweep_outlined,
                     size: 18, color: AmialColors.red),
-                label: const Text('إفراغ السلة',
+                label: Text('إفراغ السلة'.tr,
                     style: TextStyle(color: AmialColors.red, fontSize: 13)),
               ),
             ]);
@@ -224,11 +236,42 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // حاجز قطاعي أخير: الكاشير العام للتجزئة والبيع السريع فقط. الصيدلية
+    // تحتاج مسارها الذي يحفظ الوصفة والتشغيلة والانتهاء، والوقود له مساره.
+    if (Get.isRegistered<AccessController>() &&
+        Get.find<AccessController>().isFuel) {
+      return const FuelSaleScreen();
+    }
+    if (Get.isRegistered<AccessController>() &&
+        Get.find<AccessController>().isPharmacy) {
+      return const PharmacySaleScreen();
+    }
+    // AMIAL-SHIFT-GATE-001 — **الشبّاكُ لا يُفتح بلا ورديّة.**
+    //
+    // ويُلَفّ هنا **داخل الشاشة نفسِها** لا في مواضع فتحِها الثمانية:
+    // موضعٌ واحدٌ يُنسى يترك باباً بلا حارس، **وهي القاعدة الرابعة
+    // بعينها** — ميزةٌ لها مداخلُ تُحرَس من مدخلٍ واحدٍ مشترك.
+    //
+    // والحدُّ الحقيقيُّ في الخادم (`amial.shift`)؛ هذا يمنع أن يملأ
+    // الكاشيرُ السلّةَ والزبونُ واقفٌ ثمّ يُردّ عند الضغط الأخير.
+    return ShiftGate(child: _till(context));
+  }
+
+  Widget _till(BuildContext context) {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('المبيعات'),
+        title: Text('المبيعات'.tr),
         actions: [
+          // AMIAL-CALCULATOR-001 — **الحاسبةُ حيث يُحسَب، لا في قائمة.**
+          // من يحسب وهو على الشبّاك يحسب **والسلّةُ أمامه** — وشاشةٌ
+          // مستقلّةٌ تُخرجه من السلّة. وورقةٌ تعلو الشاشة تُغلَق بسحبة.
+          IconButton(
+            key: const Key('calc-open'),
+            icon: const Icon(Icons.calculate_outlined),
+            tooltip: 'آلة حاسبة'.tr,
+            onPressed: () => QuickCalculatorSheet.open(context),
+          ),
           // مؤشّر المبيعات دون اتصال (يظهر عند وجود معلّق)
           Obx(() => _offline.pending.value == 0
               ? const SizedBox.shrink()
@@ -236,7 +279,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   padding: const EdgeInsets.only(left: 4),
                   child: Stack(alignment: Alignment.center, children: [
                     IconButton(
-                      tooltip: 'مبيعات دون اتصال',
+                      tooltip: 'مبيعات دون اتصال'.tr,
                       icon: const Icon(Icons.cloud_off),
                       onPressed: () => Get.to(() => const OfflineSalesScreen()),
                     ),
@@ -251,8 +294,38 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     ),
                   ]),
                 )),
+          // AMIAL-HELD-SALE-001 — **بابُ التذاكر المفتوحة، بعدّادها.**
+          //
+          // ويُعرَض العددُ على الأيقونة: تذكرةٌ لا تُرى تُنسى، ويُعاد بناءُ
+          // سلّتها من الصفر — وهو عينُ العطل الذي بُنيت الميزةُ لحلّه.
+          Obx(() {
+            final n = c.heldTickets.length;
+            return Stack(alignment: Alignment.center, children: [
+              IconButton(
+                key: const Key('cashier-held-tickets'),
+                tooltip: 'التذاكر المفتوحة'.tr,
+                icon: const Icon(Icons.pause_circle_outline_rounded),
+                onPressed: _openHeldTickets,
+              ),
+              if (n > 0)
+                Positioned(
+                  right: 6, top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                        color: AmialColors.yellow,
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Text('$n',
+                        style: const TextStyle(
+                            color: AmialColors.primaryDark,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ),
+            ]);
+          }),
           IconButton(
-            tooltip: 'إدخال يدوي',
+            tooltip: 'إدخال يدوي'.tr,
             icon: const Icon(Icons.edit_note_rounded),
             onPressed: _manualAmount,
           ),
@@ -260,7 +333,48 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
       ),
       body: Obx(() {
         final items = _visible;
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-QUICKSALE-PRIMARY-001 — **بائعُ السمك لا يملك منتجات.**
+        //
+        // `quick_sale` قطاعُ الأسماك والخضار والبسطات (كما يقول تعريفُه
+        // في `AccessConstants`): **لا كتالوجَ فيه — يُدخَل المبلغُ ويُدفَع
+        // وتُصدَر الفاتورة**. والبنيةُ لذلك مبنيّةٌ هنا منذ البداية:
+        // `_manualAmount()` و`CashierPaymentScreen(freeAmount: true)`.
+        //
+        // **لكنّها كانت خلف أيقونةٍ صغيرةٍ في الشريط العلويّ**، وجسمُ
+        // الشاشة شبكةُ منتجاتٍ — **فارغةٌ أبداً لمن لا منتجاتِ له**. فيفتح
+        // بائعُ السمك «بيع جديد» فيرى فراغاً، وما يحتاجه أيقونةٌ بلا اسم.
+        //
+        // فصار فعلُه الأوّلَ ظاهراً بحجمه. **ولا تُخفى الشبكةُ ولا يُقفَل
+        // شيء**: من أضاف صنفاً يجده كما كان — القطاعُ يقرّر ما يتقدّم،
+        // لا ما يُمنَع. (والباقةُ لا تدخل هنا: البيعُ السريع مجّانيٌّ
+        // بطبعه، والإدخالُ اليدويُّ ليس قدرةً مُسعَّرة.)
+        // ══════════════════════════════════════════════════════════════
+        final quickSale = Get.isRegistered<AccessController>() &&
+            Get.find<AccessController>().isQuickSale;
+
         return Column(children: [
+          if (quickSale)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _manualAmount,
+                  icon: const Icon(Icons.edit_note_rounded, size: 26),
+                  label: Text('أدخل المبلغ'.tr,
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AmialColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            ),
           // ====== البحث + الماسح ======
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
@@ -289,7 +403,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   controller: _search,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: 'بحث عن منتج أو كود...',
+                    hintText: 'بحث عن منتج أو كود...'.tr,
                     hintStyle: const TextStyle(fontSize: 13),
                     prefixIcon: const Icon(Icons.search, size: 20),
                     filled: true,
@@ -336,8 +450,8 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     child:
                         CircularProgressIndicator(color: AmialColors.primary))
                 : items.isEmpty
-                    ? const Center(
-                        child: Text('لا توجد منتجات مطابقة',
+                    ? Center(
+                        child: Text('لا توجد منتجات مطابقة'.tr,
                             style: TextStyle(color: AmialColors.textMuted)))
                     : GridView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
@@ -445,7 +559,27 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                       ),
                     ),
 
-                    const SizedBox(width: 8),
+                    // AMIAL-HELD-SALE-001 — **زرُّ التعليق حيث تقع الحاجة.**
+                    //
+                    // الحاجةُ تقع والسلّةُ مبنيّةٌ والزبونُ واقف، فالزرُّ
+                    // في شريط السلّة نفسِه لا في قائمةٍ يُبحَث فيها.
+                    // **وهو خارج `InkWell` المراجعة**: زرٌّ داخل مساحةٍ
+                    // قابلةٍ للضغط تبتلعه الضغطةُ الأمُّ فينقل إلى شاشةٍ
+                    // أخرى — وهو عطلُ «تحويل رصيد» في مركز الوكلاء بحرفه.
+                    Obx(() => IconButton(
+                          key: const Key('cashier-hold-cart'),
+                          tooltip: 'تعليق الفاتورة'.tr,
+                          onPressed: c.isHolding.value ? null : _holdCart,
+                          icon: c.isHolding.value
+                              ? const SizedBox(
+                                  height: 18, width: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.pause_circle_outline_rounded,
+                                  color: Colors.white),
+                        )),
+
+                    const SizedBox(width: 4),
 
                     // ــ الفعلُ الظاهر ــ
                     Container(
@@ -455,8 +589,8 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                         color: AmialColors.yellow,
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text('مراجعة الطلب',
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text('مراجعة الطلب'.tr,
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
@@ -590,7 +724,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     color: AmialColors.primary,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text('عرض',
+                  child: Text('عرض'.tr,
                       style: TextStyle(color: Colors.white, fontSize: 9)),
                 ),
               if (out)
@@ -601,7 +735,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     color: AmialColors.dangerSurface,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text('نفد',
+                  child: Text('نفد'.tr,
                       style:
                           TextStyle(color: AmialColors.red, fontSize: 9)),
                 ),
@@ -618,7 +752,10 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
               ),
             ]),
             const Spacer(),
-            Text('${p['name']}',
+            // AMIAL-VARIANT-PARENT-001 — **الاسمُ المعروضُ يميّز المتغيّر.**
+            // ولولاه ظهرت تسعةُ صفوفٍ باسم «قميص» ولا يُعرف أيُّها الذي
+            // في اليد. و`display_name` يبنيه الخادمُ من `variant_attributes`.
+            Text('${p['display_name'] ?? p['name']}',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
@@ -669,5 +806,259 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
         ),
       ),
     );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  AMIAL-HELD-SALE-001 — التذاكر المفتوحة
+  // ══════════════════════════════════════════════════════════════════
+
+  /// **تعليقُ السلّة الحاليّة.**
+  ///
+  /// ويُسأل عن اسمٍ يُميّزها: الكاشيرُ يعود بعد نصف ساعةٍ إلى خمس تذاكر،
+  /// و«تذكرة ٣» لا تقول له أيُّها لِمن. **والاسمُ اختياريٌّ ولا يُلزَم** —
+  /// إلزامُه يجعل الطابورَ ينتظر كتابةَ نصّ.
+  Future<void> _holdCart() async {
+    if (c.cart.isEmpty) return;
+
+    final label = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('تعليق الفاتورة'.tr),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('${c.cart.length} صنف · ${AmialMoney.yer(c.cartTotal)}',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: label,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'اسم يميّزها (اختياري)'.tr,
+              hintText: 'أبو محمد · السيارة الحمراء · الطاولة ٣'.tr,
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+              'تُحفظ في الخادم فتنجو من إغلاق التطبيق، ويستأنفها أي صندوق. ولا تُخصم البضاعة من المخزون قبل الدفع.'.tr,
+              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('إلغاء'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('تعليق'.tr)),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    final done = await c.holdCart(label: label.text.trim());
+    if (!mounted) return;
+
+    if (done) {
+      Get.snackbar('عُلّقت الفاتورة'.tr, 'تُستأنف من «التذاكر المفتوحة» في الأعلى'.tr,
+          backgroundColor: AmialColors.successSurface, colorText: AmialColors.success);
+    } else {
+      Get.snackbar('تعذّر التعليق'.tr, c.lastError.value,
+          backgroundColor: AmialColors.dangerSurface, colorText: AmialColors.red);
+    }
+  }
+
+  Future<void> _openHeldTickets() async {
+    await c.loadHeldTickets();
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.92,
+        minChildSize: 0.35,
+        expand: false,
+        builder: (_, scroll) => Container(
+          decoration: const BoxDecoration(
+            color: AmialColors.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: Obx(() {
+            final list = c.heldTickets;
+
+            return ListView(controller: scroll, padding: const EdgeInsets.all(16), children: [
+              Center(
+                child: Container(
+                  width: 44, height: 4,
+                  decoration: BoxDecoration(
+                      color: AmialColors.border,
+                      borderRadius: BorderRadius.circular(4)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text('التذاكر المفتوحة'.tr,
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 4),
+              Text('فواتير عُلّقت ولم تُدفَع بعد. أي صندوق يستأنفها.'.tr,
+                  style: TextStyle(fontSize: 11.5, color: AmialColors.textMuted)),
+              const SizedBox(height: 14),
+              if (list.isEmpty)
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Text(
+                      'لا تذاكر معلّقة.\n\nحين يقول الزبون «انتظر، نسيت شيئاً» — اضغط «تعليق» في شريط السلة واخدم التالي.'.tr,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AmialColors.textMuted, height: 1.7)),
+                )
+              else
+                ...list.map(_ticketCard),
+              const SizedBox(height: 20),
+            ]);
+          }),
+        ),
+      ),
+    );
+  }
+
+  Widget _ticketCard(Map<String, dynamic> t) {
+    final label = '${t['label'] ?? ''}'.trim();
+    final who = '${t['opened_by_name'] ?? ''}'.trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AmialColors.border),
+      ),
+      child: Column(children: [
+        Row(children: [
+          Expanded(
+            child: Text(label.isEmpty ? 'تذكرة بلا اسم'.tr : label,
+                style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    color: label.isEmpty ? AmialColors.textSecondary : null)),
+          ),
+          Text(AmialMoney.yer(t['total']),
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900, color: AmialColors.primary)),
+        ]),
+        const SizedBox(height: 4),
+        Row(children: [
+          Text('${t['items_count'] ?? 0} صنف',
+              style: const TextStyle(fontSize: 11.5, color: AmialColors.textSecondary)),
+          if (who.isNotEmpty) ...[
+            const Text(' · ', style: TextStyle(color: AmialColors.textMuted)),
+            // **ومن علّقها يُقرأ** — فيعرف الكاشيرُ أنّها ليست تذكرتَه.
+            Text(who,
+                style: const TextStyle(fontSize: 11.5, color: AmialColors.textSecondary)),
+          ],
+        ]),
+        const Divider(height: 20),
+        Row(children: [
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: () => _resume('${t['ticket_ulid']}'),
+              icon: const Icon(Icons.play_arrow, size: 16),
+              label: Text('استئناف'.tr),
+              style: FilledButton.styleFrom(
+                  backgroundColor: AmialColors.primary,
+                  minimumSize: const Size(0, 42)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () => _voidTicket('${t['ticket_ulid']}'),
+            icon: const Icon(Icons.delete_outline, size: 16),
+            label: Text('إلغاء'.tr),
+            style: OutlinedButton.styleFrom(
+                foregroundColor: AmialColors.red,
+                side: const BorderSide(color: AmialColors.red),
+                minimumSize: const Size(0, 42)),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  /// **والسلّةُ الحاليّةُ لا تُداس صامتةً.**
+  ///
+  /// استئنافُ تذكرةٍ فوق سلّةٍ فيها أصنافٌ يمحوها — وأصنافٌ مُسحت بالباركود
+  /// تختفي بلا سؤال. فيُسأل، والخيارُ «علّق الحاليّة أوّلاً» مطروح.
+  Future<void> _resume(String ulid) async {
+    if (c.cart.isNotEmpty) {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('في السلة أصناف'.tr),
+          content: Text('السلة الحالية فيها ${c.cart.length} صنف. '
+              'استئناف تذكرة أخرى سيستبدلها.'.tr),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, 'cancel'),
+                child: Text('تراجع'.tr)),
+            TextButton(onPressed: () => Navigator.pop(ctx, 'hold'),
+                child: Text('علّق الحالية أولاً'.tr)),
+            FilledButton(onPressed: () => Navigator.pop(ctx, 'replace'),
+                child: Text('استبدال'.tr)),
+          ],
+        ),
+      );
+
+      if (!mounted || choice == null || choice == 'cancel') return;
+
+      if (choice == 'hold') {
+        final held = await c.holdCart();
+        if (!mounted || !held) return;
+      }
+    }
+
+    final ok = await c.resumeHeld(ulid);
+    if (!mounted) return;
+
+    if (ok) {
+      Navigator.of(context).maybePop();
+    } else {
+      Get.snackbar('تعذّر الاستئناف'.tr, c.lastError.value,
+          backgroundColor: AmialColors.dangerSurface, colorText: AmialColors.red);
+    }
+  }
+
+  Future<void> _voidTicket(String ulid) async {
+    final reason = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('إلغاء التذكرة'.tr),
+        content: TextField(
+          controller: reason,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: 'السبب'.tr,
+            hintText: 'الزبون انصرف · أُدخلت بالخطأ'.tr,
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('تراجع'.tr)),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: AmialColors.red),
+              child: Text('إلغاء التذكرة'.tr)),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    if (reason.text.trim().length < 3) {
+      Get.snackbar('السبب مطلوب'.tr, 'تذكرة تختفي بلا سبب تُقرأ عطلاً'.tr,
+          backgroundColor: AmialColors.dangerSurface, colorText: AmialColors.red);
+      return;
+    }
+
+    await c.voidHeld(ulid, reason.text.trim());
   }
 }

@@ -4,10 +4,11 @@ import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart
 import 'package:amial_pay/features/merchant/screens/merchant_accept_payment_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_transactions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/inventory_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
-import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amial_pay/features/suppliers/screens/suppliers_screen.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
@@ -16,7 +17,22 @@ import 'package:amial_pay/features/merchant/screens/split_bill_my_shares_screen.
 import 'package:amial_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_account_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
+import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
+
+/// **ملكيّةُ المنشأة، وغيابُ المتحكّم لا يُقرأ ملكيّةً.**
+///
+/// اللوحةُ تُفتح في مسارات اختبارٍ وشاشاتٍ لا يُسجَّل فيها
+/// `AccessController`. **فغيابُه يُقرأ «لستَ المالك»** — أضيقُ
+/// الاحتمالين، فلا يُفتح بابُ مالٍ على مجهول. (القاعدة السابعة.)
+bool _isOwner() => Get.isRegistered<AccessController>()
+    ? Get.find<AccessController>().isMerchantOwner
+    : false;
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
 class MerchantDashboardScreen extends StatefulWidget {
@@ -132,12 +148,17 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('الرصيد المتاح',
+                              const Text('رصيد محفظة أميال الإلكتروني',
                                   style: TextStyle(
                                       color: Colors.white70, fontSize: 12)),
                               const SizedBox(height: 2),
+                              // **«غير معروف» ليس صفراً ولا «null».** الخادمُ
+                              // يحجب الرصيدَ عن موظّف نقطة البيع، فيُقال
+                              // ذلك ولا يُطبع رقمٌ ولا كلمةٌ إنجليزيّة.
                               Text(
-                                '${ctrl.stats.value.balance} ر.ي',
+                                ctrl.stats.value.balance == null
+                                    ? 'غير معروض لحسابك'
+                                    : '${ctrl.stats.value.balance} ر.ي',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 22,
@@ -280,11 +301,17 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                     const Text('المبيعات',
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 14)),
-                    TextButton(
-                      onPressed: () =>
-                          Get.to(() => const MerchantTransactionsScreen()),
-                      child: const Text('عرض الكل'),
-                    ),
+                    // **بابُ المال من اللوحة** — كان يقود إلى شاشة الحركات
+                    // باسمٍ ثانٍ للشيء نفسِه. والمحفظةُ تجمعهما.
+                    //
+                    // **ولمالكِه وحدَه**: محفظةُ المنشأة مالُ صاحبها،
+                    // والكاشيرُ يقرأ مبيعاتِ ورديّته لا رصيدَ متجره.
+                    if (_isOwner())
+                      TextButton(
+                        key: const Key('merchant-dashboard-wallet'),
+                        onPressed: () => Get.to(() => const MerchantWalletScreen()),
+                        child: const Text('عرض الكل'),
+                      ),
                   ],
                 ),
               ),
@@ -319,6 +346,11 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   children: [
+                  _LinkTile(
+                      icon: Icons.insights_outlined,
+                      label: 'تقرير المال التشغيلي',
+                      onTap: () => Get.to(() => const FinancialTruthReportScreen(dailyOnly: true)),
+                    ),
                     _LinkTile(
                       icon: Icons.receipt_long,
                       label: 'دفتر العملاء والديون',
@@ -344,12 +376,12 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                         onTap: () => Get.to(() => const InventoryScreen()),
                       ),
                     ),
-                    // AMIAL-PROFIT-001 (التصميم 48): تقارير الربحية — باقة الأعمال فأعلى
+                    // التقرير المالي لا يخلط البيع بالتحصيل أو حركة المحفظة.
                     AccessGate(
                       feature: 'profit_reports',
                       fallback: _LinkTile(
                         icon: Icons.trending_up_rounded,
-                        label: 'تقارير الربحية 🔒 (ترقية)',
+                        label: 'التقرير المالي 🔒 (ترقية)',
                         onTap: () => Get.to(() => const PlansCatalogScreen()),
                       ),
                       child: _LinkTile(
@@ -378,20 +410,44 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       label: 'حصصي في الفواتير المقسّمة',
                       onTap: () => Get.to(() => const SplitBillMySharesScreen()),
                     ),
+                    // ══════════════════════════════════════════════════
+                    // **«قريباً» عن مبنيٍّ أسوأ من غياب الزرّ.**
+                    //
+                    // الغيابُ يُسأل عنه، و«قريباً» تُصدَّق فيُكفّ عن
+                    // السؤال — ولا خطأَ في أيّ سجلّ. وكانت على ثلاثة
+                    // أبوابٍ **اثنان منها مبنيّان منذ شهور** ويُفتحان من
+                    // شاشة الخدمات.
+                    //
+                    // والثالث «سحب للبنك» — **ولا سحبَ بنكيَّ في المنصّة
+                    // أصلاً**، والسحبُ عبر الوكيل يعمل. فالتاجرُ كان يقرأ
+                    // «قريباً» فيظنّ أنّه لا يستطيع إخراجَ مال بيعه وهو
+                    // يستطيع. فيُسمّى بما هو، ويُفتح على ما يعمل.
+                    // ══════════════════════════════════════════════════
                     _LinkTile(
                       icon: Icons.account_balance,
-                      label: 'سحب للبنك',
-                      onTap: () => _comingSoon(context),
+                      label: 'سحب رصيدي',
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const WithdrawRequestScreen()),
                     ),
                     _LinkTile(
                       icon: Icons.people,
                       label: 'موظفو نقاط البيع',
-                      onTap: () => _comingSoon(context),
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const MerchantStaffScreen()),
                     ),
                     _LinkTile(
                       icon: Icons.settings,
                       label: 'إعدادات المتجر',
-                      onTap: () => _comingSoon(context),
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const MerchantAccountScreen()),
+                    ),
+                    // **وبابُ «خدماتي» من اللوحة** — والتاجرُ يبدأ يومَه
+                    // منها، فما لا يُوصل إليه من لوحته غيرُ موجودٍ عنده.
+                    _LinkTile(
+                      icon: Icons.apps_rounded,
+                      label: 'كل الخدمات',
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const MerchantServicesHubScreen()),
                     ),
                   ],
                 ),
@@ -401,12 +457,6 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
           );
         }),
       ),
-    );
-  }
-
-  void _comingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('قريباً')),
     );
   }
 }
@@ -478,10 +528,36 @@ class _LinkTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _LinkTile({required this.icon, required this.label, required this.onTap});
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-OWNER-GATE-001 — **بابُ المالك يُحرَس بالملكيّة لا بالميزة.**
+  ///
+  /// **ولمَ لا تكفي الميزة:** `restrictToPosPermissions` في الخادم
+  /// **تُبقي لموظّف نقطة البيع ما مُنح من صلاحيّات صاحبه**. فمن أُعطي
+  /// `employees` — مديرُ عمليّاتٍ مثلاً — **يملك الميزةَ ولا يملك
+  /// المتجر**. فحاجزٌ يسأل `has('employees')` يمرّره، ثمّ يردّه الخادمُ
+  /// بـ٤٠٣ عند أوّل فعل.
+  ///
+  /// **وزرٌّ يُرسَم ثمّ يُصفَع أسوأُ من غيابه**: الغيابُ يُسأل عنه،
+  /// والرفضُ يُقرأ عطلاً في التطبيق. (القاعدة الثامنة: الهويّة تحدّد
+  /// النطاق، لا القائمة المنسدلة.)
+  ///
+  /// **وكانت هذه اللوحةُ لا تستورد `AccessController` إطلاقاً** — أي
+  /// أنّ روابطَها كلَّها بلا سؤالِ صلاحيّةٍ واحد.
+  /// ══════════════════════════════════════════════════════════════════
+  final bool ownerOnly;
+
+  const _LinkTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.ownerOnly = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (ownerOnly && !_isOwner()) return const SizedBox.shrink();
+
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 4),

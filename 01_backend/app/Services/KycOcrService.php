@@ -30,6 +30,14 @@ use Illuminate\Support\Facades\Log;
  */
 class KycOcrService
 {
+    /** الوثائق النصّية فقط؛ السيلفي دليل حضور لا يحمل رقم الهوية. */
+    private const TEXT_DOCUMENT_TYPES = [
+        KycDocument::TYPE_ID_FRONT,
+        KycDocument::TYPE_ID_BACK,
+        KycDocument::TYPE_PASSPORT,
+        KycDocument::TYPE_ADDRESS_PROOF,
+    ];
+
     public function __construct(
         private readonly EncryptedFileStorage $storage,
         private readonly IdFieldExtractor $extractor,
@@ -42,7 +50,7 @@ class KycOcrService
         return (bool) config('amial.kyc.ocr.enabled', true);
     }
 
-    public function minConfidence(): float
+    private function minConfidence(): float
     {
         return (float) config('amial.kyc.ocr.min_confidence', 70);
     }
@@ -57,6 +65,12 @@ class KycOcrService
     public function process(KycDocument $doc): KycDocument
     {
         if (!$this->enabled()) {
+            return $doc;
+        }
+
+        // لا نقرأ صورةً حيّة وكأنها بطاقة هوية: نصٌّ عارض في الخلفية قد
+        // يتحول إلى اقتراح مضلل، و«ثقة منخفضة» في سيلفي ليست مشكلة العميل.
+        if (!$this->isApplicable($doc)) {
             return $doc;
         }
 
@@ -220,6 +234,8 @@ class KycOcrService
         }
 
         return [
+            'applicable' => $this->isApplicable($doc),
+            'not_applicable_reason' => $this->notApplicableReason($doc),
             'status' => (string) ($doc->ocr_status ?? 'not_run'),
             'confidence' => (float) ($doc->ocr_confidence ?? 0),
             'min_confidence' => $this->minConfidence(),
@@ -231,6 +247,18 @@ class KycOcrService
             'error' => $payload['error'] ?? null,
             'verified' => $this->verifiedFields($doc),
         ];
+    }
+
+    private function isApplicable(KycDocument $doc): bool
+    {
+        return in_array($doc->doc_type, self::TEXT_DOCUMENT_TYPES, true);
+    }
+
+    private function notApplicableReason(KycDocument $doc): ?string
+    {
+        return $doc->doc_type === KycDocument::TYPE_SELFIE
+            ? 'الصورة الشخصية الحيّة تُراجع بصرياً لإثبات الحضور، ولا تحمل حقول هوية نصية تُستخرج آلياً.'
+            : null;
     }
 
     /** يُسطّح البنية المتشعّبة إلى الحقول السبعة التي تطلبها الوثيقة. */
@@ -246,7 +274,7 @@ class KycOcrService
         ], static fn ($v) => $v !== null);
     }
 
-    public function verifiedFields(KycDocument $doc): array
+    private function verifiedFields(KycDocument $doc): array
     {
         if (!$doc->verified_fields) {
             return [];

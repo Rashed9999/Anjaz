@@ -13,6 +13,8 @@ class MerchantController extends GetxController implements GetxService {
       AmialMerchantDashboardStats.empty().obs;
   final RxList<AmialMerchantTransaction> transactions =
       <AmialMerchantTransaction>[].obs;
+  final Rx<Map<String, dynamic>?> financialReport = Rx<Map<String, dynamic>?>(null);
+  final RxBool isLoadingFinancialReport = false.obs;
 
   final RxBool isLoading = false.obs;
   final RxBool isSubmitting = false.obs;
@@ -23,17 +25,19 @@ class MerchantController extends GetxController implements GetxService {
   final RxString lastPaymentAmount = ''.obs;
 
   // ====== Profile ======
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-MERCHANT-SESSION-001 — **نداءُ ملفّ العميل نُزع من هنا.**
+  ///
+  /// كان يُنادي `/api/v1/customer/get-customer`، **وهي تردّ ٤٠٣ لكلّ
+  /// تاجر** — فلم يملأ `merchant.value` مرّةً واحدةً منذ كُتب، والخطأُ
+  /// مبتلَعٌ في `catch` أدناه. والأسوأُ أنّه كان نداءً إلى المجموعة
+  /// الوحيدة التي تفحص الخمول، فيحذف رموزَ التاجر ويطرده من حسابه.
+  ///
+  /// **وهويّةُ المتجر تصل من بيان الوصول أصلاً** (`merchant_context`)،
+  /// و**الرصيدُ من `daily-stats`** — كلاهما مسارُ تاجرٍ يعمل.
   Future<void> loadProfile() async {
     try {
       isLoading.value = true;
-      final r = await repo.getProfile();
-      if (r.statusCode == 200 && r.body is Map) {
-        final body = r.body as Map;
-        final data = body['meta'] ?? body['data'] ?? body;
-        if (data is Map) {
-          merchant.value = AmialMerchant.fromJson(Map<String, dynamic>.from(data));
-        }
-      }
       await _loadDailyStats();
     } catch (e) {
       if (kDebugMode) debugPrint('loadProfile (merchant): $e');
@@ -55,6 +59,25 @@ class MerchantController extends GetxController implements GetxService {
       }
     } catch (e) {
       if (kDebugMode) debugPrint('_loadDailyStats (merchant): $e');
+    }
+  }
+
+  Future<void> loadFinancialReport({String? from, String? to}) async {
+    try {
+      isLoadingFinancialReport.value = true;
+      lastError.value = '';
+      final r = await repo.financialReport(from: from, to: to);
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        final meta = r.body['meta'] ?? {};
+        final report = meta is Map ? meta['report'] : null;
+        if (report is Map) financialReport.value = Map<String, dynamic>.from(report);
+      } else {
+        lastError.value = _msg(r) ?? 'تعذر تحميل التقرير المالي';
+      }
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    } finally {
+      isLoadingFinancialReport.value = false;
     }
   }
 
@@ -103,12 +126,21 @@ class MerchantController extends GetxController implements GetxService {
   Future<void> loadTransactions() async {
     try {
       isLoading.value = true;
-      final r = await repo.transactionHistory();
+      // ════════════════════════════════════════════════════════════
+      // AMIAL-MERCHANT-SESSION-001 — **من دفتر التاجر لا من سجلّ العميل.**
+      //
+      // كان مكتوباً هنا أنّ `/customer/transaction-history` «مصدرُ حركة
+      // المحفظة الحقيقيّ للتاجر». **وقِيس فإذا هي ٤٠٣ لكلّ تاجر** —
+      // القائمةُ فارغةٌ منذ كُتبت، والشاشةُ تقول «لا حركةَ في المحفظة
+      // بعد» على متجرٍ يبيع. وهو غيابٌ يُعرَض صفراً (القاعدة السابعة).
+      // ════════════════════════════════════════════════════════════
+      final r = await repo.walletLedger();
       if (r.statusCode == 200 && r.body is Map) {
-        final list = (r.body['data'] ?? r.body['meta']?['data'] ?? []) as List;
+        final meta = (r.body as Map)['meta'];
+        final list = (meta is Map ? meta['entries'] : null) as List? ?? const [];
         transactions.value = list
-            .map((j) => AmialMerchantTransaction.fromJson(
-                Map<String, dynamic>.from(j)))
+            .map((j) => AmialMerchantTransaction.fromLedgerEntry(
+                Map<String, dynamic>.from(j as Map)))
             .toList();
       }
     } catch (e) {

@@ -396,6 +396,13 @@ class BusinessSettingsController extends Controller
                     'title' => 'أميال باي',
                     'body' => 'إشعارة اختبار — الإعداد سليم ✅',
                 ],
+                'android' => [
+                    'priority' => 'HIGH',
+                    'notification' => [
+                        'channel_id' => 'amial_pay_default',
+                        'sound' => 'notification',
+                    ],
+                ],
                 'data' => ['type' => 'test'],
             ]]
         );

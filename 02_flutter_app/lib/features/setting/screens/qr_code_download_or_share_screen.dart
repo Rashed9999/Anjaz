@@ -177,14 +177,13 @@ class _QrCodeDownloadOrShareScreenState
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: AmialColors.yellow, width: 2),
                   ),
-                  // AMIAL-QR-FIX-002: كان SvgPicture.string(widget.qrCode) —
-                  // و qrCode القادم من الخادم فارغ، فتُحفظ وتُشارَك صورة بلا
-                  // رمز. نُولّده محلياً من رقم الحساب (أو الهاتف) كما تفعل
-                  // بقيّة الشاشات، فيصير الملف المُنزَّل صالحاً للمسح فعلاً.
+                  // رمز الاستلام لا يعود إلى رقم الهاتف عند تعذّر النداء؛
+                  // القيمة القادمة هي رقم الحساب الذي فُتح به هذا النموذج.
+                  // بذلك لا نحفظ صورة قابلة للمسح إلى وجهة خاطئة.
                   child: QrDisplayWidget(
                     data: (_accountNumber != null && _accountNumber!.isNotEmpty)
                         ? _accountNumber!
-                        : widget.phoneNumber,
+                        : widget.qrCode,
                     size: size.width * 0.52,
                   ),
                 ),

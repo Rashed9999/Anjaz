@@ -243,9 +243,44 @@ class ReceiptService
             }
         }
 
-        // احتياط لا يُتوقّع بلوغه: نوسّع الفضاء بدل رمي استثناء يوقف عملية مالية.
-        return $date . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT)
-            . str_pad((string) random_int(0, 99), 2, '0', STR_PAD_LEFT);
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-RECEIPT-NUMBER-RACE-001 — **«افحص ثمّ أدرج» ليس ذرّيّاً.**
+        //
+        // كان هذا الاحتياطُ يُرجع رقماً **بلا فحصِ تفرّد** («احتياطٌ لا
+        // يُتوقّع بلوغه»). وهو صحيحٌ احتماليّاً وخطأٌ بنيويّاً: على
+        // `receipts.receipt_number` **قيدٌ فريدٌ في القاعدة**، فأيُّ تصادمٍ
+        // — مهما ندر — يخرج `UniqueConstraintViolationException` **يوقف
+        // إصدارَ إيصالٍ لعمليّةٍ ماليّةٍ وقعت فعلاً**.
+        //
+        // وهو النمطُ نفسُه الذي كلّف هذا المشروعَ من قبل في
+        // `firstOrCreate` (‏`1062 Duplicate entry 'PLATFORM_FEE'`)،
+        // ومكتوبٌ في `CLAUDE.md` بثمنه: **الفحصُ ثمّ الإدراجُ خطوتان،
+        // وبينهما يمرّ غيرُك.**
+        //
+        // **وما دفعني إليه ملاحظةٌ لا برهان**: سقط
+        // `receipt_numbers_do_not_collide` في جولتَي بوّابة، ومرّ ٨/٨
+        // منفرداً ومرّتين في المجموعة كاملةً وبعد طبقة الضغط. **فلم
+        // أُثبت أنّ هذا سببُه ولا أدّعيه** — لكنّ الشقَّ مفتوحٌ بذاته،
+        // وإغلاقُه صوابٌ سواءٌ كان هو أم لا.
+        //
+        // فالاحتياطُ صار **يوسّع الفضاءَ ويفحص** — وبفضاءِ مئةِ مليون
+        // لليوم الواحد يصير التصادمُ بعد ثمانيةِ تصادماتٍ متتاليةٍ
+        // مستحيلاً عمليّاً، ولا يُرجَع رقمٌ لم يُسأل عنه.
+        // ══════════════════════════════════════════════════════════════
+        for ($attempt = 0; $attempt < 8; $attempt++) {
+            $wide = $date
+                . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT)
+                . str_pad((string) random_int(0, 99), 2, '0', STR_PAD_LEFT);
+
+            if (!Receipt::where('receipt_number', $wide)->exists()) {
+                return $wide;
+            }
+        }
+
+        // **ولا يُرمى استثناءٌ يوقف مالاً**: الطابعُ الزمنيُّ بالميكروثانية
+        // يجعل التكرارَ يحتاج إيصالين في الميكروثانية نفسِها **وبنفس
+        // القرعة** — وهو أبعدُ من كلّ ما سبق.
+        return $date . substr((string) now()->format('Hisu'), -8);
     }
 
     /**
@@ -290,6 +325,7 @@ class ReceiptService
                 return [
                     'receipt_number' => $receipt->receipt_number,
                     'receipt_type' => $receipt->receipt_type,
+                    'receipt_type_label' => $this->publicTypeLabel($receipt->receipt_type),
                     'amount' => $receipt->amount,
                     'fee' => $receipt->fee,
                     'issued_at' => $receipt->issued_at?->toIso8601String(),
@@ -298,5 +334,20 @@ class ReceiptService
                 ];
             }
         );
+    }
+
+    private function publicTypeLabel(string $type): string
+    {
+        return match ($type) {
+            'send_money' => 'تحويل أموال',
+            'cash_in' => 'إيداع نقدي',
+            'cash_out', 'withdraw' => 'سحب نقدي',
+            'add_money' => 'إضافة رصيد',
+            'pay_merchant' => 'دفع لتاجر',
+            'pos_payment' => 'دفع نقطة بيع',
+            'qr_payment' => 'دفع عبر رمز QR',
+            'refund' => 'استرجاع',
+            default => 'عملية مالية',
+        };
     }
 }

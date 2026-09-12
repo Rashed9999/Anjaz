@@ -1,13 +1,15 @@
+import 'package:amial_pay/common/widgets/amial_brand_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:amial_pay/common/widgets/vertical_state_view.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/entitlements/capability_screens.dart';
 import 'package:amial_pay/features/entitlements/controllers/entitlements_controller.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
-import 'package:amial_pay/util/images.dart';
 
 /// AMIAL-MERCHANT-NAV-001
 ///
@@ -24,12 +26,34 @@ class MerchantCapabilityHubScreen extends StatefulWidget {
     required this.subtitle,
     required this.groups,
     required this.icon,
+    this.codes,
   });
 
   final String title;
   final String subtitle;
   final List<String> groups;
   final IconData icon;
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-WHOLESALE-GUIDE-001 — **تضييقٌ بالرمز حين لا تكفي المجموعة.**
+  ///
+  /// المجموعاتُ في سجلّ القدرات عرضيّةٌ ومشتركةٌ بين القطاعات: «الناس»
+  /// تجمع العملاءَ والموظّفين معاً. وذاك يكفي التجزئةَ («العملاء
+  /// والفريق» قسمٌ واحدٌ في دليلها) **ولا يكفي الجملة**: دليلُ تشغيلها
+  /// يفصلهما قسمين —
+  ///
+  ///     العملاء والديون   : العملاء، كشف الحساب، آجال الاستحقاق
+  ///     الفريق والأجهزة   : الموظفون، الأدوار، POS، الفروع
+  ///
+  /// **ولا تُغيَّر المجموعةُ في السجلّ لأجل قطاع** — فذلك يُحرّك قسمَ
+  /// التجزئة والصيدليّة معه، وهو ما لم يطلبه أحد.
+  ///
+  /// **وحين يُمرَّر، يُقرأ وحدَه** — لا يُجمَع مع المجموعات: قسمٌ يُعرَّف
+  /// برموزه معرَّفٌ تماماً، وضمُّ مجموعةٍ إليه يُعيد الخلطَ الذي فُصل لأجله.
+  /// وكلُّ رمزٍ هنا **يجب أن يوجد في السجلّ** — يحرسه
+  /// `wholesale_guide_contract_test`، فرمزٌ مخطوءٌ يُفرغ القسمَ صامتاً.
+  /// ══════════════════════════════════════════════════════════════════
+  final List<String>? codes;
 
   @override
   State<MerchantCapabilityHubScreen> createState() =>
@@ -39,10 +63,17 @@ class MerchantCapabilityHubScreen extends StatefulWidget {
 class _MerchantCapabilityHubScreenState
     extends State<MerchantCapabilityHubScreen> {
   EntitlementsController get c => Get.find<EntitlementsController>();
+  AccessController? get _access => Get.isRegistered<AccessController>()
+      ? Get.find<AccessController>()
+      : null;
+
+  bool get _wrongFuelSection =>
+      _access?.isFuel == true && !widget.groups.contains('الوقود');
 
   @override
   void initState() {
     super.initState();
+    if (_wrongFuelSection) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (c.manifest.value == null && !c.isLoading.value) {
         c.load();
@@ -50,14 +81,23 @@ class _MerchantCapabilityHubScreenState
     });
   }
 
-  List<Map<String, dynamic>> _rows() => c.items.where((row) {
-        final cap = row['capability'];
-        if (cap is! Map) return false;
-        return widget.groups.contains('${cap['group'] ?? ''}');
-      }).toList();
+  List<Map<String, dynamic>> _rows() {
+    final codes = widget.codes;
+
+    return c.items.where((row) {
+      final cap = row['capability'];
+      if (cap is! Map) return false;
+
+      if (codes != null) return codes.contains('${cap['code'] ?? ''}');
+
+      return widget.groups.contains('${cap['group'] ?? ''}');
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_wrongFuelSection) return const FuelOwnerConsoleScreen();
+
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
@@ -137,14 +177,14 @@ class _MerchantCapabilityHubScreenState
           Row(
             children: [
               Container(
-                width: AmialSpacing.xxl * 1.75,
+                width: AmialSpacing.xxl * 1.75 * AmialBrandLogo.lockupAspect,
                 height: AmialSpacing.xxl * 1.75,
                 padding: const EdgeInsets.all(AmialSpacing.xs),
                 decoration: BoxDecoration(
                   color: AmialColors.cardSurface,
                   borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
                 ),
-                child: Image.asset(Images.logo, fit: BoxFit.contain),
+                child: const AmialBrandLogo(fit: BoxFit.contain),
               ),
               const Spacer(),
               Container(

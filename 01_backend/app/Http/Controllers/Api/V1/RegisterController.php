@@ -26,6 +26,21 @@ class RegisterController extends Controller
 
     public function customerRegistration(Request $request): JsonResponse
     {
+        // التسجيل بمساعدة موظف لا يفتح محفظة خلف ظهر صاحب الرقم: يُستعاد
+        // ما كتبه الموظف *قبل* التحقق، ثم يبقى OTP وPIN إلزاميين في هذا
+        // المسار نفسه. مدخلات العميل الحالية تتقدّم دائماً على المسودة.
+        if ($request->filled('dial_country_code') && $request->filled('phone')) {
+            $phoneForDossier = \App\Support\Phone::canonical(
+                (string) $request->input('dial_country_code') . (string) $request->input('phone')
+            );
+            $dossierType = $request->input('account_type') === 'merchant' ? 'merchant' : 'customer';
+            $prefill = app(\App\Services\RegistrationDossierService::class)
+                ->prefillForPhone($dossierType, $phoneForDossier);
+            if ($prefill) {
+                $request->merge(array_replace($prefill, $request->all()));
+            }
+        }
+
         $check = $this->validateUploadedFile($request, ['image']);
         if ($check !== true) {
             return $check;
@@ -106,7 +121,7 @@ class RegisterController extends Controller
             // الحساب يُنشأ «قيد التحقق» (kyc=0) ويظهر في لوحة التحقق للاعتماد.
             'account_type' => 'sometimes|nullable|in:customer,merchant,agent',
             'store_name' => 'sometimes|nullable|string|max:120',
-            'business_type' => 'sometimes|nullable|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_BUSINESS_TYPES),
+            'business_type' => 'sometimes|nullable|in:' . implode(',', \App\Domain\Verticals\VerticalRegistry::codes()),
         ]);
 
 
@@ -267,6 +282,9 @@ class RegisterController extends Controller
             $user->unique_id = $user->id . mt_rand(1111, 99999);
             $user->save();
 
+            // AMIAL-SELFREG-KYCDOCS-001 — انظر `ingestKycDocuments` أسفله.
+            $this->ingestKycDocuments($user, $request);
+
             // ══════════════════════════════════════════════════════════
             // AMIAL-ZONE-REG-001 — **إسنادُ المنطقة عند التسجيل.**
             //
@@ -300,9 +318,15 @@ class RegisterController extends Controller
                 $mr = new \App\Models\Merchant();
                 $mr->user_id = $user->id;
                 $mr->store_name = trim((string) $request->input('store_name'));
-                $mr->merchant_number = sprintf('M-%05d', $user->id);
                 $mr->address = trim((string) $request->input('address', '')) ?: '—';
-                $mr->save();
+
+                // AMIAL-MERCHANT-NUMBER-001 — **ستّةُ أرقامٍ عشوائيّةٍ بلا
+                // صفر.** وكان `sprintf('M-%05d', $user->id)` — مشتقّاً من
+                // رقم المستخدم، فيُفشي عدَّ التجّار ويُخمَّن جارُه.
+                // و`assignTo` تحفظ الصفَّ وتعيد المحاولةَ على تصادم
+                // القيد الفريد.
+                app(\App\Services\Merchant\MerchantNumberService::class)->assignTo($mr);
+
                 $loginNumbers['merchant_number'] = $mr->merchant_number;
 
                 \App\Models\MerchantProfile::firstOrCreate(['user_id' => $user->id], [
@@ -324,6 +348,40 @@ class RegisterController extends Controller
             }
             if ($accountType === AGENT_TYPE) {
                 $loginNumbers['agent_number'] = $user->agent_number;
+            }
+
+            $dossierType = $accountType === MERCHANT_TYPE ? 'merchant' : 'customer';
+            $dossierService = app(\App\Services\RegistrationDossierService::class);
+            $claimed = $dossierService->claimForConfirmedRegistration($dossierType, $phone, $user);
+            // التسجيل الذاتي يستحق أرشفة قابلة للطباعة هو أيضاً. أما إن بدأ
+            // الملف لدى موظف فلا ننشئ نسخة ثانية؛ يبقى مرجع الموظف هو الأصل.
+            if (!$claimed && $accountType !== AGENT_TYPE) {
+                // نفس مخطط الملف الذي تستعمله لوحة الموظف؛ لا نطبع نسخة
+                // مبتورة للتسجيل الإلكتروني ثم ندّعي أن الأرشيف موحّد.
+                $dossierPayload = $request->only([
+                    'dial_country_code', 'phone', 'gender', 'email', 'name_en', 'father_name', 'grandfather_name',
+                    'date_of_birth', 'country_of_birth', 'dual_nationality', 'marital_status',
+                    'identification_type', 'identification_number', 'identification_issue_date',
+                    'identification_expiry_date', 'id_place_of_issue', 'address', 'origin_governorate',
+                    'residence_governorate', 'residence_district', 'residence_area', 'residence_landmark',
+                    'housing_type', 'occupation', 'employer_name', 'job_title', 'work_address',
+                    'income_source', 'monthly_income', 'monthly_income_currency', 'account_purpose',
+                    'is_pep', 'pep_position', 'kin_name', 'kin_phone', 'kin_relation', 'kin2_name',
+                    'kin2_phone', 'kin2_relation', 'store_name', 'business_type', 'declaration_accepted',
+                ]);
+                $dossierPayload += [
+                    'full_name' => trim((string) ($user->f_name . ' ' . $user->l_name)),
+                    'gender' => $user->gender, 'phone' => $phone,
+                    'identification_number' => $user->identification_number,
+                    'identification_type' => $user->identification_type,
+                    'address' => $user->address ?? null,
+                    'business_name' => $accountType === MERCHANT_TYPE ? $request->input('store_name') : null,
+                    'business_type' => $accountType === MERCHANT_TYPE ? $request->input('business_type') : null,
+                    'phone_canonical' => $phone,
+                    'subject_type' => $dossierType,
+                    'schema_version' => 'opening-dossier-v1',
+                ];
+                $dossierService->archiveSelfRegistration($dossierType, $phone, $user, $dossierPayload);
             }
         });
 
@@ -474,6 +532,9 @@ class RegisterController extends Controller
             $user->unique_id = $user->id . mt_rand(1111, 99999);
             $user->save();
 
+            // AMIAL-SELFREG-KYCDOCS-001 — انظر `ingestKycDocuments` أسفله.
+            $this->ingestKycDocuments($user, $request);
+
             $emoney = $this->eMoney;
             $emoney->user_id = $user->id;
             $emoney->save();
@@ -487,5 +548,61 @@ class RegisterController extends Controller
         }
 
         return response()->json(['message' => 'Registration Successful'], 200);
+    }
+
+    /**
+     * AMIAL-SELFREG-KYCDOCS-001 — **نظامان لا يلتقيان، وزرُّ الاعتماد بينهما.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ما قِيس:** التسجيلُ الذاتيُّ يحفظ صورَ الوثائق في
+     * `users.identification_image` (‏JSON من مسارات)، و
+     * `KycDocumentService::decideAccountVerification` — التي يمرّ بها
+     * **زرُّ الاعتماد في لوحة التحقّق** — تشترط صفوفاً في `kyc_documents`
+     * من ثلاثة أنواع: وجهُ الهوية · ظهرُها · صورةٌ شخصيّة.
+     *
+     * فالزرُّ يردّ ٤٢٢ «لا يُعتمد الحسابُ قبل رفع هذه المستندات» على حسابٍ
+     * **رفع وثائقَه فعلاً**، ولا سبيلَ في تلك الشاشة إلى رفعها. أي أنّ
+     * **كلَّ حسابٍ سجّل ذاتيّاً — عميلاً أو تاجراً أو وكيلاً — لا يمكن
+     * اعتمادُه أبداً.** (قِيس بالتشغيل: `SelfRegisteredMerchantIsUsableTest`.)
+     *
+     * **ولمَ لم يمسكه اختبار:** كلُّ اختبارات الاعتماد ترفع المستنداتِ
+     * بيدها عبر `upload()` ثمّ تعتمد — فتفحص المنطقَ وتتخطّى الفجوة.
+     * والفجوةُ ليست في طرفٍ منهما بل **في الوصلة بينهما**.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **والوصلُ يحتاج نوعاً، والنوعُ لا يُخمَّن.** فمستندٌ يُسجَّل «وجهَ
+     * هويّة» وهو ظهرُها يُفسد ملفَّ امتثالٍ بصمت، وهو أسوأُ من غيابه.
+     * فتُقبل الحقولُ **مسمّاةً** (`kyc_id_front` …)، والتطبيقُ يرسلها في
+     * خاناتٍ معنونة. وما لا نوعَ له يبقى حيث هو ولا يُخترَع له نوع
+     * (القاعدة السابعة: «غير معروف» ليس قيمةً تُملأ).
+     *
+     * **ولا يُسقِط فشلُ مستندٍ تسجيلاً**: الحسابُ أُنشئ، وفقدُ مستندٍ
+     * يُعالَج برفعه ثانيةً — لا بإلغاء الحساب. فيُلتقط كلُّ استثناءٍ
+     * ويُسجَّل، ويمضي التسجيل.
+     */
+    private function ingestKycDocuments(\App\Models\User $user, Request $request): void
+    {
+        $map = [
+            'kyc_id_front' => \App\Models\KycDocument::TYPE_ID_FRONT,
+            'kyc_id_back' => \App\Models\KycDocument::TYPE_ID_BACK,
+            'kyc_selfie' => \App\Models\KycDocument::TYPE_SELFIE,
+            'kyc_address_proof' => \App\Models\KycDocument::TYPE_ADDRESS_PROOF,
+        ];
+
+        $svc = app(\App\Services\KycDocumentService::class);
+
+        foreach ($map as $field => $docType) {
+            if (!$request->hasFile($field)) {
+                continue;
+            }
+            try {
+                $svc->upload($user, $docType, $request->file($field));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'AMIAL-SELFREG-KYCDOCS-001: تعذّر إدراج مستند التسجيل',
+                    ['user_id' => $user->id, 'doc_type' => $docType, 'error' => $e->getMessage()],
+                );
+            }
+        }
     }
 }

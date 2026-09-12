@@ -31,11 +31,11 @@ class FundsController extends GetxController implements GetxService {
             .toList();
         lastError.value = '';
       } else {
-        lastError.value = _msg(r) ?? 'Failed to load funds';
+        lastError.value = _msg(r) ?? 'تعذّر تحميل الصناديق';
       }
     } catch (e) {
       if (kDebugMode) debugPrint('loadMyFunds error: $e');
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
     } finally {
       isLoading.value = false;
     }
@@ -59,10 +59,10 @@ class FundsController extends GetxController implements GetxService {
         await loadMyFunds();
         return true;
       }
-      lastError.value = _msg(r) ?? 'Failed';
+      lastError.value = _msg(r) ?? 'تعذّر إتمام العملية';
       return false;
     } catch (e) {
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
       return false;
     } finally {
       isSubmitting.value = false;
@@ -112,10 +112,10 @@ class FundsController extends GetxController implements GetxService {
         lastError.value = '';
         return true;
       }
-      lastError.value = _msg(r) ?? 'Not found';
+      lastError.value = _msg(r) ?? 'غير موجود';
       return false;
     } catch (e) {
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
       return false;
     } finally {
       isLoading.value = false;
@@ -135,10 +135,10 @@ class FundsController extends GetxController implements GetxService {
         await loadMyFunds();
         return true;
       }
-      lastError.value = _msg(r) ?? 'Failed';
+      lastError.value = _msg(r) ?? 'تعذّر إتمام العملية';
       return false;
     } catch (e) {
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
       return false;
     } finally {
       isSubmitting.value = false;
@@ -163,10 +163,10 @@ class FundsController extends GetxController implements GetxService {
         await loadFundDetails(fundUlid);
         return true;
       }
-      lastError.value = _msg(r) ?? 'Failed';
+      lastError.value = _msg(r) ?? 'تعذّر إتمام العملية';
       return false;
     } catch (e) {
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
       return false;
     } finally {
       isSubmitting.value = false;
@@ -181,10 +181,10 @@ class FundsController extends GetxController implements GetxService {
         await loadMyFunds();
         return true;
       }
-      lastError.value = _msg(r) ?? 'Failed';
+      lastError.value = _msg(r) ?? 'تعذّر إتمام العملية';
       return false;
     } catch (e) {
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
       return false;
     } finally {
       isSubmitting.value = false;

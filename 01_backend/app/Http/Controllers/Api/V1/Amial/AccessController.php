@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1\Amial;
 
+use App\Domain\Verticals\VerticalRegistry as VR;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
 use App\Models\User;
 use App\Services\FeatureAccessService;
+use App\Services\Merchant\MerchantContextService;
 use App\Support\Access\AccessConstants as A;
 use App\Support\Access\AccessPresets;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +31,7 @@ class AccessController extends Controller
 {
     public function __construct(
         private readonly FeatureAccessService $svc,
+        private readonly MerchantContextService $merchantContext,
     ) {}
 
     // ============ /me/access ============
@@ -40,11 +43,14 @@ class AccessController extends Controller
 
         $access = $this->svc->accessFor($user);
 
+        $merchantContext = $this->merchantContext->for($user, $access);
+        $access['merchant_display_name'] = $merchantContext['business']['name'];
+
         // أضف plan_info إن كان تاجراً
         $planInfo = null;
         $profile = MerchantProfile::where('user_id', $user->id)->first();
         if ($profile) {
-            $plan = $profile->subscription_plan ?? A::PLAN_FREE;
+            $plan = A::canonicalPlan($profile->subscription_plan);
             $expiresAt = $profile->subscription_expires_at;
 
             $isExpired = $expiresAt !== null && $expiresAt->isPast() && $plan !== A::PLAN_FREE;
@@ -63,6 +69,7 @@ class AccessController extends Controller
 
         return $this->ok([
             'access' => $access,
+            'merchant_context' => $merchantContext,
             'plan_info' => $planInfo,
             'user' => [
                 'id' => $user->id,
@@ -75,10 +82,50 @@ class AccessController extends Controller
 
     // ============ التاجر يختار نوع نشاطه ============
 
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-VERTICAL-COMPOSE-001 — **القطاعاتُ المتاحةُ للاختيار.**
+     *
+     * تقرؤها شاشتان: بطاقاتُ «نوع النشاط التجاري» الإلزاميّة، وقائمةُ
+     * التسجيل. وكلتاهما كانت تكتب الستّةَ بيدها في Dart — فلو أضافت
+     * الإدارةُ «مخبزاً» لَما ظهر لأحدٍ حتّى نشرةِ متجرٍ جديدة.
+     *
+     * **والأيقونةُ واللونُ يُرسَلان** لأنّ ملفّاً مُصرَّفاً لا يعرف
+     * قطاعاً وُلد بعده، فيرسمه بأيقونةٍ عامّة. والستّةُ المبنيّةُ تبقى
+     * بأيقوناتها في التطبيق — يدمج الطرفان: المعروفُ بشكله المعروف،
+     * والجديدُ بما أرسله الخادم.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    public function businessTypeCatalog(): JsonResponse
+    {
+        $rows = [];
+
+        foreach (VR::current() as $code => $vertical) {
+            $isBuiltIn = ! VR::isAdminDefined($code);
+
+            $rows[] = [
+                'value' => $code,
+                'label' => VR::labels()[$code] ?? $vertical->nameAr(),
+                'short_label' => $vertical->nameAr(),
+                'hint' => $vertical instanceof \App\Domain\Verticals\DbVertical
+                    ? $vertical->hint() : null,
+                'icon' => $vertical instanceof \App\Domain\Verticals\DbVertical
+                    ? $vertical->icon() : null,
+                'color' => $vertical instanceof \App\Domain\Verticals\DbVertical
+                    ? $vertical->color() : null,
+                // **ويُقال أيُّهما مبنيٌّ وأيُّهما مُضاف** — فالتطبيقُ يعرف
+                // متى يستعمل شكلَه المحفور ومتى يرسم ما أُرسل إليه.
+                'is_built_in' => $isBuiltIn,
+            ];
+        }
+
+        return $this->ok(['business_types' => $rows]);
+    }
+
     public function updateMyBusinessType(Request $request): JsonResponse
     {
         $v = Validator::make($request->all(), [
-            'business_type' => 'required|in:' . implode(',', A::ALL_BUSINESS_TYPES),
+            'business_type' => 'required|in:' . implode(',', VR::codes()),
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -157,15 +204,47 @@ class AccessController extends Controller
         $profile = \App\Models\MerchantProfile::where('user_id', $request->user()->id)->first();
         if ($profile) {
             $currentPlan = [
-                'code' => $profile->subscription_plan ?? A::PLAN_FREE,
+                'code' => A::canonicalPlan($profile->subscription_plan),
                 'expires_at' => $profile->subscription_expires_at?->toIso8601String(),
                 'extra_features' => $profile->extra_features ?? [],
             ];
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-PLAN-COMPARE-001 — **الفرقُ محسوبٌ من السجلّ، لا مكتوبٌ
+        // في الشاشة.**
+        //
+        // قِيس: جدولُ المقارنة في التطبيق يبني صفوفَه من `features` (٣٩
+        // رمزاً) ويترجمها بخريطةٍ مكتوبةٍ يدويّاً فيها **١٩** — فعشرون
+        // صفّاً تُعرَض `advanced_reports` و`wholesale_credit` خاماً.
+        // **والأسماءُ العربيّةُ للتسعةِ والثلاثين كلِّها في
+        // `CapabilityRegistry`** ومعها أوصافُها ومجموعاتُها.
+        //
+        // فيُرسَل الوصفُ من مصدره، **ولا يُضاف مسارٌ ثانٍ**: شاشةٌ تنادي
+        // نداءين لتبني صفحةً واحدةً تعرض نصفَها ثمّ تنتظر.
+        // ══════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════
+        // **والمقارنةُ تُحسب لنشاط القارئ، ومفتاحُ الذاكرة يحمله.**
+        //
+        // كانت تُخزَّن بمفتاحٍ واحدٍ للجميع، فيقرأ صاحبُ الصيدليّة أنّ
+        // «الأعمال» تفتح له «كتالوج التجزئة» — **ولا تفتحه أبداً**، لأنّ
+        // `CapabilityRegistry` ينزعه عند التشغيل. وعدٌ لا يُوفى.
+        //
+        // ومفتاحٌ واحدٌ لجميع الأنشطة **أخطرُ من غياب الذاكرة**: أوّلُ
+        // قارئٍ يملؤها بنشاطه فيراها البقيّةُ بعينه.
+        // ══════════════════════════════════════════════════════════════
+        $businessType = $profile?->business_type;
+
+        $comparison = \Cache::remember(
+            'amial_plans_comparison:'.($businessType ?: 'any'),
+            now()->addHours(6),
+            fn () => app(\App\Services\Access\PlanComparisonService::class)
+                ->catalogue($businessType));
+
         return $this->ok([
             'plans' => $plans,
             'current_plan' => $currentPlan,
+            'comparison' => $comparison,
             // **العملةُ من الثابت لا مكتوبةً هنا** — موضعٌ واحدٌ يُغيَّر إن
             // غُيِّر التسعير. وكان `'SAR'` هنا و«ر.ي» في الشاشة، فالخادمُ
             // يقول السعوديّ والتطبيقُ يكتب اليمنيّ على الرقم نفسِه.
@@ -185,8 +264,8 @@ class AccessController extends Controller
             'roles' => A::ALL_ROLES,
             'verification_levels' => A::ALL_VERIFICATION_LEVELS,
             'business_types' => array_map(fn($t) => [
-                'value' => $t, 'label' => A::BUSINESS_TYPE_LABELS[$t] ?? $t,
-            ], A::ALL_BUSINESS_TYPES),
+                'value' => $t, 'label' => VR::labels()[$t] ?? $t,
+            ], VR::codes()),
             'plans' => array_map(fn($p) => [
                 'value' => $p,
                 'label' => A::PLAN_LABELS[$p] ?? $p,
@@ -252,7 +331,7 @@ class AccessController extends Controller
             return $this->error('FORBIDDEN', 'صلاحية إدارية مطلوبة', 403);
         }
         $v = Validator::make($request->all(), [
-            'business_type' => 'nullable|in:' . implode(',', A::ALL_BUSINESS_TYPES),
+            'business_type' => 'nullable|in:' . implode(',', VR::codes()),
         ]);
         if ($v->fails()) return $this->validationError($v);
 

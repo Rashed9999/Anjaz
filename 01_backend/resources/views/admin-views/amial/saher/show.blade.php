@@ -153,5 +153,63 @@
         </div>
     </div>
 
+    {{-- ══════════════════════════════════════════════════════════════
+         AMIAL-SAHER-RULING-001 — **الفرزُ يُكتب هنا، أو لا يُكتب أبداً.**
+
+         حالاتُ `HUMAN_HELD` كانت مبنيّةً وتنجو من كلّ مسح، والصلاحيّةُ
+         معرَّفةً، والترجماتُ في الفهرس — **ولا زرَّ واحدٌ يبلغها**.
+         فبقيت النتائجُ تُقرأ من الصفر في كلّ تدقيق.
+
+         والزرُّ خلف `saher.findings.suppress` — فمن يرى لا يحكم بالضرورة.
+         ══════════════════════════════════════════════════════════════ --}}
+    @if(auth()->user()?->hasPlatformPermission('saher.findings.suppress'))
+    <div class="card mt-3">
+        <div class="card-header">
+            <strong>فرزُ هذا الاكتشاف</strong>
+        </div>
+        <div class="card-body">
+            @if($finding->ruling_reason)
+                <div class="alert alert-secondary py-2 mb-3">
+                    <div class="small text-muted mb-1">
+                        حُكم عليه {{ \Carbon\Carbon::parse($finding->ruled_at)->diffForHumans() }}
+                        @unless($finding->ruling_source_hash)
+                            — <span class="text-warning">بلا بصمةِ شيفرة، فلا ينتهي من تلقائه</span>
+                        @endunless
+                    </div>
+                    <div>{{ $finding->ruling_reason }}</div>
+                </div>
+            @endif
+
+            <form method="POST" action="{{ route('admin.amial.saher.rule', $finding->id) }}">
+                @csrf
+                <div class="form-group mb-2">
+                    <label class="small mb-1" for="ruling-status">الحكم</label>
+                    <select class="form-control" id="ruling-status" name="status" required>
+                        <option value="FALSE_POSITIVE">إيجابيّةٌ كاذبة — المقياسُ أخطأ</option>
+                        <option value="ACCEPTED_RISK">مخاطرةٌ مقبولة — صحيحٌ ونقبله</option>
+                        <option value="SUPPRESSED">مكتوم — متروكٌ عمداً</option>
+                        <option value="OPEN">أعِد فتحَه</option>
+                    </select>
+                </div>
+
+                <div class="form-group mb-2">
+                    <label class="small mb-1" for="ruling-reason">السبب</label>
+                    <textarea class="form-control" id="ruling-reason" name="reason"
+                              rows="3" minlength="20" maxlength="2000" required
+                              placeholder="لماذا؟ عشرون محرفاً على الأقل — فـ«تمام» كتمانٌ لا حكم."></textarea>
+                </div>
+
+                <p class="small text-muted mb-2">
+                    ويُرفَع الحكمُ من تلقائه إن تغيّر الملفُّ الذي صدر عليه —
+                    فإقرارٌ لا ينتهي صمتٌ مؤجَّل.
+                </p>
+
+                <button type="submit" class="btn btn-primary btn-sm"
+                        data-testid="saher-rule-submit">تسجيلُ الحكم</button>
+            </form>
+        </div>
+    </div>
+    @endif
+
 </div>
 @endsection

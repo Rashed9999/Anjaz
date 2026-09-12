@@ -101,6 +101,19 @@ class VerticalBootstrapService
         }
     }
 
+    /**
+     * تهيئة الأدوار فقط عند إنشاء موظف؛ لا تنشئ سجلات قطاع جانبية.
+     * تستخدم القوالب نفسها وتحفظ تعديلات المالك والأدوار المعطلة.
+     */
+    public function ensureRolesFor(User $merchant): void
+    {
+        $type = MerchantProfile::where('user_id', $merchant->id)->value('business_type');
+
+        if ($type) {
+            $this->seedRolesFor($merchant, $type);
+        }
+    }
+
     private function fuel(User $m): array
     {
         $existed = \App\Models\FuelStation::where('merchant_user_id', $m->id)->exists();

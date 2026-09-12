@@ -4,6 +4,8 @@ namespace App\Models\Retail;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Branch;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -44,6 +46,12 @@ class MerchantLocation extends Model
     public function stocks(): HasMany
     {
         return $this->hasMany(ProductStock::class, 'location_id');
+    }
+
+    /** المتجرُ التشغيلي يتبع فرعاً؛ المستودع لا يُعامل كفرع مبيعات. */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
     }
 
     public function movements(): HasMany

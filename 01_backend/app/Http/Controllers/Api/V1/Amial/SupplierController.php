@@ -254,9 +254,38 @@ class SupplierController extends Controller
     }
 
     /**
-     * استلام بضاعة: {items: [{item_id, received_quantity}]}
-     * يزيد مخزون المنتجات المربوطة، ويزيد مديونية المورد بقيمة المُستلَم،
-     * ويحدّث حالة الأمر (مستلم جزئياً / مكتمل).
+     * استلام بضاعة: {items: [{item_id, received_quantity}], paid_now?, location_id?}
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **AMIAL-DAILY-MOVEMENT-001 — عطلان قِيسا هنا، والثاني يُتلف بيانات.**
+     *
+     * **① الاستلامُ كان يتجاوز دفترَ المخزون كلَّه.** كان يكتب
+     * `$product->quantity` مباشرةً، **ولا يمرّ من `StockService`** — وهو
+     * صاحبُ الحقيقة (`product_stocks.on_hand` وسجلُّ الحركات). وقِيس
+     * بالتشغيل، لا بالقراءة:
+     *
+     *     استُلمت ١٠٠ حبّة
+     *     products.quantity      = 110.000   ← العمودُ القديم يرتفع
+     *     product_stocks.on_hand =  10.000   ← والمخزونُ الحقيقيّ ساكن
+     *     حركاتُ المخزون: opening_balance وحدها — **لا حركةَ استلامٍ قطّ**
+     *     ثمّ بيعُ ٦٠ يسقط: «الكمية غير كافية… المتاح 10»
+     *
+     * **فبضاعةٌ استُلمت ودُفع ثمنُها لا تُباع.** وأسوأُ منه ما بعده:
+     *
+     *     ثمّ بيعُ ٥ فقط ينجح ⇒ products.quantity = 5.000
+     *
+     * أي أنّ `syncLegacyQuantity` تُعيد بناء العمود القديم من مجموع
+     * المواقع، **فتمحو المئةَ المستلمة بلا خطأ ولا أثر**. (وهذا عينُ
+     * القاعدة السادسة: الرقمُ يُحسب من مصدره، ومن كتب فوق المرآة ضاع.)
+     *
+     * **و`purchase_receive` سببُ حركةٍ معرَّفٌ في `StockMovement::INBOUND`
+     * منذ بُني المخزون ولا مُصدِرَ له** — كان الرفُّ ينتظر هذا النداء.
+     *
+     * **② والشراءُ النقديُّ لم يكن ممكناً.** كلُّ استلامٍ يرفع دينَ المورد،
+     * فمن اشترى نقداً لا يجد إلّا خمسَ خطواتٍ أو لا يسجّل. فصار
+     * `paid_now` جزءاً من الاستلام: يُرفَع الدينُ ثمّ يُخفَض بما دُفع،
+     * **والحركتان كلتاهما في الدفتر** فالكشفُ يبقى مقروءاً.
+     * ══════════════════════════════════════════════════════════════════
      */
     public function poReceive(Request $request, int $id): JsonResponse
     {
@@ -264,13 +293,22 @@ class SupplierController extends Controller
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer',
             'items.*.received_quantity' => 'required|numeric|min:0.001',
+            'paid_now' => 'sometimes|nullable|numeric|min:0',
+            'location_id' => 'sometimes|nullable|integer',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
         $mid = $request->user()->id;
+        $stock = app(\App\Services\Retail\StockService::class);
+
+        $location = $request->filled('location_id')
+            ? \App\Models\Retail\MerchantLocation::where('id', (int) $request->input('location_id'))
+                ->where('merchant_user_id', $mid)->first()
+            : null;
+        $location ??= $stock->defaultLocation($mid);
 
         try {
-            $po = DB::transaction(function () use ($request, $id, $mid) {
+            $po = DB::transaction(function () use ($request, $id, $mid, $stock, $location) {
                 $po = PurchaseOrder::with('items')
                     ->where('id', $id)
                     ->where('merchant_user_id', $mid)
@@ -300,15 +338,23 @@ class SupplierController extends Controller
                     $receivedValue = bcadd($receivedValue,
                         bcmul($qty, (string) $item->unit_cost, 4), 4);
 
-                    // زيادة مخزون المنتج المربوط
+                    // **المخزونُ يمرّ من صاحبه** — انظر ① في رأس الدالّة.
                     if ($item->product_id) {
                         $product = MerchantProduct::where('id', $item->product_id)
                             ->where('merchant_user_id', $mid)
-                            ->lockForUpdate()->first();
+                            ->first();
                         if ($product) {
-                            $product->quantity =
-                                bcadd((string) $product->quantity, $qty, 3);
-                            $product->save();
+                            $stock->move(
+                                product: $product,
+                                location: $location,
+                                delta: $qty,
+                                reason: 'purchase_receive',
+                                actor: $request->user(),
+                                unitCost: (string) $item->unit_cost,
+                                sourceType: 'purchase_order',
+                                sourceId: $po->id,
+                                note: 'استلام ' . $po->po_number,
+                            );
                         }
                     }
                 }
@@ -323,15 +369,44 @@ class SupplierController extends Controller
                 $supplier->current_debt =
                     bcadd((string) $supplier->current_debt, $receivedValue, 4);
                 $supplier->save();
+
+                // ② **ما دُفع فوراً** — ولا يتجاوز قيمةَ ما استُلم: دفعةٌ
+                //    أكبرُ ليست شراءً نقديّاً بل سدادُ دينٍ سابق، وبابُها
+                //    `/{id}/payment`. وخلطُهما يجعل مشترياتِ اليومِ أكبرَ
+                //    ممّا دخل المخزنَ فعلاً.
+                $paidNow = trim((string) $request->input('paid_now', ''));
+                $paidNow = $paidNow === '' ? '0' : $paidNow;
+                if (bccomp($paidNow, $receivedValue, 4) > 0) {
+                    throw new \RuntimeException(
+                        'المدفوع فوراً أكبر من قيمة المستلَم — استعمل «سداد دفعة» لسداد دينٍ سابق');
+                }
+
                 SupplierLedgerEntry::create([
                     'supplier_id' => $supplier->id,
                     'merchant_user_id' => $mid,
                     'entry_type' => 'po_receive',
                     'amount' => $receivedValue,
+                    'cash_amount' => $paidNow,
                     'debt_after' => (string) $supplier->current_debt,
                     'reference' => $po->po_number,
                     'note' => 'استلام بضاعة من أمر الشراء',
                 ]);
+
+                if (bccomp($paidNow, '0', 4) > 0) {
+                    $supplier->current_debt =
+                        bcsub((string) $supplier->current_debt, $paidNow, 4);
+                    $supplier->save();
+
+                    SupplierLedgerEntry::create([
+                        'supplier_id' => $supplier->id,
+                        'merchant_user_id' => $mid,
+                        'entry_type' => 'payment',
+                        'amount' => $paidNow,
+                        'debt_after' => (string) $supplier->current_debt,
+                        'reference' => $po->po_number,
+                        'note' => 'دفعٌ نقديٌّ عند الاستلام',
+                    ]);
+                }
 
                 // تحديث حالة الأمر
                 $po->load('items');
@@ -343,7 +418,12 @@ class SupplierController extends Controller
 
                 return $po->fresh('items', 'supplier:id,name,current_debt');
             });
-        } catch (\RuntimeException $e) {
+        // **و`DomainException` تُلتقَط معها.** `StockService` يرميها
+        // (`LogicException` لا `RuntimeException`)، ورسائلُها عربيّةٌ
+        // للمشغّل — «الكمية غير كافية في الفرع الرئيسي». وتركُها تُفلت
+        // يجعل رفضاً سليماً يخرج ٥٠٠ بالإنجليزيّة في وجه أمين المخزن،
+        // وهو عينُ ما أمسكته الطبقةُ التاسعة من قبل.
+        } catch (\RuntimeException|\DomainException $e) {
             return $this->error('RECEIVE_FAILED', $e->getMessage(), 422);
         }
 
@@ -364,6 +444,106 @@ class SupplierController extends Controller
         $po->update(['status' => 'cancelled']);
 
         return $this->ok(['order' => $po], 'PO_CANCELLED', 'أُلغي أمر الشراء');
+    }
+
+    // ============ مرتجعات الشراء (AMIAL-DAILY-MOVEMENT-001) ============
+
+    /** GET /merchant/purchase-returns */
+    public function prIndex(Request $request): JsonResponse
+    {
+        $mid = $request->user()->id;
+        if ($err = $this->assertMerchant($mid)) return $err;
+
+        $status = (string) $request->query('status', 'all');
+
+        $q = \App\Models\PurchaseReturn::with(['items', 'supplier:id,name'])
+            ->where('merchant_user_id', $mid)->orderByDesc('id');
+        if ($status !== 'all') $q->where('status', $status);
+
+        return $this->ok(['returns' => $q->limit(100)->get()]);
+    }
+
+    /** GET /merchant/purchase-returns/{id} */
+    public function prShow(Request $request, int $id): JsonResponse
+    {
+        $r = \App\Models\PurchaseReturn::with(['items', 'supplier:id,name,current_debt'])
+            ->where('id', $id)->where('merchant_user_id', $request->user()->id)->first();
+        if (! $r) return $this->error('NOT_FOUND', 'المرتجع غير موجود', 404);
+
+        return $this->ok(['return' => $r]);
+    }
+
+    /** POST /merchant/purchase-returns */
+    public function prStore(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'supplier_id' => 'required|integer',
+            'purchase_order_id' => 'sometimes|nullable|integer',
+            'location_id' => 'sometimes|nullable|integer',
+            'settlement_type' => 'sometimes|string|in:credit_note,cash_refund',
+            'reason' => 'sometimes|nullable|string|max:500',
+            'items' => 'required|array|min:1',
+            'items.*.quantity' => 'required|numeric|min:0.001',
+            'items.*.purchase_order_item_id' => 'sometimes|nullable|integer',
+            'items.*.product_id' => 'sometimes|nullable|integer',
+            'items.*.name' => 'sometimes|nullable|string|max:200',
+            'items.*.unit_cost' => 'sometimes|nullable|numeric|min:0',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        try {
+            $return = app(\App\Services\PurchaseReturnService::class)->create(
+                $request->user(), (int) $request->input('supplier_id'),
+                $request->input('items'), [
+                    'purchase_order_id' => $request->input('purchase_order_id'),
+                    'location_id' => $request->input('location_id'),
+                    'settlement_type' => $request->input('settlement_type', 'credit_note'),
+                    'reason' => $request->input('reason'),
+                    'actor_id' => $request->user()->id,
+                ]);
+        } catch (\DomainException|\RuntimeException $e) {
+            return $this->error('PURCHASE_RETURN_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['return' => $return->load('items')], 'PURCHASE_RETURN_CREATED',
+            'سُجّل طلب مرتجع الشراء — يُعتمد لتخرج البضاعة ويتحرّك حساب المورد', 201);
+    }
+
+    /** POST /merchant/purchase-returns/{id}/approve */
+    public function prApprove(Request $request, int $id): JsonResponse
+    {
+        $r = \App\Models\PurchaseReturn::where('id', $id)
+            ->where('merchant_user_id', $request->user()->id)->first();
+        if (! $r) return $this->error('NOT_FOUND', 'المرتجع غير موجود', 404);
+
+        try {
+            $r = app(\App\Services\PurchaseReturnService::class)->approve($request->user(), $r);
+        } catch (\DomainException|\RuntimeException $e) {
+            return $this->error('APPROVE_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['return' => $r->load('items')], 'PURCHASE_RETURN_APPROVED',
+            'اعتُمد المرتجع: خرجت البضاعة من المخزون وتحرّك حساب المورد');
+    }
+
+    /** POST /merchant/purchase-returns/{id}/reject */
+    public function prReject(Request $request, int $id): JsonResponse
+    {
+        $v = Validator::make($request->all(), ['reason' => 'required|string|min:5|max:500']);
+        if ($v->fails()) return $this->validationError($v);
+
+        $r = \App\Models\PurchaseReturn::where('id', $id)
+            ->where('merchant_user_id', $request->user()->id)->first();
+        if (! $r) return $this->error('NOT_FOUND', 'المرتجع غير موجود', 404);
+
+        try {
+            $r = app(\App\Services\PurchaseReturnService::class)
+                ->reject($request->user(), $r, (string) $request->input('reason'));
+        } catch (\DomainException|\RuntimeException $e) {
+            return $this->error('REJECT_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['return' => $r], 'PURCHASE_RETURN_REJECTED', 'رُفض المرتجع');
     }
 
     // ---- helpers ----

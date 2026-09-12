@@ -1,9 +1,9 @@
 ---
 name: amial-api
-description: نقطةُ نهايةٍ تُضاف أو يُعدَّل عقدُها: المصادقةُ والصلاحيّةُ والحدُّ والتدقيق، وصيغةُ الردّ الموحّدة، وعدمُ كسر التوافق.
+description: 'نقطةُ نهايةٍ تُضاف أو يُعدَّل عقدُها: المصادقةُ والصلاحيّةُ والحدُّ والتدقيق، وصيغةُ الردّ الموحّدة، وعدمُ كسر التوافق.'
 ---
 
-<!-- المصدر: الملفّ 6 — المتن كما كتبه صاحب المشروع، بلا تعديل. -->
+<!-- المصدر: الملفّ 6، ثمّ ملحق توافق يحمي العقد المنشور. -->
 
 ROLE
 
@@ -136,3 +136,31 @@ API is complete only if
 ✓ Audited
 
 ✓ Versioned
+
+==================================================
+
+# PROJECT COMPATIBILITY — AMIAL PAY
+
+## Contract before ideal format
+
+The established response envelope is `success`, `code`, `message`, `errors`,
+and `meta`. Preserve it for existing endpoints and clients. Add a field only
+when older clients safely ignore it; introduce a new version only through a
+named migration plan, never as an incidental cleanup.
+
+Treat `request_id`, timestamps, and richer error fields as additive
+observability improvements. They must not replace or rename published keys.
+
+## Proportionate endpoint controls
+
+Apply authentication, authorization, validation, rate limits, audit, and
+logging according to the endpoint's risk. Financial state changes additionally
+require idempotency; reject an unsafe retry path rather than inventing a new
+key server-side. Ownership and role checks remain server-side even when the
+app hides the action.
+
+## Completion evidence
+
+For a changed endpoint, record the compatibility decision, authorization
+path, validation failure shape, and at least one success and one rejection
+test. Documentation should describe the fields clients can rely on today.

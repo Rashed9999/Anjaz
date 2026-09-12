@@ -23,6 +23,7 @@ use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (Customer Operations Console).
@@ -136,6 +137,10 @@ class SupportConsoleController extends Controller
                 'user_id' => $r->user_id,
                 'status' => $r->status,
                 'issued_at' => $r->issued_at,
+                // AMIAL-SUPPORT-TRACE-REACH-001 — **مرجعُ العمليّة يُرسَل**،
+                // وبه يفتح صفُّ الإيصال التتبّعَ الكامل. وبلا هذا الحقل
+                // يبقى الصفُّ سطراً ميّتاً كما كان.
+                'reference_transaction_id' => $r->reference_transaction_id,
             ])->values(),
         ]);
     }
@@ -321,6 +326,16 @@ class SupportConsoleController extends Controller
             return $this->error('TX_NOT_FOUND', 'العملية غير موجودة', 404);
         }
 
+        // فحص العملية يكشف أطرافاً وأرصدةً ومراجع إيصالات؛ يُسجَّل كاطلاع
+        // على بيانات شخصية مستقلة، لا كبحث عابر لا يترك أثراً.
+        app(\App\Services\PiiAccessAuditService::class)->logAccess(
+            actorUserId: $request->user()->id,
+            subjectType: 'transaction', subjectId: $tx->id,
+            fieldName: 'support_transaction_trace', accessType: 'view',
+            accessReason: 'فحص عملية من منصة الدعم: ' . ($tx->transaction_id ?? $tx->id),
+        );
+        $canRevealPii = $request->user()->hasPlatformPermission('platform.customers.pii.reveal');
+
         // الخط الزمني: إنشاء + إيصال + نزاعات + قرارات تدقيق
         $timeline = [];
         $timeline[] = [
@@ -389,23 +404,65 @@ class SupportConsoleController extends Controller
 
         return $this->ok([
             'transaction' => $this->txSummary($tx) + [
+                'transaction_no' => $tx->transaction_no,
                 'from_user_id' => $tx->from_user_id,
                 'to_user_id' => $tx->to_user_id,
                 'charge' => $tx->charge,
                 'balance_after' => $tx->balance,
                 'zone_code' => $tx->zone_code,
+                'request_zone' => $tx->request_zone,
+                'counterparty_zone' => $tx->counterparty_zone,
+                'fee_scheme_id' => $tx->fee_scheme_id,
+                'fee_scheme_version' => $tx->fee_scheme_version,
+                'pos_user_id' => $tx->pos_user_id,
                 'decision_code' => $tx->decision_code,
                 'decision_reason' => $tx->decision_reason,
                 'note' => $tx->note,
+                'updated_at' => $tx->updated_at,
             ],
+            'parties' => $this->transactionParties($tx, $canRevealPii),
+            'pos_actor' => $this->posActor($tx, $canRevealPii),
             'receipt' => $receipt ? [
                 'id' => $receipt->id,
                 'receipt_number' => $receipt->receipt_number,
+                'verification_code' => $receipt->verification_code,
+                'receipt_type' => $receipt->receipt_type,
                 'status' => $receipt->status,
+                'op_status' => $receipt->op_status,
+                'amount' => $receipt->amount,
+                'fee' => $receipt->fee,
+                'net_amount' => $receipt->net_amount,
+                'direction' => $receipt->direction,
+                'reference_type' => $receipt->reference_type,
+                'reference_id' => $receipt->reference_id,
+                'zone_code' => $receipt->zone_code,
+                'issued_at' => $receipt->issued_at,
+                'pdf_generated_at' => $receipt->pdf_generated_at,
+                'download_count' => $receipt->download_count,
+                'last_downloaded_at' => $receipt->last_downloaded_at,
             ] : null,
             'disputes' => $disputes->map(fn($d) => [
                 'id' => $d->id, 'status' => $d->status, 'created_at' => $d->created_at,
+                'updated_at' => $d->updated_at, 'reason' => $d->reason ?? null,
             ])->values(),
+            // AMIAL-WRONG-TRANSFER-001 — **دعاوى الرقم الخطأ في التتبّع نفسِه.**
+            // فشاشةٌ تعرض تتبّعاً كاملاً ولا تقول إنّ على هذه العمليّة
+            // دعوى مفتوحةً وحجزاً جارياً تُخفي أهمَّ ما يجري فيها الآن.
+            'wrong_transfer_claims' => \App\Models\WrongTransferClaim::with(['claimant', 'recipient'])
+                ->where('transaction_id', (string) ($tx->transaction_id ?? ''))
+                ->orderByDesc('id')->get()
+                ->map(fn ($c) => $this->claimPayload($c))->values(),
+            // **وأهليّةُ الفتح تُقال من الخادم لا تُخمَّن في الشاشة.**
+            // فزرٌّ ظاهرٌ على عمليّةِ دفعٍ لتاجر يَعِد بما يُرفَض عند الضغط.
+            'wrong_transfer_claimable' => in_array(
+                $tx->transaction_type,
+                \App\Services\WrongTransferRecoveryService::CLAIMABLE, true),
+            'tickets' => $tickets->map(fn (SupportTicket $t) => [
+                'number' => $t->ticket_number, 'status' => $t->status,
+                'category' => $t->category, 'priority' => $t->priority,
+                'created_at' => $t->created_at, 'updated_at' => $t->updated_at,
+            ])->values(),
+            'business_records' => $this->businessRecords($refs, $canRevealPii),
             'ledger_entries' => $ledgerEntries->map(fn($e) => [
                 'ulid' => $e->entry_ulid,
                 'source_type' => $e->source_type,
@@ -418,6 +475,9 @@ class SupportConsoleController extends Controller
                     'account' => $l->account?->account_code,
                     'direction' => $l->direction,
                     'amount' => (string) $l->amount,
+                    'balance_before' => (string) ($l->balance_before ?? ''),
+                    'balance_after' => (string) ($l->balance_after ?? ''),
+                    'description' => $l->description_ar,
                 ])->values(),
             ])->values(),
             'timeline' => $timeline,
@@ -982,6 +1042,201 @@ class SupportConsoleController extends Controller
             'user_id' => $t->user_id,
             'decision_code' => $t->decision_code,
             'created_at' => $t->created_at,
+        ];
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    private function transactionParties(Transaction $tx, bool $canRevealPii): array
+    {
+        $ids = array_values(array_unique(array_filter([
+            $tx->user_id, $tx->from_user_id, $tx->to_user_id,
+        ])));
+        $users = User::whereIn('id', $ids)->get()->keyBy('id');
+        $labels = [
+            (int) $tx->user_id => 'صاحب سجل العملية',
+            (int) $tx->from_user_id => 'المرسِل / المصدر',
+            (int) $tx->to_user_id => 'المستلم / الوجهة',
+        ];
+
+        return collect($ids)->map(function (int $id) use ($users, $labels, $canRevealPii) {
+            $u = $users->get($id);
+            return [
+                'role' => $labels[$id] ?? 'طرف العملية',
+                'user_id' => $id,
+                'type' => $u ? $this->userSummary($u)['type_label'] : 'حساب محذوف/قديم',
+                'name' => $u && $canRevealPii ? trim((string) ($u->f_name . ' ' . $u->l_name)) : 'محمي بالصلاحيات',
+                'phone' => $u && $canRevealPii ? (string) $u->phone : $this->maskTransactionPhone($u?->phone),
+                'zone_code' => $u?->zone_code,
+            ];
+        })->values()->all();
+    }
+
+    private function maskTransactionPhone(?string $phone): string
+    {
+        $phone = trim((string) $phone);
+        return $phone === '' ? '—' : mb_substr($phone, 0, 3) . '••••' . mb_substr($phone, -2);
+    }
+
+    /** @return array<string,mixed>|null */
+    private function posActor(Transaction $tx, bool $canRevealPii): ?array
+    {
+        if (!$tx->pos_user_id || !Schema::hasTable('pos_users')) return null;
+        $pos = \App\Models\PosUser::with(['user:id,f_name,l_name,phone', 'merchant:id,f_name,l_name,phone'])
+            ->find($tx->pos_user_id);
+        if (!$pos) return ['id' => (int) $tx->pos_user_id, 'state' => 'السجل غير موجود'];
+
+        return [
+            'id' => $pos->id, 'pos_number' => $pos->pos_number, 'display_name' => $pos->display_name,
+            'active' => (bool) $pos->is_active,
+            'operator' => $canRevealPii ? trim((string) ($pos->user?->f_name . ' ' . $pos->user?->l_name)) : 'محمي بالصلاحيات',
+            'merchant_owner_id' => $pos->merchant_user_id,
+            'merchant_owner' => $canRevealPii ? trim((string) ($pos->merchant?->f_name . ' ' . $pos->merchant?->l_name)) : 'محمي بالصلاحيات',
+        ];
+    }
+
+    /** سجلات الأعمال المرتبطة: البيع/الوقود/الصيدلية/الجملة/طلب الدفع/تقسيم الفاتورة. */
+    private function businessRecords(array $refs, bool $canRevealPii): array
+    {
+        $out = [];
+        $read = static fn (string $table) => Schema::hasTable($table);
+
+        if ($read('payment_requests')) {
+            $out['payment_requests'] = \App\Models\PaymentRequest::whereIn('paid_transaction_id', $refs)->get()
+                // short_code رابط قابل للمشاركة وليس معلومة دعم؛ عرضه يحوّل
+                // صفحة التتبع إلى قناة استخراج روابط دفع.
+                ->map(fn ($r) => ['reference' => $r->request_ulid, 'status' => $r->status, 'amount' => $r->amount, 'requester_user_id' => $r->requester_user_id, 'recipient_user_id' => $r->recipient_user_id, 'paid_at' => $r->paid_at, 'expires_at' => $r->expires_at])->values();
+        }
+        if ($read('merchant_sales')) {
+            $out['merchant_sales'] = \App\Models\MerchantSale::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($s) => ['reference' => $s->sale_ulid, 'status' => $s->status, 'payment_method' => $s->payment_method, 'merchant_user_id' => $s->merchant_user_id, 'pos_user_id' => $s->pos_user_id, 'total_amount' => $s->total_amount, 'discount_amount' => $s->discount_amount, 'cash_amount' => $s->cash_amount, 'wallet_amount' => $s->wallet_amount, 'items' => collect($s->items ?? [])->take(50)->values()])->values();
+        }
+        if ($read('fuel_sales')) {
+            $out['fuel_sales'] = \App\Models\FuelSale::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($s) => ['reference' => $s->sale_ulid, 'status' => $s->status, 'station_id' => $s->station_id, 'pump_id' => $s->pump_id, 'nozzle_id' => $s->nozzle_id, 'liters' => $s->liters, 'price_per_liter' => $s->price_per_liter, 'total_amount' => $s->total_amount, 'payment_method' => $s->payment_method, 'vehicle_plate' => $canRevealPii ? $s->vehicle_plate : null])->values();
+        }
+        if ($read('pharmacy_sales')) {
+            $out['pharmacy_sales'] = \App\Models\PharmacySale::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($s) => ['reference' => $s->sale_ulid, 'status' => $s->status, 'pharmacy_id' => $s->pharmacy_id, 'total_amount' => $s->total_amount, 'discount_amount' => $s->discount_amount, 'payment_method' => $s->payment_method, 'clinical_details_restricted' => true])->values();
+        }
+        if ($read('wholesale_invoices')) {
+            $out['wholesale_invoices'] = \App\Models\WholesaleInvoice::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($i) => ['reference' => $i->invoice_number ?: $i->invoice_ulid, 'status' => $i->status, 'business_id' => $i->business_id, 'total_amount' => $i->total_amount, 'paid_amount' => $i->paid_amount, 'balance_due' => $i->balance_due, 'payment_type' => $i->payment_type, 'due_date' => $i->due_date])->values();
+        }
+        if ($read('wholesale_collections')) {
+            $out['wholesale_collections'] = \App\Models\WholesaleCollection::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($c) => ['reference' => $c->collection_ulid, 'invoice_id' => $c->invoice_id, 'amount' => $c->amount, 'payment_method' => $c->payment_method, 'collection_date' => $c->collection_date])->values();
+        }
+        if ($read('split_bill_participants')) {
+            $out['split_bill_participants'] = \App\Models\SplitBillParticipant::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($p) => ['split_bill_id' => $p->split_bill_id, 'customer_user_id' => $p->customer_user_id, 'share_amount' => $p->share_amount, 'status' => $p->status, 'paid_at' => $p->paid_at])->values();
+        }
+        return $out;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-WRONG-TRANSFER-001 — دعاوى «حوّلتُ إلى الرقم الخطأ»
+    //
+    // **ولمَ ثلاثُ نقاطٍ لا واحدة:** الفتحُ يوقف النزيفَ وهو **قابلٌ
+    // للرجوع** (‏يُفرَج عنه تلقائيّاً بعد المهلة)، فيُتاح لمن يردّ على
+    // الهاتف أوّلاً — دقيقةُ انتظارٍ لصلاحيّةٍ أعلى تعني مالاً أُنفق.
+    // أمّا الحسمُ والرفضُ فينقلان مالاً نهائيّاً، فيلزمهما
+    // `platform.disputes.decide`. **والصلاحيّةُ تتبع الأثرَ لا الشاشة.**
+    // ══════════════════════════════════════════════════════════════════
+
+    /** POST /admin/support/wrong-transfer/open */
+    public function openWrongTransferClaim(Request $request): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) {
+            return $resp;
+        }
+
+        $data = $request->validate([
+            'transaction_id' => 'required|string|max:64',
+            'intended_phone' => 'nullable|string|max:32',
+        ]);
+
+        try {
+            $claim = app(\App\Services\WrongTransferRecoveryService::class)->open(
+                $data['transaction_id'],
+                $data['intended_phone'] ?? null,
+                (int) $request->user()->id,
+            );
+        } catch (\Throwable $e) {
+            return $this->error('CLAIM_REFUSED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['claim' => $this->claimPayload($claim)],
+            'CLAIM_OPENED', 'فُتحت الدعوى');
+    }
+
+    /** POST /admin/support/wrong-transfer/{ulid}/resolve */
+    public function resolveWrongTransferClaim(Request $request, string $ulid): JsonResponse
+    {
+        return $this->decideWrongTransferClaim($request, $ulid, true);
+    }
+
+    /** POST /admin/support/wrong-transfer/{ulid}/reject */
+    public function rejectWrongTransferClaim(Request $request, string $ulid): JsonResponse
+    {
+        return $this->decideWrongTransferClaim($request, $ulid, false);
+    }
+
+    private function decideWrongTransferClaim(Request $request, string $ulid, bool $inFavour): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) {
+            return $resp;
+        }
+
+        // **السببُ مطلوبٌ في الحسم لا في الفتح.** فالفتحُ إجراءٌ عاجلٌ
+        // يرجع من تلقائه، والحسمُ ينقل مالاً ولا يرجع — ومن نقل مالَ
+        // إنسانٍ إلى آخرَ يكتب لماذا.
+        $data = $request->validate(['note' => 'required|string|min:5|max:500']);
+
+        $claim = \App\Models\WrongTransferClaim::where('claim_ulid', $ulid)->first();
+
+        if (! $claim) {
+            return $this->error('CLAIM_NOT_FOUND', 'الدعوى غير موجودة', 404);
+        }
+
+        $svc = app(\App\Services\WrongTransferRecoveryService::class);
+
+        try {
+            $claim = $inFavour
+                ? $svc->resolve($claim, (int) $request->user()->id, $data['note'])
+                : $svc->reject($claim, (int) $request->user()->id, $data['note']);
+        } catch (\Throwable $e) {
+            return $this->error('CLAIM_DECISION_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['claim' => $this->claimPayload($claim)],
+            'CLAIM_DECIDED', $inFavour ? 'حُسمت لصالح المطالِب' : 'رُفضت الدعوى وأُفرج عن الحجز');
+    }
+
+    /** صورةُ الدعوى كما تقرؤها الشاشة — **والذمّةُ تُحسب ولا تُقرأ من عمود**. */
+    private function claimPayload(\App\Models\WrongTransferClaim $c): array
+    {
+        return [
+            'ulid' => $c->claim_ulid,
+            'transaction_id' => $c->transaction_id,
+            'status' => $c->status,
+            'status_ar' => [
+                'open' => 'مفتوحة — بلا حجز',
+                'holding' => 'محجوزة',
+                'recovered' => 'استُرِدَّت',
+                'rejected' => 'مرفوضة',
+                'expired' => 'انقضت المهلة',
+            ][$c->status] ?? $c->status,
+            'amount' => (string) $c->amount,
+            'held_amount' => (string) $c->held_amount,
+            'recovered_amount' => (string) $c->recovered_amount,
+            'outstanding' => $c->outstanding(),
+            'risk_score' => (int) $c->risk_score,
+            'risk_signals' => $c->risk_signals ?? [],
+            'hold_expires_at' => $c->hold_expires_at,
+            'resolution_note' => $c->resolution_note,
+            'resolved_at' => $c->resolved_at,
+            'claimant' => $c->claimant?->only(['id', 'f_name', 'l_name']),
+            'recipient' => $c->recipient?->only(['id', 'f_name', 'l_name']),
         ];
     }
 

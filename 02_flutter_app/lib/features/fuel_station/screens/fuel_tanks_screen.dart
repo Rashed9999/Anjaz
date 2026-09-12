@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_vertical_controller.dart';
+import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_settings_screen.dart';
 import 'package:amial_pay/features/fuel_station/widgets/fuel_state_view.dart';
 
 /// AMIAL-FUEL-VERTICAL-001 · المرحلة ٨ — الخزّانات والقياسات.
@@ -335,55 +337,112 @@ class _FuelTanksScreenState extends State<FuelTanksScreen> {
 
   // ── خزان جديد ─────────────────────────────────────────────────────
 
+  /// AMIAL-FUEL-TANK-PRODUCT-001 — **رقمٌ يُطلب ولا يُعرَف.**
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// **الثمنُ الذي دُفع:** كان الحقلُ `TextField` رقميّاً عنوانُه «معرّف
+  /// نوع الوقود» وتحته «من شاشة الأسعار» — أي أنّ الخزّانَ لا يُنشأ إلّا
+  /// بمعرّفٍ من قاعدة البيانات يحفظه صاحبُ المحطّة عن ظهر قلب.
+  ///
+  /// **وشاشةُ الأسعار لا تعرضه ولا تُنشئ نوعاً أصلاً** — تقول «أضف نوع
+  /// وقود من الإعدادات»، **وشاشةُ الإعدادات لم تكن على لوحة المحطّة**.
+  /// فالطريقُ كلُّه مسدود: لا نوعَ يُنشأ، ولا رقمَ يُعرَف، وكلُّ محاولةٍ
+  /// تردّ «نوع الوقود غير موجود في هذه المحطة» — **وهي رسالةٌ صحيحةٌ
+  /// عديمةُ الفائدة**، لا تقول ما العمل.
+  ///
+  /// فصار الحقلُ **قائمةً تُختار** من أنواع المحطّة نفسِها، وصار غيابُها
+  /// يُقال بصراحةٍ ومعه بابُه: «أضِف نوعَ وقودٍ أوّلاً» ← إعدادات المحطّة.
   Future<void> _addTankDialog() async {
+    final station = Get.find<FuelStationController>();
+
+    if (station.products.isEmpty) {
+      await station.loadProducts();
+    }
+    if (!mounted) return;
+
+    if (station.products.isEmpty) {
+      // **لا يُفتَح نموذجٌ لا يمكن إتمامُه** — ويُقال الطريقُ لا العطل.
+      final go = await Get.dialog<bool>(AlertDialog(
+        title: const Text('لا أنواعَ وقودٍ في المحطّة'),
+        content: const Text(
+          'الخزّانُ يُخزّن نوعاً بعينه، فلا يُنشأ قبله. أضِف نوعَ الوقود '
+          'وسعرَه من إعدادات المحطّة ← «الأنواع والأسعار»، ثمّ عُد.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Get.back(result: false),
+              child: const Text('لاحقاً')),
+          ElevatedButton(
+            key: const Key('fuel-tank-goto-products'),
+            onPressed: () => Get.back(result: true),
+            child: const Text('إعدادات المحطّة'),
+          ),
+        ],
+      ));
+
+      if (go == true) {
+        await Get.to(() => const FuelSettingsScreen());
+        if (mounted) await station.loadProducts();
+      }
+      return;
+    }
+
     final numberCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
     final capCtrl = TextEditingController();
     final minCtrl = TextEditingController();
-    final productCtrl = TextEditingController();
+    int productId = (station.products.first['id'] as num).toInt();
 
-    final ok = await Get.dialog<bool>(AlertDialog(
-      title: const Text('خزان جديد'),
-      content: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            key: const Key('fuel-tank-number'),
-            controller: numberCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'رقم الخزان'),
-          ),
-          TextField(controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'الاسم (اختياري)')),
-          TextField(
-            key: const Key('fuel-tank-product'),
-            controller: productCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'معرّف نوع الوقود',
-              helperText: 'من شاشة الأسعار',
+    final ok = await Get.dialog<bool>(StatefulBuilder(
+      builder: (_, setSt) => AlertDialog(
+        title: const Text('خزان جديد'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              key: const Key('fuel-tank-number'),
+              controller: numberCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'رقم الخزان'),
             ),
-          ),
-          TextField(
-            key: const Key('fuel-tank-capacity'),
-            controller: capCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'السعة (لتر)'),
-          ),
-          TextField(
-            controller: minCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'حد التنبيه (لتر)'),
-          ),
-        ]),
-      ),
-      actions: [
-        TextButton(onPressed: () => Get.back(result: false), child: const Text('إلغاء')),
-        ElevatedButton(
-          key: const Key('fuel-tank-save'),
-          onPressed: () => Get.back(result: true),
-          child: const Text('حفظ'),
+            TextField(controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'الاسم (اختياري)')),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<int>(
+              key: const Key('fuel-tank-product'),
+              initialValue: productId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'نوع الوقود *'),
+              items: [
+                for (final p in station.products)
+                  DropdownMenuItem<int>(
+                    value: (p['id'] as num).toInt(),
+                    child: Text('${p['name'] ?? p['fuel_type'] ?? '—'}'),
+                  ),
+              ],
+              onChanged: (v) => setSt(() => productId = v ?? productId),
+            ),
+            TextField(
+              key: const Key('fuel-tank-capacity'),
+              controller: capCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'السعة (لتر)'),
+            ),
+            TextField(
+              controller: minCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'حد التنبيه (لتر)'),
+            ),
+          ]),
         ),
-      ],
+        actions: [
+          TextButton(onPressed: () => Get.back(result: false), child: const Text('إلغاء')),
+          ElevatedButton(
+            key: const Key('fuel-tank-save'),
+            onPressed: () => Get.back(result: true),
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
     ));
 
     if (ok != true) return;
@@ -391,7 +450,7 @@ class _FuelTanksScreenState extends State<FuelTanksScreen> {
     final done = await c.addTank({
       'tank_number': numberCtrl.text.trim(),
       'name': nameCtrl.text.trim(),
-      'fuel_product_id': productCtrl.text.trim(),
+      'fuel_product_id': productId,
       'capacity_liters': capCtrl.text.trim(),
       'min_alert_liters': minCtrl.text.trim().isEmpty ? '0' : minCtrl.text.trim(),
     });

@@ -33,10 +33,8 @@ class UsageLimitExceededException extends Exception
     public static function suggestUpgrade(string $currentPlan): ?string
     {
         return match ($currentPlan) {
-            A::PLAN_FREE => A::PLAN_STARTER,
-            A::PLAN_STARTER => A::PLAN_BUSINESS,
-            A::PLAN_BUSINESS => A::PLAN_MERCHANT_PRO,
-            A::PLAN_MERCHANT_PRO => A::PLAN_ENTERPRISE,
+            A::PLAN_FREE => A::PLAN_BUSINESS,
+            A::PLAN_BUSINESS => A::PLAN_ENTERPRISE,
             default => null,
         };
     }

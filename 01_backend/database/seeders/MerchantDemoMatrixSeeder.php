@@ -14,7 +14,10 @@ use RuntimeException;
  * AMIAL-DEMO-MERCHANT-MATRIX-001
  *
  * مصفوفة حسابات ثابتة لاختبار واجهات التاجر والاستحقاقات:
- * 6 أنواع نشاط × 5 باقات = 30 حساباً.
+ * ٦ أنواع نشاط × الباقات المُباعة (`A::ALL_PLANS`) — والعددُ يُشتقّ ولا
+ * يُكتب. كان مكتوباً «٥ باقات = ٣٠ حساباً»، ثمّ وحّد صاحبُ المشروع
+ * الباقاتِ ثلاثاً فصارت ثمانيةَ عشر، **وبقي الرقمُ ثلاثين في الوصف
+ * وفي سطر البذر وفي الوثيقة** — انظر AMIAL-PLAN-MATRIX-003 أدناه.
  *
  * لا تُضاف إلى DatabaseSeeder عمداً. في production لا تعمل إلا بعد تفعيل
  * AMIAL_ALLOW_PRODUCTION_DEMO_MERCHANTS=true بشكل صريح، لأن كلمات المرور
@@ -40,13 +43,33 @@ class MerchantDemoMatrixSeeder extends Seeder
         A::BIZ_RESTAURANT => ['digit' => '6', 'label' => 'مطعم'],
     ];
 
-    /** @var array<string,array{digit:string,label:string}> */
+    /**
+     * AMIAL-PLAN-MATRIX-003 — **ثلاثُ باقاتٍ تُعلَن كما تُبذَر.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * كانت هنا **خمسةُ صفوف**، وفيها `A::PLAN_STARTER` و
+     * `A::PLAN_MERCHANT_PRO` — **وهما مُرادفان** لا باقتان:
+     * `PLAN_STARTER === PLAN_BUSINESS` و`PLAN_MERCHANT_PRO === PLAN_ENTERPRISE`.
+     *
+     * فالمفتاحُ `'business'` كُتب مرّتين و`'enterprise'` مرّتين، و**PHP
+     * يُبقي الأخيرَ صامتاً بلا تحذير**. فكانت الشيفرةُ **تُقرأ خمساً
+     * وتعمل ثلاثاً**، ورقمُ باقةِ «البداية» (١) يُمحى بـ«الأعمال» (٢)
+     * قبل أن يُستعمل.
+     *
+     * **والخانةُ الأخيرة بقيت كما كانت عمداً — ٠ · ٢ · ٤:** أرقامُ حسابات
+     * العرض محفوظةٌ عن ظهر قلب، فترقيمُها من جديدٍ يُدخل من حفظ رقماً
+     * على باقةٍ غيرِ التي يقصد. و`…001` و`…003` سقطا وحدَهما.
+     * (المحروس في `MerchantDemoMatrixTest`.)
+     *
+     * **والاسمُ يُقرأ من `A::PLAN_LABELS`** فلا يتفرّع اسمُ باقةٍ نسختين:
+     * واحدةً في شاشةِ الباقات وأخرى في باذر العرض.
+     *
+     * @var array<string,array{digit:string}>
+     */
     private const PLANS = [
-        A::PLAN_FREE => ['digit' => '0', 'label' => 'مجاني'],
-        A::PLAN_STARTER => ['digit' => '1', 'label' => 'البداية'],
-        A::PLAN_BUSINESS => ['digit' => '2', 'label' => 'الأعمال'],
-        A::PLAN_MERCHANT_PRO => ['digit' => '3', 'label' => 'تاجر محترف'],
-        A::PLAN_ENTERPRISE => ['digit' => '4', 'label' => 'المؤسسة'],
+        A::PLAN_FREE => ['digit' => '0'],
+        A::PLAN_BUSINESS => ['digit' => '2'],
+        A::PLAN_ENTERPRISE => ['digit' => '4'],
     ];
 
     /**
@@ -68,7 +91,7 @@ class MerchantDemoMatrixSeeder extends Seeder
                     'business_type' => $businessType,
                     'business_label' => $business['label'],
                     'plan' => $plan,
-                    'plan_label' => $planMeta['label'],
+                    'plan_label' => A::PLAN_LABELS[$plan] ?? $plan,
                     'phone_local' => $localPhone,
                     'phone' => '967' . $localPhone,
                     'password' => self::PASSWORD,
@@ -92,9 +115,22 @@ class MerchantDemoMatrixSeeder extends Seeder
             $this->upsertWallet($user);
         }
 
-        $this->command?->info('✓ AMIAL merchant demo matrix: 30 accounts ready.');
+        // **والعددُ يُعدّ ولا يُكتب.** كان «30 accounts» مطبوعاً بعد بذر
+        // ثمانيةَ عشر — ورقمٌ مكتوبٌ في رسالةِ نجاحٍ يشيخ مع أوّل قرارِ
+        // تسعيرٍ ثمّ يُقرأ إثباتاً. (AMIAL-PLAN-MATRIX-003)
+        $rows = self::accounts();
+
+        $this->command?->info(sprintf(
+            '✓ AMIAL merchant demo matrix: %d accounts ready (%d verticals × %d plans).',
+            count($rows), count(self::BUSINESS_TYPES), count(self::PLANS)));
         $this->command?->info('  Password: ' . self::PASSWORD . ' | Transaction PIN: ' . self::PIN);
-        $this->command?->info('  Wholesale: 777215000 .. 777215004 (Free .. Enterprise)');
+
+        $wholesale = array_filter($rows,
+            fn (array $r): bool => $r['business_type'] === A::BIZ_WHOLESALE);
+
+        $this->command?->info('  Wholesale: ' . implode(' · ', array_map(
+            fn (array $r): string => $r['phone_local'] . ' (' . $r['plan_label'] . ')',
+            $wholesale)));
     }
 
     private function assertSafeEnvironment(): void

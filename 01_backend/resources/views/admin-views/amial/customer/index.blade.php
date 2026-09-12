@@ -233,6 +233,33 @@
                             ['يوميّ', l.max_daily_total], ['شهريّ', l.max_monthly_total],
                         ].map(r => `<tr><td>${r[0]}</td><td class="text-end">${money(r[1])}</td></tr>`).join(''), '')
                         : '<div class="alert alert-warning mb-0 small">لا توجد سياسة حدود نافذة لهذا العميل؛ لا يُفسَّر ذلك كحدّ صفري.</div>'}
+                        {{--
+                            AMIAL-LIMIT-SCOPE-001 — **حدٌّ يُعرَض بلا نطاقه.**
+
+                            سأل صاحبُ المشروع عن «١٠٠ ألف في اليوم و٥٠٠ ألف
+                            في الشهر» في حساب تاجر وقود: **من وضعها؟**
+
+                            وقِيس: هي حدُّ فئة التوثيق من `kyc_tier_limits`
+                            (الفئة القياسيّة)، **واحدةٌ لكلّ الأنواع** — لا
+                            وُضعت للوقود ولا لقطاعٍ بعينه.
+
+                            **والأخطرُ أنّها لا تحكم ما يُظنّ أنّها تحكمه.**
+                            `assertTransactionAllowed` تُنادى في موضعين
+                            فقط — التبرّعات والدفع الآمن — و
+                            `enforceFinancialPolicy` **بصفر نداء**. فبيعُ
+                            التاجر وبيعُ الوقود والكاشير خارجَها تماماً.
+
+                            ورقمٌ يُعرَض «حدّاً» ولا يحدّ ما يظنّه قارئُه
+                            أسوأ من غيابه: يقرؤه المراجعُ سقفاً للبيع فلا
+                            يبحث عن سقفٍ حقيقيّ. فيُقال نطاقُه صراحةً.
+                        --}}
+                        <div class="small text-muted mt-2">
+                            <strong>نطاقُ هذه الحدود:</strong> التبرّعات والدفع الآمن
+                            وطلبات المال. <strong>ولا تشمل</strong> مبيعاتِ التاجر ولا
+                            مبيعاتِ الوقود ولا الكاشير — لتلك حدودُ الباقة وحدودُ
+                            الورديّة. والقيمُ من فئة التوثيق (${esc(l.source)})،
+                            وتُستثنى لهذا الحساب من إجراءات الحساب.
+                        </div>
                     </div></div>
 
                     <div class="col-lg-6"><div class="card p-3">
@@ -331,7 +358,17 @@
                     table(['المرجع', 'المصدر', 'الحالة', 'ورقي', 'أنشئ'],
                         (m.registration_dossiers || []).map(d => `<tr><td class="font-monospace">${esc(d.reference)}</td><td>${esc(d.source)}</td><td>${esc(d.state)}</td><td>${d.has_paper_form ? 'نعم' : '—'}</td><td>${dt(d.created_at)}</td></tr>`),
                         'لا ملف تسجيل مرتبط بهذا العميل', 'cc-registration-dossiers'),
-                    'تُفتح النسخة الكاملة والطباعة من «ملفات التسجيل والأرشفة» بحسب صلاحيتك.')}`;
+                    '')}
+                <div class="mt-2">
+                    <a class="btn btn-sm btn-outline-primary" id="cc-print-dossier" target="_blank" rel="noopener"
+                       href="{{ url('admin/amial/hub/account') }}/${encodeURIComponent(current)}/print">
+                       🖨 طباعة ملفّ الحساب — البيانات وصور الوثائق
+                    </a>
+                    <div class="small text-muted mt-1">
+                        ورقةٌ واحدةٌ فيها هويّةُ الحساب ولقطةُ التسجيل وصورُ الوثائق مضمَّنةً.
+                        وفتحُها مسجَّلٌ في سجلّ الوصول إلى البيانات الشخصيّة.
+                    </div>
+                </div>`;
         },
 
         risk(m, body) {

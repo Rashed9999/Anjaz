@@ -15,6 +15,7 @@ class ReceiptSettingsController extends GetxController {
   final RxList<Map<String, dynamic>> currencies = <Map<String, dynamic>>[].obs;
   final RxBool isLoaded = false.obs;
   final RxBool isSaving = false.obs;
+  final RxString uploadError = ''.obs;
 
   static Map<String, dynamic> get defaults => {
         'header_note': '',
@@ -25,9 +26,16 @@ class ReceiptSettingsController extends GetxController {
         'show_phone': true,
         'show_address': true,
         'paper_width': 80,
+        'auto_print_receipts': false,
         'currency_label': 'ر.ي',
         'store_name': 'المتجر',
         'logo_url': null,
+        'logo_spec': const {
+          'canvas': 1024,
+          'content_box': 880,
+          'max_upload_bytes': 2097152,
+          'formats': ['PNG', 'JPG'],
+        },
       };
 
   /// خريطة جاهزة للاستخدام (الإعدادات المحمّلة أو الافتراضيات).
@@ -71,14 +79,22 @@ class ReceiptSettingsController extends GetxController {
   }
 
   Future<String?> uploadLogo(String base64) async {
+    uploadError.value = '';
     try {
       final r = await _api.postData('$_base/logo', {'logo': base64});
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
         final url = ((r.body['meta'] ?? {})['logo_url'])?.toString();
         if (url != null) settings['logo_url'] = url;
+        final spec = ((r.body['meta'] ?? {})['logo_spec']);
+        if (spec is Map) settings['logo_spec'] = Map<String, dynamic>.from(spec);
         return url;
       }
+      final message = r.body is Map ? r.body['message'] : null;
+      uploadError.value = message is String && message.trim().isNotEmpty
+          ? message
+          : 'merchant_logo_upload_failed'.tr;
     } catch (_) {}
+    if (uploadError.value.isEmpty) uploadError.value = 'merchant_logo_upload_retry'.tr;
     return null;
   }
 }

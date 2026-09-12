@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Tests\Support\OpensAccountsFromHub;
 use Tests\TestCase;
 
 /**
@@ -42,6 +43,7 @@ class AgentLifecycleChainTest extends TestCase
         return $this->actingAs($staff, 'agent_staff');
     }
 
+    use OpensAccountsFromHub;
     use RefreshDatabase;
 
     private User $admin;
@@ -70,7 +72,7 @@ class AgentLifecycleChainTest extends TestCase
             ->postJson(route('admin.amial.hub.users.store', ['slug' => 'agents']), [
                 'f_name' => 'العمقي', 'l_name' => 'للصرافة',
                 'phone' => '967771600001', 'password' => 'agent-pass-1',
-            ])->assertCreated();
+            ] + $this->kycDossier('967771600001'))->assertCreated();
 
         $agent = User::where('phone', '967771600001')->first();
 
@@ -233,7 +235,7 @@ class AgentLifecycleChainTest extends TestCase
             ->postJson(route('admin.amial.hub.users.store', ['slug' => 'agents']), [
                 'f_name' => 'البسيري', 'l_name' => 'للصرافة',
                 'phone' => '967771600009', 'password' => 'agent-pass-9',
-            ])->assertCreated();
+            ] + $this->kycDossier('967771600009'))->assertCreated();
 
         $agent = User::where('phone', '967771600009')->first();
 

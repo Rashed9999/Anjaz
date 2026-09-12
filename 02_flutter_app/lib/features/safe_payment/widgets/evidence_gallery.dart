@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/safe_payment/domain/models/safe_payment_models.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-SAFEPAY-EVIDENCE-001 — معرض الأدلّة.
@@ -290,7 +291,7 @@ class _EvidenceViewerScreenState extends State<EvidenceViewerScreen> {
   }
 
   static String _fmt(DateTime d) {
-    final l = d.toLocal();
+    final l = DateConverterHelper.toMecca(d);
     return '${l.year}-${l.month.toString().padLeft(2, '0')}-${l.day.toString().padLeft(2, '0')}'
         ' ${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
   }

@@ -74,6 +74,7 @@ class AuditVocabulary
         'PAYMENT_REQUEST_PAID' => ['طلبُ دفعٍ سُدّد', 'payments'],
         'PAYMENT_REQUEST_DECLINED' => ['طلبُ دفعٍ رُفض', 'payments'],
         'PAYMENT_REQUEST_CANCELLED' => ['طلبُ دفعٍ أُلغي', 'payments'],
+        'PAYMENT_REQUEST_CANCELLED_BY_REQUESTER' => ['ألغى صاحبُ الطلب طلبَ المال', 'payments'],
         'SAFE_PAYMENT_CREATED' => ['دفعةٌ آمنةٌ أُنشئت', 'payments'],
         'SAFE_PAYMENT_DISPUTED' => ['دفعةٌ آمنةٌ نوزعت', 'payments'],
         'SAFE_PAYMENT_DISPUTE_VIEWED' => ['اطّلاعٌ على نزاع دفعةٍ آمنة', 'payments'],
@@ -82,6 +83,16 @@ class AuditVocabulary
 
         // ── التاجر ──────────────────────────────────────────────────
         'MERCHANT_PAYMENT_COMPLETED' => ['دفعةٌ لتاجرٍ اكتملت', 'merchant'],
+        // رمزٌ تاريخي ما زال يصدره بعض مسارات الدفع؛ بقاؤه بلا معجم
+        // يعرِض للتاجر PAYMENT_REQUEST… بدلاً من معنى العملية.
+        'MERCHANT_PAYMENT' => ['دفعةٌ لتاجر', 'merchant'],
+        'MERCHANT_STAFF_CREATED' => ['أُنشئ حساب موظّف', 'merchant'],
+        'MERCHANT_STAFF_BRANCH_ASSIGNED' => ['أُسند موظّف إلى فرع', 'merchant'],
+        'MERCHANT_STAFF_TOGGLED' => ['تغيّرت حالة موظّف', 'merchant'],
+        'MERCHANT_ROLE_CREATED' => ['أُنشئ دورٌ تشغيليّ للمنشأة', 'merchant'],
+        'MERCHANT_BRANCH_CREATED' => ['أُنشئ فرع', 'merchant'],
+        'MERCHANT_BRANCH_UPDATED' => ['عُدّلت بيانات فرع', 'merchant'],
+        'MERCHANT_BRANCH_DEFAULTED' => ['تغيّر الفرع الافتراضي', 'merchant'],
         'MERCHANT_REFUND_COMPLETED' => ['استردادٌ من تاجرٍ اكتمل', 'merchant'],
         'MERCHANT_INVOICE_CANCELLED' => ['فاتورةُ تاجرٍ أُلغيت', 'merchant'],
         'MERCHANT_TIER_CHANGED' => ['تغيّرت شريحةُ التاجر', 'merchant'],

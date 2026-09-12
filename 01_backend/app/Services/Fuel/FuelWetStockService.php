@@ -232,7 +232,7 @@ class FuelWetStockService
      * واحدة أمرٌ عاديّ، ونسبةُ المبيعات بالنوع تخلطهما فتُخرج فائضاً في
      * واحدٍ وعجزاً في الآخر — ويبدو الأمرُ سرقةً وهو خطأُ نسبة.
      */
-    public function soldLitersBetween(
+    private function soldLitersBetween(
         FuelTank $tank, \DateTimeInterface $from, \DateTimeInterface $to,
     ): string {
         return (string) FuelSale::where('tank_id', $tank->id)

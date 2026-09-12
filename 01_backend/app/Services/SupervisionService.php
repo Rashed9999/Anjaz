@@ -137,7 +137,7 @@ class SupervisionService
     }
 
     /** القرارات الحسّاسة — ما يقرؤه المشرف سطراً سطراً. */
-    public function criticalDecisions(int $limit = 50): array
+    private function criticalDecisions(int $limit = 50): array
     {
         return AuditDecision::where('severity', 'critical')
             ->orderByDesc('id')->limit($limit)

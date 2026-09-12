@@ -25,8 +25,18 @@ class MerchantCurrencyTest extends TestCase
             'verification_status' => 'verified', 'subscription_plan' => A::PLAN_FREE]);
     }
 
-    private function upgrade(string $plan = 'merchant_pro'): void
+    /**
+     * **والرمزُ يُقرأ من الفهرس لا يُكتب نصّاً.**
+     *
+     * كان `'merchant_pro'` مكتوباً هنا، وقد أُلغيت الباقةُ بتوحيد
+     * الباقات في ثلاث، فردّها `SubscriptionService` بـ«Invalid plan».
+     * وهو **حارسٌ سليمٌ**: كتابةُ رمزٍ ملغىً في ملفّ تاجرٍ تفتح له سطحاً
+     * لا تعرفه اللوحة. فالاختبارُ يُصلَح لا الحارس.
+     */
+    private function upgrade(?string $plan = null): void
     {
+        $plan ??= A::PLAN_ENTERPRISE;
+
         $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
         app(SubscriptionService::class)->changePlan($this->merchant, $plan, $admin);
     }

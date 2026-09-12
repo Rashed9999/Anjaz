@@ -6,6 +6,7 @@ use App\Models\MerchantProduct;
 use App\Models\Retail\MerchantLocation;
 use App\Models\Retail\ProductStock;
 use App\Models\Retail\StockMovement;
+use App\Models\Branch;
 use App\Models\User;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -71,12 +72,26 @@ class StockService
             throw new DomainException('نوع الموقع غير صحيح (متجر أو مستودع)');
         }
 
+        $branchId = $data['branch_id'] ?? null;
+        $merchantBranches = Branch::where('merchant_user_id', $merchant->id)
+            ->where('is_active', true);
+
+        // المتجر هو نقطة البيع في فرع؛ أما المستودع فليس فرع مبيعات ولا
+        // نفرض عليه ارتباطاً وهمياً. ومع ذلك لا نقبل معرّف فرعٍ لتاجر آخر.
+        if ($branchId !== null && $branchId !== '') {
+            $branch = (clone $merchantBranches)->where('id', (int) $branchId)->first();
+            if (! $branch) throw new DomainException('الفرع غير صالح لهذه المنشأة');
+            $branchId = $branch->id;
+        } elseif ($kind === 'store') {
+            $branchId = (clone $merchantBranches)->where('is_default', true)->value('id');
+        }
+
         return MerchantLocation::create([
             'merchant_user_id' => $merchant->id,
             'kind' => $kind,
             'name' => trim((string) ($data['name'] ?? $code)),
             'code' => $code,
-            'branch_id' => $data['branch_id'] ?? null,
+            'branch_id' => $branchId,
             'city' => $data['city'] ?? null,
             'address' => $data['address'] ?? null,
             'is_active' => true,
@@ -316,6 +331,56 @@ class StockService
      * **ومن لم يُضبَط له حدٌّ لا يُعدّ منخفضاً** — حدُّ الصفر يعني «لم
      * يُضبط»، وعدُّه منخفضاً يُغرق الشاشة بتنبيهاتٍ لا معنى لها.
      */
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-NEGATIVE-STOCK-001 — **السالبُ يصل صاحبَ المتجر.**
+     *
+     * **ما قِيس:** البيعُ يمرّ بالسالب عمداً وهو صواب (`allowNegative:
+     * true` في `decrementStockForSale`) — «البضاعةُ خرجت من الرفّ فعلاً،
+     * ورفضُها بعد خروجها لا يُفيد أحداً». **والسالبُ يُترَك ظاهراً**
+     * إشارةً على أنّ الجردَ منحرف، ولوحةُ المنصّة تعرضه أوّلَ ما تعرض.
+     *
+     * **لكنّ التاجرَ نفسَه لا يراه إطلاقاً.**
+     *
+     * `lowStock()` يشترط `reorder_level > 0`، **وهو صفرٌ بالافتراض**. فصنفٌ
+     * رصيدُه ‎-٤٠ ولم يُضبَط له حدُّ طلبٍ **لا يظهر في أيّ شاشةٍ للتاجر**.
+     * فالإشارةُ محفوظةٌ ومقصودةٌ ومعروضةٌ لمن لا يملك إصلاحَها، **ومحجوبةٌ
+     * عمّن يملكه** — وهو «مبنيٌّ ولا يُوصَل إليه» مقلوباً.
+     *
+     * **ولا يُشترَط هنا حدُّ طلبٍ ولا قدرةٌ مدفوعة**: السالبُ ليس تنبيهَ
+     * نفادٍ يُشترى، هو **خللٌ في البيانات** — وبيعُ رؤيةِ خللٍ للتاجر
+     * بيعُ أرقامٍ خاطئةٍ لمن دفع أقلّ. (وهو حدُّ `core()` نفسُه.)
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function negativeStock(int $merchantUserId, ?int $locationId = null): array
+    {
+        $q = ProductStock::query()
+            ->whereHas('product', fn ($w) => $w->where('merchant_user_id', $merchantUserId))
+            ->where('on_hand', '<', 0)
+            ->with(['product:id,name,barcode', 'location:id,name'])
+            ->orderBy('on_hand');
+
+        if ($locationId) {
+            $q->where('location_id', $locationId);
+        }
+
+        return $q->limit(200)->get()
+            ->map(fn (ProductStock $s) => [
+                'product_id' => (int) $s->product_id,
+                'product' => $s->product->name ?? '—',
+                'barcode' => $s->product->barcode ?? null,
+                'location' => $s->location->name ?? '—',
+                'location_id' => (int) $s->location_id,
+                'on_hand' => (string) $s->on_hand,
+                // **الناقصُ موجبٌ ليُقرأ**: «ينقص ٤٠» أوضحُ من «‎-٤٠» على
+                // شاشةٍ صغيرةٍ بالعربيّة.
+                'shortfall' => ltrim((string) $s->on_hand, '-'),
+                'last_counted_at' => $s->last_counted_at?->toIso8601String(),
+            ])->all();
+    }
+
     public function lowStock(int $merchantUserId, ?int $locationId = null): array
     {
         $q = ProductStock::query()

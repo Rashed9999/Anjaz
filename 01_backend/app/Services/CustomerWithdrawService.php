@@ -174,8 +174,8 @@ class CustomerWithdrawService
                 throw new RuntimeException('معرّف العميل لا يطابق صاحب العملية');
             }
 
-            // حدود الوكيل (سيولة/يومي) — نعيد استخدام فحص الوكيل
-            app(AgentNetworkService::class)->assertCashInAllowed($agent->id, (string)$req->amount);
+            // النقد يخرج من درج الوكيل هنا؛ لذلك يُفحص حد السحب لا حد الإيداع.
+            app(AgentNetworkService::class)->assertCashOutAllowed($agent->id, (string)$req->amount);
 
             $adminId = \App\CentralLogics\Helpers::get_admin_id();
             $agentCredit = MoneyService::add((string)$req->amount, (string)$req->agent_commission);

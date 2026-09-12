@@ -116,6 +116,7 @@
             <button class="list-group-item list-group-item-action js-kyc-open" data-id="${d.id}"
                     data-name="${esc(d.customer_name)}" data-phone="${esc(d.customer_phone)}"
                     data-label="${esc(d.doc_label)}" data-user="${d.user_id}"
+                    data-mime="${esc(d.original_mime || '')}"
                     data-testid="kyc-row-${d.id}">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
@@ -167,7 +168,7 @@
         const b = e.target.closest('.js-kyc-open');
         if (b) {
             current = {id: b.dataset.id, name: b.dataset.name, phone: b.dataset.phone,
-                       label: b.dataset.label, user: b.dataset.user};
+                       label: b.dataset.label, user: b.dataset.user, mime: b.dataset.mime};
             openDoc();
             return;
         }
@@ -226,7 +227,8 @@
 
     function openDoc() {
         const reason = 'مراجعة طابور الهوية';
-        // في إطارٍ لا في تبويب — انظر شرح أعلى الملفّ.
+        const fileUrl = `${BASE}/documents/${encodeURIComponent(current.id)}/file?reason=${encodeURIComponent(reason)}`;
+        const isImage = (current.mime || '').startsWith('image/');
         document.getElementById('kyc-viewer').innerHTML = `
             <div class="text-end">
                 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -240,9 +242,16 @@
                         <button class="btn btn-success" id="kyc-approve" data-testid="kyc-approve">اعتماد</button>
                     </div>` : '<span class="badge badge-soft-secondary">قراءة فقط</span>'}
                 </div>
-                <iframe src="${BASE}/documents/${encodeURIComponent(current.id)}/file?reason=${encodeURIComponent(reason)}"
-                        style="width:100%;height:420px;border:1px solid #ddd;border-radius:8px;background:#fafafa"
-                        title="مستند الهوية"></iframe>
+                ${isImage
+                    ? `<img id="kyc-document-image" src="${fileUrl}" alt="${esc(current.label)}"
+                         style="width:100%;max-height:420px;object-fit:contain;border:1px solid #ddd;border-radius:8px;background:#fafafa">`
+                    : `<iframe src="${fileUrl}"
+                         style="width:100%;height:420px;border:1px solid #ddd;border-radius:8px;background:#fafafa"
+                         title="مستند الهوية"></iframe>`}
+                <div id="kyc-preview-fallback" class="alert alert-warning small mt-2 d-none">
+                    تعذّر عرض هذا الملف داخل المتصفح. افتحه في نافذة مستقلة للمراجعة، ولا تعتمد الحقول قبل التحقق من الأصل.
+                    <a href="${fileUrl}" target="_blank" rel="noopener" class="alert-link">فتح الملف الأصلي</a>
+                </div>
                 <div id="kyc-ocr" class="mt-3" data-testid="kyc-ocr"></div>
                 <div id="kyc-completeness" class="mt-3"></div>
             </div>`;
@@ -250,6 +259,10 @@
         if (CAN_DECIDE) {
             document.getElementById('kyc-approve').onclick = approve;
             document.getElementById('kyc-reject').onclick = reject;
+        }
+        const image = document.getElementById('kyc-document-image');
+        if (image) {
+            image.onerror = () => document.getElementById('kyc-preview-fallback')?.classList.remove('d-none');
         }
         loadOcr();
     }
@@ -284,6 +297,15 @@
         const j = await get(`/documents/${current.id}/ocr`);
         if (!j.success) { box.innerHTML = ''; return; }
         const o = j.data;
+
+        if (o.applicable === false) {
+            box.innerHTML = `
+                <div class="alert alert-info mb-0" data-testid="kyc-ocr-not-applicable">
+                    <strong>لا يوجد استخراج حقول لهذا المستند.</strong>
+                    <div class="small mt-1">${esc(o.not_applicable_reason || 'هذا المستند لا يحتوي حقول هوية نصية.')}</div>
+                </div>`;
+            return;
+        }
 
         const st = OCR_STATUS[o.status] || OCR_STATUS.not_run;
 

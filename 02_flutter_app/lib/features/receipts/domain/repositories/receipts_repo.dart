@@ -47,6 +47,12 @@ class ReceiptsRepo extends GetxService {
     return '${apiClient.appBaseUrl}${AppConstants.amialReceiptDownload}$id/$safeRoute';
   }
 
+  /// رابط مشاركة عام للتحقق فقط. لا يحمل رمز دخول ولا يفتح PDF العميل
+  /// المحمي، لذلك يعمل في واتساب وعلى هاتف لا يملك حساب أميال.
+  String publicVerificationUrl(String verificationCode) {
+    return '${apiClient.appBaseUrl}/v/${Uri.encodeComponent(verificationCode)}';
+  }
+
   Future<Response> recordPrint(int id, {required String format, required String printerName}) {
     return apiClient.postData(
       '${AppConstants.amialReceiptShow}$id/print-event',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_refund_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_sale_detail_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -48,7 +49,7 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
       };
 
   String _timeOf(String? iso) {
-    final d = DateTime.tryParse(iso ?? '')?.toLocal();
+    final d = DateConverterHelper.tryFromApi(iso);
     if (d == null) return '';
     return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }

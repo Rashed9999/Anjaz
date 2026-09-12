@@ -57,6 +57,19 @@
                      المستخدم يظنّهما شاشتين فيجرّب الاثنتين، ثمّ يشكّ في
                      أنّه فوّت شيئاً حين يجد الشاشة نفسها. --}}
                 @includeIf('admin-views.amial.partials._sidebar')
+
+                {{-- AMIAL-EMAIL-ADMIN-001 — أثر البريد ظاهر في اللوحة لا خلف API فقط.
+                     الرابط نفسه محكوم بصلاحية القراءة؛ أزرار الإبطال داخل الصفحة
+                     تحتاج صلاحية إدارة مستقلة، وكشف البريد الكامل يحتاج PII. --}}
+                @if(auth('user')->user()?->hasPlatformPermission('platform.email.view'))
+                    <li class="nav-item">
+                        <a class="nav-link {{ Request::is('admin/amial/email-center*') ? 'active' : '' }}"
+                           href="{{ route('admin.amial.email-center.index') }}" data-testid="nav-email-center">
+                            <span class="nav-icon">✉️</span><span class="text-truncate">البريد والتحقق</span>
+                        </a>
+                    </li>
+                @endif
+
                 <li class="nav-item mt-3">
                     <a class="nav-link" href="{{ route('admin.auth.logout') }}" data-testid="nav-logout">
                         <i class="tio-logout nav-icon"></i>{{ 'تسجيل الخروج' }}
@@ -71,6 +84,38 @@
             <header class="d-flex justify-content-between align-items-center mb-4">
                 <div class="d-flex align-items-center gap-2">
                     <button type="button" class="admin-mobile-toggle" data-admin-sidebar-open aria-label="فتح القائمة">☰</button>
+
+                    {{-- ══════════════════════════════════════════════════
+                         AMIAL-ADMIN-BACK-001 — **زرُّ الرجوع، وكان مفقوداً.**
+
+                         قاله صاحب المشروع: «مساحة العمل لا يوجد أزرار رجوع
+                         للخلف».
+
+                         وقِيس فكان محقّاً: مساحةُ العمل تقود إلى **نيّفٍ
+                         وخمسين شاشة**، وليس في أيٍّ منها بابُ عودة. والقائمةُ
+                         الجانبيّةُ تحمل خمسةَ بنودٍ فقط، فمن دخل «سجلّ
+                         التدقيق» لا يجد طريقاً إلى «الامتثال والمخاطر» إلّا
+                         بزرّ المتصفّح — وهو غيرُ موجودٍ في تطبيق الويب
+                         المثبَّت على الشاشة الرئيسة.
+
+                         **ويوضع في المخطَّط لا في كلّ شاشة**: نثرُه في
+                         الشاشات يُنتج ما أنتجه غيرُه في هذا المشروع —
+                         شاشةٌ فيها بابٌ وأختُها بلا باب، ولا يُعرف السببُ
+                         إلّا بالتجربة.
+
+                         **ولا يظهر في مساحة العمل نفسِها ولا في اللوحة** —
+                         زرُّ رجوعٍ إلى الصفحة التي أنت فيها عطلٌ صغير.
+                         ══════════════════════════════════════════════════ --}}
+                    @php($amialBackHidden = request()->routeIs(
+                        'admin.amial.workspace.index', 'admin.dashboard', 'admin.amial.dashboard'))
+                    @unless($amialBackHidden)
+                        <a href="{{ route('admin.amial.workspace.index') }}"
+                           class="btn btn-sm btn-outline-secondary py-0 px-2"
+                           data-testid="admin-back"
+                           data-amial-back
+                           title="رجوع">← رجوع</a>
+                    @endunless
+
                     <h4 class="m-0" data-testid="page-title">@yield('title', 'الإدارة')</h4>
                 </div>
                 <div class="d-flex align-items-center gap-3">

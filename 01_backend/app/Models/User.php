@@ -43,11 +43,42 @@ class User extends Authenticatable
             'encrypted' => 'email_encrypted', 'blind_index' => 'email_blind_index',
             'masked' => 'email_masked', 'normalizer' => 'email',
         ],
-        'national_id' => [
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-KYC-DUP-001 — **المفتاحُ كان اسماً لا عمودَ له.**
+        //
+        // كان `'national_id'`، **ولا عمودَ بهذا الاسم في `users`**
+        // إطلاقاً. والسمةُ تقرأ `$this->attributes[$plainField]` — فلا
+        // تجد شيئاً أبداً، ومن أسنده صراحةً كسر `save()` بعمودٍ مجهول.
+        //
+        // فقِيس: `->national_id =` في المشروع كلِّه → **صفرُ إسناد**،
+        // و`national_id_blind_index` فارغٌ لكلّ حساب. والتسجيلُ يكتب
+        // `identification_number` — عموداً مسطَّحاً غيرَ مشفَّر.
+        //
+        // **وثلاثةُ أشياءَ كانت معطَّلةً بهذا وحدَه:** كشفُ الهويّة
+        // المكرَّرة في `DocumentReuseService`، ومطابقةُ قوائم العقوبات
+        // في `SanctionScreeningService` (تقرأ `$user->national_id`
+        // فتجدها `null` دائماً)، وتشفيرُ رقم الهويّة أصلاً.
+        //
+        // فصار المفتاحُ العمودَ الحقيقيّ، ويبقى المخزَّنُ في أعمدة
+        // `national_id_*` كما هي — فلا هجرةَ ولا اسمٌ ثالث.
+        // ══════════════════════════════════════════════════════════════
+        'identification_number' => [
             'encrypted' => 'national_id_encrypted', 'blind_index' => 'national_id_blind_index',
             'masked' => 'national_id_masked', 'normalizer' => 'national_id',
         ],
     ];
+
+    /**
+     * `national_id` اسمٌ مرادفٌ يقرأ العمودَ الحقيقيّ.
+     *
+     * **ولا يُحذَف النداءُ من مواضعه**: `SanctionScreeningService`
+     * وغيرُه تسأل `$user->national_id`، وكانت تأخذ `null` دائماً.
+     * فالمرادفُ يُصلح قارئاً قائماً بدل أن يطارده في كلّ ملفّ.
+     */
+    public function getNationalIdAttribute(): ?string
+    {
+        return $this->identification_number;
+    }
 
     // AMIAL-PIN-SECURITY-001: إضافة transaction_pin و fcm_token للـ hidden
     protected $hidden = [
@@ -144,6 +175,17 @@ class User extends Authenticatable
     protected static function booted(): void
     {
         static::saving(function (User $user): void {
+            // AMIAL-PHONE-IDENTITY-001 — القيد على النص الخام لا يرى أن
+            // +967 و00967 و967 تمثل هاتفاً واحداً. نحفظ مفتاحاً قانونياً
+            // مستقلاً للهوية الرقمية، بينما يبقى `phone` للتوافق مع
+            // المسارات والبيانات التاريخية التي تقرأه اليوم.
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'phone_canonical')) {
+                $phone = (string) ($user->phone ?? '');
+                $user->phone_canonical = $phone === ''
+                    ? null
+                    : \App\Support\Phone::canonical($phone, $user->dial_country_code ?? null);
+            }
+
             $current = $user->role ?? null;
             if ($current !== null && $current !== '' && $current !== \App\Support\Access\AccessConstants::ROLE_USER) {
                 return; // دور صريح مضبوط — لا نلمسه
@@ -323,11 +365,23 @@ class User extends Authenticatable
     public function hasPlatformPermission(string $code): bool
     {
         if (!isset($this->cachedPlatformPermissions)) {
-            $this->cachedPlatformPermissions = $this->platformRoles()
-                ->join('role_permissions', 'roles.id', '=', 'role_permissions.role_id')
-                ->join('permissions', 'permissions.id', '=', 'role_permissions.permission_id')
-                ->pluck('permissions.code')
-                ->all();
+            // الحساب الذي اختيرت له تبويبات عمل يستخدمها حصراً؛ لا تعود
+            // أدوار قديمة واسعة لتفتح شيئاً لم يُعلّم له في «قراءة/كتابة».
+            // الحسابات السابقة بلا صفوف تبويبات تبقى على RBAC القديم حتى
+            // ينقلها مدير المنصة عمداً، فلا ينقطع تشغيل قائم وقت النشر.
+            $tabAccessExists = \Illuminate\Support\Facades\Schema::hasTable('platform_operator_tab_access')
+                && \Illuminate\Support\Facades\DB::table('platform_operator_tab_access')
+                    ->where('user_id', $this->id)->exists();
+
+            $this->cachedPlatformPermissions = $tabAccessExists
+                ? \Illuminate\Support\Facades\DB::table('admin_user_permissions')
+                    ->join('permissions', 'permissions.id', '=', 'admin_user_permissions.permission_id')
+                    ->where('admin_user_permissions.user_id', $this->id)
+                    ->pluck('permissions.code')->all()
+                : $this->platformRoles()
+                    ->join('role_permissions', 'roles.id', '=', 'role_permissions.role_id')
+                    ->join('permissions', 'permissions.id', '=', 'role_permissions.permission_id')
+                    ->pluck('permissions.code')->all();
         }
 
         return in_array($code, $this->cachedPlatformPermissions, true);

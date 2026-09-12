@@ -387,8 +387,15 @@ class VerticalRoleTemplatesTest extends TestCase
         $denied = $this->actingAs($rep, 'api')->postJson($path, ['reason' => 'تجربة']);
 
         $denied->assertStatus(403);
-        $this->assertSame('FORBIDDEN', $denied->json('code'),
-            'الرفضُ ليس من محرّك الصلاحيّات — فقد يكون من حاجزٍ آخر، '
+        // ══════════════════════════════════════════════════════════════
+        // **والرمزُ صار أدقَّ لا أضعف.** كان `FORBIDDEN` عامّاً، وصار
+        // `WHOLESALE_PERMISSION_REQUIRED` من `EnforceWholesaleAccessPolicy`
+        // وحدَها — وهو **مصدرٌ واحدٌ مقيسٌ في الشيفرة**، فيخدم نيّةَ هذا
+        // الحارس (أن يكون الرفضُ من محرّك الصلاحيّات لا من حاجزٍ آخر)
+        // خدمةً أوثقَ من العامّ الذي قد يصدر من عشرة مواضع.
+        // ══════════════════════════════════════════════════════════════
+        $this->assertSame('WHOLESALE_PERMISSION_REQUIRED', $denied->json('code'),
+            'الرفضُ ليس من محرّك صلاحيّات الجملة — فقد يكون من حاجزٍ آخر، '
             . 'والمقياسُ حينئذٍ يقيس غيرَ ما يدّعي');
         $this->assertNotSame('', (string) $denied->json('message'),
             'رفضٌ بلا رسالةٍ يُرسل الموظّفَ إلى الدعم بلا معلومة');

@@ -1,0 +1,420 @@
+<title>دورة المال في شبكة الوكلاء</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  :root{
+    --ink:#0E1726; --ink-2:#44506A; --ink-3:#7B879E;
+    --paper:#F7F5F0; --card:#FFFFFF; --card-2:#FAF9F6;
+    --rule:#DCD8CE; --rule-2:#EBE8E1;
+    --brand:#053391; --brand-2:#1D4FB8;
+    --emoney:#0B4FBD;  /* الرصيد الإلكترونيّ — أزرقُ العلامة */
+    --cash:#A9761B;    /* النقد الورقيّ — ذهبُ العلامة */
+    --ok:#0F7A46; --ok-bg:#E9F3EC;
+    --warn:#8A5A00; --warn-bg:#FBF3E2;
+    --bad:#A62119; --bad-bg:#F9EBE9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#EAEDF4; --ink-2:#A6B0C4; --ink-3:#76819A;
+      --paper:#0B111C; --card:#131B2A; --card-2:#182131;
+      --rule:#2A3448; --rule-2:#1F2939;
+      --brand:#7FA2EF; --brand-2:#9CBAF5;
+      --emoney:#6FA3F5; --cash:#DDA94A;
+      --ok:#5FCC93; --ok-bg:#0E2A1D;
+      --warn:#E3B75F; --warn-bg:#2C2208;
+      --bad:#F08C84; --bad-bg:#341311;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#EAEDF4; --ink-2:#A6B0C4; --ink-3:#76819A;
+    --paper:#0B111C; --card:#131B2A; --card-2:#182131;
+    --rule:#2A3448; --rule-2:#1F2939;
+    --brand:#7FA2EF; --brand-2:#9CBAF5;
+    --emoney:#6FA3F5; --cash:#DDA94A;
+    --ok:#5FCC93; --ok-bg:#0E2A1D;
+    --warn:#E3B75F; --warn-bg:#2C2208;
+    --bad:#F08C84; --bad-bg:#341311;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; direction:rtl; background:var(--paper); color:var(--ink);
+    font-family:'Tajawal','Noto Kufi Arabic','Segoe UI',system-ui,sans-serif;
+    font-size:16px; line-height:1.78; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:900px; margin:0 auto; padding:38px 22px 80px}
+  h1,h2,h3{margin:0; font-weight:800; letter-spacing:-.015em; line-height:1.32; text-wrap:balance}
+  code,.n{font-family:'IBM Plex Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums}
+  code{font-size:.85em; background:var(--card-2); padding:1px 5px; border-radius:4px;
+       border:1px solid var(--rule-2); direction:ltr; display:inline-block}
+
+  header{border-bottom:2px solid var(--ink); padding-bottom:20px; margin-bottom:30px}
+  .eyebrow{font-size:11.5px; font-weight:700; letter-spacing:.17em; color:var(--brand); margin-bottom:10px}
+  h1{font-size:32px; margin-bottom:9px}
+  .lede{font-size:17px; color:var(--ink-2); margin:0; max-width:64ch}
+
+  h2.sec{font-size:21px; margin:44px 0 4px; padding-top:16px; border-top:1px solid var(--rule)}
+  .sub{font-size:14.5px; color:var(--ink-3); margin:0 0 20px}
+
+  /* الطبقتان — عمودُ المستند كلِّه */
+  .layers{background:var(--card); border:1px solid var(--rule); border-radius:14px;
+          padding:22px; margin:20px 0; overflow-x:auto}
+  .layers pre{margin:0; font-family:'IBM Plex Mono',monospace; font-size:13.5px;
+              line-height:2; color:var(--ink-2); direction:ltr; text-align:center; white-space:pre}
+  .layers b{color:var(--ink)}
+
+  /* حركةُ كلِّ عمليّة: عمودان لا رقمٌ واحد */
+  .move{background:var(--card); border:1px solid var(--rule); border-radius:14px;
+        margin-bottom:16px; overflow:hidden}
+  .move > h3{font-size:16.5px; padding:14px 18px 0; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap}
+  .who{font-size:12px; font-weight:700; color:var(--ink-3); background:var(--card-2);
+       border:1px solid var(--rule-2); border-radius:20px; padding:2px 10px; white-space:nowrap}
+  .move > p{margin:8px 18px 0; font-size:14.5px; color:var(--ink-2)}
+  .move > p b{color:var(--ink)}
+  .cite{font-size:12px; color:var(--ink-3); margin:10px 18px 16px !important;
+        border-inline-start:2px solid var(--rule); padding-inline-start:10px}
+
+  .tt{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--rule-2);
+      border-top:1px solid var(--rule-2); margin-top:14px}
+  .tt > div{background:var(--card-2); padding:12px 16px}
+  .tt .lbl{font-size:11.5px; font-weight:800; letter-spacing:.06em; margin-bottom:6px;
+           display:flex; align-items:center; gap:6px}
+  .tt .e .lbl{color:var(--emoney)}
+  .tt .c .lbl{color:var(--cash)}
+  .tt .lbl .dot{width:9px; height:9px; border-radius:50%}
+  .tt .e .lbl .dot{background:var(--emoney)}
+  .tt .c .lbl .dot{background:transparent; border:2px solid var(--cash)}
+  .tt ul{margin:0; padding-inline-start:16px; font-size:13.5px; color:var(--ink-2)}
+  .tt li{margin-bottom:2px}
+  .tt .n{color:var(--ink); font-weight:600}
+  @media (max-width:620px){ .tt{grid-template-columns:1fr} }
+
+  .eq{background:var(--card); border:2px solid var(--brand); border-radius:14px;
+      padding:20px 22px; margin:22px 0; overflow-x:auto}
+  .eq h3{font-size:16px; color:var(--brand); margin-bottom:12px}
+  .eq pre{margin:0; font-family:'IBM Plex Mono',monospace; font-size:13px; line-height:2.05;
+          color:var(--ink-2); direction:rtl; white-space:pre-wrap}
+  .eq pre b{color:var(--ink)}
+
+  .scroll{overflow-x:auto; border:1px solid var(--rule); border-radius:14px; background:var(--card)}
+  table{width:100%; border-collapse:collapse; font-size:14px; margin:0}
+  th,td{padding:11px 14px; text-align:start; border-bottom:1px solid var(--rule-2)}
+  th{background:var(--card-2); font-size:12px; font-weight:800; color:var(--ink-2); white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  td.n{font-variant-numeric:tabular-nums; white-space:nowrap}
+  .em{color:var(--emoney); font-weight:600}
+  .ca{color:var(--cash); font-weight:600}
+  tr.total td{background:var(--card-2); font-weight:800; border-top:2px solid var(--rule)}
+
+  .note{border-inline-start:4px solid var(--warn); background:var(--warn-bg);
+        border-radius:0 12px 12px 0; padding:15px 18px; margin:18px 0; font-size:14.5px; color:var(--ink-2)}
+  .note b{color:var(--ink)}
+  .note.ok{border-inline-start-color:var(--ok); background:var(--ok-bg)}
+  .note.bad{border-inline-start-color:var(--bad); background:var(--bad-bg)}
+
+  footer{margin-top:46px; padding-top:18px; border-top:1px solid var(--rule);
+         font-size:13px; color:var(--ink-3)}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">أميال باي · دورةُ المال المقيسة</div>
+    <h1>دورة المال في شبكة الوكلاء</h1>
+    <p class="lede">من محفظةٍ صفرٍ إلى خمسين مليوناً وُزّعت على الفروع — كلُّ
+      حركةٍ أدناه مقروءةٌ من الشيفرة، ومعها موضعُها. <b>وما لا قياسَ له لا
+      يُذكر هنا.</b></p>
+  </header>
+
+  <div class="note">
+    <b>قاعدةٌ تُقرأ قبل كلّ شيء:</b> الرصيدُ الإلكترونيُّ في أميال
+    <b>لا يُخلَق ولا يُعدَم</b> — يُشترى بنقدٍ ويُنقَل. وكلُّ ريالٍ إلكترونيٍّ
+    قائمٍ في الشبكة يقابله ريالٌ ورقيٌّ في مكانٍ ما: إمّا في خزينة المنصّة،
+    وإمّا في درج الوكيل.
+  </div>
+
+  <h2 class="sec">البنية — طبقتان، ولكلٍّ اتّجاهان</h2>
+  <p class="sub">والمنصّةُ طرفُ الوكيل وحدَه. لا تموّل فرعاً مباشرةً — وذلك خطأُ
+    حسابٍ لا خطأُ ترتيب.</p>
+
+  <div class="layers"><pre>
+المنصّة  ──<b>topup</b>──►  الوكيل الأمّ  ──<b>fundBranch</b>──►  الفرع
+   ▲                            ▲
+   └──<b>payout</b>─────────────┘   └──<b>collectFromBranch</b>──┘</pre></div>
+
+  <div class="note bad">
+    <b>ولمَ لا تموّل المنصّةُ فرعاً مباشرةً:</b> محرّكُ التسوية يقرأ الوكيلَ
+    وفروعَه <b>كتلةً واحدة</b> — «الفعليّ» من محافظ الفروع، و«المتوقَّع» من
+    تسويات الأمّ وحدَه. فتمويلٌ مباشرٌ يرفع الأوّلَ ولا يرفع الثاني ⇒
+    <b>فائضٌ وهميٌّ دائم</b> لا يزول أبداً، ولا يظهر في أيّ شاشة.
+  </div>
+
+  <h2 class="sec">① المنصّة تبيع رصيداً للوكيل</h2>
+  <p class="sub">وهي الخطوةُ التي يدخل بها المالُ الشبكةَ أصلاً.</p>
+
+  <div class="move">
+    <h3>شراءُ رصيد <span class="who">topup · يعتمده مسؤولٌ في المنصّة</span></h3>
+    <p>الوكيلُ <b>يدفع نقداً خارج النظام</b> — حوالةً أو تسليماً — ويطلب
+      شحناً. فيُنشأ طلبٌ حالتُه <code>pending</code>، <b>ولا يتحرّك ريالٌ
+      حتّى يعتمده مسؤول</b>.</p>
+    <p>وعند الاعتماد يُكتب قيدٌ مزدوج: <b>احتياطي النقد مديناً</b> ومحفظةُ
+      الوكيل <b>دائنة</b>. أي أنّ المنصّة سجّلت أنّها قبضت ورقاً، وأصدرت
+      مقابلَه رصيداً.</p>
+    <div class="tt">
+      <div class="e"><div class="lbl"><span class="dot"></span>الرصيد الإلكترونيّ</div>
+        <ul><li>محفظةُ الوكيل <span class="n">+ المبلغ</span></li>
+            <li><code>CASH_RESERVE</code> مدين</li></ul></div>
+      <div class="c"><div class="lbl"><span class="dot"></span>النقد الورقيّ</div>
+        <ul><li>خزينةُ المنصّة <span class="n">+ المبلغ</span></li>
+            <li>(خارج النظام — تسليمٌ حقيقيّ)</li></ul></div>
+    </div>
+    <p class="cite">AgentNetworkService::approveSettlement — <code>settlement_type = 'topup'</code></p>
+  </div>
+
+  <div class="move">
+    <h3>وإعادةُ الرصيد نقداً <span class="who">payout · الاتّجاه المعاكس</span></h3>
+    <p>الوكيلُ يردّ رصيداً ويأخذ ورقاً. <b>ويُحجَز الرصيدُ لحظةَ الطلب</b>
+      ثمّ يُصرَف عند الاعتماد — فلا ينفقه مرّتين في أثناء الانتظار.</p>
+    <p>والقيدُ معاكسٌ حرفاً: محفظةُ الوكيل مدينة، والاحتياطي دائن.</p>
+    <div class="tt">
+      <div class="e"><div class="lbl"><span class="dot"></span>الرصيد الإلكترونيّ</div>
+        <ul><li>محفظةُ الوكيل <span class="n">− المبلغ</span></li></ul></div>
+      <div class="c"><div class="lbl"><span class="dot"></span>النقد الورقيّ</div>
+        <ul><li>خزينةُ المنصّة <span class="n">− المبلغ</span></li></ul></div>
+    </div>
+    <p class="cite">AgentNetworkService::approveSettlement — <code>captureHold</code> ثمّ القيد المعاكس</p>
+  </div>
+
+  <div class="note">
+    <b>وطبقةٌ باتّجاهٍ واحد ليست تسوية — هي صرفٌ بلا استرداد.</b> وقد وقع هذا
+    مرّتين في هذا المشروع: <code>payout</code> كان غائباً عن الطبقة الأولى،
+    و<code>collectFromBranch</code> عن الثانية.
+  </div>
+
+  <h2 class="sec">② الوكيل يوزّع على فروعه</h2>
+  <p class="sub">نقلٌ داخل الشبكة — لا إصدارَ فيه ولا إعدام.</p>
+
+  <div class="move">
+    <h3>شحنُ فرعٍ برصيد <span class="who">fundBranch · من الأمّ وحدَها</span></h3>
+    <p>يُخصَم من محفظة الأمّ ويُضاف إلى محفظة الفرع. <b>والمجموعُ ثابتٌ قبل
+      وبعد</b> — وهذا هو الثابتُ الذي يحرسه الاختبار.</p>
+    <p><b>وللسقف ثلاثُ طبقات، قِيست بكسرها واحدةً واحدة:</b> فحصٌ قبل القفل،
+      وإعادتُه <b>داخل القفل</b> (فلا يمرّ طلبان متزامنان بفحصٍ واحد)،
+      <b>وحارسُ الدفتر</b> الذي يرفض حسابَ أصلٍ سالباً من عمقه. فنزعُ
+      الاثنين الأوّلين لا يُخلَق به ريال — يردُّه الدفتر.</p>
+    <div class="tt">
+      <div class="e"><div class="lbl"><span class="dot"></span>الرصيد الإلكترونيّ</div>
+        <ul><li>الأمّ <span class="n">− المبلغ</span></li>
+            <li>الفرع <span class="n">+ المبلغ</span></li>
+            <li><b>المجموع: بلا تغيير</b></li></ul></div>
+      <div class="c"><div class="lbl"><span class="dot"></span>النقد الورقيّ</div>
+        <ul><li>لا يتحرّك</li></ul></div>
+    </div>
+    <p class="cite">AgentBranchService::fundBranch — والعكسُ <code>collectFromBranch</code></p>
+  </div>
+
+  <div class="move">
+    <h3>وتوريدُ النقد إلى الفرع <span class="who">حركة الخزنة · مستقلّةٌ تماماً</span></h3>
+    <p><b>وهذا خطٌّ ثانٍ لا يمرّ بالدفتر الإلكترونيّ.</b> الوكيلُ يُرسل ورقاً
+      إلى درج الفرع ليخدم به السحوبات، ويسحب منه الفائضَ.</p>
+    <p>والنقدُ يُسجَّل على <b>درج الصرّاف</b> لا على خزنة الفرع حين تكون
+      ورديّةٌ مفتوحة — فالورقُ في يد من يقف على الشبّاك، وهو من يُسأل عنه
+      آخرَ ورديّته.</p>
+    <div class="tt">
+      <div class="e"><div class="lbl"><span class="dot"></span>الرصيد الإلكترونيّ</div>
+        <ul><li>لا يتحرّك</li></ul></div>
+      <div class="c"><div class="lbl"><span class="dot"></span>النقد الورقيّ</div>
+        <ul><li>خزنةُ الوكيل <span class="n">− المبلغ</span></li>
+            <li>درجُ الفرع <span class="n">+ المبلغ</span></li></ul></div>
+    </div>
+    <p class="cite">AgentTillService::record — اتّجاهان <code>in</code> · <code>out</code></p>
+  </div>
+
+  <h2 class="sec">③ الشبّاك — حيث يلتقي الورقُ بالرصيد</h2>
+  <p class="sub">وهنا وحدَه يتحوّل أحدُهما إلى الآخر. وكلُّ ما قبله كان نقلاً.</p>
+
+  <div class="move">
+    <h3>إيداعُ عميل <span class="who">ورقٌ يدخل · رصيدٌ يخرج</span></h3>
+    <p>العميلُ يسلّم <b>المبلغ كاملاً ورقاً</b> ويستلم <b>المبلغَ ناقصَ
+      الرسم</b> في محفظته. والرسمُ يُقتطَع من الرصيد لا من الورق.</p>
+    <p><b>والنقدُ الداخلُ يُسجَّل بالإجماليّ لا بالصافي</b> — وتسجيلُ الصافي
+      يجعل الجردَ ينقص بمقدار الرسوم كلَّ يوم.</p>
+    <div class="tt">
+      <div class="e"><div class="lbl"><span class="dot"></span>الرصيد الإلكترونيّ</div>
+        <ul><li>الفرع <span class="n">− (المبلغ − الرسم)</span></li>
+            <li>العميل <span class="n">+ (المبلغ − الرسم)</span></li>
+            <li>الفرع <span class="n">− حصّة المنصّة</span></li></ul></div>
+      <div class="c"><div class="lbl"><span class="dot"></span>النقد الورقيّ</div>
+        <ul><li>درجُ الصرّاف <span class="n">+ المبلغ كاملاً</span></li></ul></div>
+    </div>
+    <p class="cite">AgentCounterService::deposit — والفرعُ لا يودع إن لم يكفِ رصيدُه، والرسالةُ تقول ذلك</p>
+  </div>
+
+  <div class="move">
+    <h3>سحبُ عميل <span class="who">رصيدٌ يدخل · ورقٌ يخرج</span></h3>
+    <p>العميلُ يُخصَم منه <b>المبلغ زائدَ الرسم</b> ويستلم <b>المبلغَ ورقاً</b>.
+      <b>والرسمُ لم يخرج من الدرج</b> — فالنقدُ الخارجُ هو المطلوبُ وحدَه.</p>
+    <div class="tt">
+      <div class="e"><div class="lbl"><span class="dot"></span>الرصيد الإلكترونيّ</div>
+        <ul><li>العميل <span class="n">− (المبلغ + الرسم)</span></li>
+            <li>الفرع <span class="n">+ (المبلغ + الرسم)</span></li>
+            <li>الفرع <span class="n">− حصّة المنصّة</span></li></ul></div>
+      <div class="c"><div class="lbl"><span class="dot"></span>النقد الورقيّ</div>
+        <ul><li>درجُ الصرّاف <span class="n">− المبلغ</span></li></ul></div>
+    </div>
+    <p class="cite">AgentCounterService::withdraw — ويُعاد فحصُ رصيد العميل داخل القفل</p>
+  </div>
+
+  <h2 class="sec">④ الأرباح — أين تقع بالضبط</h2>
+  <p class="sub">ولا تُدفَع دفعةً في آخر الشهر: تُحتجَز عمليّةً بعمليّة.</p>
+
+  <div class="eq">
+    <h3>قسمةُ الرسم</h3>
+    <pre>الرسمُ الواحد  =  <b>عمولةُ الوكيل</b>  +  <b>حصّةُ المنصّة</b>
+
+  · النسبتان تُضبطان من لوحة الإدارة (‏<code>FeeScheme</code>) — لا في الشيفرة
+  · <b>وحاجزٌ يرفض مجموعاً يتجاوز الرسم</b>: خطأٌ في الضبط كان يجعل
+    المنصّةَ تدفع من جيبها بلا أن ينتبه أحد، والدفترُ يبقى متوازناً
+    لأنّ كلَّ قيدٍ متوازنٌ وحدَه.</pre>
+  </div>
+
+  <div class="note ok">
+    <b>وعمولةُ الوكيل لا تُحوَّل إليه — تبقى عنده.</b> فحصّةُ المنصّة وحدَها
+    هي التي تُخصَم من محفظة الفرع إلى حساب <code>PLATFORM_FEE</code>،
+    <b>والباقي يبقى رصيداً في محفظة الفرع</b>. أي أنّ ربحَ الوكيل يظهر
+    <b>زيادةً في رصيده الإلكترونيّ</b> لا حوالةً شهريّة.
+    <span style="display:block;margin-top:8px">وبالحساب: الفرعُ في كلّ إيداع
+      يكسب <b>ورقاً بقدر المبلغ</b> ويدفع <b>رصيداً بقدر المبلغ ناقصَ
+      العمولة</b> — فصافي مكسبه <b>العمولة</b>.</span>
+  </div>
+
+  <h2 class="sec">⑤ المثال: خمسون مليوناً من الصفر</h2>
+  <p class="sub">وكيلٌ محفظتُه صفر، وفروعُه صفر. والنِّسَبُ أدناه <b>افتراضٌ
+    للتوضيح</b> — تُضبَط من اللوحة ولا تُكتب في شيفرة.</p>
+
+  <div class="note">
+    <b>الافتراض:</b> رسمٌ قدرُه <span class="n">١٪</span> على عمليّات الشبّاك،
+    يُقسَم <b>٦٠٪ للوكيل و٤٠٪ للمنصّة</b>. وكلُّ الخمسين مليوناً دارت
+    <b>إيداعاتِ عملاء</b> (ورقٌ يدخل، رصيدٌ يخرج).
+  </div>
+
+  <div class="scroll"><table>
+    <thead><tr>
+      <th>#</th><th>الحركة</th>
+      <th>محفظةُ الأمّ</th><th>محافظُ الفروع</th><th>نقدُ الفروع</th>
+    </tr></thead>
+    <tbody>
+      <tr><td class="n">٠</td><td>البداية</td>
+        <td class="n">٠</td><td class="n">٠</td><td class="n">٠</td></tr>
+
+      <tr><td class="n">١</td>
+        <td><b>يدفع الوكيل ٥٠ مليوناً ورقاً للمنصّة</b><br>
+          <span style="font-size:12.5px;color:var(--ink-3)">‏topup معتمَد ⇒ القيد: احتياطي مدين · محفظةُ الوكيل دائنة</span></td>
+        <td class="n em">٥٠٬٠٠٠٬٠٠٠</td><td class="n">٠</td><td class="n">٠</td></tr>
+
+      <tr><td class="n">٢</td>
+        <td>يوزّعها على فروعه<br>
+          <span style="font-size:12.5px;color:var(--ink-3)">‏fundBranch — نقلٌ لا إصدار</span></td>
+        <td class="n">٠</td><td class="n em">٥٠٬٠٠٠٬٠٠٠</td><td class="n">٠</td></tr>
+
+      <tr><td class="n">٣</td>
+        <td>يورّد نقداً للأدراج<br>
+          <span style="font-size:12.5px;color:var(--ink-3)">خطٌّ مستقلّ — لا يمسّ الدفتر الإلكترونيّ</span></td>
+        <td class="n">٠</td><td class="n em">٥٠٬٠٠٠٬٠٠٠</td><td class="n ca">حسب الحاجة</td></tr>
+
+      <tr><td class="n">٤</td>
+        <td><b>الفروع تُودع لعملاء بـ٥٠ مليوناً</b><br>
+          <span style="font-size:12.5px;color:var(--ink-3)">الرسم ٥٠٠ ألف · للوكيل ٣٠٠ ألف · للمنصّة ٢٠٠ ألف</span></td>
+        <td class="n">٠</td>
+        <td class="n em">٣٠٠٬٠٠٠</td>
+        <td class="n ca">+٥٠٬٠٠٠٬٠٠٠</td></tr>
+
+      <tr class="total"><td class="n">٥</td>
+        <td><b>آخرُ الشهر — قبل التسوية</b></td>
+        <td class="n">٠</td>
+        <td class="n em">٣٠٠٬٠٠٠</td>
+        <td class="n ca">٥٠٬٠٠٠٬٠٠٠</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note ok">
+    <b>اقرأ السطرَ الأخير:</b> الوكيلُ دفع <b>٥٠ مليوناً ورقاً</b> في البداية،
+    وعاد إليه في الأدراج <b>٥٠ مليوناً ورقاً</b>، <b>وبقي في محافظه ٣٠٠ ألف
+    رصيداً</b>. فربحُه ٣٠٠ ألف — <b>وهو موجودٌ الآن رصيداً إلكترونيّاً، لا
+    وعداً</b>.
+    <span style="display:block;margin-top:8px">ويحوّله ورقاً متى شاء
+      بـ<b>payout</b>: يردّ ٣٠٠ ألف رصيداً ويأخذ ٣٠٠ ألف ورقاً. أو يُبقيه
+      ليخدم به دورةً جديدة بلا شراءٍ جديد.</span>
+  </div>
+
+  <div class="note">
+    <b>ولو كانت الخمسون سحوباتٍ لا إيداعات، لانعكس الاتّجاهان:</b> الرصيدُ
+    يدخل محافظَ الفروع من العملاء، والورقُ يخرج من الأدراج. فيحتاج الوكيلُ
+    <b>ورقاً في الأدراج</b> لا رصيداً في المحافظ — <b>وهذا هو القيدان
+    المتعاكسان</b> اللذان يجعلان رقماً واحداً كبيراً كاذباً: النقدُ يحدّ
+    السحبَ والرصيدُ يحدّ الإيداع.
+  </div>
+
+  <h2 class="sec">⑥ المطابقة — كيف يُعرَف أنّ الحساب سليم</h2>
+  <p class="sub">والمتوقَّعُ يُحسب من المصدر لا يُقرأ من العمود. ولو حُسب من
+    العمود لخرج الفرقُ صفراً دائماً، ولبدا كلُّ شيءٍ متوازناً وهو منهار.</p>
+
+  <div class="eq">
+    <h3>معادلةُ محرّك التسوية</h3>
+    <pre><b>الرصيدُ الإلكترونيُّ المتوقَّع =</b>
+      + ما اشتراه الوكيل            (‏topup معتمَد)
+      − ما أعاده                    (‏payout معتمَد)
+      + ما دخله من سحوبات العملاء   (يدفع رصيداً ويأخذ نقداً)
+      − ما خرج في إيداعاتهم         (يدفع نقداً ويأخذ رصيداً)
+
+<b>النقدُ الورقيُّ المتوقَّع =</b>
+      + نقدُ إيداعات العملاء
+      − نقدُ سحوباتهم
+      + التوريدُ إلى الفروع
+      − التوريدُ منها
+      ± تسوياتُ الجرد
+
+<b>والفرقُ بين المتوقَّع والفعليّ هو المنتَج.</b>  والتسامحُ <b>صفر</b>.</pre>
+  </div>
+
+  <div class="scroll"><table>
+    <thead><tr><th>الحالة</th><th>ما تعني</th></tr></thead>
+    <tbody>
+      <tr><td><b style="color:var(--ok)">متوازن</b></td><td>الفعليُّ = المتوقَّع تماماً</td></tr>
+      <tr><td><b style="color:var(--bad)">عجز</b></td><td>الفعليُّ أقلّ — ورقٌ أو رصيدٌ ناقص</td></tr>
+      <tr><td><b style="color:var(--warn)">فائض</b></td><td>الفعليُّ أكثر — <b>وهو ريبةٌ لا هديّة</b></td></tr>
+      <tr><td><b style="color:var(--ink-3)">لا بيانات</b></td><td><b>ليس صفراً</b> — لم تُرفَع تسويةٌ أصلاً</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <b>وفروقُ الجرد لا تُقاصّ:</b> فرعٌ نقص خمسةً وآخرُ زاد خمسةً <b>ليسا
+    صفراً</b> — هما حادثتان تستحقّان سؤالين. فيُعرَض العددُ لا المجموعُ وحدَه.
+  </div>
+
+  <h2 class="sec">⑦ من أين يُدار هذا كلُّه</h2>
+
+  <div class="scroll"><table>
+    <thead><tr><th>الطرف</th><th>الشاشة</th><th>ما يفعله</th></tr></thead>
+    <tbody>
+      <tr><td>المنصّة</td><td>لوحةُ الإدارة ← الوكلاء</td>
+        <td>اعتمادُ الشحن والصرف · مراقبةُ السيولة والفروق</td></tr>
+      <tr><td>الوكيل — الإدارةُ العامّة</td><td>بوّابةُ الوكيل ← الرئيسيّة</td>
+        <td><b>محفظةُ الشركة</b> · إجمالي الفروع · ما يحتاج قراراً</td></tr>
+      <tr><td>الوكيل</td><td>← 🏬 الفروع</td>
+        <td><b>شحنُ الفرع وسحبُ الفائض</b> — والسقفُ محروسٌ ثلاثاً</td></tr>
+      <tr><td>الوكيل</td><td>← 🧾 حركة النقد</td>
+        <td>توريدُ الورق إلى الأدراج وسحبُه</td></tr>
+      <tr><td>الوكيل</td><td>← <b>🤝 التسويات</b></td>
+        <td>المطابقةُ اليوميّة · طلبُ الصرف · تسويةُ الفرع</td></tr>
+      <tr><td>الصرّاف</td><td>← 💵 الشبّاك</td>
+        <td>إيداعُ العميل وسحبُه · فتحُ الورديّة وإغلاقُها</td></tr>
+    </tbody>
+  </table></div>
+
+  <footer>
+    كلُّ سطرٍ هنا قِيس من الشيفرة على <code>claude/project-code-review-yjagv</code> —
+    <code>AgentNetworkService</code> · <code>AgentBranchService</code> ·
+    <code>AgentCounterService</code> · <code>AgentTillService</code> ·
+    <code>AgentSettlementEngine</code>. والنِّسَبُ في المثال افتراضٌ مُعلَنٌ
+    للتوضيح، وتُضبَط من لوحة الإدارة.
+  </footer>
+</div>

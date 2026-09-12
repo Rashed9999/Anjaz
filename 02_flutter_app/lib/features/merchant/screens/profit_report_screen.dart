@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/merchant/screens/sales_breakdown_screen.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
@@ -47,6 +48,17 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
       appBar: AppBar(
         title: const Text('تقارير الربحية'),
         actions: [
+          // AMIAL-SALES-BREAKDOWN-001 — **البابُ إلى التفصيل.**
+          //
+          // هذه الشاشةُ تقول الإجماليَّ وأعلى عشرةِ منتجاتٍ ربحاً، وتلك
+          // تقول كلَّ صنفٍ وكلَّ تصنيف. وكلتاهما خلف `profit_reports`،
+          // فلا بابَ يُعرض ثمّ يُرفض. (وشاشةٌ لا يُوصل إليها ليست مبنيّة
+          // — القاعدة الثانية عشرة.)
+          IconButton(
+            icon: const Icon(Icons.list_alt_rounded),
+            tooltip: 'المبيعات بالصنف',
+            onPressed: () => Get.to(() => const SalesBreakdownScreen()),
+          ),
           IconButton(icon: const Icon(Icons.share), onPressed: _share),
         ],
       ),

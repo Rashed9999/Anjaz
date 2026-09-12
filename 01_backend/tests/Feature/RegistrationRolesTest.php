@@ -143,7 +143,24 @@ class RegistrationRolesTest extends TestCase
         ])->assertOk();
 
         \Laravel\Passport\Passport::actingAs($merchant->fresh(), [], 'api');
-        $this->getJson('/api/v1/amial/merchant/cashier/products')->assertOk();
+
+        // ══════════════════════════════════════════════════════════════
+        // **والتاجرُ الموثَّقُ يفتح بابَ قطاعه — لا بابَ غيره.**
+        //
+        // كان هذا السطرُ يشترط أن يفتح **تاجرُ صيدليّةٍ كاشيرَ البقالة**
+        // (`/merchant/cashier/products`)، وهو ما يمنعه عزلُ القطاعات
+        // عمداً بـ`PHARMACY_CASHIER_ONLY`: «استخدم كاشير الصيدلية لتبقى
+        // الوصفات والتشغيلات والصلاحية في الفاتورة».
+        //
+        // **والمقصودُ من الفحص باقٍ**: أنّ الحسابَ بعد الاعتماد يعمل
+        // فعلاً. فيُقاس على بابه هو — **ويُشترط معه أنّ البابَ الآخرَ
+        // مغلق**، فيصير السطرُ الذي كان يناقض العزلَ حارساً له.
+        // ══════════════════════════════════════════════════════════════
+        $this->getJson('/api/v1/amial/merchant/pharmacy')->assertOk();
+
+        $this->getJson('/api/v1/amial/merchant/cashier/products')
+            ->assertForbidden()
+            ->assertJsonPath('code', 'PHARMACY_CASHIER_ONLY');
     }
 
     /** @test AMIAL-VERIFY-GATE — استجابة الدخول تحمل حالة التوثيق لتوجيه التطبيق. */
@@ -214,11 +231,29 @@ class RegistrationRolesTest extends TestCase
         $this->assertSame('active', $resp['otp']);
         $this->assertNotEmpty($resp['demo_otp']);
 
+        // ══════════════════════════════════════════════════════════════
         // **والنفي الحاسم:** رقمٌ حقيقيٌّ لا يُفصح عن رمزه.
+        //
+        // وكان يُطالَب هنا بـ٢٠٠ — **وذاك هو السلوكُ الذي أُصلح**: لا
+        // قناةَ إيصالٍ مفعّلةً في بيئة الاختبار، فرقمٌ حقيقيٌّ كان يُقال
+        // له «أُرسل الرمز» ولا يصله شيء. (AMIAL-OTP-DELIVERY-001)
+        //
+        // فصار ٥٠٣ برسالةٍ تقول ما وقع. **والعقدُ المحروسُ هنا لم يتغيّر
+        // بل اشتدّ**: لا إفصاحَ عن رمزِ رقمٍ حقيقيّ — ولا رمزَ يُولَّد له
+        // أصلاً حين لا سبيلَ إلى إيصاله.
+        // ══════════════════════════════════════════════════════════════
         $real = $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => '967771500006'])
-            ->assertOk()->json();
+            ->assertStatus(503)->json();
 
         $this->assertNull($real['demo_otp'] ?? null,
             'أُفصح عن رمزِ رقمٍ حقيقيّ — فبطل التحقّق من أصله');
+
+        $this->assertStringContainsString('غير مهيّأة', (string) ($real['message'] ?? ''),
+            'صمتٌ في وجه رقمٍ حقيقيّ — ينتظر رسالةً لا تصل ولا يعرف لماذا');
+
+        // **ولا يُخزَّن رمزٌ لا سبيلَ إلى إيصاله** — فصفٌّ في
+        // `phone_verifications` يجعل نافذةَ إعادة الإرسال تعمل على رمزٍ
+        // لم يُرسَل، فيُقفَل الرقمُ دقيقةً على لا شيء.
+        $this->assertDatabaseMissing('phone_verifications', ['phone' => '967771500006']);
     }
 }

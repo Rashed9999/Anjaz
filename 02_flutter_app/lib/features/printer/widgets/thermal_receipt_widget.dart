@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:amial_pay/util/app_direction.dart';
 
 /// AMIAL-THERMAL-PRINT-001 — سطر في الإيصال الحراري.
 class ThermalReceiptLine {
@@ -106,7 +107,7 @@ class ThermalReceiptWidget extends StatelessWidget {
     const small = TextStyle(color: Colors.black, fontSize: 18, height: 1.2);
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: appTextDirection(),
       child: Container(
         color: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
@@ -260,7 +261,7 @@ class ThermalVoucherWidget extends StatelessWidget {
         );
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: appTextDirection(),
       child: Container(
         color: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),

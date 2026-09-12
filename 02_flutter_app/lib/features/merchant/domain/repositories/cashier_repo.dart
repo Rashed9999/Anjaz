@@ -8,9 +8,18 @@ class CashierRepo extends GetxService {
 
   static const _base = '/api/v1/amial/merchant/cashier';
 
-  Future<Response> products({String? search}) {
-    return apiClient.getData('$_base/products',
-        query: search != null && search.isNotEmpty ? {'search': search} : null);
+  /// AMIAL-VARIANT-EDITOR-001 — `includeVariantParents` لشاشة **الإدارة**.
+  ///
+  /// شبكةُ البيع لا تعرض مِظلّةَ المتغيّرات (لا تُباع)، **وشاشةُ إدارة
+  /// المنتجات يجب أن تعرضها** — وإلّا لم يبقَ للتاجر بابٌ إليها: لا
+  /// تعديلُ اسمٍ ولا وصولٌ إلى «الأنواع» ليوزّع مخزونَها.
+  Future<Response> products({String? search, bool includeVariantParents = false}) {
+    final q = <String, String>{
+      if (search != null && search.isNotEmpty) 'search': search,
+      if (includeVariantParents) 'include_variant_parents': '1',
+    };
+
+    return apiClient.getData('$_base/products', query: q.isEmpty ? null : q);
   }
 
   // AMIAL-CASHIER-BARCODE-001 — بحث منتج بالباركود
@@ -67,4 +76,35 @@ class CashierRepo extends GetxService {
   /// AMIAL-PROFIT-001 — تقرير الربحية (إجماليات + اتجاه يومي + منتجات).
   Future<Response> profitReport({int days = 7}) =>
       apiClient.getData('$_base/profit-report?days=$days');
+
+  /// AMIAL-SALES-BREAKDOWN-001 — المبيعاتُ بالصنف وبالتصنيف على مدىً
+  /// يختاره التاجر، **ومطروحاً منه المرتجَع**.
+  Future<Response> salesBreakdown({String? from, String? to}) {
+    final q = <String>[
+      if (from != null) 'from=$from',
+      if (to != null) 'to=$to',
+    ].join('&');
+
+    return apiClient.getData(
+        '$_base/sales-breakdown${q.isEmpty ? '' : '?$q'}');
+  }
+
+  // ── AMIAL-HELD-SALE-001 — التذاكر المفتوحة (تعليق الفاتورة) ─────────
+
+  /// التذاكرُ المعلَّقةُ للمنشأة — **لا للجهاز**: الزبونُ قد ينتقل إلى
+  /// الصندوق الآخر، فيستأنفها زميلُه.
+  Future<Response> heldTickets() => apiClient.getData('$_base/held');
+
+  Future<Response> holdCart(Map<String, dynamic> data) =>
+      apiClient.postData('$_base/held', data);
+
+  Future<Response> resumeHeld(String ulid) =>
+      apiClient.postData('$_base/held/$ulid/resume', {});
+
+  /// **تراجعٌ عن الاستئناف** — وبدونه تضيع السلّةُ إن سقط الدفع.
+  Future<Response> reopenHeld(String ulid) =>
+      apiClient.postData('$_base/held/$ulid/reopen', {});
+
+  Future<Response> voidHeld(String ulid, String reason) =>
+      apiClient.postData('$_base/held/$ulid/void', {'reason': reason});
 }

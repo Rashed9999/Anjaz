@@ -140,12 +140,18 @@ class AdminDashboardService
         // ويُطلَب من الماليّة أن تُطابقه فلا تستطيع. (AMIAL-TRUTH-004)
         $sum = static fn ($q): string => bcadd((string) ($q ?? '0'), '0', 4);
 
-        $circulating = $sum(DB::table('e_money')
+        // **وبالأساس وحدَه.** AMIAL-MULTI-CURRENCY-002: صار للمستخدم محفظةٌ
+        // لكلّ عملة، و`DB::table` استعلامٌ خامٌّ لا يبلغه نطاقُ النموذج.
+        // فجمعٌ بلا قيدٍ يضمّ دولاراً إلى ريالٍ في رقمٍ واحدٍ يُعرَض على
+        // الماليّة كأنّه سيولةُ المنصّة — وهو ليس مبلغاً من شيء.
+        $base = \App\Support\Money\Currencies::BASE;
+
+        $circulating = $sum(DB::table('e_money')->where('currency', $base)
             ->where('user_id', '!=', $platformId)->sum('current_balance'));
 
-        $pending = $sum(DB::table('e_money')->sum('pending_balance'));
+        $pending = $sum(DB::table('e_money')->where('currency', $base)->sum('pending_balance'));
 
-        $treasury = $sum(DB::table('e_money')
+        $treasury = $sum(DB::table('e_money')->where('currency', $base)
             ->where('user_id', $platformId)->sum('current_balance'));
 
         $toppedUp = $sum(DB::table('transactions')

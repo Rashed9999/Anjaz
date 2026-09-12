@@ -290,26 +290,17 @@ class CustomerController extends Controller
         return view('admin-views.customer.kyc_list', compact('customers', 'search'));
     }
 
-    public function updateKycStatus(int $id, int $status): RedirectResponse
-    {
-        $user = $this->user->find($id);
-        if (!isset($user)) {
-            Toastr::error(translate('customer not found'));
-            return back();
-        }
-        $user->is_kyc_verified = in_array($status, [1, 2]) ? $status : $user->is_kyc_verified;
-        $user->save();
-
-        $data = [
-            'title' => $status == 1 ? translate('verification_request_is_accepted') : translate('verification_request_is_denied'),
-            'description' => '',
-            'image' => '',
-            'type' => 'kyc_verification',
-        ];
-
-        Helpers::send_push_notif_to_device($user->fcm_token, $data);
-
-        Toastr::success(translate('Successfully updated.'));
-        return back();
-    }
+    /*
+     * AMIAL-KYC-EVIDENCE-001 — **حُذفت `updateKycStatus`: بابٌ ثانٍ إلى
+     * قرارٍ ماليّ.**
+     *
+     * كانت تكتب `is_kyc_verified` مباشرةً — **بلا مراجعةِ وثيقةٍ واحدة،
+     * وبلا محافظةِ سكن، وبلا المبدأ الرباعيّ، وبلا سطرِ تدقيق**. وقِيس
+     * أنّها بلا مسارٍ مسجَّلٍ ولا قالبٍ يناديها، فهي شيفرةٌ يتيمة —
+     * **لكنّ اليتيمَ يُتبنّى**: من قرأها ظنّها المسارَ ووصلها بمسار.
+     *
+     * والقرارُ الواحد: `KycDocumentService::decideAccountVerification`،
+     * ومدخلُه من اللوحة `POST hub/users/{id}/kyc`.
+     * ويحرسه `KycEvidenceGuardTest`.
+     */
 }

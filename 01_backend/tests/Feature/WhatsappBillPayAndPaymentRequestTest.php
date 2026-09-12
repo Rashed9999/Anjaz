@@ -317,6 +317,12 @@ class WhatsappBillPayAndPaymentRequestTest extends TestCase
     {
         $requester = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
         EMoney::create(['user_id' => $requester->id, 'current_balance' => 0, 'pending_balance' => 0]);
+        // AMIAL-MERCHANT-VERIFY-RECEIVE-001: التاجرُ المستلمُ للفاتورة موثّقٌ خادميّاً.
+        \App\Models\MerchantProfile::create([
+            'user_id' => $requester->id, 'tier' => 'small',
+            'verification_status' => 'verified',
+            'single_receive_limit' => '5000000', 'daily_receive_limit' => '50000000',
+        ]);
 
         return PaymentRequest::create([
             'request_ulid' => (string) Str::ulid(),

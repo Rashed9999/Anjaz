@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\AccountNumberService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 /**
@@ -50,6 +51,23 @@ class AccountNumberTest extends TestCase
     {
         $user = User::factory()->create();
         $this->assertNotNull($user->account_number);
+        $this->assertTrue($this->svc->isValid($user->account_number));
+    }
+
+    /** @test */
+    public function account_number_endpoint_repairs_a_legacy_account_without_one(): void
+    {
+        $user = User::factory()->create();
+        $user->forceFill(['account_number' => null])->save();
+
+        Passport::actingAs($user);
+
+        $this->getJson('/api/v1/amial/me/account-number')
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $user->refresh();
+        $this->assertNotEmpty($user->account_number);
         $this->assertTrue($this->svc->isValid($user->account_number));
     }
 

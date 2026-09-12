@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 
 /// AMIAL-CUSTOMER-CREDIT-VIEW-001 — «فواتيري الآجلة».
 ///
@@ -157,6 +158,16 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
   bool _loading = true;
   String _balance = '0';
   List<Map<String, dynamic>> _movements = [];
+  List<Map<String, dynamic>> _invoices = [];
+
+  /// AMIAL-CREDIT-GAP-001 — **الفرقُ بين الرصيد ومجموع الفواتير.**
+  ///
+  /// قائمةُ الفواتير تقتصر على قيود البيع عمداً، والتعديلُ اليدويُّ
+  /// الموجب (دَينٌ قديمٌ مُرحَّل) في الرصيد ولا سطرَ له. فيقرأ العميلُ
+  /// «عليّ ٥٠٠» فوق و«١٥٠٠» في البطاقة، **ولا شيءَ يفسّر الألف**.
+  /// (القاعدة السابعة: الغيابُ يُقال ولا يُترَك فراغاً.)
+  String _unlinked = '0';
+  String _unlinkedNote = '';
 
   @override
   void initState() {
@@ -175,6 +186,11 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
           _movements = ((meta['movements'] ?? []) as List)
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
+          _invoices = ((meta['invoices'] ?? []) as List)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+          _unlinked = '${meta['unlinked_balance'] ?? '0'}';
+          _unlinkedNote = '${meta['unlinked_note_ar'] ?? ''}';
         });
       }
     } catch (_) {} finally {
@@ -187,17 +203,17 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
     return n.toStringAsFixed(n == n.roundToDouble() ? 0 : 2);
   }
 
-  Future<void> _settle() async {
-    final balance = double.tryParse(_balance) ?? 0;
+  Future<void> _settle({Map<String, dynamic>? invoice}) async {
+    final balance = double.tryParse('${invoice?['remaining'] ?? _balance}') ?? 0;
     if (balance <= 0) return;
     final amtCtrl = TextEditingController(text: balance.toStringAsFixed(0));
 
     final amount = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('سداد الآجل'),
+        title: Text(invoice == null ? 'سداد الآجل' : 'سداد فاتورة آجلة'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('المستحقّ: ${_fmt(_balance)} ر.ي',
+          Text('المستحقّ: ${_fmt(invoice?['remaining'] ?? _balance)} ر.ي',
               style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.red)),
           const SizedBox(height: 12),
           TextField(
@@ -225,7 +241,12 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
 
     final r = await _api.postData(
       '/api/v1/amial/customer/credits/${widget.accountId}/settle',
-      {'amount': amount, 'pin': pin},
+      {
+        'amount': amount,
+        'pin': pin,
+        if (invoice?['movement_ulid'] != null)
+          'sale_movement_ulid': invoice!['movement_ulid'],
+      },
     );
     if (!mounted) return;
     if (r.statusCode == 200) {
@@ -242,7 +263,7 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
 
   String _date(String? iso) {
     if (iso == null) return '';
-    final d = DateTime.tryParse(iso)?.toLocal();
+    final d = DateConverterHelper.tryFromApi(iso);
     if (d == null) return '';
     return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
   }
@@ -280,6 +301,14 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
                   ),
                 ],
                 const SizedBox(height: 12),
+                if (_invoices.isNotEmpty) ...[
+                  const Text('الفواتير المستحقة',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  ..._invoices.map(_invoiceRow),
+                  const SizedBox(height: 8),
+                ],
+                if ((double.tryParse(_unlinked) ?? 0) > 0) _unlinkedBox(),
                 ..._movements.map(_movementRow),
               ]),
             ),
@@ -307,4 +336,70 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
       ),
     );
   }
+
+  Widget _invoiceRow(Map<String, dynamic> invoice) {
+    final due = '${invoice['due_date'] ?? ''}';
+    final note = '${invoice['note'] ?? ''}';
+    final reference = '${invoice['reference_number'] ?? ''}';
+    final remaining = _fmt(invoice['remaining']);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AmialColors.red.withValues(alpha: 0.18)),
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.receipt_long, color: AmialColors.red),
+        title: Text(reference.isEmpty ? 'فاتورة آجلة' : 'فاتورة $reference',
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text([
+          if (due.isNotEmpty) 'الاستحقاق: $due',
+          if (note.isNotEmpty) note,
+        ].join(' • '), style: const TextStyle(fontSize: 11)),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text('$remaining ر.ي',
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.red)),
+            const Text('سداد جزئي أو كامل', style: TextStyle(fontSize: 10, color: AmialColors.textMuted)),
+          ],
+        ),
+        onTap: () => _settle(invoice: invoice),
+      ),
+    );
+  }
+
+  /// **ما ليس فاتورةً يُقال بنصّه** — ولا يُخترَع له سطرُ فاتورةٍ وهميّ
+  /// بزرّ سدادٍ لا يقبله المحرّك.
+  Widget _unlinkedBox() => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AmialColors.warningSurface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AmialColors.warning.withValues(alpha: 0.35)),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.info_outline, size: 18, color: AmialColors.warning),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${_fmt(_unlinked)} ر.ي خارج الفواتير أعلاه',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: AmialColors.warning)),
+              if (_unlinkedNote.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(_unlinkedNote,
+                      style: const TextStyle(
+                          fontSize: 11, color: AmialColors.textSecondary)),
+                ),
+            ]),
+          ),
+        ]),
+      );
 }

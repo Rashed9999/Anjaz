@@ -45,7 +45,7 @@ class AmialCustomerHomeScreen extends StatefulWidget {
 class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   String _name = '';
   String _balance = '0';
-  String _qrCode = ''; // SVG رمز العميل لاستقبال المال
+  String _accountNumber = '';
   String _phone = '';
   bool _hideBalance = false;
   bool _loading = true;
@@ -125,7 +125,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         final ln = (b['l_name'] ?? '').toString();
         _name = ('$fn $ln').trim();
         _balance = (b['balance'] ?? '0').toString();
-        _qrCode = (b['qr_code'] ?? '').toString();
+        _accountNumber = (b['account_number'] ?? b['receive_address'] ?? '').toString();
         _phone = (b['phone'] ?? '').toString();
       }
     } catch (_) {/* دفاعي: نُبقي الواجهة نظيفة */}
@@ -302,14 +302,17 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   }
 
   void _openReceiveQr() {
-    if (_qrCode.isEmpty) {
+    if (_accountNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('جارٍ تجهيز رمز الاستلام...')),
       );
       _load();
       return;
     }
-    Get.to(() => QrCodeDownloadOrShareScreen(qrCode: _qrCode, phoneNumber: _phone));
+    Get.to(() => QrCodeDownloadOrShareScreen(
+          qrCode: _accountNumber,
+          phoneNumber: _phone,
+        ));
   }
 
   String get _balanceText {

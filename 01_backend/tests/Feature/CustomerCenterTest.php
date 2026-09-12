@@ -81,7 +81,7 @@ class CustomerCenterTest extends TestCase
     public function test_legacy_customer_edit_route_opens_the_modern_customer_center(): void
     {
         $this->actingAs($this->staff, 'user')
-            ->get(\"/admin/customer/edit/{$this->customer->id}\")
+            ->get("/admin/customer/edit/{$this->customer->id}")
             ->assertRedirect(route('admin.amial.customer.page', ['open' => $this->customer->id]));
     }
 

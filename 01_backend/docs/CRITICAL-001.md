@@ -45,6 +45,18 @@ final_features = roleBase(role)
    - 50+ feature key.
    - أسعار الخطط بـ SAR (FREE=0, STARTER=15, BUSINESS=35, PRO=65, ENTERPRISE=150).
 
+   > **مُصحَّحٌ — AMIAL-PLAN-MATRIX-003.** السطران أعلاه **سجلُّ ما بُني
+   > يومَها ولم يعد وصفَ ما يعمل اليوم**، ويُتركان لأنّهما تاريخُ القرار
+   > لا مرجعُه. والباقاتُ الآن **ثلاث** بقرار صاحب المشروع:
+   > `free` = ٠ · `business` = ٣٥ · `enterprise` = ٩٩ ر.س.
+   > و`STARTER` و`PRO` **مُرادفان مهجوران** (`PLAN_STARTER === PLAN_BUSINESS`
+   > و`PLAN_MERCHANT_PRO === PLAN_ENTERPRISE`) لا باقتان، ولا يدخلان
+   > `ALL_PLANS` ولا API ولا شاشة.
+   >
+   > **والمرجعُ الحيُّ `AccessConstants::ALL_PLANS` و`PLAN_PRICES_SAR`
+   > وحدَهما** — وهذا الملفُّ من الأوراق التي غذّت جدولَ الخمسِ في تدقيق
+   > القطاعات، فلولا هذا السطرُ لأعاد قارئُه بناءَ ما أُلغي.
+
 2. **`app/Support/Access/AccessPresets.php`** — قواميس الـ Features:
    - `roleBase($role)` — ميزات أساسية لكل دور.
    - `businessTypeFeatures($type)` — ميزات لكل business_type.

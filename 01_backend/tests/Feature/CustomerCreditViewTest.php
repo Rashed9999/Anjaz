@@ -126,4 +126,30 @@ class CustomerCreditViewTest extends TestCase
 
         $this->assertSame($this->customer->id, $orphan->fresh()->customer_user_id);
     }
+
+    /** @test الفاتورة الآجلة تعرض متبقيها الحقيقي ويثبت السداد الجزئي عليها وحدها. */
+    public function deferred_invoices_keep_their_own_remaining_balance_after_a_targeted_partial_payment(): void
+    {
+        $account = $this->svc->findOrCreateAccount(
+            $this->merchant->id, '+967771700055', 'علي نونو',
+        );
+        $first = $this->svc->recordSale($account, '1000', referenceNumber: 'INV-OLD');
+        $second = $this->svc->recordSale($account, '900', referenceNumber: 'INV-NEW');
+
+        // سداد ٤٠٠ للفواتير الجديدة فقط، لا يعاد توزيعها على الأقدم بصمت.
+        app(\App\Services\CreditSourceSettlementService::class)
+            ->allocate($account->fresh(), '400', $second->movement_ulid);
+        $this->svc->recordPayment(
+            $account->fresh(), '400', referenceType: 'credit_sale_payment',
+            referenceId: $second->movement_ulid,
+        );
+
+        Passport::actingAs($this->customer->fresh(), [], 'api');
+        $this->getJson("/api/v1/amial/customer/credits/{$account->id}/statement")
+            ->assertOk()
+            ->assertJsonPath('meta.invoices.0.reference_number', 'INV-OLD')
+            ->assertJsonPath('meta.invoices.0.remaining', '1000.0000')
+            ->assertJsonPath('meta.invoices.1.reference_number', 'INV-NEW')
+            ->assertJsonPath('meta.invoices.1.remaining', '500.0000');
+    }
 }

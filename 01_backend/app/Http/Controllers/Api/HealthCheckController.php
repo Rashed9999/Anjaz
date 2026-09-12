@@ -73,12 +73,20 @@ class HealthCheckController
 
         // 4. Queue size (warning if too high)
         $checks['queue'] = $this->checkQueueDepth();
-        // queue health لا يفشل readiness — مجرد معلومات
+        // ══════════════════════════════════════════════════════════════
+        // **الطابورُ لا يُسقط `readiness`** — انظر `checkQueueDepth`:
+        // إسقاطُ الحاوية على طابورٍ ممتلئٍ يقتل العاملَ الذي يُفرغه.
+        //
+        // **لكنّه لا يُسكَت أيضاً.** فحالةٌ ثالثةٌ `degraded`: الردُّ ٢٠٠
+        // فلا تُقتَل حاويةٌ سليمة، والنصُّ يقول إنّ شيئاً ليس على ما
+        // يرام فلا تُقرأ الصفحةُ خضراءَ وهي ليست كذلك.
+        // ══════════════════════════════════════════════════════════════
+        $degraded = ($checks['queue']['healthy'] ?? true) === false;
 
         $status = $allHealthy ? 200 : 503;
 
         return new JsonResponse([
-            'status' => $allHealthy ? 'ready' : 'not_ready',
+            'status' => $allHealthy ? ($degraded ? 'degraded' : 'ready') : 'not_ready',
             'timestamp' => now()->toIso8601String(),
             'checks' => $checks,
         ], $status);
@@ -205,18 +213,54 @@ class HealthCheckController
         }
     }
 
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-HEALTH-QUEUE-001 — **`healthy => true` كانت تُردّ دائماً.**
+     *
+     * كانت تُردّ على `overloaded`، وتُردّ حين **يتعذّر القياسُ أصلاً**.
+     * فطابورٌ فيه خمسون ألفَ مهمّةٍ عالقةٍ يُقرأ «سليماً»، وصفحةُ الصحّة
+     * خضراءُ بينما لا إيصالَ يصل أحداً. **وحارسٌ يكذب أسوأ من غيابه.**
+     *
+     * وهذا بعينه ما يقع في تجربةِ ألفَي مستخدم: الطابورُ أوّلُ ما يمتلئ
+     * تحت الحمل، وهو آخرُ ما كان يُرى.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **وثلاثةُ قراراتٍ تُقرأ ولا تُخمَّن:**
+     *
+     * ① **الامتلاءُ لا يُسقط الحاوية.** `readiness` يقرؤه `HEALTHCHECK`
+     *    في الصورة، وإسقاطُ الحاوية على طابورٍ ممتلئٍ يقتل العاملَ الذي
+     *    يُفرغه — **فيُعالَج العطلُ بما يزيده**. فيبقى الردُّ ٢٠٠
+     *    و`healthy` كاذبةً لا، بل تُقال الحقيقةُ في `status`.
+     *
+     * ② **و«تعذّر القياس» ليس «سليماً»** — بل `unknown` صريحة. (القاعدةُ
+     *    السابعة: «غير معروف» ليس صفراً.) وقارئٌ يرى `unknown` يسأل،
+     *    ويرى `healthy` فيطمئنّ.
+     *
+     * ③ **والإنذارُ يُرفَع من هنا** — فصفحةٌ لا يفتحها أحدٌ ليلاً ليست
+     *    رصداً. ويُرفَع على الامتلاء وعلى تعذُّر القياس معاً.
+     */
     private function checkQueueDepth(): array
     {
         try {
-            $size = \Queue::size('default');
-            $receiptsSize = \Queue::size('receipts');
-            $total = (int)$size + (int)$receiptsSize;
+            $size = (int) \Queue::size('default');
+            $receiptsSize = (int) \Queue::size('receipts');
+            $total = $size + $receiptsSize;
 
-            // تحذير لو > 5000
             $status = $total < 1000 ? 'normal' : ($total < 5000 ? 'busy' : 'overloaded');
 
+            if ($status === 'overloaded') {
+                $this->noteOps(
+                    'queue.overloaded',
+                    'طابورُ المهامّ ممتلئ',
+                    sprintf('العمق %d مهمّة (افتراضي %d · إيصالات %d) — '
+                        . 'العاملُ متوقّفٌ أو لا يلحق. ولا إيصالَ ولا إشعارَ يصل '
+                        . 'حتّى يُفرَّغ.', $total, $size, $receiptsSize),
+                );
+            }
+
             return [
-                'healthy' => true,
+                // **الامتلاءُ ليس سلامةً** — وإن لم يُسقط الحاوية.
+                'healthy' => $status !== 'overloaded',
                 'depth' => [
                     'default' => $size,
                     'receipts' => $receiptsSize,
@@ -225,7 +269,28 @@ class HealthCheckController
                 'status' => $status,
             ];
         } catch (\Throwable $e) {
-            return ['healthy' => true, 'error' => 'queue_size_unavailable'];
+            $this->noteOps(
+                'queue.unmeasurable',
+                'تعذّر قياسُ عمق الطابور',
+                'فلا يُعرف أممتلئٌ هو أم فارغ: ' . $e->getMessage(),
+            );
+
+            return [
+                'healthy' => false,
+                'status' => 'unknown',
+                'error' => 'queue_size_unavailable',
+            ];
+        }
+    }
+
+    /** أثرُ الإنذار — **ولا يُسقط فحصَ الصحّة إن سقط هو**. */
+    private function noteOps(string $key, string $title, string $detail): void
+    {
+        try {
+            app(\App\Services\OpsAlertService::class)->note($key, $title, $detail);
+        } catch (\Throwable) {
+            // صفحةُ الصحّة تبقى تجيب وإن تعذّر رفعُ الإنذار — وإلّا
+            // صار عطلُ الرصد يُسقط ما يرصده.
         }
     }
 }

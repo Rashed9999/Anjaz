@@ -70,7 +70,7 @@ class PlatformLoginPinService
      * fallback لحساب مدير المنصّة الجذري إذا أنشئ بعد الهجرة.
      * نحدد الجذر من أول مستخدم يحمل platform_admin فعلياً، لا من أول type=0.
      */
-    public function ensureBootstrapCredential(User $user): bool
+    private function ensureBootstrapCredential(User $user): bool
     {
         if ($this->exists($user->id)) {
             return true;

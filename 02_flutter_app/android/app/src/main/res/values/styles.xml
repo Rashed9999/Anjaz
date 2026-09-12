@@ -6,7 +6,12 @@
              Flutter draws its first frame -->
         <item name="android:windowBackground">@drawable/launch_background</item>
         <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
-
+        <!-- **ويُضبطان هنا أيضاً** — لحظةُ الإقلاع تسبق أوّلَ إطارٍ من
+             فلاتر، فبلا ضبطٍ هنا يرى المستخدمُ الشريطين أسودين ثمّ
+             يتغيّران: وميضٌ يُقرأ عطلاً. -->
+        <item name="android:statusBarColor">@color/amial_status_bar</item>
+        <item name="android:navigationBarColor">@color/amial_nav_bar</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
     <!-- Theme applied to the Android Window as soon as the process has started.
          This theme determines the color of the Android Window while your
@@ -17,6 +22,10 @@
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@android:color/white</item>
         <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
-
+        <!-- AMIAL-INSETS-001 — بلا هذين يبقى الشريطان أسودَي الثيم الأصل. -->
+        <item name="android:statusBarColor">@color/amial_status_bar</item>
+        <item name="android:navigationBarColor">@color/amial_nav_bar</item>
+        <!-- شريطُ التنقّل فاتح ⇒ أيقوناتُه داكنة، وإلّا اختفت. -->
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

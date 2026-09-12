@@ -33,6 +33,7 @@
             color: #053391;
             margin: 0 0 4px 0;
         }
+        .merchant-logo { max-width: 92px; max-height: 58px; object-fit: contain; margin-bottom: 5px; }
         .business-meta {
             font-size: 9pt;
             color: #6B7280;
@@ -253,6 +254,7 @@
 {{-- ================= Header ================= --}}
 <div class="header">
     <div class="header-right">
+        @if(!empty($merchantLogoData))<img class="merchant-logo" src="{{ $merchantLogoData }}" alt="شعار المنشأة">@endif
         <div class="business-name">{{ $business->business_name ?? 'منشأة الجملة' }}</div>
         @if($business->commercial_register)
             <div class="business-meta">س.ت: {{ $business->commercial_register }}</div>
@@ -300,7 +302,10 @@
         <div class="info-label">معلومات الفاتورة</div>
         <div class="meta-line"><strong>تاريخ الإصدار:</strong> {{ $invoice->invoice_date?->format('Y-m-d') }}</div>
         <div class="meta-line"><strong>تاريخ الاستحقاق:</strong> {{ $invoice->due_date?->format('Y-m-d') }}</div>
-        <div class="meta-line"><strong>نوع الدفع:</strong> {{ $invoice->payment_type === 'cash' ? 'نقد' : 'آجل' }}</div>
+        <div class="meta-line"><strong>نوع الدفع:</strong> {{ $invoice->payment_type === 'amial_pay' ? 'أميال باي' : ($invoice->payment_type === 'cash' ? 'نقد' : 'آجل') }}</div>
+        @if($invoice->payment_type === 'amial_pay' && $invoice->paid_transaction_id)
+            <div class="meta-line"><strong>مرجع أميال:</strong> {{ $invoice->paid_transaction_id }}</div>
+        @endif
         @if($salesRep)
             <div class="meta-line"><strong>المندوب:</strong> {{ $salesRep->full_name }}</div>
         @endif
