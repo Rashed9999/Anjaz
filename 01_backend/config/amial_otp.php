@@ -22,5 +22,12 @@ return [
         'from_address' => env('MAIL_FROM_ADDRESS', 'verify@amialpay.com'),
         'from_name' => env('MAIL_FROM_NAME', 'Amial Pay'),
         'webhook_secret' => env('RESEND_WEBHOOK_SECRET'),
+        // Keep the email logo absolute: mail clients cannot resolve Laravel's
+        // relative asset() URLs after the message leaves the application.
+        'brand_logo_url' => env(
+            'MAIL_BRAND_LOGO_URL',
+            rtrim((string) env('APP_URL', 'https://amialpay.com'), '/') . '/branding/logo.png'
+        ),
+        'website_url' => env('MAIL_WEBSITE_URL', 'https://amialpay.com'),
     ],
 ];
