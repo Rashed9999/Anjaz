@@ -305,23 +305,31 @@ class EmailOtpService
         $fromName = (string) config('amial_otp.resend.from_name', 'Amial Pay');
         $apiUrl = (string) config('amial_otp.resend.api_url', 'https://api.resend.com/emails');
         $minutes = max(1, (int) config('amial_otp.ttl_minutes', 5));
-        $purposeLabel = match ($purpose) {
-            self::PURPOSE_REGISTRATION => 'إنشاء حساب أميال',
-            self::PURPOSE_PASSWORD_RESET => 'استعادة كلمة المرور',
-            self::PURPOSE_PIN_RECOVERY => 'استعادة رمز PIN',
-            self::PURPOSE_EMAIL_CHANGE => 'تغيير البريد الإلكتروني',
-            default => 'التحقق من الحساب',
-        };
+        $copy = $this->emailCopy($purpose);
+        $websiteUrl = rtrim((string) config('amial_otp.resend.website_url', 'https://amialpay.com'), '/');
+        $logoUrl = (string) config(
+            'amial_otp.resend.brand_logo_url',
+            $websiteUrl . '/branding/logo.png'
+        );
+        $reference = 'AM-' . strtoupper(substr($challengeId, -8));
 
-        $subject = "رمز التحقق من أميال — {$purposeLabel}";
-        $text = "رمز التحقق الخاص بك هو: {$otp}\nصالح لمدة {$minutes} دقائق.\nإذا لم تطلب هذا الرمز فتجاهل الرسالة ولا تشاركه مع أي شخص، بما في ذلك فريق الدعم.";
-        $html = '<div dir="rtl" style="font-family:Arial,sans-serif;max-width:560px;margin:auto">'
-            . '<h2>أميال باي</h2>'
-            . '<p>' . e($purposeLabel) . '</p>'
-            . '<div style="font-size:30px;font-weight:700;letter-spacing:8px;padding:18px 0">' . e($otp) . '</div>'
-            . '<p>هذا الرمز صالح لمدة ' . $minutes . ' دقائق ويعمل مرة واحدة فقط.</p>'
-            . '<p>لن يطلب منك فريق دعم أميال كشف هذا الرمز.</p>'
-            . '</div>';
+        $viewData = [
+            'subject' => $copy['subject'],
+            'preheader' => $copy['preheader'],
+            'purposeLabel' => $copy['label'],
+            'purposeDescription' => $copy['description'],
+            'otp' => $otp,
+            'minutes' => $minutes,
+            'reference' => $reference,
+            'logoUrl' => $logoUrl,
+            'websiteUrl' => $websiteUrl,
+        ];
+
+        // HTML is intentionally rendered from a dedicated email-safe Blade
+        // template instead of concatenating markup in the OTP security service.
+        // The plain-text twin is sent as well for accessibility and deliverability.
+        $html = view('emails.amial-otp', $viewData)->render();
+        $text = view('emails.amial-otp-text', $viewData)->render();
 
         $response = Http::withToken($apiKey)
             ->acceptJson()
@@ -330,10 +338,13 @@ class EmailOtpService
             ->post($apiUrl, [
                 'from' => $fromName . ' <' . $fromAddress . '>',
                 'to' => [$email],
-                'subject' => $subject,
+                'subject' => $copy['subject'],
                 'text' => $text,
                 'html' => $html,
-                'headers' => ['X-Amial-Challenge' => $challengeId],
+                'headers' => [
+                    'X-Amial-Challenge' => $challengeId,
+                    'X-Amial-Category' => 'security-otp',
+                ],
             ]);
 
         if (!$response->successful()) {
@@ -346,6 +357,48 @@ class EmailOtpService
         }
 
         return $id;
+    }
+
+    /**
+     * Human copy stays purpose-specific so a user always understands why the
+     * OTP arrived. The OTP itself is never placed in the subject or preheader.
+     *
+     * @return array{subject:string,preheader:string,label:string,description:string}
+     */
+    private function emailCopy(string $purpose): array
+    {
+        return match ($purpose) {
+            self::PURPOSE_REGISTRATION => [
+                'subject' => 'رمز التحقق لإنشاء حسابك في أميال باي',
+                'preheader' => 'أكمل التحقق من بريدك الإلكتروني لإنشاء حساب أميال باي بأمان.',
+                'label' => 'إنشاء حساب أميال',
+                'description' => 'استخدم الرمز التالي لإكمال التحقق من بريدك الإلكتروني وإنشاء حسابك بأمان.',
+            ],
+            self::PURPOSE_PASSWORD_RESET => [
+                'subject' => 'رمز استعادة كلمة المرور — أميال باي',
+                'preheader' => 'رمز أمني قصير الصلاحية لاستعادة كلمة مرور حسابك.',
+                'label' => 'استعادة كلمة المرور',
+                'description' => 'طلبت استعادة كلمة مرور حسابك. أدخل الرمز التالي في تطبيق أميال باي لإكمال العملية.',
+            ],
+            self::PURPOSE_PIN_RECOVERY => [
+                'subject' => 'رمز استعادة PIN — أميال باي',
+                'preheader' => 'تحقق من ملكية بريدك قبل اختيار رمز PIN جديد.',
+                'label' => 'استعادة رمز PIN',
+                'description' => 'استخدم هذا الرمز لإثبات ملكية بريدك، وبعد نجاح التحقق ستختار رمز PIN جديداً بنفسك.',
+            ],
+            self::PURPOSE_EMAIL_CHANGE => [
+                'subject' => 'تأكيد البريد الإلكتروني الجديد — أميال باي',
+                'preheader' => 'أكد البريد الجديد قبل ربطه بحساب أميال باي.',
+                'label' => 'تغيير البريد الإلكتروني',
+                'description' => 'أدخل الرمز التالي لتأكيد ملكيتك لهذا البريد قبل ربطه بحساب أميال باي.',
+            ],
+            default => [
+                'subject' => 'رمز التحقق الأمني — أميال باي',
+                'preheader' => 'رمز تحقق أمني قصير الصلاحية من أميال باي.',
+                'label' => 'التحقق من الحساب',
+                'description' => 'استخدم الرمز التالي لإكمال عملية التحقق الأمني.',
+            ],
+        };
     }
 
     private function assertPurpose(string $purpose): void
