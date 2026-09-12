@@ -222,9 +222,8 @@ class EmailVerificationCenterController extends Controller
         }
         if ($filters['q'] !== '') {
             $needle = mb_strtolower($filters['q']);
-            $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $needle) . '%';
-            $query->where(function ($q) use ($filters, $like): void {
-                $q->whereRaw("LOWER(identifier) LIKE ? ESCAPE '\\\\'", [$like])
+            $query->where(function ($q) use ($filters, $needle): void {
+                $q->whereRaw('LOWER(identifier) LIKE ?', ['%' . $needle . '%'])
                     ->orWhere('challenge_id', $filters['q'])
                     ->orWhere('provider_message_id', $filters['q']);
 
@@ -259,11 +258,12 @@ class EmailVerificationCenterController extends Controller
     private function identityStats(): array
     {
         $hasVerified = Schema::hasColumn('users', 'is_email_verified');
-        $realUsers = DB::table('users')->where(function ($q): void {
-            $q->whereNull('phone')->orWhere('phone', 'not like', '9009%');
-        });
+        $realPhoneUsers = DB::table('users')
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->where('phone', 'not like', '9009%');
 
-        $missing = (clone $realUsers)->where(function ($q): void {
+        $missing = (clone $realPhoneUsers)->where(function ($q): void {
             $q->whereNull('email')->orWhereRaw("TRIM(email) = ''");
         })->count();
 
