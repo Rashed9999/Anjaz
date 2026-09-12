@@ -106,6 +106,8 @@ class CustomerCreditViewController extends Controller
                 'balance_after' => (string) $m->balance_after,
                 'due_date' => $m->due_date?->toDateString(),
                 'note' => $m->note,
+                'reference_type' => $m->reference_type,
+                'reference_id' => $m->reference_id,
                 'reference_number' => $m->reference_number,
                 'created_at' => $m->created_at?->toIso8601String(),
             ]);
@@ -193,14 +195,25 @@ class CustomerCreditViewController extends Controller
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID', $e->getMessage(), 422);
         } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Customer debt settlement failed', [
+                'user_id' => $user->id,
+                'credit_account_id' => $id,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
             return $this->error('SETTLE_FAILED', 'تعذّر تنفيذ السداد', 422);
         }
 
         return $this->ok([
             'paid' => $result['paid'],
             'new_balance' => $result['new_balance'],
+            'transaction_id' => $result['transaction_id'],
+            'transaction_no' => $result['transaction_no'],
+            'receipt_id' => $result['receipt_id'] ?? null,
+            'receipt_number' => $result['receipt_number'] ?? null,
+            'receipt_type' => 'debt_payment',
             'allocations' => $result['allocations'] ?? [],
-        ], 'SETTLED', 'تم السداد بنجاح');
+        ], 'SETTLED', 'تم سداد الدين بنجاح');
     }
 
     private function typeLabel(string $type): string
