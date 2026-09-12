@@ -11,21 +11,24 @@ use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
- * AMIAL-EMAIL-OTP-001
+ * AMIAL-EMAIL-OTP-001 + AMIAL-EMAIL-IDENTITY-001
  *
- * One secure implementation for registration, password reset and PIN recovery.
- * OTP values are never stored in plaintext and are never returned to operators.
+ * One secure implementation for registration, password reset, PIN recovery and
+ * verified email replacement. OTP values are never stored in plaintext and are
+ * never returned to operators.
  */
 class EmailOtpService
 {
     public const PURPOSE_REGISTRATION = 'registration';
     public const PURPOSE_PASSWORD_RESET = 'password_reset';
     public const PURPOSE_PIN_RECOVERY = 'pin_recovery';
+    public const PURPOSE_EMAIL_CHANGE = 'email_change';
 
     public const PURPOSES = [
         self::PURPOSE_REGISTRATION,
         self::PURPOSE_PASSWORD_RESET,
         self::PURPOSE_PIN_RECOVERY,
+        self::PURPOSE_EMAIL_CHANGE,
     ];
 
     public function normalizeEmail(string $email): string
@@ -131,7 +134,7 @@ class EmailOtpService
     /**
      * Verifies the OTP once and returns a second, one-time verification token.
      * The verification token is what authorizes the sensitive action; the OTP
-     * itself cannot be replayed for password/PIN changes.
+     * itself cannot be replayed for password/PIN/email changes.
      */
     public function verify(string $challengeId, string $email, string $purpose, string $otp): string
     {
@@ -306,6 +309,7 @@ class EmailOtpService
             self::PURPOSE_REGISTRATION => 'إنشاء حساب أميال',
             self::PURPOSE_PASSWORD_RESET => 'استعادة كلمة المرور',
             self::PURPOSE_PIN_RECOVERY => 'استعادة رمز PIN',
+            self::PURPOSE_EMAIL_CHANGE => 'تغيير البريد الإلكتروني',
             default => 'التحقق من الحساب',
         };
 
