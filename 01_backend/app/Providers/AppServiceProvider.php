@@ -55,6 +55,11 @@ class AppServiceProvider extends ServiceProvider
     {
         Paginator::useBootstrap();
 
+        // AMIAL-EMAIL-ADMIN-001 — مسارات مركز البريد منفصلة عن ملف Amial
+        // الضخم كي تبقى القراءة والإدارة بصلاحيتين دقيقتين. loadRoutesFrom
+        // يحترم route:cache؛ فلا تختفي الشاشة في الإنتاج عند تفعيل الكاش.
+        $this->loadRoutesFrom(base_path('routes/admin/email-center.php'));
+
         // AMIAL-LEDGER-OPENING-002: محفظةٌ تولد مموَّلة تدخل الدفتر برصيدها.
         // بلا هذا يبدأ حسابها بصفر فيُرفض أوّل خصمٍ ويُبتلع الرفض، فيتحرّك
         // المال بلا قيد. انظر شرح EMoneyObserver.
