@@ -37,7 +37,10 @@ class EmailIdentityService
 
         $query = User::withTrashed();
         if ($excludeUserId !== null) {
-            $query->whereKeyNot($excludeUserId);
+            // Keep this intentionally explicit instead of relying on a framework
+            // helper: this security invariant must behave identically across the
+            // supported Laravel/Builder versions used by deployment and tests.
+            $query->where('id', '!=', $excludeUserId);
         }
 
         $query->where(function ($q) use ($email): void {
