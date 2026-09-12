@@ -12,8 +12,13 @@ use Illuminate\Validation\ValidationException;
  *
  * Global guard: every User save path (customer, merchant, agent, admin, staff)
  * passes here, so legacy profile controllers cannot silently replace the email
- * recovery credential. Every new phone-backed account must have exactly one
+ * recovery credential. Every real phone-backed account must have exactly one
  * unique email; changing an existing address requires the OTP-authorized flow.
+ *
+ * Merchant POS/staff subaccounts are the one explicit exception at creation:
+ * their `9009...` value is an internal synthetic identifier, not a customer's
+ * phone number and is never exposed as a recovery identity. They can later bind
+ * a real verified email only through the authenticated OTP email-change flow.
  */
 class UserEmailIdentityObserver
 {
@@ -26,9 +31,9 @@ class UserEmailIdentityObserver
         $phone = trim((string) ($attributes['phone'] ?? ''));
 
         if ($email === '') {
-            if ($phone !== '') {
+            if ($phone !== '' && ! $this->isSyntheticMerchantStaff($user, $phone)) {
                 throw ValidationException::withMessages([
-                    'email' => ['البريد الإلكتروني مطلوب لكل حساب مرتبط برقم هاتف.'],
+                    'email' => ['البريد الإلكتروني مطلوب لكل حساب مرتبط برقم هاتف حقيقي.'],
                 ]);
             }
 
@@ -96,6 +101,16 @@ class UserEmailIdentityObserver
     {
         $attributes = $user->getAttributes();
         return trim((string) ($attributes['email'] ?? ''));
+    }
+
+    private function isSyntheticMerchantStaff(User $user, string $phone): bool
+    {
+        $attributes = $user->getAttributes();
+        $role = (string) ($attributes['role'] ?? '');
+        $type = (int) ($attributes['type'] ?? -1);
+
+        return str_starts_with($phone, '9009')
+            && ($role === 'pos' || $type === 4);
     }
 
     private function assertValid(string $email): void
