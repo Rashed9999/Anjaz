@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Models\Branch;
 use App\Models\CashierShift;
+use App\Models\Merchant;
 use App\Models\Merchant\MerchantRole;
 use App\Models\Merchant\PosDevice;
 use App\Models\Merchant\PosDeviceSession;
@@ -66,8 +67,8 @@ class MerchantOperationsCenterController extends AmialApiController
         return $this->ok([
             'merchant' => [
                 'id' => $merchant->id,
-                'business_name' => MerchantProfile::where('user_id', $merchant->id)
-                    ->value('business_name'),
+                'business_name' => Merchant::where('user_id', $merchant->id)
+                    ->value('store_name'),
             ],
             'counts' => [
                 'branches' => (clone $branches)->count(),

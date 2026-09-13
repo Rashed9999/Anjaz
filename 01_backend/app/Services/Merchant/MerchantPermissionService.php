@@ -462,8 +462,27 @@ class MerchantPermissionService
                 'scope_station_id' => $stationId,
                 'scope_branch_id' => $branchId,
                 'is_active' => true,
+                'suspended_by_staff_toggle' => false,
             ],
         );
+    }
+
+    /** Keep independent role revocations separate from temporary staff suspension. */
+    public function setStaffActive(User $merchant, User $employee, bool $active): int
+    {
+        $this->cache = [];
+        $assignments = MerchantUserRole::where('merchant_user_id', $merchant->id)
+            ->where('user_id', $employee->id);
+
+        if ($active) {
+            return $assignments->where('suspended_by_staff_toggle', true)->update([
+                'is_active' => true, 'suspended_by_staff_toggle' => false,
+            ]);
+        }
+
+        return $assignments->where('is_active', true)->update([
+            'is_active' => false, 'suspended_by_staff_toggle' => true,
+        ]);
     }
 
     /**

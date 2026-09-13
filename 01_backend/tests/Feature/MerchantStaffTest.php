@@ -132,6 +132,15 @@ class MerchantStaffTest extends TestCase
 
         $first = PosUser::findOrFail($firstId);
         $second = PosUser::findOrFail($secondId);
+        $inactiveRole = MerchantRole::create([
+            'merchant_user_id' => $this->merchant->id,
+            'code' => 'explicitly-inactive', 'name_ar' => 'دور غير مسند حالياً',
+            'is_active' => true,
+        ]);
+        $inactiveAssignment = MerchantUserRole::create([
+            'merchant_user_id' => $this->merchant->id, 'user_id' => $first->user_id,
+            'merchant_role_id' => $inactiveRole->id, 'is_active' => false,
+        ]);
 
         $this->postJson("/api/v1/amial/merchant/staff/{$firstId}/toggle")
             ->assertOk()->assertJsonPath('meta.is_active', false);
@@ -142,5 +151,14 @@ class MerchantStaffTest extends TestCase
         $this->assertTrue(MerchantUserRole::where('merchant_user_id', $this->merchant->id)
             ->where('user_id', $second->user_id)->where('is_active', true)->exists(),
             'تعطيل موظف واحد عطّل عضوية زميله');
+
+        $this->postJson("/api/v1/amial/merchant/staff/{$firstId}/toggle")
+            ->assertOk()->assertJsonPath('meta.is_active', true);
+        $this->assertTrue(MerchantUserRole::where('merchant_user_id', $this->merchant->id)
+            ->where('user_id', $first->user_id)->where('is_active', true)->exists());
+        $this->assertFalse((bool) $inactiveAssignment->fresh()->is_active,
+            'إعادة تفعيل الموظف أعادت إسناد دور كان معطلاً قبل إيقافه');
+        $this->assertSame(0, MerchantUserRole::where('merchant_user_id', $this->merchant->id)
+            ->where('user_id', $first->user_id)->where('suspended_by_staff_toggle', true)->count());
     }
 }

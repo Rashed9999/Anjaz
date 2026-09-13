@@ -62,6 +62,7 @@ class KycSanctionTest extends TestCase
     {
         $user = User::factory()->create([
             'kyc_tier' => 2,
+            'is_kyc_verified' => 1,
             'limit_override' => ['max_single_transaction' => '1200'],
         ]);
 
@@ -83,7 +84,7 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function tier_2_allows_safe_payment()
     {
-        $user = User::factory()->create(['kyc_tier' => 2]);
+        $user = User::factory()->create(['kyc_tier' => 2, 'is_kyc_verified' => 1]);
         $this->kyc->assertTransactionAllowed($user, '1000', 'safe_payment');
         $this->assertTrue(true);
     }
@@ -91,7 +92,7 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function tier_3_allows_all_features()
     {
-        $user = User::factory()->create(['kyc_tier' => 3]);
+        $user = User::factory()->create(['kyc_tier' => 3, 'is_kyc_verified' => 1]);
         foreach (['send_money', 'safe_payment', 'donations', 'family_fund'] as $feature) {
             $this->kyc->assertTransactionAllowed($user, '1000', $feature);
         }

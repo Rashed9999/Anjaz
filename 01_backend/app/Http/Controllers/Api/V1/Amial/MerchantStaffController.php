@@ -328,76 +328,81 @@ class MerchantStaffController extends Controller
         $m = $this->guardMerchant($request);
         if ($m instanceof JsonResponse) return $m;
 
-        $pos = PosUser::where('id', $id)->where('merchant_user_id', $m->id)->first();
-        if (!$pos) return $this->error('NOT_FOUND', 'الموظف غير موجود', 404);
+        return DB::transaction(function () use ($id, $m): JsonResponse {
+            $pos = PosUser::where('id', $id)->where('merchant_user_id', $m->id)->lockForUpdate()->first();
+            if (!$pos) return $this->error('NOT_FOUND', 'الموظف غير موجود', 404);
 
-        $pos->is_active = !$pos->is_active;
-        $pos->save();
+            $pos->setRelation('user', $pos->user()->lockForUpdate()->first());
 
-        // ══════════════════════════════════════════════════════════════
-        // AMIAL-STAFF-REVOKE-001 — **القطعُ كان يقع، ولا يُقال.**
-        //
-        // ظننتُ أوّلاً أنّ الرمزَ يبقى حيّاً بعد التعطيل فبنيتُ إبطالاً
-        // هنا. **وقياسٌ نقض الدعوى**: `User::boot()`
-        // (‏`app/Models/User.php:281`) يُبطل كلَّ الرموز حين يتّسخ
-        // `is_active` ويصير صفراً — فحفظُ الحسابِ أدناه **يقطع الجلسات
-        // في نفس اللحظة منذ زمن**. فحُذف الإبطالُ المكرَّر.
-        //
-        // **والعطلُ الباقي هو الصمت**: الرسالةُ «تم التعطيل» واحدةٌ
-        // لحالتين — «ولا جلسةَ له» و«وقُطعت ثلاثٌ وهو يبيع الآن».
-        // فالتاجرُ لا يعرف أنّ موظّفَه كان على الجهاز في تلك اللحظة.
-        //
-        // **ويُعدُّ قبل الحفظ لا بعده** — فالخُطّاف يكون قد أبطلها،
-        // فيقرأ العدَّ صفراً ويُطبَع «ولا جلسةَ مفتوحةٌ له» **وهو كذب**.
-        // (وهذا بعينه ما وقع أوّلَ مرّةٍ هنا وأمسكه الحارس.)
-        // ══════════════════════════════════════════════════════════════
-        $revoked = 0;
-        if (! $pos->is_active && $pos->user) {
-            $revoked = $pos->user->tokens()->where('revoked', false)->count();
-        }
+            $pos->is_active = !$pos->is_active;
+            $pos->save();
 
-        // عطّل حساب الدخول أيضاً — وبه يقع القطعُ عبر خُطّاف `User`.
-        if ($pos->user) {
-            $pos->user->is_active = $pos->is_active ? 1 : 0;
-            $pos->user->save();
-        }
+            // ══════════════════════════════════════════════════════════════
+            // AMIAL-STAFF-REVOKE-001 — **القطعُ كان يقع، ولا يُقال.**
+            //
+            // ظننتُ أوّلاً أنّ الرمزَ يبقى حيّاً بعد التعطيل فبنيتُ إبطالاً
+            // هنا. **وقياسٌ نقض الدعوى**: `User::boot()`
+            // (‏`app/Models/User.php:281`) يُبطل كلَّ الرموز حين يتّسخ
+            // `is_active` ويصير صفراً — فحفظُ الحسابِ أدناه **يقطع الجلسات
+            // في نفس اللحظة منذ زمن**. فحُذف الإبطالُ المكرَّر.
+            //
+            // **والعطلُ الباقي هو الصمت**: الرسالةُ «تم التعطيل» واحدةٌ
+            // لحالتين — «ولا جلسةَ له» و«وقُطعت ثلاثٌ وهو يبيع الآن».
+            // فالتاجرُ لا يعرف أنّ موظّفَه كان على الجهاز في تلك اللحظة.
+            //
+            // **ويُعدُّ قبل الحفظ لا بعده** — فالخُطّاف يكون قد أبطلها،
+            // فيقرأ العدَّ صفراً ويُطبَع «ولا جلسةَ مفتوحةٌ له» **وهو كذب**.
+            // (وهذا بعينه ما وقع أوّلَ مرّةٍ هنا وأمسكه الحارس.)
+            // ══════════════════════════════════════════════════════════════
+            $revoked = 0;
+            if (! $pos->is_active && $pos->user) {
+                $revoked = $pos->user->tokens()->where('revoked', false)->count();
+            }
 
-        // **درءُ الانحراف — ومعه شبكةُ أمانٍ للباب كلِّه.**
-        //
-        // الحالةُ المقصودة: عضويّةٌ تُعطَّل وحسابُها مُعطَّلٌ سلفاً، فلا
-        // يتّسخ `is_active`، **فلا يُطلَق الخُطّاف**، فتبقى الرموزُ حيّة.
-        //
-        // **وقِيس بالتجربة العكسيّة أنّه أوسعُ من ذلك**: بنزع الخُطّاف من
-        // `User` بقيت الحالاتُ الستُّ كلُّها خضراء — أي أنّ هذا السطرَ
-        // يقطع وحدَه إن ذهب الخُطّاف. فالبابُ الذي يضغطه التاجرُ مكتفٍ
-        // بنفسِه ولا يتّكل على خُطّافٍ في نموذجٍ بعيد.
-        if (! $pos->is_active && $pos->user
-            && $pos->user->tokens()->where('revoked', false)->exists()) {
-            $pos->user->tokens()->where('revoked', false)->get()
-                ->each(fn ($t) => $t->revoke());
-        }
+            // عطّل حساب الدخول أيضاً — وبه يقع القطعُ عبر خُطّاف `User`.
+            if ($pos->user) {
+                $pos->user->is_active = $pos->is_active ? 1 : 0;
+                $pos->user->save();
+                $this->merchantPermissions->setStaffActive($m, $pos->user, (bool) $pos->is_active);
+            }
 
-        $this->audit->record([
-            'actor_type' => 'merchant', 'actor_user_id' => $m->id,
-            'subject_type' => 'user', 'subject_id' => $pos->user_id,
-            'action' => 'MERCHANT_STAFF_TOGGLED',
-            'decision_code' => $pos->is_active ? 'COMPLETED' : 'CANCELLED',
-            'reason' => $pos->is_active ? 'فُعّل حساب الموظف' : 'عُطّل حساب الموظف',
-            'context' => ['merchant_user_id' => $m->id, 'staff_id' => $pos->id,
-                'branch_id' => $pos->branch_id, 'revoked_sessions' => $revoked],
-        ]);
+            // **درءُ الانحراف — ومعه شبكةُ أمانٍ للباب كلِّه.**
+            //
+            // الحالةُ المقصودة: عضويّةٌ تُعطَّل وحسابُها مُعطَّلٌ سلفاً، فلا
+            // يتّسخ `is_active`، **فلا يُطلَق الخُطّاف**، فتبقى الرموزُ حيّة.
+            //
+            // **وقِيس بالتجربة العكسيّة أنّه أوسعُ من ذلك**: بنزع الخُطّاف من
+            // `User` بقيت الحالاتُ الستُّ كلُّها خضراء — أي أنّ هذا السطرَ
+            // يقطع وحدَه إن ذهب الخُطّاف. فالبابُ الذي يضغطه التاجرُ مكتفٍ
+            // بنفسِه ولا يتّكل على خُطّافٍ في نموذجٍ بعيد.
+            if (! $pos->is_active && $pos->user
+                && $pos->user->tokens()->where('revoked', false)->exists()) {
+                $pos->user->tokens()->where('revoked', false)->get()
+                    ->each(fn ($t) => $t->revoke());
+            }
 
-        return $this->ok([
-            'id' => $pos->id,
-            'is_active' => (bool) $pos->is_active,
-            // **ويُقال كم جلسةً قُطعت** — فصفرٌ صامتٌ لا يفرّق بين
-            // «لم يكن يعمل» و«لم يُقطَع شيء». (القاعدة السابعة.)
-            'revoked_sessions' => $revoked,
-        ], 'STAFF_TOGGLED', $pos->is_active
-            ? 'تم التفعيل'
-            : ($revoked > 0
-                ? "تم التعطيل — وقُطعت {$revoked} جلسة عمل فوراً"
-                : 'تم التعطيل — ولا جلسةَ مفتوحةٌ له'));
+            $this->audit->record([
+                'actor_type' => 'merchant', 'actor_user_id' => $m->id,
+                'subject_type' => 'user', 'subject_id' => $pos->user_id,
+                'action' => 'MERCHANT_STAFF_TOGGLED',
+                'decision_code' => $pos->is_active ? 'COMPLETED' : 'CANCELLED',
+                'reason' => $pos->is_active ? 'فُعّل حساب الموظف' : 'عُطّل حساب الموظف',
+                'context' => ['merchant_user_id' => $m->id, 'staff_id' => $pos->id,
+                    'branch_id' => $pos->branch_id, 'revoked_sessions' => $revoked],
+            ]);
+
+            return $this->ok([
+                'id' => $pos->id,
+                'is_active' => (bool) $pos->is_active,
+                // **ويُقال كم جلسةً قُطعت** — فصفرٌ صامتٌ لا يفرّق بين
+                // «لم يكن يعمل» و«لم يُقطَع شيء». (القاعدة السابعة.)
+                'revoked_sessions' => $revoked,
+            ], 'STAFF_TOGGLED', $pos->is_active
+                ? 'تم التفعيل'
+                : ($revoked > 0
+                    ? "تم التعطيل — وقُطعت {$revoked} جلسة عمل فوراً"
+                    : 'تم التعطيل — ولا جلسةَ مفتوحةٌ له'));
+        });
     }
 
     /** يغيّر نطاق الموظف؛ الحساب نفسه يبقى ولا تضيع مبيعاته التاريخية. */

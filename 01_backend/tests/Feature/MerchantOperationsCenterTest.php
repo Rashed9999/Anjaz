@@ -26,6 +26,10 @@ class MerchantOperationsCenterTest extends TestCase
             'verification_status' => 'verified',
         ]);
         app(VerticalBootstrapService::class)->ensureFor($owner);
+        $store = new \App\Models\Merchant;
+        $store->user_id = $owner->id;
+        $store->store_name = 'متجر الاختبار ' . $owner->id;
+        $store->save();
 
         return $owner->refresh();
     }
@@ -63,6 +67,7 @@ class MerchantOperationsCenterTest extends TestCase
         $this->actingAs($owner, 'api')
             ->getJson('/api/v1/amial/merchant/operations-center')
             ->assertOk()
+            ->assertJsonPath('meta.merchant.business_name', 'متجر الاختبار ' . $owner->id)
             ->assertJsonPath('meta.counts.active_employees', 1)
             ->assertJsonPath('meta.setup.has_role', true)
             ->assertJsonPath('meta.setup.has_employee', true);
