@@ -46,6 +46,7 @@ class EmailOtpService
         string $requestedByType = 'user',
         ?int $requestedById = null,
         array $meta = [],
+        bool $afterCommit = false,
     ): array {
         $email = $this->normalizeEmail($email);
         $this->assertPurpose($purpose);
@@ -54,72 +55,83 @@ class EmailOtpService
             throw new RuntimeException('INVALID_EMAIL');
         }
 
-        $now = now();
-        $recent = DB::table('otp_challenges')
-            ->where('identifier', $email)
-            ->where('purpose', $purpose)
-            ->whereNull('consumed_at')
-            ->orderByDesc('id')
-            ->first();
+        [$challengeId, $otp, $ttl, $resend] = DB::transaction(function () use (
+            $email, $purpose, $userId, $requestedByType, $requestedById, $meta
+        ): array {
+            $now = now();
+            $lockKey = hash('sha256', $email . "\0" . $purpose);
+            DB::table('otp_issuance_locks')->insertOrIgnore([
+                'key' => $lockKey, 'created_at' => $now, 'updated_at' => $now,
+            ]);
+            DB::table('otp_issuance_locks')->where('key', $lockKey)->lockForUpdate()->first();
+            $recent = DB::table('otp_challenges')
+                ->where('identifier', $email)
+                ->where('purpose', $purpose)
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
 
-        if ($recent && $recent->delivery_status !== 'failed' && $recent->resend_available_at) {
-            $available = Carbon::parse($recent->resend_available_at);
-            if ($available->isFuture()) {
-                throw new RuntimeException('RESEND_TOO_SOON:' . max(1, now()->diffInSeconds($available)));
+            // Failed deliveries and exhausted/consumed codes still obey cooldown.
+            if ($recent && $recent->resend_available_at) {
+                $available = Carbon::parse($recent->resend_available_at);
+                if ($available->isFuture()) {
+                    throw new RuntimeException('RESEND_TOO_SOON:' . max(1, (int) ceil(now()->diffInSeconds($available))));
+                }
             }
-        }
 
-        // A new code invalidates all older active codes for the same purpose.
-        DB::table('otp_challenges')
-            ->where('identifier', $email)
-            ->where('purpose', $purpose)
-            ->whereNull('consumed_at')
-            ->update([
-                'consumed_at' => $now,
-                'delivery_status' => DB::raw("CASE WHEN delivery_status = 'failed' THEN delivery_status ELSE 'superseded' END"),
+            // A new code invalidates all older active codes for the same purpose.
+            DB::table('otp_challenges')
+                ->where('identifier', $email)
+                ->where('purpose', $purpose)
+                ->whereNull('consumed_at')
+                ->update([
+                    'consumed_at' => $now,
+                    'delivery_status' => DB::raw("CASE WHEN delivery_status = 'failed' THEN delivery_status ELSE 'superseded' END"),
+                    'updated_at' => $now,
+                ]);
+
+            $otp = (string) random_int(100000, 999999);
+            $challengeId = (string) Str::ulid();
+            $ttl = max(1, (int) config('amial_otp.ttl_minutes', 5));
+            $resend = max(30, (int) config('amial_otp.resend_seconds', 60));
+            $maxAttempts = max(3, min(10, (int) config('amial_otp.max_attempts', 5)));
+
+            DB::table('otp_challenges')->insert([
+                'challenge_id' => $challengeId,
+                'user_id' => $userId,
+                'identifier' => $email,
+                'channel' => 'email',
+                'purpose' => $purpose,
+                'token_hash' => Hash::make($otp),
+                'expires_at' => $now->copy()->addMinutes($ttl),
+                'resend_available_at' => $now->copy()->addSeconds($resend),
+                'attempts' => 0,
+                'max_attempts' => $maxAttempts,
+                'delivery_status' => 'pending',
+                'requested_by_type' => $requestedByType,
+                'requested_by_id' => $requestedById,
+                'meta' => empty($meta) ? null : json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'created_at' => $now,
                 'updated_at' => $now,
             ]);
 
-        $otp = (string) random_int(100000, 999999);
-        $challengeId = (string) Str::ulid();
-        $ttl = max(1, (int) config('amial_otp.ttl_minutes', 5));
-        $resend = max(30, (int) config('amial_otp.resend_seconds', 60));
-        $maxAttempts = max(3, min(10, (int) config('amial_otp.max_attempts', 5)));
+            return [$challengeId, $otp, $ttl, $resend];
+        });
 
-        DB::table('otp_challenges')->insert([
-            'challenge_id' => $challengeId,
-            'user_id' => $userId,
-            'identifier' => $email,
-            'channel' => 'email',
-            'purpose' => $purpose,
-            'token_hash' => Hash::make($otp),
-            'expires_at' => $now->copy()->addMinutes($ttl),
-            'resend_available_at' => $now->copy()->addSeconds($resend),
-            'attempts' => 0,
-            'max_attempts' => $maxAttempts,
-            'delivery_status' => 'pending',
-            'requested_by_type' => $requestedByType,
-            'requested_by_id' => $requestedById,
-            'meta' => empty($meta) ? null : json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
-
-        try {
-            $providerId = $this->sendViaResend($email, $otp, $purpose, $challengeId);
-            DB::table('otp_challenges')->where('challenge_id', $challengeId)->update([
-                'delivery_status' => 'sent',
-                'provider_message_id' => $providerId,
-                'last_error' => null,
-                'updated_at' => now(),
-            ]);
-        } catch (\Throwable $e) {
-            DB::table('otp_challenges')->where('challenge_id', $challengeId)->update([
-                'delivery_status' => 'failed',
-                'last_error' => mb_substr($e->getMessage(), 0, 2000),
-                'updated_at' => now(),
-            ]);
-            throw new RuntimeException('OTP_DELIVERY_FAILED', previous: $e);
+        $deferred = $afterCommit && DB::transactionLevel() > 0;
+        if ($deferred) {
+            // Support approval must commit before an external email can escape.
+            // Rollback discards this callback. Delivery failures remain visible
+            // on the challenge; they must not undo an already committed approval.
+            DB::afterCommit(function () use ($email, $otp, $purpose, $challengeId): void {
+                try {
+                    $this->deliver($email, $otp, $purpose, $challengeId);
+                } catch (RuntimeException) {
+                    // deliver() persisted a sanitized failure on this challenge.
+                }
+            });
+        } else {
+            $this->deliver($email, $otp, $purpose, $challengeId);
         }
 
         return [
@@ -127,8 +139,32 @@ class EmailOtpService
             'masked_email' => $this->maskEmail($email),
             'expires_in_seconds' => $ttl * 60,
             'resend_after_seconds' => $resend,
-            'delivery_status' => 'sent',
+            'delivery_status' => $deferred ? 'pending' : 'sent',
         ];
+    }
+
+    private function deliver(string $email, string $otp, string $purpose, string $challengeId): void
+    {
+        try {
+            $providerId = $this->sendViaResend($email, $otp, $purpose, $challengeId);
+            DB::table('otp_challenges')->where('challenge_id', $challengeId)->update([
+                'delivery_status' => DB::raw("CASE WHEN delivery_status = 'pending' THEN 'sent' ELSE delivery_status END"),
+                'provider_message_id' => $providerId,
+                'last_error' => null,
+                'updated_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            DB::table('otp_challenges')->where('challenge_id', $challengeId)->update([
+                'delivery_status' => DB::raw("CASE WHEN delivery_status = 'pending' THEN 'failed' ELSE delivery_status END"),
+                // Provider/transport errors can echo request data. Store only a
+                // bounded diagnostic code, never an email body, key or OTP.
+                'last_error' => preg_match('/^RESEND_[A-Z0-9_]+$/', $e->getMessage())
+                    ? $e->getMessage() : 'RESEND_TRANSPORT_ERROR',
+                'updated_at' => now(),
+            ]);
+            throw new RuntimeException('OTP_DELIVERY_FAILED', previous: $e);
+        }
+
     }
 
     /**
@@ -141,56 +177,90 @@ class EmailOtpService
         $email = $this->normalizeEmail($email);
         $this->assertPurpose($purpose);
 
-        return DB::transaction(function () use ($challengeId, $email, $purpose, $otp) {
-            $row = DB::table('otp_challenges')
-                ->where('challenge_id', $challengeId)
-                ->where('identifier', $email)
-                ->where('purpose', $purpose)
-                ->lockForUpdate()
-                ->first();
+        $result = DB::transaction(fn () => $this->verifyWithinTransaction($challengeId, $email, $purpose, $otp));
+        if ($result instanceof RuntimeException) {
+            throw $result;
+        }
+        return $result;
+    }
 
-            if (!$row) {
-                throw new RuntimeException('OTP_NOT_FOUND');
+    /** Verify and apply an authenticated action in one commit, preserving bad attempts. */
+    public function verifyAndConsume(
+        string $challengeId,
+        string $email,
+        string $purpose,
+        string $otp,
+        \Closure $action,
+    ): mixed {
+        $email = $this->normalizeEmail($email);
+        $this->assertPurpose($purpose);
+        $result = DB::transaction(function () use ($challengeId, $email, $purpose, $otp, $action) {
+            $token = $this->verifyWithinTransaction($challengeId, $email, $purpose, $otp);
+            if ($token instanceof RuntimeException) {
+                return $token; // Commit counters before reporting rejection.
             }
-            if ($row->consumed_at) {
-                throw new RuntimeException('OTP_ALREADY_USED');
-            }
-            if (Carbon::parse($row->expires_at)->isPast()) {
-                DB::table('otp_challenges')->where('id', $row->id)->update([
-                    'consumed_at' => now(),
-                    'delivery_status' => 'expired',
-                    'updated_at' => now(),
-                ]);
-                throw new RuntimeException('OTP_EXPIRED');
-            }
-            if ((int) $row->attempts >= (int) $row->max_attempts) {
-                throw new RuntimeException('OTP_LOCKED');
-            }
+            return $action($this->consumeVerification($challengeId, $email, $purpose, $token));
+        });
+        if ($result instanceof RuntimeException) {
+            throw $result;
+        }
+        return $result;
+    }
 
-            if (!Hash::check($otp, $row->token_hash)) {
-                $attempts = (int) $row->attempts + 1;
-                $locked = $attempts >= (int) $row->max_attempts;
-                DB::table('otp_challenges')->where('id', $row->id)->update([
-                    'attempts' => $attempts,
-                    'consumed_at' => $locked ? now() : null,
-                    'delivery_status' => $locked ? 'locked' : $row->delivery_status,
-                    'updated_at' => now(),
-                ]);
-                throw new RuntimeException($locked ? 'OTP_LOCKED' : 'OTP_INVALID');
-            }
+    /** Caller owns the transaction; rejection is data so counter writes commit. */
+    private function verifyWithinTransaction(string $challengeId, string $email, string $purpose, string $otp): string|RuntimeException
+    {
+        $row = DB::table('otp_challenges')
+            ->where('challenge_id', $challengeId)
+            ->where('identifier', $email)
+            ->where('purpose', $purpose)
+            ->lockForUpdate()
+            ->first();
 
-            $verificationToken = bin2hex(random_bytes(32));
-            $verificationTtl = max(2, (int) config('amial_otp.verification_ttl_minutes', 10));
-
+        if (!$row) {
+            return new RuntimeException('OTP_NOT_FOUND');
+        }
+        if ((int) $row->attempts >= (int) $row->max_attempts) {
+            return new RuntimeException('OTP_LOCKED');
+        }
+        if ($row->consumed_at) {
+            return new RuntimeException('OTP_ALREADY_USED');
+        }
+        if ($row->verified_at) {
+            return new RuntimeException('OTP_ALREADY_USED');
+        }
+        if (Carbon::parse($row->expires_at)->lessThanOrEqualTo(now())) {
             DB::table('otp_challenges')->where('id', $row->id)->update([
-                'verified_at' => now(),
-                'verification_token_hash' => Hash::make($verificationToken),
-                'verification_expires_at' => now()->addMinutes($verificationTtl),
+                'consumed_at' => now(),
+                'delivery_status' => 'expired',
                 'updated_at' => now(),
             ]);
+            return new RuntimeException('OTP_EXPIRED');
+        }
 
-            return $verificationToken;
-        });
+        if (!Hash::check($otp, $row->token_hash)) {
+            $attempts = (int) $row->attempts + 1;
+            $locked = $attempts >= (int) $row->max_attempts;
+            DB::table('otp_challenges')->where('id', $row->id)->update([
+                'attempts' => $attempts,
+                'consumed_at' => $locked ? now() : null,
+                'delivery_status' => $locked ? 'locked' : $row->delivery_status,
+                'updated_at' => now(),
+            ]);
+            return new RuntimeException($locked ? 'OTP_LOCKED' : 'OTP_INVALID');
+        }
+
+        $verificationToken = bin2hex(random_bytes(32));
+        $verificationTtl = max(2, (int) config('amial_otp.verification_ttl_minutes', 10));
+
+        DB::table('otp_challenges')->where('id', $row->id)->update([
+            'verified_at' => now(),
+            'verification_token_hash' => Hash::make($verificationToken),
+            'verification_expires_at' => now()->addMinutes($verificationTtl),
+            'updated_at' => now(),
+        ]);
+
+        return $verificationToken;
     }
 
     /**
@@ -219,7 +289,7 @@ class EmailOtpService
             if ($row->consumed_at) {
                 throw new RuntimeException('OTP_ALREADY_USED');
             }
-            if (!$row->verification_expires_at || Carbon::parse($row->verification_expires_at)->isPast()) {
+            if (!$row->verification_expires_at || Carbon::parse($row->verification_expires_at)->lessThanOrEqualTo(now())) {
                 throw new RuntimeException('VERIFICATION_EXPIRED');
             }
             if (!Hash::check($verificationToken, $row->verification_token_hash)) {
@@ -277,7 +347,16 @@ class EmailOtpService
         };
 
         if ($status !== null) {
-            DB::table('otp_challenges')->where('provider_message_id', $providerId)->update([
+            // Late/replayed delivery notifications cannot revive locked,
+            // expired or superseded challenges, or regress a terminal receipt.
+            $previous = match ($status) {
+                'sent' => ['pending'],
+                'delayed' => ['pending', 'sent'],
+                'delivered', 'bounced' => ['pending', 'sent', 'delayed'],
+                'complained' => ['pending', 'sent', 'delayed', 'delivered'],
+            };
+            DB::table('otp_challenges')->where('provider_message_id', $providerId)
+                ->whereIn('delivery_status', $previous)->update([
                 'delivery_status' => $status,
                 'updated_at' => now(),
             ]);
@@ -333,6 +412,7 @@ class EmailOtpService
 
         $response = Http::withToken($apiKey)
             ->acceptJson()
+            ->withHeaders(['Idempotency-Key' => 'email-otp/' . $challengeId])
             ->timeout(12)
             ->retry(2, 250, throw: false)
             ->post($apiUrl, [
@@ -348,7 +428,7 @@ class EmailOtpService
             ]);
 
         if (!$response->successful()) {
-            throw new RuntimeException('RESEND_HTTP_' . $response->status() . ':' . mb_substr($response->body(), 0, 500));
+            throw new RuntimeException('RESEND_HTTP_' . $response->status());
         }
 
         $id = (string) ($response->json('id') ?? '');

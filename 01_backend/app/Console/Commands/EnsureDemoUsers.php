@@ -73,6 +73,7 @@ class EnsureDemoUsers extends Command
                 goto demo_recipient;
             }
             $user = new User();
+            $user->email = DemoAccountPolicy::emailForNewAccount($phone);
             $user->f_name = 'أحمد';
             $user->l_name = 'سالم';
             $user->phone = $phone;
@@ -143,6 +144,7 @@ class EnsureDemoUsers extends Command
                 goto after_recipient;
             }
             $recipient = new User();
+            $recipient->email = DemoAccountPolicy::emailForNewAccount($rxPhone);
             $recipient->f_name = 'محمد';
             $recipient->l_name = 'علي';
             $recipient->phone = $rxPhone;

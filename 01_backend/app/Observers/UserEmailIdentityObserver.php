@@ -58,6 +58,15 @@ class UserEmailIdentityObserver
         $normalized = $this->identities->normalize($current);
         $meaningfulChange = $normalized !== $original;
 
+        if (! $this->identities->isMutationAuthorized($user)
+            && (($user->isDirty('is_email_verified') && (bool) $user->is_email_verified)
+                || ($user->isDirty('email_verified_at') && $user->email_verified_at !== null)
+                || $user->isDirty('email_canonical'))) {
+            throw ValidationException::withMessages([
+                'email' => ['توثيق هوية البريد يتطلب إكمال رمز التحقق.'],
+            ]);
+        }
+
         if ($meaningfulChange && ! $this->identities->isMutationAuthorized($user)) {
             throw ValidationException::withMessages([
                 'email' => [
@@ -73,6 +82,14 @@ class UserEmailIdentityObserver
             return;
         }
 
+        // Invalid legacy text must not lock unrelated profile/security saves.
+        // It remains untrusted until repaired through the OTP identity flow.
+        if (! $meaningfulChange && ! filter_var($normalized, FILTER_VALIDATE_EMAIL)) {
+            $user->email_canonical = null;
+            $user->is_email_verified = 0;
+            $user->email_verified_at = null;
+            return;
+        }
         $this->assertValid($current);
 
         if ($meaningfulChange) {

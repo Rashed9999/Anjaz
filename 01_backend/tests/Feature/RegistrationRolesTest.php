@@ -28,6 +28,7 @@ class RegistrationRolesTest extends TestCase
             'gender' => 'male',
             'dial_country_code' => '+967',
             'phone' => $phone,
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'password' => '1234',
             'identification_number' => '01-01-01-12345',
             'identification_type' => 'nid',

@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'package:amial_pay/util/app_direction.dart';
+import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
+import 'package:amial_pay/helper/route_helper.dart';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/common/widgets/custom_logo_widget.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
-import 'package:amial_pay/util/app_direction.dart';
 
 /// AMIAL-EMAIL-OTP-RECOVERY-001
 ///
@@ -35,6 +37,8 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
   String? _verificationToken;
   int _stage = 0;
   int _resendSeconds = 0;
+  int _codeTtlSeconds = 300;
+  DateTime? _verificationExpiresAt;
   bool _busy = false;
   bool _obscure = true;
   Timer? _timer;
@@ -99,9 +103,10 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
   }
 
   Future<void> _requestCode() async {
+    if (_busy || _resendSeconds > 0) return;
     final email = _validEmail();
     if (email == null) {
-      _message('أدخل بريداً إلكترونياً صحيحاً', error: true);
+      _message('email_otp_valid_email'.tr, error: true);
       return;
     }
 
@@ -111,22 +116,32 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
         '/api/v1/auth/email-otp/request',
         {'email': email, 'purpose': _purpose},
       );
-      if ((r.statusCode ?? 500) < 200 || (r.statusCode ?? 500) >= 300) {
-        _message(_responseMessage(r, 'تعذر إرسال رمز التحقق'), error: true);
+      if (!mounted) return;
+      if (r.statusCode != 200 || r.body is! Map || r.body['success'] != true) {
+        _message(_responseMessage(r, 'email_otp_send_failed'.tr), error: true);
         return;
       }
 
       final meta = r.body is Map && r.body['meta'] is Map
           ? Map<String, dynamic>.from(r.body['meta'])
           : <String, dynamic>{};
-      _challengeId = meta['challenge_id']?.toString();
-      final resend = int.tryParse('${meta['resend_after_seconds'] ?? 60}') ?? 60;
+      final challenge = meta['challenge_id']?.toString();
+      final resend = int.tryParse('${meta['resend_after_seconds']}');
+      final expires = int.tryParse('${meta['expires_in_seconds']}');
+      if (challenge == null || challenge.length != 26 || resend == null || expires == null || expires <= 0) {
+        _message('email_otp_invalid_session'.tr, error: true);
+        return;
+      }
+      _challengeId = challenge;
+      _verificationToken = null;
+      _verificationExpiresAt = null;
+      _codeTtlSeconds = expires;
       _otp.clear();
       setState(() => _stage = 1);
       _startResend(resend);
-      _message('تم إرسال رمز من 6 أرقام إلى بريدك. صلاحيته 5 دقائق.');
+      _message(_responseMessage(r, 'email_otp_conditional_notice'.tr));
     } catch (_) {
-      _message('تعذر الاتصال بالخادم', error: true);
+      _message('email_otp_connection_failed'.tr, error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -135,20 +150,23 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
   void _useSupportCode() {
     final email = _validEmail();
     if (email == null) {
-      _message('أدخل بريد الحساب أولاً', error: true);
+      _message('email_otp_email_first'.tr, error: true);
       return;
     }
     _challengeId = null; // الخادم يلتقط أحدث تحدٍ نشط أطلقه الدعم لهذا البريد.
+    _verificationToken = null;
+    _verificationExpiresAt = null;
     _otp.clear();
     setState(() => _stage = 1);
-    _message('أدخل الرمز الذي وصلك من أميال. فريق الدعم لا يستطيع رؤيته.');
+    _message('email_otp_support_hint'.tr);
   }
 
   Future<void> _verifyCode() async {
+    if (_busy) return;
     final email = _validEmail();
     final code = _otp.text.trim();
     if (email == null || !RegExp(r'^\d{6}$').hasMatch(code)) {
-      _message('أدخل رمز التحقق المكوّن من 6 أرقام', error: true);
+      _message('email_otp_six_digits'.tr, error: true);
       return;
     }
 
@@ -164,8 +182,9 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
         '/api/v1/auth/email-otp/verify',
         body,
       );
-      if ((r.statusCode ?? 500) < 200 || (r.statusCode ?? 500) >= 300) {
-        _message(_responseMessage(r, 'رمز التحقق غير صحيح'), error: true);
+      if (!mounted) return;
+      if (r.statusCode != 200 || r.body is! Map || r.body['success'] != true) {
+        _message(_responseMessage(r, 'email_otp_wrong_code'.tr), error: true);
         return;
       }
 
@@ -174,45 +193,49 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
           : <String, dynamic>{};
       _challengeId = meta['challenge_id']?.toString() ?? _challengeId;
       _verificationToken = meta['verification_token']?.toString();
-      if (_challengeId == null || _verificationToken == null) {
-        _message('تعذر إنشاء جلسة الاستعادة', error: true);
+      final expires = int.tryParse('${meta['verification_expires_in_seconds']}');
+      if (_challengeId?.length != 26 || (_verificationToken?.length ?? 0) < 32 || expires == null || expires <= 0) {
+        _message('email_otp_invalid_session'.tr, error: true);
         return;
       }
+      _verificationExpiresAt = DateTime.now().add(Duration(seconds: expires));
 
       _secret.clear();
       _confirm.clear();
       setState(() => _stage = 2);
     } catch (_) {
-      _message('تعذر الاتصال بالخادم', error: true);
+      _message('email_otp_connection_failed'.tr, error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _finishRecovery() async {
+    if (_busy) return;
     final email = _validEmail();
-    if (email == null || _challengeId == null || _verificationToken == null) {
-      _message('انتهت جلسة التحقق. ابدأ من جديد.', error: true);
+    if (email == null || _challengeId == null || _verificationToken == null
+        || _verificationExpiresAt == null || !DateTime.now().isBefore(_verificationExpiresAt!)) {
+      _message('email_otp_expired_session'.tr, error: true);
       setState(() => _stage = 0);
       return;
     }
 
-    final value = _secret.text.trim();
-    final confirm = _confirm.text.trim();
+    final value = _pinMode ? _secret.text.trim() : _secret.text;
+    final confirm = _pinMode ? _confirm.text.trim() : _confirm.text;
     final formatOk = _pinMode
         ? RegExp(r'^\d{4,6}$').hasMatch(value)
-        : RegExp(r'^\d{4}$').hasMatch(value);
+        : value.length >= 4 && value.length <= 64;
     if (!formatOk) {
       _message(
         _pinMode
-            ? 'رمز PIN يجب أن يكون من 4 إلى 6 أرقام'
-            : 'كلمة المرور الحالية في أميال تتكون من 4 أرقام',
+            ? 'email_otp_pin_format'.tr
+            : 'email_otp_password_format'.tr,
         error: true,
       );
       return;
     }
     if (value != confirm) {
-      _message('القيمتان غير متطابقتين', error: true);
+      _message('email_otp_mismatch'.tr, error: true);
       return;
     }
 
@@ -230,14 +253,24 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
       };
 
       final r = await Get.find<ApiClient>().postData(endpoint, body);
-      if ((r.statusCode ?? 500) < 200 || (r.statusCode ?? 500) >= 300) {
-        _message(_responseMessage(r, 'تعذر إكمال الاستعادة'), error: true);
+      if (!mounted) return;
+      if (r.statusCode != 200 || r.body is! Map || r.body['success'] != true) {
+        _message(_responseMessage(r, 'email_otp_action_failed'.tr), error: true);
+        if (r.statusCode == 409 || r.statusCode == 410) {
+          _verificationToken = null;
+          _verificationExpiresAt = null;
+          setState(() => _stage = 0);
+        }
         return;
       }
 
+      final repo = Get.find<AuthRepo>();
+      await repo.removeUserToken();
+      repo.removeUserData();
+      if (!mounted) return;
       setState(() => _stage = 3);
     } catch (_) {
-      _message('تعذر الاتصال بالخادم', error: true);
+      _message('email_otp_connection_failed'.tr, error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -248,7 +281,7 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(_pinMode ? 'استعادة رمز PIN' : 'استعادة كلمة المرور'),
+        title: Text(_pinMode ? 'email_otp_pin_recovery'.tr : 'email_otp_password_recovery'.tr),
         backgroundColor: Colors.white,
         elevation: 0,
       ),
@@ -279,28 +312,28 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
   Widget _startCard() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'استعادة آمنة عبر البريد الإلكتروني',
+          Text(
+            'email_otp_secure_recovery'.tr,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'لن يرى فريق الدعم رمز التحقق أو كلمة المرور أو رمز PIN الجديد.',
+          Text(
+            'email_otp_support_privacy'.tr,
             textAlign: TextAlign.center,
             style: TextStyle(color: AmialColors.textMuted, height: 1.5),
           ),
           const SizedBox(height: 22),
           SegmentedButton<String>(
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: 'password_reset',
-                label: Text('كلمة المرور'),
+                label: Text('email_otp_password'.tr),
                 icon: Icon(Icons.lock_outline),
               ),
               ButtonSegment(
                 value: 'pin_recovery',
-                label: Text('رمز PIN'),
+                label: Text('email_otp_pin'.tr),
                 icon: Icon(Icons.pin_outlined),
               ),
             ],
@@ -312,11 +345,12 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
           const SizedBox(height: 20),
           TextField(
             controller: _email,
+            enabled: !_busy,
             keyboardType: TextInputType.emailAddress,
             textDirection: TextDirection.ltr,
             autocorrect: false,
-            decoration: const InputDecoration(
-              labelText: 'البريد الإلكتروني المسجل في الحساب',
+            decoration: InputDecoration(
+              labelText: 'email_otp_account_email'.tr,
               hintText: 'name@example.com',
               border: OutlineInputBorder(),
               prefixIcon: Icon(Icons.email_outlined),
@@ -324,18 +358,20 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _busy ? null : _requestCode,
+            onPressed: _busy || _resendSeconds > 0 ? null : _requestCode,
             icon: _busy
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.send_outlined),
-            label: const Text('إرسال رمز التحقق'),
+            label: Text(_resendSeconds > 0
+                ? 'email_otp_resend_wait'.trParams({'seconds': '$_resendSeconds'})
+                : 'email_otp_send'.tr),
           ),
           if (_pinMode) ...[
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: _busy ? null : _useSupportCode,
               icon: const Icon(Icons.support_agent_outlined),
-              label: const Text('لدي رمز أرسله فريق الدعم'),
+              label: Text('email_otp_support_code'.tr),
             ),
           ],
         ],
@@ -344,14 +380,14 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
   Widget _otpCard() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'أدخل رمز التحقق',
+          Text(
+            'email_otp_enter_code'.tr,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           Text(
-            'أرسلنا رمزاً من 6 أرقام إلى ${_email.text.trim()}. صلاحيته 5 دقائق ويعمل مرة واحدة فقط.',
+            'email_otp_inbox_hint'.trParams({'email': _email.text.trim(), 'seconds': '$_codeTtlSeconds'}),
             textAlign: TextAlign.center,
             style: const TextStyle(color: AmialColors.textMuted, height: 1.5),
           ),
@@ -362,8 +398,8 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
             textAlign: TextAlign.center,
             maxLength: 6,
             style: const TextStyle(fontSize: 26, letterSpacing: 8, fontWeight: FontWeight.w700),
-            decoration: const InputDecoration(
-              labelText: 'رمز التحقق',
+            decoration: InputDecoration(
+              labelText: 'email_otp_code'.tr,
               counterText: '',
               border: OutlineInputBorder(),
             ),
@@ -373,20 +409,20 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
             onPressed: _busy ? null : _verifyCode,
             child: _busy
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('تحقق'),
+                : Text('email_otp_verify'.tr),
           ),
           const SizedBox(height: 10),
           TextButton(
             onPressed: _busy || _resendSeconds > 0 ? null : _requestCode,
             child: Text(
               _resendSeconds > 0
-                  ? 'إعادة الإرسال بعد $_resendSeconds ثانية'
-                  : 'إعادة إرسال الرمز',
+                  ? 'email_otp_resend_wait'.trParams({'seconds': '$_resendSeconds'})
+                  : 'email_otp_resend'.tr,
             ),
           ),
           TextButton(
             onPressed: _busy ? null : () => setState(() => _stage = 0),
-            child: const Text('تغيير البريد أو نوع الاستعادة'),
+            child: Text('email_otp_change_recovery'.tr),
           ),
         ],
       );
@@ -395,26 +431,26 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            _pinMode ? 'اختر رمز PIN جديداً' : 'اختر كلمة مرور جديدة',
+            _pinMode ? 'email_otp_choose_pin'.tr : 'email_otp_choose_password'.tr,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
           Text(
             _pinMode
-                ? 'لا يعرف فريق الدعم رمزك القديم أو الجديد.'
-                : 'بعد التغيير سيتم إنهاء الجلسات المسجلة لحماية حسابك.',
+                ? 'email_otp_pin_privacy'.tr
+                : 'email_otp_session_notice'.tr,
             textAlign: TextAlign.center,
             style: const TextStyle(color: AmialColors.textMuted),
           ),
           const SizedBox(height: 22),
           TextField(
             controller: _secret,
-            keyboardType: TextInputType.number,
+            keyboardType: _pinMode ? TextInputType.number : TextInputType.visiblePassword,
             obscureText: _obscure,
-            maxLength: _pinMode ? 6 : 4,
+            maxLength: _pinMode ? 6 : 64,
             decoration: InputDecoration(
-              labelText: _pinMode ? 'رمز PIN الجديد' : 'كلمة المرور الجديدة',
+              labelText: _pinMode ? 'email_otp_new_pin'.tr : 'email_otp_new_password'.tr,
               counterText: '',
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
@@ -426,11 +462,11 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _confirm,
-            keyboardType: TextInputType.number,
+            keyboardType: _pinMode ? TextInputType.number : TextInputType.visiblePassword,
             obscureText: _obscure,
-            maxLength: _pinMode ? 6 : 4,
+            maxLength: _pinMode ? 6 : 64,
             decoration: InputDecoration(
-              labelText: _pinMode ? 'تأكيد رمز PIN' : 'تأكيد كلمة المرور',
+              labelText: _pinMode ? 'email_otp_confirm_pin'.tr : 'email_otp_confirm_password'.tr,
               counterText: '',
               border: const OutlineInputBorder(),
             ),
@@ -440,7 +476,15 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
             onPressed: _busy ? null : _finishRecovery,
             child: _busy
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(_pinMode ? 'تعيين رمز PIN' : 'تغيير كلمة المرور'),
+                : Text(_pinMode ? 'email_otp_set_pin'.tr : 'email_otp_change_password'.tr),
+          ),
+          TextButton(
+            onPressed: _busy ? null : () => setState(() {
+              _stage = 0;
+              _verificationToken = null;
+              _verificationExpiresAt = null;
+            }),
+            child: Text('email_otp_change_recovery'.tr),
           ),
         ],
       );
@@ -450,13 +494,13 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
           const Icon(Icons.verified_user_outlined, size: 72, color: AmialColors.primary),
           const SizedBox(height: 18),
           Text(
-            _pinMode ? 'تم تغيير رمز PIN بنجاح' : 'تم تغيير كلمة المرور بنجاح',
+            _pinMode ? 'email_otp_pin_success'.tr : 'email_otp_password_success'.tr,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
-          const Text(
-            'لحماية الحساب تم إنهاء الجلسات المسجلة. يمكنك تسجيل الدخول من جديد.',
+          Text(
+            'email_otp_sessions_ended'.tr,
             textAlign: TextAlign.center,
             style: TextStyle(color: AmialColors.textMuted, height: 1.5),
           ),
@@ -464,8 +508,8 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: () => Get.back(),
-              child: const Text('العودة لتسجيل الدخول'),
+              onPressed: () => Get.offAllNamed(RouteHelper.getUnifiedLoginRoute()),
+              child: Text('email_otp_back_login'.tr),
             ),
           ),
         ],

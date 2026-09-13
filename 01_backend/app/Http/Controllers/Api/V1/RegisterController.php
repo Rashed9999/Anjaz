@@ -24,7 +24,9 @@ class RegisterController extends Controller
         private EMoney $eMoney
     ){}
 
-    public function customerRegistration(Request $request): JsonResponse
+    // $verifiedEmail is supplied ONLY by EmailRegistrationController after
+    // atomic proof consumption; request input never authorizes this argument.
+    public function customerRegistration(Request $request, ?string $verifiedEmail = null): JsonResponse
     {
         // التسجيل بمساعدة موظف لا يفتح محفظة خلف ظهر صاحب الرقم: يُستعاد
         // ما كتبه الموظف *قبل* التحقق، ثم يبقى OTP وPIN إلزاميين في هذا
@@ -61,7 +63,7 @@ class RegisterController extends Controller
                 'min:5',
                 'max:20',
             ],
-            'email' => 'nullable|email',
+            'email' => 'required|email|max:255',
             'password' => 'required|min:4|max:4',
             // AMIAL-SIGNATURE-001: التوقيع الإلكتروني (base64 PNG مرسوم على الشاشة) —
             // اختياري للتوافق الخلفي، ويُحفَظ مشفّراً كسجلّ قانوني لفتح الحساب.
@@ -138,7 +140,9 @@ class RegisterController extends Controller
         }
 
         $verify = null;
-        if(Helpers::get_business_settings('phone_verification') == 1) {
+        $emailAuthorized = $verifiedEmail !== null
+            && hash_equals($verifiedEmail, (string) $request->input('email'));
+        if (! $emailAuthorized && Helpers::get_business_settings('phone_verification') == 1) {
             if($request->has('otp')) {
                 // AMIAL-OTP-SPLIT-001: الرمزُ الثابت **لأرقام العرض وحدها**.
                 //
@@ -465,7 +469,7 @@ class RegisterController extends Controller
                 'min:5',
                 'max:20',
             ],
-            'email' => 'nullable|email',
+            'email' => 'required|email|max:255',
             'password' => 'required|min:4|max:4'
         ]);
 

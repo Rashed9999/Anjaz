@@ -185,6 +185,7 @@ class EnsureDemoStaff extends Command
                 return;
             }
             $agent = new User();
+            $agent->email = DemoAccountPolicy::emailForNewAccount($phone);
 
             $agent->f_name = 'خالد';
             $agent->l_name = 'الوكيل';

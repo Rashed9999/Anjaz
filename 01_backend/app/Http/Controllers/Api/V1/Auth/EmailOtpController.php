@@ -47,6 +47,9 @@ class EmailOtpController extends Controller
 
         $email = $this->identities->normalize((string) $request->input('email'));
         $purpose = (string) $request->input('purpose');
+        if (! $this->channelEnabled($purpose)) {
+            return $this->error('EMAIL_OTP_DISABLED', 'التحقق بالبريد غير مفعّل لهذا الإجراء حالياً.', 409);
+        }
         $user = null;
 
         if ($purpose === EmailOtpService::PURPOSE_REGISTRATION) {
@@ -75,9 +78,18 @@ class EmailOtpController extends Controller
                 meta: ['ip' => $request->ip()],
             );
         } catch (RuntimeException $e) {
+            if ($user) {
+                $latest = DB::table('otp_challenges')->where('identifier', $email)
+                    ->where('purpose', $purpose)->where('user_id', $user->id)
+                    ->orderByDesc('id')->value('challenge_id');
+                return $this->acceptedRecoveryReply($email, $latest);
+            }
             return $this->otpError($e);
         }
 
+        if ($user) {
+            return $this->acceptedRecoveryReply($email, $meta['challenge_id']);
+        }
         return $this->ok($meta, 'OTP_SENT', 'تم إرسال رمز التحقق إلى البريد الإلكتروني');
     }
 
@@ -99,6 +111,9 @@ class EmailOtpController extends Controller
 
         $email = $this->identities->normalize((string) $request->input('email'));
         $purpose = (string) $request->input('purpose');
+        if (! $this->channelEnabled($purpose)) {
+            return $this->error('EMAIL_OTP_DISABLED', 'التحقق بالبريد غير مفعّل لهذا الإجراء حالياً.', 409);
+        }
         $challengeId = trim((string) $request->input('challenge_id', ''));
 
         if ($challengeId === '') {
@@ -146,42 +161,7 @@ class EmailOtpController extends Controller
             return $this->validationError($v);
         }
 
-        try {
-            $challenge = $this->otp->consumeVerification(
-                (string) $request->input('challenge_id'),
-                (string) $request->input('email'),
-                EmailOtpService::PURPOSE_PASSWORD_RESET,
-                (string) $request->input('verification_token'),
-            );
-        } catch (RuntimeException $e) {
-            return $this->otpError($e);
-        }
-
-        $user = $challenge->user_id ? User::find((int) $challenge->user_id) : null;
-        if (! $user) {
-            return $this->error('USER_NOT_FOUND', 'تعذر إكمال الاستعادة', 404);
-        }
-        if (! $this->identities->matchesVerifiedUser($user, (string) $challenge->identifier)) {
-            return $this->error('EMAIL_IDENTITY_CHANGED', 'تم تغيير هوية البريد لهذا الحساب. اطلب رمز استعادة جديداً.', 409);
-        }
-
-        DB::transaction(function () use ($user, $request): void {
-            $user->password = Hash::make((string) $request->input('password'));
-            $user->save();
-            $this->revokeSessions($user);
-        });
-
-        $this->audit->record([
-            'actor_type' => 'user',
-            'actor_user_id' => $user->id,
-            'subject_type' => 'password',
-            'subject_id' => (string) $user->id,
-            'action' => 'PASSWORD_RECOVERED_BY_EMAIL_OTP',
-            'decision_code' => 'PASSWORD_RESET_OK',
-            'severity' => 'warning',
-        ]);
-
-        return $this->ok([], 'PASSWORD_RESET', 'تم تغيير كلمة المرور. سجّل الدخول من جديد.');
+        return $this->completeRecovery($request, EmailOtpService::PURPOSE_PASSWORD_RESET);
     }
 
     public function resetPin(Request $request): JsonResponse
@@ -196,49 +176,55 @@ class EmailOtpController extends Controller
             return $this->validationError($v);
         }
 
+        return $this->completeRecovery($request, EmailOtpService::PURPOSE_PIN_RECOVERY);
+    }
+
+    private function completeRecovery(Request $request, string $purpose): JsonResponse
+    {
+        if (! $this->channelEnabled($purpose)) {
+            return $this->error('EMAIL_OTP_DISABLED', 'التحقق بالبريد غير مفعّل لهذا الإجراء حالياً.', 409);
+        }
+        $pin = $purpose === EmailOtpService::PURPOSE_PIN_RECOVERY;
         try {
-            $challenge = $this->otp->consumeVerification(
-                (string) $request->input('challenge_id'),
-                (string) $request->input('email'),
-                EmailOtpService::PURPOSE_PIN_RECOVERY,
-                (string) $request->input('verification_token'),
-            );
+            DB::transaction(function () use ($request, $purpose, $pin): void {
+                $challenge = $this->otp->consumeVerification(
+                    (string) $request->input('challenge_id'),
+                    (string) $request->input('email'),
+                    $purpose,
+                    (string) $request->input('verification_token'),
+                );
+                $user = User::whereKey($challenge->user_id)->lockForUpdate()->first();
+                if (! $user || ! $this->identities->matchesVerifiedUser($user, (string) $challenge->identifier)) {
+                    throw new RuntimeException('EMAIL_IDENTITY_CHANGED');
+                }
+                if ($pin) {
+                    $this->pins->setPin($user, (string) $request->input('new_pin'));
+                } else {
+                    $user->password = Hash::make((string) $request->input('password'));
+                    $user->save();
+                }
+                $this->revokeSessions($user);
+                $this->audit->record([
+                    'actor_type' => 'user', 'actor_user_id' => $user->id,
+                    'subject_type' => $pin ? 'pin' : 'password', 'subject_id' => (string) $user->id,
+                    'action' => $pin ? 'PIN_RECOVERED_BY_EMAIL_OTP' : 'PASSWORD_RECOVERED_BY_EMAIL_OTP',
+                    'decision_code' => $pin ? 'PIN_RESET_OK' : 'PASSWORD_RESET_OK',
+                    'severity' => $pin ? 'critical' : 'warning',
+                    'context' => [
+                        'support_initiated' => $challenge->requested_by_type === 'admin',
+                        'requested_by_id' => $challenge->requested_by_id,
+                    ],
+                ]);
+            });
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('WEAK_PIN', $e->getMessage(), 422);
         } catch (RuntimeException $e) {
             return $this->otpError($e);
         }
 
-        $user = $challenge->user_id ? User::find((int) $challenge->user_id) : null;
-        if (! $user) {
-            return $this->error('USER_NOT_FOUND', 'تعذر إكمال استعادة الرمز', 404);
-        }
-        if (! $this->identities->matchesVerifiedUser($user, (string) $challenge->identifier)) {
-            return $this->error('EMAIL_IDENTITY_CHANGED', 'تم تغيير هوية البريد لهذا الحساب. اطلب رمز استعادة جديداً.', 409);
-        }
-
-        try {
-            DB::transaction(function () use ($user, $request): void {
-                $this->pins->setPin($user, (string) $request->input('new_pin'));
-                $this->revokeSessions($user);
-            });
-        } catch (\InvalidArgumentException $e) {
-            return $this->error('WEAK_PIN', $e->getMessage(), 422);
-        }
-
-        $this->audit->record([
-            'actor_type' => 'user',
-            'actor_user_id' => $user->id,
-            'subject_type' => 'pin',
-            'subject_id' => (string) $user->id,
-            'action' => 'PIN_RECOVERED_BY_EMAIL_OTP',
-            'decision_code' => 'PIN_RESET_OK',
-            'severity' => 'critical',
-            'context' => [
-                'support_initiated' => $challenge->requested_by_type === 'admin',
-                'requested_by_id' => $challenge->requested_by_id,
-            ],
-        ]);
-
-        return $this->ok([], 'PIN_RESET', 'تم تعيين رمز PIN جديد. سجّل الدخول من جديد.');
+        return $pin
+            ? $this->ok([], 'PIN_RESET', 'تم تعيين رمز PIN جديد. سجّل الدخول من جديد.')
+            : $this->ok([], 'PASSWORD_RESET', 'تم تغيير كلمة المرور. سجّل الدخول من جديد.');
     }
 
     /**
@@ -257,7 +243,7 @@ class EmailOtpController extends Controller
 
         /** @var User|null $user */
         $user = $request->user();
-        if (! $user) {
+        if (! $user || ! (bool) $user->is_active) {
             return $this->error('UNAUTHENTICATED', 'يجب تسجيل الدخول', 401);
         }
 
@@ -267,7 +253,7 @@ class EmailOtpController extends Controller
 
         $newEmail = $this->identities->normalize((string) $request->input('new_email'));
         $currentEmail = $this->identities->normalize((string) ($user->email ?? ''));
-        if ($newEmail === $currentEmail) {
+        if ($newEmail === $currentEmail && $this->identities->matchesVerifiedUser($user, $currentEmail)) {
             return $this->error('EMAIL_UNCHANGED', 'البريد الجديد مطابق للبريد الحالي', 422);
         }
         if (! $this->identities->isAvailable($newEmail, (int) $user->id)) {
@@ -284,6 +270,7 @@ class EmailOtpController extends Controller
                 meta: [
                     'ip' => $request->ip(),
                     'old_email_masked' => $this->otp->maskEmail($currentEmail),
+                    'old_email_hash' => hash('sha256', $currentEmail),
                 ],
             );
         } catch (RuntimeException $e) {
@@ -324,7 +311,7 @@ class EmailOtpController extends Controller
 
         /** @var User|null $user */
         $user = $request->user();
-        if (! $user) {
+        if (! $user || ! (bool) $user->is_active) {
             return $this->error('UNAUTHENTICATED', 'يجب تسجيل الدخول', 401);
         }
 
@@ -342,52 +329,41 @@ class EmailOtpController extends Controller
         }
 
         try {
-            $verificationToken = $this->otp->verify(
+            $this->otp->verifyAndConsume(
                 $challengeId,
                 $newEmail,
                 EmailOtpService::PURPOSE_EMAIL_CHANGE,
                 (string) $request->input('otp'),
+                function (object $challenge) use ($user, $newEmail): void {
+                    $locked = User::whereKey($user->id)->lockForUpdate()->first();
+                    if (! $locked || ! (bool) $locked->is_active
+                        || (int) $challenge->user_id !== (int) $locked->id) {
+                        throw new RuntimeException('EMAIL_IDENTITY_CHANGED');
+                    }
+                    $oldEmail = $this->identities->normalize((string) ($locked->email ?? ''));
+                    $meta = json_decode((string) $challenge->meta, true) ?: [];
+                    if (! hash_equals((string) ($meta['old_email_hash'] ?? ''), hash('sha256', $oldEmail))) {
+                        throw new RuntimeException('EMAIL_IDENTITY_CHANGED');
+                    }
+                    $updated = $this->identities->replaceVerifiedEmail($locked, $newEmail);
+                    $this->revokeSessions($updated);
+                    $this->audit->record([
+                        'actor_type' => 'user', 'actor_user_id' => $updated->id,
+                        'subject_type' => 'email_identity', 'subject_id' => (string) $updated->id,
+                        'action' => 'EMAIL_IDENTITY_CHANGED_BY_OTP', 'decision_code' => 'EMAIL_CHANGE_OK',
+                        'severity' => 'critical',
+                        'context' => [
+                            'old_email_masked' => $this->otp->maskEmail($oldEmail),
+                            'new_email_masked' => $this->otp->maskEmail($newEmail),
+                        ],
+                    ]);
+                },
             );
-            $challenge = $this->otp->consumeVerification(
-                $challengeId,
-                $newEmail,
-                EmailOtpService::PURPOSE_EMAIL_CHANGE,
-                $verificationToken,
-            );
+        } catch (ValidationException) {
+            return $this->error('EMAIL_IN_USE', 'تعذر ربط البريد الجديد بهذا الحساب', 409);
         } catch (RuntimeException $e) {
             return $this->otpError($e);
         }
-
-        if ((int) ($challenge->user_id ?? 0) !== (int) $user->id) {
-            return $this->error('EMAIL_CHANGE_OWNER_MISMATCH', 'طلب تغيير البريد لا يخص هذا الحساب', 403);
-        }
-
-        if (! $this->identities->isAvailable($newEmail, (int) $user->id)) {
-            return $this->error('EMAIL_IN_USE', 'البريد الإلكتروني أصبح مرتبطاً بحساب آخر. اطلب التغيير مرة أخرى.', 409);
-        }
-
-        $oldEmail = $this->identities->normalize((string) ($user->email ?? ''));
-        try {
-            $updated = $this->identities->replaceVerifiedEmail($user, $newEmail);
-        } catch (ValidationException) {
-            return $this->error('EMAIL_IN_USE', 'تعذر ربط البريد الجديد بهذا الحساب', 409);
-        }
-
-        $this->revokeSessions($updated);
-
-        $this->audit->record([
-            'actor_type' => 'user',
-            'actor_user_id' => $updated->id,
-            'subject_type' => 'email_identity',
-            'subject_id' => (string) $updated->id,
-            'action' => 'EMAIL_IDENTITY_CHANGED_BY_OTP',
-            'decision_code' => 'EMAIL_CHANGE_OK',
-            'severity' => 'critical',
-            'context' => [
-                'old_email_masked' => $this->otp->maskEmail($oldEmail),
-                'new_email_masked' => $this->otp->maskEmail($newEmail),
-            ],
-        ]);
 
         return $this->ok([
             'masked_email' => $this->otp->maskEmail($newEmail),
@@ -451,18 +427,34 @@ class EmailOtpController extends Controller
     private function revokeSessions(User $user): void
     {
         if (Schema::hasTable('oauth_access_tokens')) {
+            // Include already revoked access tokens: their refresh tokens may
+            // have survived an older, incomplete revocation implementation.
+            if (Schema::hasTable('oauth_refresh_tokens')) {
+                DB::table('oauth_refresh_tokens')->whereIn('access_token_id',
+                    DB::table('oauth_access_tokens')->where('user_id', $user->id)->select('id')
+                )->update(['revoked' => true]);
+            }
             DB::table('oauth_access_tokens')->where('user_id', $user->id)->update(['revoked' => true]);
         }
         if (Schema::hasTable('user_log_histories')) {
             DB::table('user_log_histories')->where('user_id', $user->id)->update(['is_active' => 0]);
         }
-        $user->forceFill(['fcm_token' => null])->saveQuietly();
+        if (Schema::hasTable('sessions')) {
+            DB::table('sessions')->where('user_id', $user->id)->delete();
+        }
+        $user->forceFill(['fcm_token' => null, 'remember_token' => Str::random(60)])->saveQuietly();
     }
 
-    private function acceptedRecoveryReply(string $email): JsonResponse
+    private function channelEnabled(string $purpose): bool
+    {
+        $key = $purpose === EmailOtpService::PURPOSE_REGISTRATION ? 'registration_channel' : $purpose . '_channel';
+        return (string) config('amial_otp.' . $key, 'email') === 'email';
+    }
+
+    private function acceptedRecoveryReply(string $email, ?string $challengeId = null): JsonResponse
     {
         return $this->ok([
-            'challenge_id' => (string) Str::ulid(),
+            'challenge_id' => $challengeId ?? (string) Str::ulid(),
             'masked_email' => $this->otp->maskEmail($email),
             'expires_in_seconds' => max(1, (int) config('amial_otp.ttl_minutes', 5)) * 60,
             'resend_after_seconds' => max(30, (int) config('amial_otp.resend_seconds', 60)),
@@ -479,6 +471,7 @@ class EmailOtpController extends Controller
         }
 
         return match ($message) {
+            'EMAIL_IDENTITY_CHANGED' => $this->error('EMAIL_IDENTITY_CHANGED', 'هوية البريد أو حالة الحساب تغيّرت. اطلب رمزاً جديداً.', 409),
             'INVALID_EMAIL' => $this->error('INVALID_EMAIL', 'صيغة البريد الإلكتروني غير صحيحة', 422),
             'OTP_DELIVERY_FAILED' => $this->error('OTP_DELIVERY_FAILED', 'تعذر إرسال الرمز حالياً. حاول مرة أخرى بعد قليل.', 503),
             'OTP_NOT_FOUND' => $this->error('OTP_NOT_FOUND', 'طلب التحقق غير موجود', 404),

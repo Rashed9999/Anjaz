@@ -53,6 +53,16 @@ use Illuminate\Support\Str;
  */
 class DemoAccountPolicy
 {
+    public static function emailForNewAccount(string $phone): string
+    {
+        $configured = config('amial_otp.bootstrap_emails', []);
+        $email = is_array($configured) ? mb_strtolower(trim((string) ($configured[$phone] ?? ''))) : '';
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 255) {
+            throw new \RuntimeException('Configure AMIAL_BOOTSTRAP_EMAILS for the new bootstrap account before creating it.');
+        }
+        return $email;
+    }
+
     /** المفتاحُ الذي يفتح السلوكَ القديمَ كاملاً — للعرض والتطوير. */
     public const OPT_IN = 'AMIAL_ALLOW_DEMO_ACCOUNTS';
 

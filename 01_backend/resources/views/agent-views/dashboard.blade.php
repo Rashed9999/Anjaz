@@ -192,6 +192,9 @@
                             <hr>
                             <div class="mb-2"><label class="form-label">هاتف الفرع</label>
                                 <input class="form-control" id="br-phone" dir="ltr" placeholder="9677xxxxxxxx"></div>
+                            <div class="mb-2"><label class="form-label">البريد الإلكتروني للفرع *</label>
+                                <input class="form-control" id="br-email" type="email" dir="ltr" maxlength="255" required>
+                                <div class="form-text">بريد مستقل للحساب، يوثّقه صاحبه من إعدادات التطبيق.</div></div>
                             <div class="mb-2"><label class="form-label">كلمة سرّ الفرع (٨ أحرف فأكثر)</label>
                                 <input class="form-control" id="br-pass" dir="ltr"></div>
                             <div class="alert alert-info small py-2 mb-0">
@@ -578,6 +581,7 @@
         const name = $el('br-name').value.trim();
         const code = $el('br-code').value.trim();
         const phone = $el('br-phone').value.trim();
+        const email = $el('br-email').value.trim().toLowerCase();
         const password = $el('br-pass').value;
 
         // يُفحص كلّ شيءٍ **قبل** الإرسال والحقول كلّها أمام عين المستعمل —
@@ -585,12 +589,13 @@
         if (name.length < 2) { err.textContent = 'اسم الفرع إلزاميّ'; return; }
         if (!code) { err.textContent = 'رمز الفرع إلزاميّ'; return; }
         if (phone.replace(/\D+/g, '').length < 9) { err.textContent = 'هاتف الفرع ناقص'; return; }
+        if (!email || !$el('br-email').checkValidity()) { err.textContent = 'أدخل بريد الفرع الصحيح'; return; }
         if (password.length < 8) { err.textContent = 'كلمة السرّ ثمانية أحرف فأكثر'; return; }
 
         $el('br-save').disabled = true;
         try {
             const j = await post('/branches', {
-                name, code, phone, password,
+                name, code, phone, email, password,
                 city: $el('br-city').value.trim() || null,
                 address: $el('br-address').value.trim() || null,
             });

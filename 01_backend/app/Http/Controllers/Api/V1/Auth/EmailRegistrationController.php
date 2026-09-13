@@ -10,11 +10,11 @@ use App\Services\EmailIdentityService;
 use App\Services\Otp\EmailOtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use RuntimeException;
 
 /**
  * AMIAL-EMAIL-OTP-REG-001 + AMIAL-EMAIL-IDENTITY-001
@@ -60,52 +60,21 @@ class EmailRegistrationController extends Controller
             ]]], 403);
         }
 
-        $challenge = DB::table('otp_challenges')
-            ->where('challenge_id', (string) $request->input('email_challenge_id'))
-            ->where('identifier', $email)
-            ->where('purpose', EmailOtpService::PURPOSE_REGISTRATION)
-            ->first();
-
-        if (!$challenge || !$challenge->verified_at || !$challenge->verification_token_hash) {
-            return $this->verificationError('EMAIL_NOT_VERIFIED', 'تحقق من البريد الإلكتروني أولاً.');
-        }
-        if ($challenge->consumed_at) {
-            return $this->verificationError('EMAIL_VERIFICATION_USED', 'تم استخدام جلسة التحقق هذه. اطلب رمزاً جديداً.');
-        }
-        if (!$challenge->verification_expires_at || Carbon::parse($challenge->verification_expires_at)->isPast()) {
-            return $this->verificationError('EMAIL_VERIFICATION_EXPIRED', 'انتهت جلسة التحقق. اطلب رمزاً جديداً.');
-        }
-        if (!Hash::check((string) $request->input('email_verification_token'), (string) $challenge->verification_token_hash)) {
-            return $this->verificationError('EMAIL_VERIFICATION_INVALID', 'جلسة التحقق غير صحيحة.');
-        }
-
         $request->merge(['email' => $email]);
-        $syntheticVerificationId = null;
-
         try {
-            // RegisterController still enforces the legacy phone OTP when the
-            // business switch is on. During the email pilot we satisfy that
-            // internal gate only after email ownership has been cryptographically
-            // verified. The random value is never returned and the row is always
-            // removed in finally{}.
-            if ((int) (Helpers::get_business_settings('phone_verification') ?? 0) === 1) {
-                $phone = \App\Support\Phone::canonical(
-                    (string) $request->input('dial_country_code') . (string) $request->input('phone')
+            return DB::transaction(function () use ($request, $email): JsonResponse {
+                $challenge = $this->otp->consumeVerification(
+                    (string) $request->input('email_challenge_id'),
+                    $email,
+                    EmailOtpService::PURPOSE_REGISTRATION,
+                    (string) $request->input('email_verification_token'),
                 );
-                $internalOtp = (string) random_int(100000, 999999);
-                $syntheticVerificationId = DB::table('phone_verifications')->insertGetId([
-                    'phone' => $phone,
-                    'otp' => $internalOtp,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-                $request->merge(['otp' => $internalOtp]);
-            }
-
-            /** @var JsonResponse $response */
-            $response = app(RegisterController::class)->customerRegistration($request);
-
-            if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
+                // The second argument is server-only and follows consumption of
+                // real email proof. No fabricated phone-verification row exists.
+                $response = app(RegisterController::class)->customerRegistration($request, $email);
+                if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+                    throw new HttpResponseException($response);
+                }
                 $phone = \App\Support\Phone::canonical(
                     (string) $request->input('dial_country_code') . (string) $request->input('phone')
                 );
@@ -119,28 +88,29 @@ class EmailRegistrationController extends Controller
                 $user = $query->orderByDesc('id')->first();
 
                 if (!$user) {
-                    // Never mark a challenge consumed unless the account actually
-                    // exists. This also makes operational inconsistencies visible.
-                    return response()->json(['errors' => [[
-                        'code' => 'registration',
-                        'message' => 'تمت العملية جزئياً وتعذر تأكيد الحساب. تواصل مع الدعم.',
-                    ]]], 500);
+                    throw new RuntimeException('EMAIL_REGISTRATION_FAILED');
                 }
 
                 $this->identities->markCurrentEmailVerified($user);
 
                 DB::table('otp_challenges')->where('id', $challenge->id)->update([
                     'user_id' => $user->id,
-                    'consumed_at' => now(),
                     'updated_at' => now(),
                 ]);
+                return $response;
+            });
+        } catch (HttpResponseException $e) {
+            return $e->getResponse();
+        } catch (RuntimeException $e) {
+            if (! in_array($e->getMessage(), [
+                'OTP_NOT_VERIFIED', 'OTP_ALREADY_USED', 'VERIFICATION_EXPIRED', 'VERIFICATION_INVALID',
+            ], true)) {
+                throw $e;
             }
-
-            return $response;
-        } finally {
-            if ($syntheticVerificationId !== null) {
-                DB::table('phone_verifications')->where('id', $syntheticVerificationId)->delete();
-            }
+            return $this->verificationError(
+                $e->getMessage(),
+                'تعذر إكمال التسجيل. تأكد من البيانات وصلاحية جلسة التحقق ثم أعد المحاولة.',
+            );
         }
     }
 

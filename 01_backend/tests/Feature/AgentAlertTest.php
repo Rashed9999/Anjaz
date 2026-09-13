@@ -52,6 +52,7 @@ class AgentAlertTest extends TestCase
         parent::setUp();
 
         $this->company = new User();
+        $this->company->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $this->company->forceFill([
             'f_name' => 'البسيري', 'l_name' => 'للصرافة', 'phone' => '967773100001',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
@@ -62,6 +63,7 @@ class AgentAlertTest extends TestCase
         $this->hq = app(AgentStaffService::class)->ensureHeadOfficeAccount($this->company, 'hq123456');
 
         $bu = new User();
+        $bu->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $bu->forceFill([
             'f_name' => 'فرع المكلا', 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '967773100099', 'password' => Hash::make('secret123'),
@@ -159,6 +161,7 @@ class AgentAlertTest extends TestCase
     private function admin(string $phone): User
     {
         $admin = new User();
+        $admin->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $admin->forceFill([
             'f_name' => 'مشرف', 'l_name' => 'أميال', 'phone' => $phone,
             'type' => ADMIN_TYPE, 'role' => 'super_admin',
@@ -248,6 +251,7 @@ class AgentAlertTest extends TestCase
     public function another_branchs_manager_is_not_told(): void
     {
         $other = new User();
+        $other->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $other->forceFill([
             'f_name' => 'فرع سيحوت', 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '967773100088', 'password' => Hash::make('secret123'),

@@ -44,6 +44,7 @@ class KycRegulatoryFieldsTest extends TestCase
             'f_name' => 'راشد', 'l_name' => 'محمد عوض معرابي',
             'gender' => 'male', 'dial_country_code' => '+967',
             'phone' => '783545525', 'password' => '4321',
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
         ], $extra);
     }
 

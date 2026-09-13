@@ -87,7 +87,7 @@ class AgentController extends Controller
             'f_name' => 'required',
             'l_name' => 'required',
             'image' => 'required|image|max:'. $this->maxImageSizeKB .'|mimes:' . implode(',', array_column(IMAGE_EXTENSIONS, 'key')),
-            'email' => '',
+            'email' => 'required|email|max:255',
             'phone' => [
                 'required',
                 Rule::unique('users')->where(function ($query) {

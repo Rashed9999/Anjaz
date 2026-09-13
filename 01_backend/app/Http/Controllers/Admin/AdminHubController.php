@@ -546,7 +546,7 @@ class AdminHubController extends Controller
             'pin' => 'nullable|digits:4',
             'gender' => 'nullable|in:male,female,other',
             'date_of_birth' => 'nullable|date|before:today',
-            'email' => 'nullable|email|max:150',
+            'email' => 'required|email|max:255',
             'name_en' => ['nullable', 'string', 'max:150', 'regex:/^[A-Za-z\s.\-\x27]+$/'],
             'father_name' => 'nullable|string|max:60',
             'grandfather_name' => 'nullable|string|max:60',

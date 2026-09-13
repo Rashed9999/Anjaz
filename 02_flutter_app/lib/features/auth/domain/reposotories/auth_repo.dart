@@ -160,7 +160,7 @@ class AuthRepo extends GetxService{
      return _cachedToken != null && _cachedToken!.isNotEmpty;
    }
 
-  void removeUserToken() async {
+  Future<void> removeUserToken() async {
     _cachedToken = null;
     apiClient.token = null;
     // لا نُبقي Authorization قديمة بعد الخروج؛ الرمز المحذوف لا يجوز أن

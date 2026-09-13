@@ -54,6 +54,7 @@ class EditProfileController extends GetxController implements GetxService{
       '_method': 'put',
     };
 
+    try {
     Response response = await authRepo.updateProfile(allProfileInfo, multipartBody);
     ResponseModel responseModel;
     if (response.statusCode == 200) {
@@ -69,8 +70,12 @@ class EditProfileController extends GetxController implements GetxService{
     else {
       ApiChecker.checkApi(response);
     }
-    _isLoading = false;
-    update();
+    } catch (_) {
+      showCustomSnackBarHelper('email_otp_connection_failed'.tr);
+    } finally {
+      _isLoading = false;
+      update();
+    }
     return isSuccess;
   }
 }

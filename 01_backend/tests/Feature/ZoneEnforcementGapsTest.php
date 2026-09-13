@@ -49,6 +49,7 @@ class ZoneEnforcementGapsTest extends TestCase
 
         $this->actingAs($this->admin(), 'user')
             ->postJson('/admin/amial/hub/customers/users', array_merge([
+                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
                 'f_name' => 'اختبار', 'l_name' => 'مناطق',
                 'phone' => $phone,
                 'password' => 'Passw0rd!123',

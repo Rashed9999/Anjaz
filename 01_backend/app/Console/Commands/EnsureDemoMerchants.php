@@ -158,6 +158,7 @@ class EnsureDemoMerchants extends Command
         }
 
         $user = new User();
+        $user->email = DemoAccountPolicy::emailForNewAccount($m['phone']);
         $user->f_name = $m['f'];
         $user->l_name = $m['l'];
         $user->phone = $m['phone'];

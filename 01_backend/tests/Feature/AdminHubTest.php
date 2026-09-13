@@ -84,6 +84,7 @@ class AdminHubTest extends TestCase
     {
         $this->actingAs($this->admin, 'user')
             ->postJson('/admin/amial/hub/customers/users', [
+                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
                 'f_name' => 'اختبار', 'l_name' => 'عميل',
                 'phone' => '967771009010', 'password' => 'Secret@123',
             ] + $this->kycDossier('967771009010'))
@@ -102,6 +103,7 @@ class AdminHubTest extends TestCase
 
         $this->actingAs($this->admin, 'user')
             ->postJson('/admin/amial/hub/customers/users', [
+                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
                 'f_name' => 'مكرر', 'phone' => '967771009011', 'password' => 'Secret@123',
             ] + $this->kycDossier('967771009011'))
             ->assertStatus(422);
@@ -245,6 +247,7 @@ class AdminHubTest extends TestCase
     {
         $this->actingAs($this->admin, 'user')
             ->postJson('/admin/amial/hub/customers/users', [
+                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
                 'f_name' => 'عميل', 'l_name' => 'حقيقي',
                 'phone' => '967771009050', 'password' => 'Secret@123', 'pin' => '5678',
             ] + $this->kycDossier('967771009050'))->assertCreated();
@@ -260,6 +263,7 @@ class AdminHubTest extends TestCase
     {
         $this->actingAs($this->admin, 'user')
             ->postJson('/admin/amial/hub/merchants/users', [
+                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
                 'f_name' => 'تاجر', 'l_name' => 'حقيقي',
                 'phone' => '967771009051', 'password' => 'Secret@123',
                 'store_name' => 'بقالة الاختبار', 'business_type' => 'retail', 'plan' => 'business',
@@ -303,6 +307,7 @@ class AdminHubTest extends TestCase
     {
         $this->actingAs($this->admin, 'user')
             ->postJson('/admin/amial/hub/agents/users', [
+                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
                 'f_name' => 'وكيل', 'l_name' => 'حقيقي',
                 'phone' => '967771009052', 'password' => 'Secret@123',
             ] + $this->kycDossier('967771009052'))->assertCreated();
@@ -324,6 +329,7 @@ class AdminHubTest extends TestCase
     {
         $this->actingAs($this->admin, 'user')
             ->postJson('/admin/amial/hub/merchants/users', [
+                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
                 'f_name' => 'تاجر', 'l_name' => 'باقات',
                 'phone' => '967771009053', 'password' => 'Secret@123',
                 'store_name' => 'متجر الباقات', 'plan' => 'free',

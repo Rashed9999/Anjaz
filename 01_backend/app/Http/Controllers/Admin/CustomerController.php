@@ -60,6 +60,7 @@ class CustomerController extends Controller
             ],
             'gender' => 'required',
             'occupation' => 'required',
+            'email' => 'required|email|max:255',
             'password' => 'required|min:4|max:4',
         ], [
             'password.min' => 'Password must contain 4 characters',

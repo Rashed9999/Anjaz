@@ -10,6 +10,7 @@ import 'package:amial_pay/features/setting/controllers/edit_profile_controller.d
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/features/camera_verification/controllers/camera_screen_controller.dart';
 import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/features/setting/widgets/email_identity_dialog.dart';
 
 /// AMIAL-PROFILE-EDIT-001 + AMIAL-EMAIL-IDENTITY-001
 ///
@@ -29,7 +30,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _lastName = TextEditingController();
   final _email = TextEditingController();
   final _occupation = TextEditingController();
-  final _api = Get.find<ApiClient>();
   bool _changingEmail = false;
 
   @override
@@ -52,21 +52,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
-
-  String _responseMessage(Response response, String fallback) {
-    final body = response.body;
-    if (body is Map && body['message'] != null) return '${body['message']}';
-    return fallback;
-  }
-
-  Map<String, dynamic> _responseMeta(Response response) {
-    final body = response.body;
-    if (body is! Map || body['meta'] is! Map) return <String, dynamic>{};
-    return Map<String, dynamic>.from(body['meta'] as Map);
-  }
-
   Future<void> _save(EditProfileController c) async {
     if (!_formKey.currentState!.validate()) return;
     final image = Get.find<CameraScreenController>().getImage;
@@ -84,163 +69,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _changeEmail() async {
     if (_changingEmail) return;
-
-    final newEmail = TextEditingController();
-    final password = TextEditingController();
-    final firstKey = GlobalKey<FormState>();
-
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(_email.text.trim().isEmpty ? 'إضافة البريد الإلكتروني' : 'تغيير البريد الإلكتروني'),
-        content: Form(
-          key: firstKey,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text(
-              'سيصل رمز تحقق إلى البريد الجديد. لا يمكن ربط بريد مستخدم بحساب آخر.',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: newEmail,
-              keyboardType: TextInputType.emailAddress,
-              textDirection: TextDirection.ltr,
-              decoration: const InputDecoration(
-                labelText: 'البريد الجديد',
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) {
-                final s = (v ?? '').trim();
-                if (s.isEmpty) return 'البريد مطلوب';
-                return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(s)
-                    ? null
-                    : 'بريد غير صحيح';
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: password,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'كلمة المرور الحالية',
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) => (v == null || v.isEmpty) ? 'كلمة المرور مطلوبة' : null,
-            ),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
-          FilledButton(
-            onPressed: () {
-              if (firstKey.currentState?.validate() == true) {
-                Navigator.pop(dialogContext, true);
-              }
-            },
-            child: const Text('إرسال رمز التحقق'),
-          ),
-        ],
-      ),
-    );
-
-    final newAddress = newEmail.text.trim().toLowerCase();
-    final currentPassword = password.text;
-    newEmail.dispose();
-    password.dispose();
-    if (proceed != true || !mounted) return;
-
     setState(() => _changingEmail = true);
     try {
-      final requested = await _api.postData('/api/v1/auth/email-change/request', {
-        'new_email': newAddress,
-        'current_password': currentPassword,
-      });
-      if (!mounted) return;
-      if (requested.statusCode != 200 || requested.body is! Map || requested.body['success'] != true) {
-        _snack(_responseMessage(requested, 'تعذّر إرسال رمز التحقق'));
-        return;
-      }
-
-      final meta = _responseMeta(requested);
-      final challengeId = '${meta['challenge_id'] ?? ''}';
-      if (challengeId.isEmpty) {
-        _snack('تعذر إنشاء طلب تغيير البريد. حاول مرة أخرى.');
-        return;
-      }
-
-      final otp = TextEditingController();
-      final otpKey = GlobalKey<FormState>();
-      final confirmed = await showDialog<bool>(
+      final changed = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('تحقق من البريد الجديد'),
-          content: Form(
-            key: otpKey,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('أدخل الرمز المكوّن من 6 أرقام الذي أرسلناه إلى $newAddress'),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: otp,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                maxLength: 6,
-                decoration: const InputDecoration(
-                  labelText: 'رمز التحقق',
-                  counterText: '',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) => RegExp(r'^\d{6}$').hasMatch((v ?? '').trim())
-                    ? null
-                    : 'أدخل 6 أرقام',
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'الرمز صالح لفترة قصيرة ويعمل مرة واحدة. فريق أميال لن يطلبه منك.',
-                style: TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-            ]),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
-            FilledButton(
-              onPressed: () {
-                if (otpKey.currentState?.validate() == true) {
-                  Navigator.pop(dialogContext, true);
-                }
-              },
-              child: const Text('تأكيد البريد'),
-            ),
-          ],
-        ),
+        builder: (_) => EmailIdentityDialog(initialEmail: _email.text.trim()),
       );
-
-      final code = otp.text.trim();
-      otp.dispose();
-      if (confirmed != true || !mounted) return;
-
-      final changed = await _api.postData('/api/v1/auth/email-change/confirm', {
-        'challenge_id': challengeId,
-        'new_email': newAddress,
-        'otp': code,
-      });
-      if (!mounted) return;
-      if (changed.statusCode != 200 || changed.body is! Map || changed.body['success'] != true) {
-        _snack(_responseMessage(changed, 'تعذر تأكيد البريد الجديد'));
-        return;
-      }
-
-      // الخادم أبطل الجلسات لحظة تغيير اعتماد الاستعادة. نمسح النسخة المحلية
-      // أيضاً حتى لا يبقى التطبيق في حالة "داخل ظاهرياً" بتوكن مرفوض.
+      if (changed != true || !mounted) return;
       final repo = Get.find<AuthRepo>();
-      repo.removeUserToken();
+      await repo.removeUserToken();
       repo.removeUserData();
+      if (!mounted) return;
       Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final ctx = Get.context;
         if (ctx == null) return;
-        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-          content: Text('تم تغيير البريد وتوثيقه. سجّل الدخول من جديد لحماية الحساب.'),
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          content: Text('email_identity_success'.tr),
           backgroundColor: AmialColors.success,
         ));
       });
@@ -248,14 +94,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) setState(() => _changingEmail = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final phone = Get.find<ProfileController>().userInfo?.phone ?? '';
     return GetBuilder<EditProfileController>(builder: (c) {
       return Scaffold(
         backgroundColor: AmialColors.background,
-        appBar: AppBar(title: const Text('تعديل بياناتي')),
+        appBar: AppBar(title: Text('email_profile_title'.tr)),
         body: Form(
           key: _formKey,
           child: ListView(padding: const EdgeInsets.all(16), children: [
@@ -288,42 +133,42 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             const SizedBox(height: 20),
 
             if (phone.isNotEmpty) ...[
-              _readOnly('رقم الجوال', phone),
+              _readOnly('email_profile_phone'.tr, phone),
               const SizedBox(height: 12),
             ],
-            _field(_firstName, 'الاسم الأول *', required: true),
+            _field(_firstName, 'email_profile_first_name'.tr, required: true),
             const SizedBox(height: 12),
-            _field(_lastName, 'الاسم الأخير *', required: true),
+            _field(_lastName, 'email_profile_last_name'.tr, required: true),
             const SizedBox(height: 12),
 
-            _readOnly('البريد الإلكتروني المرتبط بالحساب',
-                _email.text.trim().isEmpty ? 'غير مضاف' : _email.text.trim()),
+            _readOnly('email_identity_linked'.tr,
+                _email.text.trim().isEmpty ? 'email_identity_missing'.tr : _email.text.trim()),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: _changingEmail ? null : _changeEmail,
               icon: _changingEmail
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.verified_user_outlined),
-              label: Text(_email.text.trim().isEmpty ? 'إضافة البريد وتوثيقه' : 'تغيير البريد بطريقة آمنة'),
+              label: Text(_email.text.trim().isEmpty ? 'email_identity_add'.tr : 'email_identity_manage'.tr),
             ),
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(top: 6),
               child: Text(
-                'لا يمكن تعديل البريد مباشرة؛ يلزم التحقق من البريد الجديد برمز OTP.',
+                'email_identity_edit_help'.tr,
                 style: TextStyle(fontSize: 12, color: Colors.black54),
               ),
             ),
             const SizedBox(height: 12),
 
-            _field(_occupation, 'المهنة (اختياري)'),
+            _field(_occupation, 'email_profile_occupation'.tr),
             const SizedBox(height: 16),
 
-            const Text('الجنس', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            Text('email_profile_gender'.tr, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Row(children: [
-              _genderChip(c, 'Male', 'ذكر'),
+              _genderChip(c, 'Male', 'email_profile_male'.tr),
               const SizedBox(width: 10),
-              _genderChip(c, 'Female', 'أنثى'),
+              _genderChip(c, 'Female', 'email_profile_female'.tr),
             ]),
             const SizedBox(height: 28),
 
@@ -332,7 +177,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               icon: c.isLoading
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.save),
-              label: Text(c.isLoading ? 'جارٍ الحفظ…' : 'حفظ البيانات'),
+              label: Text(c.isLoading ? 'email_profile_saving'.tr : 'email_profile_save'.tr),
               style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(52)),
             ),
           ]),
@@ -347,7 +192,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       controller: ctrl,
       keyboardType: keyboard,
       decoration: InputDecoration(labelText: label, filled: true, fillColor: Colors.white, border: const OutlineInputBorder()),
-      validator: validator ?? (required ? (v) => (v == null || v.trim().isEmpty) ? 'مطلوب' : null : null),
+      validator: validator ?? (required ? (v) => (v == null || v.trim().isEmpty) ? 'email_profile_required'.tr : null : null),
     );
   }
 

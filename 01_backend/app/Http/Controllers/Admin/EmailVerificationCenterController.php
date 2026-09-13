@@ -7,7 +7,6 @@ use App\Services\AuditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -20,7 +19,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class EmailVerificationCenterController extends Controller
 {
     private const PURPOSES = ['registration', 'password_reset', 'pin_recovery', 'email_change'];
-    private const STATUSES = ['pending', 'sent', 'delivered', 'delayed', 'bounced', 'complained', 'failed'];
+    private const STATUSES = ['pending', 'sent', 'delivered', 'delayed', 'bounced', 'complained', 'failed', 'locked', 'expired', 'superseded'];
 
     public function __construct(private readonly AuditService $audit)
     {
@@ -176,7 +175,7 @@ class EmailVerificationCenterController extends Controller
                 fputcsv($out, [
                     $row->challenge_id,
                     $row->user_id,
-                    $this->maskEmail((string) $row->identifier),
+                    $this->csvCell($this->maskEmail((string) $row->identifier)),
                     $row->purpose,
                     $row->delivery_status,
                     $row->attempts,
@@ -312,9 +311,14 @@ class EmailVerificationCenterController extends Controller
             return null;
         }
 
-        $safe = preg_replace('/(?:re|whsec)_[A-Za-z0-9_\-\.]+/i', '[redacted]', $error);
-        $safe = preg_replace('/Bearer\s+\S+/i', 'Bearer [redacted]', (string) $safe);
+        // Historical failures may contain a provider's echoed request body.
+        // A privileged read still must never reveal the OTP or token in it.
+        return preg_match('/^RESEND_[A-Z0-9_]+/', $error, $match)
+            ? $match[0] : 'RESEND_TRANSPORT_ERROR';
+    }
 
-        return Str::limit((string) $safe, 180);
+    private function csvCell(string $value): string
+    {
+        return preg_match('/^[=+@\-\t\r\n]/', $value) ? "'" . $value : $value;
     }
 }

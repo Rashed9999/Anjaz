@@ -56,6 +56,7 @@ class MerchantAccountIsUsableGuardTest extends TestCase
     {
         $this->actingAs($this->operator(), 'user')
             ->postJson('/admin/amial/hub/merchants/users', [
+                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
                 'f_name' => 'صاحب',
                 'l_name' => 'الحساب',
                 // **ورمزُ الدولة صار إلزاميّاً** — أضافه التزامُ صاحب

@@ -126,7 +126,7 @@
                         <div class="col-md-3"><label class="form-label">تاريخ الميلاد *</label><input class="form-control" name="date_of_birth" type="date" required></div>
                         <div class="col-md-3"><label class="form-label">مفتاح الدولة *</label><input class="form-control" name="dial_country_code" value="+967" dir="ltr" required></div>
                         <div class="col-md-4"><label class="form-label">رقم الجوال *</label><input class="form-control" name="phone" dir="ltr" placeholder="771234567" required></div>
-                        <div class="col-md-5"><label class="form-label">البريد الإلكتروني</label><input class="form-control" name="email" type="email" dir="ltr"></div>
+                        <div class="col-md-5"><label class="form-label">البريد الإلكتروني *</label><input class="form-control" name="email" type="email" dir="ltr" maxlength="255" required></div>
                     </div></div></div></div>
                 <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-identity">2. الهوية والعنوان</button></h2>
                     <div id="opening-identity" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3">

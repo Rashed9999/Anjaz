@@ -32,7 +32,7 @@ Route::prefix('auth')->name('amial.auth.')->middleware(['amial.rate-limit:auth_l
 // A recovery email is a security credential, not editable profile text.
 // These endpoints work for every authenticated User type: customer, merchant,
 // agent, admin and staff. Current password + OTP to the NEW address are required.
-Route::prefix('auth')->name('amial.auth.')->middleware(['auth:api', 'throttle:5,1'])->group(function () {
+Route::prefix('auth')->name('amial.auth.')->middleware(['auth:api', 'amial.pos-device', 'throttle:5,1'])->group(function () {
     Route::post('/email-change/request', [EmailOtpController::class, 'requestEmailChange'])
         ->name('email-change.request');
     Route::post('/email-change/confirm', [EmailOtpController::class, 'confirmEmailChange'])

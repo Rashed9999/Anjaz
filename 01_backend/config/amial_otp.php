@@ -16,6 +16,10 @@ return [
     'max_attempts' => (int) env('OTP_MAX_ATTEMPTS', 5),
     'verification_ttl_minutes' => (int) env('OTP_VERIFICATION_TTL_MINUTES', 10),
 
+    // Explicit mailboxes for creating absent bootstrap phone accounts.
+    // Existing recovery identities are never replaced by bootstrap commands.
+    'bootstrap_emails' => json_decode((string) env('AMIAL_BOOTSTRAP_EMAILS', '{}'), true) ?: [],
+
     'resend' => [
         'api_key' => env('RESEND_API_KEY'),
         'api_url' => env('RESEND_API_URL', 'https://api.resend.com/emails'),

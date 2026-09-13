@@ -39,6 +39,7 @@ class RegistrationDossierTest extends TestCase
         $this->assertDatabaseMissing('registration_dossiers', ['payload_encrypted' => 'مها سالم']);
 
         $this->postJson('/api/v1/customer/auth/register', [
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'dial_country_code' => '+967', 'phone' => '771700001', 'password' => '1234',
         ])->assertOk();
 
@@ -64,6 +65,7 @@ class RegistrationDossierTest extends TestCase
         );
 
         $this->postJson('/api/v1/customer/auth/register', [
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'account_type' => 'merchant', 'dial_country_code' => '+967',
             'phone' => '771700002', 'password' => '1234',
         ])->assertOk();
@@ -78,6 +80,7 @@ class RegistrationDossierTest extends TestCase
     public function self_service_registration_has_its_own_printable_archive_record(): void
     {
         $this->postJson('/api/v1/customer/auth/register', [
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'f_name' => 'تسجيل', 'l_name' => 'ذاتي', 'gender' => 'male',
             'dial_country_code' => '+967', 'phone' => '771700003', 'password' => '1234',
         ])->assertOk();

@@ -145,6 +145,10 @@ jobs:
           echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
           echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
 
+      - name: تحقق دورة البريد قبل الاختبارات الشاملة
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Feature/EmailOtpLifecycleTest.php tests/Feature/EmailIdentityGuardTest.php tests/Feature/AmialOtpEmailTemplateTest.php
+
       - name: تشغيل كل اختبارات الخادم
         working-directory: 01_backend
         run: |

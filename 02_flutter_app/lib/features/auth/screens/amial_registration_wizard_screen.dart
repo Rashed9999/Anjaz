@@ -34,6 +34,8 @@ class _AmialRegistrationWizardScreenState
   bool _otpSent = false;
   String? _emailChallengeId;
   String? _emailVerificationToken;
+  DateTime? _emailVerificationExpiresAt;
+  int _emailCodeTtl = 300;
   int _otpResendSeconds = 0;
   Timer? _otpTimer;
 
@@ -223,6 +225,7 @@ class _AmialRegistrationWizardScreenState
     _otpSent = false;
     _emailChallengeId = null;
     _emailVerificationToken = null;
+    _emailVerificationExpiresAt = null;
     _otpResendSeconds = 0;
     _otp.clear();
   }
@@ -334,11 +337,11 @@ class _AmialRegistrationWizardScreenState
         return true;
       case 9:
         if (_emailChallengeId == null) {
-          _snack('اطلب رمز تحقق جديداً للبريد الإلكتروني');
+          _snack('email_otp_expired_session'.tr);
           return false;
         }
         if (!RegExp(r'^\d{6}$').hasMatch(_otp.text.trim())) {
-          _snack('أدخل رمز التحقق المكوّن من 6 أرقام');
+          _snack('email_otp_six_digits'.tr);
           return false;
         }
         return true;
@@ -437,7 +440,7 @@ class _AmialRegistrationWizardScreenState
 
   Future<bool> _sendOtp() async {
     if (!_emailValid) {
-      _snack('أدخل بريداً إلكترونياً صحيحاً أولاً');
+      _snack('email_otp_valid_email'.tr);
       return false;
     }
     if (_otpResendSeconds > 0) return false;
@@ -448,9 +451,10 @@ class _AmialRegistrationWizardScreenState
         '/api/v1/auth/email-otp/request',
         {'email': _normalizedEmail, 'purpose': 'registration'},
       );
+      if (!mounted) return false;
       final status = r.statusCode ?? 500;
-      if (status < 200 || status >= 300) {
-        _snack(_responseMessage(r, 'تعذر إرسال رمز التحقق إلى البريد'));
+      if (status < 200 || status >= 300 || r.body is! Map || r.body['success'] != true) {
+        _snack(_responseMessage(r, 'email_otp_send_failed'.tr));
         return false;
       }
 
@@ -458,21 +462,24 @@ class _AmialRegistrationWizardScreenState
           ? Map<String, dynamic>.from(r.body['meta'])
           : <String, dynamic>{};
       final challenge = meta['challenge_id']?.toString();
-      if (challenge == null || challenge.length != 26) {
-        _snack('لم يُنشئ الخادم جلسة تحقق صالحة. حاول مرة أخرى.');
+      final ttl = int.tryParse('${meta['expires_in_seconds']}');
+      if (challenge == null || challenge.length != 26 || ttl == null || ttl <= 0 || meta['delivery_status'] != 'sent') {
+        _snack('email_otp_invalid_session'.tr);
         return false;
       }
 
       _emailChallengeId = challenge;
       _emailVerificationToken = null;
+      _emailVerificationExpiresAt = null;
+      _emailCodeTtl = ttl;
       _otp.clear();
       _otpSent = true;
       final resend = int.tryParse('${meta['resend_after_seconds'] ?? 60}') ?? 60;
       _startOtpCountdown(resend);
-      _snack('تم إرسال رمز من 6 أرقام إلى $_normalizedEmail. صلاحيته 5 دقائق.', error: false);
+      _snack('email_otp_inbox_hint'.trParams({'email': _normalizedEmail, 'seconds': '$_emailCodeTtl'}), error: false);
       return true;
     } catch (_) {
-      _snack('تعذر الاتصال بالخادم لإرسال رمز التحقق');
+      _snack('email_otp_connection_failed'.tr);
       return false;
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -480,7 +487,12 @@ class _AmialRegistrationWizardScreenState
   }
 
   Future<bool> _verifyRegistrationOtp() async {
-    if (_emailVerificationToken != null) return true;
+    if (_emailVerificationToken != null) {
+      if (_emailVerificationExpiresAt != null && DateTime.now().isBefore(_emailVerificationExpiresAt!)) return true;
+      _invalidateEmailOtp();
+      _snack('email_otp_expired_session'.tr);
+      return false;
+    }
     final challenge = _emailChallengeId;
     if (challenge == null || !_emailValid) return false;
 
@@ -494,9 +506,10 @@ class _AmialRegistrationWizardScreenState
           'otp': _otp.text.trim(),
         },
       );
+      if (!mounted) return false;
       final status = r.statusCode ?? 500;
-      if (status < 200 || status >= 300) {
-        _snack(_responseMessage(r, 'رمز التحقق غير صحيح أو انتهت صلاحيته'));
+      if (status < 200 || status >= 300 || r.body is! Map || r.body['success'] != true) {
+        _snack(_responseMessage(r, 'email_otp_wrong_code'.tr));
         return false;
       }
 
@@ -505,17 +518,19 @@ class _AmialRegistrationWizardScreenState
           : <String, dynamic>{};
       final token = meta['verification_token']?.toString();
       final returnedChallenge = meta['challenge_id']?.toString();
-      if (token == null || token.length < 32) {
-        _snack('تعذر إنشاء جلسة التحقق. اطلب رمزاً جديداً.');
+      final ttl = int.tryParse('${meta['verification_expires_in_seconds']}');
+      if (token == null || token.length < 32 || ttl == null || ttl <= 0) {
+        _snack('email_otp_invalid_session'.tr);
         return false;
       }
       _emailVerificationToken = token;
+      _emailVerificationExpiresAt = DateTime.now().add(Duration(seconds: ttl));
       if (returnedChallenge != null && returnedChallenge.length == 26) {
         _emailChallengeId = returnedChallenge;
       }
       return true;
     } catch (_) {
-      _snack('تعذر الاتصال بالخادم للتحقق من الرمز');
+      _snack('email_otp_connection_failed'.tr);
       return false;
     }
   }
@@ -534,7 +549,7 @@ class _AmialRegistrationWizardScreenState
     try {
       if (!await _verifyRegistrationOtp()) return;
       if (_emailChallengeId == null || _emailVerificationToken == null) {
-        _snack('تحقق من البريد الإلكتروني أولاً');
+        _snack('email_otp_enter_code'.tr);
         return;
       }
 
@@ -609,6 +624,7 @@ class _AmialRegistrationWizardScreenState
       final r = await Get.find<ApiClient>().postMultipartData(
         '/api/v1/auth/register/email', fields, parts,
       );
+      if (!mounted) return;
 
       final ok = r.statusCode == 200 &&
           (r.body is Map) &&
@@ -626,6 +642,9 @@ class _AmialRegistrationWizardScreenState
         return;
       }
       _snack(_responseMessage(r, 'تعذّر إكمال التسجيل'));
+      if (r.body is Map && ['OTP_ALREADY_USED', 'VERIFICATION_EXPIRED', 'VERIFICATION_INVALID'].contains(r.body['code'])) {
+        _invalidateEmailOtp();
+      }
     } catch (_) {
       _snack('خطأ في الاتصال');
     } finally {
@@ -1158,8 +1177,7 @@ class _AmialRegistrationWizardScreenState
 
   Widget _stepOtp() => _wrap([
         _sectionNote(
-          'أدخل رمز التحقق المكوّن من 6 أرقام المرسل إلى $_normalizedEmail. '
-          'الرمز صالح 5 دقائق ويعمل مرة واحدة، ولن يطلبه منك فريق الدعم.',
+          'email_otp_inbox_hint'.trParams({'email': _normalizedEmail, 'seconds': '$_emailCodeTtl'}),
         ),
         _field(_otp, 'رمز التحقق *', type: TextInputType.number, maxLength: 6),
         TextButton(
@@ -1167,7 +1185,7 @@ class _AmialRegistrationWizardScreenState
           child: Text(
             _otpResendSeconds > 0
                 ? 'إعادة الإرسال بعد $_otpResendSeconds ثانية'
-                : 'إعادة إرسال الرمز إلى البريد',
+                : 'email_otp_resend'.tr,
             style: const TextStyle(color: AmialColors.primary),
           ),
         ),

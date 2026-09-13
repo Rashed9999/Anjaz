@@ -125,4 +125,31 @@ class EmailIdentityGuardTest extends TestCase
         $this->assertNotNull($staff->id);
         $this->assertNull($staff->email_canonical);
     }
+
+    public function test_profile_cannot_promote_unverified_email_to_recovery_credential(): void
+    {
+        $user = User::factory()->create(['is_email_verified' => 0]);
+        $this->expectException(ValidationException::class);
+        $user->forceFill(['is_email_verified' => 1])->save();
+    }
+
+    public function test_invalid_legacy_email_does_not_block_unrelated_profile_updates(): void
+    {
+        $user = User::factory()->create();
+        DB::table('users')->where('id', $user->id)->update([
+            'email' => 'invalid legacy mailbox', 'email_canonical' => 'invalid legacy mailbox',
+            'email_encrypted' => null,
+        ]);
+        $user->refresh()->forceFill(['f_name' => 'Updated'])->save();
+        $this->assertSame('Updated', $user->fresh()->f_name);
+        $this->assertNull($user->fresh()->email_canonical);
+        $this->assertSame(0, (int) $user->fresh()->is_email_verified);
+    }
+
+    public function test_bootstrap_requires_an_explicit_mailbox_and_never_invents_one(): void
+    {
+        config(['amial_otp.bootstrap_emails' => []]);
+        $this->expectException(\RuntimeException::class);
+        \App\Support\DemoAccountPolicy::emailForNewAccount('967777100001');
+    }
 }

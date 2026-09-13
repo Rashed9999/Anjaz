@@ -51,6 +51,7 @@ class AdminCreatedAccountReviewTest extends TestCase
             'f_name' => 'اختبار',
             'l_name' => 'حساب',
             'phone' => $phone,
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'password' => 'Passw0rd!123',
         ] + $this->kycDossier($phone, merchant: $merchant);
 

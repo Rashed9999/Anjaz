@@ -202,8 +202,11 @@ class ApprovalService
                 if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                     throw new \DomainException('PIN_RECOVERY_EMAIL_REQUIRED');
                 }
-                if (Schema::hasColumn('users', 'is_email_verified') && !(bool) $u->is_email_verified) {
+                if (! app(EmailIdentityService::class)->matchesVerifiedUser($u, $email)) {
                     throw new \DomainException('PIN_RECOVERY_EMAIL_NOT_VERIFIED');
+                }
+                if ((string) config('amial_otp.pin_recovery_channel', 'email') !== 'email') {
+                    throw new \DomainException('PIN_RECOVERY_EMAIL_DISABLED');
                 }
 
                 $issued = app(EmailOtpService::class)->issue(
@@ -218,6 +221,7 @@ class ApprovalService
                         'maker_admin_id' => (int) $req->maker_admin_id,
                         'reason' => mb_substr((string) $req->reason, 0, 500),
                     ],
+                    afterCommit: true,
                 );
 
                 // نُبقي فقط معرّف التحدّي وحالة الإرسال والبريد المقنّع؛ لا OTP.

@@ -71,7 +71,7 @@ class EmailIdentityService
     public function findVerifiedOwner(string $email): ?User
     {
         $email = $this->normalize($email);
-        if ($email === '') {
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return null;
         }
 
@@ -86,12 +86,13 @@ class EmailIdentityService
         }
 
         $matches = $query->limit(2)->get();
-        return $matches->count() === 1 ? $matches->first() : null;
+        $owner = $matches->count() === 1 ? $matches->first() : null;
+        return $owner && $this->matchesVerifiedUser($owner, $email) ? $owner : null;
     }
 
     public function matchesVerifiedUser(User $user, string $email): bool
     {
-        if ($user->trashed() || (int) ($user->is_email_verified ?? 0) !== 1) {
+        if ($user->trashed() || ! (bool) $user->is_active || (int) ($user->is_email_verified ?? 0) !== 1) {
             return false;
         }
 
@@ -121,12 +122,15 @@ class EmailIdentityService
     public function authorizeMutation(User $user, Closure $callback): mixed
     {
         $key = $this->mutationKey($user);
+        $alreadyAuthorized = isset($this->authorizedMutations[$key]);
         $this->authorizedMutations[$key] = true;
 
         try {
             return $callback();
         } finally {
-            unset($this->authorizedMutations[$key]);
+            if (! $alreadyAuthorized) {
+                unset($this->authorizedMutations[$key]);
+            }
         }
     }
 
@@ -146,6 +150,9 @@ class EmailIdentityService
         return DB::transaction(function () use ($user, $email): User {
             /** @var User $locked */
             $locked = User::withTrashed()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            if ($locked->trashed() || $this->normalize((string) $locked->email) !== $email) {
+                throw ValidationException::withMessages(['email' => ['هوية البريد تغيّرت. أعد التحقق.']]);
+            }
             $this->assertAvailable($email, (int) $locked->id);
 
             $this->authorizeMutation($locked, function () use ($locked, $email): void {

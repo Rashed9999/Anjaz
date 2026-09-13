@@ -62,6 +62,7 @@ class SelfRegisteredMerchantIsUsableTest extends TestCase
             'gender' => 'male',
             'dial_country_code' => '+967',
             'phone' => '777444999',
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'password' => '1234',
             'otp' => '123456',
             'identification_number' => '24549449',
