@@ -9,6 +9,7 @@ use App\Services\LedgerReportService;
 use App\Services\Reporting\CashLiquidityReportService;
 use App\Services\Reporting\FinancialStatementsService;
 use App\Services\Reporting\GeneralLedgerReportService;
+use App\Services\Reporting\P1ControlReportService;
 use App\Services\Reporting\ReportCatalogService;
 use App\Services\Reporting\TransactionMonitoringReportService;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +18,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Validator;
 
 /**
- * AMIAL-REPORTING-CENTER-001 — بوابة التقارير المؤسسية.
+ * AMIAL-REPORTING-CENTER-001/002 — بوابة التقارير المؤسسية.
  *
  * لا يحسب هذا المتحكم المال. يستدعي فقط مصادر الحقيقة القائمة ثم يسجل
  * الاطلاع في AuditService. الوصول نفسه خلف platform.reports.view.
@@ -30,6 +31,7 @@ class ReportingCenterController extends Controller
         private readonly CashLiquidityReportService $cashLiquidity,
         private readonly TransactionMonitoringReportService $transactions,
         private readonly GeneralLedgerReportService $generalLedger,
+        private readonly P1ControlReportService $p1,
         private readonly FeeProfitReportService $fees,
         private readonly LedgerReportService $ledger,
         private readonly AuditService $audit,
@@ -184,6 +186,67 @@ class ReportingCenterController extends Controller
         $this->auditRead($request, 'wallet_reconciliation', ['limit' => $limit]);
 
         return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function merchantPortfolio(Request $request): JsonResponse
+    {
+        $payload = $this->p1->merchantPortfolio();
+        $this->auditRead($request, 'merchant_portfolio', []);
+
+        return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function kycPipeline(Request $request): JsonResponse
+    {
+        [$from, $to] = $this->period($request);
+        $payload = $this->p1->kycPipeline($from, $to);
+        $this->auditRead($request, 'kyc_pipeline', ['from' => $from, 'to' => $to]);
+
+        return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function agentLiquidity(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->query(), [
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+        abort_if($validator->fails(), 422, $validator->errors()->first());
+
+        $date = (string) ($request->query('date') ?: now()->toDateString());
+        $payload = $this->p1->agentLiquidity($date);
+        $this->auditRead($request, 'agent_float', ['date' => $date]);
+
+        return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function auditSensitiveActions(Request $request): JsonResponse
+    {
+        [$from, $to] = $this->period($request);
+        $limit = $this->auditLimit($request);
+        $payload = $this->p1->auditSensitiveActions($from, $to, $limit);
+        $this->auditRead($request, 'audit_sensitive_actions', ['from' => $from, 'to' => $to, 'limit' => $limit]);
+
+        return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function rbacChanges(Request $request): JsonResponse
+    {
+        [$from, $to] = $this->period($request);
+        $limit = $this->auditLimit($request);
+        $payload = $this->p1->rbacChanges($from, $to, $limit);
+        $this->auditRead($request, 'rbac_changes', ['from' => $from, 'to' => $to, 'limit' => $limit]);
+
+        return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    private function auditLimit(Request $request): int
+    {
+        $validator = Validator::make($request->query(), [
+            'limit' => ['nullable', 'integer', 'min:10', 'max:200'],
+        ]);
+        abort_if($validator->fails(), 422, $validator->errors()->first());
+
+        return (int) $request->query('limit', 50);
     }
 
     private function period(Request $request): array
