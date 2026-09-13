@@ -19,7 +19,7 @@ class ReportCatalogService
                     ['code' => 'trial_balance', 'label' => 'ميزان المراجعة', 'status' => 'ready', 'source' => 'LedgerReportService', 'priority' => 'P0'],
                     ['code' => 'income_statement', 'label' => 'قائمة الدخل', 'status' => 'ready', 'source' => 'FinancialStatementsService', 'priority' => 'P0'],
                     ['code' => 'balance_sheet', 'label' => 'الميزانية العمومية', 'status' => 'ready', 'source' => 'FinancialStatementsService', 'priority' => 'P0'],
-                    ['code' => 'cash_flow', 'label' => 'التدفق النقدي', 'status' => 'missing', 'source' => 'Ledger + Treasury classification', 'priority' => 'P0'],
+                    ['code' => 'cash_flow', 'label' => 'التدفق النقدي', 'status' => 'ready', 'source' => 'CashLiquidityReportService ← ledger entry lines', 'priority' => 'P0'],
                     ['code' => 'general_ledger', 'label' => 'دفتر الأستاذ', 'status' => 'partial', 'source' => 'LedgerReportService statements', 'priority' => 'P0'],
                 ],
             ],
@@ -28,15 +28,15 @@ class ReportCatalogService
                 'reports' => [
                     ['code' => 'wallet_reconciliation', 'label' => 'مطابقة المحافظ بالدفتر', 'status' => 'ready', 'source' => 'LedgerReportService', 'priority' => 'P0'],
                     ['code' => 'reconciliation_cases', 'label' => 'قضايا فروقات المصالحة', 'status' => 'ready', 'source' => 'ReconciliationCaseService', 'priority' => 'P0'],
-                    ['code' => 'liquidity_position', 'label' => 'مركز السيولة', 'status' => 'partial', 'source' => 'Treasury + Wallets + Settlements', 'priority' => 'P0'],
-                    ['code' => 'safeguarded_funds', 'label' => 'أموال العملاء مقابل الغطاء', 'status' => 'missing', 'source' => 'Treasury + Ledger', 'priority' => 'P0'],
+                    ['code' => 'liquidity_position', 'label' => 'مركز السيولة', 'status' => 'ready', 'source' => 'CashLiquidityReportService ← ledger balances', 'priority' => 'P0'],
+                    ['code' => 'safeguarded_funds', 'label' => 'أموال العملاء مقابل الغطاء', 'status' => 'ready', 'source' => 'CashLiquidityReportService ← ledger balances', 'priority' => 'P0'],
                 ],
             ],
             'transactions' => [
                 'label' => 'المعاملات والحركة المالية',
                 'reports' => [
-                    ['code' => 'transaction_volume', 'label' => 'حجم وعدد المعاملات', 'status' => 'partial', 'source' => 'transactions + ledger', 'priority' => 'P0'],
-                    ['code' => 'failed_reversed_pending', 'label' => 'الفاشلة والعكسية والمعلقة', 'status' => 'missing', 'source' => 'transactions + audit', 'priority' => 'P0'],
+                    ['code' => 'transaction_volume', 'label' => 'حجم وعدد المعاملات', 'status' => 'ready', 'source' => 'TransactionMonitoringReportService ← journal', 'priority' => 'P0'],
+                    ['code' => 'failed_reversed_pending', 'label' => 'الفاشلة والعكسية والمعلقة', 'status' => 'ready', 'source' => 'Pending transfers + ledger reversals + audit', 'priority' => 'P0'],
                     ['code' => 'fees_commissions', 'label' => 'الرسوم والعمولات', 'status' => 'partial', 'source' => 'FeeService + ledger', 'priority' => 'P0'],
                 ],
             ],
