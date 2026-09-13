@@ -56,7 +56,7 @@ class ReportingCenterController extends Controller
     public function trialBalance(Request $request): JsonResponse
     {
         [$from, $to] = $this->period($request);
-        $payload = $this->ledger->trialBalance($from, $to);
+        $payload = $this->statements->trialBalance($from, $to);
         $this->auditRead($request, 'trial_balance', ['from' => $from, 'to' => $to]);
 
         return response()->json(['success' => true, 'meta' => $payload]);
