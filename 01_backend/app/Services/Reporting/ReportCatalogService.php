@@ -3,7 +3,7 @@
 namespace App\Services\Reporting;
 
 /**
- * AMIAL-REPORTING-CENTER-001/002 — كتالوج واحد بدل جزر تقارير متفرقة.
+ * AMIAL-REPORTING-CENTER-001/003 — كتالوج واحد بدل جزر تقارير متفرقة.
  *
  * هذا الملف لا يحسب أرقاماً مالية. هو فهرس تشغيلي يصف التقارير ومصادرها
  * وحالتها كي تعرف الإدارة ما هو جاهز وما هو ناقص بدون ادعاء اكتمال.
@@ -55,7 +55,7 @@ class ReportCatalogService
                 'label' => 'العملاء والوكلاء',
                 'reports' => [
                     ['code' => 'customer_statement', 'label' => 'كشف حساب العميل', 'status' => 'ready', 'source' => 'CustomerLedgerReportService ← ledger lines', 'priority' => 'P0'],
-                    ['code' => 'customer_activity', 'label' => 'نشاط واحتفاظ العملاء', 'status' => 'missing', 'source' => 'users + transactions', 'priority' => 'P1'],
+                    ['code' => 'customer_activity', 'label' => 'نشاط واحتفاظ العملاء', 'status' => 'ready', 'source' => 'P1BusinessOperationsReportService ← users + transactions', 'priority' => 'P1'],
                     ['code' => 'agent_daily_close', 'label' => 'إغلاق الوكيل اليومي', 'status' => 'ready', 'source' => 'AgentReportService', 'priority' => 'P1'],
                     ['code' => 'agent_float', 'label' => 'سيولة الوكيل والعجز ومطابقة الخزنة', 'status' => 'ready', 'source' => 'P1ControlReportService ← till + movements + wallet', 'priority' => 'P1'],
                 ],
@@ -64,7 +64,7 @@ class ReportCatalogService
                 'label' => 'الامتثال والمخاطر والتدقيق',
                 'reports' => [
                     ['code' => 'kyc_pipeline', 'label' => 'KYC والتحقق والمدة والتراكم', 'status' => 'ready', 'source' => 'P1ControlReportService ← users + merchant verification', 'priority' => 'P1'],
-                    ['code' => 'aml_regulatory', 'label' => 'AML وSTR/CTR', 'status' => 'partial', 'source' => 'AmlRegulatoryReportService', 'priority' => 'P1'],
+                    ['code' => 'aml_regulatory', 'label' => 'AML وSTR/CTR', 'status' => 'partial', 'source' => 'AmlDashboardService + AmlRegulatoryReportService؛ PEP/watchlist غير مبنيين', 'priority' => 'P1'],
                     ['code' => 'audit_sensitive_actions', 'label' => 'الإجراءات الحساسة والتدقيق', 'status' => 'ready', 'source' => 'P1ControlReportService ← append-only audit', 'priority' => 'P1'],
                     ['code' => 'rbac_changes', 'label' => 'تغييرات الصلاحيات والأدوار', 'status' => 'ready', 'source' => 'P1ControlReportService ← append-only audit', 'priority' => 'P1'],
                 ],
@@ -75,8 +75,8 @@ class ReportCatalogService
                     ['code' => 'system_health_history', 'label' => 'تاريخ صحة النظام وSLA', 'status' => 'partial', 'source' => 'health + alerts', 'priority' => 'P1'],
                     ['code' => 'jobs_queues', 'label' => 'الطوابير والمهام الفاشلة', 'status' => 'partial', 'source' => 'queue/jobs', 'priority' => 'P1'],
                     ['code' => 'email_otp', 'label' => 'البريد وOTP والتسليم', 'status' => 'ready', 'source' => 'otp_challenges', 'priority' => 'P2'],
-                    ['code' => 'support_sla', 'label' => 'الدعم وSLA وزمن الحل', 'status' => 'missing', 'source' => 'support tickets', 'priority' => 'P2'],
-                    ['code' => 'subscriptions', 'label' => 'الباقات والاشتراكات وMRR/Churn', 'status' => 'missing', 'source' => 'plans + subscriptions', 'priority' => 'P1'],
+                    ['code' => 'support_sla', 'label' => 'الدعم وزمن الحل والتراكم', 'status' => 'partial', 'source' => 'P1BusinessOperationsReportService؛ هدف SLA الرسمي غير مضبوط بعد', 'priority' => 'P2'],
+                    ['code' => 'subscriptions', 'label' => 'الباقات والاشتراكات والقيمة المتكررة', 'status' => 'ready', 'source' => 'P1BusinessOperationsReportService ← profiles + immutable subscription changes', 'priority' => 'P1'],
                 ],
             ],
         ];
@@ -85,14 +85,12 @@ class ReportCatalogService
     public function summary(): array
     {
         $counts = ['ready' => 0, 'partial' => 0, 'missing' => 0, 'total' => 0];
-
         foreach ($this->catalog() as $domain) {
             foreach ($domain['reports'] as $report) {
                 $counts['total']++;
                 $counts[$report['status']]++;
             }
         }
-
         return $counts;
     }
 }
