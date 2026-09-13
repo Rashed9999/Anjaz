@@ -12,6 +12,7 @@ use App\Services\Reporting\FinancialStatementsService;
 use App\Services\Reporting\GeneralLedgerReportService;
 use App\Services\Reporting\P1BusinessOperationsReportService;
 use App\Services\Reporting\P1ControlReportService;
+use App\Services\Reporting\P1MerchantOperationsReportService;
 use App\Services\Reporting\ReportCatalogService;
 use App\Services\Reporting\TransactionMonitoringReportService;
 use Illuminate\Http\JsonResponse;
@@ -19,12 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Validator;
 
-/**
- * AMIAL-REPORTING-CENTER-001/003 — بوابة التقارير المؤسسية.
- *
- * لا يحسب هذا المتحكم المال. يستدعي فقط مصادر الحقيقة القائمة ثم يسجل
- * الاطلاع في AuditService. الوصول نفسه خلف platform.reports.view.
- */
+/** AMIAL-REPORTING-CENTER — بوابة موحدة لمصادر الحقيقة، مع Audit لكل قراءة. */
 class ReportingCenterController extends Controller
 {
     public function __construct(
@@ -35,261 +31,121 @@ class ReportingCenterController extends Controller
         private readonly GeneralLedgerReportService $generalLedger,
         private readonly P1ControlReportService $p1,
         private readonly P1BusinessOperationsReportService $businessOps,
+        private readonly P1MerchantOperationsReportService $merchantOps,
         private readonly AmlDashboardService $aml,
         private readonly FeeProfitReportService $fees,
         private readonly LedgerReportService $ledger,
         private readonly AuditService $audit,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
         $actor = auth('user')->user();
         $summary = $this->catalog->summary();
-
         $this->audit->record([
-            'actor_type' => 'admin',
-            'actor_user_id' => $actor?->id,
-            'subject_type' => 'reporting_center',
-            'action' => 'REPORTING_CENTER_VIEWED',
-            'decision_code' => 'ALLOW',
-            'severity' => 'info',
+            'actor_type' => 'admin', 'actor_user_id' => $actor?->id,
+            'subject_type' => 'reporting_center', 'action' => 'REPORTING_CENTER_VIEWED',
+            'decision_code' => 'ALLOW', 'severity' => 'info',
             'context' => ['catalog_total' => $summary['total']],
         ]);
-
         return view('admin-views.amial.reporting-center.index', [
-            'catalog' => $this->catalog->catalog(),
-            'summary' => $summary,
+            'catalog' => $this->catalog->catalog(), 'summary' => $summary,
             'canExport' => (bool) $actor?->hasPlatformPermission('platform.reports.export'),
         ]);
     }
 
-    public function trialBalance(Request $request): JsonResponse
+    public function trialBalance(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'trial_balance',$this->statements->trialBalance($f,$t),['from'=>$f,'to'=>$t]); }
+    public function incomeStatement(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'income_statement',$this->statements->incomeStatement($f,$t),['from'=>$f,'to'=>$t]); }
+    public function balanceSheet(Request $r): JsonResponse { $d=$this->asOf($r); return $this->out($r,'balance_sheet',$this->statements->balanceSheet($d),['as_of'=>$d]); }
+    public function cashFlow(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'cash_flow',$this->cashLiquidity->cashFlow($f,$t),['from'=>$f,'to'=>$t]); }
+    public function liquidity(Request $r): JsonResponse { $d=$this->asOf($r); return $this->out($r,'liquidity_position',$this->cashLiquidity->liquidityPosition($d),['as_of'=>$d]); }
+    public function safeguardedFunds(Request $r): JsonResponse { $d=$this->asOf($r); return $this->out($r,'safeguarded_funds',$this->cashLiquidity->safeguardedFunds($d),['as_of'=>$d]); }
+    public function transactionVolume(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'transaction_volume',$this->transactions->volume($f,$t),['from'=>$f,'to'=>$t]); }
+
+    public function transactionExceptions(Request $r): JsonResponse
     {
-        [$from, $to] = $this->period($request);
-        $payload = $this->statements->trialBalance($from, $to);
-        $this->auditRead($request, 'trial_balance', ['from' => $from, 'to' => $to]);
-        return response()->json(['success' => true, 'meta' => $payload]);
+        [$f,$t]=$this->period($r); $limit=$this->limit($r);
+        return $this->out($r,'failed_reversed_pending',$this->transactions->exceptions($f,$t,$limit),['from'=>$f,'to'=>$t,'limit'=>$limit]);
     }
 
-    public function incomeStatement(Request $request): JsonResponse
+    public function generalLedger(Request $r): JsonResponse
     {
-        [$from, $to] = $this->period($request);
-        $payload = $this->statements->incomeStatement($from, $to);
-        $this->auditRead($request, 'income_statement', ['from' => $from, 'to' => $to]);
-        return response()->json(['success' => true, 'meta' => $payload]);
+        $v=Validator::make($r->query(),[
+            'from'=>['nullable','date_format:Y-m-d'],'to'=>['nullable','date_format:Y-m-d','after_or_equal:from'],
+            'currency'=>['nullable','string','max:8'],'source_type'=>['nullable','string','max:100'],
+            'account_code'=>['nullable','string','max:100'],'search'=>['nullable','string','max:120'],
+            'page'=>['nullable','integer','min:1'],'limit'=>['nullable','integer','min:10','max:100'],
+        ]); abort_if($v->fails(),422,$v->errors()->first()); $filters=$v->validated();
+        return $this->out($r,'general_ledger',$this->generalLedger->report($filters),$filters);
     }
 
-    public function balanceSheet(Request $request): JsonResponse
+    public function feesCommissions(Request $r): JsonResponse
     {
-        $asOf = $this->asOf($request);
-        $payload = $this->statements->balanceSheet($asOf);
-        $this->auditRead($request, 'balance_sheet', ['as_of' => $asOf]);
-        return response()->json(['success' => true, 'meta' => $payload]);
+        [$f,$t]=$this->period($r); $from=Carbon::parse($f?:now()->startOfMonth()->toDateString())->startOfDay(); $to=Carbon::parse($t?:now()->toDateString())->endOfDay();
+        $p=$this->fees->forPeriod($from,$to); $p['from']=$from->toDateString(); $p['to']=$to->toDateString(); $p['report']='fees_commissions'; $p['basis']='transactions charges + measured platform/agent credits';
+        return $this->out($r,'fees_commissions',$p,['from'=>$p['from'],'to'=>$p['to']]);
     }
 
-    public function cashFlow(Request $request): JsonResponse
+    public function reconciliation(Request $r): JsonResponse
     {
-        [$from, $to] = $this->period($request);
-        $payload = $this->cashLiquidity->cashFlow($from, $to);
-        $this->auditRead($request, 'cash_flow', ['from' => $from, 'to' => $to]);
-        return response()->json(['success' => true, 'meta' => $payload]);
+        $limit=min(500,max(10,(int)$r->query('limit',100)));
+        return $this->out($r,'wallet_reconciliation',$this->ledger->walletReconciliation($limit),['limit'=>$limit]);
     }
 
-    public function liquidity(Request $request): JsonResponse
+    public function merchantPortfolio(Request $r): JsonResponse { return $this->out($r,'merchant_portfolio',$this->p1->merchantPortfolio(),[]); }
+    public function kycPipeline(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'kyc_pipeline',$this->p1->kycPipeline($f,$t),['from'=>$f,'to'=>$t]); }
+
+    public function agentLiquidity(Request $r): JsonResponse
     {
-        $asOf = $this->asOf($request);
-        $payload = $this->cashLiquidity->liquidityPosition($asOf);
-        $this->auditRead($request, 'liquidity_position', ['as_of' => $asOf]);
-        return response()->json(['success' => true, 'meta' => $payload]);
+        $v=Validator::make($r->query(),['date'=>['nullable','date_format:Y-m-d']]); abort_if($v->fails(),422,$v->errors()->first()); $d=(string)($r->query('date')?:now()->toDateString());
+        return $this->out($r,'agent_float',$this->p1->agentLiquidity($d),['date'=>$d]);
     }
 
-    public function safeguardedFunds(Request $request): JsonResponse
+    public function auditSensitiveActions(Request $r): JsonResponse { [$f,$t]=$this->period($r); $l=$this->limit($r); return $this->out($r,'audit_sensitive_actions',$this->p1->auditSensitiveActions($f,$t,$l),['from'=>$f,'to'=>$t,'limit'=>$l]); }
+    public function rbacChanges(Request $r): JsonResponse { [$f,$t]=$this->period($r); $l=$this->limit($r); return $this->out($r,'rbac_changes',$this->p1->rbacChanges($f,$t,$l),['from'=>$f,'to'=>$t,'limit'=>$l]); }
+    public function subscriptions(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'subscriptions',$this->businessOps->subscriptions($f,$t),['from'=>$f,'to'=>$t]); }
+    public function customerActivity(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'customer_activity',$this->businessOps->customerActivity($f,$t),['from'=>$f,'to'=>$t]); }
+    public function supportOperations(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'support_sla',$this->businessOps->supportOperations($f,$t),['from'=>$f,'to'=>$t]); }
+    public function inventoryControl(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'inventory_valuation',$this->merchantOps->inventoryControl($f,$t),['from'=>$f,'to'=>$t]); }
+    public function creditControl(Request $r): JsonResponse { return $this->out($r,'credit_aging',$this->merchantOps->creditControl(),[]); }
+
+    public function amlRegulatory(Request $r): JsonResponse
     {
-        $asOf = $this->asOf($request);
-        $payload = $this->cashLiquidity->safeguardedFunds($asOf);
-        $this->auditRead($request, 'safeguarded_funds', ['as_of' => $asOf]);
-        return response()->json(['success' => true, 'meta' => $payload]);
+        $p=$this->aml->metrics(); $p['report']='aml_regulatory'; $p['basis']='AML rules + evaluations + investigations + regulatory reports';
+        return $this->out($r,'aml_regulatory',$p,[]);
     }
 
-    public function transactionVolume(Request $request): JsonResponse
+    private function limit(Request $r): int
     {
-        [$from, $to] = $this->period($request);
-        $payload = $this->transactions->volume($from, $to);
-        $this->auditRead($request, 'transaction_volume', ['from' => $from, 'to' => $to]);
-        return response()->json(['success' => true, 'meta' => $payload]);
+        $v=Validator::make($r->query(),['limit'=>['nullable','integer','min:10','max:200']]); abort_if($v->fails(),422,$v->errors()->first());
+        return (int)$r->query('limit',50);
     }
 
-    public function transactionExceptions(Request $request): JsonResponse
+    private function period(Request $r): array
     {
-        [$from, $to] = $this->period($request);
-        $validator = Validator::make($request->query(), ['limit' => ['nullable', 'integer', 'min:10', 'max:200']]);
-        abort_if($validator->fails(), 422, $validator->errors()->first());
-        $limit = (int) $request->query('limit', 50);
-        $payload = $this->transactions->exceptions($from, $to, $limit);
-        $this->auditRead($request, 'failed_reversed_pending', ['from' => $from, 'to' => $to, 'limit' => $limit]);
-        return response()->json(['success' => true, 'meta' => $payload]);
+        $v=Validator::make($r->query(),['from'=>['nullable','date_format:Y-m-d'],'to'=>['nullable','date_format:Y-m-d','after_or_equal:from']]); abort_if($v->fails(),422,$v->errors()->first());
+        return [$r->query('from')?:null,$r->query('to')?:null];
     }
 
-    public function generalLedger(Request $request): JsonResponse
+    private function asOf(Request $r): string
     {
-        $validator = Validator::make($request->query(), [
-            'from' => ['nullable', 'date_format:Y-m-d'],
-            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
-            'currency' => ['nullable', 'string', 'max:8'],
-            'source_type' => ['nullable', 'string', 'max:100'],
-            'account_code' => ['nullable', 'string', 'max:100'],
-            'search' => ['nullable', 'string', 'max:120'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'limit' => ['nullable', 'integer', 'min:10', 'max:100'],
-        ]);
-        abort_if($validator->fails(), 422, $validator->errors()->first());
-        $filters = $validator->validated();
-        $payload = $this->generalLedger->report($filters);
-        $this->auditRead($request, 'general_ledger', $filters);
-        return response()->json(['success' => true, 'meta' => $payload]);
+        $v=Validator::make($r->query(),['as_of'=>['nullable','date_format:Y-m-d']]); abort_if($v->fails(),422,$v->errors()->first());
+        return (string)($r->query('as_of')?:now()->toDateString());
     }
 
-    public function feesCommissions(Request $request): JsonResponse
+    private function out(Request $r,string $report,array $payload,array $filters): JsonResponse
     {
-        [$from, $to] = $this->period($request);
-        $fromCarbon = Carbon::parse($from ?: now()->startOfMonth()->toDateString())->startOfDay();
-        $toCarbon = Carbon::parse($to ?: now()->toDateString())->endOfDay();
-        $report = $this->fees->forPeriod($fromCarbon, $toCarbon);
-        $report['from'] = $fromCarbon->toDateString();
-        $report['to'] = $toCarbon->toDateString();
-        $report['report'] = 'fees_commissions';
-        $report['basis'] = 'transactions charges + measured platform/agent credits';
-        $this->auditRead($request, 'fees_commissions', ['from' => $report['from'], 'to' => $report['to']]);
-        return response()->json(['success' => true, 'meta' => $report]);
+        $this->auditRead($r,$report,$filters);
+        return response()->json(['success'=>true,'meta'=>$payload]);
     }
 
-    public function reconciliation(Request $request): JsonResponse
+    private function auditRead(Request $r,string $report,array $filters): void
     {
-        $limit = min(500, max(10, (int) $request->query('limit', 100)));
-        $payload = $this->ledger->walletReconciliation($limit);
-        $this->auditRead($request, 'wallet_reconciliation', ['limit' => $limit]);
-        return response()->json(['success' => true, 'meta' => $payload]);
-    }
-
-    public function merchantPortfolio(Request $request): JsonResponse
-    {
-        $payload = $this->p1->merchantPortfolio();
-        $this->auditRead($request, 'merchant_portfolio', []);
-        return response()->json(['success' => true, 'meta' => $payload]);
-    }
-
-    public function kycPipeline(Request $request): JsonResponse
-    {
-        [$from, $to] = $this->period($request);
-        $payload = $this->p1->kycPipeline($from, $to);
-        $this->auditRead($request, 'kyc_pipeline', ['from' => $from, 'to' => $to]);
-        return response()->json(['success' => true, 'meta' => $payload]);
-    }
-
-    public function agentLiquidity(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->query(), ['date' => ['nullable', 'date_format:Y-m-d']]);
-        abort_if($validator->fails(), 422, $validator->errors()->first());
-        $date = (string) ($request->query('date') ?: now()->toDateString());
-        $payload = $this->p1->agentLiquidity($date);
-        $this->auditRead($request, 'agent_float', ['date' => $date]);
-        return response()->json(['success' => true, 'meta' => $payload]);
-    }
-
-    public function auditSensitiveActions(Request $request): JsonResponse
-    {
-        [$from, $to] = $this->period($request);
-        $limit = $this->auditLimit($request);
-        $payload = $this->p1->auditSensitiveActions($from, $to, $limit);
-        $this->auditRead($request, 'audit_sensitive_actions', ['from' => $from, 'to' => $to, 'limit' => $limit]);
-        return response()->json(['success' => true, 'meta' => $payload]);
-    }
-
-    public function rbacChanges(Request $request): JsonResponse
-    {
-        [$from, $to] = $this->period($request);
-        $limit = $this->auditLimit($request);
-        $payload = $this->p1->rbacChanges($from, $to, $limit);
-        $this->auditRead($request, 'rbac_changes', ['from' => $from, 'to' => $to, 'limit' => $limit]);
-        return response()->json(['success' => true, 'meta' => $payload]);
-    }
-
-    public function subscriptions(Request $request): JsonResponse
-    {
-        [$from, $to] = $this->period($request);
-        $payload = $this->businessOps->subscriptions($from, $to);
-        $this->auditRead($request, 'subscriptions', ['from' => $from, 'to' => $to]);
-        return response()->json(['success' => true, 'meta' => $payload]);
-    }
-
-    public function customerActivity(Request $request): JsonResponse
-    {
-        [$from, $to] = $this->period($request);
-        $payload = $this->businessOps->customerActivity($from, $to);
-        $this->auditRead($request, 'customer_activity', ['from' => $from, 'to' => $to]);
-        return response()->json(['success' => true, 'meta' => $payload]);
-    }
-
-    public function supportOperations(Request $request): JsonResponse
-    {
-        [$from, $to] = $this->period($request);
-        $payload = $this->businessOps->supportOperations($from, $to);
-        $this->auditRead($request, 'support_sla', ['from' => $from, 'to' => $to]);
-        return response()->json(['success' => true, 'meta' => $payload]);
-    }
-
-    public function amlRegulatory(Request $request): JsonResponse
-    {
-        $payload = $this->aml->metrics();
-        $payload['report'] = 'aml_regulatory';
-        $payload['basis'] = 'AML rules + evaluations + investigations + regulatory reports';
-        $this->auditRead($request, 'aml_regulatory', []);
-        return response()->json(['success' => true, 'meta' => $payload]);
-    }
-
-    private function auditLimit(Request $request): int
-    {
-        $validator = Validator::make($request->query(), ['limit' => ['nullable', 'integer', 'min:10', 'max:200']]);
-        abort_if($validator->fails(), 422, $validator->errors()->first());
-        return (int) $request->query('limit', 50);
-    }
-
-    private function period(Request $request): array
-    {
-        $validator = Validator::make($request->query(), [
-            'from' => ['nullable', 'date_format:Y-m-d'],
-            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
-        ]);
-        abort_if($validator->fails(), 422, $validator->errors()->first());
-        $from = $request->query('from');
-        $to = $request->query('to');
-        return [$from ?: null, $to ?: null];
-    }
-
-    private function asOf(Request $request): string
-    {
-        $validator = Validator::make($request->query(), ['as_of' => ['nullable', 'date_format:Y-m-d']]);
-        abort_if($validator->fails(), 422, $validator->errors()->first());
-        return (string) ($request->query('as_of') ?: now()->toDateString());
-    }
-
-    private function auditRead(Request $request, string $report, array $filters): void
-    {
-        $actor = auth('user')->user();
+        $actor=auth('user')->user();
         $this->audit->record([
-            'actor_type' => 'admin',
-            'actor_user_id' => $actor?->id,
-            'subject_type' => 'report',
-            'subject_id' => $report,
-            'action' => 'REPORT_VIEWED',
-            'decision_code' => 'ALLOW',
-            'severity' => 'info',
-            'context' => [
-                'report' => $report,
-                'filters' => $filters,
-                'request_id' => $request->header('X-Request-ID'),
-            ],
+            'actor_type'=>'admin','actor_user_id'=>$actor?->id,'subject_type'=>'report','subject_id'=>$report,
+            'action'=>'REPORT_VIEWED','decision_code'=>'ALLOW','severity'=>'info',
+            'context'=>['report'=>$report,'filters'=>$filters,'request_id'=>$r->header('X-Request-ID')],
         ]);
     }
 }
