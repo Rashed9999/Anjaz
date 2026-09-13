@@ -73,11 +73,13 @@ final class PlatformAccessTabs
                     'platform.money.view' => 'الأرصدة والخزانة',
                     'platform.transactions.view' => 'سجلّ العمليّات',
                     'platform.fees.view' => 'الرسوم والعمولات',
+                    'platform.reports.view' => 'مركز التقارير المؤسسية والتقارير المالية',
                 ],
                 'write' => [
                     'platform.money.move' => 'تحريك المال بين المحافظ',
                     'platform.treasury.issue' => 'إصدار سيولة',
                     'platform.fees.update' => 'تعديل الرسوم',
+                    'platform.reports.export' => 'تصدير التقارير المالية والتشغيلية',
                 ]],
 
             'compliance' => ['label' => 'الامتثال والتحقق', 'icon' => '🪪',
