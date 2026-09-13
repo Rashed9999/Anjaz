@@ -56,6 +56,8 @@ Reviewing the concurrently added email center also exposed a missing action: a v
 
 Third repair commit: `60f0ae31896cee2f15369395dc41cc0adadfc23b`, [run 34772224801](https://github.com/Rashed9999/Anjaz/actions/runs/34772224801). The complete 38-case focused email/identity/template/admin suite passed and the full backend step started. This establishes fake-provider runtime coverage of the repaired lifecycle. The follow-up expands the focused gate to the connected legacy/support cases below; inbox delivery and production configuration remain unverified.
 
+The connected email/support/agent suite subsequently passed all 59 cases. Commit `afb6fff0339cd722a729b192d039634ef8be6434` additionally supplied the required mailbox in demo OTP registration and preserved newer reporting changes. In [run 34789867087](https://github.com/Rashed9999/Anjaz/actions/runs/34789867087), the expanded email/demo gate and the separate existing-backend-blocker gate both passed. The full backend step started; concurrent reporting work exposed a separate Flutter money-display rounding failure tracked in `AMIAL_CI_REGRESSION_FOLLOWUP.md`. A production readiness response and a real inbox receipt have not been verified.
+
 Follow-up of baseline integration failures: update the complete agent account-creation chain with the now-required company/branch mailboxes; replace the old support test's expectation of an erased PIN with an approved email followed by customer proof and PIN selection; translate the webhook rejection message. These connected regressions join the focused CI step alongside the existing operational email test. No real messages are sent.
 
 | Repository file | Reason |

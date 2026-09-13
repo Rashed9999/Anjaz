@@ -27,7 +27,17 @@ class AmialMoney {
 
     var fraction = parts.length > 1 ? parts[1] : '';
     if (maxFractionDigits >= 0 && fraction.length > maxFractionDigits) {
+      final roundUp = fraction.codeUnitAt(maxFractionDigits) >= 53;
       fraction = fraction.substring(0, maxFractionDigits);
+      if (roundUp) {
+        // نقرّب الخانات العشرية نفسها؛ BigInt يحفظ الدقة حتى على الويب.
+        final rounded = (BigInt.parse('$whole$fraction') + BigInt.one)
+            .toString()
+            .padLeft(maxFractionDigits + 1, '0');
+        final split = rounded.length - maxFractionDigits;
+        whole = rounded.substring(0, split);
+        fraction = rounded.substring(split);
+      }
     }
     fraction = fraction.replaceFirst(RegExp(r'0+$'), '');
 
