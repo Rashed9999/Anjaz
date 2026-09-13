@@ -27,7 +27,14 @@ class ReportingCenterGuardTest extends TestCase
             'admin.amial.reporting-center.safeguarded-funds',
             'admin.amial.reporting-center.transaction-volume',
             'admin.amial.reporting-center.transaction-exceptions',
+            'admin.amial.reporting-center.general-ledger',
+            'admin.amial.reporting-center.fees-commissions',
             'admin.amial.reporting-center.reconciliation',
+            'admin.amial.reporting-center.merchant-portfolio',
+            'admin.amial.reporting-center.kyc-pipeline',
+            'admin.amial.reporting-center.agent-liquidity',
+            'admin.amial.reporting-center.audit-sensitive-actions',
+            'admin.amial.reporting-center.rbac-changes',
         ] as $name) {
             $route = Route::getRoutes()->getByName($name);
             $this->assertNotNull($route, $name);
@@ -36,23 +43,33 @@ class ReportingCenterGuardTest extends TestCase
     }
 
     /** @test */
-    public function catalog_marks_implemented_p0_reports_ready_without_claiming_everything_is_complete(): void
+    public function catalog_marks_implemented_reports_ready_without_claiming_everything_is_complete(): void
     {
         $catalog = (new ReportCatalogService())->catalog();
         $financial = collect($catalog['financial_core']['reports'])->keyBy('code');
         $treasury = collect($catalog['reconciliation_treasury']['reports'])->keyBy('code');
         $transactions = collect($catalog['transactions']['reports'])->keyBy('code');
+        $merchants = collect($catalog['merchant']['reports'])->keyBy('code');
+        $agents = collect($catalog['customers_agents']['reports'])->keyBy('code');
+        $risk = collect($catalog['risk_compliance']['reports'])->keyBy('code');
 
-        foreach (['trial_balance', 'income_statement', 'balance_sheet', 'cash_flow'] as $code) {
+        foreach (['trial_balance', 'income_statement', 'balance_sheet', 'cash_flow', 'general_ledger'] as $code) {
             $this->assertSame('ready', $financial[$code]['status'], $code);
         }
         foreach (['liquidity_position', 'safeguarded_funds'] as $code) {
             $this->assertSame('ready', $treasury[$code]['status'], $code);
         }
-        foreach (['transaction_volume', 'failed_reversed_pending'] as $code) {
+        foreach (['transaction_volume', 'failed_reversed_pending', 'fees_commissions'] as $code) {
             $this->assertSame('ready', $transactions[$code]['status'], $code);
         }
-        $this->assertSame('partial', $financial['general_ledger']['status']);
+        $this->assertSame('ready', $merchants['merchant_portfolio']['status']);
+        $this->assertSame('ready', $agents['agent_float']['status']);
+        foreach (['kyc_pipeline', 'audit_sensitive_actions', 'rbac_changes'] as $code) {
+            $this->assertSame('ready', $risk[$code]['status'], $code);
+        }
+
+        $this->assertSame('missing', $merchants['inventory_valuation']['status']);
+        $this->assertSame('partial', $risk['aml_regulatory']['status']);
     }
 
     /** @test */
