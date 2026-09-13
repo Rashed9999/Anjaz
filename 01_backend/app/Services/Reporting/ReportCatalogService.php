@@ -3,7 +3,7 @@
 namespace App\Services\Reporting;
 
 /**
- * AMIAL-REPORTING-CENTER-001 — كتالوج واحد بدل جزر تقارير متفرقة.
+ * AMIAL-REPORTING-CENTER-001/002 — كتالوج واحد بدل جزر تقارير متفرقة.
  *
  * هذا الملف لا يحسب أرقاماً مالية. هو فهرس تشغيلي يصف التقارير ومصادرها
  * وحالتها كي تعرف الإدارة ما هو جاهز وما هو ناقص بدون ادعاء اكتمال.
@@ -43,6 +43,7 @@ class ReportCatalogService
             'merchant' => [
                 'label' => 'التجار والقطاعات',
                 'reports' => [
+                    ['code' => 'merchant_portfolio', 'label' => 'محفظة التجار والباقات والمخاطر', 'status' => 'ready', 'source' => 'P1ControlReportService ← merchant_profiles', 'priority' => 'P1'],
                     ['code' => 'merchant_financial_truth', 'label' => 'الحقيقة المالية للتاجر', 'status' => 'ready', 'source' => 'MerchantFinancialTruthReportService', 'priority' => 'P1'],
                     ['code' => 'merchant_profit', 'label' => 'ربحية التاجر', 'status' => 'ready', 'source' => 'CashierService', 'priority' => 'P1'],
                     ['code' => 'inventory_valuation', 'label' => 'تقييم وحركة المخزون', 'status' => 'missing', 'source' => 'Retail/vertical inventory', 'priority' => 'P1'],
@@ -55,17 +56,17 @@ class ReportCatalogService
                 'reports' => [
                     ['code' => 'customer_statement', 'label' => 'كشف حساب العميل', 'status' => 'ready', 'source' => 'CustomerLedgerReportService ← ledger lines', 'priority' => 'P0'],
                     ['code' => 'customer_activity', 'label' => 'نشاط واحتفاظ العملاء', 'status' => 'missing', 'source' => 'users + transactions', 'priority' => 'P1'],
-                    ['code' => 'agent_daily_close', 'label' => 'إغلاق الوكيل اليومي', 'status' => 'ready', 'source' => 'AgentShift/Settlement services', 'priority' => 'P1'],
-                    ['code' => 'agent_float', 'label' => 'سيولة الوكيل والعجز', 'status' => 'partial', 'source' => 'agent wallet + cash + ledger', 'priority' => 'P1'],
+                    ['code' => 'agent_daily_close', 'label' => 'إغلاق الوكيل اليومي', 'status' => 'ready', 'source' => 'AgentReportService', 'priority' => 'P1'],
+                    ['code' => 'agent_float', 'label' => 'سيولة الوكيل والعجز ومطابقة الخزنة', 'status' => 'ready', 'source' => 'P1ControlReportService ← till + movements + wallet', 'priority' => 'P1'],
                 ],
             ],
             'risk_compliance' => [
                 'label' => 'الامتثال والمخاطر والتدقيق',
                 'reports' => [
-                    ['code' => 'kyc_pipeline', 'label' => 'KYC والتحقق والمدة', 'status' => 'missing', 'source' => 'KYC services', 'priority' => 'P1'],
+                    ['code' => 'kyc_pipeline', 'label' => 'KYC والتحقق والمدة والتراكم', 'status' => 'ready', 'source' => 'P1ControlReportService ← users + merchant verification', 'priority' => 'P1'],
                     ['code' => 'aml_regulatory', 'label' => 'AML وSTR/CTR', 'status' => 'partial', 'source' => 'AmlRegulatoryReportService', 'priority' => 'P1'],
-                    ['code' => 'audit_sensitive_actions', 'label' => 'الإجراءات الحساسة والتدقيق', 'status' => 'partial', 'source' => 'AuditService', 'priority' => 'P1'],
-                    ['code' => 'rbac_changes', 'label' => 'تغييرات الصلاحيات والأدوار', 'status' => 'missing', 'source' => 'roles + permissions + audit', 'priority' => 'P1'],
+                    ['code' => 'audit_sensitive_actions', 'label' => 'الإجراءات الحساسة والتدقيق', 'status' => 'ready', 'source' => 'P1ControlReportService ← append-only audit', 'priority' => 'P1'],
+                    ['code' => 'rbac_changes', 'label' => 'تغييرات الصلاحيات والأدوار', 'status' => 'ready', 'source' => 'P1ControlReportService ← append-only audit', 'priority' => 'P1'],
                 ],
             ],
             'operations' => [
