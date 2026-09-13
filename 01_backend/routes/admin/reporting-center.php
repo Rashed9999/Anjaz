@@ -3,19 +3,13 @@
 use App\Http\Controllers\Admin\ReportingCenterController;
 use Illuminate\Support\Facades\Route;
 
-/**
- * AMIAL-REPORTING-CENTER-001/003 — مسارات التقارير المؤسسية.
- *
- * القراءة خلف صلاحية مستقلة. التصدير يبقى بصلاحية أخرى حتى لا يساوي
- * مجرد مشاهدة الشاشة إخراج بيانات مالية أو رقابية خارج النظام.
- */
+/** AMIAL-REPORTING-CENTER — كل قراءة محمية بصلاحية تقارير مستقلة. */
 Route::middleware(['web', 'admin', 'amial.force-pin-change'])
     ->prefix('admin/amial/reporting-center')
     ->name('admin.amial.reporting-center.')
     ->group(function (): void {
         Route::get('/', [ReportingCenterController::class, 'index'])
-            ->middleware('platform:platform.reports.view')
-            ->name('index');
+            ->middleware('platform:platform.reports.view')->name('index');
 
         foreach ([
             'trial-balance' => 'trialBalance',
@@ -30,6 +24,8 @@ Route::middleware(['web', 'admin', 'amial.force-pin-change'])
             'fees-commissions' => 'feesCommissions',
             'reconciliation' => 'reconciliation',
             'merchant-portfolio' => 'merchantPortfolio',
+            'inventory-control' => 'inventoryControl',
+            'credit-control' => 'creditControl',
             'kyc-pipeline' => 'kycPipeline',
             'agent-liquidity' => 'agentLiquidity',
             'audit-sensitive-actions' => 'auditSensitiveActions',
@@ -40,7 +36,6 @@ Route::middleware(['web', 'admin', 'amial.force-pin-change'])
             'aml-regulatory' => 'amlRegulatory',
         ] as $uri => $method) {
             Route::get('/' . $uri, [ReportingCenterController::class, $method])
-                ->middleware('platform:platform.reports.view')
-                ->name($uri);
+                ->middleware('platform:platform.reports.view')->name($uri);
         }
     });
