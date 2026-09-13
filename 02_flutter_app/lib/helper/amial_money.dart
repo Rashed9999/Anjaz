@@ -1,34 +1,44 @@
-/// AMIAL-MONEY-001 — تنسيق مبالغ نظيف.
+/// AMIAL-MONEY-002 — تنسيق مبالغ بلا تحويل إلى double.
 ///
-/// الخادم يُرجع المبالغ بأربع خانات عشرية ("600.0000") فتبدو غير منطقية.
-/// هذا المساعد يعرضها بشكل بشريّ: أعداد صحيحة بلا كسور + فواصل آلاف،
-/// والكسور بخانتين فقط عند وجودها. (بلا رمز العملة — يُضاف بعده.)
+/// المبلغ المالي يبقى نصاً عشرياً من الخادم حتى العرض. هذا يمنع فقدان
+/// الدقة في الأرصدة الكبيرة ويجعل شاشة التقارير امتداداً للحقيقة المالية،
+/// لا عملية حسابية جديدة داخل الهاتف.
 class AmialMoney {
   AmialMoney._();
 
-  /// "600.0000" → "600" ، "1234.5000" → "1,234.5" ، "1234567" → "1,234,567"
-  static String fmt(dynamic value) {
-    final raw = (value ?? '').toString().trim();
+  /// "600.0000" → "600" ، "1234.5000" → "1,234.5".
+  ///
+  /// [maxFractionDigits] للعرض فقط؛ لا يغير القيمة الأصلية في الخادم.
+  static String fmt(dynamic value, {int maxFractionDigits = 2}) {
+    var raw = (value ?? '').toString().trim();
     if (raw.isEmpty) return '0';
-    final n = double.tryParse(raw);
-    if (n == null) return raw;
 
-    // كسر بخانتين كحدّ أقصى، مع إزالة الأصفار الزائدة
-    var s = n.toStringAsFixed(2);
-    if (s.contains('.')) {
-      s = s.replaceAll(RegExp(r'0+$'), '');
-      s = s.replaceAll(RegExp(r'\.$'), '');
+    final negative = raw.startsWith('-');
+    if (negative || raw.startsWith('+')) raw = raw.substring(1);
+
+    // نقبل الشكل العشري فقط. أي قيمة أخرى تُعرض كما وصلت بدل اختراع رقم.
+    if (!RegExp(r'^\d+(?:\.\d+)?$').hasMatch(raw)) {
+      return (negative ? '-' : '') + raw;
     }
 
-    // فواصل آلاف للجزء الصحيح
-    final parts = s.split('.');
-    parts[0] = parts[0].replaceAllMapped(
+    final parts = raw.split('.');
+    var whole = parts.first.replaceFirst(RegExp(r'^0+(?=\d)'), '');
+    if (whole.isEmpty) whole = '0';
+
+    var fraction = parts.length > 1 ? parts[1] : '';
+    if (maxFractionDigits >= 0 && fraction.length > maxFractionDigits) {
+      fraction = fraction.substring(0, maxFractionDigits);
+    }
+    fraction = fraction.replaceFirst(RegExp(r'0+$'), '');
+
+    final grouped = whole.replaceAllMapped(
       RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (m) => ',',
+      (_) => ',',
     );
-    return parts.join('.');
+
+    final sign = negative && (grouped != '0' || fraction.isNotEmpty) ? '-' : '';
+    return '$sign$grouped${fraction.isEmpty ? '' : '.$fraction'}';
   }
 
-  /// مع رمز الريال اليمني: "600 ر.ي"
   static String yer(dynamic value) => '${fmt(value)} ر.ي';
 }
