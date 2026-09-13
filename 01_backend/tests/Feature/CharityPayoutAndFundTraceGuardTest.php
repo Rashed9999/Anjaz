@@ -407,7 +407,7 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         // واحداً لكلا الدورين.)
         $this->charity->approveCampaign($campaign, $this->payoutAdmin);
 
-        $donor = User::factory()->create(['f_name' => 'سرّيّ', 'zone_code' => 'SOUTH']);
+        $donor = User::factory()->create(['f_name' => 'سرّيّ', 'zone_code' => 'SOUTH', 'is_kyc_verified' => 1]);
         EMoney::create(['user_id' => $donor->id, 'current_balance' => '5000.0000']);
         $this->donations->donate($donor, $campaign, '100.0000', true);
 

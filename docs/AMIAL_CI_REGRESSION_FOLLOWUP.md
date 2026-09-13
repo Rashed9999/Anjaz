@@ -25,11 +25,11 @@ Applicable project skills include amial-impact, amial-rbac, amial-database, amia
 | `01_backend/app/Services/Kyc/KycAccountStatusService.php` | Preserve the legacy not-submitted state without changing approval or financial eligibility. |
 | `01_backend/tests/Feature/DonationsServiceTest.php` | Give positive donation fixtures explicit KYC approval. |
 | `01_backend/tests/Feature/CharityServiceTest.php` | Give settlement donor fixtures explicit KYC approval. |
-| `01_backend/tests/Feature/CharityPayoutAndFundTraceGuardTest.php` | Give the actual donor in payout fixtures explicit KYC approval. |
+| `01_backend/tests/Feature/CharityPayoutAndFundTraceGuardTest.php` | Give actual donors in payout and anonymous-donation fixtures explicit KYC approval so the tests reach their payout/privacy assertions. |
 | `01_backend/tests/Feature/KycSanctionTest.php` | Model approved tier 2/3 users in positive feature/limit cases. |
 | `.github/workflows/ci.yml` | Run the previously failing classes before the full backend gate to surface remaining blockers promptly. |
 | `docs/AMIAL_CI_REGRESSION_FOLLOWUP.md` | Record existing failures, bounded repairs, per-file reasons and validation evidence. |
 
 ## Verification
 
-Repairs are implemented. `git diff --check` passed and the CI YAML parsed locally; PHP runtime evidence remains pending. The connected email/support/agent gate already passed in [run 34772455446](https://github.com/Rashed9999/Anjaz/actions/runs/34772455446), as did structural checks, Flutter and both Docker builds. Full CI gates and manual APK policy remain in place. Additive migrations run through both existing container startup scripts before the service accepts traffic. No real external messages are sent by these tests.
+In [run 34772847400](https://github.com/Rashed9999/Anjaz/actions/runs/34772847400), the email/support/agent gate passed all 59 tests. The existing-blocker gate passed 124 tests (395 assertions) and identified one remaining anonymous-donor fixture lacking KYC approval. That positive fixture is now corrected; the next run must verify it and the full backend suite. Structural checks, Flutter and both Docker builds passed. `git diff --check` and local CI YAML parsing also passed. Full CI gates and manual APK policy remain in place. Additive migrations run through both existing container startup scripts before the service accepts traffic. No real external messages are sent by these tests.
