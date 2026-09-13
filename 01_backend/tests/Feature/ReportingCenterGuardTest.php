@@ -31,6 +31,8 @@ class ReportingCenterGuardTest extends TestCase
             'admin.amial.reporting-center.fees-commissions',
             'admin.amial.reporting-center.reconciliation',
             'admin.amial.reporting-center.merchant-portfolio',
+            'admin.amial.reporting-center.inventory-control',
+            'admin.amial.reporting-center.credit-control',
             'admin.amial.reporting-center.kyc-pipeline',
             'admin.amial.reporting-center.agent-liquidity',
             'admin.amial.reporting-center.audit-sensitive-actions',
@@ -76,9 +78,11 @@ class ReportingCenterGuardTest extends TestCase
         }
         $this->assertSame('ready', $operations['subscriptions']['status']);
 
-        // لا نعلن ما لم يكتمل: المخزون غير مبني، AML بلا PEP/watchlist،
-        // والدعم بلا هدف SLA رسمي يمكن قياس الخرق عليه.
-        $this->assertSame('missing', $merchants['inventory_valuation']['status']);
+        // لا نعلن ما لم يكتمل. رقابة المخزون والذمم صارت قابلة للقراءة،
+        // لكن التقييم المالي للمخزون يحتاج سياسة تكلفة/عملة، وتقادم الآجل
+        // الموحد يحتاج تخصيص الدفعات على المبيعات. AML والدعم لهما فجوات معلنة.
+        $this->assertSame('partial', $merchants['inventory_valuation']['status']);
+        $this->assertSame('partial', $merchants['credit_aging']['status']);
         $this->assertSame('partial', $risk['aml_regulatory']['status']);
         $this->assertSame('partial', $operations['support_sla']['status']);
     }
