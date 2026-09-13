@@ -60,6 +60,10 @@ class AppServiceProvider extends ServiceProvider
         // يحترم route:cache؛ فلا تختفي الشاشة في الإنتاج عند تفعيل الكاش.
         $this->loadRoutesFrom(base_path('routes/admin/email-center.php'));
 
+        // AMIAL-REPORTING-CENTER-001 — مركز التقارير مستقل عن ملف المسارات
+        // الإداري الكبير، ويظل محمّلاً أيضاً عند route:cache.
+        $this->loadRoutesFrom(base_path('routes/admin/reporting-center.php'));
+
         // AMIAL-LEDGER-OPENING-002: محفظةٌ تولد مموَّلة تدخل الدفتر برصيدها.
         // بلا هذا يبدأ حسابها بصفر فيُرفض أوّل خصمٍ ويُبتلع الرفض، فيتحرّك
         // المال بلا قيد. انظر شرح EMoneyObserver.
