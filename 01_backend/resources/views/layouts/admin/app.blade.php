@@ -70,6 +70,17 @@
                     </li>
                 @endif
 
+                {{-- AMIAL-REPORTING-CENTER-001 — التقارير لها صلاحية مستقلة،
+                     ولا تظهر لمن يستطيع رؤية لوحة عامة فقط. --}}
+                @if(auth('user')->user()?->hasPlatformPermission('platform.reports.view'))
+                    <li class="nav-item">
+                        <a class="nav-link {{ Request::is('admin/amial/reporting-center*') ? 'active' : '' }}"
+                           href="{{ route('admin.amial.reporting-center.index') }}" data-testid="nav-reporting-center">
+                            <span class="nav-icon">📊</span><span class="text-truncate">مركز التقارير</span>
+                        </a>
+                    </li>
+                @endif
+
                 <li class="nav-item mt-3">
                     <a class="nav-link" href="{{ route('admin.auth.logout') }}" data-testid="nav-logout">
                         <i class="tio-logout nav-icon"></i>{{ 'تسجيل الخروج' }}
