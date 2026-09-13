@@ -26,6 +26,8 @@ Route::middleware(['web', 'admin', 'amial.force-pin-change'])
             'safeguarded-funds' => 'safeguardedFunds',
             'transaction-volume' => 'transactionVolume',
             'transaction-exceptions' => 'transactionExceptions',
+            'general-ledger' => 'generalLedger',
+            'fees-commissions' => 'feesCommissions',
             'reconciliation' => 'reconciliation',
         ] as $uri => $method) {
             Route::get('/' . $uri, [ReportingCenterController::class, $method])
