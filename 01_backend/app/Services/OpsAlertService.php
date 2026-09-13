@@ -17,6 +17,11 @@ use Illuminate\Support\Facades\Mail;
  * AMIAL-PROD-READINESS-004 — البريد التشغيلي يعيد استخدام Resend المفعّل
  * أصلاً لرسائل OTP، ولا يحتاج SMTP إضافياً. إذا لم يكن Resend مهيأً يبقى
  * Laravel Mail/SMTP مساراً احتياطياً متوافقاً مع التركيبات القديمة.
+ *
+ * AMIAL-PROD-READINESS-005 — الإنذار الخارجي ليس مجرد «وقع عطل».
+ * الرسالة تحمل سياقاً تشغيلياً آمناً يكفي لاتخاذ أول قرار: مستوى الخطورة،
+ * المكوّن، وقت الاكتشاف، المرجع، البيئة، التفاصيل الآمنة، الإجراء المقترح
+ * ورابط مركز الصحة. ولا تُرسل بيانات عميل أو أسرار أو رموز تحقق.
  */
 class OpsAlertService
 {
@@ -58,12 +63,16 @@ class OpsAlertService
             return false;
         }
 
+        $payload = $this->buildExternalPayload($key, $title, $detail);
         $sent = false;
 
         // واتساب قناة مستقلة؛ نتيجة المزود تُقرأ ولا يكفي غياب الاستثناء.
         foreach ($numbers as $number) {
             try {
-                $result = WhatsappModule::sendText((string) $number, $detail);
+                $result = WhatsappModule::sendText(
+                    (string) $number,
+                    $this->whatsappText($payload)
+                );
                 if ($result === 'success') {
                     $sent = true;
                 } else {
@@ -83,7 +92,7 @@ class OpsAlertService
         // البريد قناة مستقلة وتُجرّب دائماً حتى لو نجح واتساب.
         foreach ($emails as $address) {
             try {
-                if ($this->sendEmail((string) $address, $title, $detail)) {
+                if ($this->sendEmail((string) $address, $payload)) {
                     $sent = true;
                 }
             } catch (\Throwable $e) {
@@ -101,7 +110,7 @@ class OpsAlertService
      * يرسل البريد عبر Resend HTTP إذا كان مفتاحه موجوداً؛ وإلا يعود إلى
      * Laravel Mail حتى لا نكسر التركيبات القديمة التي تعتمد SMTP.
      */
-    private function sendEmail(string $address, string $title, string $detail): bool
+    private function sendEmail(string $address, array $payload): bool
     {
         $address = mb_strtolower(trim($address));
         if (! filter_var($address, FILTER_VALIDATE_EMAIL)) {
@@ -115,6 +124,9 @@ class OpsAlertService
             $fromName = (string) config('amial_otp.resend.from_name', 'Amial Pay');
             $apiUrl = (string) config('amial_otp.resend.api_url', 'https://api.resend.com/emails');
 
+            $text = view('emails.ops-alert', $payload)->render();
+            $html = view('emails.ops-alert-html', $payload)->render();
+
             $response = Http::withToken($apiKey)
                 ->acceptJson()
                 ->timeout(12)
@@ -122,11 +134,13 @@ class OpsAlertService
                 ->post($apiUrl, [
                     'from' => $fromName . ' <' . $fromAddress . '>',
                     'to' => [$address],
-                    'subject' => 'أميال باي — ' . $title,
-                    'text' => $detail
-                        . "\n\nهذا تنبيه تشغيلي آلي. افتح لوحة الإدارة لمراجعة التفاصيل والأثر.",
+                    'subject' => $payload['subject'],
+                    'text' => $text,
+                    'html' => $html,
                     'headers' => [
                         'X-Amial-Category' => 'ops-alert',
+                        'X-Amial-Alert-Key' => $payload['alertKey'],
+                        'X-Amial-Alert-Reference' => $payload['reference'],
                     ],
                 ]);
 
@@ -147,8 +161,115 @@ class OpsAlertService
             return true;
         }
 
-        Mail::to($address)->send(new \App\Mail\OpsAlertMail($title, $detail));
+        Mail::to($address)->send(new \App\Mail\OpsAlertMail($payload));
         return true;
+    }
+
+    /**
+     * يبني سياقاً خارجياً آمناً. التفاصيل نفسها تأتي من نقاط الإنذار
+     * التشغيلية التي لا تمرّر PII؛ ونضيف هنا بيانات النظام فقط.
+     *
+     * @return array<string,string>
+     */
+    private function buildExternalPayload(string $key, string $title, string $detail): array
+    {
+        $now = now();
+        [$severityCode, $severityLabel] = $this->severity($key);
+        $dashboardUrl = rtrim((string) config('app.url', 'https://amialpay.com'), '/')
+            . '/admin/amial/system/health';
+        $reference = 'OPS-' . strtoupper(substr(hash(
+            'sha256',
+            $key . '|' . $now->format('YmdHi')
+        ), 0, 10));
+
+        return [
+            'subject' => '[' . $severityLabel . '] أميال باي — ' . $title,
+            'alertKey' => $key,
+            'alertTitle' => $title,
+            'detail' => trim($detail),
+            'severityCode' => $severityCode,
+            'severityLabel' => $severityLabel,
+            'component' => $this->componentLabel($key),
+            'detectedAt' => $now->format('Y-m-d H:i:s P'),
+            'environment' => (string) config('app.env', 'production'),
+            'reference' => $reference,
+            'recommendedAction' => $this->recommendedAction($key),
+            'dashboardUrl' => $dashboardUrl,
+            'logoUrl' => (string) config(
+                'amial_otp.resend.brand_logo_url',
+                rtrim((string) config('app.url', 'https://amialpay.com'), '/') . '/branding/logo.png'
+            ),
+        ];
+    }
+
+    /** @return array{0:string,1:string} */
+    private function severity(string $key): array
+    {
+        if (str_contains($key, 'selftest')) {
+            return ['test', 'اختبار'];
+        }
+
+        if (str_starts_with($key, 'health.down.')
+            || str_contains($key, 'diverged')
+            || str_contains($key, 'integrity')
+            || str_contains($key, 'corrupt')) {
+            return ['critical', 'حرج'];
+        }
+
+        if (str_starts_with($key, 'backup.')
+            || str_contains($key, 'failed')
+            || str_contains($key, 'stale')) {
+            return ['high', 'عالٍ'];
+        }
+
+        return ['warning', 'تحذير'];
+    }
+
+    private function componentLabel(string $key): string
+    {
+        return match (true) {
+            str_starts_with($key, 'recon.') => 'المصالحة المالية والدفتر',
+            str_starts_with($key, 'health.') => 'صحة النظام',
+            str_starts_with($key, 'backup.') => 'النسخ الاحتياطي',
+            str_starts_with($key, 'recovery.') => 'استعادة الحسابات',
+            str_starts_with($key, 'security.') => 'الأمن',
+            str_starts_with($key, 'ops.') => 'التشغيل والمراقبة',
+            default => 'منصة أميال باي',
+        };
+    }
+
+    private function recommendedAction(string $key): string
+    {
+        if (str_contains($key, 'selftest')) {
+            return 'لا إجراء مطلوب. هذه رسالة اختبار لإثبات أن قناة الإنذار تصل فعلياً.';
+        }
+
+        if (str_starts_with($key, 'recon.')) {
+            return 'افتح صحة النظام ثم راجع المصالحة والدفتر قبل تنفيذ أي تسوية أو حركة تصحيحية.';
+        }
+
+        if (str_starts_with($key, 'health.')) {
+            return 'افتح صحة النظام وحدد المكوّن المتعثر وراجع آخر ظهور له قبل إعادة التشغيل أو التدخل اليدوي.';
+        }
+
+        if (str_starts_with($key, 'backup.')) {
+            return 'راجع آخر نسخة احتياطية صالحة ووجهتها الخارجية، ولا تعتبر النسخ سليماً قبل إثبات قابلية الاستعادة.';
+        }
+
+        return 'افتح مركز صحة النظام ومركز الأعطال، راجع المرجع والتفاصيل، ثم وثّق الإجراء المتخذ.';
+    }
+
+    /** @param array<string,string> $payload */
+    private function whatsappText(array $payload): string
+    {
+        return '🚨 أميال باي — ' . $payload['severityLabel'] . "\n"
+            . $payload['alertTitle'] . "\n"
+            . 'المكوّن: ' . $payload['component'] . "\n"
+            . 'الوقت: ' . $payload['detectedAt'] . "\n"
+            . 'المرجع: ' . $payload['reference'] . "\n\n"
+            . $payload['detail'] . "\n\n"
+            . 'الإجراء: ' . $payload['recommendedAction'] . "\n"
+            . $payload['dashboardUrl'];
     }
 
     /** أثر بلا تنبيه خارجي. */
