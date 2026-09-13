@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\AuditService;
 use App\Services\LedgerReportService;
+use App\Services\Reporting\CashLiquidityReportService;
 use App\Services\Reporting\FinancialStatementsService;
 use App\Services\Reporting\ReportCatalogService;
+use App\Services\Reporting\TransactionMonitoringReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -22,6 +24,8 @@ class ReportingCenterController extends Controller
     public function __construct(
         private readonly ReportCatalogService $catalog,
         private readonly FinancialStatementsService $statements,
+        private readonly CashLiquidityReportService $cashLiquidity,
+        private readonly TransactionMonitoringReportService $transactions,
         private readonly LedgerReportService $ledger,
         private readonly AuditService $audit,
     ) {
@@ -69,14 +73,62 @@ class ReportingCenterController extends Controller
 
     public function balanceSheet(Request $request): JsonResponse
     {
+        $asOf = $this->asOf($request);
+        $payload = $this->statements->balanceSheet($asOf);
+        $this->auditRead($request, 'balance_sheet', ['as_of' => $asOf]);
+
+        return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function cashFlow(Request $request): JsonResponse
+    {
+        [$from, $to] = $this->period($request);
+        $payload = $this->cashLiquidity->cashFlow($from, $to);
+        $this->auditRead($request, 'cash_flow', ['from' => $from, 'to' => $to]);
+
+        return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function liquidity(Request $request): JsonResponse
+    {
+        $asOf = $this->asOf($request);
+        $payload = $this->cashLiquidity->liquidityPosition($asOf);
+        $this->auditRead($request, 'liquidity_position', ['as_of' => $asOf]);
+
+        return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function safeguardedFunds(Request $request): JsonResponse
+    {
+        $asOf = $this->asOf($request);
+        $payload = $this->cashLiquidity->safeguardedFunds($asOf);
+        $this->auditRead($request, 'safeguarded_funds', ['as_of' => $asOf]);
+
+        return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function transactionVolume(Request $request): JsonResponse
+    {
+        [$from, $to] = $this->period($request);
+        $payload = $this->transactions->volume($from, $to);
+        $this->auditRead($request, 'transaction_volume', ['from' => $from, 'to' => $to]);
+
+        return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function transactionExceptions(Request $request): JsonResponse
+    {
+        [$from, $to] = $this->period($request);
         $validator = Validator::make($request->query(), [
-            'as_of' => ['nullable', 'date_format:Y-m-d'],
+            'limit' => ['nullable', 'integer', 'min:10', 'max:200'],
         ]);
         abort_if($validator->fails(), 422, $validator->errors()->first());
 
-        $asOf = $request->query('as_of') ?: now()->toDateString();
-        $payload = $this->statements->balanceSheet($asOf);
-        $this->auditRead($request, 'balance_sheet', ['as_of' => $asOf]);
+        $limit = (int) $request->query('limit', 50);
+        $payload = $this->transactions->exceptions($from, $to, $limit);
+        $this->auditRead($request, 'failed_reversed_pending', [
+            'from' => $from, 'to' => $to, 'limit' => $limit,
+        ]);
 
         return response()->json(['success' => true, 'meta' => $payload]);
     }
@@ -102,6 +154,16 @@ class ReportingCenterController extends Controller
         $to = $request->query('to');
 
         return [$from ?: null, $to ?: null];
+    }
+
+    private function asOf(Request $request): string
+    {
+        $validator = Validator::make($request->query(), [
+            'as_of' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+        abort_if($validator->fails(), 422, $validator->errors()->first());
+
+        return (string) ($request->query('as_of') ?: now()->toDateString());
     }
 
     private function auditRead(Request $request, string $report, array $filters): void
