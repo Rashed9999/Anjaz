@@ -147,7 +147,7 @@ jobs:
 
       - name: تحقق دورة البريد قبل الاختبارات الشاملة
         working-directory: 01_backend
-        run: php artisan test --compact tests/Feature/EmailOtpLifecycleTest.php tests/Feature/EmailIdentityGuardTest.php tests/Feature/AmialOtpEmailTemplateTest.php
+        run: php artisan test --compact tests/Feature/EmailOtpLifecycleTest.php tests/Feature/EmailIdentityGuardTest.php tests/Feature/AmialOtpEmailTemplateTest.php tests/Feature/EmailVerificationCenterGuardTest.php
 
       - name: تشغيل كل اختبارات الخادم
         working-directory: 01_backend

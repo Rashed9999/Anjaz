@@ -4,7 +4,7 @@
 
 @push('css_or_js')
 <style>
-    .email-center .hero { background:linear-gradient(135deg,#053391 0%,#0b57d0 100%); color:#fff; border:0; overflow:hidden; }
+    .email-center .hero { background:linear-gradient(135deg,var(--amial-primary) 0%,var(--amial-primary-light) 100%); color:var(--amial-surface); border:0; overflow:hidden; }
     .email-center .hero .sub { color:rgba(255,255,255,.78); }
     .email-center .metric { border:1px solid #e7ebf3; border-radius:16px; background:#fff; height:100%; }
     .email-center .metric strong { font-size:1.45rem; display:block; }
@@ -35,6 +35,9 @@
         'bounced' => ['مرتد','danger'],
         'complained' => ['شكوى Spam','danger'],
         'failed' => ['فشل','danger'],
+        'locked' => ['مقفل بعد المحاولات','danger'],
+        'expired' => ['منتهي','secondary'],
+        'superseded' => ['استُبدل برمز أحدث','secondary'],
     ];
 @endphp
 
@@ -155,6 +158,8 @@
                     @php
                         $s = $statusLabels[$row->delivery_status] ?? [$row->delivery_status, 'secondary'];
                         $isExpired = \Illuminate\Support\Carbon::parse($row->expires_at)->isPast();
+                        $proofActive = $row->verified_at && $row->verification_expires_at
+                            && \Illuminate\Support\Carbon::parse($row->verification_expires_at)->isFuture();
                     @endphp
                     <tr>
                         <td><div class="small">{{ $row->created_at }}</div></td>
@@ -163,15 +168,16 @@
                         <td>{{ $purposeLabels[$row->purpose] ?? $row->purpose }}</td>
                         <td><span class="badge bg-{{ $s[1] }}">{{ $s[0] }}</span>@if($row->last_error_display)<div class="tiny text-danger mt-1" title="{{ $row->last_error_display }}">{{ \Illuminate\Support\Str::limit($row->last_error_display, 55) }}</div>@endif</td>
                         <td>
-                            @if($row->verified_at)<span class="badge bg-success">تم</span>
-                            @elseif($row->consumed_at)<span class="badge bg-secondary">مستهلك</span>
+                            @if($row->consumed_at)<span class="badge bg-secondary">مستهلك أو مبطل</span>
+                            @elseif($proofActive)<span class="badge bg-success">تم · بانتظار الإكمال</span>
+                            @elseif($row->verified_at)<span class="badge bg-secondary">انتهت مهلة الإكمال</span>
                             @elseif($isExpired)<span class="badge bg-secondary">منتهي</span>
                             @else<span class="badge bg-warning text-dark">بانتظار</span>@endif
                         </td>
                         <td>{{ $row->attempts }} / {{ $row->max_attempts }}</td>
                         <td class="challenge-cell">{{ $row->challenge_id }}</td>
                         <td>
-                            @if($canManage && !$row->consumed_at && !$isExpired)
+                            @if($canManage && !$row->consumed_at && (!$isExpired || $proofActive))
                                 <form method="POST" action="{{ route('admin.amial.email-center.challenges.revoke', $row->challenge_id) }}" onsubmit="return confirm('إبطال هذا التحدي فوراً؟ لن يقبل الرمز بعد ذلك.');">
                                     @csrf
                                     <button class="btn btn-outline-danger btn-sm">إبطال</button>

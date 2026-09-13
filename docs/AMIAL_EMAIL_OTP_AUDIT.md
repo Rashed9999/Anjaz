@@ -44,7 +44,11 @@ Operational requirements: deploy the additive `otp_issuance_locks` migration bef
 
 Provider contracts checked against primary documentation: [Resend idempotency keys](https://resend.com/docs/dashboard/emails/idempotency-keys) and [webhook signature verification](https://resend.com/docs/webhooks/verify-webhooks-requests).
 
-Remote push and CI results: pending at this checkpoint; update with exact commit/run evidence after publication.
+Published first repair commit: `d742d06801288198e360b5f7ac99e774640f76e2`, GitHub Actions [run 34753278985](https://github.com/Rashed9999/Anjaz/actions/runs/34753278985). Structural checks, Flutter analysis/tests and both Docker builds passed. The focused PHP suite stopped before running because its private `call()` helper collided with Laravel's public HTTP test helper. The follow-up renames it to `otpRequest()`; this is a test harness defect, not evidence of a successful lifecycle run. Deployment was skipped because the backend gate failed. The next complete run remains pending.
+
+The follow-up incorporates six concurrent operations-alert commits through `fe602d3e53bec28d65f30fd5c4138db86ff17bf1`. Their transport/template changes are preserved; the newly added HTML email receives the same named CSS-variable exemption as the OTP email, without exempting web screens.
+
+Reviewing the concurrently added email center also exposed a missing action: a verified proof remains valid after the original code expires, but the screen hid its revoke button. The follow-up reads the proof expiry, keeps revocation available while either credential is live, shows consumed/expired states accurately and adds real HTTP tests for restricted readers, historical error redaction, CSV formula prefixes and revocation. Its web-only hero now uses shared brand tokens; the mail template retains its explicitly required inline colors.
 
 ## Per-file change reasons
 
@@ -58,7 +62,7 @@ Remote push and CI results: pending at this checkpoint; update with exact commit
 | `01_backend/app/Http/Controllers/Admin/AdminHubController.php` | Require email during operator-created customer, merchant and agent account validation. |
 | `01_backend/app/Http/Controllers/Admin/AgentController.php` | Validate the required email before creating a legacy agent account. |
 | `01_backend/app/Http/Controllers/Admin/CustomerController.php` | Validate the required email before creating a legacy customer account. |
-| `01_backend/app/Http/Controllers/Admin/EmailVerificationCenterController.php` | Cover locked/expired/superseded states; hide historical raw provider errors and prevent formula execution in exported masked email cells. |
+| `01_backend/app/Http/Controllers/Admin/EmailVerificationCenterController.php` | Cover locked/expired/superseded states; expose proof expiry for revocation, hide historical raw provider errors and prevent formula execution in exported masked email cells. |
 | `01_backend/app/Http/Controllers/Agent/AgentPortalController.php` | Require the branch mailbox in the branch-creation API contract. |
 | `01_backend/app/Http/Controllers/Api/V1/Auth/EmailOtpController.php` | Make recovery/change atomic, recheck owner and active state, revoke refresh/database/remembered sessions, enroll legacy addresses and honor channel settings. |
 | `01_backend/app/Http/Controllers/Api/V1/Auth/EmailRegistrationController.php` | Consume real email proof in the same transaction as account creation; remove fabricated phone proof and preserve retryability. |
@@ -73,6 +77,7 @@ Remote push and CI results: pending at this checkpoint; update with exact commit
 | `01_backend/database/migrations/2026_09_12_180000_create_otp_issuance_locks_table.php` | Add a stable DB lock row per hashed mailbox/purpose; no existing OTP table provided a first-request serialization key. |
 | `01_backend/phpunit.xml` | Supply reserved test-only bootstrap mailboxes while leaving production addresses unconfigured. |
 | `01_backend/resources/views/admin-views/amial/hub/users.blade.php` | Make the operator creation form's email field visibly required. |
+| `01_backend/resources/views/admin-views/amial/email-center/index.blade.php` | Keep live proof revocation accessible after code expiry, distinguish completion states and use shared web brand colors. |
 | `01_backend/resources/views/agent-views/dashboard.blade.php` | Add and submit the required branch email in the agent's branch modal. |
 | `01_backend/routes/api/unified-auth.php` | Apply the mandatory POS device gate to both authenticated email-change routes. |
 | `01_backend/tests/Feature/AdminCreatedAccountReviewTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
@@ -96,6 +101,7 @@ Remote push and CI results: pending at this checkpoint; update with exact commit
 | `01_backend/tests/Feature/AgentWorkTimeTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/BranchInternalRebalanceTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/EmailIdentityGuardTest.php` | Add regressions for trust-flag promotion, invalid legacy updates and explicit bootstrap mailboxes. |
+| `01_backend/tests/Feature/EmailVerificationCenterGuardTest.php` | Verify actual permission enforcement, masked/full views with error redaction, safe CSV cells and revocation of a still-live verification proof. |
 | `01_backend/tests/Feature/EmailOtpLifecycleTest.php` | Exercise success, failure, expiry, replay, owner binding, atomic registration/recovery/change, rollback, channel settings and signed webhooks with a fake provider. |
 | `01_backend/tests/Feature/KycRegulatoryFieldsTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/MerchantAccountIsUsableGuardTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
@@ -107,7 +113,7 @@ Remote push and CI results: pending at this checkpoint; update with exact commit
 | `01_backend/tests/Feature/SelfRegisteredMerchantIsUsableTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/SignatureRegistrationTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/SiteAndUnifiedLoginTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
-| `01_backend/tests/Feature/VisualIdentityGuardTest.php` | Explicitly exempt the single inline OTP email template from CSS-variable enforcement because email clients cannot use the application stylesheet. |
+| `01_backend/tests/Feature/VisualIdentityGuardTest.php` | Explicitly exempt the two named inline OTP/operations email templates from CSS-variable enforcement because email clients cannot use the application stylesheet. |
 | `01_backend/tests/Feature/ZoneEnforcementGapsTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/ZoneOnRegistrationTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `02_flutter_app/assets/language/ar.json` | Add Arabic text for the repaired email and profile journeys. |

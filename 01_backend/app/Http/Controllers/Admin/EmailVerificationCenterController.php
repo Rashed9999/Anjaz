@@ -37,7 +37,7 @@ class EmailVerificationCenterController extends Controller
             ->select([
                 'id', 'challenge_id', 'user_id', 'identifier', 'channel', 'purpose',
                 'expires_at', 'resend_available_at', 'attempts', 'max_attempts',
-                'verified_at', 'consumed_at', 'delivery_status', 'provider_message_id',
+                'verified_at', 'verification_expires_at', 'consumed_at', 'delivery_status', 'provider_message_id',
                 'last_error', 'requested_by_type', 'requested_by_id', 'created_at', 'updated_at',
             ])
             ->orderByDesc('id')

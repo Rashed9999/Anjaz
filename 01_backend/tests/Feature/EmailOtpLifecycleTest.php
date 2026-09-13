@@ -71,7 +71,7 @@ class EmailOtpLifecycleTest extends TestCase
         }
     }
 
-    private function call(string $method, array $data, ?User $user = null): \Illuminate\Http\JsonResponse
+    private function otpRequest(string $method, array $data, ?User $user = null): \Illuminate\Http\JsonResponse
     {
         $request = Request::create('/api/v1/auth/test', 'POST', $data);
         $request->setUserResolver(fn () => $user);
@@ -139,7 +139,7 @@ class EmailOtpLifecycleTest extends TestCase
     {
         $id = $this->issue()['challenge_id'];
         $oldCode = $this->code();
-        $response = $this->call('requestCode', ['email' => 'recipient@example.com', 'purpose' => 'registration']);
+        $response = $this->otpRequest('requestCode', ['email' => 'recipient@example.com', 'purpose' => 'registration']);
         $this->assertSame(429, $response->getStatusCode());
         $this->assertCount(1, $this->messages);
         $this->travel(61)->seconds();
@@ -153,13 +153,13 @@ class EmailOtpLifecycleTest extends TestCase
     public function provider_failure_is_not_reported_as_sent_and_never_stores_the_response_body(): void
     {
         Http::fake(['api.resend.com/emails' => Http::response(['message' => 'sensitive echoed request'], 503)]);
-        $response = $this->call('requestCode', ['email' => 'recipient@example.com', 'purpose' => 'registration']);
+        $response = $this->otpRequest('requestCode', ['email' => 'recipient@example.com', 'purpose' => 'registration']);
         $this->assertSame(503, $response->getStatusCode());
         $this->assertFalse($response->getData(true)['success']);
         $row = DB::table('otp_challenges')->first();
         $this->assertSame('failed', $row->delivery_status);
         $this->assertSame('RESEND_HTTP_503', $row->last_error);
-        $again = $this->call('requestCode', ['email' => 'recipient@example.com', 'purpose' => 'registration']);
+        $again = $this->otpRequest('requestCode', ['email' => 'recipient@example.com', 'purpose' => 'registration']);
         $this->assertSame(429, $again->getStatusCode());
     }
 
@@ -182,8 +182,8 @@ class EmailOtpLifecycleTest extends TestCase
     public function recovery_responses_do_not_disclose_whether_the_account_is_verified(): void
     {
         $user = User::factory()->create();
-        $unknown = $this->call('requestCode', ['email' => 'unknown@example.com', 'purpose' => 'password_reset']);
-        $known = $this->call('requestCode', ['email' => $user->email, 'purpose' => 'password_reset']);
+        $unknown = $this->otpRequest('requestCode', ['email' => 'unknown@example.com', 'purpose' => 'password_reset']);
+        $known = $this->otpRequest('requestCode', ['email' => $user->email, 'purpose' => 'password_reset']);
         $a = $unknown->getData(true);
         $b = $known->getData(true);
         unset($a['meta']['challenge_id'], $a['meta']['masked_email'], $b['meta']['challenge_id'], $b['meta']['masked_email']);
@@ -198,7 +198,7 @@ class EmailOtpLifecycleTest extends TestCase
         foreach ([['is_active' => 0], ['is_email_verified' => 0]] as $attributes) {
             $user = User::factory()->create($attributes);
             $this->assertNull(app(EmailIdentityService::class)->findVerifiedOwner($user->email));
-            $this->call('requestCode', ['email' => $user->email, 'purpose' => 'pin_recovery']);
+            $this->otpRequest('requestCode', ['email' => $user->email, 'purpose' => 'pin_recovery']);
         }
         Http::assertNothingSent();
     }
@@ -209,10 +209,10 @@ class EmailOtpLifecycleTest extends TestCase
         $user = User::factory()->create();
         $oldPassword = $user->password;
         $proof = $this->proof($user, 'pin_recovery');
-        $bad = $this->call('resetPin', $proof + ['new_pin' => '1234', 'new_pin_confirmation' => '1234']);
+        $bad = $this->otpRequest('resetPin', $proof + ['new_pin' => '1234', 'new_pin_confirmation' => '1234']);
         $this->assertSame('WEAK_PIN', $bad->getData(true)['code']);
         $this->assertNull($this->row($proof['challenge_id'])->consumed_at);
-        $ok = $this->call('resetPin', $proof + ['new_pin' => '739582', 'new_pin_confirmation' => '739582']);
+        $ok = $this->otpRequest('resetPin', $proof + ['new_pin' => '739582', 'new_pin_confirmation' => '739582']);
         $this->assertSame('PIN_RESET', $ok->getData(true)['code']);
         $this->assertTrue(Hash::check('739582', $user->fresh()->transaction_pin));
         $this->assertSame($oldPassword, $user->fresh()->password);
@@ -239,7 +239,7 @@ class EmailOtpLifecycleTest extends TestCase
             ]);
         }
         $proof = $this->proof($user, 'password_reset');
-        $result = $this->call('resetPassword', $proof + ['password' => 'Changed#723', 'password_confirmation' => 'Changed#723']);
+        $result = $this->otpRequest('resetPassword', $proof + ['password' => 'Changed#723', 'password_confirmation' => 'Changed#723']);
         $this->assertSame('PASSWORD_RESET', $result->getData(true)['code']);
         $this->assertTrue(Hash::check('Changed#723', $user->fresh()->password));
         $this->assertNotSame('old-remember', $user->fresh()->remember_token);
@@ -247,7 +247,7 @@ class EmailOtpLifecycleTest extends TestCase
         $this->assertDatabaseHas('oauth_refresh_tokens', ['id' => 'refresh-' . $other->id, 'revoked' => false]);
         $this->assertDatabaseMissing('sessions', ['user_id' => $user->id]);
         $this->assertDatabaseHas('sessions', ['user_id' => $other->id]);
-        $replay = $this->call('resetPassword', $proof + ['password' => 'Changed#999', 'password_confirmation' => 'Changed#999']);
+        $replay = $this->otpRequest('resetPassword', $proof + ['password' => 'Changed#999', 'password_confirmation' => 'Changed#999']);
         $this->assertSame(409, $replay->getStatusCode());
     }
 
@@ -258,7 +258,7 @@ class EmailOtpLifecycleTest extends TestCase
         $proof = $this->proof($user, 'password_reset');
         $oldPassword = $user->password;
         app(EmailIdentityService::class)->replaceVerifiedEmail($user, 'replacement@example.com');
-        $response = $this->call('resetPassword', $proof + ['password' => 'change-me', 'password_confirmation' => 'change-me']);
+        $response = $this->otpRequest('resetPassword', $proof + ['password' => 'change-me', 'password_confirmation' => 'change-me']);
         $this->assertSame(409, $response->getStatusCode());
         $this->assertSame($oldPassword, $user->fresh()->password);
         $this->assertNull($this->row($proof['challenge_id'])->consumed_at);
@@ -268,14 +268,14 @@ class EmailOtpLifecycleTest extends TestCase
     public function legacy_owner_can_verify_the_current_email_and_retry_a_wrong_code(): void
     {
         $user = User::factory()->create(['email' => 'legacy@example.com', 'is_email_verified' => 0, 'password' => Hash::make('6392')]);
-        $requested = $this->call('requestEmailChange', ['new_email' => $user->email, 'current_password' => '6392'], $user);
+        $requested = $this->otpRequest('requestEmailChange', ['new_email' => $user->email, 'current_password' => '6392'], $user);
         $this->assertSame(200, $requested->getStatusCode());
         $id = $requested->getData(true)['meta']['challenge_id'];
         $data = ['challenge_id' => $id, 'new_email' => $user->email];
-        $bad = $this->call('confirmEmailChange', $data + ['otp' => '000000'], $user);
+        $bad = $this->otpRequest('confirmEmailChange', $data + ['otp' => '000000'], $user);
         $this->assertSame(422, $bad->getStatusCode());
         $this->assertSame(1, (int) $this->row($id)->attempts);
-        $good = $this->call('confirmEmailChange', $data + ['otp' => $this->code()], $user);
+        $good = $this->otpRequest('confirmEmailChange', $data + ['otp' => $this->code()], $user);
         $this->assertSame('EMAIL_CHANGED', $good->getData(true)['code']);
         $this->assertSame(1, (int) $user->fresh()->is_email_verified);
         $this->assertNotNull($user->fresh()->email_verified_at);
@@ -286,12 +286,12 @@ class EmailOtpLifecycleTest extends TestCase
     {
         $user = User::factory()->create(['password' => Hash::make('6392')]);
         $other = User::factory()->create();
-        $requested = $this->call('requestEmailChange', ['new_email' => 'new@example.com', 'current_password' => '6392'], $user);
+        $requested = $this->otpRequest('requestEmailChange', ['new_email' => 'new@example.com', 'current_password' => '6392'], $user);
         $id = $requested->getData(true)['meta']['challenge_id'];
         $data = ['challenge_id' => $id, 'new_email' => 'new@example.com', 'otp' => $this->code()];
-        $this->assertSame(404, $this->call('confirmEmailChange', $data, $other)->getStatusCode());
+        $this->assertSame(404, $this->otpRequest('confirmEmailChange', $data, $other)->getStatusCode());
         User::factory()->create(['email' => 'new@example.com']);
-        $this->assertSame(409, $this->call('confirmEmailChange', $data, $user)->getStatusCode());
+        $this->assertSame(409, $this->otpRequest('confirmEmailChange', $data, $user)->getStatusCode());
         $this->assertNull($this->row($id)->consumed_at);
         $this->assertNull($this->row($id)->verified_at);
         $this->assertSame($user->email, $user->fresh()->email);
@@ -328,8 +328,8 @@ class EmailOtpLifecycleTest extends TestCase
         $user = User::factory()->create();
         $proof = $this->proof($user, 'pin_recovery');
         config(['amial_otp.pin_recovery_channel' => 'sms']);
-        $this->assertSame(409, $this->call('requestCode', ['email' => $user->email, 'purpose' => 'pin_recovery'])->getStatusCode());
-        $this->assertSame(409, $this->call('resetPin', $proof + ['new_pin' => '739582', 'new_pin_confirmation' => '739582'])->getStatusCode());
+        $this->assertSame(409, $this->otpRequest('requestCode', ['email' => $user->email, 'purpose' => 'pin_recovery'])->getStatusCode());
+        $this->assertSame(409, $this->otpRequest('resetPin', $proof + ['new_pin' => '739582', 'new_pin_confirmation' => '739582'])->getStatusCode());
         $this->assertNull($this->row($proof['challenge_id'])->consumed_at);
     }
 
