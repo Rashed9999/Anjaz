@@ -3,7 +3,7 @@
 namespace App\Services\Reporting;
 
 /**
- * AMIAL-REPORTING-CENTER-001/003 — كتالوج واحد بدل جزر تقارير متفرقة.
+ * AMIAL-REPORTING-CENTER-001/004 — كتالوج واحد بدل جزر تقارير متفرقة.
  *
  * هذا الملف لا يحسب أرقاماً مالية. هو فهرس تشغيلي يصف التقارير ومصادرها
  * وحالتها كي تعرف الإدارة ما هو جاهز وما هو ناقص بدون ادعاء اكتمال.
@@ -46,8 +46,8 @@ class ReportCatalogService
                     ['code' => 'merchant_portfolio', 'label' => 'محفظة التجار والباقات والمخاطر', 'status' => 'ready', 'source' => 'P1ControlReportService ← merchant_profiles', 'priority' => 'P1'],
                     ['code' => 'merchant_financial_truth', 'label' => 'الحقيقة المالية للتاجر', 'status' => 'ready', 'source' => 'MerchantFinancialTruthReportService', 'priority' => 'P1'],
                     ['code' => 'merchant_profit', 'label' => 'ربحية التاجر', 'status' => 'ready', 'source' => 'CashierService', 'priority' => 'P1'],
-                    ['code' => 'inventory_valuation', 'label' => 'تقييم وحركة المخزون', 'status' => 'missing', 'source' => 'Retail/vertical inventory', 'priority' => 'P1'],
-                    ['code' => 'credit_aging', 'label' => 'تقادم الديون والتحصيل', 'status' => 'partial', 'source' => 'Credit + WholesaleReportsService', 'priority' => 'P0'],
+                    ['code' => 'inventory_valuation', 'label' => 'حركة ورقابة المخزون / التقييم المالي', 'status' => 'partial', 'source' => 'P1MerchantOperationsReportService ← stock movements + stocks؛ التقييم المالي ينتظر سياسة تكلفة وعملة صريحة', 'priority' => 'P1'],
+                    ['code' => 'credit_aging', 'label' => 'تقادم الديون والتحصيل', 'status' => 'partial', 'source' => 'P1MerchantOperationsReportService ← unified credit + wholesale invoices؛ الآجل الموحد ينتظر تخصيص الدفعات على المبيعات', 'priority' => 'P0'],
                     ['code' => 'vertical_performance', 'label' => 'أداء الصيدلية والوقود والمطعم والتجزئة والجملة والبيع السريع', 'status' => 'partial', 'source' => 'Vertical services', 'priority' => 'P1'],
                 ],
             ],
