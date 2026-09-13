@@ -35,6 +35,10 @@ class ReportingCenterGuardTest extends TestCase
             'admin.amial.reporting-center.agent-liquidity',
             'admin.amial.reporting-center.audit-sensitive-actions',
             'admin.amial.reporting-center.rbac-changes',
+            'admin.amial.reporting-center.subscriptions',
+            'admin.amial.reporting-center.customer-activity',
+            'admin.amial.reporting-center.support-operations',
+            'admin.amial.reporting-center.aml-regulatory',
         ] as $name) {
             $route = Route::getRoutes()->getByName($name);
             $this->assertNotNull($route, $name);
@@ -52,6 +56,7 @@ class ReportingCenterGuardTest extends TestCase
         $merchants = collect($catalog['merchant']['reports'])->keyBy('code');
         $agents = collect($catalog['customers_agents']['reports'])->keyBy('code');
         $risk = collect($catalog['risk_compliance']['reports'])->keyBy('code');
+        $operations = collect($catalog['operations']['reports'])->keyBy('code');
 
         foreach (['trial_balance', 'income_statement', 'balance_sheet', 'cash_flow', 'general_ledger'] as $code) {
             $this->assertSame('ready', $financial[$code]['status'], $code);
@@ -63,13 +68,19 @@ class ReportingCenterGuardTest extends TestCase
             $this->assertSame('ready', $transactions[$code]['status'], $code);
         }
         $this->assertSame('ready', $merchants['merchant_portfolio']['status']);
-        $this->assertSame('ready', $agents['agent_float']['status']);
+        foreach (['customer_activity', 'agent_float'] as $code) {
+            $this->assertSame('ready', $agents[$code]['status'], $code);
+        }
         foreach (['kyc_pipeline', 'audit_sensitive_actions', 'rbac_changes'] as $code) {
             $this->assertSame('ready', $risk[$code]['status'], $code);
         }
+        $this->assertSame('ready', $operations['subscriptions']['status']);
 
+        // لا نعلن ما لم يكتمل: المخزون غير مبني، AML بلا PEP/watchlist،
+        // والدعم بلا هدف SLA رسمي يمكن قياس الخرق عليه.
         $this->assertSame('missing', $merchants['inventory_valuation']['status']);
         $this->assertSame('partial', $risk['aml_regulatory']['status']);
+        $this->assertSame('partial', $operations['support_sla']['status']);
     }
 
     /** @test */
