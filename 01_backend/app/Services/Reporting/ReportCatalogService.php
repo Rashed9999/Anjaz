@@ -16,11 +16,11 @@ class ReportCatalogService
             'financial_core' => [
                 'label' => 'القوائم المالية والدفتر',
                 'reports' => [
-                    ['code' => 'trial_balance', 'label' => 'ميزان المراجعة', 'status' => 'ready', 'source' => 'LedgerReportService', 'priority' => 'P0'],
-                    ['code' => 'income_statement', 'label' => 'قائمة الدخل', 'status' => 'ready', 'source' => 'FinancialStatementsService', 'priority' => 'P0'],
-                    ['code' => 'balance_sheet', 'label' => 'الميزانية العمومية', 'status' => 'ready', 'source' => 'FinancialStatementsService', 'priority' => 'P0'],
+                    ['code' => 'trial_balance', 'label' => 'ميزان المراجعة', 'status' => 'ready', 'source' => 'FinancialStatementsService ← ledger lines', 'priority' => 'P0'],
+                    ['code' => 'income_statement', 'label' => 'قائمة الدخل', 'status' => 'ready', 'source' => 'FinancialStatementsService ← ledger lines', 'priority' => 'P0'],
+                    ['code' => 'balance_sheet', 'label' => 'الميزانية العمومية', 'status' => 'ready', 'source' => 'FinancialStatementsService ← ledger lines', 'priority' => 'P0'],
                     ['code' => 'cash_flow', 'label' => 'التدفق النقدي', 'status' => 'ready', 'source' => 'CashLiquidityReportService ← ledger entry lines', 'priority' => 'P0'],
-                    ['code' => 'general_ledger', 'label' => 'دفتر الأستاذ', 'status' => 'partial', 'source' => 'LedgerReportService statements', 'priority' => 'P0'],
+                    ['code' => 'general_ledger', 'label' => 'دفتر الأستاذ', 'status' => 'ready', 'source' => 'GeneralLedgerReportService', 'priority' => 'P0'],
                 ],
             ],
             'reconciliation_treasury' => [
@@ -37,7 +37,7 @@ class ReportCatalogService
                 'reports' => [
                     ['code' => 'transaction_volume', 'label' => 'حجم وعدد المعاملات', 'status' => 'ready', 'source' => 'TransactionMonitoringReportService ← journal', 'priority' => 'P0'],
                     ['code' => 'failed_reversed_pending', 'label' => 'الفاشلة والعكسية والمعلقة', 'status' => 'ready', 'source' => 'Pending transfers + ledger reversals + audit', 'priority' => 'P0'],
-                    ['code' => 'fees_commissions', 'label' => 'الرسوم والعمولات', 'status' => 'partial', 'source' => 'FeeService + ledger', 'priority' => 'P0'],
+                    ['code' => 'fees_commissions', 'label' => 'الرسوم والعمولات', 'status' => 'ready', 'source' => 'FeeProfitReportService', 'priority' => 'P0'],
                 ],
             ],
             'merchant' => [
@@ -53,7 +53,7 @@ class ReportCatalogService
             'customers_agents' => [
                 'label' => 'العملاء والوكلاء',
                 'reports' => [
-                    ['code' => 'customer_statement', 'label' => 'كشف حساب العميل', 'status' => 'partial', 'source' => 'customer transactions', 'priority' => 'P0'],
+                    ['code' => 'customer_statement', 'label' => 'كشف حساب العميل', 'status' => 'ready', 'source' => 'CustomerLedgerReportService ← ledger lines', 'priority' => 'P0'],
                     ['code' => 'customer_activity', 'label' => 'نشاط واحتفاظ العملاء', 'status' => 'missing', 'source' => 'users + transactions', 'priority' => 'P1'],
                     ['code' => 'agent_daily_close', 'label' => 'إغلاق الوكيل اليومي', 'status' => 'ready', 'source' => 'AgentShift/Settlement services', 'priority' => 'P1'],
                     ['code' => 'agent_float', 'label' => 'سيولة الوكيل والعجز', 'status' => 'partial', 'source' => 'agent wallet + cash + ledger', 'priority' => 'P1'],
