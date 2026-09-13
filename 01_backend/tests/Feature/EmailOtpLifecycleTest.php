@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Http\Controllers\Api\V1\Auth\EmailOtpController;
 use App\Http\Controllers\Api\V1\Auth\EmailRegistrationController;
 use App\Http\Controllers\Api\V1\RegisterController;
-use App\Models\BusinessSetting;
 use App\Models\User;
 use App\Services\EmailIdentityService;
 use App\Services\Otp\EmailOtpService;
@@ -24,6 +23,7 @@ class EmailOtpLifecycleTest extends TestCase
     use RefreshDatabase;
 
     private array $messages = [];
+    private int $providerStatus = 200;
 
     protected function setUp(): void
     {
@@ -40,7 +40,9 @@ class EmailOtpLifecycleTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['api.resend.com/emails' => function ($request) {
             $this->messages[] = $request;
-            return Http::response(['id' => 'email-' . count($this->messages)], 200);
+            return Http::response($this->providerStatus === 200
+                ? ['id' => 'email-' . count($this->messages)]
+                : ['message' => 'sensitive echoed request'], $this->providerStatus);
         }]);
     }
 
@@ -152,7 +154,9 @@ class EmailOtpLifecycleTest extends TestCase
     #[Test]
     public function provider_failure_is_not_reported_as_sent_and_never_stores_the_response_body(): void
     {
-        Http::fake(['api.resend.com/emails' => Http::response(['message' => 'sensitive echoed request'], 503)]);
+        // Keep one fake callback: adding another matching fake would preserve
+        // the earlier success callback and never exercise provider failure.
+        $this->providerStatus = 503;
         $response = $this->otpRequest('requestCode', ['email' => 'recipient@example.com', 'purpose' => 'registration']);
         $this->assertSame(503, $response->getStatusCode());
         $this->assertFalse($response->getData(true)['success']);
@@ -307,7 +311,7 @@ class EmailOtpLifecycleTest extends TestCase
             'email_verification_token' => $token, 'dial_country_code' => '+967', 'phone' => '779123987',
             'password' => '6392', 'gender' => 'Male', 'account_type' => 'customer',
         ];
-        BusinessSetting::updateOrCreate(['key' => 'phone_verification'], ['value' => 1]);
+        DB::table('business_settings')->updateOrInsert(['key' => 'phone_verification'], ['value' => 1]);
         $controller = app(EmailRegistrationController::class);
         $failed = $controller->register(Request::create('/api/v1/auth/register/email', 'POST', $data));
         $this->assertSame(403, $failed->getStatusCode());
@@ -336,7 +340,7 @@ class EmailOtpLifecycleTest extends TestCase
     #[Test]
     public function request_fields_cannot_bypass_the_legacy_phone_verification_gate(): void
     {
-        BusinessSetting::updateOrCreate(['key' => 'phone_verification'], ['value' => 1]);
+        DB::table('business_settings')->updateOrInsert(['key' => 'phone_verification'], ['value' => 1]);
         $response = app(RegisterController::class)->customerRegistration(Request::create('/api/v1/customer/auth/register', 'POST', [
             'f_name' => 'Phone', 'l_name' => 'Owner', 'gender' => 'Male',
             'dial_country_code' => '+967', 'phone' => '779123988', 'password' => '6392',

@@ -48,6 +48,8 @@ Published first repair commit: `d742d06801288198e360b5f7ac99e774640f76e2`, GitHu
 
 The follow-up incorporates six concurrent operations-alert commits through `fe602d3e53bec28d65f30fd5c4138db86ff17bf1`. Their transport/template changes are preserved; the newly added HTML email receives the same named CSS-variable exemption as the OTP email, without exempting web screens.
 
+Second repair commit: `f766ef44a701b168a55614000cd55375f936f110`, [run 34772020514](https://github.com/Rashed9999/Anjaz/actions/runs/34772020514). The focused suite executed: **35 passed, 3 failed, 173 assertions** in 25.75 seconds. All identity-guard and email-center tests passed, including actual permission enforcement, redaction, export and revocation. Three lifecycle cases were blocked by fixture defects: a second HTTP fake did not override the first matching success callback, and two settings writes used mass assignment on a guarded model. The next repair uses a single configurable fake response and explicit test database settings writes. Production model guards remain unchanged.
+
 Reviewing the concurrently added email center also exposed a missing action: a verified proof remains valid after the original code expires, but the screen hid its revoke button. The follow-up reads the proof expiry, keeps revocation available while either credential is live, shows consumed/expired states accurately and adds real HTTP tests for restricted readers, historical error redaction, CSV formula prefixes and revocation. Its web-only hero now uses shared brand tokens; the mail template retains its explicitly required inline colors.
 
 ## Per-file change reasons
