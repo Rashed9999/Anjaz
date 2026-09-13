@@ -2,15 +2,18 @@
 
 namespace Tests\Feature;
 
-use App\Services\LedgerReportService;
+use App\Models\Ledger\LedgerAccount;
+use App\Services\LedgerService;
 use App\Services\Reporting\FinancialStatementsService;
 use App\Services\Reporting\ReportCatalogService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
-use Mockery;
 use Tests\TestCase;
 
 class ReportingCenterGuardTest extends TestCase
 {
+    use RefreshDatabase;
+
     /** @test */
     public function reporting_routes_are_permission_guarded(): void
     {
@@ -19,6 +22,11 @@ class ReportingCenterGuardTest extends TestCase
             'admin.amial.reporting-center.trial-balance',
             'admin.amial.reporting-center.income-statement',
             'admin.amial.reporting-center.balance-sheet',
+            'admin.amial.reporting-center.cash-flow',
+            'admin.amial.reporting-center.liquidity',
+            'admin.amial.reporting-center.safeguarded-funds',
+            'admin.amial.reporting-center.transaction-volume',
+            'admin.amial.reporting-center.transaction-exceptions',
             'admin.amial.reporting-center.reconciliation',
         ] as $name) {
             $route = Route::getRoutes()->getByName($name);
@@ -28,82 +36,92 @@ class ReportingCenterGuardTest extends TestCase
     }
 
     /** @test */
-    public function catalog_does_not_claim_missing_p0_reports_are_ready(): void
+    public function catalog_marks_implemented_p0_reports_ready_without_claiming_everything_is_complete(): void
     {
         $catalog = (new ReportCatalogService())->catalog();
         $financial = collect($catalog['financial_core']['reports'])->keyBy('code');
+        $treasury = collect($catalog['reconciliation_treasury']['reports'])->keyBy('code');
+        $transactions = collect($catalog['transactions']['reports'])->keyBy('code');
 
-        $this->assertSame('ready', $financial['trial_balance']['status']);
-        $this->assertSame('ready', $financial['income_statement']['status']);
-        $this->assertSame('ready', $financial['balance_sheet']['status']);
-        $this->assertSame('missing', $financial['cash_flow']['status']);
+        foreach (['trial_balance', 'income_statement', 'balance_sheet', 'cash_flow'] as $code) {
+            $this->assertSame('ready', $financial[$code]['status'], $code);
+        }
+        foreach (['liquidity_position', 'safeguarded_funds'] as $code) {
+            $this->assertSame('ready', $treasury[$code]['status'], $code);
+        }
+        foreach (['transaction_volume', 'failed_reversed_pending'] as $code) {
+            $this->assertSame('ready', $transactions[$code]['status'], $code);
+        }
+        $this->assertSame('partial', $financial['general_ledger']['status']);
     }
 
     /** @test */
-    public function income_statement_uses_ledger_balances_and_decimal_math(): void
+    public function statements_never_merge_two_currencies_and_keep_decimal_precision(): void
     {
-        $ledger = Mockery::mock(LedgerReportService::class);
-        $ledger->shouldReceive('trialBalance')->once()->with('2026-09-01', '2026-09-30')->andReturn([
-            'accounts' => [
-                $this->account(1, 'REV_FEES', 'إيراد الرسوم', 'revenue', 'credit', '125.5000'),
-                $this->account(2, 'EXP_SMS', 'مصروف الرسائل', 'expense', 'debit', '20.1250'),
-            ],
-            'balanced' => true,
-            'unbalanced_entries' => [],
+        $this->account('CASH_YER', 'asset', 'debit', 'YER');
+        $this->account('CUSTOMER_PAYABLE_YER', 'liability', 'credit', 'YER');
+        $this->account('REV_FEES_YER', 'revenue', 'credit', 'YER');
+        $this->account('EXP_SMS_YER', 'expense', 'debit', 'YER');
+        $this->account('CASH_USD', 'asset', 'debit', 'USD');
+        $this->account('CUSTOMER_PAYABLE_USD', 'liability', 'credit', 'USD');
+
+        $ledger = app(LedgerService::class);
+        $ledger->post('seed_yer', '1', 'تمويل ريال', [
+            ['account' => 'CASH_YER', 'direction' => 'debit', 'amount' => '100.0000'],
+            ['account' => 'CUSTOMER_PAYABLE_YER', 'direction' => 'credit', 'amount' => '100.0000'],
+        ]);
+        $ledger->post('fee_yer', '2', 'إيراد رسوم', [
+            ['account' => 'CASH_YER', 'direction' => 'debit', 'amount' => '125.5000'],
+            ['account' => 'REV_FEES_YER', 'direction' => 'credit', 'amount' => '125.5000'],
+        ]);
+        $ledger->post('expense_yer', '3', 'مصروف رسائل', [
+            ['account' => 'EXP_SMS_YER', 'direction' => 'debit', 'amount' => '20.1250'],
+            ['account' => 'CASH_YER', 'direction' => 'credit', 'amount' => '20.1250'],
+        ]);
+        $ledger->post('seed_usd', '4', 'تمويل دولار', [
+            ['account' => 'CASH_USD', 'direction' => 'debit', 'amount' => '5.7500'],
+            ['account' => 'CUSTOMER_PAYABLE_USD', 'direction' => 'credit', 'amount' => '5.7500'],
         ]);
 
-        $report = (new FinancialStatementsService($ledger))->incomeStatement('2026-09-01', '2026-09-30');
+        $service = app(FinancialStatementsService::class);
+        $trial = $service->trialBalance(now()->toDateString(), now()->toDateString());
+        $trialByCurrency = collect($trial['by_currency'])->keyBy('currency');
 
-        $this->assertSame('125.5000', $report['revenue']);
-        $this->assertSame('20.1250', $report['expenses']);
-        $this->assertSame('105.3750', $report['net_income']);
-        $this->assertTrue($report['ledger_balanced']);
+        $this->assertCount(2, $trialByCurrency);
+        $this->assertTrue($trialByCurrency['YER']['balanced']);
+        $this->assertTrue($trialByCurrency['USD']['balanced']);
+        $this->assertSame('245.6250', $trialByCurrency['YER']['period_debit']);
+        $this->assertSame('245.6250', $trialByCurrency['YER']['period_credit']);
+        $this->assertSame('5.7500', $trialByCurrency['USD']['period_debit']);
+        $this->assertSame('5.7500', $trialByCurrency['USD']['period_credit']);
+
+        $income = $service->incomeStatement(now()->toDateString(), now()->toDateString());
+        $incomeYER = collect($income['by_currency'])->firstWhere('currency', 'YER');
+        $this->assertSame('125.5000', $incomeYER['revenue']);
+        $this->assertSame('20.1250', $incomeYER['expenses']);
+        $this->assertSame('105.3750', $incomeYER['net_income']);
+
+        $balance = $service->balanceSheet(now()->toDateString());
+        $balanceByCurrency = collect($balance['by_currency'])->keyBy('currency');
+        $this->assertSame('0.0000', $balanceByCurrency['YER']['equation_gap']);
+        $this->assertSame('0.0000', $balanceByCurrency['USD']['equation_gap']);
+        $this->assertTrue($balanceByCurrency['YER']['balanced']);
+        $this->assertTrue($balanceByCurrency['USD']['balanced']);
     }
 
-    /** @test */
-    public function balance_sheet_exposes_current_earnings_instead_of_hiding_the_equation(): void
+    private function account(string $code, string $type, string $normal, string $currency): void
     {
-        $ledger = Mockery::mock(LedgerReportService::class);
-        $ledger->shouldReceive('trialBalance')->once()->with(null, '2026-09-30')->andReturn([
-            'accounts' => [
-                $this->account(1, 'CASH', 'النقد', 'asset', 'debit', '150.0000'),
-                $this->account(2, 'PAYABLE', 'التزامات', 'liability', 'credit', '60.0000'),
-                $this->account(3, 'CAPITAL', 'رأس المال', 'equity', 'credit', '50.0000'),
-                $this->account(4, 'REV', 'إيراد', 'revenue', 'credit', '45.0000'),
-                $this->account(5, 'EXP', 'مصروف', 'expense', 'debit', '5.0000'),
-            ],
-            'balanced' => true,
-            'unbalanced_entries' => [],
-        ]);
-
-        $report = (new FinancialStatementsService($ledger))->balanceSheet('2026-09-30');
-
-        $this->assertSame('40.0000', $report['current_earnings_not_closed']);
-        $this->assertSame('90.0000', $report['equity_with_current_earnings']);
-        $this->assertSame('0.0000', $report['equation_gap']);
-        $this->assertTrue($report['balanced']);
-    }
-
-    private function account(
-        int $id,
-        string $code,
-        string $name,
-        string $type,
-        string $normal,
-        string $balance,
-    ): array {
-        return [
-            'id' => $id,
+        LedgerAccount::create([
             'account_code' => $code,
-            'name' => $name,
             'account_type' => $type,
+            'name_ar' => $code,
+            'owner_user_id' => null,
+            'owner_type' => 'system',
             'normal_balance' => $normal,
-            'debit_total' => $normal === 'debit' ? $balance : '0.0000',
-            'credit_total' => $normal === 'credit' ? $balance : '0.0000',
-            'computed_balance' => $balance,
-            'stored_balance' => $balance,
-            'drift' => '0.0000',
-            'has_drift' => false,
-        ];
+            'current_balance' => '0.0000',
+            'currency' => $currency,
+            'zone_code' => 'SOUTH',
+            'is_active' => 1,
+        ]);
     }
 }
