@@ -54,6 +54,10 @@ Reviewing the concurrently added email center also exposed a missing action: a v
 
 ## Per-file change reasons
 
+Third repair commit: `60f0ae31896cee2f15369395dc41cc0adadfc23b`, [run 34772224801](https://github.com/Rashed9999/Anjaz/actions/runs/34772224801). The complete 38-case focused email/identity/template/admin suite passed and the full backend step started. This establishes fake-provider runtime coverage of the repaired lifecycle. The follow-up expands the focused gate to the connected legacy/support cases below; inbox delivery and production configuration remain unverified.
+
+Follow-up of baseline integration failures: update the complete agent account-creation chain with the now-required company/branch mailboxes; replace the old support test's expectation of an erased PIN with an approved email followed by customer proof and PIN selection; translate the webhook rejection message. These connected regressions join the focused CI step alongside the existing operational email test. No real messages are sent.
+
 | Repository file | Reason |
 | --- | --- |
 | `.github/workflows/ci.yml` | Run the focused email lifecycle suite before the existing complete backend gate; preserve all mandatory gates and manual APK policy. |
@@ -89,6 +93,7 @@ Reviewing the concurrently added email center also exposed a missing action: a v
 | `01_backend/tests/Feature/AgentCounterReceiptTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/AgentDailySettlementTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/AgentFundingHierarchyTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
+| `01_backend/tests/Feature/AgentLifecycleChainTest.php` | Supply distinct company/branch mailboxes in the complete operator-to-agent-to-customer flow. |
 | `01_backend/tests/Feature/AgentPortalContractTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/AgentPortalTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/AgentReportsTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
@@ -106,6 +111,7 @@ Reviewing the concurrently added email center also exposed a missing action: a v
 | `01_backend/tests/Feature/EmailVerificationCenterGuardTest.php` | Verify actual permission enforcement, masked/full views with error redaction, safe CSV cells and revocation of a still-live verification proof. |
 | `01_backend/tests/Feature/EmailOtpLifecycleTest.php` | Exercise success, failure, expiry, replay, owner binding, atomic registration/recovery/change, rollback, channel settings and signed webhooks with a fake provider. |
 | `01_backend/tests/Feature/KycRegulatoryFieldsTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
+| `01_backend/tests/Feature/InsiderDefenseTest.php` | Prove that support approval sends email only after approval, preserves the current PIN, hides proof from staff, and lets the customer complete PIN recovery using the emailed code. |
 | `01_backend/tests/Feature/MerchantAccountIsUsableGuardTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/PortalHostSeparationTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |
 | `01_backend/tests/Feature/ReceiptDownloadIntegrityTest.php` | Update existing account/branch/registration fixtures with explicit reserved test email addresses so the original assertions exercise their intended behavior under the new identity requirement. No production guard is disabled. |

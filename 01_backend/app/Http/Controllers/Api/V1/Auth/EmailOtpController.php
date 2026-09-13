@@ -377,7 +377,7 @@ class EmailOtpController extends Controller
     public function webhook(Request $request): JsonResponse
     {
         if (!$this->validWebhookSignature($request)) {
-            return $this->error('INVALID_WEBHOOK_SIGNATURE', 'Invalid signature', 401);
+            return $this->error('INVALID_WEBHOOK_SIGNATURE', 'توقيع إشعار البريد غير صالح.', 401);
         }
 
         $payload = $request->json()->all();

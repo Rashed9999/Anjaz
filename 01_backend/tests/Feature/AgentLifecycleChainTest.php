@@ -72,6 +72,7 @@ class AgentLifecycleChainTest extends TestCase
             ->postJson(route('admin.amial.hub.users.store', ['slug' => 'agents']), [
                 'f_name' => 'العمقي', 'l_name' => 'للصرافة',
                 'phone' => '967771600001', 'password' => 'agent-pass-1',
+                'email' => 'agent-chain-company@example.test',
             ] + $this->kycDossier('967771600001'))->assertCreated();
 
         $agent = User::where('phone', '967771600001')->first();
@@ -105,6 +106,7 @@ class AgentLifecycleChainTest extends TestCase
         $this->postJson(route('agent.branch.create'), [
             'name' => 'فرع المكلا', 'code' => 'MKL', 'city' => 'حضرموت',
             'phone' => '967771600002', 'password' => 'branch-pass-1',
+            'email' => 'agent-chain-branch@example.test',
         ])->assertOk();
 
         $branch = AgentBranch::where('code', 'MKL')->first();
@@ -235,6 +237,7 @@ class AgentLifecycleChainTest extends TestCase
             ->postJson(route('admin.amial.hub.users.store', ['slug' => 'agents']), [
                 'f_name' => 'البسيري', 'l_name' => 'للصرافة',
                 'phone' => '967771600009', 'password' => 'agent-pass-9',
+                'email' => 'agent-chain-new-company@example.test',
             ] + $this->kycDossier('967771600009'))->assertCreated();
 
         $agent = User::where('phone', '967771600009')->first();
