@@ -4,13 +4,16 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\AuditService;
+use App\Services\FeeProfitReportService;
 use App\Services\LedgerReportService;
 use App\Services\Reporting\CashLiquidityReportService;
 use App\Services\Reporting\FinancialStatementsService;
+use App\Services\Reporting\GeneralLedgerReportService;
 use App\Services\Reporting\ReportCatalogService;
 use App\Services\Reporting\TransactionMonitoringReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -26,6 +29,8 @@ class ReportingCenterController extends Controller
         private readonly FinancialStatementsService $statements,
         private readonly CashLiquidityReportService $cashLiquidity,
         private readonly TransactionMonitoringReportService $transactions,
+        private readonly GeneralLedgerReportService $generalLedger,
+        private readonly FeeProfitReportService $fees,
         private readonly LedgerReportService $ledger,
         private readonly AuditService $audit,
     ) {
@@ -131,6 +136,45 @@ class ReportingCenterController extends Controller
         ]);
 
         return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function generalLedger(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->query(), [
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'currency' => ['nullable', 'string', 'max:8'],
+            'source_type' => ['nullable', 'string', 'max:100'],
+            'account_code' => ['nullable', 'string', 'max:100'],
+            'search' => ['nullable', 'string', 'max:120'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:10', 'max:100'],
+        ]);
+        abort_if($validator->fails(), 422, $validator->errors()->first());
+
+        $filters = $validator->validated();
+        $payload = $this->generalLedger->report($filters);
+        $this->auditRead($request, 'general_ledger', $filters);
+
+        return response()->json(['success' => true, 'meta' => $payload]);
+    }
+
+    public function feesCommissions(Request $request): JsonResponse
+    {
+        [$from, $to] = $this->period($request);
+        $fromCarbon = Carbon::parse($from ?: now()->startOfMonth()->toDateString())->startOfDay();
+        $toCarbon = Carbon::parse($to ?: now()->toDateString())->endOfDay();
+        $report = $this->fees->forPeriod($fromCarbon, $toCarbon);
+        $report['from'] = $fromCarbon->toDateString();
+        $report['to'] = $toCarbon->toDateString();
+        $report['report'] = 'fees_commissions';
+        $report['basis'] = 'transactions charges + measured platform/agent credits';
+
+        $this->auditRead($request, 'fees_commissions', [
+            'from' => $report['from'], 'to' => $report['to'],
+        ]);
+
+        return response()->json(['success' => true, 'meta' => $report]);
     }
 
     public function reconciliation(Request $request): JsonResponse
