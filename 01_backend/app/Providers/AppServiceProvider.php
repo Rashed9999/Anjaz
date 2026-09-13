@@ -64,6 +64,10 @@ class AppServiceProvider extends ServiceProvider
         // الإداري الكبير، ويظل محمّلاً أيضاً عند route:cache.
         $this->loadRoutesFrom(base_path('routes/admin/reporting-center.php'));
 
+        // AMIAL-CUSTOMER-REPORTS-003 — ملخص تقارير العميل من الدفتر، مستقل
+        // عن transaction-history المحدود بالصفحات، ويظل موجوداً مع route:cache.
+        $this->loadRoutesFrom(base_path('routes/api/v1/customer-reports.php'));
+
         // AMIAL-LEDGER-OPENING-002: محفظةٌ تولد مموَّلة تدخل الدفتر برصيدها.
         // بلا هذا يبدأ حسابها بصفر فيُرفض أوّل خصمٍ ويُبتلع الرفض، فيتحرّك
         // المال بلا قيد. انظر شرح EMoneyObserver.
