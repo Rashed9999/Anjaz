@@ -55,11 +55,13 @@ class ReportingCenterController extends Controller
             'context' => ['catalog_total' => $summary['total']],
         ]);
 
-        // AMIAL-REPORTING-UX-002 — الواجهة التنفيذية هي الافتراضية، مع إبقاء
-        // العرض التشغيلي السابق متاحاً كمسار رجوع آمن أثناء مرحلة التبني.
+        // AMIAL-REPORTING-UX-003 — V3 هي لوحة القرار الافتراضية.
+        // نُبقي V2 والعرض التشغيلي القديم كمسارات رجوع آمنة أثناء التبني.
         $view = $request->boolean('legacy')
             ? 'admin-views.amial.reporting-center.index'
-            : 'admin-views.amial.reporting-center.index-v2';
+            : ($request->integer('dashboard') === 2
+                ? 'admin-views.amial.reporting-center.index-v2'
+                : 'admin-views.amial.reporting-center.index-v3');
 
         return view($view, [
             'catalog' => $this->catalog->catalog(), 'summary' => $summary,
