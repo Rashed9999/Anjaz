@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\AuditService;
 use App\Services\EncryptedFileStorage;
 use App\Services\KycDocumentService;
+use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -47,6 +48,25 @@ class GuardedKycDocumentService extends KycDocumentService
         $this->privacy->assertReviewerAccess($subject, $reviewer, true);
 
         return parent::reject($doc, $reviewer, $reason);
+    }
+
+    /**
+     * فك الملف نفسه بوابة بيانات حساسة، لا مجرد دالة تخزين. الحالة المقيدة
+     * لا تُفك حتى داخلياً في سياق ويب إلا لموظف يملك مفتاح العرض المقيد.
+     */
+    public function decrypt(KycDocument $doc): string
+    {
+        if ($this->privacy->isRestricted((int) $doc->user_id)) {
+            $reviewer = auth('user')->user();
+
+            if (!$reviewer instanceof User) {
+                throw new DomainException('KYC_RESTRICTED_VIEW_REQUIRED');
+            }
+
+            $this->privacy->assertReviewerAccess((int) $doc->user_id, $reviewer, false);
+        }
+
+        return parent::decrypt($doc);
     }
 
     public function decideAccountVerification(
@@ -113,7 +133,7 @@ class GuardedKycDocumentService extends KycDocumentService
     {
         // لا يكفي أن endpoint نفسه محروس؛ الخدمة كذلك حتى لا يفتحها نادٍ آخر.
         if (!$reviewer->hasPlatformPermission('platform.customers.kyc.restricted.view')) {
-            throw new \DomainException('KYC_RESTRICTED_VIEW_REQUIRED');
+            throw new DomainException('KYC_RESTRICTED_VIEW_REQUIRED');
         }
 
         $restricted = $this->restrictedUserIds();
@@ -131,7 +151,7 @@ class GuardedKycDocumentService extends KycDocumentService
     public function restrictedActivationQueue(User $reviewer, int $limit = 100): array
     {
         if (!$reviewer->hasPlatformPermission('platform.customers.kyc.restricted.view')) {
-            throw new \DomainException('KYC_RESTRICTED_VIEW_REQUIRED');
+            throw new DomainException('KYC_RESTRICTED_VIEW_REQUIRED');
         }
 
         $restricted = $this->restrictedUserIds();
