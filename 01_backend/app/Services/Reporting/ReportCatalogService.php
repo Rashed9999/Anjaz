@@ -74,7 +74,8 @@ class ReportCatalogService
                 'reports' => [
                     ['code' => 'system_health_history', 'label' => 'تاريخ صحة النظام والتوفّر المرصود', 'status' => 'ready', 'source' => 'P1ObservabilityReportService ← system_health_checks + system_errors؛ لا يُسمى SLA تعاقدياً', 'priority' => 'P1'],
                     ['code' => 'jobs_queues', 'label' => 'الطوابير والمهام الفاشلة', 'status' => 'ready', 'source' => 'P1ObservabilityReportService ← jobs + failed_jobs بدون كشف payload', 'priority' => 'P1'],
-                    ['code' => 'email_otp', 'label' => 'البريد وOTP والتسليم', 'status' => 'ready', 'source' => 'otp_challenges', 'priority' => 'P2'],
+                    ['code' => 'email_otp', 'label' => 'البريد وOTP والتسليم', 'status' => 'ready', 'source' => 'P2IdentityCommunicationReportService ← otp_challenges aggregate only؛ بلا PII أو أسرار', 'priority' => 'P2'],
+                    ['code' => 'auth_security', 'label' => 'أمان المصادقة ومحاولات الدخول', 'status' => 'ready', 'source' => 'P2IdentityCommunicationReportService ← unified_login_attempts + audit lockouts aggregate only؛ بلا identifier/IP/user-agent', 'priority' => 'P2'],
                     ['code' => 'support_sla', 'label' => 'الدعم وزمن الحل والتراكم', 'status' => 'partial', 'source' => 'P1BusinessOperationsReportService؛ هدف SLA الرسمي غير مضبوط بعد', 'priority' => 'P2'],
                     ['code' => 'subscriptions', 'label' => 'الباقات والاشتراكات والقيمة المتكررة', 'status' => 'ready', 'source' => 'P1BusinessOperationsReportService ← profiles + immutable subscription changes', 'priority' => 'P1'],
                 ],
