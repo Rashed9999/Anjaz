@@ -33,6 +33,7 @@ class ReportingCenterGuardTest extends TestCase
             'admin.amial.reporting-center.merchant-portfolio',
             'admin.amial.reporting-center.inventory-control',
             'admin.amial.reporting-center.credit-control',
+            'admin.amial.reporting-center.vertical-performance',
             'admin.amial.reporting-center.kyc-pipeline',
             'admin.amial.reporting-center.agent-liquidity',
             'admin.amial.reporting-center.audit-sensitive-actions',
@@ -40,6 +41,8 @@ class ReportingCenterGuardTest extends TestCase
             'admin.amial.reporting-center.subscriptions',
             'admin.amial.reporting-center.customer-activity',
             'admin.amial.reporting-center.support-operations',
+            'admin.amial.reporting-center.system-health-history',
+            'admin.amial.reporting-center.queue-operations',
             'admin.amial.reporting-center.aml-regulatory',
         ] as $name) {
             $route = Route::getRoutes()->getByName($name);
@@ -69,20 +72,22 @@ class ReportingCenterGuardTest extends TestCase
         foreach (['transaction_volume', 'failed_reversed_pending', 'fees_commissions'] as $code) {
             $this->assertSame('ready', $transactions[$code]['status'], $code);
         }
-        $this->assertSame('ready', $merchants['merchant_portfolio']['status']);
+        foreach (['merchant_portfolio', 'credit_aging'] as $code) {
+            $this->assertSame('ready', $merchants[$code]['status'], $code);
+        }
         foreach (['customer_activity', 'agent_float'] as $code) {
             $this->assertSame('ready', $agents[$code]['status'], $code);
         }
         foreach (['kyc_pipeline', 'audit_sensitive_actions', 'rbac_changes'] as $code) {
             $this->assertSame('ready', $risk[$code]['status'], $code);
         }
-        $this->assertSame('ready', $operations['subscriptions']['status']);
+        foreach (['subscriptions', 'system_health_history', 'jobs_queues'] as $code) {
+            $this->assertSame('ready', $operations[$code]['status'], $code);
+        }
 
-        // لا نعلن ما لم يكتمل. رقابة المخزون والذمم صارت قابلة للقراءة،
-        // لكن التقييم المالي للمخزون يحتاج سياسة تكلفة/عملة، وتقادم الآجل
-        // الموحد يحتاج تخصيص الدفعات على المبيعات. AML والدعم لهما فجوات معلنة.
+        // لا نعلن ما لم يكتمل: التقييم المالي للمخزون ما زال يحتاج سياسة
+        // تكلفة/عملة صريحة، وAML يحتاج PEP/watchlist، والدعم يحتاج هدف SLA رسمي.
         $this->assertSame('partial', $merchants['inventory_valuation']['status']);
-        $this->assertSame('partial', $merchants['credit_aging']['status']);
         $this->assertSame('partial', $risk['aml_regulatory']['status']);
         $this->assertSame('partial', $operations['support_sla']['status']);
     }
