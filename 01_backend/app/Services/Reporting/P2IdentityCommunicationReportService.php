@@ -7,11 +7,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * AMIAL-REPORTING-OTP-001 — تقرير البريد وOTP بلا PII أو أسرار.
+ * AMIAL-REPORTING-IDENTITY-001 — مؤشرات الهوية والمصادقة بلا PII أو أسرار.
  *
- * لا يقرأ identifier ولا token_hash ولا verification_token_hash ولا
- * last_error ولا provider_message_id. الهدف قياس الخدمة، لا تحويل مركز
- * التقارير إلى شاشة قادرة على كشف هوية المستخدم أو مادة تحقق حساسة.
+ * لا يخرج البريد/الهاتف/IP/identifier أو OTP/hash/token/payload. التقرير
+ * يقيس الخدمة والمخاطر التجميعية فقط، وتبقى التفاصيل الشخصية خلف مراكزها
+ * المخصصة وصلاحيات PII المنفصلة.
  */
 class P2IdentityCommunicationReportService
 {
@@ -91,9 +91,81 @@ class P2IdentityCommunicationReportService
                 'sender_address_configured' => trim((string) config('amial_otp.resend.from_address')) !== '',
                 'sender_name' => (string) config('amial_otp.resend.from_name', 'Amial Pay'),
             ],
+            'privacy' => ['pii_included' => false, 'secret_fields_included' => false],
+            'generated_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    public function authenticationSecurity(?string $from = null, ?string $to = null): array
+    {
+        [$fromDate, $toDate] = $this->period($from, $to);
+        if (! Schema::hasTable('unified_login_attempts')) {
+            return $this->unavailable('unified_login_attempts');
+        }
+
+        $base = DB::table('unified_login_attempts')
+            ->whereBetween('attempted_at', [$fromDate, $toDate]);
+
+        $total = (clone $base)->count();
+        $success = (clone $base)->where('success', 1)->count();
+        $failure = $total - $success;
+
+        $byRole = (clone $base)
+            ->selectRaw("role as value, COUNT(*) as total,
+                SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success,
+                SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failure")
+            ->groupBy('role')->orderByDesc('total')->get()
+            ->map(fn ($r) => [
+                'value' => (string) $r->value,
+                'total' => (int) $r->total,
+                'success' => (int) $r->success,
+                'failure' => (int) $r->failure,
+                'success_rate_pct' => $this->ratio((int) $r->success, (int) $r->total),
+            ])->all();
+
+        $failureReasons = (clone $base)
+            ->where('success', 0)
+            ->whereNotNull('failure_reason')
+            ->selectRaw('failure_reason as value, COUNT(*) as total')
+            ->groupBy('failure_reason')->orderByDesc('total')->limit(30)->get()
+            ->map(fn ($r) => ['value' => (string) $r->value, 'total' => (int) $r->total])
+            ->all();
+
+        // نعد مصادر الهجوم المحتملة فقط، ولا نعيد الـIP نفسه إلى التقرير.
+        $repeatedFailureSources = (clone $base)
+            ->where('success', 0)
+            ->selectRaw('ip_address, COUNT(*) as failures')
+            ->groupBy('ip_address')
+            ->havingRaw('COUNT(*) >= 5')
+            ->get()->count();
+
+        $lockouts = null;
+        if (Schema::hasTable('audit_decisions')) {
+            $lockouts = DB::table('audit_decisions')
+                ->whereBetween('created_at', [$fromDate, $toDate])
+                ->where('decision_code', 'ACCOUNT_TEMP_LOCKED')
+                ->count();
+        }
+
+        return [
+            'report' => 'auth_security',
+            'from' => $fromDate->toDateString(),
+            'to' => $toDate->toDateString(),
+            'basis' => 'unified_login_attempts aggregate fields + audit lockout decisions; identifier/IP/user-agent are not exposed',
+            'attempts' => $total,
+            'successful' => $success,
+            'failed' => $failure,
+            'success_rate_pct' => $this->ratio($success, $total),
+            'failure_rate_pct' => $this->ratio($failure, $total),
+            'repeated_failure_sources' => $repeatedFailureSources,
+            'temporary_lockouts' => $lockouts,
+            'by_role' => $byRole,
+            'failure_reasons' => $failureReasons,
             'privacy' => [
-                'pii_included' => false,
-                'secret_fields_included' => false,
+                'identifier_included' => false,
+                'ip_address_included' => false,
+                'user_agent_included' => false,
             ],
             'generated_at' => now()->toIso8601String(),
         ];
