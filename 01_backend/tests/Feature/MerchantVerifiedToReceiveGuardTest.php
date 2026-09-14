@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\MerchantVerificationService;
 use App\Services\PaymentRequestService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
 /**
@@ -43,6 +44,7 @@ use Tests\TestCase;
 class MerchantVerifiedToReceiveGuardTest extends TestCase
 {
     use RefreshDatabase;
+    use EstablishesKycEvidence;
 
     /** تاجرٌ بحالة توثيقٍ محدّدة وحدودٍ سخيّة (فالمقياسُ هو التوثيق لا الحدّ). */
     private function merchant(string $status): User
@@ -60,30 +62,12 @@ class MerchantVerifiedToReceiveGuardTest extends TestCase
     }
 
     /**
-     * AMIAL-KYC-EVIDENCE-001 — **ملفُّ هويّةٍ مكتملٌ ومعتمَد.**
-     *
-     * كان هذا الحارسُ يفترض أنّ اعتمادَ **النشاط التجاريّ** يرفع قفلَ
-     * المال عن تاجرٍ **بلا وثيقةِ هويّةٍ واحدة** — وهو ثغرةُ امتثالٍ لا
-     * ميزة: سجلُّ المتجر لا يثبت هويّةَ صاحبه. فصار الملفُّ يُستوفى هنا،
-     * ويبقى المحروسُ كما هو: **الاعتمادُ يرفع القفلَ فعلاً لا اسماً**.
+     * ملف هوية مكتملٌ **ومثبت الملكية**؛ ثلاث صور وحدها لا تكفي بعد
+     * AMIAL-KYC-OWNERSHIP-001.
      */
-    private function completeIdentity(User $u): void
+    private function completeIdentity(User $u, ?User $reviewer = null): void
     {
-        $u->residence_governorate = 'عدن';
-        $u->save();
-
-        foreach ([
-            \App\Models\KycDocument::TYPE_ID_FRONT,
-            \App\Models\KycDocument::TYPE_ID_BACK,
-            \App\Models\KycDocument::TYPE_SELFIE,
-        ] as $type) {
-            \App\Models\KycDocument::create([
-                'user_id' => $u->id, 'doc_type' => $type,
-                'status' => \App\Models\KycDocument::STATUS_APPROVED,
-                'encrypted_path' => 'kyc/'.\Illuminate\Support\Str::random(8).'.enc',
-                'size_bytes' => 1024, 'ocr_status' => 'not_run',
-            ]);
-        }
+        $this->establishKycEvidence($u, 2, $reviewer);
     }
 
     private function customer(): User
@@ -201,9 +185,9 @@ class MerchantVerifiedToReceiveGuardTest extends TestCase
         $this->assertSame(0, (int) $merchant->fresh()->is_kyc_verified,
             'قبل الاعتماد: التاجرُ غيرُ موثّق');
 
-        // **وملفُّ هويّته مكتملٌ ومعتمَد** — فاعتمادُ النشاط يرفع القفلَ
-        // عبر البابِ الواحد، لا بكتابةِ الحقل مباشرةً.
-        $this->completeIdentity($merchant);
+        // **وملفُّ هويّته مكتملٌ ومثبت الملكية** — فاعتمادُ النشاط يرفع
+        // القفلَ عبر البابِ الواحد، لا بكتابةِ الحقل مباشرةً.
+        $this->completeIdentity($merchant, $admin);
 
         app(MerchantVerificationService::class)->approve($req, $admin->id);
 
