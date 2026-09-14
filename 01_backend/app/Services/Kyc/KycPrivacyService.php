@@ -30,8 +30,10 @@ class KycPrivacyService
 
     public function biometricConfigured(): bool
     {
-        $provider = trim((string) config('amial.kyc.biometric.provider', ''));
-        return $provider !== '' && $provider !== 'none';
+        $provider = trim((string) config('amial_kyc.biometric.provider', 'none'));
+        $enabled = (bool) config('amial_kyc.biometric.enabled', false);
+
+        return $enabled && $provider !== '' && $provider !== 'none';
     }
 
     /** @return array<string,mixed> */
@@ -73,40 +75,47 @@ class KycPrivacyService
 
         $restricted = $mode === self::MODE_RESTRICTED;
         $provider = $this->biometricConfigured()
-            ? trim((string) config('amial.kyc.biometric.provider'))
+            ? trim((string) config('amial_kyc.biometric.provider'))
             : null;
 
         $now = now();
-        DB::table('kyc_verification_cases')->updateOrInsert(
-            ['user_id' => (int) $user->id],
-            [
-                'review_mode' => $mode,
-                'ownership_method' => $mode === self::MODE_AUTOMATED
-                    ? 'biometric_liveness_face_match'
-                    : ($mode === self::MODE_IN_PERSON ? 'in_person_pending' : 'legacy_selfie_review'),
-                'status' => $mode === self::MODE_IN_PERSON ? 'manual_review' : 'collecting',
-                'liveness_status' => $mode === self::MODE_AUTOMATED ? 'pending' : 'not_configured',
-                'liveness_score' => null,
-                'face_match_status' => $mode === self::MODE_AUTOMATED ? 'pending' : 'not_configured',
-                'face_match_score' => null,
-                'biometric_provider' => $mode === self::MODE_AUTOMATED ? $provider : null,
-                'provider_reference' => null,
-                'restricted_review' => $restricted,
-                'requested_at' => $now,
-                'reviewed_by' => null,
-                'reviewed_at' => null,
-                'decision_reason' => null,
+        $values = [
+            'review_mode' => $mode,
+            'ownership_method' => $mode === self::MODE_AUTOMATED
+                ? 'biometric_liveness_face_match'
+                : ($mode === self::MODE_IN_PERSON ? 'in_person_pending' : 'legacy_selfie_review'),
+            'status' => $mode === self::MODE_IN_PERSON ? 'manual_review' : 'collecting',
+            'liveness_status' => $mode === self::MODE_AUTOMATED ? 'pending' : 'not_configured',
+            'liveness_score' => null,
+            'face_match_status' => $mode === self::MODE_AUTOMATED ? 'pending' : 'not_configured',
+            'face_match_score' => null,
+            'biometric_provider' => $mode === self::MODE_AUTOMATED ? $provider : null,
+            'provider_reference' => null,
+            'restricted_review' => $restricted,
+            'requested_at' => $now,
+            'reviewed_by' => null,
+            'reviewed_at' => null,
+            'decision_reason' => null,
+            'updated_at' => $now,
+        ];
+
+        // updateOrInsert مع created_at داخل قيم التحديث كان يعيد كتابة تاريخ
+        // إنشاء القضية عند كل تغيير للخصوصية. تاريخ الطلب يتغير؛ تاريخ إنشاء
+        // السجل لا. لذلك نفصل الإنشاء عن التحديث.
+        $exists = DB::table('kyc_verification_cases')->where('user_id', $user->id)->exists();
+        if ($exists) {
+            DB::table('kyc_verification_cases')->where('user_id', $user->id)->update($values);
+        } else {
+            DB::table('kyc_verification_cases')->insert($values + [
+                'user_id' => (int) $user->id,
                 'created_at' => $now,
-                'updated_at' => $now,
-            ],
-        );
+            ]);
+        }
 
         return $this->forUser($user);
     }
 
-    /**
-     * ينشئ الحالة الافتراضية للحساب الجديد دون اختراع تحقق بيومتري.
-     */
+    /** ينشئ الحالة الافتراضية للحساب الجديد دون اختراع تحقق بيومتري. */
     public function ensure(User $user): array
     {
         if (!Schema::hasTable('kyc_verification_cases')) {
