@@ -168,6 +168,7 @@ class CustomerCreditSettleService
                 referenceType: 'debt_payment',
                 referenceId: $primaryId,
                 referenceNumber: $transactionNo,
+                saleMovementUlid: $saleMovementUlid,
             );
 
             if (!$movement) {

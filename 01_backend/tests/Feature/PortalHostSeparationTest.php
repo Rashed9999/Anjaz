@@ -46,7 +46,6 @@ class PortalHostSeparationTest extends TestCase
     private function admin(string $phone = '967770001001'): User
     {
         $u = new User();
-        $u->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $u->forceFill([
             'f_name' => 'مدير', 'l_name' => 'المنصّة', 'phone' => $phone,
             'email' => $phone . '@amialpay.test',
@@ -63,6 +62,7 @@ class PortalHostSeparationTest extends TestCase
         $u = new User();
         $u->forceFill([
             'f_name' => 'البسيري', 'l_name' => 'للصرافة', 'phone' => $phone,
+            'email' => 'portal-company-' . $phone . '@example.test',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
             'is_kyc_verified' => 1, 'is_active' => 1,
         ])->save();

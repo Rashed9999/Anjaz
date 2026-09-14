@@ -55,7 +55,7 @@ class CreditSourceSettlementService
      * القيد هو دفتر الحقيقة الوحيد. نعيد لعب القيود لنحسب المتبقي لكل
      * فاتورة؛ فلا ننشئ جدول "فواتير مؤجلة" موازياً قد يختلف عن الرصيد.
      * السدادات القديمة التي لم تحدد فاتورة تبقى FIFO، والسداد الجديد الذي
-     * يحدده العميل يحمل ULID الفاتورة في مرجعه ويخصم منها تحديداً.
+     * يحدده العميل يحمل ULID الفاتورة مستقلاً عن مرجع العملية المالية.
      *
      * @return array<int,array<string,mixed>>
      */
@@ -78,8 +78,9 @@ class CreditSourceSettlementService
             if (str_starts_with($value, '-')) {
                 // السداد الذي اختار العميل له فاتورة لا يُحوّل بصمت إلى
                 // أقدم فاتورة. القيود القديمة تبقى FIFO للتوافق التاريخي.
-                $target = $movement->reference_type === 'credit_sale_payment'
-                    ? (string) $movement->reference_id : null;
+                $target = $movement->sale_movement_ulid
+                    ?: ($movement->reference_type === 'credit_sale_payment'
+                        ? (string) $movement->reference_id : null);
                 $this->consume($open, ltrim($value, '-'), $target ?: null);
                 continue;
             }

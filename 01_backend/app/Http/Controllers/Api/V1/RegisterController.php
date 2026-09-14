@@ -190,7 +190,8 @@ class RegisterController extends Controller
         DB::transaction(function () use ($request, $verify, $phone, $signaturePath, $accountType, &$loginNumbers) {
             $verify?->delete();
 
-            $user = $this->user;
+            // A reused controller must never mutate the previous registrant.
+            $user = $this->user->newInstance();
             $user->f_name = $request->f_name;
             $user->l_name = $request->l_name;
             $user->image = $request->has('image') ? Helpers::upload('customer/', APPLICATION_IMAGE_FORMAT, $request->file('image')) : null;
@@ -313,7 +314,7 @@ class RegisterController extends Controller
                 ]);
             }
 
-            $emoney = $this->eMoney;
+            $emoney = $this->eMoney->newInstance();
             $emoney->user_id = $user->id;
             $emoney->save();
 
@@ -517,7 +518,7 @@ class RegisterController extends Controller
         DB::transaction(function () use ($request, $verify, $phone) {
             $verify?->delete();
 
-            $user = $this->user;
+            $user = $this->user->newInstance();
             $user->f_name = $request->f_name;
             $user->l_name = $request->l_name;
             $user->image = $request->has('image') ? Helpers::upload('agent/', APPLICATION_IMAGE_FORMAT, $request->file('image')) : null;
@@ -539,7 +540,7 @@ class RegisterController extends Controller
             // AMIAL-SELFREG-KYCDOCS-001 — انظر `ingestKycDocuments` أسفله.
             $this->ingestKycDocuments($user, $request);
 
-            $emoney = $this->eMoney;
+            $emoney = $this->eMoney->newInstance();
             $emoney->user_id = $user->id;
             $emoney->save();
         });

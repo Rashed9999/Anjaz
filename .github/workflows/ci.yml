@@ -147,11 +147,11 @@ jobs:
 
       - name: تحقق دورة البريد قبل الاختبارات الشاملة
         working-directory: 01_backend
-        run: php artisan test --compact tests/Feature/EmailOtpLifecycleTest.php tests/Feature/EmailIdentityGuardTest.php tests/Feature/AmialOtpEmailTemplateTest.php tests/Feature/EmailVerificationCenterGuardTest.php tests/Feature/AgentLifecycleChainTest.php tests/Feature/InsiderDefenseTest.php tests/Feature/ArabicUserMessagesGuardTest.php tests/Feature/OpsAlertResendGuardTest.php tests/Feature/DemoOtpTest.php tests/Feature/DemoMoneyGuardTest.php
+        run: php artisan test --compact tests/Feature/EmailOtpLifecycleTest.php tests/Feature/EmailIdentityGuardTest.php tests/Feature/AmialOtpEmailTemplateTest.php tests/Feature/EmailVerificationCenterGuardTest.php tests/Feature/AgentLifecycleChainTest.php tests/Feature/InsiderDefenseTest.php tests/Feature/ArabicUserMessagesGuardTest.php tests/Feature/OpsAlertResendGuardTest.php tests/Feature/DemoOtpTest.php tests/Feature/DemoMoneyGuardTest.php tests/Feature/KycRegulatoryFieldsTest.php tests/Feature/PortalHostSeparationTest.php
 
       - name: تحقق عوائق الخادم السابقة
         working-directory: 01_backend
-        run: php artisan test --compact tests/Feature/DonationsServiceTest.php tests/Feature/CharityServiceTest.php tests/Feature/CharityPayoutAndFundTraceGuardTest.php tests/Feature/KycSanctionTest.php tests/Feature/CustomerCenterTest.php tests/Feature/MerchantOperationsCenterTest.php tests/Feature/MerchantStaffTest.php tests/Feature/StaffDisableRevokesNowGuardTest.php
+        run: php artisan test --compact tests/Feature/DonationsServiceTest.php tests/Feature/CharityServiceTest.php tests/Feature/CharityPayoutAndFundTraceGuardTest.php tests/Feature/KycSanctionTest.php tests/Feature/CustomerCenterTest.php tests/Feature/MerchantOperationsCenterTest.php tests/Feature/MerchantStaffTest.php tests/Feature/StaffDisableRevokesNowGuardTest.php tests/Feature/CustomerCreditSettleTest.php tests/Feature/CustomerCreditViewTest.php tests/Feature/LedgerCoverageGuardTest.php
 
       - name: تشغيل كل اختبارات الخادم
         working-directory: 01_backend

@@ -175,6 +175,7 @@ class KycRegulatoryFieldsTest extends TestCase
     public function pep_denied_and_pep_declared_are_told_apart(): void
     {
         $denied = $this->register(['is_pep' => '0']);
+        $firstEmail = $denied->email;
 
         $this->assertFalse((bool) $denied->is_pep);
         $this->assertNotNull($denied->is_pep, '«أنكر» خُلط بـ«لم يُسأل»');
@@ -189,6 +190,12 @@ class KycRegulatoryFieldsTest extends TestCase
 
         $this->assertTrue((bool) $declared->is_pep);
         $this->assertSame('وكيل وزارة', $declared->pep_position);
+        $this->assertNotSame($denied->id, $declared->id);
+        $this->assertSame($firstEmail, $denied->fresh()->email);
+        $this->assertFalse((bool) $denied->fresh()->is_pep);
+        foreach ([$denied, $declared] as $registrant) {
+            $this->assertSame(1, \App\Models\EMoney::where('user_id', $registrant->id)->count());
+        }
     }
 
     /** @test */

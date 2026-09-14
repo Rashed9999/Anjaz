@@ -164,7 +164,7 @@ class CustomerCreditSettleTest extends TestCase
         $selected = $this->svc->recordSale($account, '900', referenceNumber: 'NEW-1');
 
         Passport::actingAs($this->customer->fresh(), [], 'api');
-        $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+        $response = $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
             'amount' => '400',
             'pin' => '1234',
             'sale_movement_ulid' => $selected->movement_ulid,
@@ -179,5 +179,52 @@ class CustomerCreditSettleTest extends TestCase
         $this->assertSame('1000.0000', $byReference['OLD-1']['remaining']);
         $this->assertSame('500.0000', $byReference['NEW-1']['remaining']);
         $this->assertNotSame($older->movement_ulid, $selected->movement_ulid);
+
+        $this->assertDatabaseHas('customer_credit_movements', [
+            'account_id' => $account->id,
+            'type' => 'payment',
+            'reference_type' => 'debt_payment',
+            'reference_id' => $response->json('meta.transaction_id'),
+            'sale_movement_ulid' => $selected->movement_ulid,
+        ]);
+
+        // إعادة القراءة والسداد يجب أن يحترما المتبقي نفسه، لا أن يخصما
+        // من الفاتورة الأقدم في الجولة التالية.
+        $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+            'amount' => '500', 'pin' => '1234',
+            'sale_movement_ulid' => $selected->movement_ulid,
+        ])->assertOk()->assertJsonPath('meta.new_balance', '1000.0000');
+
+        $remaining = app(\App\Services\CreditSourceSettlementService::class)
+            ->openInvoices($account->fresh());
+        $this->assertCount(1, $remaining);
+        $this->assertSame('OLD-1', $remaining[0]['reference_number']);
+        $this->assertSame('1000.0000', $remaining[0]['remaining']);
+        $this->assertSame('9100.0000',
+            (string) EMoney::where('user_id', $this->customer->id)->value('current_balance'));
+        $this->assertSame('900.0000',
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'));
+    }
+
+    public function test_a_sale_from_another_account_cannot_receive_the_payment(): void
+    {
+        $account = $this->svc->findOrCreateAccount($this->merchant->id, '+967771700066', 'علي');
+        $this->svc->recordSale($account, '1000');
+        $other = $this->svc->findOrCreateAccount($this->merchant->id, '+967771700077', 'عميل آخر');
+        $sale = $this->svc->recordSale($other, '900');
+
+        Passport::actingAs($this->customer->fresh(), [], 'api');
+        $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+            'amount' => '400', 'pin' => '1234',
+            'sale_movement_ulid' => $sale->movement_ulid,
+        ])->assertStatus(422);
+
+        $this->assertSame('1000.0000', (string) $account->fresh()->current_balance);
+        $this->assertSame('900.0000', (string) $other->fresh()->current_balance);
+        $this->assertSame('10000.0000',
+            (string) EMoney::where('user_id', $this->customer->id)->value('current_balance'));
+        $this->assertSame('0.0000',
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'));
+        $this->assertDatabaseMissing('transactions', ['transaction_type' => 'debt_payment']);
     }
 }
