@@ -17,11 +17,6 @@ use Illuminate\Support\Facades\Schema;
  * كل المتحكمات والخدمات التي تطلب KycDocumentService ستحصل على هذا الصنف
  * من الحاوية. بذلك لا يمكن لمسار قديم أو تاجر أو لجنة أخرى تجاوز إثبات
  * الملكية أو طابور الخصوصية المقيد بمجرد أنه لا يستخدم شاشة KYC الجديدة.
- *
- * نترك KycDocumentService الأصلي كما هو للحفاظ على قواعده الراسخة، ثم
- * نضيف هنا القواعد الجديدة. القرار الأب يقع داخل معاملة خارجية؛ فإذا نجح
- * في كل قواعده القديمة ثم فشل إثبات الملكية، تُلغى المعاملة كلها ولا يبقى
- * الحساب موثقاً نصف توثيق.
  */
 class GuardedKycDocumentService extends KycDocumentService
 {
@@ -121,11 +116,12 @@ class GuardedKycDocumentService extends KycDocumentService
     public function activationQueue(int $limit = 100): array
     {
         $restricted = $this->restrictedUserIds();
-
-        return array_values(array_filter(
+        $rows = array_values(array_filter(
             parent::activationQueue($limit + count($restricted)),
             fn (array $row) => !isset($restricted[(int) $row['user_id']]),
         ));
+
+        return $this->withOwnership($rows);
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -159,10 +155,35 @@ class GuardedKycDocumentService extends KycDocumentService
             return [];
         }
 
-        return array_values(array_filter(
+        $rows = array_values(array_filter(
             parent::activationQueue($limit + count($restricted)),
             fn (array $row) => isset($restricted[(int) $row['user_id']]),
         ));
+
+        return $this->withOwnership($rows);
+    }
+
+    /**
+     * «الوثائق مكتملة» ليست «الحساب جاهز». نضيف نتيجة حارس الملكية نفسها
+     * إلى الطابور كي تقرأها الواجهة قبل إظهار زر القرار.
+     *
+     * @param array<int,array<string,mixed>> $rows
+     * @return array<int,array<string,mixed>>
+     */
+    private function withOwnership(array $rows): array
+    {
+        return array_values(array_map(function (array $row): array {
+            $user = User::find((int) $row['user_id']);
+
+            return $row + [
+                'ownership' => $user ? $this->ownership->assess($user) : [
+                    'ready' => false,
+                    'method' => 'unknown',
+                    'blockers' => ['الحساب غير موجود.'],
+                    'evidence' => [],
+                ],
+            ];
+        }, $rows));
     }
 
     /** @return array<int,true> user_id => true */
