@@ -1,19 +1,54 @@
 @extends('layouts.admin.app')
 
-@section('title', 'تتبع تسريب مستندات KYC')
+@section('title', 'خصوصية وتتبع مستندات KYC')
 
 @section('content')
 <div class="content container-fluid" dir="rtl">
     <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
         <div>
-            <h2 class="page-header-title mb-1">مركز تتبّع مستندات الهوية</h2>
-            <div class="text-muted">كل مشاهدة آمنة تحمل رمزاً يربط الصورة بالموظف والجلسة ووقت العرض.</div>
+            <h2 class="page-header-title mb-1">مركز خصوصية وتتبّع الهوية</h2>
+            <div class="text-muted">مسار الخصوصية، حالة إثبات صاحب الهوية، وتتبع كل نسخة مشاهدة إلى الموظف.</div>
         </div>
         <a href="{{ route('admin.amial.kyc.page') }}" class="btn btn-outline-secondary ms-auto">العودة إلى لجنة التحقق</a>
     </div>
 
+    <div class="row g-3 mb-4">
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center">
+                    <div>
+                        <h5 class="card-header-title mb-1">حالات الخصوصية وإثبات صاحب الهوية</h5>
+                        <div class="small text-muted">لا تُحوّل «غير مربوط» إلى صفر أو نجاح؛ الحالة تُعرض كما هي.</div>
+                    </div>
+                    <button id="privacy-refresh" class="btn btn-sm btn-outline-primary ms-auto">تحديث</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead><tr>
+                            <th>الحساب</th><th>مسار المراجعة</th><th>إثبات الملكية</th><th>Liveness</th><th>Face Match</th>
+                        </tr></thead>
+                        <tbody id="privacy-cases">
+                            <tr><td colspan="5" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="card-header-title mb-0">ماذا تعني الحالات؟</h5></div>
+                <div class="card-body small">
+                    <div class="mb-3"><strong>خصوصية إضافية:</strong> صورة الوجه محمية بصلاحية بيومترية مستقلة، وكل مشاهدة مائية ومسجلة.</div>
+                    <div class="mb-3"><strong>تحقق آلي خاص:</strong> لا يصبح متاحاً إلا بعد ربط مزود حقيقي لـ Liveness وFace Match.</div>
+                    <div class="mb-3"><strong>تحقق حضوري:</strong> طلب مسار يدوي؛ لا يتجاوز متطلبات الاعتماد الحالية حتى تعتمد السياسة الرقابية.</div>
+                    <div class="alert alert-info mb-0" id="biometric-readiness">حالة المزود البيومتري: جارٍ الفحص…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="alert alert-warning">
-        <strong>استخدام رقابي فقط.</strong>
+        <strong>تتبّع تسريب صورة.</strong>
         أدخل رمز <span class="font-monospace">VIEW</span> الظاهر على الصورة المسرّبة، مثل
         <span class="font-monospace">AM-0123ABCDEF456789ABCD</span>. لا تُعرض هنا صورة الهوية نفسها.
     </div>
@@ -62,7 +97,52 @@
     const button = document.getElementById('trace-search');
     const result = document.getElementById('trace-result');
     const endpoint = @json(route('admin.amial.kyc.privacy.trace'));
+    const casesEndpoint = @json(route('admin.amial.kyc.privacy.cases'));
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    const statusBadge = (kind, status, score) => {
+        const labels = {
+            not_configured: 'غير مربوط', pending: 'قيد التنفيذ', passed: 'اجتاز', failed: 'فشل',
+            manual_review: 'مراجعة بشرية', matched: 'متطابق', not_matched: 'غير متطابق'
+        };
+        const cls = ['passed', 'matched'].includes(status) ? 'success'
+            : ['failed', 'not_matched'].includes(status) ? 'danger'
+            : status === 'not_configured' ? 'secondary' : 'warning text-dark';
+        const scoreText = score == null ? '' : ` · ${esc(score)}`;
+        return `<span class="badge bg-${cls}">${esc(labels[status] || status)}${scoreText}</span>`;
+    };
+
+    async function loadPrivacyCases() {
+        const body = document.getElementById('privacy-cases');
+        const readiness = document.getElementById('biometric-readiness');
+        body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>';
+        try {
+            const r = await fetch(casesEndpoint, {headers: {'Accept': 'application/json'}});
+            const j = await r.json();
+            if (!j.success) {
+                body.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">${esc(j.message || 'تعذّر التحميل')}</td></tr>`;
+                readiness.className = 'alert alert-danger mb-0';
+                readiness.textContent = j.message || 'تعذّر فحص المزود البيومتري';
+                return;
+            }
+            const rows = j.data.cases || [];
+            readiness.className = j.data.biometric_provider_configured ? 'alert alert-success mb-0' : 'alert alert-warning mb-0';
+            readiness.textContent = j.data.biometric_provider_configured
+                ? 'مزود بيومتري حقيقي مفعّل — يمكن بدء التحقق الآلي.'
+                : 'لا يوجد مزود بيومتري مفعّل — لا يعرض أميال درجات Liveness أو Face Match وهمية.';
+            body.innerHTML = rows.length ? rows.map(c => `
+                <tr>
+                    <td><strong>${esc(c.name)}</strong><div class="small text-muted font-monospace">#${esc(c.user_id)} · ${esc(c.phone)}</div></td>
+                    <td>${c.restricted_review ? '<span class="badge bg-danger">مقيدة</span> ' : ''}${esc(c.review_mode_label)}</td>
+                    <td class="small">${esc(c.ownership_method_label)}</td>
+                    <td>${statusBadge('liveness', c.liveness.status, c.liveness.score)}</td>
+                    <td>${statusBadge('face', c.face_match.status, c.face_match.score)}</td>
+                </tr>`).join('')
+                : '<tr><td colspan="5" class="text-center text-muted py-4">لا توجد حالات خصوصية مسجلة بعد. تظهر عند فتح شاشة الخصوصية أو اختيار مسار.</td></tr>';
+        } catch (_) {
+            body.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">تعذّر الاتصال بمركز الخصوصية.</td></tr>';
+        }
+    }
 
     async function lookup() {
         const trace = input.value.trim().toUpperCase();
@@ -103,8 +183,10 @@
         }
     }
 
+    document.getElementById('privacy-refresh').addEventListener('click', loadPrivacyCases);
     button.addEventListener('click', lookup);
     input.addEventListener('keydown', e => { if (e.key === 'Enter') lookup(); });
+    loadPrivacyCases();
 })();
 </script>
 @endsection
