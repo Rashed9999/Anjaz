@@ -176,13 +176,12 @@ class P1BusinessOperationsReportService
             return $this->unavailable('support_tickets');
         }
 
-        $period = SupportTicket::query()->whereBetween('created_at', [$fromDate, $toDate]);
+        $createdInPeriod = SupportTicket::query()->whereBetween('created_at', [$fromDate, $toDate]);
+        $resolvedInPeriod = SupportTicket::query()->whereBetween('resolved_at', [$fromDate, $toDate]);
         $openStatuses = ['open', 'investigating', 'waiting_customer'];
         $openNow = SupportTicket::query()->whereIn('status', $openStatuses);
 
-        $resolved = (clone $period)
-            ->whereNotNull('resolved_at')
-            ->get(['created_at', 'resolved_at']);
+        $resolved = (clone $resolvedInPeriod)->get(['created_at', 'resolved_at']);
         $resolutionMinutes = null;
         if ($resolved->isNotEmpty()) {
             $totalMinutes = $resolved->reduce(
@@ -193,13 +192,59 @@ class P1BusinessOperationsReportService
             $resolutionMinutes = (int) round($totalMinutes / $resolved->count());
         }
 
+        $targets = $this->supportSlaTargets();
+        $missingPriorities = array_keys(array_filter($targets, fn (?int $target): bool => $target === null));
+        $slaConfigured = $missingPriorities === [];
+        $slaEvaluated = 0;
+        $slaBreaches = 0;
+        $slaByPriority = [];
+
+        foreach (SupportTicket::PRIORITIES as $priority) {
+            $slaByPriority[$priority] = [
+                'priority' => $priority,
+                'target_minutes' => $targets[$priority],
+                'evaluated' => 0,
+                'breached' => 0,
+                'breach_rate_pct' => null,
+            ];
+        }
+
+        if ($slaConfigured) {
+            $evaluationNow = now();
+            $tickets = (clone $createdInPeriod)->get(['priority', 'created_at', 'resolved_at']);
+
+            foreach ($tickets as $ticket) {
+                $priority = (string) $ticket->priority;
+                if (! array_key_exists($priority, $targets) || $targets[$priority] === null) {
+                    continue;
+                }
+
+                $endedAt = $ticket->resolved_at ?: $evaluationNow;
+                $elapsed = max(0, $ticket->created_at->diffInMinutes($endedAt, false));
+                $breached = $elapsed > $targets[$priority];
+
+                $slaEvaluated++;
+                $slaByPriority[$priority]['evaluated']++;
+                if ($breached) {
+                    $slaBreaches++;
+                    $slaByPriority[$priority]['breached']++;
+                }
+            }
+
+            foreach ($slaByPriority as $priority => $row) {
+                $slaByPriority[$priority]['breach_rate_pct'] = $this->percentage($row['breached'], $row['evaluated']);
+            }
+        }
+
+        $slaBreachRate = $slaConfigured ? $this->percentage($slaBreaches, $slaEvaluated) : null;
+
         return [
             'report' => 'support_sla',
-            'basis' => 'support_tickets lifecycle timestamps',
+            'basis' => 'support_tickets lifecycle timestamps; SLA policy is explicit config and is never guessed',
             'from' => $fromDate->toDateString(),
             'to' => $toDate->toDateString(),
-            'created_in_period' => (clone $period)->count(),
-            'resolved_in_period' => (clone $period)->whereNotNull('resolved_at')->count(),
+            'created_in_period' => (clone $createdInPeriod)->count(),
+            'resolved_in_period' => $resolved->count(),
             'open_backlog' => (clone $openNow)->count(),
             'unassigned_backlog' => (clone $openNow)->whereNull('assigned_admin_id')->count(),
             'urgent_backlog' => (clone $openNow)->where('priority', 'urgent')->count(),
@@ -210,12 +255,20 @@ class P1BusinessOperationsReportService
                 '4_7_days' => (clone $openNow)->whereBetween('created_at', [now()->subDays(7), now()->subDays(3)])->count(),
                 '8_plus_days' => (clone $openNow)->where('created_at', '<', now()->subDays(7))->count(),
             ],
-            'by_status' => $this->countTicketsBy($period, 'status'),
-            'by_priority' => $this->countTicketsBy($period, 'priority'),
-            'by_category' => $this->countTicketsBy($period, 'category'),
-            // لا نخترع SLA. عند إضافة سياسة زمنية رسمية يمكن حساب breach rate.
-            'sla_target_configured' => false,
-            'sla_breach_rate' => null,
+            'by_status' => $this->countTicketsBy($createdInPeriod, 'status'),
+            'by_priority' => $this->countTicketsBy($createdInPeriod, 'priority'),
+            'by_category' => $this->countTicketsBy($createdInPeriod, 'category'),
+            'sla_target_configured' => $slaConfigured,
+            'sla_targets_minutes' => $targets,
+            'sla_missing_priorities' => $missingPriorities,
+            'sla_clock' => (string) config('amial_reporting.support_sla.clock', 'wall_clock'),
+            'sla_waiting_customer_pauses_clock' => (bool) config('amial_reporting.support_sla.waiting_customer_pauses_clock', false),
+            'sla_evaluation_basis' => 'tickets_created_in_period; resolved uses resolved_at, unresolved uses current server time',
+            'sla_evaluated_tickets' => $slaEvaluated,
+            'sla_breaches' => $slaConfigured ? $slaBreaches : null,
+            'sla_breach_rate' => $slaBreachRate,
+            'sla_breach_rate_pct' => $slaBreachRate,
+            'sla_by_priority' => array_values($slaByPriority),
             'generated_at' => now()->toIso8601String(),
         ];
     }
@@ -229,6 +282,29 @@ class P1BusinessOperationsReportService
             ->get()
             ->map(fn ($row) => ['value' => (string) ($row->value ?? 'unknown'), 'total' => (int) $row->total])
             ->all();
+    }
+
+    /** @return array{low:?int,normal:?int,high:?int,urgent:?int} */
+    private function supportSlaTargets(): array
+    {
+        $configured = (array) config('amial_reporting.support_sla.resolution_minutes', []);
+        $targets = [];
+
+        foreach (SupportTicket::PRIORITIES as $priority) {
+            $value = $configured[$priority] ?? null;
+            $targets[$priority] = is_numeric($value) && (int) $value > 0 ? (int) $value : null;
+        }
+
+        return $targets;
+    }
+
+    private function percentage(int $numerator, int $denominator): string
+    {
+        if ($denominator <= 0) {
+            return '0.00';
+        }
+
+        return bcdiv(bcmul((string) $numerator, '100', 4), (string) $denominator, 2);
     }
 
     private function period(?string $from, ?string $to): array
