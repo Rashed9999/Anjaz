@@ -216,7 +216,13 @@ class KycPrivacyService
      */
     public function verifyInPerson(User $user, User $reviewer, string $reason): array
     {
-        $this->assertReviewerAccess($user, $reviewer, true);
+        // in_person ليس بالضرورة restricted_review=true، لذلك لا يجوز
+        // الاعتماد على assertReviewerAccess وحدها: ذلك الحارس يتعمّد عدم
+        // التدخل في الحالات العادية. هنا الفعل نفسه حساس دائماً.
+        if (!$reviewer->hasPlatformPermission('platform.customers.kyc.restricted.decide')) {
+            throw new DomainException('KYC_RESTRICTED_DECIDE_REQUIRED');
+        }
+
         $state = $this->forUser($user);
 
         if (($state['review_mode'] ?? null) !== self::MODE_IN_PERSON) {
