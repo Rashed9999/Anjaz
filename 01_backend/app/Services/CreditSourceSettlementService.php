@@ -25,14 +25,13 @@ class CreditSourceSettlementService
      * يعيد توزيع مبلغ جديد على أقدم بنود الدين المفتوحة قبل نشر حركة السداد.
      * لا يكتب شيئاً هنا؛ لتبقى العملية الذرية تحت معاملة السداد الأم.
      *
-     * @return array<int, array{reference_type:?string,reference_id:?string,amount:string,fully_settled:bool}>
+     * @return array<int, array{sale_movement_ulid:string,reference_type:?string,reference_id:?string,amount:string,fully_settled:bool}>
      */
     public function allocate(
         CustomerCreditAccount $account,
         string $amount,
         ?string $saleMovementUlid = null,
-    ): array
-    {
+    ): array {
         $open = $this->openEntries($account);
 
         $allocations = [];
@@ -61,17 +60,73 @@ class CreditSourceSettlementService
      */
     public function openInvoices(CustomerCreditAccount $account): array
     {
-        return array_values(array_filter($this->openEntries($account),
-            fn (array $entry) => MoneyService::isPositive($entry['remaining'])));
+        return array_values(array_filter(
+            $this->openEntries($account),
+            fn (array $entry) => MoneyService::isPositive($entry['remaining']),
+        ));
+    }
+
+    /**
+     * نفس إعادة التشغيل السابقة ولكن لعدة حسابات بقراءة DB واحدة.
+     *
+     * التقارير المؤسسية لا يجوز أن تنفذ استعلاماً مستقلاً لكل عميل؛ عند
+     * عشرات آلاف الحسابات يتحول تقرير التقادم إلى N+1 بطيء. هنا نقرأ جميع
+     * القيود المطلوبة مرتبة حسب الحساب ثم نعيد تشغيل نفس منطق السداد نفسه،
+     * لذلك لا يوجد محرّك تقادم موازٍ لمنطق «فواتيري الآجلة».
+     *
+     * @param  iterable<int,CustomerCreditAccount|int|string>  $accounts
+     * @return array<int,array<int,array<string,mixed>>> keyed by account id
+     */
+    public function openInvoicesForAccounts(iterable $accounts): array
+    {
+        $ids = [];
+        foreach ($accounts as $account) {
+            $id = $account instanceof CustomerCreditAccount ? $account->id : (int) $account;
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+        $ids = array_values($ids);
+        if ($ids === []) {
+            return [];
+        }
+
+        $grouped = CustomerCreditMovement::query()
+            ->whereIn('account_id', $ids)
+            ->orderBy('account_id')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('account_id');
+
+        $result = [];
+        foreach ($ids as $id) {
+            $entries = $this->replayMovements($grouped->get($id, collect()));
+            $result[$id] = array_values(array_filter(
+                $entries,
+                fn (array $entry) => MoneyService::isPositive($entry['remaining']),
+            ));
+        }
+
+        return $result;
     }
 
     /** @return array<int,array<string,mixed>> */
     private function openEntries(CustomerCreditAccount $account): array
     {
+        return $this->replayMovements(
+            CustomerCreditMovement::where('account_id', $account->id)
+                ->orderBy('id')
+                ->get(),
+        );
+    }
+
+    /**
+     * @param  iterable<int,CustomerCreditMovement>  $movements
+     * @return array<int,array<string,mixed>>
+     */
+    private function replayMovements(iterable $movements): array
+    {
         $open = [];
-        $movements = CustomerCreditMovement::where('account_id', $account->id)
-            ->orderBy('id')
-            ->get();
 
         foreach ($movements as $movement) {
             $value = (string) $movement->amount;
@@ -171,8 +226,8 @@ class CreditSourceSettlementService
     /**
      * يستهلك مبلغاً من قائمة بنود مفتوحة FIFO ويعيد حصص الاستهلاك.
      *
-     * @param array<int, array{reference_type:?string,reference_id:?string,remaining:string}> $open
-     * @return array<int, array{reference_type:?string,reference_id:?string,amount:string,fully_settled:bool}>
+     * @param  array<int, array{reference_type:?string,reference_id:?string,remaining:string}>  $open
+     * @return array<int, array{movement_ulid:string,reference_type:?string,reference_id:?string,amount:string,fully_settled:bool}>
      */
     private function consume(array &$open, string $amount, ?string $saleMovementUlid = null): array
     {
@@ -200,6 +255,7 @@ class CreditSourceSettlementService
                     unset($open[$index]);
                 }
                 unset($entry);
+
                 return $portions;
             }
             unset($entry);
