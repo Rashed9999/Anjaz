@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\KycDocument;
 use App\Models\User;
+use App\Services\Kyc\IdentityLookupService;
 use App\Services\Ocr\IdFieldExtractor;
 use App\Services\Ocr\OcrDriverInterface;
 use App\Services\Ocr\OcrResult;
@@ -315,6 +316,26 @@ class KycOcrService
             throw new DomainException('الوثيقة منتهية — لا تُعتمَد مهما كانت واضحة');
         }
 
+        // AMIAL-KYC-OWNERSHIP-001 — إقرارُ المراجع لا يبقى داخل الوثيقة
+        // وحدها بينما الحساب يحمل رقماً آخر أو لا يحمل رقماً. نحوله إلى
+        // الرقم القانوني الموحّد نفسه الذي يغذي blind index وكشف التكرار.
+        $digits = preg_replace('/[^\d]/', '',
+            EncryptionService::foldDigits((string) $clean['national_id'])) ?? '';
+
+        if (mb_strlen($digits) < IdentityLookupService::MIN_DIGITS) {
+            throw new DomainException('رقم الهوية الذي أُقرّ أقصر من الحد المقبول ولا يصلح لإثبات الملكية.');
+        }
+
+        $subject = User::findOrFail($doc->user_id);
+        $remembered = app(IdentityLookupService::class)->remember($digits, $subject);
+
+        if (!$remembered['stored']
+            && str_contains((string) ($remembered['reason'] ?? ''), 'مختلف')) {
+            throw new DomainException((string) $remembered['reason']);
+        }
+
+        // نخزن الشكل القانوني الذي قورن بالحساب، لا نسختين مختلفتين من الرقم.
+        $clean['national_id'] = $digits;
         $clean['_confirmed_by'] = $reviewer->id;
         $clean['_confirmed_at'] = now()->toIso8601String();
 
