@@ -66,8 +66,6 @@ class EmailRegistrationController extends Controller
         // مسمّاةً (`kyc_id_front`/`kyc_id_back`/`kyc_selfie`). كان يرسل
         // النسخ نفسها أيضاً في `identification_image[]` للتوافق القديم،
         // فيحفظ RegisterController نسخة ثانية خارج `kyc_documents`.
-        // إذا وصل أي مستند حديث نحذف حزمة legacy قبل إنشاء الحساب. العميل
-        // القديم الذي لا يرسل الحقول الحديثة يبقى متوافقاً كما هو.
         if ($request->hasFile('kyc_id_front')
             || $request->hasFile('kyc_id_back')
             || $request->hasFile('kyc_selfie')
@@ -84,8 +82,6 @@ class EmailRegistrationController extends Controller
                     EmailOtpService::PURPOSE_REGISTRATION,
                     (string) $request->input('email_verification_token'),
                 );
-                // The second argument is server-only and follows consumption of
-                // real email proof. No fabricated phone-verification row exists.
                 $response = app(RegisterController::class)->customerRegistration($request, $email);
                 if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
                     throw new HttpResponseException($response);
@@ -107,6 +103,12 @@ class EmailRegistrationController extends Controller
                 }
 
                 $this->identities->markCurrentEmailVerified($user);
+
+                // AMIAL-KYC-PRIVACY-001 — لكل حساب جديد قضية تحقق صريحة.
+                // البداية لا تدّعي Liveness أو Face Match: كلاهما
+                // `not_configured` حتى يُربط مزود حقيقي أو يختار العميل
+                // مسار خصوصية آخر من endpoint المخصص.
+                app(\App\Services\Kyc\KycPrivacyService::class)->ensure($user);
 
                 DB::table('otp_challenges')->where('id', $challenge->id)->update([
                     'user_id' => $user->id,
