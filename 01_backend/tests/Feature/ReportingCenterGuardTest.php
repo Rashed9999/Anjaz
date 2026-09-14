@@ -43,6 +43,8 @@ class ReportingCenterGuardTest extends TestCase
             'admin.amial.reporting-center.support-operations',
             'admin.amial.reporting-center.system-health-history',
             'admin.amial.reporting-center.queue-operations',
+            'admin.amial.reporting-center.email-otp',
+            'admin.amial.reporting-center.auth-security',
             'admin.amial.reporting-center.aml-regulatory',
         ] as $name) {
             $route = Route::getRoutes()->getByName($name);
@@ -81,7 +83,7 @@ class ReportingCenterGuardTest extends TestCase
         foreach (['kyc_pipeline', 'audit_sensitive_actions', 'rbac_changes'] as $code) {
             $this->assertSame('ready', $risk[$code]['status'], $code);
         }
-        foreach (['subscriptions', 'system_health_history', 'jobs_queues'] as $code) {
+        foreach (['subscriptions', 'system_health_history', 'jobs_queues', 'email_otp', 'auth_security'] as $code) {
             $this->assertSame('ready', $operations[$code]['status'], $code);
         }
 
