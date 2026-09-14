@@ -86,6 +86,7 @@ final class PlatformAccessTabs
                 'read' => [
                     'platform.audit.view' => 'سجلّ التدقيق',
                     'platform.customers.kyc.view' => 'مراجعة وثائق الهويّة',
+                    'platform.customers.kyc.biometric.view' => 'عرض الصور البيومترية الحساسة (صلاحية مستقلة)',
                     'platform.registrations.view' => 'ملفّات فتح الحسابات',
                 ],
                 'write' => [
