@@ -26,6 +26,7 @@ Route::middleware(['web', 'admin', 'amial.force-pin-change'])
             'merchant-portfolio' => 'merchantPortfolio',
             'inventory-control' => 'inventoryControl',
             'credit-control' => 'creditControl',
+            'vertical-performance' => 'verticalPerformance',
             'kyc-pipeline' => 'kycPipeline',
             'agent-liquidity' => 'agentLiquidity',
             'audit-sensitive-actions' => 'auditSensitiveActions',
