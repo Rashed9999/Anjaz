@@ -83,13 +83,19 @@
             <button class="btn btn-outline-warning" data-report="aml-regulatory">AML وSTR/CTR</button>
             <button class="btn btn-outline-danger" data-report="audit-sensitive-actions">الإجراءات الحساسة</button>
             <button class="btn btn-outline-danger" data-report="rbac-changes">تغييرات الصلاحيات</button>
-            <button class="btn btn-outline-secondary" data-report="support-operations">الدعم وزمن الحل</button>
         </div>
 
-        <div class="section-label">التشغيل والتقنية</div>
-        <div class="report-buttons d-flex flex-wrap gap-2">
+        <div class="section-label">التشغيل والتقنية P1</div>
+        <div class="report-buttons d-flex flex-wrap gap-2 mb-4">
             <button class="btn btn-outline-success" data-report="system-health-history">صحة النظام التاريخية</button>
             <button class="btn btn-outline-secondary" data-report="queue-operations">الطوابير والمهام</button>
+        </div>
+
+        <div class="section-label">الهوية والاتصالات والدعم P2</div>
+        <div class="report-buttons d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-info" data-report="email-otp">البريد وOTP</button>
+            <button class="btn btn-outline-danger" data-report="auth-security">أمان المصادقة</button>
+            <button class="btn btn-outline-secondary" data-report="support-operations">الدعم وزمن الحل</button>
         </div>
 
         <div id="report-state" class="text-muted small mt-3" aria-live="polite">اختر تقريراً لعرضه.</div>
@@ -158,6 +164,8 @@
         'support-operations': @json(route('admin.amial.reporting-center.support-operations')),
         'system-health-history': @json(route('admin.amial.reporting-center.system-health-history')),
         'queue-operations': @json(route('admin.amial.reporting-center.queue-operations')),
+        'email-otp': @json(route('admin.amial.reporting-center.email-otp')),
+        'auth-security': @json(route('admin.amial.reporting-center.auth-security')),
     };
 
     const labels = {
@@ -168,6 +176,9 @@
         sale:'بيع', sale_return:'مرتجع بيع', purchase_receive:'استلام شراء', purchase_return:'مرتجع شراء',
         transfer_out:'تحويل صادر', transfer_in:'تحويل وارد', count_adjustment:'تسوية جرد', waste:'هالك', opening_balance:'رصيد افتتاحي', correction:'تصحيح',
         up:'سليم', degraded:'متدهور', down:'متوقف', default:'افتراضية', emails:'البريد',
+        delivered:'تم التسليم', delayed:'متأخر', bounced:'مرتد', complained:'شكوى', pending:'قيد الانتظار', failed:'فشل', sent:'مرسل',
+        customer:'عميل', merchant:'تاجر', agent:'وكيل', admin:'إدارة', employee:'موظف', pos:'نقطة بيع',
+        registration:'تسجيل', password_reset:'استعادة كلمة المرور', pin_recovery:'استعادة PIN', email_change:'تغيير البريد',
     };
 
     const state = document.getElementById('report-state');
@@ -313,6 +324,22 @@
         return card('الطوابير والمهام', `<div class="row g-2 mb-3">${metric('Driver',meta.driver)}${metric('الحالة',meta.state==='healthy'?'سليم':'تحذير')}${metric('كل المعلقة',p.total??'غير متاح')}${metric('جاهزة',p.ready??'غير متاح')}${metric('محجوزة لعامل',p.reserved??'غير متاح')}${metric('مؤجلة',p.delayed??'غير متاح')}${metric('أقدم انتظار جاهز',wait)}${metric('فاشلة حالياً',f.total??'غير متاح')}${metric('فاشلة في الفترة',f.in_period??'غير متاح')}</div><div class="row g-3"><div class="col-lg-6"><h6>المعلقة حسب الطابور</h6>${breakdown(p.by_queue)}</div><div class="col-lg-6"><h6>الفاشلة حسب الطابور</h6>${breakdown(f.by_queue)}</div></div>${warning}`,'لا تُعرض payloads أو traces الحساسة في التقرير');
     }
 
+    function renderEmailOtp(meta) {
+        const readiness=meta.provider_readiness||{};
+        const providerReady=readiness.resend_api_key_configured&&readiness.webhook_signature_configured&&readiness.sender_address_configured;
+        const purposeRows=(meta.by_purpose||[]).map(r=>`<tr><td>${esc(label(r.value))}</td><td>${esc(r.total)}</td><td>${esc(r.verified)}</td><td>${esc(r.delivered)}</td><td class="mono">${esc(r.verification_rate_pct)}%</td></tr>`);
+        const readinessBox=providerReady
+            ? `<div class="alert alert-success mb-0 mt-3">مزود البريد، توقيع Webhook وعنوان المرسل مهيأة. لا تُعرض المفاتيح أو معرفات الرسائل.</div>`
+            : `<div class="alert alert-warning mb-0 mt-3"><strong>جاهزية المزود غير مكتملة.</strong> API: ${readiness.resend_api_key_configured?'مهيأ':'غير مهيأ'} · Webhook: ${readiness.webhook_signature_configured?'مهيأ':'غير مهيأ'} · المرسل: ${readiness.sender_address_configured?'مهيأ':'غير مهيأ'}.</div>`;
+        return card('البريد وOTP', `<div class="row g-2 mb-3">${metric('التحديات',meta.total_challenges)}${metric('تم التحقق',meta.verified)}${metric('تم الاستهلاك',meta.consumed)}${metric('منتهية بلا تحقق',meta.expired_unverified)}${metric('متوسط المحاولات',meta.attempts_average)}${metric('نسبة التحقق',meta.verification_rate_pct,'%')}${metric('تأكيد التسليم',meta.delivery_confirmation_rate_pct,'%')}${metric('أخطاء المزود',meta.provider_error_challenges)}</div><div class="row g-3"><div class="col-lg-5"><h6>حالة التسليم</h6>${breakdown(meta.by_delivery_status)}</div><div class="col-lg-7"><h6>حسب الغرض</h6>${table(['الغرض','الإجمالي','متحقق','مسلّم','نسبة التحقق'],purposeRows)}</div></div>${readinessBox}<div class="small text-muted mt-3">الخصوصية: التقرير تجميعي فقط؛ لا بريد/هاتف، لا OTP/hash/token، ولا جسم خطأ المزود.</div>`, `${meta.from??'—'} → ${meta.to??'—'}`);
+    }
+
+    function renderAuthSecurity(meta) {
+        const roleRows=(meta.by_role||[]).map(r=>`<tr><td>${esc(label(r.value))}</td><td>${esc(r.total)}</td><td>${esc(r.success)}</td><td>${esc(r.failure)}</td><td class="mono">${esc(r.success_rate_pct)}%</td></tr>`);
+        const reasonRows=(meta.failure_reasons||[]).map(r=>`<tr><td class="mono">${esc(r.value)}</td><td>${esc(r.total)}</td></tr>`);
+        return card('أمان المصادقة', `<div class="row g-2 mb-3">${metric('محاولات الدخول',meta.attempts)}${metric('ناجحة',meta.successful)}${metric('فاشلة',meta.failed)}${metric('نسبة النجاح',meta.success_rate_pct,'%')}${metric('نسبة الفشل',meta.failure_rate_pct,'%')}${metric('مصادر فشل متكرر',meta.repeated_failure_sources)}${metric('إقفالات مؤقتة',meta.temporary_lockouts??'غير متاح')}</div><div class="row g-3"><div class="col-lg-7"><h6>حسب الدور</h6>${table(['الدور','المحاولات','ناجحة','فاشلة','النجاح'],roleRows)}</div><div class="col-lg-5"><h6>أسباب الفشل</h6>${table(['السبب','العدد'],reasonRows)}</div></div><div class="alert alert-light border mb-0 mt-3"><strong>خصوصية مضمّنة:</strong> لا يعرض التقرير identifier أو IP أو user-agent. «مصادر الفشل المتكرر» رقم تجميعي فقط.</div>`, `${meta.from??'—'} → ${meta.to??'—'}`);
+    }
+
     function renderAml(meta) {
         const health=meta.health||{}, inv=meta.investigations||{}, large=meta.large_transactions||{};
         const gaps=[];
@@ -333,6 +360,7 @@
             'kyc-pipeline':renderKyc, 'aml-regulatory':renderAml, 'audit-sensitive-actions':m=>renderAudit(m,false),
             'rbac-changes':m=>renderAudit(m,true), 'support-operations':renderSupport,
             'system-health-history':renderHealth, 'queue-operations':renderQueue,
+            'email-otp':renderEmailOtp, 'auth-security':renderAuthSecurity,
         };
         return handlers[type] ? handlers[type](meta) : empty('لا يوجد عارض لهذا التقرير.');
     }
