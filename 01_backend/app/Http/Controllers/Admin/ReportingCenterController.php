@@ -15,6 +15,7 @@ use App\Services\Reporting\P1ControlReportService;
 use App\Services\Reporting\P1MerchantOperationsReportService;
 use App\Services\Reporting\P1ObservabilityReportService;
 use App\Services\Reporting\P1VerticalPerformanceReportService;
+use App\Services\Reporting\P2IdentityCommunicationReportService;
 use App\Services\Reporting\ReportCatalogService;
 use App\Services\Reporting\TransactionMonitoringReportService;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +37,7 @@ class ReportingCenterController extends Controller
         private readonly P1MerchantOperationsReportService $merchantOps,
         private readonly P1ObservabilityReportService $observability,
         private readonly P1VerticalPerformanceReportService $verticals,
+        private readonly P2IdentityCommunicationReportService $identityOps,
         private readonly AmlDashboardService $aml,
         private readonly FeeProfitReportService $fees,
         private readonly LedgerReportService $ledger,
@@ -115,6 +117,8 @@ class ReportingCenterController extends Controller
     public function verticalPerformance(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'vertical_performance',$this->verticals->report($f,$t),['from'=>$f,'to'=>$t]); }
     public function healthHistory(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'system_health_history',$this->observability->healthHistory($f,$t),['from'=>$f,'to'=>$t]); }
     public function queueOperations(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'jobs_queues',$this->observability->queueOperations($f,$t),['from'=>$f,'to'=>$t]); }
+    public function emailOtp(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'email_otp',$this->identityOps->emailOtp($f,$t),['from'=>$f,'to'=>$t]); }
+    public function authSecurity(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'auth_security',$this->identityOps->authenticationSecurity($f,$t),['from'=>$f,'to'=>$t]); }
 
     public function amlRegulatory(Request $r): JsonResponse
     {
