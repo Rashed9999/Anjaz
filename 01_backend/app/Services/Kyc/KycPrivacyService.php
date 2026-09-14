@@ -3,6 +3,7 @@
 namespace App\Services\Kyc;
 
 use App\Models\User;
+use App\Services\Kyc\Biometric\BiometricProviderManager;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -30,10 +31,10 @@ class KycPrivacyService
 
     public function biometricConfigured(): bool
     {
-        $provider = trim((string) config('amial_kyc.biometric.provider', 'none'));
-        $enabled = (bool) config('amial_kyc.biometric.enabled', false);
-
-        return $enabled && $provider !== '' && $provider !== 'none';
+        // AMIAL-KYC-BIOMETRIC-RUNTIME-003 — كتابة alias في ENV وحدها لا
+        // تعني أن مزوداً حقيقياً جاهز. يجب أن يكون مسجلاً، مفعلاً، وDriver
+        // نفسه يؤكد توفر مفاتيح الاتصال والتحقق من التوقيع.
+        return app(BiometricProviderManager::class)->configured();
     }
 
     /** @return array<string,mixed> */
@@ -104,7 +105,7 @@ class KycPrivacyService
 
         $restricted = $mode === self::MODE_RESTRICTED;
         $provider = $this->biometricConfigured()
-            ? trim((string) config('amial_kyc.biometric.provider'))
+            ? app(BiometricProviderManager::class)->selectedAlias()
             : null;
 
         $now = now();
