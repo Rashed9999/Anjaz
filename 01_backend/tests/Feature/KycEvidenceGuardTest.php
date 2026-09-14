@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\Admin\KycEvidenceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
 /**
@@ -36,6 +37,7 @@ use Tests\TestCase;
 class KycEvidenceGuardTest extends TestCase
 {
     use RefreshDatabase;
+    use EstablishesKycEvidence;
 
     /** الشيفرةُ بلا تعليقات — فالتعليقُ يصف العطلَ ولا يكونه. */
     private function codeOnly(string $php): string
@@ -168,6 +170,8 @@ class KycEvidenceGuardTest extends TestCase
     public function the_three_account_types_share_one_evidence(): void
     {
         // **عميلٌ ووكيلٌ وتاجر** — الوثيقةُ الشخصيّةُ واحدةٌ لمن يملك محفظة.
+        // ومنذ AMIAL-KYC-OWNERSHIP-001 صار «ملف مكتمل» يعني أيضاً أن
+        // المراجع ربط رقم الهوية بالحساب، لا مجرد وجود ثلاث صور.
         foreach ([CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE] as $type) {
             $u = $this->account($type);
 
@@ -176,6 +180,7 @@ class KycEvidenceGuardTest extends TestCase
                 $this->doc($u, $t, KycDocument::STATUS_APPROVED);
             }
 
+            $this->establishKycOwnership($u);
             $ev = $this->evidence($u);
 
             $this->assertTrue($ev['complete'],
