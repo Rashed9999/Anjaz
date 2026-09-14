@@ -8,6 +8,7 @@ use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
 /**
@@ -50,6 +51,7 @@ class SelfRegisteredMerchantIsUsableTest extends TestCase
     }
 
     use RefreshDatabase;
+    use EstablishesKycEvidence;
 
     /** يسجّل تاجراً بنفس الحمولة التي يرسلها معالجُ التطبيق. */
     private function registerMerchant(): User
@@ -226,11 +228,10 @@ class SelfRegisteredMerchantIsUsableTest extends TestCase
     }
 
     /**
-     * **④ والسلسلةُ كاملةً تُمشى: رفعٌ ← مراجعةٌ ← اعتماد.**
+     * **④ والسلسلةُ كاملةً تُمشى: رفعٌ ← مراجعةٌ ← إقرار ملكية ← اعتماد.**
      *
-     * وهذا هو المسارُ الصحيح: رفعُ العميل لا يوثّق نفسَه، فالمراجعُ يعتمد
-     * المستنداتِ ثمّ يعتمد الحساب. **والعطلُ كان قبل أوّل خطوة** — لا
-     * مستنداتٍ تُراجَع أصلاً.
+     * رفعُ العميل لا يوثّق نفسَه، واعتماد الصور وحده لا يثبت صاحبها.
+     * المراجع يعتمد المستندات، يقر رقم الهوية من الوثيقة، ثم يعتمد الحساب.
      */
     /** @test */
     public function the_full_chain_registration_to_approval_completes(): void
@@ -243,11 +244,15 @@ class SelfRegisteredMerchantIsUsableTest extends TestCase
             $svc->approve($doc, $reviewer);
         }
 
+        // نستخدم الوثائق التي رفعها التسجيل نفسه؛ لا نستبدلها بfixture.
+        // هنا فقط نضيف الحلقة الجديدة: إقرار رقم الهوية من وثيقة معتمدة.
+        $this->establishKycOwnership($user->fresh(), $reviewer);
+
         $r = $this->actingAs($reviewer, 'user')
             ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 1]);
 
         $this->assertSame(200, $r->status(),
-            '**تعذّر اعتمادُ الحساب بعد اعتماد مستنداته**: '
+            '**تعذّر اعتمادُ الحساب بعد اعتماد مستنداته وإثبات ملكيتها**: '
             .((string) $r->json('message') ?: $r->status()));
 
         $this->assertSame(1, (int) $user->fresh()->is_kyc_verified,
