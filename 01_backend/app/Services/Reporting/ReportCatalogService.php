@@ -48,7 +48,7 @@ class ReportCatalogService
                     ['code' => 'merchant_profit', 'label' => 'ربحية التاجر', 'status' => 'ready', 'source' => 'CashierService', 'priority' => 'P1'],
                     ['code' => 'inventory_valuation', 'label' => 'حركة ورقابة المخزون / التقييم المالي', 'status' => 'partial', 'source' => 'P1MerchantOperationsReportService ← stock movements + stocks؛ التقييم المالي ينتظر سياسة تكلفة وعملة صريحة', 'priority' => 'P1'],
                     ['code' => 'credit_aging', 'label' => 'تقادم الديون والتحصيل', 'status' => 'ready', 'source' => 'P1MerchantOperationsReportService ← replay للدفتر الموحد + رقابة مرآة الجملة بدون ازدواج', 'priority' => 'P0'],
-                    ['code' => 'vertical_performance', 'label' => 'أداء الصيدلية والوقود والمطعم والتجزئة والجملة والبيع السريع', 'status' => 'partial', 'source' => 'Vertical services', 'priority' => 'P1'],
+                    ['code' => 'vertical_performance', 'label' => 'أداء الصيدلية والوقود والمطعم والتجزئة والجملة والبيع السريع', 'status' => 'ready', 'source' => 'P1VerticalPerformanceReportService ← base POS sales + vertical operational truth؛ لا دمج نقدي لجداول بلا عملة', 'priority' => 'P1'],
                 ],
             ],
             'customers_agents' => [
