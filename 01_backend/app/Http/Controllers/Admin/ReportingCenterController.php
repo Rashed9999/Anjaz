@@ -13,6 +13,7 @@ use App\Services\Reporting\GeneralLedgerReportService;
 use App\Services\Reporting\P1BusinessOperationsReportService;
 use App\Services\Reporting\P1ControlReportService;
 use App\Services\Reporting\P1MerchantOperationsReportService;
+use App\Services\Reporting\P1ObservabilityReportService;
 use App\Services\Reporting\ReportCatalogService;
 use App\Services\Reporting\TransactionMonitoringReportService;
 use Illuminate\Http\JsonResponse;
@@ -32,6 +33,7 @@ class ReportingCenterController extends Controller
         private readonly P1ControlReportService $p1,
         private readonly P1BusinessOperationsReportService $businessOps,
         private readonly P1MerchantOperationsReportService $merchantOps,
+        private readonly P1ObservabilityReportService $observability,
         private readonly AmlDashboardService $aml,
         private readonly FeeProfitReportService $fees,
         private readonly LedgerReportService $ledger,
@@ -108,6 +110,8 @@ class ReportingCenterController extends Controller
     public function supportOperations(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'support_sla',$this->businessOps->supportOperations($f,$t),['from'=>$f,'to'=>$t]); }
     public function inventoryControl(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'inventory_valuation',$this->merchantOps->inventoryControl($f,$t),['from'=>$f,'to'=>$t]); }
     public function creditControl(Request $r): JsonResponse { return $this->out($r,'credit_aging',$this->merchantOps->creditControl(),[]); }
+    public function healthHistory(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'system_health_history',$this->observability->healthHistory($f,$t),['from'=>$f,'to'=>$t]); }
+    public function queueOperations(Request $r): JsonResponse { [$f,$t]=$this->period($r); return $this->out($r,'jobs_queues',$this->observability->queueOperations($f,$t),['from'=>$f,'to'=>$t]); }
 
     public function amlRegulatory(Request $r): JsonResponse
     {
