@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Reporting\P1BusinessOperationsReportService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -85,6 +86,10 @@ class P1BusinessOperationsReportTest extends TestCase
     /** @test */
     public function support_report_refuses_to_invent_an_sla_target(): void
     {
+        config()->set('amial_reporting.support_sla.resolution_minutes', [
+            'urgent' => null, 'high' => null, 'normal' => null, 'low' => null,
+        ]);
+
         $customer = User::factory()->create(['type' => CUSTOMER_TYPE]);
         $admin = User::factory()->create();
         SupportTicket::create([
@@ -106,6 +111,74 @@ class P1BusinessOperationsReportTest extends TestCase
         $this->assertSame(1, $report['unassigned_backlog']);
         $this->assertSame(1, $report['urgent_backlog']);
         $this->assertFalse($report['sla_target_configured']);
+        $this->assertSameCanonicalizing(['urgent', 'high', 'normal', 'low'], $report['sla_missing_priorities']);
+        $this->assertSame(0, $report['sla_evaluated_tickets']);
+        $this->assertNull($report['sla_breaches']);
         $this->assertNull($report['sla_breach_rate']);
+    }
+
+    /** @test */
+    public function support_report_measures_resolution_sla_only_after_all_priority_targets_are_configured(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-14 12:00:00'));
+        config()->set('amial_reporting.support_sla.resolution_minutes', [
+            'urgent' => 60,
+            'high' => 240,
+            'normal' => 480,
+            'low' => 1440,
+        ]);
+
+        $customer = User::factory()->create(['type' => CUSTOMER_TYPE]);
+        $admin = User::factory()->create();
+
+        $breached = SupportTicket::create([
+            'ticket_number' => 'TKT-900002',
+            'user_id' => $customer->id,
+            'opened_by_admin_id' => $admin->id,
+            'category' => 'balance_issue',
+            'priority' => 'urgent',
+            'status' => 'resolved',
+            'subject' => 'متجاوز',
+            'description' => 'اختبار SLA متجاوز',
+        ]);
+        SupportTicket::query()->whereKey($breached->id)->update([
+            'created_at' => now()->subMinutes(120),
+            'updated_at' => now()->subMinutes(20),
+            'resolved_at' => now()->subMinutes(20),
+        ]);
+
+        $within = SupportTicket::create([
+            'ticket_number' => 'TKT-900003',
+            'user_id' => $customer->id,
+            'opened_by_admin_id' => $admin->id,
+            'category' => 'account_access',
+            'priority' => 'normal',
+            'status' => 'resolved',
+            'subject' => 'ضمن الهدف',
+            'description' => 'اختبار SLA ضمن الهدف',
+        ]);
+        SupportTicket::query()->whereKey($within->id)->update([
+            'created_at' => now()->subMinutes(90),
+            'updated_at' => now()->subMinutes(30),
+            'resolved_at' => now()->subMinutes(30),
+        ]);
+
+        $report = app(P1BusinessOperationsReportService::class)
+            ->supportOperations(now()->subDay()->toDateString(), now()->toDateString());
+
+        $this->assertTrue($report['sla_target_configured']);
+        $this->assertSame([], $report['sla_missing_priorities']);
+        $this->assertSame(2, $report['sla_evaluated_tickets']);
+        $this->assertSame(1, $report['sla_breaches']);
+        $this->assertSame('50.00', $report['sla_breach_rate_pct']);
+        $this->assertSame(2, $report['resolved_in_period']);
+        $this->assertSame(80, $report['average_resolution_minutes']);
+
+        $byPriority = collect($report['sla_by_priority'])->keyBy('priority');
+        $this->assertSame(60, $byPriority['urgent']['target_minutes']);
+        $this->assertSame(1, $byPriority['urgent']['breached']);
+        $this->assertSame('100.00', $byPriority['urgent']['breach_rate_pct']);
+        $this->assertSame(0, $byPriority['normal']['breached']);
+        $this->assertSame('0.00', $byPriority['normal']['breach_rate_pct']);
     }
 }
