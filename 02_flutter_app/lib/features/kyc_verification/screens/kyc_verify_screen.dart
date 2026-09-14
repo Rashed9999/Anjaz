@@ -20,16 +20,17 @@ class KycVerifyScreen extends StatefulWidget {
 
 class _KycVerifyScreenState extends State<KycVerifyScreen> {
   final TextEditingController _identityNumberController = TextEditingController();
-  // AMIAL-KYC: العنوان + التوقيع الإلكتروني + الإقرار
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _signatureController = TextEditingController();
   String? _residenceGovernorate;
   bool _declared = false;
 
+  // AMIAL-KYC-PRIVACY-APP-001 — حق خصوصية للجميع، لا «وضع نساء».
+  String _reviewMode = 'standard';
+
   @override
   void initState() {
     Get.find<KycVerifyController>().initialSelect();
-
     super.initState();
   }
 
@@ -44,9 +45,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('kyc_verification'.tr),
-      ),
+      appBar: AppBar(title: Text('kyc_verification'.tr)),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: Dimensions.fontSizeDefault, vertical: Dimensions.paddingSizeLarge),
         child: GetBuilder<KycVerifyController>(
@@ -62,15 +61,58 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
 
                 CustomTextFieldWidget(
                   controller: _identityNumberController,
-                  //fillColor: Theme.of(context).cardColor,
                   isShowBorder: true,
                   maxLines: 1,
                   hintText: 'identity_number'.tr,
                 ),
-                const SizedBox(height: Dimensions.fontSizeDefault),
+                const SizedBox(height: Dimensions.paddingSizeLarge),
+
+                Text('طريقة مراجعة الهوية', style: rubikRegular.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                const Text(
+                  'الخصوصية متاحة لكل صاحب حساب. لا يغيّر اختيارك متطلبات إثبات الهوية؛ بل يحدد من يستطيع رؤية صورة الوجه وكيف تُراجع.',
+                  style: TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xFF5F6B7C)),
+                ),
+                const SizedBox(height: 10),
+                _privacyOption(
+                  value: 'standard',
+                  title: 'مراجعة عادية',
+                  subtitle: 'الوثائق مشفّرة، وكل مشاهدة من لوحة أميال تحمل علامة مائية قابلة للتتبّع.',
+                  icon: Icons.verified_user_outlined,
+                ),
+                _privacyOption(
+                  value: 'restricted_review',
+                  title: 'خصوصية إضافية',
+                  subtitle: 'صورة الوجه لا تُعرض إلا لمراجع يملك صلاحية بيومترية مستقلة، مع تسجيل كل مشاهدة.',
+                  icon: Icons.privacy_tip_outlined,
+                  emphasized: true,
+                ),
+                _privacyOption(
+                  value: 'in_person',
+                  title: 'طلب تحقق حضوري',
+                  subtitle: 'طلب مسار مراجعة حضورية مقيدة. في النسخة الحالية تبقى المستندات الثلاثة مطلوبة حتى اعتماد البديل رقابياً.',
+                  icon: Icons.person_pin_circle_outlined,
+                ),
+                Container(
+                  margin: const EdgeInsets.only(top: 4, bottom: 14),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4F7FB),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFDDE5EF)),
+                  ),
+                  child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.face_retouching_natural, size: 20, color: Color(0xFF5F6B7C)),
+                    SizedBox(width: 8),
+                    Expanded(child: Text(
+                      'التحقق الآلي الخاص (Liveness + Face Match) سيظهر هنا بعد ربط مزود بيومتري حقيقي ومعتمد. أميال لا يعرض نتائج أو درجات وهمية.',
+                      style: TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xFF5F6B7C)),
+                    )),
+                  ]),
+                ),
 
                 const Text(
-                  'ارفع ٣ صور بالترتيب: وجه الهوية، ظهر الهوية، ثم صورة شخصية حيّة.',
+                  'ارفع ٣ صور بالترتيب: وجه الهوية، ظهر الهوية، ثم صورة شخصية حديثة.',
                   style: TextStyle(fontSize: 13, height: 1.5),
                 ),
                 const SizedBox(height: Dimensions.paddingSizeDefault,),
@@ -116,7 +158,6 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                 ),
                 const SizedBox(height: Dimensions.fontSizeDefault),
 
-                // ── العنوان ──────────────────────────────────
                 Text('العنوان (المدينة، الحي، الشارع)', style: rubikRegular),
                 const SizedBox(height: Dimensions.paddingSizeExtraSmall),
                 CustomTextFieldWidget(
@@ -134,7 +175,6 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                   onChanged: (value) => setState(() => _residenceGovernorate = value),
                 ),
 
-                // ── التوقيع الإلكتروني ────────────────────────
                 Text('التوقيع الإلكتروني (اكتب اسمك الكامل)', style: rubikRegular),
                 const SizedBox(height: Dimensions.paddingSizeExtraSmall),
                 CustomTextFieldWidget(
@@ -145,7 +185,6 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                 ),
                 const SizedBox(height: Dimensions.fontSizeDefault),
 
-                // ── الإقرار بصحة المعلومات ────────────────────
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -191,20 +230,65 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                         residenceGovernorate: _residenceGovernorate!,
                         signature: _signatureController.text.trim(),
                         declared: _declared,
+                        reviewMode: _reviewMode,
                       ).then((value)
                       => Get.find<ProfileController>().getProfileData(isUpdate: true, reload: true));
                     }
                   }, color: Theme.of(context).primaryColor),
                   ),
                 ),
-
-
-
-
               ]),
             );
           }
         ),
+      ),
+    );
+  }
+
+  Widget _privacyOption({
+    required String value,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    bool emphasized = false,
+  }) {
+    final selected = _reviewMode == value;
+    final primary = Theme.of(context).primaryColor;
+    return InkWell(
+      onTap: () => setState(() => _reviewMode = value),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 9),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected ? primary.withValues(alpha: 0.06) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? primary : (emphasized ? const Color(0xFF9EB8D8) : const Color(0xFFE1E6EC)),
+            width: selected ? 1.6 : 1,
+          ),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: selected ? primary : const Color(0xFF5F6B7C), size: 23),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
+              if (emphasized)
+                const Padding(
+                  padding: EdgeInsets.only(right: 6),
+                  child: Text('خصوصية أعلى', style: TextStyle(fontSize: 10.5, color: Color(0xFF365F91))),
+                ),
+            ]),
+            const SizedBox(height: 4),
+            Text(subtitle, style: const TextStyle(fontSize: 12, height: 1.45, color: Color(0xFF5F6B7C))),
+          ])),
+          Radio<String>(
+            value: value,
+            groupValue: _reviewMode,
+            onChanged: (v) => setState(() => _reviewMode = v ?? 'standard'),
+          ),
+        ]),
       ),
     );
   }
