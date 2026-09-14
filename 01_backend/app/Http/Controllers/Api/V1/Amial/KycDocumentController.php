@@ -5,13 +5,14 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
 use App\Models\User;
+use App\Services\Kyc\KycForensicWatermarkService;
 use App\Services\KycDocumentService;
-use App\Services\PiiAccessAuditService;
 use App\Support\YemenGovernorates;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 
 /**
  * AMIAL-KYC-DOCS-001 — طرفا الدائرة: العميل يرفع، والمراجع يبتّ.
@@ -183,26 +184,46 @@ class KycDocumentController extends Controller
         ]);
     }
 
-    /** GET /admin/kyc/documents/{id}/file — الملفّ مفكوكاً، للمراجع وحده. */
+    /**
+     * GET /admin/kyc/documents/{id}/file — نسخة مشاهدة جنائية لا الأصل.
+     *
+     * كل فتح يولّد Trace جديداً ويحرق رقم الموظف والوقت والرمز داخل بكسلات
+     * الصورة. السيلفي أكثر حساسية من وثيقة الهوية نفسها، لذلك يحتاج مفتاحاً
+     * إضافياً ولا تكفي صلاحية مراجعة KYC العامة.
+     */
     public function file(Request $request, int $id)
     {
         $doc = KycDocument::findOrFail($id);
+        $viewer = $request->user();
 
-        // فتحُ صورة هويّة أشدُّ أنواع الوصول إلى بيانات شخصية — يُسجَّل دائماً.
-        app(PiiAccessAuditService::class)->logAccess(
-            actorUserId: $request->user()->id,
-            subjectType: 'user',
-            subjectId: (int) $doc->user_id,
-            fieldName: 'kyc_document:' . $doc->doc_type,
-            accessType: 'view',
-            accessReason: (string) $request->query('reason', 'مراجعة مستند هوية'),
-        );
+        if ($doc->doc_type === KycDocument::TYPE_SELFIE
+            && !$viewer->hasPlatformPermission('platform.customers.kyc.biometric.view')) {
+            abort(403, 'صورة الوجه محمية بصلاحية بيومترية مستقلة.');
+        }
 
-        return response($this->kyc->decrypt($doc), 200, [
-            'Content-Type' => $doc->original_mime ?: 'application/octet-stream',
-            // لا تُخزَّن صورة هويّة في وسيطٍ ولا في متصفّح.
-            'Cache-Control' => 'no-store, private',
+        try {
+            $preview = app(KycForensicWatermarkService::class)->render(
+                $doc,
+                $viewer,
+                (string) $request->query('reason', 'مراجعة مستند هوية'),
+            );
+        } catch (RuntimeException $e) {
+            // لا fallback إلى الأصل أبداً: إن تعذّر الحرق، تتعطل المعاينة
+            // ولا تتعطل الخصوصية. يُطلب تحويل المستند إلى JPG/PNG آمن.
+            return response()->json([
+                'success' => false,
+                'code' => $e->getMessage(),
+                'message' => 'تعذّرت المعاينة الآمنة لهذا الملف. حوّله إلى JPG أو PNG؛ الأصل لن يُرسل بلا علامة مائية.',
+            ], 415, ['Cache-Control' => 'no-store, private']);
+        }
+
+        return response($preview['bytes'], 200, [
+            'Content-Type' => $preview['mime'],
+            'Cache-Control' => 'no-store, private, max-age=0',
+            'Pragma' => 'no-cache',
             'Content-Disposition' => 'inline',
+            'X-Amial-View-Trace' => $preview['trace_code'],
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
