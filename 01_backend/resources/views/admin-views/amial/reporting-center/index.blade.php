@@ -73,7 +73,7 @@
         </div>
 
         <div class="section-label">الإدارة والرقابة P1</div>
-        <div class="report-buttons d-flex flex-wrap gap-2">
+        <div class="report-buttons d-flex flex-wrap gap-2 mb-4">
             <button class="btn btn-outline-primary" data-report="merchant-portfolio">محفظة التجار</button>
             <button class="btn btn-outline-primary" data-report="inventory-control">المخزون والجرد</button>
             <button class="btn btn-outline-primary" data-report="customer-activity">نشاط العملاء</button>
@@ -84,6 +84,12 @@
             <button class="btn btn-outline-danger" data-report="audit-sensitive-actions">الإجراءات الحساسة</button>
             <button class="btn btn-outline-danger" data-report="rbac-changes">تغييرات الصلاحيات</button>
             <button class="btn btn-outline-secondary" data-report="support-operations">الدعم وزمن الحل</button>
+        </div>
+
+        <div class="section-label">التشغيل والتقنية</div>
+        <div class="report-buttons d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-success" data-report="system-health-history">صحة النظام التاريخية</button>
+            <button class="btn btn-outline-secondary" data-report="queue-operations">الطوابير والمهام</button>
         </div>
 
         <div id="report-state" class="text-muted small mt-3" aria-live="polite">اختر تقريراً لعرضه.</div>
@@ -150,6 +156,8 @@
         'audit-sensitive-actions': @json(route('admin.amial.reporting-center.audit-sensitive-actions')),
         'rbac-changes': @json(route('admin.amial.reporting-center.rbac-changes')),
         'support-operations': @json(route('admin.amial.reporting-center.support-operations')),
+        'system-health-history': @json(route('admin.amial.reporting-center.system-health-history')),
+        'queue-operations': @json(route('admin.amial.reporting-center.queue-operations')),
     };
 
     const labels = {
@@ -159,6 +167,7 @@
         low:'منخفض', normal:'عادي', high:'عالٍ', urgent:'عاجل', store:'متجر', warehouse:'مستودع',
         sale:'بيع', sale_return:'مرتجع بيع', purchase_receive:'استلام شراء', purchase_return:'مرتجع شراء',
         transfer_out:'تحويل صادر', transfer_in:'تحويل وارد', count_adjustment:'تسوية جرد', waste:'هالك', opening_balance:'رصيد افتتاحي', correction:'تصحيح',
+        up:'سليم', degraded:'متدهور', down:'متوقف', default:'افتراضية', emails:'البريد',
     };
 
     const state = document.getElementById('report-state');
@@ -287,6 +296,23 @@
         return card('الدعم وزمن الحل', `<div class="row g-2 mb-3">${metric('أنشئت في الفترة',meta.created_in_period)}${metric('حُلّت في الفترة',meta.resolved_in_period)}${metric('التراكم المفتوح',meta.open_backlog)}${metric('غير مسندة',meta.unassigned_backlog)}${metric('عاجلة',meta.urgent_backlog)}${metric('متوسط الحل',meta.average_resolution_minutes??'—','دقيقة')}${metric('متأخر 8+ أيام',a['8_plus_days']??0)}${metric('خرق SLA',meta.sla_breach_rate??'غير قابل للقياس')}</div><div class="row g-3"><div class="col-lg-4"><h6>الحالات</h6>${breakdown(meta.by_status)}</div><div class="col-lg-4"><h6>الأولويات</h6>${breakdown(meta.by_priority)}</div><div class="col-lg-4"><h6>الأسباب</h6>${breakdown(meta.by_category)}</div></div>`,'لا نحسب خرق SLA قبل ضبط هدف زمني رسمي');
     }
 
+    function renderHealth(meta) {
+        const s=meta.samples||{}, e=meta.errors||{};
+        const rows=(meta.components||[]).map(c=>`<tr><td>${esc(c.component)}</td><td>${esc(label(c.latest_state))}</td><td class="mono">${esc(c.latest_latency_ms??'—')}</td><td>${c.samples}</td><td>${c.up}</td><td>${c.degraded}</td><td>${c.down}</td><td class="mono">${esc(c.observed_up_ratio_pct??'—')}%</td><td>${esc(c.latest_checked_at??'—')}</td></tr>`);
+        const heartbeat = meta.heartbeat_stale
+            ? `<div class="alert alert-danger mt-3 mb-0"><strong>نبض المراقبة متأخر أو مفقود.</strong> آخر نبضة: ${esc(meta.last_heartbeat_at??'غير موجود')} · العمر: ${esc(meta.heartbeat_age_minutes??'—')} دقيقة.</div>`
+            : `<div class="alert alert-success mt-3 mb-0">نبض المراقبة ضمن النافذة المتوقعة (${esc(meta.heartbeat_expected_minutes)} دقائق).</div>`;
+        return card('تاريخ صحة النظام والتوفّر المرصود', `<div class="row g-2 mb-3">${metric('عينات سليمة',s.up??0)}${metric('عينات متدهورة',s.degraded??0)}${metric('عينات متوقفة',s.down??0)}${metric('آخر نبضة/دقيقة',meta.heartbeat_age_minutes??'—')}${metric('أخطاء مفتوحة',e.open??'—')}${metric('أخطاء معترف بها',e.acknowledged??'—')}${metric('أخطاء محلولة',e.resolved??'—')}${metric('قناة إنذار خارجية',meta.external_alert_channel_configured?'مهيأة':'غير مهيأة')}</div>` + table(['المكوّن','آخر حالة','كمون ms','عينات','سليم','متدهور','متوقف','نسبة السليم المرصودة','آخر فحص'],rows) + heartbeat + `<div class="alert alert-warning mt-3 mb-0"><strong>ليست SLA تعاقدية:</strong> هذه نسب من عينات داخلية كل عدة دقائق، ولا تثبت التوفّر من طرف العميل بين العينات أو من خارج الشبكة.</div>`, `${meta.from??'—'} → ${meta.to??'—'} · احتفاظ ${meta.retention_days??'—'} يوماً`);
+    }
+
+    function renderQueue(meta) {
+        const p=meta.pending||{}, f=meta.failed||{};
+        const wait=p.oldest_ready_wait_seconds===null||p.oldest_ready_wait_seconds===undefined?'—':`${p.oldest_ready_wait_seconds} ثانية`;
+        const warning = meta.completion_history_available===false
+            ? `<div class="alert alert-warning mb-0 mt-3"><strong>لا يوجد تاريخ مكتملات قابل للدفاع:</strong> Laravel يحذف صف المهمة الناجحة من الجدول القياسي، لذلك لا نختلق throughput أو متوسط زمن تنفيذ للمهمات المكتملة.</div>` : '';
+        return card('الطوابير والمهام', `<div class="row g-2 mb-3">${metric('Driver',meta.driver)}${metric('الحالة',meta.state==='healthy'?'سليم':'تحذير')}${metric('كل المعلقة',p.total??'غير متاح')}${metric('جاهزة',p.ready??'غير متاح')}${metric('محجوزة لعامل',p.reserved??'غير متاح')}${metric('مؤجلة',p.delayed??'غير متاح')}${metric('أقدم انتظار جاهز',wait)}${metric('فاشلة حالياً',f.total??'غير متاح')}${metric('فاشلة في الفترة',f.in_period??'غير متاح')}</div><div class="row g-3"><div class="col-lg-6"><h6>المعلقة حسب الطابور</h6>${breakdown(p.by_queue)}</div><div class="col-lg-6"><h6>الفاشلة حسب الطابور</h6>${breakdown(f.by_queue)}</div></div>${warning}`,'لا تُعرض payloads أو traces الحساسة في التقرير');
+    }
+
     function renderAml(meta) {
         const health=meta.health||{}, inv=meta.investigations||{}, large=meta.large_transactions||{};
         const gaps=[];
@@ -306,6 +332,7 @@
             'customer-activity':renderCustomer, 'agent-liquidity':renderAgent, 'subscriptions':renderSubscriptions,
             'kyc-pipeline':renderKyc, 'aml-regulatory':renderAml, 'audit-sensitive-actions':m=>renderAudit(m,false),
             'rbac-changes':m=>renderAudit(m,true), 'support-operations':renderSupport,
+            'system-health-history':renderHealth, 'queue-operations':renderQueue,
         };
         return handlers[type] ? handlers[type](meta) : empty('لا يوجد عارض لهذا التقرير.');
     }
