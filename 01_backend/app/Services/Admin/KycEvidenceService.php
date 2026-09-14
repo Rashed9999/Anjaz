@@ -4,48 +4,17 @@ namespace App\Services\Admin;
 
 use App\Models\KycDocument;
 use App\Models\User;
+use App\Services\Kyc\KycOwnershipGuardService;
+use App\Services\Kyc\KycPrivacyService;
 use App\Services\KycDocumentService;
 use App\Support\YemenGovernorates;
 
 /**
  * AMIAL-KYC-EVIDENCE-001 — **الدليلُ المعروضُ هو الدليلُ المحكومُ به.**
  *
- * ══════════════════════════════════════════════════════════════════════
- * **العطلُ الذي وُلدت منه، وقِيس ولم يُفترَض:**
- *
- *     AdminHubController::verificationJson  →  'documents' =>
- *         $u->identification_image_fullpath        ← العمودُ القديم
- *
- *     KycDocumentService::decideAccountVerification →
- *         completenessFor()  يقرأ  `kyc_documents`  ← السجلُّ الحديث
- *
- * **فالمراجعُ يرى شيئاً ويقرّر على شيءٍ آخر.** وله وجهان، وكلاهما يقع:
- *
- *   ① **يرى صوراً قديمةً فيعتمد** — والوثائقُ الحديثةُ لم تُراجَع سطراً.
- *   ② **أو يرى «لا وثائق مرفوعة» وهي مرفوعة** — رفعها العميلُ من
- *      التطبيق إلى `kyc_documents`، والشاشةُ تقرأ عموداً لا يعرفه ذلك
- *      المسار. فيُترك حسابٌ مكتملٌ في الطابور، أو يُضغط «اعتماد» فيُردّ
- *      برسالةٍ لا يفهم سببَها.
- *
- * **والعلاجُ ليس قائمةً ثانية.** هذه الخدمةُ **تسأل مصدرَ القرار نفسَه**
- * (`KycDocumentService::completenessFor`) ولا تُعيد بناءَ شروطه — فقائمةٌ
- * موازيةٌ تشيخ يومَ يُضاف نوعُ مستندٍ في الخدمة ولا يظهر في الشاشة، وهو
- * العطلُ نفسُه بثوبٍ جديد.
- *
- * **والثلاثةُ سواء: عميلٌ ووكيلٌ وتاجر.** الوثائقُ الشخصيّةُ واحدةٌ لكلّ
- * من يملك محفظة — ولوحةُ التحقّق تُدرج الأنواعَ الثلاثة أصلاً، فكان
- * الدليلُ مكسوراً لثلاثتهم لا للتاجر وحدَه.
- *
- * **والقديمُ يُعرَض ولا يُحتسَب.** صورةٌ في العمود القديم ليست وثيقةً
- * معتمَدة، وطيُّها يُخفي ما قد ينفع المراجع. فتُعرَض موسومةً «قديمة — لا
- * تُحتسَب في الاكتمال». (القاعدة السابعة: الغيابُ والوجودُ يُقالان، ولا
- * يُخلطان.)
- *
- * يظهر في : لوحة الإدارة ← لوحة التحقّق: الحسابات الجديدة · ومركزُ
- * الحساب (نافذةُ المستخدم). ويُوصل إليهما من : مساحة العمل ← العملاء
- * والحسابات.
- *
- * @see \Tests\Feature\KycEvidenceGuardTest
+ * الشاشة لا تعيد اختراع شروط القرار. تقرأ نفس خدمة KYC، وتعرض أيضاً
+ * إثبات ملكية الهوية الذي يحرس القرار النهائي. والحالات المقيدة لا تُسرّب
+ * حتى metadata أو الصور القديمة لمراجع لا يحمل مفتاحها.
  */
 class KycEvidenceService
 {
@@ -53,18 +22,46 @@ class KycEvidenceService
         private KycDocumentService $kyc,
         private \App\Services\Kyc\DocumentReuseService $reuse,
         private \App\Services\Kyc\IdentityExpiryService $expiry,
+        private KycOwnershipGuardService $ownership,
+        private KycPrivacyService $privacy,
     ) {}
 
     /**
      * الدليلُ الكاملُ لحسابٍ واحد — لأيّ نوعٍ من الثلاثة.
      *
-     * @param  User|null  $reviewer  المراجعُ الحاليّ، لفحص المبدأ الرباعيّ.
-     * @return array{tier:int,complete:bool,required:array,approved:array,missing:array,
-     *               missing_fields:array,documents:array,legacy_images:array,blockers:array}
+     * @param  User|null  $reviewer  المراجعُ الحاليّ، لفحص المبدأ الرباعيّ والصلاحيات المقيدة.
      */
     public function for(User $user, int $targetTier = 2, ?User $reviewer = null): array
     {
+        // AMIAL-KYC-RESTRICTED-EVIDENCE-001 — لا يكفي حجب endpoint الصورة:
+        // هذه الخدمة كانت تقرأ legacy_images والـmetadata مباشرة. من لا يحمل
+        // restricted.view يأخذ حالةً حمراء فقط، لا أدلة يمكن تركيب الهوية منها.
+        if ($this->privacy->isRestricted($user)
+            && (!$reviewer || !$reviewer->hasPlatformPermission('platform.customers.kyc.restricted.view'))) {
+            return [
+                'tier' => $targetTier,
+                'complete' => false,
+                'required' => [],
+                'approved' => [],
+                'missing' => [],
+                'missing_fields' => [],
+                'documents' => [],
+                'legacy_images' => [],
+                'blockers' => ['هذه الحالة في طابور مراجعة مقيد — التفاصيل محجوبة عن هذا الموظف.'],
+                'reuse' => ['blockers' => [], 'warnings' => []],
+                'identity_expiry' => ['state' => 'restricted', 'expires_at' => null],
+                'ownership' => [
+                    'ready' => false,
+                    'method' => 'restricted',
+                    'blockers' => ['إثبات الملكية متاح لفريق المراجعة المقيدة فقط.'],
+                    'evidence' => [],
+                ],
+                'restricted' => true,
+            ];
+        }
+
         $completeness = $this->kyc->completenessFor($user, $targetTier);
+        $ownership = $this->ownership->assess($user);
 
         return [
             'tier' => $targetTier,
@@ -75,37 +72,33 @@ class KycEvidenceService
             'missing_fields' => array_values($completeness['missing_fields'] ?? []),
             'documents' => $this->documents($user),
             'legacy_images' => $this->legacy($user),
-            'blockers' => $this->blockers($user, $completeness, $targetTier, $reviewer),
+            'blockers' => $this->blockers(
+                $user, $completeness, $targetTier, $reviewer, $ownership),
             // AMIAL-KYC-REUSE-001 — **ورقةٌ واحدةٌ تفتح حسابين.**
             'reuse' => $this->reuse->findingsFor($user),
-
-            // ══════════════════════════════════════════════════════════
-            // AMIAL-KYC-DUP-001 — **وتاريخُ الانتهاء يُعرَض حيث يُعتمَد.**
-            //
-            // `IdentityExpiryService` مبنيّةٌ ومقروءةٌ من ثلاثة مواضع —
-            // طلبُ تغيير البيانات في التطبيق، ونظيرُه في اللوحة، وأمرٌ
-            // مجدول — **ولا واحدَ منها لوحةُ التحقّق**. فالمراجعُ الذي
-            // يضغط «اعتماد» لا يرى تاريخَ انتهاء الهويّة أصلاً.
-            //
-            // و«غيرُ معروف» تُقال ولا تُقرأ «سارية» (القاعدة السابعة):
-            // التاريخُ اختياريٌّ في التسجيل، فغيابُه شائعٌ ويجب أن
-            // يُرى — لا أن يُخفى فيُقرأ سلامةً.
-            // ══════════════════════════════════════════════════════════
             'identity_expiry' => $this->expiry->stateOf($user),
+            // AMIAL-KYC-OWNERSHIP-001 — يظهر قبل زر الاعتماد لا بعد رفضه.
+            'ownership' => $ownership,
+            'restricted' => $this->privacy->isRestricted($user),
         ];
     }
 
     /**
      * **ما يمنع الاعتمادَ الآن — قبل الضغط لا بعد الرفض.**
      *
-     * وهو نسخةُ شروطِ `decideAccountVerification` **بترتيبها نفسِه**: زرٌّ
-     * يُضغط فيُردّ يُعلّم المراجعَ أن يجرّب ويرى، وهو أبطأُ من أن يُقرأ
-     * ويُصلَح. (وهو الحدُّ نفسُه الذي بُنيت به لافتةُ المحافظة.)
+     * ترتيب الشروط يبقى قريباً من `decideAccountVerification`: الاكتمال،
+     * المحافظة، الحقول، التكرار، الانتهاء، ثم إثبات الملكية. لا نعرض نقص
+     * الملكية إذا كانت الوثائق نفسها ناقصة حتى لا نكرر «لا سيلفي» مرتين.
      *
      * @return array<int,string>
      */
-    private function blockers(User $user, array $completeness, int $tier, ?User $reviewer): array
-    {
+    private function blockers(
+        User $user,
+        array $completeness,
+        int $tier,
+        ?User $reviewer,
+        array $ownership,
+    ): array {
         $out = [];
 
         if ($reviewer && (int) $reviewer->id === (int) $user->id) {
@@ -116,13 +109,10 @@ class KycEvidenceService
             $missing = $this->labels($completeness['missing'] ?? []);
 
             $out[] = $missing === []
-                // **وقائمةٌ فارغةٌ لا تُقرأ «مكتمل»** — الفئةُ بلا مستنداتٍ
-                // مطلوبةٍ لا تُعتمد أصلاً، ويُقال ذلك لا يُسكَت عنه.
                 ? 'لا مستنداتٍ مطلوبةً لهذه الفئة — لا يتمّ الاعتماد منها.'
                 : 'مستنداتٌ ناقصةٌ أو غيرُ معتمَدة: '.implode('، ', $missing);
         }
 
-        // نفسُ فحص `kycStatus`: محافظةُ السكن شرطٌ قبل الاعتماد.
         $governorate = YemenGovernorates::codeFromName(
             (string) ($user->residence_governorate ?: $user->origin_governorate));
 
@@ -130,31 +120,15 @@ class KycEvidenceService
             $out[] = 'محافظة السكن غير محدَّدة — اخترها من البطاقة أوّلاً.';
         }
 
-        // والحقولُ الرقابيّةُ تُلزم في الفئة الثالثة وحدَها.
         if ($tier >= 3 && ($completeness['missing_fields'] ?? []) !== []) {
             $out[] = 'حقولٌ رقابيّةٌ ناقصةٌ للفئة الثالثة: '
                 .implode('، ', $completeness['missing_fields']);
         }
 
-        // **وإعادةُ استعمال الوثيقة تُغلق الطريقَ كغيرها** — ولا تُعرَض
-        // لافتةً بجانب زرٍّ يعمل: تحذيرٌ يُمكن تخطّيه يُتخطّى.
         foreach ($this->reuse->findingsFor($user)['blockers'] as $line) {
             $out[] = $line;
         }
 
-        // ══════════════════════════════════════════════════════════════
-        // AMIAL-KYC-DUP-001 — **ولا يُوثَّق حسابٌ على هويّةٍ منتهية.**
-        //
-        // وهذا **لا يناقض** قاعدةَ `IdentityExpiryService` («تَسِمُ ولا
-        // تمنع»): تلك عن حسابٍ **وُثِّق أمس** وانتهت ورقتُه اليوم —
-        // فتجميدُه صامتاً يشلّ من لم يخطئ. وهذه عن **اعتمادٍ يقع الآن**،
-        // وختمُ التوثيق على ورقةٍ منتهيةٍ خللٌ رقابيٌّ لا سهو.
-        //
-        // **و«غير معروف» ليست مانعاً** — التاريخُ اختياريٌّ في التسجيل،
-        // فمنعُه يُجمّد الطابورَ كلَّه. يُعرَض في `identity_expiry`
-        // ويراه المراجعُ ويقرّر. (القاعدة السابعة: يُقال ولا يُسكَت عنه،
-        // ولا يُلبَس ثوبَ السلامة أيضاً.)
-        // ══════════════════════════════════════════════════════════════
         $expiry = $this->expiry->stateOf($user);
 
         if (($expiry['state'] ?? null) === \App\Services\Kyc\IdentityExpiryService::STATE_EXPIRED) {
@@ -163,15 +137,20 @@ class KycEvidenceService
                 .' — لا يُوثَّق حسابٌ على ورقةٍ منتهية. اطلب إعادةَ الرفع.';
         }
 
+        // لا نُغرق المراجع بسببين لنفس النقص: بعد اكتمال المستندات فقط
+        // نعرض ما بقي لإثبات أن صاحب الحساب هو صاحب تلك المستندات.
+        if ($completeness['complete'] && !($ownership['ready'] ?? false)) {
+            foreach (($ownership['blockers'] ?? []) as $line) {
+                if (!in_array($line, $out, true)) {
+                    $out[] = $line;
+                }
+            }
+        }
+
         return $out;
     }
 
-    /**
-     * وثائقُ السجلّ الحديث بحالاتها — **وكلُّها لا المعتمَدةُ وحدَها.**
-     *
-     * فوثيقةٌ مرفوضةٌ أو منتهيةٌ خبرٌ للمراجع لا سطرٌ يُطوى: بها يعرف أنّ
-     * العميلَ رفع وأنّ الرفعَ رُدّ، ولا يظنّه لم يرفع.
-     */
+    /** وثائقُ السجلّ الحديث بحالاتها — وكلُّها لا المعتمَدةُ وحدَها. */
     private function documents(User $user): array
     {
         return KycDocument::where('user_id', $user->id)
