@@ -54,7 +54,14 @@ class ReportingCenterController extends Controller
             'decision_code' => 'ALLOW', 'severity' => 'info',
             'context' => ['catalog_total' => $summary['total']],
         ]);
-        return view('admin-views.amial.reporting-center.index', [
+
+        // AMIAL-REPORTING-UX-002 — الواجهة التنفيذية هي الافتراضية، مع إبقاء
+        // العرض التشغيلي السابق متاحاً كمسار رجوع آمن أثناء مرحلة التبني.
+        $view = $request->boolean('legacy')
+            ? 'admin-views.amial.reporting-center.index'
+            : 'admin-views.amial.reporting-center.index-v2';
+
+        return view($view, [
             'catalog' => $this->catalog->catalog(), 'summary' => $summary,
             'canExport' => (bool) $actor?->hasPlatformPermission('platform.reports.export'),
         ]);
