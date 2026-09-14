@@ -61,6 +61,21 @@ class EmailRegistrationController extends Controller
         }
 
         $request->merge(['email' => $email]);
+
+        // AMIAL-KYC-SINGLE-SOURCE-001 — المعالج الحديث يرسل المستندات
+        // مسمّاةً (`kyc_id_front`/`kyc_id_back`/`kyc_selfie`). كان يرسل
+        // النسخ نفسها أيضاً في `identification_image[]` للتوافق القديم،
+        // فيحفظ RegisterController نسخة ثانية خارج `kyc_documents`.
+        // إذا وصل أي مستند حديث نحذف حزمة legacy قبل إنشاء الحساب. العميل
+        // القديم الذي لا يرسل الحقول الحديثة يبقى متوافقاً كما هو.
+        if ($request->hasFile('kyc_id_front')
+            || $request->hasFile('kyc_id_back')
+            || $request->hasFile('kyc_selfie')
+            || $request->hasFile('kyc_address_proof')) {
+            $request->files->remove('identification_image');
+            $request->request->remove('identification_image');
+        }
+
         try {
             return DB::transaction(function () use ($request, $email): JsonResponse {
                 $challenge = $this->otp->consumeVerification(
