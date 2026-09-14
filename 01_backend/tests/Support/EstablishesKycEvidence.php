@@ -74,10 +74,19 @@ trait EstablishesKycEvidence
     protected function establishKycOwnership(User $customer, ?User $reviewer = null): void
     {
         $identity = trim((string) ($customer->identification_number ?? ''));
-        if ($identity === '') {
-            $identity = 'TST-'.$customer->id.'-IDENTITY';
-            $customer->identification_number = $identity;
-            $customer->save();
+        $digits = preg_replace(
+            '/[^\d]/',
+            '',
+            \App\Services\EncryptionService::foldDigits($identity),
+        ) ?? '';
+
+        // AMIAL-KYC-EVIDENCE-FIXTURE-002 — المساعد السابق كان يصنع
+        // `TST-{id}-IDENTITY`، وبعد تنقية غير الأرقام لا يبقى غالباً إلا
+        // رقم السجل نفسه (1، 2، ...). الإنتاج يرفض أقل من MIN_DIGITS بحق؛
+        // لذلك نصحح الـfixture ولا نخفض الحارس الحقيقي.
+        if (mb_strlen($digits) < \App\Services\Kyc\IdentityLookupService::MIN_DIGITS) {
+            $identity = '990'.str_pad((string) $customer->id, 9, '0', STR_PAD_LEFT);
+            $customer->forceFill(['identification_number' => $identity])->save();
         }
 
         $idDocument = KycDocument::query()
