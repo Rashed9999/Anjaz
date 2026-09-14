@@ -26,16 +26,24 @@
 @section('content')
 <div class="content container-fluid" id="kyc-panel" data-testid="kyc-panel">
 
-    <div class="d-flex align-items-center gap-3 mb-4">
+    <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
         <i class="tio-verified text-primary" style="font-size:24px"></i>
         <h2 class="page-header-title mb-0">مراجعة مستندات الهوية</h2>
         <span class="badge bg-warning text-dark" id="kyc-count">0</span>
-        <button class="btn btn-outline-primary btn-sm ms-auto" id="kyc-btn-refresh" data-testid="kyc-btn-refresh">تحديث</button>
+        <div class="ms-auto d-flex gap-2">
+            @if(auth('user')->user()?->hasPlatformPermission('platform.audit.view'))
+                <a class="btn btn-outline-danger btn-sm" href="{{ route('admin.amial.kyc.privacy.page') }}">
+                    تتبّع تسريب صورة
+                </a>
+            @endif
+            <button class="btn btn-outline-primary btn-sm" id="kyc-btn-refresh" data-testid="kyc-btn-refresh">تحديث</button>
+        </div>
     </div>
 
     <div class="alert alert-secondary py-2 small">
         لا يراجع الموظّف مستندَ نفسه — والنظام يرفض ذلك ولو حاول.
-        كلّ فتحٍ لصورة هويّة يُسجَّل باسم من فتحه.
+        كلّ فتحٍ لصورة هويّة يصدر <strong>نسخة مشاهدة مائية</strong> تحمل رقم الموظف والوقت ورمز VIEW قابلًا للتتبّع؛
+        الأصل المشفّر لا يُرسل للمتصفح مباشرة.
     </div>
 
     <div class="row g-3">
@@ -76,6 +84,7 @@
     // واجهة القارئ لا تعرض أزرار القرار. والحارس في الخادم يبقى الحكم النهائي.
     const CAN_DECIDE = @json((bool) auth('user')->user()?->hasPlatformPermission('platform.customers.freeze'));
     const CAN_ACTIVATE = @json((bool) auth('user')->user()?->hasPlatformPermission('platform.approvals.decide'));
+    const CAN_BIOMETRIC = @json((bool) auth('user')->user()?->hasPlatformPermission('platform.customers.kyc.biometric.view'));
     const GOVERNORATES = @json($governorates);
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -116,7 +125,7 @@
             <button class="list-group-item list-group-item-action js-kyc-open" data-id="${d.id}"
                     data-name="${esc(d.customer_name)}" data-phone="${esc(d.customer_phone)}"
                     data-label="${esc(d.doc_label)}" data-user="${d.user_id}"
-                    data-mime="${esc(d.original_mime || '')}"
+                    data-type="${esc(d.doc_type || '')}" data-mime="${esc(d.original_mime || '')}"
                     data-testid="kyc-row-${d.id}">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
@@ -168,7 +177,7 @@
         const b = e.target.closest('.js-kyc-open');
         if (b) {
             current = {id: b.dataset.id, name: b.dataset.name, phone: b.dataset.phone,
-                       label: b.dataset.label, user: b.dataset.user, mime: b.dataset.mime};
+                       label: b.dataset.label, user: b.dataset.user, type: b.dataset.type, mime: b.dataset.mime};
             openDoc();
             return;
         }
@@ -229,6 +238,7 @@
         const reason = 'مراجعة طابور الهوية';
         const fileUrl = `${BASE}/documents/${encodeURIComponent(current.id)}/file?reason=${encodeURIComponent(reason)}`;
         const isImage = (current.mime || '').startsWith('image/');
+        const biometricBlocked = current.type === 'selfie' && !CAN_BIOMETRIC;
         document.getElementById('kyc-viewer').innerHTML = `
             <div class="text-end">
                 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -236,21 +246,26 @@
                         <h5 class="mb-0">${esc(current.name)}</h5>
                         <div class="small text-muted font-monospace">#${esc(current.user)} • ${esc(current.phone)}</div>
                         <span class="badge badge-soft-primary mt-1">${esc(current.label)}</span>
+                        <span class="badge badge-soft-danger mt-1">معاينة مائية قابلة للتتبّع</span>
                     </div>
                     ${CAN_DECIDE ? `<div class="d-flex gap-2">
                         <button class="btn btn-outline-danger" id="kyc-reject" data-testid="kyc-reject">رفض</button>
                         <button class="btn btn-success" id="kyc-approve" data-testid="kyc-approve">اعتماد</button>
                     </div>` : '<span class="badge badge-soft-secondary">قراءة فقط</span>'}
                 </div>
-                ${isImage
-                    ? `<img id="kyc-document-image" src="${fileUrl}" alt="${esc(current.label)}"
-                         style="width:100%;max-height:420px;object-fit:contain;border:1px solid #ddd;border-radius:8px;background:#fafafa">`
-                    : `<iframe src="${fileUrl}"
-                         style="width:100%;height:420px;border:1px solid #ddd;border-radius:8px;background:#fafafa"
-                         title="مستند الهوية"></iframe>`}
+                ${biometricBlocked
+                    ? `<div class="alert alert-danger text-start">
+                        <strong>صورة الوجه محمية.</strong>
+                        لا تملك صلاحية <span class="font-monospace">KYC Biometric View</span>؛ حالة المستند والحقول تبقى ظاهرة دون الصورة.
+                       </div>`
+                    : (isImage
+                        ? `<img id="kyc-document-image" src="${fileUrl}" alt="${esc(current.label)}"
+                             style="width:100%;max-height:420px;object-fit:contain;border:1px solid #ddd;border-radius:8px;background:#fafafa">`
+                        : `<iframe src="${fileUrl}"
+                             style="width:100%;height:420px;border:1px solid #ddd;border-radius:8px;background:#fafafa"
+                             title="مستند الهوية"></iframe>`)}
                 <div id="kyc-preview-fallback" class="alert alert-warning small mt-2 d-none">
-                    تعذّر عرض هذا الملف داخل المتصفح. افتحه في نافذة مستقلة للمراجعة، ولا تعتمد الحقول قبل التحقق من الأصل.
-                    <a href="${fileUrl}" target="_blank" rel="noopener" class="alert-link">فتح الملف الأصلي</a>
+                    تعذّرت المعاينة الآمنة. لا يرسل أميال الملف الأصلي بلا علامة مائية؛ حوّل المستند إلى JPG/PNG أو أعد رفعه بصيغة مدعومة.
                 </div>
                 <div id="kyc-ocr" class="mt-3" data-testid="kyc-ocr"></div>
                 <div id="kyc-completeness" class="mt-3"></div>
