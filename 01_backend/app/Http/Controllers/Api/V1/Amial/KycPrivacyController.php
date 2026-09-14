@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
+use App\Services\Kyc\Biometric\BiometricVerificationService;
 use App\Services\Kyc\KycPrivacyService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -36,7 +37,7 @@ class KycPrivacyController extends Controller
                 'code' => $code,
                 'message' => match ($code) {
                     'KYC_BIOMETRIC_PROVIDER_NOT_CONFIGURED' =>
-                        'التحقق الآلي لم يُربط بعد بمزوّد بيومتري معتمد. اختر المراجعة العادية أو الخصوصية الإضافية حالياً.',
+                        'التحقق الآلي غير متاح حتى يكتمل ربط مزوّد بيومتري حقيقي ومفاتيح التوقيع الخاصة به.',
                     'KYC_PRIVACY_SCHEMA_UNAVAILABLE' =>
                         'خدمة خصوصية التحقق غير متاحة على هذا الخادم حتى اكتمال الترحيل.',
                     default => 'طريقة التحقق المطلوبة غير متاحة.',
@@ -50,6 +51,41 @@ class KycPrivacyController extends Controller
             'data' => $state,
             'options' => $this->options($privacy),
         ]);
+    }
+
+    /**
+     * يبدأ جلسة مزود حقيقي فقط بعد أن يختار صاحب الحساب المسار automated.
+     * لا يكتب هذا الباب نتيجة ولا يعتمد الحساب؛ يستلم بيانات إطلاق الجلسة فقط.
+     */
+    public function startBiometric(Request $request, BiometricVerificationService $biometrics): JsonResponse
+    {
+        try {
+            $data = $biometrics->start($request->user());
+        } catch (DomainException $e) {
+            $code = $e->getMessage();
+
+            return response()->json([
+                'success' => false,
+                'code' => $code,
+                'message' => match ($code) {
+                    'KYC_BIOMETRIC_MODE_REQUIRED' => 'اختر «تحقق آلي خاص» أولاً قبل بدء الجلسة البيومترية.',
+                    'KYC_BIOMETRIC_ATTEMPT_ALREADY_ACTIVE' => 'توجد محاولة تحقق بيومتري نشطة بالفعل. أكملها أو أعد المحاولة بعد انتهاء مهلة الحماية.',
+                    'KYC_BIOMETRIC_PROVIDER_DISABLED',
+                    'KYC_BIOMETRIC_PROVIDER_NOT_CONFIGURED',
+                    'KYC_BIOMETRIC_PROVIDER_UNKNOWN',
+                    'KYC_BIOMETRIC_PROVIDER_UNAVAILABLE' => 'مزوّد التحقق البيومتري غير متاح حالياً.',
+                    'KYC_BIOMETRIC_SCHEMA_UNAVAILABLE' => 'خدمة التحقق البيومتري لم يكتمل ترحيلها على هذا الخادم.',
+                    default => 'تعذر بدء جلسة التحقق البيومتري حالياً.',
+                },
+            ], in_array($code, ['KYC_BIOMETRIC_ATTEMPT_ALREADY_ACTIVE'], true) ? 409 : 503);
+        }
+
+        return response()->json([
+            'success' => true,
+            'code' => 'KYC_BIOMETRIC_SESSION_STARTED',
+            'message' => 'تم إنشاء جلسة التحقق لدى المزود المعتمد.',
+            'data' => $data,
+        ], 201);
     }
 
     private function options(KycPrivacyService $privacy): array
