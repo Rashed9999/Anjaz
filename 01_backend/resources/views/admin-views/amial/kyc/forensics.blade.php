@@ -13,7 +13,7 @@
     </div>
 
     <div class="row g-3 mb-4">
-        <div class="col-lg-7">
+        <div class="col-xl-8">
             <div class="card h-100">
                 <div class="card-header d-flex align-items-center">
                     <div>
@@ -34,14 +34,28 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-5">
+        <div class="col-xl-4">
             <div class="card h-100">
-                <div class="card-header"><h5 class="card-header-title mb-0">ماذا تعني الحالات؟</h5></div>
+                <div class="card-header"><h5 class="card-header-title mb-0">المزوّد البيومتري — Runtime</h5></div>
                 <div class="card-body small">
-                    <div class="mb-3"><strong>خصوصية إضافية:</strong> صورة الوجه محمية بصلاحية بيومترية مستقلة، وكل مشاهدة مائية ومسجلة.</div>
-                    <div class="mb-3"><strong>تحقق آلي خاص:</strong> لا يصبح متاحاً إلا بعد ربط مزود حقيقي لـ Liveness وFace Match.</div>
-                    <div class="mb-3"><strong>تحقق حضوري:</strong> طلب مسار يدوي؛ لا يتجاوز متطلبات الاعتماد الحالية حتى تعتمد السياسة الرقابية.</div>
-                    <div class="alert alert-info mb-0" id="biometric-readiness">حالة المزود البيومتري: جارٍ الفحص…</div>
+                    <div class="alert alert-info" id="biometric-readiness">حالة المزود البيومتري: جارٍ الفحص…</div>
+
+                    <div id="biometric-runtime" class="row g-2">
+                        <div class="col-6"><div class="border rounded p-2 h-100"><div class="text-muted">المزوّد</div><div id="bio-provider" class="fw-bold font-monospace">—</div></div></div>
+                        <div class="col-6"><div class="border rounded p-2 h-100"><div class="text-muted">Driver</div><div id="bio-driver" class="fw-bold">—</div></div></div>
+                        <div class="col-6"><div class="border rounded p-2 h-100"><div class="text-muted">قيد التنفيذ</div><div id="bio-pending" class="fs-5 fw-bold">0</div></div></div>
+                        <div class="col-6"><div class="border rounded p-2 h-100"><div class="text-muted">مكتمل</div><div id="bio-completed" class="fs-5 fw-bold">0</div></div></div>
+                        <div class="col-6"><div class="border rounded p-2 h-100"><div class="text-muted">مراجعة بشرية</div><div id="bio-manual" class="fs-5 fw-bold">0</div></div></div>
+                        <div class="col-6"><div class="border rounded p-2 h-100"><div class="text-muted">فشل</div><div id="bio-failed" class="fs-5 fw-bold">0</div></div></div>
+                        <div class="col-12"><div class="border rounded p-2"><div class="text-muted">آخر Callback معالج</div><div id="bio-last-callback" class="font-monospace">—</div></div></div>
+                    </div>
+
+                    <div class="alert alert-light border mt-3 mb-3" id="bio-data-policy">
+                        لا تُخزَّن صور/فيديو بيومترية ولا نصوص callbacks الخام في أميال.
+                    </div>
+                    <div class="mb-2"><strong>خصوصية إضافية:</strong> صورة الوجه محمية بصلاحية بيومترية مستقلة، وكل مشاهدة مائية ومسجلة.</div>
+                    <div class="mb-2"><strong>تحقق آلي خاص:</strong> النتيجة الناجحة تصبح دليل ملكية فقط؛ اعتماد الحساب النهائي يبقى قرار لجنة التحقق.</div>
+                    <div><strong>تحقق حضوري:</strong> لا يُعد اعتماداً بمجرد اختيار المسار؛ يحتاج قرار مراجع مخول.</div>
                 </div>
             </div>
         </div>
@@ -100,16 +114,44 @@
     const casesEndpoint = @json(route('admin.amial.kyc.privacy.cases'));
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value == null || value === '' ? '—' : String(value);
+    };
+
     const statusBadge = (kind, status, score) => {
         const labels = {
             not_configured: 'غير مربوط', pending: 'قيد التنفيذ', passed: 'اجتاز', failed: 'فشل',
-            manual_review: 'مراجعة بشرية', matched: 'متطابق', not_matched: 'غير متطابق'
+            manual_review: 'مراجعة بشرية', matched: 'متطابق', not_matched: 'غير متطابق',
+            redacted: 'محجوب بالصلاحية'
         };
         const cls = ['passed', 'matched'].includes(status) ? 'success'
             : ['failed', 'not_matched'].includes(status) ? 'danger'
-            : status === 'not_configured' ? 'secondary' : 'warning text-dark';
+            : ['not_configured', 'redacted'].includes(status) ? 'secondary' : 'warning text-dark';
         const scoreText = score == null ? '' : ` · ${esc(score)}`;
         return `<span class="badge bg-${cls}">${esc(labels[status] || status)}${scoreText}</span>`;
+    };
+
+    const paintRuntime = runtime => {
+        const readiness = document.getElementById('biometric-readiness');
+        const attempts = runtime?.attempts || {};
+        const configured = Boolean(runtime?.configured);
+
+        readiness.className = configured ? 'alert alert-success' : 'alert alert-warning';
+        readiness.textContent = configured
+            ? 'المزوّد البيومتري جاهز فعلياً: Driver مسجل، التفعيل قائم، ومفاتيح التشغيل/التوقيع متاحة.'
+            : runtime?.enabled
+                ? 'التفعيل مطلوب لكن المزود غير جاهز فعلياً؛ لن يفتح أميال التحقق الآلي حتى يصبح Driver متاحاً.'
+                : 'التحقق البيومتري غير مفعّل حالياً؛ لا توجد درجات Liveness أو Face Match وهمية.';
+
+        setText('bio-provider', runtime?.provider || 'غير مربوط');
+        setText('bio-driver', runtime?.driver_registered ? (runtime?.available ? 'جاهز' : 'مسجل / غير متاح') : 'غير مسجل');
+        setText('bio-pending', attempts.pending ?? 0);
+        setText('bio-completed', attempts.completed ?? 0);
+        setText('bio-manual', attempts.manual_review ?? 0);
+        setText('bio-failed', attempts.failed ?? 0);
+        setText('bio-last-callback', runtime?.last_callback_at || 'لا يوجد');
+        setText('bio-data-policy', runtime?.data_policy || 'لا تُخزَّن صور/فيديو بيومترية ولا نصوص callbacks الخام في أميال.');
     };
 
     async function loadPrivacyCases() {
@@ -121,18 +163,16 @@
             const j = await r.json();
             if (!j.success) {
                 body.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">${esc(j.message || 'تعذّر التحميل')}</td></tr>`;
-                readiness.className = 'alert alert-danger mb-0';
+                readiness.className = 'alert alert-danger';
                 readiness.textContent = j.message || 'تعذّر فحص المزود البيومتري';
                 return;
             }
+
+            paintRuntime(j.data.biometric_runtime || {});
             const rows = j.data.cases || [];
-            readiness.className = j.data.biometric_provider_configured ? 'alert alert-success mb-0' : 'alert alert-warning mb-0';
-            readiness.textContent = j.data.biometric_provider_configured
-                ? 'مزود بيومتري حقيقي مفعّل — يمكن بدء التحقق الآلي.'
-                : 'لا يوجد مزود بيومتري مفعّل — لا يعرض أميال درجات Liveness أو Face Match وهمية.';
             body.innerHTML = rows.length ? rows.map(c => `
                 <tr>
-                    <td><strong>${esc(c.name)}</strong><div class="small text-muted font-monospace">#${esc(c.user_id)} · ${esc(c.phone)}</div></td>
+                    <td><strong>${esc(c.name)}</strong><div class="small text-muted font-monospace">${c.user_id == null ? '' : '#'+esc(c.user_id)+' · '}${esc(c.phone)}</div></td>
                     <td>${c.restricted_review ? '<span class="badge bg-danger">مقيدة</span> ' : ''}${esc(c.review_mode_label)}</td>
                     <td class="small">${esc(c.ownership_method_label)}</td>
                     <td>${statusBadge('liveness', c.liveness.status, c.liveness.score)}</td>
