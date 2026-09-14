@@ -12,6 +12,8 @@ class ReportCatalogService
 {
     public function catalog(): array
     {
+        $supportSlaReady = $this->supportSlaReady();
+
         return [
             'financial_core' => [
                 'label' => 'القوائم المالية والدفتر',
@@ -76,7 +78,15 @@ class ReportCatalogService
                     ['code' => 'jobs_queues', 'label' => 'الطوابير والمهام الفاشلة', 'status' => 'ready', 'source' => 'P1ObservabilityReportService ← jobs + failed_jobs بدون كشف payload', 'priority' => 'P1'],
                     ['code' => 'email_otp', 'label' => 'البريد وOTP والتسليم', 'status' => 'ready', 'source' => 'P2IdentityCommunicationReportService ← otp_challenges aggregate only؛ بلا PII أو أسرار', 'priority' => 'P2'],
                     ['code' => 'auth_security', 'label' => 'أمان المصادقة ومحاولات الدخول', 'status' => 'ready', 'source' => 'P2IdentityCommunicationReportService ← unified_login_attempts + audit lockouts aggregate only؛ بلا identifier/IP/user-agent', 'priority' => 'P2'],
-                    ['code' => 'support_sla', 'label' => 'الدعم وزمن الحل والتراكم', 'status' => 'partial', 'source' => 'P1BusinessOperationsReportService؛ هدف SLA الرسمي غير مضبوط بعد', 'priority' => 'P2'],
+                    [
+                        'code' => 'support_sla',
+                        'label' => 'الدعم وزمن الحل والتراكم',
+                        'status' => $supportSlaReady ? 'ready' : 'partial',
+                        'source' => $supportSlaReady
+                            ? 'P1BusinessOperationsReportService ← support_tickets + سياسة SLA رسمية مهيأة لكل الأولويات'
+                            : 'P1BusinessOperationsReportService؛ قياسات الدعم جاهزة لكن هدف SLA الرسمي غير مكتمل لكل الأولويات',
+                        'priority' => 'P2',
+                    ],
                     ['code' => 'subscriptions', 'label' => 'الباقات والاشتراكات والقيمة المتكررة', 'status' => 'ready', 'source' => 'P1BusinessOperationsReportService ← profiles + immutable subscription changes', 'priority' => 'P1'],
                 ],
             ],
@@ -93,5 +103,18 @@ class ReportCatalogService
             }
         }
         return $counts;
+    }
+
+    private function supportSlaReady(): bool
+    {
+        $targets = (array) config('amial_reporting.support_sla.resolution_minutes', []);
+        foreach (['low', 'normal', 'high', 'urgent'] as $priority) {
+            $value = $targets[$priority] ?? null;
+            if (! is_numeric($value) || (int) $value <= 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
