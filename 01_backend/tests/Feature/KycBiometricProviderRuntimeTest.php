@@ -93,7 +93,7 @@ class KycBiometricProviderRuntimeTest extends TestCase
         return ['x-test-signature' => ['signed-test-event']];
     }
 
-    private function callback(string $reference, string $eventId = 'evt-1'): string
+    private function providerCallbackPayload(string $reference, string $eventId = 'evt-1'): string
     {
         return json_encode([
             'event_id' => $eventId,
@@ -153,7 +153,7 @@ class KycBiometricProviderRuntimeTest extends TestCase
 
         try {
             app(BiometricVerificationService::class)->applyWebhook(
-                'test_bio', $this->callback($reference), ['x-test-signature' => ['wrong']],
+                'test_bio', $this->providerCallbackPayload($reference), ['x-test-signature' => ['wrong']],
             );
             $this->fail('قُبل callback بتوقيع غير صالح.');
         } catch (DomainException $e) {
@@ -175,7 +175,7 @@ class KycBiometricProviderRuntimeTest extends TestCase
             ->where('attempt_ulid', $start['attempt_ulid'])->value('provider_reference');
 
         $outcome = app(BiometricVerificationService::class)->applyWebhook(
-            'test_bio', $this->callback($reference), $this->signedHeaders(),
+            'test_bio', $this->providerCallbackPayload($reference), $this->signedHeaders(),
         );
 
         $this->assertSame('completed', $outcome['status']);
@@ -195,7 +195,7 @@ class KycBiometricProviderRuntimeTest extends TestCase
         $start = app(BiometricVerificationService::class)->start($user);
         $reference = (string) DB::table('kyc_biometric_attempts')
             ->where('attempt_ulid', $start['attempt_ulid'])->value('provider_reference');
-        $body = $this->callback($reference, 'evt-idempotent');
+        $body = $this->providerCallbackPayload($reference, 'evt-idempotent');
 
         $service = app(BiometricVerificationService::class);
         $first = $service->applyWebhook('test_bio', $body, $this->signedHeaders());
@@ -225,7 +225,7 @@ class KycBiometricProviderRuntimeTest extends TestCase
         $this->assertNotSame($firstRef, $secondRef);
 
         $outcome = $service->applyWebhook(
-            'test_bio', $this->callback($firstRef, 'evt-late'), $this->signedHeaders(),
+            'test_bio', $this->providerCallbackPayload($firstRef, 'evt-late'), $this->signedHeaders(),
         );
 
         $this->assertFalse($outcome['case_updated'],
