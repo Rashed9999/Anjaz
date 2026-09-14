@@ -8,6 +8,7 @@ use App\Services\KycDocumentService;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
 /**
@@ -24,6 +25,7 @@ use Tests\TestCase;
 class KycDocumentTest extends TestCase
 {
     use RefreshDatabase;
+    use EstablishesKycEvidence;
 
     private KycDocumentService $svc;
 
@@ -240,8 +242,9 @@ class KycDocumentTest extends TestCase
         foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $type) {
             $this->svc->approve($this->svc->upload($u, $type, $this->image()), $admin);
         }
+        $this->establishKycOwnership($u, $admin);
 
-        $verified = $this->svc->decideAccountVerification($u, $admin, true);
+        $verified = $this->svc->decideAccountVerification($u->fresh(), $admin, true);
         $this->assertSame(1, (int) $verified->is_kyc_verified);
         $this->assertGreaterThanOrEqual(2, (int) $verified->kyc_tier);
     }
@@ -258,6 +261,7 @@ class KycDocumentTest extends TestCase
 
         $this->assertSame(1, (int) $u->fresh()->kyc_update_required,
             'اعتماد مستند مفرد لا يمسح طلب تحديث الحساب');
+        $this->establishKycOwnership($u, $admin);
 
         $verified = $this->svc->decideAccountVerification($u->fresh(), $admin, true);
         $this->assertSame(0, (int) $verified->kyc_update_required);
@@ -289,6 +293,7 @@ class KycDocumentTest extends TestCase
         foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $type) {
             $this->svc->approve($this->svc->upload($u, $type, $this->image()), $admin);
         }
+        $this->establishKycOwnership($u, $admin);
 
         try {
             $this->svc->decideAccountVerification($u->fresh(), $admin, true, 2);
@@ -369,6 +374,7 @@ class KycDocumentTest extends TestCase
             array_column($this->svc->activationQueue(), 'user_id'),
             'اختفى الحساب بعد اعتماد آخر مستند ولم يعد للمراجع قرار نهائي ظاهر');
 
+        $this->establishKycOwnership($customer, $reviewer);
         $this->svc->decideAccountVerification($customer->fresh(), $reviewer, true);
 
         $this->assertNotContains($customer->id,
