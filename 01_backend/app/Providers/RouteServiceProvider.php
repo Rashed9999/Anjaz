@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Route;
 /**
  * MERGED (6cash base + Amial Pay):
  *   - راوتات 6cash الأساسية (api/v1, admin, merchant, install, web).
- *   - راوتات أميال تُسجَّل في bootstrap/app.php (then:) — لا تكرار هنا.
+ *   - راوتات أميال تُسجَّل هنا دون فتح أبواب متوازية لنفس القرار.
  */
 class RouteServiceProvider extends ServiceProvider
 {
@@ -40,6 +40,13 @@ class RouteServiceProvider extends ServiceProvider
                 ->middleware(['web', 'admin', 'amial.force-pin-change'])
                 ->name('admin.amial.')
                 ->group(base_path('routes/admin/kyc-privacy.php'));
+
+            // AMIAL-KYC-BIOMETRIC-WEBHOOK-001 — المزود الخارجي لا يملك
+            // auth:api. لا نضع عليه limiter العملاء العام (90/IP) لأن callback
+            // قد يصل بدفعات؛ له throttle مستقل في ملفه، والثقة الفعلية من
+            // التوقيع التشفيري الذي يتحقق منه Driver قبل قراءة الحدث.
+            Route::prefix('api/v1/amial')
+                ->group(base_path('routes/api/kyc-biometric-webhook.php'));
 
             // AMIAL-KYC-PRIVACY-API-001 — اختيار صاحب الحساب لمسار الخصوصية.
             // نفس حراس سطح amial المصادق: الرمز يعود لصاحب الحساب نفسه،
