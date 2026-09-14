@@ -322,6 +322,9 @@ class NoTillWithoutAShiftGuardTest extends TestCase
      */
     public function work_time_is_computed_from_the_shifts_and_running_is_not_zero(): void
     {
+        // Keep both shifts inside today, including when CI runs after midnight.
+        $this->travelTo(now()->startOfDay()->addHours(14));
+
         // ورديّةٌ مُقفلةٌ بثلاث ساعات
         CashierShift::create([
             'merchant_user_id' => $this->owner->id, 'pos_user_id' => null,

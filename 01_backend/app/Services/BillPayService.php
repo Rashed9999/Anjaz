@@ -47,16 +47,19 @@ class BillPayService
     ) {}
 
     /**
-     * Resolve provider implementation. في v0.9-C كلها Stub.
-     * v1.0 سيُسجَّل provider حقيقي حسب الـ provider->integration_type.
+     * Only explicitly supported integrations may execute. The stub is for
+     * development/testing/staging; real provider adapters are not implemented.
      */
     public function resolveProvider(BillProvider $provider): BillProviderInterface
     {
-        return match ($provider->integration_type) {
-            'stub' => new StubProvider(),
-            // 'http' => app(\App\Services\BillPay\HttpProvider::class, ['provider' => $provider]),
-            default => new StubProvider(),
-        };
+        if ($provider->integration_type !== 'stub') {
+            throw new \RuntimeException('مزود الخدمة غير مربوط فعلياً بعد.');
+        }
+        if (!app()->environment(['local', 'testing', 'staging'])) {
+            throw new \RuntimeException('محاكاة سداد الخدمات غير مسموحة في بيئة الإنتاج.');
+        }
+
+        return new StubProvider();
     }
 
     /**
@@ -84,6 +87,9 @@ class BillPayService
         if ($provider->zone_code !== 'SOUTH') {
             throw new \RuntimeException('Provider not available in SOUTH zone');
         }
+
+        // Reject unavailable integrations before creating an order or debiting.
+        $providerImpl = $this->resolveProvider($provider);
 
         $amountNormalized = MoneyService::normalize($amount);
         $fee = $this->calculateFee($product, $amountNormalized);
@@ -123,7 +129,6 @@ class BillPayService
         });
 
         // 2. استدعاء المزود (خارج DB::transaction — قد يطول)
-        $providerImpl = $this->resolveProvider($provider);
         $providerResponse = null;
 
         try {

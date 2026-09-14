@@ -151,7 +151,7 @@ jobs:
 
       - name: تحقق عوائق الخادم السابقة
         working-directory: 01_backend
-        run: php artisan test --compact tests/Feature/DonationsServiceTest.php tests/Feature/CharityServiceTest.php tests/Feature/CharityPayoutAndFundTraceGuardTest.php tests/Feature/KycSanctionTest.php tests/Feature/CustomerCenterTest.php tests/Feature/MerchantOperationsCenterTest.php tests/Feature/MerchantStaffTest.php tests/Feature/StaffDisableRevokesNowGuardTest.php tests/Feature/CustomerCreditSettleTest.php tests/Feature/CustomerCreditViewTest.php tests/Feature/LedgerCoverageGuardTest.php
+        run: php artisan test --compact tests/Feature/DonationsServiceTest.php tests/Feature/CharityServiceTest.php tests/Feature/CharityPayoutAndFundTraceGuardTest.php tests/Feature/KycSanctionTest.php tests/Feature/CustomerCenterTest.php tests/Feature/MerchantOperationsCenterTest.php tests/Feature/MerchantStaffTest.php tests/Feature/StaffDisableRevokesNowGuardTest.php tests/Feature/CustomerCreditSettleTest.php tests/Feature/CustomerCreditViewTest.php tests/Feature/LedgerCoverageGuardTest.php tests/Feature/NoTillWithoutAShiftGuardTest.php tests/Feature/BillPayServiceTest.php
 
       - name: تشغيل كل اختبارات الخادم
         working-directory: 01_backend

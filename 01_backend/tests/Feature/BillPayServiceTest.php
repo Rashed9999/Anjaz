@@ -101,6 +101,42 @@ class BillPayServiceTest extends TestCase
         return $serviceMock;
     }
 
+    public function test_an_unimplemented_provider_is_rejected_before_debit(): void
+    {
+        $this->provider->integration_type = 'http';
+
+        try {
+            $this->service->createAndExecute(
+                $this->user, $this->provider, $this->service_, $this->product, '777111222', '100',
+            );
+            $this->fail('An unimplemented provider must not simulate a successful payment.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('مزود الخدمة غير مربوط فعلياً بعد.', $e->getMessage());
+        }
+
+        $this->assertDatabaseCount('bill_payment_orders', 0);
+        $this->assertSame('1000.0000',
+            (string) EMoney::where('user_id', $this->user->id)->value('current_balance'));
+    }
+
+    public function test_the_stub_cannot_debit_a_production_wallet(): void
+    {
+        $this->app['env'] = 'production';
+
+        try {
+            $this->service->createAndExecute(
+                $this->user, $this->provider, $this->service_, $this->product, '777111222', '100',
+            );
+            $this->fail('A development simulator must not debit a production wallet.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('محاكاة سداد الخدمات غير مسموحة في بيئة الإنتاج.', $e->getMessage());
+        }
+
+        $this->assertDatabaseCount('bill_payment_orders', 0);
+        $this->assertSame('1000.0000',
+            (string) EMoney::where('user_id', $this->user->id)->value('current_balance'));
+    }
+
     /** @test */
     public function successful_payment_debits_user_and_marks_success()
     {
