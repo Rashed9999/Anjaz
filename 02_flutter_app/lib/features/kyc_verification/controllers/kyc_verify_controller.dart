@@ -63,11 +63,11 @@ class KycVerifyController extends GetxController implements GetxService{
     String residenceGovernorate = '',
     String signature = '',
     bool declared = false,
+    String reviewMode = 'standard',
   }) async{
     Map<String, String> field = {
       'identification_number': idNumber,
       'identification_type': _dropDownSelectedValue,
-      // AMIAL-KYC: العنوان + التوقيع الإلكتروني + الإقرار بصحة المعلومات
       'address': address,
       'residence_governorate': residenceGovernorate,
       'signature': signature,
@@ -77,6 +77,25 @@ class KycVerifyController extends GetxController implements GetxService{
     _multipartBody = _identityImage.map((image) => MultipartBody('identification_image[]', File(image.path))).toList();
     _isLoading = true;
     update();
+
+    // AMIAL-KYC-PRIVACY-APP-001 — لا نرفع صورةً حساسة قبل أن يؤكد الخادم
+    // أن اختيار الخصوصية حُفظ. فاستمرار الرفع عند فشل الحفظ يعني أن المستخدم
+    // اختار مراجعة مقيدة بينما وصلت صورته لمسار عادي.
+    final privacyResponse = await kycVerifyRepo.updatePrivacyMode(reviewMode);
+    final privacyOk = (privacyResponse.statusCode ?? 500) >= 200 &&
+        (privacyResponse.statusCode ?? 500) < 300 &&
+        privacyResponse.body is Map &&
+        privacyResponse.body['success'] == true;
+    if (!privacyOk) {
+      final message = privacyResponse.body is Map
+          ? (privacyResponse.body['message']?.toString() ?? 'تعذّر حفظ إعداد الخصوصية')
+          : 'تعذّر حفظ إعداد الخصوصية';
+      showCustomSnackBarHelper(message);
+      _isLoading = false;
+      update();
+      return;
+    }
+
     Response response = await kycVerifyRepo.kycVerifyApi(field, _multipartBody);
     if(response.body['response_code'] == 'default_update_200') {
       Get.back();
