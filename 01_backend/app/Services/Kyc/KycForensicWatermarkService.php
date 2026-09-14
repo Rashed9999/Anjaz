@@ -21,6 +21,9 @@ class KycForensicWatermarkService
 {
     public const VERSION = 'fw-1';
 
+    /** الصيغ التي يستطيع محرك المعاينة الحالي وسمها فعلاً دون تسريب الأصل. */
+    private const PREVIEWABLE_MIME = ['image/jpeg', 'image/png'];
+
     public function __construct(
         private readonly KycDocumentService $documents,
         private readonly PiiAccessAuditService $pii,
@@ -31,6 +34,16 @@ class KycForensicWatermarkService
      */
     public function render(KycDocument $doc, User $viewer, string $reason): array
     {
+        $mime = strtolower(trim((string) ($doc->original_mime ?: '')));
+
+        // نعرف من metadata أن PDF/HEIC/HEIF لا يستطيع GD الحالي أن يحرق
+        // عليها العلامة. رفضها قبل فك التشفير أدق وأأمن: لا نفك بياناتٍ
+        // حساسة لن نستطيع إصدار نسخة مشاهدة مأمونة منها، ولا نسمح لخطأ
+        // التخزين/التشفير أن يغيّر عقد الخطأ المقصود لهذه الصيغ.
+        if (!in_array($mime, self::PREVIEWABLE_MIME, true)) {
+            throw new RuntimeException('KYC_SECURE_PREVIEW_UNSUPPORTED_FORMAT');
+        }
+
         $this->pii->logAccess(
             actorUserId: (int) $viewer->id,
             subjectType: 'user',
@@ -42,7 +55,6 @@ class KycForensicWatermarkService
 
         $trace = $this->newTraceCode();
         $binary = $this->documents->decrypt($doc);
-        $mime = strtolower((string) ($doc->original_mime ?: ''));
 
         [$bytes, $outputMime] = $this->burn($binary, $mime, $viewer, $trace);
 
@@ -95,8 +107,7 @@ class KycForensicWatermarkService
             throw new RuntimeException('KYC_SECURE_PREVIEW_GD_UNAVAILABLE');
         }
 
-        // لا نعيد الأصل غير المعلّم عند صيغة لا يستطيع الخادم فكها. الفشل
-        // المغلق هنا مقصود: المعاينة المعطوبة أفضل من تسريب أصل بلا بصمة.
+        // لا نعيد الأصل غير المعلّم عند ملف تالف أو صورة لا يستطيع GD فكها.
         $image = @imagecreatefromstring($binary);
         if ($image === false) {
             throw new RuntimeException('KYC_SECURE_PREVIEW_UNSUPPORTED_FORMAT');
