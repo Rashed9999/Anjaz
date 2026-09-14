@@ -66,8 +66,7 @@ class KycForensicWatermarkTest extends TestCase
         $document = app(KycDocumentService::class)->upload(
             $subject,
             KycDocument::TYPE_ID_FRONT,
-            UploadedFile::fake()->createWithContent('identity.pdf', '%PDF-1.4 fake')
-                ->mimeType('application/pdf'),
+            UploadedFile::fake()->create('identity.pdf', 4, 'application/pdf'),
         );
 
         try {
