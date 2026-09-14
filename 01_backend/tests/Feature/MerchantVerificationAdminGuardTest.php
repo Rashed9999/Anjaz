@@ -11,6 +11,7 @@ use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
 /**
@@ -36,6 +37,7 @@ use Tests\TestCase;
 class MerchantVerificationAdminGuardTest extends TestCase
 {
     use RefreshDatabase;
+    use EstablishesKycEvidence;
 
     private function admin(array $permissions): User
     {
@@ -182,20 +184,14 @@ class MerchantVerificationAdminGuardTest extends TestCase
     public function a_complete_identity_does_lift_the_lock_through_the_one_door(): void
     {
         $merchant = $this->merchant();
+        $admin = $this->admin([]);
 
-        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK,
-            KycDocument::TYPE_SELFIE] as $type) {
-            KycDocument::create([
-                'user_id' => $merchant->id, 'doc_type' => $type,
-                'status' => KycDocument::STATUS_APPROVED,
-                'encrypted_path' => 'kyc/'.Str::random(8).'.enc',
-                'size_bytes' => 1024, 'ocr_status' => 'not_run',
-            ]);
-        }
-
+        // «مكتمل» هنا يعني المستندات + إثبات أن صاحب الحساب هو صاحب الهوية،
+        // لا مجرد ثلاث صور معتمدة.
+        $this->establishKycEvidence($merchant, 2, $admin);
         $req = $this->request($merchant);
 
-        $this->actingAs($this->admin([]), 'user')
+        $this->actingAs($admin, 'user')
             ->postJson(route('admin.amial.merchants.verification.approve', $req->id))
             ->assertOk();
 
