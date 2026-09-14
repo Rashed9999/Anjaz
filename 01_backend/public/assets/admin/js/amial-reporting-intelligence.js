@@ -14,7 +14,7 @@
         'subscriptions','vertical-performance','kyc-pipeline','aml-regulatory','audit-sensitive-actions',
         'rbac-changes','system-health-history','queue-operations','email-otp','auth-security','support-operations'
     ]);
-    const state = { current: {}, previous: {}, failed: new Set() };
+    const state = { current: {}, previous: {}, currentFailures: new Set(), previousFailures: new Set() };
     const $ = id => document.getElementById(id);
     const esc = value => String(value ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
     const fmt = value => {
@@ -30,35 +30,40 @@
     };
     const num = value => Number.isFinite(Number(value)) ? Number(value) : 0;
     const loading = () => '<span class="ari-loading"><i></i><i></i><i></i></span>';
-    const set = (id, value) => { const n = $(id); if (n) n.textContent = value ?? '—'; };
-    const status = (id, text, kind = 'neutral') => { const n = $(id); if (!n) return; n.className = `ari-status ${kind}`; n.textContent = text; };
+    const set = (id, value) => { const node = $(id); if (node) node.textContent = value ?? '—'; };
+    const status = (id, text, kind = 'neutral') => { const node = $(id); if (!node) return; node.className = `ari-status ${kind}`; node.textContent = text; };
 
     function parseDate(value) {
-        const d = new Date(`${value}T00:00:00Z`);
-        return Number.isNaN(d.getTime()) ? null : d;
+        const date = new Date(`${value}T00:00:00Z`);
+        return Number.isNaN(date.getTime()) ? null : date;
     }
-    function ymd(date) { return date.toISOString().slice(0, 10); }
+    const ymd = date => date.toISOString().slice(0, 10);
     function selectedPeriods() {
-        const from = $('ari-from')?.value;
-        const to = $('ari-to')?.value;
-        const f = parseDate(from), t = parseDate(to);
-        if (!f || !t || t < f) return { current: { from, to }, previous: { from: null, to: null }, days: 0 };
-        const days = Math.floor((t - f) / 86400000) + 1;
-        const prevTo = new Date(f.getTime() - 86400000);
-        const prevFrom = new Date(prevTo.getTime() - ((days - 1) * 86400000));
-        return { current: { from: ymd(f), to: ymd(t) }, previous: { from: ymd(prevFrom), to: ymd(prevTo) }, days };
+        const from = $('ari-from')?.value || '';
+        const to = $('ari-to')?.value || '';
+        const start = parseDate(from), end = parseDate(to);
+        if (!start || !end || end < start) return { valid: false, current: { from, to }, previous: { from: null, to: null }, days: 0 };
+        const days = Math.floor((end - start) / 86400000) + 1;
+        const previousTo = new Date(start.getTime() - 86400000);
+        const previousFrom = new Date(previousTo.getTime() - ((days - 1) * 86400000));
+        return {
+            valid: true,
+            current: { from: ymd(start), to: ymd(end) },
+            previous: { from: ymd(previousFrom), to: ymd(previousTo) },
+            days
+        };
     }
     function queryFor(name, range = 'current') {
         const periods = selectedPeriods();
         const selected = periods[range] || periods.current;
-        const q = new URLSearchParams();
-        if (name === 'agent-liquidity') q.set('date', selected.to || periods.current.to || '');
-        else if (asOfReports.has(name)) q.set('as_of', selected.to || periods.current.to || '');
+        const query = new URLSearchParams();
+        if (name === 'agent-liquidity') query.set('date', selected.to || periods.current.to || '');
+        else if (asOfReports.has(name)) query.set('as_of', selected.to || periods.current.to || '');
         else if (!noPeriodReports.has(name)) {
-            if (selected.from) q.set('from', selected.from);
-            if (selected.to) q.set('to', selected.to);
+            if (selected.from) query.set('from', selected.from);
+            if (selected.to) query.set('to', selected.to);
         }
-        return q.toString();
+        return query.toString();
     }
     async function fetchMeta(name, range = 'current') {
         if (!reportNames.has(name)) throw new Error('unknown_report');
@@ -71,73 +76,65 @@
         let body = {};
         try { body = await response.json(); } catch (_) {}
         if (!response.ok || body.success === false) throw new Error(body.message || `HTTP ${response.status}`);
-        return body.meta || {};
+        const meta = body.meta || {};
+        if (meta.available === false) throw new Error(meta.reason || meta.source || 'source_unavailable');
+        return meta;
     }
 
-    function transactionEntries(meta) {
-        return (Array.isArray(meta?.by_currency) ? meta.by_currency : []).reduce((sum, row) => sum + num(row.original_entries), 0);
-    }
-    function exceptionCount(meta) {
-        return num(meta?.pending_transfers?.overdue_holding) + num(meta?.rejections?.count);
-    }
-    function ratioCovered(meta) {
+    const transactionEntries = meta => (Array.isArray(meta?.by_currency) ? meta.by_currency : []).reduce((sum, row) => sum + num(row.original_entries), 0);
+    const exceptionCount = meta => num(meta?.pending_transfers?.overdue_holding) + num(meta?.rejections?.count);
+    function liquidityCoverage(meta) {
         const rows = Array.isArray(meta?.by_currency) ? meta.by_currency : [];
-        return { total: rows.length, covered: rows.filter(row => row.external_wallets_covered === true).length };
+        return { rows, total: rows.length, covered: rows.filter(row => row.external_wallets_covered === true).length };
     }
     function deltaInfo(current, previous, lowerIsBetter = false) {
         const cur = num(current), prev = num(previous);
         if (prev === 0) {
-            if (cur === 0) return { text: 'بدون تغير', kind: 'neutral', pct: 0, direction: 0 };
-            return { text: 'جديد مقابل صفر', kind: lowerIsBetter ? 'bad' : 'neutral', pct: null, direction: 1 };
+            if (cur === 0) return { text: 'بدون تغير', kind: 'neutral' };
+            return { text: 'جديد مقابل صفر', kind: lowerIsBetter ? 'bad' : 'neutral' };
         }
         const pct = ((cur - prev) / Math.abs(prev)) * 100;
         const direction = pct > 0 ? 1 : (pct < 0 ? -1 : 0);
         let kind = 'neutral';
         if (lowerIsBetter && direction !== 0) kind = direction < 0 ? 'good' : 'bad';
-        const arrow = direction > 0 ? '↑' : (direction < 0 ? '↓' : '→');
-        return { text: `${arrow} ${Math.abs(pct).toFixed(1)}%`, kind, pct, direction };
+        return { text: `${direction > 0 ? '↑' : (direction < 0 ? '↓' : '→')} ${Math.abs(pct).toFixed(1)}%`, kind };
+    }
+    function trendUnavailable(id, label = 'المقارنة غير متاحة') {
+        set(`${id}-current`, '—'); set(`${id}-previous`, label);
+        const pill = $(`${id}-delta`); if (pill) { pill.className = 'ari-delta neutral'; pill.textContent = 'غير متاح'; }
+        const bar = $(`${id}-bar`); if (bar) bar.style.width = '0%';
     }
     function trendCard(id, current, previous, options = {}) {
         set(`${id}-current`, fmt(current));
         set(`${id}-previous`, `السابق: ${fmt(previous)}`);
-        const d = deltaInfo(current, previous, options.lowerIsBetter === true);
-        const pill = $(`${id}-delta`);
-        if (pill) { pill.className = `ari-delta ${d.kind}`; pill.textContent = d.text; }
+        const delta = deltaInfo(current, previous, options.lowerIsBetter === true);
+        const pill = $(`${id}-delta`); if (pill) { pill.className = `ari-delta ${delta.kind}`; pill.textContent = delta.text; }
         const bar = $(`${id}-bar`);
         if (bar) {
             const max = Math.max(Math.abs(num(current)), Math.abs(num(previous)), 1);
-            const width = Math.min(100, Math.max(4, (Math.abs(num(current)) / max) * 100));
-            bar.style.width = `${width}%`;
+            bar.style.width = `${Math.min(100, Math.max(num(current) === 0 ? 0 : 4, (Math.abs(num(current)) / max) * 100))}%`;
         }
     }
 
     function renderVolume(meta) {
         const rows = Array.isArray(meta.by_currency) ? meta.by_currency : [];
-        const entries = transactionEntries(meta);
-        set('ari-kpi-transactions', fmt(entries));
+        set('ari-kpi-transactions', fmt(transactionEntries(meta)));
         set('ari-kpi-transactions-note', rows.length ? `${rows.length} عملة ممثلة دون جمع قيمها` : 'لا توجد حركة في الفترة');
         const node = $('ari-volume-list');
-        if (node) node.innerHTML = rows.length ? rows.map(row => `
-            <div class="ari-row"><div><div class="ari-row-title">${esc(row.currency || '—')}</div><div class="ari-row-sub">${esc(fmt(row.original_entries || 0))} أصلية · ${esc(fmt(row.reversal_entries || 0))} عكسية</div></div><div class="ari-row-value">${esc(fmt(row.gross_original_volume || 0))}</div></div>`).join('') : '<div class="text-muted small">لا توجد معاملات في الفترة.</div>';
+        if (node) node.innerHTML = rows.length ? rows.map(row => `<div class="ari-row"><div><div class="ari-row-title">${esc(row.currency || '—')}</div><div class="ari-row-sub">${esc(fmt(row.original_entries || 0))} أصلية · ${esc(fmt(row.reversal_entries || 0))} عكسية</div></div><div class="ari-row-value">${esc(fmt(row.gross_original_volume || 0))}</div></div>`).join('') : '<div class="text-muted small">لا توجد معاملات في الفترة.</div>';
     }
     function renderLiquidity(meta) {
-        const rows = Array.isArray(meta.by_currency) ? meta.by_currency : [];
-        const { total, covered } = ratioCovered(meta);
+        const { rows, total, covered } = liquidityCoverage(meta);
         const gaps = total - covered;
         set('ari-kpi-liquidity', total ? `${covered}/${total}` : '—');
         set('ari-kpi-liquidity-note', total ? (gaps ? `${gaps} عملة بها فجوة تغطية` : 'كل العملات الممثلة مغطاة') : 'لا توجد بيانات سيولة');
         status('ari-finance-state', gaps ? 'توجد فجوات' : (total ? 'مغطى' : 'لا بيانات'), gaps ? 'bad' : (total ? 'good' : 'neutral'));
         const node = $('ari-liquidity-list');
-        if (node) node.innerHTML = rows.length ? rows.map(row => `
-            <div class="ari-row"><div><div class="ari-row-title">${esc(row.currency || '—')}</div><div class="ari-row-sub">التغطية ${esc(fmt(row.external_wallet_coverage_ratio ?? '—'))}%</div></div><span class="ari-status ${row.external_wallets_covered ? 'good' : 'bad'}">${row.external_wallets_covered ? 'مغطاة' : 'فجوة'}</span></div>`).join('') : '<div class="text-muted small">لا توجد أرصدة سيولة.</div>';
+        if (node) node.innerHTML = rows.length ? rows.map(row => `<div class="ari-row"><div><div class="ari-row-title">${esc(row.currency || '—')}</div><div class="ari-row-sub">التغطية ${esc(fmt(row.external_wallet_coverage_ratio ?? '—'))}%</div></div><span class="ari-status ${row.external_wallets_covered ? 'good' : 'bad'}">${row.external_wallets_covered ? 'مغطاة' : 'فجوة'}</span></div>`).join('') : '<div class="text-muted small">لا توجد أرصدة سيولة.</div>';
     }
     function renderExceptions(meta) {
-        const pending = num(meta?.pending_transfers?.overdue_holding);
-        const rejected = num(meta?.rejections?.count);
-        const total = pending + rejected;
+        const pending = num(meta?.pending_transfers?.overdue_holding), rejected = num(meta?.rejections?.count), total = pending + rejected;
         set('ari-ex-pending', fmt(pending)); set('ari-ex-rejected', fmt(rejected)); set('ari-ex-total', fmt(total));
-        set('ari-kpi-actions', fmt(total));
-        set('ari-kpi-actions-note', total ? 'إشارات مالية أولية قبل بقية الرقابة' : 'لا توجد استثناءات مالية حرجة ضمن الفترة');
         status('ari-exception-state', total ? 'تحقيق مطلوب' : 'مستقر', total ? 'bad' : 'good');
     }
     function renderMerchant(meta) {
@@ -146,9 +143,9 @@
         status('ari-merchant-state', total ? `${Math.round((verified / total) * 100)}% موثق` : 'لا بيانات', total && verified < total ? 'warn' : 'good');
     }
     function renderKyc(meta) {
-        const c = meta.customers || {}, m = meta.merchants || {}, a = m.pending_aging || {};
-        set('ari-kyc-verified', fmt(c.verified)); set('ari-kyc-total', fmt(c.total)); set('ari-kyc-backlog', fmt(m.pending_backlog)); set('ari-kyc-aged', fmt(a['8_plus_days'] || 0));
-        status('ari-kyc-state', num(a['8_plus_days']) > 0 ? 'يوجد تأخير' : 'ضمن المتابعة', num(a['8_plus_days']) > 0 ? 'warn' : 'good');
+        const customer = meta.customers || {}, merchant = meta.merchants || {}, aging = merchant.pending_aging || {};
+        set('ari-kyc-verified', fmt(customer.verified)); set('ari-kyc-total', fmt(customer.total)); set('ari-kyc-backlog', fmt(merchant.pending_backlog)); set('ari-kyc-aged', fmt(aging['8_plus_days'] || 0));
+        status('ari-kyc-state', num(aging['8_plus_days']) > 0 ? 'يوجد تأخير' : 'ضمن المتابعة', num(aging['8_plus_days']) > 0 ? 'warn' : 'good');
     }
     function renderSupport(meta) {
         set('ari-support-open', fmt(meta.open_backlog)); set('ari-support-urgent', fmt(meta.urgent_backlog)); set('ari-support-unassigned', fmt(meta.unassigned_backlog));
@@ -162,92 +159,91 @@
         status('ari-auth-state', attention ? 'مؤشرات تستحق المراجعة' : 'مستقر', attention ? 'warn' : 'good');
     }
     function renderHealth(meta) {
-        const stale = meta.heartbeat_stale === true;
-        const components = Array.isArray(meta.components) ? meta.components : [];
-        status('ari-health-state', stale ? 'نبض متأخر' : 'نبض سليم', stale ? 'bad' : 'good');
-        set('ari-health-heartbeat', stale ? 'متأخر/مفقود' : 'سليم'); set('ari-health-components', fmt(components.length));
-        const down = components.filter(c => c.latest_state === 'down').length;
-        set('ari-health-down', fmt(down)); set('ari-health-last', meta.last_heartbeat_at || '—');
+        const stale = meta.heartbeat_stale === true, components = Array.isArray(meta.components) ? meta.components : [];
+        const down = components.filter(component => component.latest_state === 'down').length;
+        status('ari-health-state', stale ? 'نبض متأخر' : (down ? 'مكون متوقف' : 'نبض سليم'), stale || down ? 'bad' : 'good');
+        set('ari-health-heartbeat', stale ? 'متأخر/مفقود' : 'سليم'); set('ari-health-components', fmt(components.length)); set('ari-health-down', fmt(down)); set('ari-health-last', meta.last_heartbeat_at || '—');
     }
 
     function buildActions() {
         const actions = [];
-        const liquidity = state.current['liquidity'] || {};
-        const liquidityRows = Array.isArray(liquidity.by_currency) ? liquidity.by_currency : [];
-        const gaps = liquidityRows.filter(row => row.external_wallets_covered !== true);
-        if (gaps.length) actions.push({severity:'bad', icon:'!', title:`فجوة سيولة في ${gaps.length} عملة`, sub:'افتح مركز السيولة قبل أي قرار تشغيلي متعلق بالأموال.', report:'liquidity'});
+        state.currentFailures.forEach(name => actions.push({ severity:'warn', icon:'?', title:`تعذر قراءة ${name}`, sub:'المصدر غير متاح في آخر تحديث؛ لا يتم تحويل غيابه إلى صفر.', report: name }));
 
-        const ex = state.current['transaction-exceptions'] || {};
-        const overdue = num(ex?.pending_transfers?.overdue_holding), rejected = num(ex?.rejections?.count);
-        if (overdue || rejected) actions.push({severity:'bad', icon:'!', title:`${overdue + rejected} استثناء مالي يحتاج تحقيقاً`, sub:`${overdue} معلّقة متأخرة · ${rejected} مرفوضة/فاشلة.`, report:'transaction-exceptions'});
+        const { rows: liquidityRows } = liquidityCoverage(state.current.liquidity || {});
+        const gaps = liquidityRows.filter(row => row.external_wallets_covered !== true);
+        if (gaps.length) actions.push({ severity:'bad', icon:'!', title:`فجوة سيولة في ${gaps.length} عملة`, sub:'افتح مركز السيولة قبل أي قرار تشغيلي متعلق بالأموال.', report:'liquidity' });
+
+        const exceptions = state.current['transaction-exceptions'] || {};
+        const overdue = num(exceptions?.pending_transfers?.overdue_holding), rejected = num(exceptions?.rejections?.count);
+        if (overdue || rejected) actions.push({ severity:'bad', icon:'!', title:`${overdue + rejected} استثناء مالي يحتاج تحقيقاً`, sub:`${overdue} معلّقة متأخرة · ${rejected} مرفوضة/فاشلة.`, report:'transaction-exceptions' });
 
         const merchant = state.current['merchant-portfolio'] || {};
-        if (num(merchant.expired) > 0) actions.push({severity:'warn', icon:'↗', title:`${fmt(merchant.expired)} اشتراك تاجر منتهي`, sub:'راجع حالة الاشتراكات قبل استمرار مزايا الباقات المدفوعة.', report:'merchant-portfolio'});
-        else if (num(merchant.expiring_30d) > 0) actions.push({severity:'info', icon:'i', title:`${fmt(merchant.expiring_30d)} اشتراك ينتهي خلال 30 يوماً`, sub:'إشارة استباقية للتجديد وليست مشكلة مالية بحد ذاتها.', report:'subscriptions'});
+        if (num(merchant.expired) > 0) actions.push({ severity:'warn', icon:'↗', title:`${fmt(merchant.expired)} اشتراك تاجر منتهي`, sub:'راجع حالة الاشتراكات قبل استمرار مزايا الباقات المدفوعة.', report:'merchant-portfolio' });
+        else if (num(merchant.expiring_30d) > 0) actions.push({ severity:'info', icon:'i', title:`${fmt(merchant.expiring_30d)} اشتراك ينتهي خلال 30 يوماً`, sub:'إشارة استباقية للتجديد وليست مشكلة مالية بحد ذاتها.', report:'subscriptions' });
 
         const kyc = state.current['kyc-pipeline'] || {}, aged = num(kyc?.merchants?.pending_aging?.['8_plus_days']);
-        if (aged > 0) actions.push({severity:'warn', icon:'!', title:`${aged} طلب تحقق متأخر 8 أيام أو أكثر`, sub:'تراكم التحقق يحتاج معالجة قبل أن يتحول إلى عنق زجاجة.', report:'kyc-pipeline'});
+        if (aged > 0) actions.push({ severity:'warn', icon:'!', title:`${aged} طلب تحقق متأخر 8 أيام أو أكثر`, sub:'تراكم التحقق يحتاج معالجة قبل أن يتحول إلى عنق زجاجة.', report:'kyc-pipeline' });
 
         const support = state.current['support-operations'] || {};
-        if (num(support.urgent_backlog) > 0) actions.push({severity:'warn', icon:'!', title:`${fmt(support.urgent_backlog)} تذكرة دعم عاجلة مفتوحة`, sub:`غير المسندة حالياً: ${fmt(support.unassigned_backlog || 0)}.`, report:'support-operations'});
+        if (num(support.urgent_backlog) > 0) actions.push({ severity:'warn', icon:'!', title:`${fmt(support.urgent_backlog)} تذكرة دعم عاجلة مفتوحة`, sub:`غير المسندة حالياً: ${fmt(support.unassigned_backlog || 0)}.`, report:'support-operations' });
         const sla = support.sla_breach_rate_pct ?? support.sla_breach_rate;
-        if (sla !== null && sla !== undefined && num(sla) > 0) actions.push({severity:'warn', icon:'%', title:`خرق SLA بنسبة ${fmt(sla)}%`, sub:'النسبة تظهر فقط لأن سياسة SLA الرسمية مضبوطة في الخادم.', report:'support-operations'});
+        if (sla !== null && sla !== undefined && num(sla) > 0) actions.push({ severity:'warn', icon:'%', title:`خرق SLA بنسبة ${fmt(sla)}%`, sub:'النسبة تظهر فقط عند وجود سياسة SLA رسمية مضبوطة.', report:'support-operations' });
 
         const auth = state.current['auth-security'] || {};
-        if (num(auth.repeated_failure_sources) > 0 || num(auth.temporary_lockouts) > 0) actions.push({severity:'warn', icon:'🔒', title:'نشاط مصادقة يحتاج مراجعة', sub:`مصادر فشل متكرر: ${fmt(auth.repeated_failure_sources || 0)} · أقفال مؤقتة: ${fmt(auth.temporary_lockouts || 0)}.`, report:'auth-security'});
+        if (num(auth.repeated_failure_sources) > 0 || num(auth.temporary_lockouts) > 0) actions.push({ severity:'warn', icon:'🔒', title:'نشاط مصادقة يحتاج مراجعة', sub:`مصادر فشل متكرر: ${fmt(auth.repeated_failure_sources || 0)} · أقفال مؤقتة: ${fmt(auth.temporary_lockouts || 0)}.`, report:'auth-security' });
 
-        const health = state.current['system-health-history'] || {};
-        if (health.heartbeat_stale === true) actions.push({severity:'bad', icon:'!', title:'نبض المراقبة متأخر أو مفقود', sub:`آخر نبضة: ${health.last_heartbeat_at || 'غير متوفرة'}.`, report:'system-health-history'});
-        const down = (Array.isArray(health.components) ? health.components : []).filter(c => c.latest_state === 'down');
-        if (down.length) actions.push({severity:'bad', icon:'×', title:`${down.length} مكوّن بحالة متوقف`, sub:'اللوحة تعرض الحالة المرصودة فقط ولا تستنتج سبب العطل.', report:'system-health-history'});
+        const health = state.current['system-health-history'] || {}, components = Array.isArray(health.components) ? health.components : [];
+        if (health.heartbeat_stale === true) actions.push({ severity:'bad', icon:'!', title:'نبض المراقبة متأخر أو مفقود', sub:`آخر نبضة: ${health.last_heartbeat_at || 'غير متوفرة'}.`, report:'system-health-history' });
+        const down = components.filter(component => component.latest_state === 'down');
+        if (down.length) actions.push({ severity:'bad', icon:'×', title:`${down.length} مكوّن بحالة متوقف`, sub:'الحالة مرصودة من سجل الصحة ولا يتم استنتاج سبب العطل.', report:'system-health-history' });
 
-        const node = $('ari-actions');
-        if (!node) return;
         set('ari-kpi-actions', fmt(actions.length));
         set('ari-kpi-actions-note', actions.length ? 'إشارات مجمعة من المصادر الرقابية الحية' : 'لا توجد إشارات تدخل ضمن المؤشرات المراقبة');
-        node.innerHTML = actions.length ? actions.map(action => `
-            <div class="ari-action">
-                <div class="ari-action-icon ${action.severity}">${esc(action.icon)}</div>
-                <div><div class="ari-action-title">${esc(action.title)}</div><div class="ari-action-sub">${esc(action.sub)}</div></div>
-                <button type="button" class="ari-btn ari-btn-soft ari-btn-sm" data-open-report="${esc(action.report)}">فتح التقرير</button>
-            </div>`).join('') : '<div class="ari-action-empty">لا توجد حالياً إشارات تدخل ضمن المؤشرات التي تغطيها هذه اللوحة. هذا لا يعني أن كل أنظمة المنصة خالية من المخاطر.</div>';
+        const node = $('ari-actions');
+        if (!node) return;
+        node.innerHTML = actions.length ? actions.map(action => `<div class="ari-action"><div class="ari-action-icon ${action.severity}">${esc(action.icon)}</div><div><div class="ari-action-title">${esc(action.title)}</div><div class="ari-action-sub">${esc(action.sub)}</div></div><button type="button" class="ari-btn ari-btn-soft ari-btn-sm" data-open-report="${esc(action.report)}">فتح التقرير</button></div>`).join('') : '<div class="ari-action-empty">لا توجد حالياً إشارات تدخل ضمن المؤشرات التي تغطيها هذه اللوحة. هذا لا يعني أن كل أنظمة المنصة خالية من المخاطر.</div>';
         node.querySelectorAll('[data-open-report]').forEach(button => button.addEventListener('click', () => openReport(button.dataset.openReport)));
     }
 
     function renderTrends() {
-        trendCard('ari-trend-transactions', transactionEntries(state.current['transaction-volume']), transactionEntries(state.previous['transaction-volume']));
-        trendCard('ari-trend-exceptions', exceptionCount(state.current['transaction-exceptions']), exceptionCount(state.previous['transaction-exceptions']), { lowerIsBetter: true });
-        trendCard('ari-trend-support', num(state.current['support-operations']?.created_in_period), num(state.previous['support-operations']?.created_in_period));
-        trendCard('ari-trend-auth', num(state.current['auth-security']?.failed), num(state.previous['auth-security']?.failed), { lowerIsBetter: true });
+        const specs = [
+            ['ari-trend-transactions','transaction-volume',transactionEntries,false],
+            ['ari-trend-exceptions','transaction-exceptions',exceptionCount,true],
+            ['ari-trend-support','support-operations',meta => num(meta?.created_in_period),false],
+            ['ari-trend-auth','auth-security',meta => num(meta?.failed),true]
+        ];
+        specs.forEach(([id, name, extractor, lowerIsBetter]) => {
+            if (state.currentFailures.has(name) || state.previousFailures.has(name) || !state.current[name] || !state.previous[name]) {
+                trendUnavailable(id, state.previousFailures.has(name) ? 'الفترة السابقة غير متاحة' : 'المصدر غير متاح');
+                return;
+            }
+            trendCard(id, extractor(state.current[name]), extractor(state.previous[name]), { lowerIsBetter });
+        });
         const periods = selectedPeriods();
-        set('ari-previous-period', periods.previous.from && periods.previous.to ? `${periods.previous.from} → ${periods.previous.to}` : '—');
+        set('ari-previous-period', periods.valid ? `${periods.previous.from} → ${periods.previous.to}` : 'الفترة غير صالحة');
     }
 
     async function loadExecutive() {
-        const refresh = $('ari-refresh');
+        const periods = selectedPeriods();
+        const refresh = $('ari-refresh'), refreshState = $('ari-refresh-state');
+        if (!periods.valid) {
+            if (refreshState) refreshState.textContent = 'تحقق من ترتيب تاريخ البداية والنهاية';
+            set('ari-previous-period', 'الفترة غير صالحة');
+            return;
+        }
         if (refresh) refresh.disabled = true;
-        const refreshState = $('ari-refresh-state');
         if (refreshState) refreshState.innerHTML = `${loading()}<span class="ms-2">قراءة المصادر ومقارنة الفترة السابقة</span>`;
-        state.current = {}; state.previous = {}; state.failed = new Set();
+        state.current = {}; state.previous = {}; state.currentFailures = new Set(); state.previousFailures = new Set();
 
         const currentNames = ['transaction-volume','liquidity','transaction-exceptions','merchant-portfolio','kyc-pipeline','support-operations','auth-security','system-health-history'];
         const previousNames = ['transaction-volume','transaction-exceptions','support-operations','auth-security'];
-        const currentResults = await Promise.allSettled(currentNames.map(async name => {
-            const meta = await fetchMeta(name, 'current');
-            if (meta.available === false) throw new Error(meta.reason || 'source_unavailable');
-            state.current[name] = meta;
-        }));
-        currentResults.forEach((result, index) => { if (result.status === 'rejected') state.failed.add(currentNames[index]); });
-
-        const previousResults = await Promise.allSettled(previousNames.map(async name => {
-            const meta = await fetchMeta(name, 'previous');
-            if (meta.available === false) throw new Error(meta.reason || 'source_unavailable');
-            state.previous[name] = meta;
-        }));
-        previousResults.forEach((result, index) => { if (result.status === 'rejected') state.failed.add(`${previousNames[index]}:previous`); });
+        const currentResults = await Promise.allSettled(currentNames.map(async name => { state.current[name] = await fetchMeta(name, 'current'); }));
+        currentResults.forEach((result, index) => { if (result.status === 'rejected') state.currentFailures.add(currentNames[index]); });
+        const previousResults = await Promise.allSettled(previousNames.map(async name => { state.previous[name] = await fetchMeta(name, 'previous'); }));
+        previousResults.forEach((result, index) => { if (result.status === 'rejected') state.previousFailures.add(previousNames[index]); });
 
         if (state.current['transaction-volume']) renderVolume(state.current['transaction-volume']);
-        if (state.current['liquidity']) renderLiquidity(state.current['liquidity']);
+        if (state.current.liquidity) renderLiquidity(state.current.liquidity);
         if (state.current['transaction-exceptions']) renderExceptions(state.current['transaction-exceptions']);
         if (state.current['merchant-portfolio']) renderMerchant(state.current['merchant-portfolio']);
         if (state.current['kyc-pipeline']) renderKyc(state.current['kyc-pipeline']);
@@ -256,25 +252,25 @@
         if (state.current['system-health-history']) renderHealth(state.current['system-health-history']);
         renderTrends(); buildActions();
 
-        const failedCount = state.failed.size;
-        if (refreshState) refreshState.textContent = failedCount ? `اكتمل مع ${failedCount} مصدر/مقارنة غير متاحة` : `محدث · ${new Date().toLocaleTimeString('ar-SA', {hour:'2-digit', minute:'2-digit'})}`;
+        const failures = state.currentFailures.size + state.previousFailures.size;
+        if (refreshState) refreshState.textContent = failures ? `اكتمل مع ${failures} مصدر/مقارنة غير متاحة` : `محدث · ${new Date().toLocaleTimeString('ar-SA', {hour:'2-digit', minute:'2-digit'})}`;
         if (refresh) refresh.disabled = false;
-        const monitoredStates = ['ari-finance-state','ari-exception-state','ari-merchant-state','ari-kyc-state','ari-support-state','ari-auth-state','ari-health-state'];
-        monitoredStates.forEach(id => { const n = $(id); if (n && n.textContent === 'تحميل') status(id, 'غير متاح', 'warn'); });
+        ['ari-finance-state','ari-exception-state','ari-merchant-state','ari-kyc-state','ari-support-state','ari-auth-state','ari-health-state'].forEach(id => {
+            const node = $(id); if (node && node.textContent === 'تحميل') status(id, 'غير متاح', 'warn');
+        });
     }
 
     function scalarEntries(object) {
         return Object.entries(object || {}).filter(([, value]) => value === null || ['string','number','boolean'].includes(typeof value)).slice(0, 18);
     }
     function genericRender(meta) {
-        if (meta.available === false) return `<div class="ari-result-empty">المصدر غير متاح: ${esc(meta.reason || meta.source || 'غير محدد')}</div>`;
         let html = '';
         const scalars = scalarEntries(meta);
         if (scalars.length) html += `<div class="ari-metrics">${scalars.map(([key,value]) => `<div class="ari-metric"><div class="k">${esc(key.replaceAll('_',' '))}</div><div class="v">${esc(typeof value === 'boolean' ? (value ? 'نعم' : 'لا') : fmt(value))}</div></div>`).join('')}</div>`;
         Object.entries(meta || {}).filter(([, value]) => Array.isArray(value) && value.length).slice(0, 5).forEach(([key, rows]) => {
             if (typeof rows[0] !== 'object' || Array.isArray(rows[0])) return;
             const heads = Object.keys(rows[0]).slice(0, 8);
-            html += `<div class="ari-subsection"><h6>${esc(key.replaceAll('_',' '))}</h6><div class="ari-table-wrap"><table class="ari-table"><thead><tr>${heads.map(h => `<th>${esc(h.replaceAll('_',' '))}</th>`).join('')}</tr></thead><tbody>${rows.slice(0, 30).map(row => `<tr>${heads.map(h => `<td>${esc(typeof row[h] === 'object' ? JSON.stringify(row[h]) : fmt(row[h]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+            html += `<div class="ari-subsection"><h6>${esc(key.replaceAll('_',' '))}</h6><div class="ari-table-wrap"><table class="ari-table"><thead><tr>${heads.map(head => `<th>${esc(head.replaceAll('_',' '))}</th>`).join('')}</tr></thead><tbody>${rows.slice(0, 30).map(row => `<tr>${heads.map(head => `<td>${esc(typeof row[head] === 'object' ? JSON.stringify(row[head]) : fmt(row[head]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
         });
         Object.entries(meta || {}).filter(([, value]) => value && typeof value === 'object' && !Array.isArray(value)).slice(0, 5).forEach(([key, value]) => {
             const entries = scalarEntries(value); if (!entries.length) return;
@@ -303,7 +299,7 @@
     $('ari-refresh')?.addEventListener('click', loadExecutive);
     ['ari-from','ari-to'].forEach(id => $(id)?.addEventListener('change', () => {
         status('ari-explorer-state', 'الفترة تغيرت', 'neutral');
-        const p = selectedPeriods(); set('ari-previous-period', p.previous.from && p.previous.to ? `${p.previous.from} → ${p.previous.to}` : '—');
+        const periods = selectedPeriods(); set('ari-previous-period', periods.valid ? `${periods.previous.from} → ${periods.previous.to}` : 'الفترة غير صالحة');
     }));
     loadExecutive();
 })();
