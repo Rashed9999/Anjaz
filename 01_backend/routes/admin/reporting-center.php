@@ -36,6 +36,8 @@ Route::middleware(['web', 'admin', 'amial.force-pin-change'])
             'support-operations' => 'supportOperations',
             'system-health-history' => 'healthHistory',
             'queue-operations' => 'queueOperations',
+            'email-otp' => 'emailOtp',
+            'auth-security' => 'authSecurity',
             'aml-regulatory' => 'amlRegulatory',
         ] as $uri => $method) {
             Route::get('/' . $uri, [ReportingCenterController::class, $method])
