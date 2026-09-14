@@ -69,11 +69,13 @@
             <button class="btn btn-outline-dark" data-report="transaction-volume">حجم المعاملات</button>
             <button class="btn btn-outline-danger" data-report="transaction-exceptions">الاستثناءات المالية</button>
             <button class="btn btn-outline-secondary" data-report="reconciliation">مطابقة المحافظ</button>
+            <button class="btn btn-outline-danger" data-report="credit-control">تقادم الديون والتحصيل</button>
         </div>
 
         <div class="section-label">الإدارة والرقابة P1</div>
         <div class="report-buttons d-flex flex-wrap gap-2">
             <button class="btn btn-outline-primary" data-report="merchant-portfolio">محفظة التجار</button>
+            <button class="btn btn-outline-primary" data-report="inventory-control">المخزون والجرد</button>
             <button class="btn btn-outline-primary" data-report="customer-activity">نشاط العملاء</button>
             <button class="btn btn-outline-primary" data-report="agent-liquidity">سيولة الوكلاء</button>
             <button class="btn btn-outline-success" data-report="subscriptions">الاشتراكات</button>
@@ -138,6 +140,8 @@
         'transaction-exceptions': @json(route('admin.amial.reporting-center.transaction-exceptions')),
         'reconciliation': @json(route('admin.amial.reporting-center.reconciliation')),
         'merchant-portfolio': @json(route('admin.amial.reporting-center.merchant-portfolio')),
+        'inventory-control': @json(route('admin.amial.reporting-center.inventory-control')),
+        'credit-control': @json(route('admin.amial.reporting-center.credit-control')),
         'customer-activity': @json(route('admin.amial.reporting-center.customer-activity')),
         'agent-liquidity': @json(route('admin.amial.reporting-center.agent-liquidity')),
         'subscriptions': @json(route('admin.amial.reporting-center.subscriptions')),
@@ -152,7 +156,9 @@
         free:'مجاني', business:'أعمال', enterprise:'مؤسسة', verified:'موثق', pending_review:'قيد المراجعة',
         rejected:'مرفوض', resubmission_required:'إعادة تقديم مطلوبة', verification_suspended:'موقوف التحقق',
         open:'مفتوحة', investigating:'قيد التحقيق', waiting_customer:'بانتظار العميل', resolved:'محلولة', closed:'مغلقة',
-        low:'منخفض', normal:'عادي', high:'عالٍ', urgent:'عاجل',
+        low:'منخفض', normal:'عادي', high:'عالٍ', urgent:'عاجل', store:'متجر', warehouse:'مستودع',
+        sale:'بيع', sale_return:'مرتجع بيع', purchase_receive:'استلام شراء', purchase_return:'مرتجع شراء',
+        transfer_out:'تحويل صادر', transfer_in:'تحويل وارد', count_adjustment:'تسوية جرد', waste:'هالك', opening_balance:'رصيد افتتاحي', correction:'تصحيح',
     };
 
     const state = document.getElementById('report-state');
@@ -233,6 +239,25 @@
         return card('محفظة التجار', `<div class="row g-2 mb-3">${metric('إجمالي التجار',meta.total)}${metric('موثق',meta.verified)}${metric('تنتهي خلال 30 يوم',meta.expiring_30d)}${metric('منتهية',meta.expired)}</div><div class="row g-3"><div class="col-lg-3"><h6>القطاعات</h6>${breakdown(meta.by_business_type)}</div><div class="col-lg-3"><h6>الباقات</h6>${breakdown(meta.by_plan)}</div><div class="col-lg-3"><h6>التحقق</h6>${breakdown(meta.by_verification)}</div><div class="col-lg-3"><h6>المخاطر</h6>${breakdown(meta.by_risk)}</div></div>`,'من ملفات التجار الأصلية');
     }
 
+    function renderInventory(meta) {
+        const warning = meta.valuation_available === false
+            ? `<div class="alert alert-warning mb-0 mt-3"><strong>التقييم المالي غير مُعلن كرقم:</strong> لا توجد بعد سياسة تكلفة/عملة موحدة قابلة للدفاع. حركة المخزون والجرد أدناه حقيقية، لكن «قيمة المخزون» لن تُخمن.</div>` : '';
+        return card('المخزون والجرد', `<div class="row g-2 mb-3">${metric('المنتجات',meta.products)}${metric('متابعة مخزون',meta.tracked_products)}${metric('الموجود',money(meta.on_hand_units))}${metric('المحجوز',money(meta.reserved_units))}${metric('المتاح',money(meta.available_units))}${metric('نافد',meta.out_of_stock_products)}${metric('منخفض',meta.low_stock_products)}${metric('سالب',meta.negative_stock_products)}${metric('منتهي',meta.expired_products)}${metric('ينتهي خلال 30 يوم',meta.expiring_30_days)}</div><div class="row g-3"><div class="col-lg-6"><h6>المواقع</h6>${breakdown(meta.locations_by_kind)}</div><div class="col-lg-6"><h6>حركات الفترة</h6>${breakdown(meta.movements_by_reason)}</div></div>${warning}`,'الحركة من stock_movements والرصيد التشغيلي من product_stocks');
+    }
+
+    function renderCredit(meta) {
+        const u=meta.unified_credit||{}, w=meta.wholesale||{};
+        const bucketLabels={current:'غير مستحق/حالي','1_30':'1–30 يوم','31_60':'31–60 يوم','61_90':'61–90 يوم',over_90:'أكثر من 90 يوم'};
+        const rows=Object.entries(u.buckets||{}).map(([k,v])=>`<tr><td>${esc(bucketLabels[k]??k)}</td><td class="mono">${money(v)}</td></tr>`);
+        const orphanRows=Object.entries(w.legacy_orphan_buckets||{}).map(([k,v])=>`<tr><td>${esc(bucketLabels[k]??k)}</td><td class="mono">${money(v)}</td></tr>`);
+        const warnings=[];
+        if((u.accounts_with_unaged_balance??0)>0) warnings.push(`يوجد ${u.accounts_with_unaged_balance} حساباً فيه رصيد موجب بلا فاتورة مؤرخة؛ ظهر كرصيد غير مؤرخ ولم نختلق له تاريخ استحقاق.`);
+        if((u.reconciliation_anomalies??0)>0) warnings.push(`يوجد ${u.reconciliation_anomalies} حساباً لا تتطابق فواتيره المفتوحة مع رصيده الحالي.`);
+        if((w.source_divergences??0)>0) warnings.push(`يوجد ${w.source_divergences} اختلافاً بين مرآة الجملة والدفتر الموحد بقيمة ${money(w.source_divergence_amount)} ${meta.currency??''}.`);
+        if((w.legacy_orphan_invoices??0)>0) warnings.push(`يوجد ${w.legacy_orphan_invoices} فاتورة جملة تاريخية مفتوحة لم تُرحل إلى الدفتر الموحد؛ أضيفت مرة واحدة فقط لمنع ازدواج الدين.`);
+        return card('تقادم الديون والتحصيل', `<div class="row g-2 mb-3">${metric('إجمالي الذمم المعروفة',money(meta.total_known_receivable),meta.currency)}${metric('مؤرخة وقابلة للتقادم',money(meta.aged_receivable),meta.currency)}${metric('غير مؤرخة',money(meta.unaged_receivable),meta.currency)}${metric('تغطية التقادم',meta.aging_coverage_pct??'—','%')}${metric('حسابات الآجل',u.accounts)}${metric('فواتير موحدة مفتوحة',u.open_invoices)}${metric('فواتير متأخرة',u.overdue_invoices)}${metric('متأخر مستحق',money(u.overdue_receivable),meta.currency)}${metric('تجاوزت الحد',u.over_limit_accounts)}${metric('مرتبطة بعميل أميال',u.linked_to_amial_customer)}${metric('جملة ممثلة بالموحد',w.mirrored_in_unified)}${metric('جملة تاريخية منفصلة',w.legacy_orphan_invoices)}</div><div class="row g-3"><div class="col-lg-6"><h6>تقادم الدفتر الموحد</h6>${table(['العمر','المبلغ'],rows)}</div><div class="col-lg-6"><h6>تقادم الجملة التاريخية غير المرحلة</h6>${table(['العمر','المبلغ'],orphanRows)}</div></div>${warnings.length?`<div class="alert alert-warning mb-0 mt-3">${warnings.map(esc).join('<br>')}</div>`:`<div class="alert alert-success mb-0 mt-3">الذمم قابلة للتتبع ولا يوجد ازدواج معروف بين الجملة والدفتر الموحد.</div>`}`,'السداد المحدد يحترم الفاتورة المختارة، والسداد التاريخي غير المحدد يعاد FIFO');
+    }
+
     function renderCustomer(meta) {
         return card('نشاط العملاء', `<div class="row g-2">${metric('كل العملاء',meta.total_customers)}${metric('عملاء جدد',meta.new_customers_in_period)}${metric('عملاء نفذوا عمليات',meta.transacting_customers_in_period)}${metric('صفوف عمليات الفترة',meta.transaction_rows_in_period)}${metric('خاملون 90 يوماً',meta.dormant_90_days)}${metric('مصدر العمليات',meta.transactions_source_available?'متاح':'غير متاح')}</div>`,'الحساب على الخادم؛ لا حد 500 عملية');
     }
@@ -263,7 +288,7 @@
     }
 
     function renderAml(meta) {
-        const health=meta.health||{}, inv=meta.investigations||{}, large=meta.large_transactions||{}, rep=meta.reports||{};
+        const health=meta.health||{}, inv=meta.investigations||{}, large=meta.large_transactions||{};
         const gaps=[];
         if(meta.watchlist?.configured===false) gaps.push(meta.watchlist.why);
         if(meta.pep?.configured===false) gaps.push(meta.pep.why);
@@ -277,6 +302,7 @@
             'cash-flow':renderCashFlow, 'liquidity':m=>renderLiquidity(m,false), 'safeguarded-funds':m=>renderLiquidity(m,true),
             'general-ledger':renderGeneralLedger, 'fees-commissions':renderFees, 'transaction-volume':renderVolume,
             'transaction-exceptions':renderExceptions, 'reconciliation':renderReconciliation, 'merchant-portfolio':renderMerchant,
+            'inventory-control':renderInventory, 'credit-control':renderCredit,
             'customer-activity':renderCustomer, 'agent-liquidity':renderAgent, 'subscriptions':renderSubscriptions,
             'kyc-pipeline':renderKyc, 'aml-regulatory':renderAml, 'audit-sensitive-actions':m=>renderAudit(m,false),
             'rbac-changes':m=>renderAudit(m,true), 'support-operations':renderSupport,
@@ -292,7 +318,7 @@
             if(to) params.set('as_of',to);
         } else if (type==='agent-liquidity') {
             if(to) params.set('date',to);
-        } else if (!['reconciliation','merchant-portfolio','aml-regulatory'].includes(type)) {
+        } else if (!['reconciliation','merchant-portfolio','aml-regulatory','credit-control'].includes(type)) {
             if(from) params.set('from',from);
             if(to) params.set('to',to);
         }
