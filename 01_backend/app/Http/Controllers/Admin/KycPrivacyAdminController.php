@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Kyc\Biometric\BiometricVerificationService;
 use App\Services\Kyc\KycPrivacyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,8 +14,11 @@ use Illuminate\Support\Facades\Schema;
 /** AMIAL-KYC-PRIVACY-ADMIN-001 — رؤية مسار التحقق بلا اختراع نتيجة أو تسريبها. */
 class KycPrivacyAdminController extends Controller
 {
-    public function cases(Request $request, KycPrivacyService $privacy): JsonResponse
-    {
+    public function cases(
+        Request $request,
+        KycPrivacyService $privacy,
+        BiometricVerificationService $biometrics,
+    ): JsonResponse {
         if (!Schema::hasTable('kyc_verification_cases')) {
             return response()->json([
                 'success' => false,
@@ -64,11 +68,14 @@ class KycPrivacyAdminController extends Controller
             ->values()
             ->all();
 
+        $runtime = $biometrics->operationalSummary();
+
         return response()->json([
             'success' => true,
             'data' => [
                 'cases' => $rows,
-                'biometric_provider_configured' => $privacy->biometricConfigured(),
+                'biometric_provider_configured' => (bool) ($runtime['configured'] ?? false),
+                'biometric_runtime' => $runtime,
                 'biometric_details_allowed' => $canBiometric,
                 'restricted_details_allowed' => $canRestricted,
             ],
@@ -92,8 +99,63 @@ class KycPrivacyAdminController extends Controller
                 'user_id' => (int) $user->id,
                 'name' => trim((string) ($user->f_name . ' ' . $user->l_name)) ?: '—',
                 'state' => $this->redactBiometric($privacy->forUser($user), $canBiometric),
+                'biometric_attempts' => $canBiometric ? $this->attemptsFor((int) $user->id) : [],
             ],
         ]);
+    }
+
+    /**
+     * محاولة/مرجع المزود بيانات KYC حساسة. يظهر التاريخ والحالة للمخول فقط،
+     * والمرجع نفسه مقنع حتى لا يتحول مركز التشغيل إلى مصدر نسخ لمعرفات المزود.
+     */
+    private function attemptsFor(int $userId): array
+    {
+        if (!Schema::hasTable('kyc_biometric_attempts')) {
+            return [];
+        }
+
+        return DB::table('kyc_biometric_attempts')
+            ->where('user_id', $userId)
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get([
+                'attempt_ulid', 'provider', 'provider_reference', 'status',
+                'liveness_status', 'liveness_score', 'face_match_status',
+                'face_match_score', 'result_code', 'started_at', 'completed_at', 'expires_at',
+            ])
+            ->map(function ($row): array {
+                $reference = (string) ($row->provider_reference ?? '');
+                return [
+                    'attempt_ulid' => (string) $row->attempt_ulid,
+                    'provider' => (string) $row->provider,
+                    'provider_reference_masked' => $reference === '' ? null : $this->maskReference($reference),
+                    'status' => (string) $row->status,
+                    'liveness' => [
+                        'status' => (string) $row->liveness_status,
+                        'score' => $row->liveness_score === null ? null : (string) $row->liveness_score,
+                    ],
+                    'face_match' => [
+                        'status' => (string) $row->face_match_status,
+                        'score' => $row->face_match_score === null ? null : (string) $row->face_match_score,
+                    ],
+                    'result_code' => $row->result_code,
+                    'started_at' => $row->started_at,
+                    'completed_at' => $row->completed_at,
+                    'expires_at' => $row->expires_at,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function maskReference(string $value): string
+    {
+        $length = mb_strlen($value);
+        if ($length <= 8) {
+            return str_repeat('•', max(4, $length));
+        }
+
+        return mb_substr($value, 0, 4).'••••'.mb_substr($value, -4);
     }
 
     /**
