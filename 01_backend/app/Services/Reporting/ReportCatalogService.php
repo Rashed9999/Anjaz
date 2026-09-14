@@ -72,8 +72,8 @@ class ReportCatalogService
             'operations' => [
                 'label' => 'التشغيل والتقنية',
                 'reports' => [
-                    ['code' => 'system_health_history', 'label' => 'تاريخ صحة النظام وSLA', 'status' => 'partial', 'source' => 'health + alerts', 'priority' => 'P1'],
-                    ['code' => 'jobs_queues', 'label' => 'الطوابير والمهام الفاشلة', 'status' => 'partial', 'source' => 'queue/jobs', 'priority' => 'P1'],
+                    ['code' => 'system_health_history', 'label' => 'تاريخ صحة النظام والتوفّر المرصود', 'status' => 'ready', 'source' => 'P1ObservabilityReportService ← system_health_checks + system_errors؛ لا يُسمى SLA تعاقدياً', 'priority' => 'P1'],
+                    ['code' => 'jobs_queues', 'label' => 'الطوابير والمهام الفاشلة', 'status' => 'ready', 'source' => 'P1ObservabilityReportService ← jobs + failed_jobs بدون كشف payload', 'priority' => 'P1'],
                     ['code' => 'email_otp', 'label' => 'البريد وOTP والتسليم', 'status' => 'ready', 'source' => 'otp_challenges', 'priority' => 'P2'],
                     ['code' => 'support_sla', 'label' => 'الدعم وزمن الحل والتراكم', 'status' => 'partial', 'source' => 'P1BusinessOperationsReportService؛ هدف SLA الرسمي غير مضبوط بعد', 'priority' => 'P2'],
                     ['code' => 'subscriptions', 'label' => 'الباقات والاشتراكات والقيمة المتكررة', 'status' => 'ready', 'source' => 'P1BusinessOperationsReportService ← profiles + immutable subscription changes', 'priority' => 'P1'],
