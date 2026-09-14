@@ -34,6 +34,14 @@ class RouteServiceProvider extends ServiceProvider
                 ->namespace($this->namespace)
                 ->group(base_path('routes/admin.php'));
 
+            // AMIAL-KYC-FORENSIC-002 — مركز التتبّع له ملف routes مستقل
+            // لكنه يعيش تحت نفس بوابة موظفي المنصّة وبنفس حارس تغيير PIN.
+            // فصله هنا يمنع تضخيم routes/admin/amial.php بميزة تحقيق حساسة.
+            Route::prefix('admin/amial')
+                ->middleware(['web', 'admin', 'amial.force-pin-change'])
+                ->name('admin.amial.')
+                ->group(base_path('routes/admin/kyc-privacy.php'));
+
             // AMIAL-AUDIT-ORPHAN-002: أُزيل تسجيل routes/merchant.php —
             // لوحة التاجر الويبيّة من قالب 6cash. قوالبها كلّها محذوفة، فكل
             // صفحاتها ترمي 500، ولا شيء خارجها يشير إليها (مراجعها الوحيدة
