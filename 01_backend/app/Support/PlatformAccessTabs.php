@@ -85,17 +85,27 @@ final class PlatformAccessTabs
             'compliance' => ['label' => 'الامتثال والتحقق', 'icon' => '🪪',
                 'read' => [
                     'platform.audit.view' => 'سجلّ التدقيق',
-                    'platform.customers.kyc.view' => 'مراجعة وثائق الهويّة',
-                    'platform.customers.kyc.biometric.view' => 'عرض الصور البيومترية الحساسة (صلاحية مستقلة)',
-                    'platform.customers.kyc.restricted.view' => 'عرض طابور KYC المقيد ومستنداته',
+                    'platform.customers.kyc.view' => 'مراجعة وثائق الهويّة العامة',
                     'platform.registrations.view' => 'ملفّات فتح الحسابات',
                 ],
                 'write' => [
                     'platform.approvals.decide' => 'اعتماد التوثيق ورفضُه',
-                    'platform.customers.kyc.restricted.decide' => 'اعتماد ورفض حالات KYC المقيدة/الحضورية',
                     'platform.customers.kyc.request' => 'طلب وثائقَ ورفعُها',
                     'platform.customers.freeze' => 'تجميد حسابٍ وفكُّه',
                     'platform.registrations.create' => 'إنشاء ملفّ فتح حساب',
+                ]],
+
+            // AMIAL-KYC-SENSITIVE-RBAC-001 — هذا تبويب مستقل عمداً.
+            // وضعُ هذه المفاتيح تحت «الامتثال» يجعل منح التبويب كاملاً
+            // يمنح صور الوجه والحالات المقيدة ضمناً. هنا لا يصل إليها أحد
+            // إلا بمنح تبويب الهوية الحساسة أو اختيار الصلاحية نفسها.
+            'identity_sensitive' => ['label' => 'الهوية الحساسة', 'icon' => '🔒',
+                'read' => [
+                    'platform.customers.kyc.biometric.view' => 'عرض الصور البيومترية الحساسة (السيلفي)',
+                    'platform.customers.kyc.restricted.view' => 'عرض طابور KYC المقيد ومستنداته',
+                ],
+                'write' => [
+                    'platform.customers.kyc.restricted.decide' => 'اعتماد ورفض حالات KYC المقيدة والتحقق الحضوري',
                 ]],
 
             'risk_security' => ['label' => 'المخاطر والأمن', 'icon' => '🛡️',
