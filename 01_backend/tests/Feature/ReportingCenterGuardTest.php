@@ -56,6 +56,10 @@ class ReportingCenterGuardTest extends TestCase
     /** @test */
     public function catalog_marks_implemented_reports_ready_without_claiming_everything_is_complete(): void
     {
+        config()->set('amial_reporting.support_sla.resolution_minutes', [
+            'urgent' => null, 'high' => null, 'normal' => null, 'low' => null,
+        ]);
+
         $catalog = (new ReportCatalogService())->catalog();
         $financial = collect($catalog['financial_core']['reports'])->keyBy('code');
         $treasury = collect($catalog['reconciliation_treasury']['reports'])->keyBy('code');
@@ -91,6 +95,25 @@ class ReportingCenterGuardTest extends TestCase
         // تكلفة/عملة صريحة، وAML يحتاج PEP/watchlist، والدعم يحتاج هدف SLA رسمي.
         $this->assertSame('partial', $merchants['inventory_valuation']['status']);
         $this->assertSame('partial', $risk['aml_regulatory']['status']);
+        $this->assertSame('partial', $operations['support_sla']['status']);
+    }
+
+    /** @test */
+    public function catalog_promotes_support_sla_only_after_all_priority_targets_are_configured(): void
+    {
+        config()->set('amial_reporting.support_sla.resolution_minutes', [
+            'urgent' => 60,
+            'high' => 240,
+            'normal' => 480,
+            'low' => 1440,
+        ]);
+
+        $operations = collect((new ReportCatalogService())->catalog()['operations']['reports'])->keyBy('code');
+        $this->assertSame('ready', $operations['support_sla']['status']);
+        $this->assertStringContainsString('سياسة SLA رسمية مهيأة', $operations['support_sla']['source']);
+
+        config()->set('amial_reporting.support_sla.resolution_minutes.high', null);
+        $operations = collect((new ReportCatalogService())->catalog()['operations']['reports'])->keyBy('code');
         $this->assertSame('partial', $operations['support_sla']['status']);
     }
 
