@@ -37,7 +37,7 @@ class P1VerticalPerformanceReportService
         $rows = [];
 
         foreach (A::ALL_BUSINESS_TYPES as $vertical) {
-            $row = [
+            $rows[] = [
                 'vertical' => $vertical,
                 'label' => A::BUSINESS_TYPE_LABELS[$vertical] ?? $vertical,
                 'merchants' => (int) ($merchantCounts[$vertical] ?? 0),
@@ -51,7 +51,6 @@ class P1VerticalPerformanceReportService
                 ],
                 'domain' => $this->domainMetrics($vertical, $fromDate, $toDate),
             ];
-            $rows[] = $row;
         }
 
         return [
@@ -254,8 +253,16 @@ class P1VerticalPerformanceReportService
             'negative_stock_products' => null,
             'inventory_audits_in_period' => null,
         ];
-        if (! $data['available']) return $data + ['reason' => 'merchant_products_missing'];
-        if ($ids->isEmpty()) return $data + ['products' => 0, 'negative_stock_products' => 0, 'inventory_audits_in_period' => 0];
+        if (! $data['available']) {
+            return array_replace($data, ['reason' => 'merchant_products_missing']);
+        }
+        if ($ids->isEmpty()) {
+            return array_replace($data, [
+                'products' => 0,
+                'negative_stock_products' => 0,
+                'inventory_audits_in_period' => 0,
+            ]);
+        }
 
         $data['products'] = DB::table('merchant_products')->whereIn('merchant_user_id', $ids)->count();
         if (Schema::hasTable('product_stocks')) {
@@ -288,8 +295,7 @@ class P1VerticalPerformanceReportService
 
     private function decimal(mixed $value): string
     {
-        $value = (string) ($value ?? '0');
-        return function_exists('bcadd') ? bcadd($value, '0', 4) : number_format((float) $value, 4, '.', '');
+        return bcadd((string) ($value ?? '0'), '0', 4);
     }
 
     private function unavailable(string $source): array
