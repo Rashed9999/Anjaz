@@ -53,6 +53,35 @@ class KycPrivacyService
         return $this->serialize($row);
     }
 
+    public function isRestricted(User|int $user): bool
+    {
+        return (bool) ($this->forUser($user)['restricted_review'] ?? false);
+    }
+
+    /**
+     * بوابة المراجع المقيد.
+     *
+     * `kyc.view` يفتح طابور KYC العادي فقط. من اختار خصوصية إضافية لا تظهر
+     * وثائقه ولا OCR ولا قراره لمن لا يحمل المفتاح المقيد. فصل view عن
+     * decide مهم: محققٌ قد يحتاج رؤية القضية ولا يملك حق اعتمادها.
+     */
+    public function assertReviewerAccess(User|int $subject, User $reviewer, bool $decision = false): void
+    {
+        if (!$this->isRestricted($subject)) {
+            return;
+        }
+
+        $permission = $decision
+            ? 'platform.customers.kyc.restricted.decide'
+            : 'platform.customers.kyc.restricted.view';
+
+        if (!$reviewer->hasPlatformPermission($permission)) {
+            throw new DomainException($decision
+                ? 'هذه الحالة في طابور مراجعة مقيد وتتطلب صلاحية اعتماد مستقلة. [KYC_RESTRICTED_DECIDE_REQUIRED]'
+                : 'هذه الحالة في طابور مراجعة مقيد ولا يحق لهذا الموظف عرض مستنداتها. [KYC_RESTRICTED_VIEW_REQUIRED]');
+        }
+    }
+
     /**
      * صاحب الحساب يختار مستوى الخصوصية. لا يستطيع من هذا الباب إعلان نفسه
      * «متحققاً»، ولا كتابة درجات حيوية أو مطابقة.
@@ -148,6 +177,70 @@ class KycPrivacyService
         return $this->forUser($user);
     }
 
+    /**
+     * يُكتب أثر القرار بعد نجاح القرار المالي/الحسابي نفسه، لا قبله.
+     * يلفّه GuardedKycDocumentService في المعاملة نفسها حتى لا يصبح الحساب
+     * موثقاً وحالة KYC تقول collecting أو العكس.
+     */
+    public function markAccountDecision(
+        User $user,
+        User $reviewer,
+        bool $approved,
+        ?string $reason = null,
+        ?string $ownershipMethod = null,
+    ): void {
+        if (!Schema::hasTable('kyc_verification_cases')) {
+            return;
+        }
+
+        $this->ensure($user);
+
+        $update = [
+            'status' => $approved ? 'verified' : 'rejected',
+            'reviewed_by' => (int) $reviewer->id,
+            'reviewed_at' => now(),
+            'decision_reason' => $approved ? null : mb_substr(trim((string) $reason), 0, 500),
+            'updated_at' => now(),
+        ];
+
+        if ($approved && $ownershipMethod) {
+            $update['ownership_method'] = $ownershipMethod;
+        }
+
+        DB::table('kyc_verification_cases')->where('user_id', $user->id)->update($update);
+    }
+
+    /**
+     * التحقق الحضوري لا يعني «الموظف رآه»؛ يحتاج سبباً وأثراً ومراجعاً
+     * يحمل مفتاح القرار المقيد. وبعده فقط يستطيع حارس الملكية اعتباره دليلاً.
+     */
+    public function verifyInPerson(User $user, User $reviewer, string $reason): array
+    {
+        $this->assertReviewerAccess($user, $reviewer, true);
+        $state = $this->forUser($user);
+
+        if (($state['review_mode'] ?? null) !== self::MODE_IN_PERSON) {
+            throw new DomainException('KYC_IN_PERSON_MODE_REQUIRED');
+        }
+        if (mb_strlen(trim($reason)) < 5) {
+            throw new DomainException('سبب/مرجع التحقق الحضوري مطلوب.');
+        }
+        if (!Schema::hasTable('kyc_verification_cases')) {
+            throw new DomainException('KYC_PRIVACY_SCHEMA_UNAVAILABLE');
+        }
+
+        DB::table('kyc_verification_cases')->where('user_id', $user->id)->update([
+            'ownership_method' => 'in_person_verified',
+            'status' => 'verified',
+            'reviewed_by' => (int) $reviewer->id,
+            'reviewed_at' => now(),
+            'decision_reason' => mb_substr(trim($reason), 0, 500),
+            'updated_at' => now(),
+        ]);
+
+        return $this->forUser($user);
+    }
+
     /** @return array<string,mixed> */
     private function virtualDefault(int $userId, ?string $warning): array
     {
@@ -162,8 +255,12 @@ class KycPrivacyService
             'liveness' => ['status' => 'not_configured', 'score' => null],
             'face_match' => ['status' => 'not_configured', 'score' => null],
             'biometric_provider' => null,
+            'provider_reference' => null,
             'biometric_available' => $this->biometricConfigured(),
             'requested_at' => null,
+            'reviewed_by' => null,
+            'reviewed_at' => null,
+            'decision_reason' => null,
             'warning' => $warning,
         ];
     }
@@ -183,7 +280,10 @@ class KycPrivacyService
             'ownership_method' => (string) $row->ownership_method,
             'ownership_method_label' => match ((string) $row->ownership_method) {
                 'biometric_liveness_face_match' => 'Liveness + Face Match',
-                'in_person_pending' => 'تحقق حضوري — بانتظار اعتماد السياسة/المراجع',
+                'in_person_pending' => 'تحقق حضوري — بانتظار المراجع',
+                'in_person_verified' => 'تحقق حضوري معتمد',
+                'manual_selfie_confirmed_id' => 'صورة شخصية + رقم هوية أقرّه المراجع',
+                'restricted_manual_selfie_confirmed_id' => 'مراجعة مقيدة + صورة شخصية + رقم هوية مُقَر',
                 default => 'صورة شخصية + مراجعة بشرية (النظام الحالي)',
             },
             'status' => (string) $row->status,
@@ -197,8 +297,12 @@ class KycPrivacyService
                 'score' => $row->face_match_score === null ? null : (string) $row->face_match_score,
             ],
             'biometric_provider' => $row->biometric_provider,
+            'provider_reference' => $row->provider_reference,
             'biometric_available' => $this->biometricConfigured(),
             'requested_at' => $row->requested_at,
+            'reviewed_by' => $row->reviewed_by === null ? null : (int) $row->reviewed_by,
+            'reviewed_at' => $row->reviewed_at,
+            'decision_reason' => $row->decision_reason,
             'warning' => null,
         ];
     }
