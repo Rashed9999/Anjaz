@@ -12,12 +12,15 @@ use App\Services\KycDocumentService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * AMIAL-KYC-RESTRICTED-QUEUE-001 — طابورٌ منفصل لا فلتر تجميلي.
  *
  * الحالة التي يختار صاحبها «خصوصية إضافية» لا تدخل الطابور العام أصلاً.
- * هذا المتحكم هو بابها الوحيد في لوحة المراجعة، ومفتاحه RBAC مستقل.
+ * والتحقق الحضوري يُدار هنا أيضاً لأنه إثبات ملكية عالي الحساسية، لا لأنه
+ * مرتبط بجنس صاحب الحساب. التعيين للموظفين يتم بالصلاحيات فقط.
  */
 class KycRestrictedReviewController extends Controller
 {
@@ -52,11 +55,37 @@ class KycRestrictedReviewController extends Controller
             ];
         };
 
+        $inPerson = [];
+        if (Schema::hasTable('kyc_verification_cases')) {
+            $ids = DB::table('kyc_verification_cases')
+                ->where('review_mode', KycPrivacyService::MODE_IN_PERSON)
+                ->whereIn('status', ['collecting', 'manual_review'])
+                ->orderBy('requested_at')
+                ->limit(100)
+                ->pluck('user_id');
+
+            $inPerson = User::query()
+                ->whereIn('id', $ids)
+                ->get(['id', 'f_name', 'l_name', 'phone'])
+                ->map(function (User $user) use ($privacy, $ownership) {
+                    return [
+                        'user_id' => (int) $user->id,
+                        'customer_name' => trim((string) ($user->f_name . ' ' . $user->l_name)) ?: '—',
+                        'customer_phone' => (string) ($user->phone ?? '—'),
+                        'privacy' => $privacy->forUser($user),
+                        'ownership' => $ownership->assess($user),
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
                 'documents' => array_map($decorate, $pending),
                 'ready_for_account_decision' => array_map($decorate, $ready),
+                'in_person_requests' => $inPerson,
             ],
         ]);
     }
@@ -68,14 +97,20 @@ class KycRestrictedReviewController extends Controller
         KycOwnershipGuardService $ownership,
     ): JsonResponse {
         $user = User::findOrFail($userId);
-        $privacy->assertReviewerAccess($user, $request->user(), false);
+        $state = $privacy->forUser($user);
+
+        // التحقق الحضوري يستخدم نفس فريق الخصوصية المقيد حتى إن لم يحمل
+        // restricted_review=true؛ route نفسه يتطلب restricted.view.
+        if (($state['review_mode'] ?? null) !== KycPrivacyService::MODE_IN_PERSON) {
+            $privacy->assertReviewerAccess($user, $request->user(), false);
+        }
 
         return response()->json([
             'success' => true,
             'data' => [
                 'user_id' => (int) $user->id,
                 'name' => trim((string) ($user->f_name . ' ' . $user->l_name)) ?: '—',
-                'privacy' => $privacy->forUser($user),
+                'privacy' => $state,
                 'ownership' => $ownership->assess($user),
             ],
         ]);
