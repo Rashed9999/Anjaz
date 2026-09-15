@@ -1,4 +1,6 @@
+import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/kyc_verification/controllers/verification_center_controller.dart';
+import 'package:amial_pay/features/kyc_verification/domain/reposotories/verification_center_repo.dart';
 import 'package:amial_pay/features/kyc_verification/screens/complete_my_account_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -17,6 +19,13 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
   @override
   void initState() {
     super.initState();
+    if (!Get.isRegistered<VerificationCenterController>()) {
+      Get.put(
+        VerificationCenterController(
+          repo: VerificationCenterRepo(apiClient: Get.find<ApiClient>()),
+        ),
+      );
+    }
     Future.microtask(() => Get.find<VerificationCenterController>().load());
   }
 
