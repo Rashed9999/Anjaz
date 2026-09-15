@@ -85,6 +85,11 @@ class AppServiceProvider extends ServiceProvider
         // والإدارة والموظفين لأنهم جميعاً يعتمدون User كمصدر هوية الحساب.
         \App\Models\User::observe(\App\Observers\UserEmailIdentityObserver::class);
 
+        // AMIAL-PROGRESSIVE-KYC-TURNOVER-002: كل صف معاملة ناجح لعميل فرد
+        // يكتب projection للحدود من أصل المبلغ فقط، بلا الرسوم/العمولات.
+        // الـObserver يعمل داخل نفس DB transaction، فيسقط سجله مع rollback.
+        \App\Models\Transaction::observe(\App\Observers\CustomerTurnoverObserver::class);
+
         // AMIAL-CLEANUP: أُزيلت بوّابة تفعيل 6amtech + إعداد addon_admin_routes
         // (نظام إضافات 6cash — بلا وحدات، ومستهلِكوه محذوفون).
     }
