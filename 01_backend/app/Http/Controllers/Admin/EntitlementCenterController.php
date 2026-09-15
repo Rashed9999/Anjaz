@@ -175,8 +175,8 @@ class EntitlementCenterController extends Controller
                 // وكُشف بمسبار اللوحة **حين كانت في القاعدة بياناتُ عرضٍ
                 // حقيقيّة**؛ ومسحٌ على قاعدةٍ فارغةٍ يمرّ فوق العطل بلا أن
                 // يراه. **والغيابُ يُقال ولا يُملأ** (القاعدة السابعة).
-                'plan' => $profile?->subscription_plan ?? A::PLAN_FREE,
-                'plan_name' => A::PLAN_LABELS[$profile?->subscription_plan ?? A::PLAN_FREE] ?? '—',
+                'plan' => A::canonicalPlan($profile?->subscription_plan),
+                'plan_name' => A::PLAN_LABELS[A::canonicalPlan($profile?->subscription_plan)] ?? '—',
                 'business_type' => $profile?->business_type,
                 'has_profile' => $profile !== null,
                 'expires_at' => $profile?->subscription_expires_at?->format('Y-m-d'),

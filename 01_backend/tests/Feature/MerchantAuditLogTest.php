@@ -65,4 +65,33 @@ class MerchantAuditLogTest extends TestCase
             ->assertJsonPath('meta.count', 1)
             ->assertJsonPath('meta.entries.0.action', 'MERCHANT_PAYMENT');
     }
+
+    /** @test سجل التاجر لا يعيد الرموز الإنجليزية التي يراها المالك في التطبيق. */
+    public function merchant_audit_presents_known_action_reason_and_branch_in_arabic(): void
+    {
+        $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+        app(SubscriptionService::class)->changePlan($this->merchant, A::PLAN_MERCHANT_PRO, $admin);
+
+        $branch = \App\Models\Branch::create([
+            'merchant_user_id' => $this->merchant->id,
+            'name' => 'فرع التحرير', 'is_active' => true, 'is_default' => true,
+        ]);
+        app(AuditService::class)->record([
+            'actor_type' => 'merchant', 'actor_user_id' => $this->merchant->id,
+            'subject_type' => 'user', 'subject_id' => $this->merchant->id,
+            'action' => 'PAYMENT_REQUEST_CANCELLED_BY_REQUESTER',
+            'decision_code' => 'CANCELLED',
+            'reason' => 'requester cancelled pending money request',
+            'context' => ['branch_id' => $branch->id, 'employee_code' => 'EMP-10'],
+        ]);
+
+        Passport::actingAs($this->merchant->fresh(), [], 'api');
+        $this->getJson('/api/v1/amial/merchant/audit-log')
+            ->assertOk()
+            ->assertJsonPath('meta.entries.0.action_label', 'ألغى صاحبُ الطلب طلبَ المال')
+            ->assertJsonPath('meta.entries.0.decision_label', 'ملغىً')
+            ->assertJsonPath('meta.entries.0.reason', 'ألغى صاحب الطلب طلب المال المعلّق')
+            ->assertJsonPath('meta.entries.0.branch.name', 'فرع التحرير')
+            ->assertJsonPath('meta.entries.0.details.0.label', 'معرّف الفرع');
+    }
 }

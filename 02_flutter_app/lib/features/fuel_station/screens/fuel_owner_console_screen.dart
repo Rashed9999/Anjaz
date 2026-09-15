@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_vertical_controller.dart';
 import 'package:amial_pay/features/fuel_station/widgets/fuel_state_view.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_ops_center_screen.dart';
@@ -13,7 +14,7 @@ import 'package:amial_pay/features/fuel_station/screens/fuel_shifts_screen.dart'
 import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_companies_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_settings_screen.dart';
 
 /// AMIAL-FUEL-VERTICAL-001 · المرحلة ٨ — **لوحةُ المحطّة**.
 ///
@@ -215,10 +216,9 @@ class _FuelOwnerConsoleScreenState extends State<FuelOwnerConsoleScreen> {
             () => const FuelSalesHistoryScreen()),
         _Item('الورديات', Icons.access_time_rounded, 'shift.close',
             () => const FuelShiftsScreen()),
-        // **اللوحةُ القديمة لا تُهجَر** — فيها ملخّصُ اليوم ورسومُه،
-        // وصارت بنداً بصلاحيّته بدل أن تكون بابَ الجميع.
-        _Item('ملخص اليوم', Icons.insights_rounded, 'report.sales',
-            () => const FuelStationDashboardScreen()),
+        // التقرير هنا سجلّ مبيعات الوقود نفسه، لا لوحة «بيع سريع» عامة.
+        _Item('سجل وتقارير المبيعات', Icons.insights_rounded, 'report.sales',
+            () => const FuelSalesHistoryScreen()),
       ]),
 
       _Group('المخزون', Icons.propane_tank_rounded, [
@@ -238,6 +238,26 @@ class _FuelOwnerConsoleScreenState extends State<FuelOwnerConsoleScreen> {
       ]),
 
       _Group('الإدارة', Icons.admin_panel_settings_rounded, [
+        // AMIAL-FUEL-SETTINGS-DOOR-001 — **مبنيّةٌ ولا يُوصَل إليها.**
+        //
+        // ══════════════════════════════════════════════════════════════
+        // قال صاحبُ المشروع: **«لا استطيع انشاء خزان او مضخة، ليس هناك
+        // طريقة للعمل»**. وقِيس، فإذا `FuelSettingsScreen` — وفيها
+        // **المضخّاتُ وأنواعُ الوقود وأسعارُها وبياناتُ المحطّة** —
+        // مبنيّةٌ كاملةً ولها بابٌ واحدٌ في المشروع كلِّه:
+        // `merchant_adaptive_shell.dart` — **قائمةٌ أخرى ليست لوحةَ
+        // المحطّة**. فلوحةُ المحطّة، وهي ما يفتحه صاحبُها كلَّ يوم، بلا
+        // مضخّاتٍ وبلا أنواع.
+        //
+        // **وشاشةُ الأسعار تقول «أضف نوع وقود من الإعدادات»** — إرشادٌ
+        // إلى شاشةٍ لا بابَ لها. والخزّانُ يطلب نوعاً لا سبيلَ إلى
+        // إنشائه. **فالطريقُ مسدودٌ من ثلاث جهات، ولا خطأَ في أيّ سجلّ.**
+        //
+        // (القاعدة الثانية عشرة: المسارُ المسجَّل ليس ظهوراً — لا بدّ من
+        // رابطٍ يقود إليه من مكانٍ يمرّ به المستعمل.)
+        _Item('إعدادات المحطة — المضخّات والأنواع',
+            Icons.settings_rounded, 'fuel.pump.view',
+            () => const FuelSettingsScreen()),
         _Item('الأدوار والصلاحيات', Icons.manage_accounts_rounded, 'role.view',
             () => const FuelRolesScreen()),
       ]),
@@ -288,10 +308,10 @@ class _FuelOwnerConsoleScreenState extends State<FuelOwnerConsoleScreen> {
 
   String _shortTime(dynamic iso) {
     if (iso == null) return '—';
-    final t = DateTime.tryParse('$iso');
+    final t = DateConverterHelper.tryParseApiInstant('$iso');
     if (t == null) return '—';
 
-    final d = DateTime.now().difference(t);
+    final d = DateTime.now().toUtc().difference(t);
     if (d.inMinutes < 60) return '${d.inMinutes} دقيقة';
     if (d.inHours < 24) return '${d.inHours} ساعة';
     return '${d.inDays} يوم';

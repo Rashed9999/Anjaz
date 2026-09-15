@@ -5,6 +5,7 @@ namespace App\Services\Reconciliation;
 use App\Services\LedgerReportService;
 use App\Models\Agent\AgentShift;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * AMIAL-RECON-NIGHTLY-001 — كلّ ليلة: يُحسب الرقمُ من مصدرين ويُقارَنان.
@@ -55,7 +56,10 @@ class ReconciliationService
         // في بطاقةٍ ويُنسى مع إغلاق الصفحة. (المحور ٢٢: «افتح Case».)
         $this->cases->recordLedgerDrift($ledger['drift'] ?? []);
 
-        $diverged = $wallets['diverged'] > 0
+        $stock = $this->stock();
+
+        $diverged = $stock['diverged'] > 0
+            || $wallets['diverged'] > 0
             || $ledger['unbalanced'] > 0
             || bccomp($ledger['net'], '0', 4) !== 0
             || count($ledger['drift'] ?? []) > 0
@@ -66,6 +70,7 @@ class ReconciliationService
             'wallets'     => $wallets,
             'ledger'      => $ledger,
             'tills'       => $tills,
+            'stock'       => $stock,
             'blind_spots' => $this->blindSpots(),
             'duration_ms' => (int) round((microtime(true) - $started) * 1000),
         ];
@@ -122,7 +127,7 @@ class ReconciliationService
      * وهذا فحصٌ مستقلٌّ عن الأوّل: محافظُ العملاء قد تطابق الدفتر وهو
      * غيرُ متوازنٍ في ذاته، لو كان النقصُ في حسابٍ ليس محفظةَ عميل.
      */
-    public function ledgerBalance(): array
+    private function ledgerBalance(): array
     {
         $sums = DB::table('ledger_entry_lines')
             ->selectRaw("COALESCE(SUM(CASE WHEN direction='debit'  THEN amount ELSE 0 END),0) d")
@@ -270,6 +275,64 @@ class ReconciliationService
 
     // ══════════════════════════════════════════════════════════════
     // العمى المُعلَن
+    // ══════════════════════════════════════════════════════════════
+    // ٤) مخزونُ التجّار: العمودُ المخزَّن مقابل مجموع حركاته
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * **AMIAL-STOCK-DRIFT-001 — عمودٌ يُقرأ ولا يُقارَن بمصدره.**
+     *
+     * `product_stocks.on_hand` رقمٌ **مخزَّن**، ومصدرُه مجموعُ
+     * `stock_movements.quantity_delta`. و`StockService::computedFromMovements`
+     * تحسبه من مصدره — **وقِيس أنّ لا مُنادِيَ لها في المشروع كلِّه**.
+     *
+     * فلا شيءَ يقارن العمودَ بحركاته. وأيُّ مسارٍ يكتب العمودَ ولا يكتب
+     * حركةً — أو العكس — **يُحدث فرقاً يكبر بصمتٍ إلى الأبد**: يرى التاجرُ
+     * رقماً لا يطابق رفَّه، ولا سطرَ في أيّ سجلٍّ يقول متى بدأ الفرق.
+     *
+     * وهي القاعدةُ السادسة بنصّها: «الرقم يُحسب من مصدره لا من عمودٍ
+     * مخزَّن» — وقد كانت مطبَّقةً على المحافظ والدفتر وخزائن النقد
+     * **وغائبةً عن المخزون وحدَه**.
+     *
+     * **ولا أمرٌ ثانٍ**: البنيةُ قائمةٌ وناضجة — تُفتح قضيّةٌ كسواها
+     * فتُتابَع وتُغلَق، بدل بطاقةٍ تُعرَض وتُنسى مع إغلاق الصفحة.
+     *
+     * @return array{checked:int,diverged:int,rows:list<array<string,mixed>>}
+     */
+    public function stock(): array
+    {
+        if (! Schema::hasTable('product_stocks') || ! Schema::hasTable('stock_movements')) {
+            return ['checked' => 0, 'diverged' => 0, 'rows' => []];
+        }
+
+        $svc = app(\App\Services\Retail\StockService::class);
+        $rows = [];
+        $checked = 0;
+
+        // **وبلا حدٍّ للعدد** — مصالحةٌ تفحص مئةً وتسكت عن الباقي تقول
+        // «لا فرق» وهي لم تنظر. (كما في `wallets()` أعلاه.)
+        foreach (DB::table('product_stocks')->orderBy('id')->cursor() as $s) {
+            $checked++;
+
+            $computed = $svc->computedFromMovements((int) $s->product_id, (int) $s->location_id);
+            $stored = (string) $s->on_hand;
+
+            if (bccomp($stored, $computed, 3) === 0) {
+                continue;
+            }
+
+            $rows[] = [
+                'product_id' => (int) $s->product_id,
+                'location_id' => (int) $s->location_id,
+                'stored' => $stored,
+                'computed' => $computed,
+                'drift' => bcsub($stored, $computed, 3),
+            ];
+        }
+
+        return ['checked' => $checked, 'diverged' => count($rows), 'rows' => $rows];
+    }
+
     // ══════════════════════════════════════════════════════════════
 
     /**

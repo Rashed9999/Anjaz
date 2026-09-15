@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/common/widgets/amial_button.dart';
+import 'package:amial_pay/helper/payment_feedback.dart';
 
 /// AMIAL-DS-001 — ورقة النتيجة الموحّدة (Processing → Success / Failure).
 ///
@@ -93,6 +94,16 @@ class _ResultSheetBodyState<T> extends State<_ResultSheetBody<T>> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _run());
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-PAY-SOUND-001 — **النغمةُ ها هنا لا في كلّ شاشة.**
+  //
+  // هذه الورقةُ هي النمطُ الموحّد لكلّ عمليّةٍ ماليّة (دفعُ تاجر · تسديدُ
+  // فاتورة · دفعٌ آمن · صندوقُ العائلة · تحويل). فوضعُ النغمة فيها
+  // يُسمِعها في كلّ مسارٍ يمرّ بها **ومسارٍ يُضاف غداً**.
+  //
+  // ونثرُها في الشاشات يُنتج ما أنتجه من قبلُ في هذا المشروع: مسارٌ
+  // يُسمِع وآخرُ يصمت، ولا يُعرف السببُ إلّا بالتجربة.
+  // ══════════════════════════════════════════════════════════════════
   Future<void> _run() async {
     try {
       final r = await widget.action();
@@ -101,12 +112,14 @@ class _ResultSheetBodyState<T> extends State<_ResultSheetBody<T>> {
         _result = r;
         _phase = _Phase.success;
       });
+      PaymentFeedback.success();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e;
         _phase = _Phase.failure;
       });
+      PaymentFeedback.failure();
     }
   }
 

@@ -8,6 +8,7 @@ use App\Services\KycDocumentService;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
 /**
@@ -24,6 +25,7 @@ use Tests\TestCase;
 class KycDocumentTest extends TestCase
 {
     use RefreshDatabase;
+    use EstablishesKycEvidence;
 
     private KycDocumentService $svc;
 
@@ -33,9 +35,12 @@ class KycDocumentTest extends TestCase
         $this->svc = app(KycDocumentService::class);
     }
 
+    /** بصمةٌ مميَّزةٌ لكلّ صورة — انظر AMIAL-KYC-REUSE-001. */
+    private int $imageSeq = 0;
+
     private function image(string $name = 'id.jpg'): UploadedFile
     {
-        return UploadedFile::fake()->image($name, 600, 400);
+        return UploadedFile::fake()->image($name, 600, 400 + (++$this->imageSeq));
     }
 
     private function customer(): User
@@ -59,6 +64,18 @@ class KycDocumentTest extends TestCase
         $this->assertSame(KycDocument::STATUS_PENDING, $doc->status);
         $this->assertSame($u->id, (int) $doc->user_id);
         $this->assertNotEmpty($doc->content_sha256, 'لم تُحسب بصمة المحتوى');
+    }
+
+    public function test_the_review_queue_exposes_the_safe_display_mime_for_each_document(): void
+    {
+        $doc = $this->svc->upload(
+            $this->customer(), KycDocument::TYPE_ID_FRONT, $this->image(),
+        );
+
+        $row = collect($this->svc->pendingQueue())->firstWhere('id', $doc->id);
+
+        $this->assertSame('image/jpeg', $row['original_mime'] ?? null,
+            'واجهة المراجعة لا تعرف هل تعرض المستند صورةً أو ملفاً داخل عارض مناسب');
     }
 
     public function test_the_file_itself_is_stored_encrypted_not_readable(): void
@@ -225,8 +242,9 @@ class KycDocumentTest extends TestCase
         foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $type) {
             $this->svc->approve($this->svc->upload($u, $type, $this->image()), $admin);
         }
+        $this->establishKycOwnership($u, $admin);
 
-        $verified = $this->svc->decideAccountVerification($u, $admin, true);
+        $verified = $this->svc->decideAccountVerification($u->fresh(), $admin, true);
         $this->assertSame(1, (int) $verified->is_kyc_verified);
         $this->assertGreaterThanOrEqual(2, (int) $verified->kyc_tier);
     }
@@ -243,6 +261,7 @@ class KycDocumentTest extends TestCase
 
         $this->assertSame(1, (int) $u->fresh()->kyc_update_required,
             'اعتماد مستند مفرد لا يمسح طلب تحديث الحساب');
+        $this->establishKycOwnership($u, $admin);
 
         $verified = $this->svc->decideAccountVerification($u->fresh(), $admin, true);
         $this->assertSame(0, (int) $verified->kyc_update_required);
@@ -274,12 +293,17 @@ class KycDocumentTest extends TestCase
         foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $type) {
             $this->svc->approve($this->svc->upload($u, $type, $this->image()), $admin);
         }
+        $this->establishKycOwnership($u, $admin);
 
         try {
             $this->svc->decideAccountVerification($u->fresh(), $admin, true, 2);
             $this->fail('أُعيدت فئة ٣ بمستندات فئة ٢ فقط');
         } catch (DomainException $e) {
-            $this->assertStringContainsString(KycDocument::TYPE_ADDRESS_PROOF, $e->getMessage());
+            // **يُسمّى الناقصُ بالعربيّة** — صارت الرسالةُ تُقرأ بلغة
+            // من يقرؤها (AMIAL-KYC-SAY-001)، والمقصودُ هنا هو نفسُه:
+            // أن يُسمّى المستندُ الناقصُ بعينه لا «الملفّ ناقص».
+            $this->assertStringContainsString(
+                KycDocument::TYPE_LABELS[KycDocument::TYPE_ADDRESS_PROOF], $e->getMessage());
         }
 
         $this->svc->approve($this->svc->upload($u, KycDocument::TYPE_ADDRESS_PROOF, $this->image('address.jpg')), $admin);
@@ -350,6 +374,7 @@ class KycDocumentTest extends TestCase
             array_column($this->svc->activationQueue(), 'user_id'),
             'اختفى الحساب بعد اعتماد آخر مستند ولم يعد للمراجع قرار نهائي ظاهر');
 
+        $this->establishKycOwnership($customer, $reviewer);
         $this->svc->decideAccountVerification($customer->fresh(), $reviewer, true);
 
         $this->assertNotContains($customer->id,

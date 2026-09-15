@@ -266,6 +266,11 @@ $app = Application::configure(basePath: dirname(__DIR__))
             // المسروق. وهذه **مقعدُ ترخيصٍ يملكه التاجر** — تمنع أن يعمل
             // عشرةُ أجهزةٍ برمزِ مقعدٍ واحدٍ مدفوع.
             'amial.pos-device' => \App\Http\Middleware\EnsurePosDevice::class,
+
+            // AMIAL-SHIFT-GATE-001 — **لا شبّاكَ بلا ورديّة، ولا استثناءَ
+            // للمالك.** ويُوضَع على مسارات البيع وحدَها، ويعدّها حارسٌ
+            // فلا يُضاف بابُ بيعٍ جديدٌ يفلت منه.
+            'amial.shift' => \App\Http\Middleware\EnsureOpenShift::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
@@ -311,6 +316,15 @@ $app = Application::configure(basePath: dirname(__DIR__))
         //  ذلك يُغرق الجدولُ برفضٍ سليمٍ فيُخفي ما يستحقّ النظر.
         // ══════════════════════════════════════════════════════════════
         $exceptions->respond(function ($response, \Throwable $e, $request) {
+            // AMIAL-API-ERROR-SHIELD-001 — هذا آخر موضع قبل خروج الرد.
+            // يطهر حتى HttpResponseException أو render() مخصّص من أي نص
+            // تقني، فلا تكون معالجةٌ جانبية منفذاً لتفاصيل الخادم.
+            $response = \App\Support\ApiErrorResponse::sanitizeRenderedResponse(
+                $response,
+                $e,
+                $request,
+            );
+
             app(\App\Services\ErrorTrackingService::class)
                 ->record($e, $request, $response->getStatusCode());
 
@@ -382,21 +396,12 @@ $app = Application::configure(basePath: dirname(__DIR__))
                     'errors' => (object)[], 'meta' => (object)[],
                 ], 401);
             }
-            $status = ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
-                ? $e->getStatusCode() : 500;
-            $payload = [
-                'success' => false,
-                'code' => $status >= 500 ? 'SERVER_ERROR' : 'REQUEST_ERROR',
-                'message' => $e->getMessage() !== '' ? $e->getMessage() : 'حدث خطأ في الخادم',
-                'errors' => (object)[], 'meta' => (object)[],
-            ];
-            if (config('app.debug')) {
-                $payload['debug'] = [
-                    'exception' => get_class($e),
-                    'at' => $e->getFile() . ':' . $e->getLine(),
-                ];
-            }
-            return new \Illuminate\Http\JsonResponse($payload, $status);
+            // AMIAL-API-ERROR-SHIELD-001 — لا يخرج نص الاستثناء من الخادم.
+            //
+            // QueryException يحمل SQL واسم العمود والمضيف؛ وAPP_DEBUG لا يصلح
+            // منفذاً لها حتى لو أُسيء ضبط البيئة. تُحفظ التفاصيل داخلياً عبر
+            // ErrorTrackingService، ويصل العميل رمز طلب آمن فقط.
+            return \App\Support\ApiErrorResponse::from($e, $request);
         });
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
@@ -434,6 +439,45 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->everyFiveMinutes()
             ->name('health-check')
             ->withoutOverlapping();
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-READINESS-METER-002 — **قياسٌ يحتاج من يشغّله لا يُقاس.**
+        //
+        // `amial:readiness` يقرأ الشروطَ العشرةَ من مصادرها ويحسب الرقم،
+        // **ولا يجري إلّا إن تذكّر أحدٌ أن يكتبه**. فالجاهزيّةُ تُعرف يومَ
+        // يُسأل عنها لا يومَ تتغيّر — وهو بعينه العيبُ الذي وُجد المقياسُ
+        // ليُصلحه: «حكمٌ يعتمد على من يكتبه لا يُراجَع ولا يُتابَع».
+        //
+        // فيجري على الخادم من تلقائه. وعلى الخادم **تُقاس الشروطُ
+        // كلُّها** — البيئةُ والقناةُ والنسخةُ والرمزُ — فيصير الرقمُ
+        // محسوباً لا مجهولاً.
+        //
+        // **ويوميّاً لا كلَّ ساعة:** الشروطُ إعداداتٌ تتغيّر بفعل إنسان،
+        // لا مقاديرُ تتحرّك من تلقائها. وإنذارٌ يتكرّر يُعوَّد عليه.
+        //
+        // وأثرُه في مركز الأعطال: `OpsAlertService` تُبصم بالمفتاح، فصفٌّ
+        // واحدٌ يُحدَّث ويُغلَق من تلقائه يومَ تصير الجاهزيّةُ تامّة.
+        // ══════════════════════════════════════════════════════════════
+        $schedule->command('amial:readiness')
+            ->dailyAt('07:00')
+            ->name('readiness-meter')
+            ->withoutOverlapping()
+            ->onOneServer()
+            ->appendOutputTo(storage_path('logs/readiness.log'));
+
+        // AMIAL-RETAIL-RESERVATION-002 — فكُّ حجوزات المخزون المنتهية.
+        //
+        // **بلا هذا `expires_at` عمودٌ يُكتَب ولا يُقرأ**، والتعليقُ عند
+        // نقطة الحجز يَعِد بمهلةٍ لا تنتهي أبداً. فسلّةٌ مهجورةٌ تقتطع من
+        // مخزون التاجر بلا رجعة، ويرى «٠ متاح» والرفُّ ملآن.
+        //
+        // وخمسٌ لا ساعة: زبونٌ يُعاود الشراءَ بعد دقائقَ يجب أن يجد
+        // البضاعةَ متاحة، **وحجزٌ يبقى ساعةً بعد انتهائه يمنع بيعاً حقيقيّاً**.
+        $schedule->command('amial:release-expired-reservations')
+            ->everyFiveMinutes()
+            ->name('retail-release-expired-reservations')
+            ->withoutOverlapping()
+            ->onOneServer();
     })
     ->create();
 

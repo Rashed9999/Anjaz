@@ -38,6 +38,7 @@ class DonationsServiceTest extends TestCase
         $this->donor = User::factory()->create([
             'zone_code' => 'SOUTH',
             'phone' => '+967700005001',
+            'is_kyc_verified' => 1,
         ]);
         EMoney::create(['user_id' => $this->donor->id, 'current_balance' => '5000.0000']);
 

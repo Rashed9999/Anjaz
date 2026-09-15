@@ -16,6 +16,28 @@ if [ "$APP_DEBUG" = "true" ]; then
     exit 1
 fi
 
+# ── AMIAL-DEMO-OTP-GUARD-001 — رمزُ OTP الثابت يمنع الإطلاق ────────────
+# **الثمنُ المتوقَّع:** ما دام `AMIAL_DEMO_OTP` مضبوطاً، يُقبل `123456`
+# (أو أيُّ قيمةٍ فيه) رمزَ تحقّقٍ **لأيّ رقمٍ في اليمن**. فمن يعرفه يسجّل
+# باسم أيّ رقمٍ ويستقبل أيَّ حساب — وهو أخطرُ فجوةٍ أمنيّةٍ في المنصّة،
+# لأنّها تتخطّى المصادقةَ من جذرها لا من فرعها.
+#
+# ويبقى **عمداً طوال التجربة** بقرار صاحب المشروع (قياسُ الضغط لا قناةُ
+# الرسائل). لكنّ «مؤقّتاً» يبقى إلى الأبد ما لم يوجد ما يمنعه — فيُرفَض
+# **إقلاعُ الإنتاج** ما دام موجوداً، إلّا بمنفذٍ صريحٍ للتجربة:
+# `AMIAL_ALLOW_DEMO_OTP=true`. (نفسُ نمط `AMIAL_ALLOW_DEBUG`.)
+#
+# فمن أراد تجربةً على خادمٍ حقيقيّ يفتح المنفذَ بيده ويعرف أنّه فتحه؛
+# ومن نسي إفراغَ الرمز عند الإطلاق **يُوقَف الإقلاعُ فيتذكّر** — لا أن
+# يُطلق منصّةً ماليّةً بابُها مفتوحٌ ولا يدري.
+if [ -n "$AMIAL_DEMO_OTP" ] && [ "$AMIAL_ALLOW_DEMO_OTP" != "true" ]; then
+    echo "❌ خطأ فادح: AMIAL_DEMO_OTP مضبوط في بيئة إنتاج (قيمة: مخفيّة)."
+    echo "   ما دام مضبوطاً، يُقبل رمزُه رمزَ تحقّقٍ لأيّ رقم — تخطٍّ كاملٌ للمصادقة."
+    echo "   عند الإطلاق الحقيقيّ: اضبط AMIAL_DEMO_OTP= فارغاً بعد تشغيل بوابة SMS/واتساب."
+    echo "   وللتجربة على خادمٍ حقيقيّ عمداً: AMIAL_ALLOW_DEMO_OTP=true (وأنت تعلم أنّك فتحتَه)."
+    exit 1
+fi
+
 # ── انتظار MySQL ─────────────────────────────────────────
 echo "⏳ انتظار MySQL..."
 RETRIES=30
@@ -111,10 +133,25 @@ fi
 # ── AMIAL-FIX: مفاتيح Passport (مُستثناة من الصورة) — تُولَّد مرّة وتُحفَظ ──
 # نُفضّل حجم مُثبَّت (mounted secret/volume). إن غابت، نولّدها (تحتاج تثبيت
 # storage على volume دائم حتى تبقى الرموز صالحة عبر إعادات التشغيل).
-if [ ! -f storage/oauth-private.key ]; then
-    echo "🔑 توليد مفاتيح Passport (لم تكن موجودة)..."
-    php artisan passport:keys --force
+# AMIAL-PASSPORT-KEYS-PERSIST-001 — **المفاتيحُ في الحجم الدائم.**
+# كانت في `storage/` وهو **ليس** على حجمٍ دائم (الحجمُ على `storage/app`)،
+# فتُولَّد جديدةً مع كلّ نشرة **فيبطل كلُّ رمزِ دخولٍ سابق** ويُطرَد كلُّ
+# المستخدمين بـ«انتهت الجلسة». وموضعُها الآن `storage/app/passport`
+# (‏`Passport::loadKeysFrom` في `AuthServiceProvider`).
+#
+# **وتُنقَل القديمةُ إن وُجدت** — فترحيلٌ يُبقي الرموزَ الحاليّةَ صالحة،
+# ونشرةٌ واحدةٌ بلا طردٍ خيرٌ من نشرةٍ تطرد الجميع.
+mkdir -p storage/app/passport
+if [ -f storage/oauth-private.key ] && [ ! -f storage/app/passport/oauth-private.key ]; then
+    echo "🔑 ترحيل مفاتيح Passport إلى الحجم الدائم..."
+    mv storage/oauth-private.key storage/oauth-public.key storage/app/passport/ 2>/dev/null || true
 fi
+if [ ! -f storage/app/passport/oauth-private.key ] || [ ! -f storage/app/passport/oauth-public.key ]; then
+    echo "🔑 توليد مفاتيح Passport (لم تكن موجودة)..."
+    php artisan passport:keys --force 2>&1 | tail -1 || true
+fi
+chmod 600 storage/app/passport/oauth-*.key 2>/dev/null || true
+chown www-data:www-data storage/app/passport/oauth-*.key 2>/dev/null || true
 
 php artisan storage:link --force 2>/dev/null || true
 

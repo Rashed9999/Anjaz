@@ -8,6 +8,7 @@ use App\Models\BillProvider;
 use App\Models\BillService;
 use App\Models\BillServiceProduct;
 use App\Services\BillPayService;
+use App\Services\KycTierService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -19,6 +20,7 @@ class BillPayController extends Controller
 {
     public function __construct(
         private readonly BillPayService $service,
+        private readonly KycTierService $kyc,
     ) {}
 
     /** GET /api/v1/amial/bill-pay/providers — قائمة المزودين النشطين */
@@ -77,6 +79,19 @@ class BillPayController extends Controller
             }
         }
 
+        // AMIAL-PROGRESSIVE-MONEY-003 — سداد الخدمات ميزة Tier 1، لكن
+        // الهاتف وحده لا يحرّك ريالاً: الإقامة الموثقة وحدود المستوى تمر
+        // من الحارس المركزي قبل إنشاء الطلب أو استدعاء المزود أو الخصم.
+        try {
+            $this->kyc->assertTransactionAllowed(
+                $request->user(),
+                (string) $request->input('amount'),
+                'bill_pay',
+            );
+        } catch (\RuntimeException $e) {
+            return $this->error('PROGRESSIVE_KYC_POLICY_DENIED', $e->getMessage(), 403);
+        }
+
         try {
             $order = $this->service->createAndExecute(
                 user: $request->user(),
@@ -100,7 +115,10 @@ class BillPayController extends Controller
             default => 'BILL_PAY_UNKNOWN',
         };
 
-        return $this->ok(['order' => $order], $code, $order->provider_message ?? 'Order processed');
+        return $this->ok([
+            'order' => $order,
+            'kyc_tier' => $this->kyc->effectiveTier($request->user()),
+        ], $code, $order->provider_message ?? 'Order processed');
     }
 
     public function showOrder(Request $request, string $ulid): JsonResponse
@@ -130,7 +148,6 @@ class BillPayController extends Controller
         ]);
     }
 
-    // Helpers
     private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
     {
         return new JsonResponse([

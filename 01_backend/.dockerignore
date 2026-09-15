@@ -47,3 +47,8 @@ storage/oauth-public.key
 storage/*.key
 .env.demo
 .env.*.local
+
+# ملفُ مُثبّت 6cash محليّ/قديم، ليس جزءاً من عقد أميال باي ولا يُدار في Git.
+# إن تُرك في مساحة بناء Coolify يدخل `COPY . .` ثم يفشل artisan على أيّ
+# خطأ نحوي باقٍ من نسخة سابقة.
+config/initial.php

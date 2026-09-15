@@ -9,7 +9,9 @@ use App\Models\AmialNotification;
 use App\Models\EMoney;
 use App\Models\KycDocument;
 use App\Models\PaymentRequest;
+use App\Models\RegistrationDossier;
 use App\Models\User;
+use App\Services\Kyc\KycAccountStatusService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -42,6 +44,7 @@ class CustomerCenterService
         private readonly PiiAccessAuditService $pii,
         private readonly LedgerReportService $ledgerReports,
         private readonly KycDocumentService $kycDocuments,
+        private readonly KycAccountStatusService $kycStatus,
     ) {
     }
 
@@ -197,7 +200,8 @@ class CustomerCenterService
      */
     private function kycReconciliation(User $customer): array
     {
-        $tier = max(0, min(3, (int) ($customer->kyc_tier ?? 0)));
+        $accountStatus = $this->kycStatus->for($customer);
+        $tier = $accountStatus['tier'];
         // الفئة 0/1 لا تتطلب ملفّات في KycDocumentService. عند غيابها نعرض
         // جاهزية ترقية الفئة 2، لا ندّعي أن الحساب الحالي ناقص المستندات.
         $documentTier = $tier >= 2 ? $tier : 2;
@@ -207,9 +211,8 @@ class CustomerCenterService
         $hasDocuments = $documents->isNotEmpty();
         $hasPending = $documents->contains('status', KycDocument::STATUS_PENDING);
         $hasRejected = $documents->contains('status', KycDocument::STATUS_REJECTED);
-        $accountState = $this->accountKycState($customer);
-        $updateRequired = Schema::hasColumn('users', 'kyc_update_required')
-            && (int) ($customer->kyc_update_required ?? 0) === 1;
+        $accountState = $accountStatus['state'];
+        $updateRequired = $accountStatus['update_required'];
 
         [$state, $severity, $label, $description] = match (true) {
             $accountState === 'rejected' => [
@@ -255,7 +258,7 @@ class CustomerCenterService
         };
 
         return [
-            'is_verified' => $this->isKycVerified($customer),
+            'is_verified' => $accountStatus['is_verified'],
             'account_state' => $accountState,
             'tier' => $tier,
             'document_target_tier' => $documentTier,
@@ -577,6 +580,15 @@ class CustomerCenterService
                         ? trim((string) ($d->reviewer->f_name . ' ' . $d->reviewer->l_name)) : null,
                     'reviewed_at' => $d->reviewed_at?->toIso8601String(),
                     'uploaded_at' => $d->created_at?->toIso8601String(),
+                ])->all(),
+            // لا نكشف payload هنا؛ التبويب يثبت وجود ملفه ويقود إلى شاشة
+            // الأرشيف المحروسة التي تسجّل فتح البيانات الحساسة.
+            'registration_dossiers' => RegistrationDossier::query()
+                ->where('subject_user_id', $customer->id)->latest()->limit(10)->get()
+                ->map(fn (RegistrationDossier $d) => [
+                    'reference' => $d->reference, 'source' => $d->source,
+                    'state' => $d->state, 'has_paper_form' => (bool) $d->paper_form_encrypted_path,
+                    'created_at' => $d->created_at?->toIso8601String(),
                 ])->all(),
         ]);
     }

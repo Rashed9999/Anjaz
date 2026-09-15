@@ -340,11 +340,12 @@ class FuelVerticalController extends GetxController
         return true;
       }
 
-      lastError.value = _msg(r);
+      // **فشلُ فعلٍ لا فشلُ تحميل** — AMIAL-VERTICAL-ACTION-ERROR-001.
+      // القائمةُ في الذاكرة سليمة، فلا تُحجَب الشاشةُ ولا يُمحى زرُّها.
+      failAction(_msg(r));
       return false;
     } catch (_) {
-      lastError.value = 'تعذّر إتمام العملية — تحقّق من الشبكة';
-      isOffline.value = true;
+      failAction('تعذّر إتمام العملية — تحقّق من الشبكة');
       return false;
     } finally {
       isSubmitting.value = false;

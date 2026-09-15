@@ -165,6 +165,19 @@
                         </td>
 
                         <td>
+                            {{-- AMIAL-FEE-PLAN-001 — استثناءاتُ الباقات تُقال.
+                                 فسطرٌ يعرض سعراً واحداً وتحته نسخةُ باقةٍ
+                                 يُقرأ أنّ السعرَ واحدٌ للجميع، **وهو ليس كذلك**. --}}
+                            @if(!empty($r['plan_overrides']))
+                                <div class="mb-1">
+                                    @foreach($r['plan_overrides'] as $pl)
+                                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle"
+                                              title="نسخةٌ خاصّةٌ بهذه الباقة تسبق السعرَ العامّ">
+                                            {{ \App\Support\Access\AccessConstants::PLAN_LABELS[$pl] ?? $pl }}
+                                        </span>
+                                    @endforeach
+                                </div>
+                            @endif
                             @switch($r['state'])
                                 @case('priced')
                                     <span class="fee-state s-priced">مسعَّرة</span>

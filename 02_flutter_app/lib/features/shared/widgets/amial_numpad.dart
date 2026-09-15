@@ -31,10 +31,28 @@ class AmialNumpad extends StatefulWidget {
   final int? maxLength;
   final ValueChanged<String>? onChanged;
 
-  /// يُخفي زرّ «000» — لشاشات الرمز السري.
+  /// يستبدل زرّ «000» بزرّ «مسح» — لشاشات الرمز السري.
   ///
-  /// لا معنى له في رمز من أربعة أرقام، ووجوده يمنح المتلصّص ضغطةً مميّزة
-  /// الشكل يقرؤها من بعيد. يبقى في إدخال المبالغ حيث يوفّر ضغطات حقيقية.
+  /// «000» لا معنى له في رمز من أربعة أرقام، ووجوده يمنح المتلصّص ضغطةً
+  /// مميّزة الشكل يقرؤها من بعيد. يبقى في إدخال المبالغ حيث يوفّر ضغطات
+  /// حقيقية.
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// **AMIAL-NUMPAD-CLEAR-001 — خانةٌ فارغةٌ ليست تصميماً.**
+  ///
+  /// قال صاحبُ المشروع: «لوحةُ إدخال رمز Pin هناك **خانةٌ ناقصة** أحتاج
+  /// إلى تكملتها من أجل لوحةٍ نظيفة».
+  ///
+  /// وكان `compact` يرسم `SizedBox` فارغاً مكانَ «000»: فجوةٌ في الصفّ
+  /// الأخير تُقرأ **زرّاً معطَّلاً** لا فراغاً مقصوداً — والمستعمل يضغطها
+  /// فلا يحدث شيء، وهو بعينه ما تحاربه القاعدة التاسعة.
+  ///
+  /// **والبديلُ ليس حشواً**: «مسح» يُفرِغ الرمزَ كلَّه بضغطةٍ واحدة، وهو
+  /// ما يحتاجه من أخطأ في أوّل رقمٍ من أربعة — بدل أربع ضغطاتٍ على
+  /// التراجع. فتكتمل اللوحةُ بفعلٍ حقيقيّ، لا بمربّعٍ يملأ الفراغ.
+  ///
+  /// **ولا يُوضَع «موافق»**: الشاشاتُ تُرسِل تلقائيّاً عند اكتمال الرمز،
+  /// فزرُّ تأكيدٍ لا يُضغط أبداً هو الفراغُ نفسُه بثوبٍ جديد.
   final bool compact;
 
   @override
@@ -60,6 +78,14 @@ class _AmialNumpadState extends State<AmialNumpad> {
     if (t.isEmpty) return;
     controller.text = t.substring(0, t.length - 1);
     widget.onChanged?.call(controller.text);
+  }
+
+  /// **مسحُ الرمز كلِّه** — ومن أخطأ في أوّل رقمٍ من أربعةٍ لا يضغط
+  /// التراجعَ أربعاً. ولا يُنادى المستمعُ على لوحةٍ فارغةٍ أصلاً.
+  void _clearAll() {
+    if (controller.text.isEmpty) return;
+    controller.text = '';
+    widget.onChanged?.call('');
   }
 
   Widget _key(BuildContext context, String label, {VoidCallback? onTap, Widget? child}) {
@@ -104,13 +130,23 @@ class _AmialNumpadState extends State<AmialNumpad> {
             ]),
           Row(children: [
             if (widget.compact)
-              const Expanded(child: SizedBox(height: 58))
+              // **لا فجوةَ في الصفّ** — تُقرأ زرّاً معطَّلاً، ومن ضغطها
+              // لم يحدث شيءٌ ولا رسالة. (AMIAL-NUMPAD-CLEAR-001)
+              _key(context, '',
+                  onTap: _clearAll,
+                  child: const Text('مسح',
+                      key: Key('numpad-clear'),
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFDC0A0B))))
             else
               _key(context, '000'),
             _key(context, '0'),
             _key(context, '',
                 onTap: _backspace,
                 child: const Icon(Icons.backspace_outlined,
+                    key: Key('numpad-backspace'),
                     color: Color(0xFFDC0A0B), size: 22)),
           ]),
         ],

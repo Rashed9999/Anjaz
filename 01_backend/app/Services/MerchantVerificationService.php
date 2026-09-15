@@ -135,12 +135,54 @@ class MerchantVerificationService
             // إشعار التاجر
             $merchant = User::find($request->merchant_user_id);
             if ($merchant) {
+                // ══════════════════════════════════════════════════════
+                // AMIAL-KYC-EVIDENCE-001 — **وثيقةُ النشاط لا توثّق الشخص.**
+                //
+                // كان هنا `$merchant->is_kyc_verified = 1` مباشرةً، وسببُه
+                // مشكلةٌ حقيقيّةٌ مكتوبةٌ في تعليقٍ سابق: تاجرٌ اعتمدته
+                // الإدارةُ كان **يبقى محبوساً** لأنّ الحقلَ الذي يقرؤه
+                // التطبيقُ لم يتحرّك. **والمشكلةُ صحيحةٌ والعلاجُ كان
+                // خطأً**: سجلُّ النشاط التجاريّ (اسمُ المتجر، السجلُّ
+                // التجاريّ) **لا يثبت هويّةَ صاحبه**، فمنحُه التوثيقَ
+                // الشخصيَّ يفتح سقفَ مالٍ على وثيقةٍ لا تخصّ الشخص.
+                //
+                // **فصار البابُ واحداً**: يُسأل مصدرُ القرار، فإن اكتمل
+                // ملفُّ الهويّة رُفع القفلُ **من خلاله** بتدقيقه ومبدئه
+                // الرباعيّ؛ وإن لم يكتمل بقي الحسابُ كما هو **ويُقال
+                // للتاجر ما ينقصه** — فلا يبقى محبوساً بلا سببٍ يعرفه،
+                // وهو عينُ ما شكا منه التعليقُ السابق.
+                // ══════════════════════════════════════════════════════
+                $reviewer = User::find($adminId);
+                $identity = null;
+
+                if ($reviewer && (int) ($merchant->is_kyc_verified ?? 0) !== 1) {
+                    try {
+                        app(\App\Services\KycDocumentService::class)
+                            ->decideAccountVerification(
+                                user: $merchant,
+                                reviewer: $reviewer,
+                                approve: true,
+                            );
+                        $merchant->refresh();
+                    } catch (\DomainException $e) {
+                        // **ولا يُسقِط توثيقَ النشاط**: هما قراران، ونقصُ
+                        // الهويّة لا يُلغي اعتمادَ المتجر — يُقال ويُبلَّغ.
+                        $identity = $e->getMessage();
+                    }
+                }
+
                 $this->notif->dispatch(
                     $merchant,
                     'merchant_verified',
                     '✓ تمّ توثيق متجرك',
-                    'تهانينا! تمّ توثيق متجر "' . $request->business_name . '" بنجاح.',
-                    data: ['request_ulid' => $request->request_ulid],
+                    'تهانينا! تمّ توثيق متجر "' . $request->business_name . '" بنجاح.'
+                        // **وما ينقص يُقال في الرسالة نفسِها** — تاجرٌ يُبلَّغ
+                        // بالتوثيق ثمّ يجد نفسَه محبوساً يفتح تذكرةَ دعم.
+                        . ($identity ? "\n\nويبقى توثيقُ هويّتك الشخصيّة: " . $identity : ''),
+                    data: [
+                        'request_ulid' => $request->request_ulid,
+                        'identity_pending' => $identity,
+                    ],
                 );
             }
 

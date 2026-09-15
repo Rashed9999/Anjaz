@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\KycDocument;
 use App\Models\User;
+use App\Services\Kyc\IdentityLookupService;
 use App\Services\Ocr\IdFieldExtractor;
 use App\Services\Ocr\OcrDriverInterface;
 use App\Services\Ocr\OcrResult;
@@ -30,6 +31,14 @@ use Illuminate\Support\Facades\Log;
  */
 class KycOcrService
 {
+    /** الوثائق النصّية فقط؛ السيلفي دليل حضور لا يحمل رقم الهوية. */
+    private const TEXT_DOCUMENT_TYPES = [
+        KycDocument::TYPE_ID_FRONT,
+        KycDocument::TYPE_ID_BACK,
+        KycDocument::TYPE_PASSPORT,
+        KycDocument::TYPE_ADDRESS_PROOF,
+    ];
+
     public function __construct(
         private readonly EncryptedFileStorage $storage,
         private readonly IdFieldExtractor $extractor,
@@ -42,7 +51,7 @@ class KycOcrService
         return (bool) config('amial.kyc.ocr.enabled', true);
     }
 
-    public function minConfidence(): float
+    private function minConfidence(): float
     {
         return (float) config('amial.kyc.ocr.min_confidence', 70);
     }
@@ -57,6 +66,12 @@ class KycOcrService
     public function process(KycDocument $doc): KycDocument
     {
         if (!$this->enabled()) {
+            return $doc;
+        }
+
+        // لا نقرأ صورةً حيّة وكأنها بطاقة هوية: نصٌّ عارض في الخلفية قد
+        // يتحول إلى اقتراح مضلل، و«ثقة منخفضة» في سيلفي ليست مشكلة العميل.
+        if (!$this->isApplicable($doc)) {
             return $doc;
         }
 
@@ -220,6 +235,8 @@ class KycOcrService
         }
 
         return [
+            'applicable' => $this->isApplicable($doc),
+            'not_applicable_reason' => $this->notApplicableReason($doc),
             'status' => (string) ($doc->ocr_status ?? 'not_run'),
             'confidence' => (float) ($doc->ocr_confidence ?? 0),
             'min_confidence' => $this->minConfidence(),
@@ -231,6 +248,18 @@ class KycOcrService
             'error' => $payload['error'] ?? null,
             'verified' => $this->verifiedFields($doc),
         ];
+    }
+
+    private function isApplicable(KycDocument $doc): bool
+    {
+        return in_array($doc->doc_type, self::TEXT_DOCUMENT_TYPES, true);
+    }
+
+    private function notApplicableReason(KycDocument $doc): ?string
+    {
+        return $doc->doc_type === KycDocument::TYPE_SELFIE
+            ? 'الصورة الشخصية الحيّة تُراجع بصرياً لإثبات الحضور، ولا تحمل حقول هوية نصية تُستخرج آلياً.'
+            : null;
     }
 
     /** يُسطّح البنية المتشعّبة إلى الحقول السبعة التي تطلبها الوثيقة. */
@@ -246,7 +275,7 @@ class KycOcrService
         ], static fn ($v) => $v !== null);
     }
 
-    public function verifiedFields(KycDocument $doc): array
+    private function verifiedFields(KycDocument $doc): array
     {
         if (!$doc->verified_fields) {
             return [];
@@ -287,6 +316,26 @@ class KycOcrService
             throw new DomainException('الوثيقة منتهية — لا تُعتمَد مهما كانت واضحة');
         }
 
+        // AMIAL-KYC-OWNERSHIP-001 — إقرارُ المراجع لا يبقى داخل الوثيقة
+        // وحدها بينما الحساب يحمل رقماً آخر أو لا يحمل رقماً. نحوله إلى
+        // الرقم القانوني الموحّد نفسه الذي يغذي blind index وكشف التكرار.
+        $digits = preg_replace('/[^\d]/', '',
+            EncryptionService::foldDigits((string) $clean['national_id'])) ?? '';
+
+        if (mb_strlen($digits) < IdentityLookupService::MIN_DIGITS) {
+            throw new DomainException('رقم الهوية الذي أُقرّ أقصر من الحد المقبول ولا يصلح لإثبات الملكية.');
+        }
+
+        $subject = User::findOrFail($doc->user_id);
+        $remembered = app(IdentityLookupService::class)->remember($digits, $subject);
+
+        if (!$remembered['stored']
+            && str_contains((string) ($remembered['reason'] ?? ''), 'مختلف')) {
+            throw new DomainException((string) $remembered['reason']);
+        }
+
+        // نخزن الشكل القانوني الذي قورن بالحساب، لا نسختين مختلفتين من الرقم.
+        $clean['national_id'] = $digits;
         $clean['_confirmed_by'] = $reviewer->id;
         $clean['_confirmed_at'] = now()->toIso8601String();
 

@@ -101,15 +101,41 @@ void main() {
     // أغلى باقة. فإن لم تُعلَن، وضعتها الشاشة في «متاح بترقية الباقة» —
     // ووعدت صاحبَ الباقة المؤسسية بترقيةٍ فوق الأعلى.
     //
-    // المرجع: AccessPresets::businessTypeFeatures — ما ورد هناك ولم يرد في
-    // أيّ planFeatures يجب أن يحمل onlyFor.
+    // المرجع: نواةُ القطاع — ما ورد هناك ولم يرد في أيّ planFeatures يجب
+    // أن يحمل onlyFor.
+    //
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-VERTICAL-OOP-001 — **ونواةُ القطاع انتقلت إلى مربّعها.**
+    //
+    // كانت تُقرأ من `AccessPresets::businessTypeFeatures`، وصارت هناك
+    // سطراً واحداً يسأل `VerticalRegistry`. فلم يستخرج هذا الفحصُ شيئاً.
+    //
+    // **ولم يمرّ على الفراغ** — وهو ما أنقذه: `expect(bizOnly, isNotEmpty)`
+    // أسقطه صراحةً وقال «تغيّرت صياغة AccessPresets». ومُطابِقٌ عمي كان
+    // سيخرج أخضرَ على صفرٍ ويصمت عن كلّ خدمةٍ تفقد `onlyFor` بعدها.
+    // ══════════════════════════════════════════════════════════════════
     final presets =
         File('../01_backend/app/Support/Access/AccessPresets.php');
     expect(presets.existsSync(), isTrue, reason: 'AccessPresets غير موجود');
 
+    final registry =
+        File('../01_backend/app/Domain/Verticals/VerticalRegistry.php');
+    expect(registry.existsSync(), isTrue,
+        reason: 'سجلّ القطاعات غير موجود — ولا مصدرَ لنواة القطاع');
+
     final src = presets.readAsStringSync();
-    final bizBlock = src.substring(
-        src.indexOf('businessTypeFeatures'), src.indexOf('planFeatures'));
+
+    // نواةُ القطاعات كلُّها: `own()` في السجلّ. والعمقُ المُباع
+    // (`paidDepth`) ليس منها — تفتحه الباقةُ فعلاً، فـ`onlyFor` عليه كذب.
+    final registrySrc = registry.readAsStringSync();
+    final bizBlock = RegExp(r'public function own\(\): array\s*\{.*?\n\s*\}',
+            dotAll: true)
+        .allMatches(registrySrc)
+        .map((m) => m.group(0)!)
+        .join('\n');
+    expect(bizBlock, isNotEmpty,
+        reason: 'لم تُقرأ نواةُ أيّ قطاع — تغيّرت صياغة VerticalRegistry');
+
     final planBlock = src.substring(src.indexOf('planFeatures'));
 
     // ما يمنحه الدور نفسه ممنوحٌ لكل تاجر مهما كان نشاطه أو باقته، فلا

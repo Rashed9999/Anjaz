@@ -8,9 +8,14 @@ import 'package:amial_pay/common/widgets/custom_button_widget.dart';
 import 'package:amial_pay/common/widgets/custom_drop_down_button_widget.dart';
 import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 import 'package:amial_pay/common/widgets/custom_text_field_widget.dart';
-import 'package:amial_pay/features/auth/widgets/governorate_picker.dart';
 import '../../../util/dimensions.dart';
 
+/// AMIAL-PROGRESSIVE-KYC-UPGRADE-APP-002
+///
+/// هذه الشاشة تخص Tier 2 فقط: إثبات الهوية القانونية. إثبات الإقامة له
+/// مساره المستقل، وإثبات صاحب الهوية الأقوى (Liveness/Face Match أو مسار
+/// حضوري/مقيد) يخص Tier 3. فصل المراحل يمنع إجبار العميل على KYC كامل كي
+/// يرفع حدوده من المحفظة الأساسية.
 class KycVerifyScreen extends StatefulWidget {
   const KycVerifyScreen({super.key});
 
@@ -20,192 +25,474 @@ class KycVerifyScreen extends StatefulWidget {
 
 class _KycVerifyScreenState extends State<KycVerifyScreen> {
   final TextEditingController _identityNumberController = TextEditingController();
-  // AMIAL-KYC: العنوان + التوقيع الإلكتروني + الإقرار
-  final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _signatureController = TextEditingController();
-  String? _residenceGovernorate;
-  bool _declared = false;
+
+  // حق خصوصية للجميع، لا مسار مبني على جنس المستخدم.
+  String _reviewMode = 'standard';
 
   @override
   void initState() {
-    Get.find<KycVerifyController>().initialSelect();
-
     super.initState();
+    Get.find<KycVerifyController>().initialSelect();
   }
 
   @override
   void dispose() {
     _identityNumberController.dispose();
-    _addressController.dispose();
-    _signatureController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F8FB),
       appBar: AppBar(
-        title: Text('kyc_verification'.tr),
+        title: const Text('ترقية توثيق الهوية'),
+        elevation: 0,
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Dimensions.fontSizeDefault, vertical: Dimensions.paddingSizeLarge),
-        child: GetBuilder<KycVerifyController>(
-          builder: (kycVerifyController) {
-            return SingleChildScrollView(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      body: GetBuilder<KycVerifyController>(
+        builder: (controller) => SingleChildScrollView(
+          padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _tierHeader(context),
+              const SizedBox(height: 14),
+              _card([
+                _sectionTitle(
+                  Icons.badge_outlined,
+                  'بيانات الهوية',
+                  'أدخل رقم الوثيقة كما هو مكتوب عليها، ثم اختر نوعها.',
+                ),
                 CustomDropDownButtonWidget(
-                  value: kycVerifyController.dropDownSelectedValue,
-                  itemList: kycVerifyController.dropList,
-                  onChanged: (value)=> kycVerifyController.dropDownChange(value!),
+                  value: controller.dropDownSelectedValue,
+                  itemList: controller.dropList,
+                  onChanged: (value) => controller.dropDownChange(value!),
                 ),
                 const SizedBox(height: Dimensions.fontSizeDefault),
-
                 CustomTextFieldWidget(
                   controller: _identityNumberController,
-                  //fillColor: Theme.of(context).cardColor,
                   isShowBorder: true,
                   maxLines: 1,
                   hintText: 'identity_number'.tr,
                 ),
-                const SizedBox(height: Dimensions.fontSizeDefault),
-
-                const Text(
-                  'ارفع ٣ صور بالترتيب: وجه الهوية، ظهر الهوية، ثم صورة شخصية حيّة.',
-                  style: TextStyle(fontSize: 13, height: 1.5),
+              ]),
+              const SizedBox(height: 14),
+              _card([
+                _sectionTitle(
+                  Icons.document_scanner_outlined,
+                  'صورتا الوثيقة',
+                  'المستوى الثاني يحتاج وجه الهوية وظهرها فقط. لا نطلب صورة شخصية في هذه المرحلة.',
                 ),
-                const SizedBox(height: Dimensions.paddingSizeDefault,),
-
-                Container(height: 100,padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeExtraSmall),
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    shrinkWrap: true,
-                    itemCount: kycVerifyController.identityImage.length + 1,
-                    itemBuilder: (BuildContext context, index){
-                      if(index + 1 == kycVerifyController.identityImage.length + 1) {
-                        return const DottedBorderWidget(path: null);
-                      }
-                      return  kycVerifyController.identityImage.isNotEmpty ?
-                      Row(
-                        children: [
-                          Stack(
-                            children: [
-                              DottedBorderWidget(path: kycVerifyController.identityImage[index].path),
-
-                              Positioned(
-                                bottom:0,right:0,
-                                child: InkWell(
-                                  onTap :() => kycVerifyController.removeImage(index),
-                                  child: Container(
-                                      decoration: BoxDecoration(
-                                          color: Colors.red.withValues(alpha:0.2),
-                                          borderRadius: const BorderRadius.all(Radius.circular(Dimensions.paddingSizeDefault))
-                                      ),
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(5.0),
-                                        child: Icon(Icons.delete_outline,color: Colors.red,size: 16,),
-                                      )),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: Dimensions.paddingSizeDefault),
-                        ],
-                      ):const SizedBox();
-
-                    },),
-                ),
-                const SizedBox(height: Dimensions.fontSizeDefault),
-
-                // ── العنوان ──────────────────────────────────
-                Text('العنوان (المدينة، الحي، الشارع)', style: rubikRegular),
-                const SizedBox(height: Dimensions.paddingSizeExtraSmall),
-                CustomTextFieldWidget(
-                  controller: _addressController,
-                  isShowBorder: true,
-                  maxLines: 2,
-                  hintText: 'مثال: عدن، المنصورة، شارع الأربعين',
-                ),
-                const SizedBox(height: Dimensions.fontSizeDefault),
-
-                GovernoratePicker(
-                  label: 'محافظة السكن',
-                  value: _residenceGovernorate,
-                  helper: 'نستخدمها لتحديد منطقة الحساب بعد مراجعة الهوية.',
-                  onChanged: (value) => setState(() => _residenceGovernorate = value),
-                ),
-
-                // ── التوقيع الإلكتروني ────────────────────────
-                Text('التوقيع الإلكتروني (اكتب اسمك الكامل)', style: rubikRegular),
-                const SizedBox(height: Dimensions.paddingSizeExtraSmall),
-                CustomTextFieldWidget(
-                  controller: _signatureController,
-                  isShowBorder: true,
-                  maxLines: 1,
-                  hintText: 'اسمك الكامل كتوقيع',
-                ),
-                const SizedBox(height: Dimensions.fontSizeDefault),
-
-                // ── الإقرار بصحة المعلومات ────────────────────
+                _privacyNotice(),
+                const SizedBox(height: 12),
+                _documentStrip(controller),
+                const SizedBox(height: 8),
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Checkbox(
-                      value: _declared,
-                      activeColor: Theme.of(context).primaryColor,
-                      onChanged: (v) => setState(() => _declared = v ?? false),
-                    ),
-                    const Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.only(top: 12),
-                        child: Text(
-                          'أقرّ بأن جميع المعلومات والوثائق المقدّمة صحيحة، وأتحمّل المسؤولية القانونية عن صحّتها.',
-                          style: TextStyle(fontSize: 12.5, height: 1.4),
-                        ),
-                      ),
-                    ),
+                    _legendDot('1', 'وجه الهوية'),
+                    const SizedBox(width: 10),
+                    _legendDot('2', 'ظهر الهوية'),
                   ],
                 ),
-                const SizedBox(height: Dimensions.paddingSizeLarge),
-
-                Center(child: kycVerifyController.isLoading ? const CircularProgressIndicator() :  SizedBox(
-                  width: 200, height: 50,
-                  child: CustomButtonWidget(buttonText: 'upload'.tr, onTap: (){
-                    if(_identityNumberController.text.isEmpty) {
-                      showCustomSnackBarHelper('identity_number_is_empty'.tr);
-                    }else if(kycVerifyController.identityImage.length != 3) {
-                      showCustomSnackBarHelper('يرجى رفع ثلاث صور بالترتيب: وجه الهوية وظهرها وصورة شخصية');
-                    }else if(kycVerifyController.dropDownSelectedValue == kycVerifyController.dropList[0]) {
-                      showCustomSnackBarHelper('select_identity_type'.tr);
-                    }else if(_addressController.text.trim().isEmpty) {
-                      showCustomSnackBarHelper('الرجاء إدخال العنوان');
-                    }else if(_residenceGovernorate == null) {
-                      showCustomSnackBarHelper('الرجاء اختيار محافظة السكن');
-                    }else if(_signatureController.text.trim().isEmpty) {
-                      showCustomSnackBarHelper('الرجاء كتابة التوقيع الإلكتروني');
-                    }else if(!_declared) {
-                      showCustomSnackBarHelper('الرجاء الإقرار بصحة المعلومات');
-                    }else{
-                      kycVerifyController.kycVerify(
-                        _identityNumberController.text,
-                        address: _addressController.text.trim(),
-                        residenceGovernorate: _residenceGovernorate!,
-                        signature: _signatureController.text.trim(),
-                        declared: _declared,
-                      ).then((value)
-                      => Get.find<ProfileController>().getProfileData(isUpdate: true, reload: true));
-                    }
-                  }, color: Theme.of(context).primaryColor),
+              ]),
+              const SizedBox(height: 14),
+              _card([
+                _sectionTitle(
+                  Icons.privacy_tip_outlined,
+                  'خصوصية المراجعة',
+                  'اختر من يستطيع مراجعة وثائقك. هذا لا يغيّر متطلبات إثبات الهوية ولا يضعفها.',
+                ),
+                _privacyOption(
+                  value: 'standard',
+                  title: 'مراجعة محمية',
+                  subtitle:
+                      'الوثائق مشفّرة، وكل مشاهدة من لوحة أميال تُعرض بنسخة تحمل علامة مائية وTrace ID مرتبطين بالموظف.',
+                  icon: Icons.verified_user_outlined,
+                ),
+                _privacyOption(
+                  value: 'restricted_review',
+                  title: 'خصوصية إضافية',
+                  subtitle:
+                      'تنتقل القضية إلى طابور مقيد ولا يستطيع رؤية الوثائق إلا مراجع يملك صلاحية KYC المقيدة.',
+                  icon: Icons.lock_person_outlined,
+                  emphasized: true,
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4F7FB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFDDE5EF)),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.face_retouching_natural,
+                        size: 20,
+                        color: Color(0xFF5F6B7C),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Liveness + Face Match والتحقق الحضوري ليست مطلوبة للمستوى الثاني. تظهر كخيارات إثبات أقوى عند طلب المستوى الثالث بعد ربط مزود بيومتري حقيقي ومعتمد.',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            height: 1.55,
+                            color: Color(0xFF5F6B7C),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-
-
-
-
               ]),
-            );
-          }
+              const SizedBox(height: 14),
+              _separationCard(),
+              const SizedBox(height: 20),
+              controller.isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : CustomButtonWidget(
+                      buttonText: 'إرسال الهوية للمراجعة',
+                      color: Theme.of(context).primaryColor,
+                      onTap: () => _submit(controller),
+                    ),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _tierHeader(BuildContext context) {
+    final primary = Theme.of(context).primaryColor;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: primary,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.shield_outlined, color: Colors.white),
+              SizedBox(width: 8),
+              Text(
+                'Tier 2 · هوية موثقة',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 10),
+          Text(
+            'هذه ترقية للحساب القائم وليست إعادة تسجيل. بعد اعتماد الوثيقة ترتفع حدودك وفق سياسة أميال الحالية.',
+            style: TextStyle(color: Colors.white, height: 1.55, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card(List<Widget> children) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE5E9EF)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0A000000),
+              blurRadius: 18,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        ),
+      );
+
+  Widget _sectionTitle(IconData icon, String title, String subtitle) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 22, color: const Color(0xFF2F5E92)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: rubikRegular.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 12.5,
+              height: 1.5,
+              color: Color(0xFF5F6B7C),
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+      );
+
+  Widget _privacyNotice() => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF8F2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFCDE8D6)),
+        ),
+        child: const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.no_photography_outlined, color: Color(0xFF177848), size: 20),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'لا سيلفي في Tier 2. صور الوثيقة تُخزّن مشفّرة ولا تُنسخ إلى مخزن الهوية القديم.',
+                style: TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xFF315D43)),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _documentStrip(KycVerifyController controller) {
+    final canAdd = controller.identityImage.length < 2;
+    return SizedBox(
+      height: 108,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: controller.identityImage.length + (canAdd ? 1 : 0),
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          if (index >= controller.identityImage.length) {
+            return const DottedBorderWidget(path: null);
+          }
+
+          return Stack(
+            children: [
+              DottedBorderWidget(path: controller.identityImage[index].path),
+              PositionedDirectional(
+                bottom: 2,
+                end: 2,
+                child: InkWell(
+                  onTap: () => controller.removeImage(index),
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.88),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.delete_outline, color: Colors.white, size: 16),
+                  ),
+                ),
+              ),
+              PositionedDirectional(
+                top: 4,
+                start: 4,
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    color: Colors.black87,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '${index + 1}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _legendDot(String number, String label) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F8FB),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF2F5E92),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  number,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(label, style: const TextStyle(fontSize: 12.5)),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _privacyOption({
+    required String value,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    bool emphasized = false,
+  }) {
+    final selected = _reviewMode == value;
+    final primary = Theme.of(context).primaryColor;
+    return InkWell(
+      onTap: () => setState(() => _reviewMode = value),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 9),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected ? primary.withValues(alpha: 0.06) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected
+                ? primary
+                : (emphasized
+                    ? const Color(0xFF9EB8D8)
+                    : const Color(0xFFE1E6EC)),
+            width: selected ? 1.6 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: selected ? primary : const Color(0xFF5F6B7C), size: 23),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                        ),
+                      ),
+                      if (emphasized)
+                        const Text(
+                          'وصول مقيد',
+                          style: TextStyle(fontSize: 10.5, color: Color(0xFF365F91)),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.45,
+                      color: Color(0xFF5F6B7C),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Radio<String>(
+              value: value,
+              groupValue: _reviewMode,
+              onChanged: (v) => setState(() => _reviewMode = v ?? 'standard'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _separationCard() => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBF1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF0E1B7)),
+        ),
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ما الذي لا نطلبه هنا؟',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+            ),
+            SizedBox(height: 7),
+            Text(
+              '• إثبات السكن: مسار مستقل لتفعيل نطاق التشغيل.\n'
+              '• السيلفي أو Liveness: ليس شرطاً لـTier 2.\n'
+              '• الدخل وPEP والملف التنظيمي الكامل: تُستكمل عند طلب Tier 3.',
+              style: TextStyle(fontSize: 12.5, height: 1.65, color: Color(0xFF655A3D)),
+            ),
+          ],
+        ),
+      );
+
+  void _submit(KycVerifyController controller) {
+    if (_identityNumberController.text.trim().length < 5) {
+      showCustomSnackBarHelper('أدخل رقم هوية صحيحاً');
+      return;
+    }
+    if (controller.dropDownSelectedValue == controller.dropList.first) {
+      showCustomSnackBarHelper('select_identity_type'.tr);
+      return;
+    }
+    if (controller.identityImage.length != 2) {
+      showCustomSnackBarHelper('ارفع صورتين بالترتيب: وجه الهوية ثم ظهرها');
+      return;
+    }
+
+    controller
+        .kycVerify(
+          _identityNumberController.text.trim(),
+          reviewMode: _reviewMode,
+        )
+        .then((_) {
+      try {
+        Get.find<ProfileController>().getProfileData(isUpdate: true, reload: true);
+      } catch (_) {
+        // تحديث الملف تحسين واجهة فقط؛ نجاح رفع الهوية لا يعتمد عليه.
+      }
+    });
   }
 }

@@ -1,9 +1,9 @@
 ---
 name: amial-flutter
-description: شاشةٌ في تطبيق فلاتر تُبنى أو تُعدَّل: بنيةُ الميزات، وحالاتُ الشاشة الستّ (تحميل · فارغ · خطأ · رفض · بلا اتّصال · صيانة)، ومعالجةُ الأخطاء.
+description: 'شاشةٌ في تطبيق فلاتر تُبنى أو تُعدَّل: بنيةُ الميزات، وحالاتُ الشاشة الستّ (تحميل · فارغ · خطأ · رفض · بلا اتّصال · صيانة)، ومعالجةُ الأخطاء.'
 ---
 
-<!-- المصدر: الملفّ 3 — المتن كما كتبه صاحب المشروع، بلا تعديل. -->
+<!-- المصدر: الملفّ 3، ثمّ ملحق توافق للمشروع بعد أن وصل النصّ مبتوراً. -->
 
 # ROLE
 
@@ -208,3 +208,40 @@ Datasource
 API Client
 
 Never call HTTP directly from
+
+==================================================
+
+# PROJECT COMPATIBILITY — AMIAL PAY
+
+## Preserve the working state model
+
+The application uses GetX. Extend the existing controller, binding, route,
+and API-client conventions for a related screen. Do not migrate an existing
+flow to Riverpod, Bloc, or another state-management pattern as part of a
+feature or bug fix.
+
+Keep domain decisions on the server. The client may format, render, and
+coordinate a request; it must not derive balances, fees, limits, or
+authorization from local assumptions.
+
+## Network boundary
+
+Use the existing ApiClient and the closest established data-access pattern.
+Do not add a Repository/Datasource hierarchy merely to satisfy a pattern when
+the surrounding feature does not use one. A new abstraction earns its place
+only when it removes duplicated request logic or isolates a real dependency.
+
+Preserve the published response envelope and map its known error codes to
+friendly Arabic UI states. Do not expose raw backend text.
+
+## Screen completion
+
+For the states that can occur in this screen, provide an observable result:
+
+- loading: progress without blocking recovery;
+- empty: a truthful empty state and next action where one exists;
+- failure or offline: a clear message and retry when retry is safe;
+- denied or maintenance: an explanation without a misleading retry.
+
+Check the route, RTL layout, small-phone layout, and every action the screen
+introduces. Mark a state `not applicable` only with a reason.

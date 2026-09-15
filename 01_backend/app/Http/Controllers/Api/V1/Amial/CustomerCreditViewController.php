@@ -8,6 +8,7 @@ use App\Models\CustomerCreditAccount;
 use App\Models\CustomerCreditMovement;
 use App\Models\User;
 use App\Services\CustomerCreditSettleService;
+use App\Services\CreditSourceSettlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -105,9 +106,42 @@ class CustomerCreditViewController extends Controller
                 'balance_after' => (string) $m->balance_after,
                 'due_date' => $m->due_date?->toDateString(),
                 'note' => $m->note,
+                'reference_type' => $m->reference_type,
+                'reference_id' => $m->reference_id,
                 'reference_number' => $m->reference_number,
                 'created_at' => $m->created_at?->toIso8601String(),
             ]);
+
+        // هذه فواتير العميل المستحقة فعلاً، وكلّ واحدة تحمل متبقيها بعد
+        // السدادات الجزئية والمرتجعات من دفتر الديون نفسه.
+        $invoices = app(CreditSourceSettlementService::class)->openInvoices($account);
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-CREDIT-GAP-001 — **الفرقُ يُقال، ولا يُترَك للقارئ يجمع.**
+        //
+        // `openInvoices` تقتصر على قيود البيع عمداً — والتعديلُ اليدويُّ
+        // الموجب (دينٌ قديمٌ مُرحَّل) ليس فاتورةً تُسدَّد وحدَها. **لكنّه
+        // في الرصيد.** فقِيس:
+        //
+        //     تعديلٌ موجب  1000  ثمّ بيعةٌ آجلة  500
+        //     current_balance = 1500
+        //     invoices        =  500   ← ألفٌ بلا سطر
+        //
+        // فيقرأ العميلُ «عليّ ٥٠٠» في قائمة الفواتير و«١٥٠٠» في الرصيد،
+        // **ولا شيءَ يفسّر الألف**. وهو عينُ القاعدة السابعة: الغيابُ
+        // يُقال ولا يُترَك فراغاً يُقرأ صفراً.
+        //
+        // **ولا يُخترَع له سطرُ فاتورةٍ وهميّ** — سطرٌ يُعرَض بزرّ سدادٍ
+        // لا يقبله المحرّك أسوأ من لافتةٍ تشرح.
+        // ══════════════════════════════════════════════════════════════
+        $invoicesTotal = '0';
+        foreach ($invoices as $invoice) {
+            $invoicesTotal = \App\Services\MoneyService::add(
+                $invoicesTotal, (string) ($invoice['remaining'] ?? '0'));
+        }
+
+        $unlinked = \App\Services\MoneyService::sub(
+            (string) $account->current_balance, $invoicesTotal);
 
         return $this->ok([
             'account_id' => $account->id,
@@ -115,6 +149,14 @@ class CustomerCreditViewController extends Controller
             'current_balance' => (string) $account->current_balance,
             'credit_limit' => (string) $account->credit_limit,
             'movements' => $movements,
+            'invoices' => $invoices,
+            'invoices_total' => $invoicesTotal,
+            // موجبٌ يعني: دينٌ في الرصيد بلا فاتورةٍ تُسدَّد وحدَها.
+            'unlinked_balance' => $unlinked,
+            'unlinked_note_ar' => \App\Services\MoneyService::isPositive($unlinked)
+                ? 'مبلغٌ من رصيدك ليس فاتورةً مستقلّة (تعديلٌ يدويٌّ أو '
+                    . 'دَينٌ سابقٌ مُرحَّل). يُسدَّد بـ«سداد الآجل» كاملاً.'
+                : null,
         ], 'OK', 'كشف الحساب الآجل');
     }
 
@@ -126,6 +168,7 @@ class CustomerCreditViewController extends Controller
         $v = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:0.01',
             'pin' => 'required|string|min:4|max:8',
+            'sale_movement_ulid' => 'sometimes|nullable|string|max:40',
         ]);
         if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
 
@@ -140,20 +183,37 @@ class CustomerCreditViewController extends Controller
         }
 
         try {
-            $result = app(CustomerCreditSettleService::class)
-                ->settle($user, $account, (string) $request->input('amount'));
+            $result = app(CustomerCreditSettleService::class)->settle(
+                $user,
+                $account,
+                (string) $request->input('amount'),
+                $request->filled('sale_movement_ulid')
+                    ? (string) $request->input('sale_movement_ulid') : null,
+            );
         } catch (\App\Exceptions\InsufficientBalanceException $e) {
             return $this->error('INSUFFICIENT_BALANCE', 'رصيد محفظتك لا يكفي', 422);
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID', $e->getMessage(), 422);
         } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Customer debt settlement failed', [
+                'user_id' => $user->id,
+                'credit_account_id' => $id,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
             return $this->error('SETTLE_FAILED', 'تعذّر تنفيذ السداد', 422);
         }
 
         return $this->ok([
             'paid' => $result['paid'],
             'new_balance' => $result['new_balance'],
-        ], 'SETTLED', 'تم السداد بنجاح');
+            'transaction_id' => $result['transaction_id'],
+            'transaction_no' => $result['transaction_no'],
+            'receipt_id' => $result['receipt_id'] ?? null,
+            'receipt_number' => $result['receipt_number'] ?? null,
+            'receipt_type' => 'debt_payment',
+            'allocations' => $result['allocations'] ?? [],
+        ], 'SETTLED', 'تم سداد الدين بنجاح');
     }
 
     private function typeLabel(string $type): string

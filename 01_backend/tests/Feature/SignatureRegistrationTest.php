@@ -34,6 +34,7 @@ class SignatureRegistrationTest extends TestCase
     private function register(array $extra = []): \Illuminate\Testing\TestResponse
     {
         return $this->postJson('/api/v1/customer/auth/register', array_merge([
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'f_name' => 'أحمد', 'l_name' => 'سالم', 'gender' => 'male',
             'dial_country_code' => '+967', 'phone' => '771555001', 'password' => '1234',
         ], $extra));

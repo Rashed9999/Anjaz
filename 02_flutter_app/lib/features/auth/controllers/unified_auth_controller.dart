@@ -63,14 +63,14 @@ class UnifiedAuthController extends GetxController implements GetxService {
     required String merchantNumber,
     required String phone,
     required String password,
-    String? posNumber,
+    String? employeeCode,
   }) async {
     return _execute({
       'role': 'merchant',
       'merchant_number': merchantNumber,
       'phone': phone,
       'password': password,
-      if (posNumber != null && posNumber.isNotEmpty) 'pos_number': posNumber,
+      if (employeeCode != null && employeeCode.isNotEmpty) 'employee_code': employeeCode,
     });
   }
 
@@ -164,6 +164,29 @@ class UnifiedAuthController extends GetxController implements GetxService {
         verificationState.value =
             (user['verification_state'] ?? 'verified').toString();
         _displayName = (user['name'] ?? '').toString();
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-QUICK-RECEIVE-002 — **المخرجُ الواحد يتذكّر، لا كلُّ شاشة.**
+        //
+        // كانت `rememberLastUser` تُنادى من `_submit` في شاشة الدخول
+        // وحدَها. والدخولُ بالبصمة ينجح ويذهب إلى الرئيسيّة **بلا أن
+        // يتذكّر** — فبطاقةُ «استلام سريع» في شاشة الدخول تبقى ميّتةً
+        // أبداً لمن يدخل ببصمته، وهو المسارُ المتكرّر لا الاستثناء.
+        //
+        // **وهي القاعدةُ الرابعة بنصّها**: ميزةٌ لها مدخلان تُختبَر من
+        // مدخليها. فجُرّب المدخلُ الأوّل ونجح، والمستعمِلُ يسلك الآخر.
+        //
+        // فنُقل التذكُّرُ إلى **المخرج الواحد** الذي يمرّ به كلُّ دخولٍ
+        // ناجحٍ لكلّ دور. ومدخلٌ ثالثٌ يُضاف غداً يرثه بلا أن يتذكّره
+        // أحد — وهذا هو المقصود.
+        // ══════════════════════════════════════════════════════════════
+        final rememberedPhone = (body['phone'] ?? '').toString().trim();
+        if (rememberedPhone.isNotEmpty) {
+          await rememberLastUser(
+            name: _displayName,
+            phone: rememberedPhone,
+            kind: (body['role'] ?? meta['role'] ?? '').toString(),
+          );
+        }
         // CRITICAL-001 — حمّل access بعد تسجيل الدخول الناجح
         try { await Get.find<AccessController>().load(); } catch (_) {}
         return true;
@@ -298,11 +321,31 @@ class UnifiedAuthController extends GetxController implements GetxService {
   Future<void> navigateToHomeForRole() async {
     if (currentRole.value.isEmpty) return;
 
-    // AMIAL-VERIFY-GATE: الحساب غير المعتمد (قيد المراجعة/مرفوض) لا يفتح
-    // الرئيسية — يذهب لشاشة الحالة الصريحة بدل تجربة ناقصة صامتة. الأدمن
-    // مستثنى (لا يخضع لتوثيق KYC).
-    if (currentRole.value != 'admin' &&
-        verificationState.value != 'verified') {
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-MERCHANT-VERIFY-RECEIVE-001 — **«دخولٌ محدود فوراً» للتاجر.**
+    //
+    // كان كلُّ حسابٍ غيرِ معتمدٍ يُحبَس في التطبيق كلِّه بشاشة «قيد
+    // المراجعة» — والمالكُ هو من أنشأ الحساب، فيقرأ «قيد المراجعة» ولا
+    // يعرف من يراجع. وقرارُ صاحب المشروع: **التاجرُ (وموظّفُ POS) يدخل
+    // ويعمل من اللحظة الأولى** (بيعٌ نقديّ، آجل، جردٌ، طباعة)، ويبقى
+    // **القبضُ الماليُّ الحقيقيُّ عبر المنصّة** مقفلاً حتّى تعتمده الإدارة.
+    //
+    // والقفلُ الماليُّ في الخادم لا هنا: `MerchantRiskService::
+    // assertReceiveAllowed` يرفض استلامَ تاجرٍ غيرِ موثّق. فرفعُ الحبس هنا
+    // لا يفتح ثغرة — «إخفاءُ الواجهة ليس أماناً»، والأمانُ خلفه قائم.
+    //
+    // ويبقى الحبسُ الكاملُ حيث يجب:
+    //   · التاجرُ/POS المرفوض (rejected) — يحتاج إعادةَ تقديمٍ لا تجربةً ناقصة
+    //   · وغيرُ التاجر (العميل) غيرُ الموثّق — سلوكُه لم يتغيّر، ومالُه
+    //     محروسٌ خادميّاً بحدّ KYC.
+    // والأدمن مستثنىً (لا يخضع لتوثيق KYC).
+    // ══════════════════════════════════════════════════════════════════
+    final bool isMerchantSide =
+        currentRole.value == 'merchant' || currentRole.value == 'pos';
+    final bool fullyBlocked = isMerchantSide
+        ? verificationState.value == 'rejected'
+        : verificationState.value != 'verified';
+    if (currentRole.value != 'admin' && fullyBlocked) {
       Get.offAll(() => AccountReviewScreen(
             state: verificationState.value,
             userName: _displayName,

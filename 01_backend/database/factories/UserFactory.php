@@ -40,8 +40,17 @@ class UserFactory extends Factory
             // الاختبارات المالية تنشئ عميلاً صالحاً افتراضياً؛ الاختبارات
             // التي تريد رفض KYC تصرّح بالمستوى الأقل صراحةً.
             'kyc_tier' => 2,
+            // Tier 2 في بيانات الاختبار يعني اعتماد KYC صريحاً، لا استنتاجاً من الاعتماد لاحقاً.
+            'is_kyc_verified' => 1,
             'is_active' => true,
-            'zone_code' => 'SOUTH',      // المنطقة المسموح لها افتراضياً
+            'zone_code' => 'SOUTH',
+            // AMIAL-RESIDENCE-TEST-001 — SOUTH وحده لم يعد دليلاً. المصنع
+            // المالي الافتراضي يمثل عميلاً ذا إقامة موثقة في عدن، كي تختبر
+            // الخدمات المالية موضوعها الحقيقي بدلاً من أن تسقط عند بوابة
+            // الإقامة. اختبارات الغياب/الخروج تصرّح بذلك صراحةً.
+            'residence_governorate' => 'YE-AD',
+            'verified_residence_governorate' => 'YE-AD',
+            'residence_verified_at' => now(),
             'unique_id' => (string) Str::uuid(),
             'remember_token' => Str::random(10),
         ];
@@ -59,9 +68,14 @@ class UserFactory extends Factory
         return $this->state(fn () => ['type' => 1, 'role' => 'merchant']);
     }
 
-    /** خارج منطقة الجنوب (لاختبار سياسة الـ Zone). */
+    /** خارج منطقة التشغيل (لاختبار سياسة الـ Zone). */
     public function outsideZone(string $zone = 'NORTH'): static
     {
-        return $this->state(fn () => ['zone_code' => $zone]);
+        return $this->state(fn () => [
+            'zone_code' => $zone,
+            'residence_governorate' => 'YE-SN',
+            'verified_residence_governorate' => 'YE-SN',
+            'residence_verified_at' => now(),
+        ]);
     }
 }

@@ -37,7 +37,12 @@ class AdminMerchantRiskController extends Controller
                     'risk_score' => (string)$r->current_risk_score,
                     'risk_level' => $r->risk_level,
                     'tier' => $profile?->tier,
-                    'pass_through_ratio' => round($r->passThroughRatio() * 100, 1),
+                    // **ولا يُقرأ المجهولُ صفراً** — `null` تعني «لم
+                    // يُسجَّل خروجُ مالٍ بعد»، و«‎0.0%‎» تعني «فُحص فلم
+                    // يوجد». والفرقُ بينهما تحقيقُ امتثالٍ يُفتح أو لا.
+                    'pass_through_ratio' => $r->hasOutboundRecord()
+                        ? round($r->passThroughRatio() * 100, 1)
+                        : null,
                     'aml_flags_count' => $r->aml_flags_count,
                     'last_flagged_at' => $r->last_flagged_at,
                 ];

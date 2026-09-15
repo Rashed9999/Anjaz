@@ -6,31 +6,28 @@ use App\Models\KycDocument;
 use App\Models\User;
 
 /**
- * AMIAL-KYC-EVIDENCE-001 — **اعتمادٌ بلا وثيقة ليس اعتماداً.**
+ * AMIAL-KYC-EVIDENCE-001 — **اعتمادٌ بلا وثيقة ولا إثبات ملكية ليس اعتماداً.**
  *
- * ══════════════════════════════════════════════════════════════════════
- * `decideAccountVerification` صارت ترفض الاعتماد ما لم تكتمل مستنداتُ
- * الفئة المطلوبة (`KYC_DOCUMENTS_INCOMPLETE`). **والحارسُ صحيح** — وهو
- * بعينه ما وُلدت من أجله `AdminCreatedAccountReviewTest`: حسابٌ يخرج
- * موثّقاً بلا وثيقةٍ واحدة يُفرّغ لوحةَ التحقّق من معناها.
+ * هذا المساعد لا يخفف حراس الإنتاج كي تمر الاختبارات؛ بل يبني نفس الدليل
+ * الذي صار الإنتاج يشترطه: مستنداتٌ صالحة، محافظة سكن، رقم هوية قانوني
+ * محفوظ على الحساب، ثم إقرارُ مراجعٍ للرقم من وثيقة هوية معتمدة.
  *
- * لكنّ تسعةَ مواضعَ في المجموعة كانت تضغط «اعتماد» على حسابٍ **بلا
- * وثائق** — كُتبت قبل الحارس. فكانت تُخرج ٤٢٢، ولو نُزع الحارسُ لِتمرَّ
- * لعاد العطلُ الذي بُني الحارسُ له.
- *
- * فيُبنى الدليلُ هنا **مرّةً واحدة**، بمساره الحقيقيّ: مستنداتٌ محفوظةٌ
- * ومعتمَدة. ولا يُنسخ الشرطُ في تسعة ملفّات — فشرطٌ منسوخٌ تسعَ مرّاتٍ
- * يشيخ في ثمانٍ منها.
+ * بذلك يبقى معنى استدعاء `establishKycEvidence()` واحداً وواضحاً:
+ * «هذا الملف يملك دليلاً صالحاً يتيح اختبار ما بعد KYC». وإذا أضيف شرط
+ * إثبات جديد لاحقاً يُضاف هنا مرةً واحدة بدل أن تشيخ عشرات التجهيزات.
  */
 trait EstablishesKycEvidence
 {
     /**
-     * مستنداتُ الفئة المطلوبة، معتمَدةً وصالحة.
+     * يبني مستندات الفئة المطلوبة ويثبت ملكية الهوية بالطريق الحقيقي.
      *
-     * @param  int  $tier  ٢ = هويّةٌ وجهاً وظهراً وصورةٌ حيّة · ٣ = ومعها إثباتُ عنوان
+     * @param  int  $tier  ٢ = هوية وجهاً وظهراً وصورة حيّة · ٣ = ومعها إثبات عنوان
      */
-    protected function establishKycEvidence(User $customer, int $tier = 2): void
-    {
+    protected function establishKycEvidence(
+        User $customer,
+        int $tier = 2,
+        ?User $reviewer = null,
+    ): void {
         $types = [
             KycDocument::TYPE_ID_FRONT,
             KycDocument::TYPE_ID_BACK,
@@ -39,6 +36,14 @@ trait EstablishesKycEvidence
 
         if ($tier >= 3) {
             $types[] = KycDocument::TYPE_ADDRESS_PROOF;
+        }
+
+        // محافظة السكن شرطٌ لقرار KYC لأن المنطقة التشغيلية تُشتق منها.
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'residence_governorate')
+            && ($customer->residence_governorate ?? null) === null) {
+            $customer->forceFill([
+                'residence_governorate' => \App\Support\YemenGovernorates::codes()[1] ?? 'YE-AD',
+            ])->save();
         }
 
         foreach ($types as $type) {
@@ -50,13 +55,60 @@ trait EstablishesKycEvidence
                     'original_mime' => 'image/jpeg',
                     'size_bytes' => 2048,
                     'content_sha256' => hash('sha256', $customer->id.$type),
-                    // لا انتهاءَ قريب: مستندٌ معتمَدٌ منتهٍ يُحسب ناقصاً
-                    // (‏`isUsable`)، فتاريخٌ قريبٌ هنا يُسقط الاختبارَ بعد
-                    //  شهرٍ من كتابته لا لعطلٍ بل لمرور الزمن.
                     'document_expires_at' => now()->addYears(5),
                     'reviewed_at' => now(),
                 ],
             );
         }
+
+        $this->establishKycOwnership($customer, $reviewer);
+    }
+
+    /**
+     * يثبت سؤالاً مختلفاً عن اكتمال الوثائق: هل صاحب الحساب هو صاحب الهوية؟
+     *
+     * نستخدم `KycOcrService::confirmFields` نفسه بدل كتابة `verified_fields`
+     * مباشرة، حتى يمر الاختبار من عقد الإنتاج ويسجل أثر الإقرار كما يفعل
+     * المراجع الحقيقي. لا نختلق Liveness ولا Face Match.
+     */
+    protected function establishKycOwnership(User $customer, ?User $reviewer = null): void
+    {
+        $identity = trim((string) ($customer->identification_number ?? ''));
+        $digits = preg_replace(
+            '/[^\d]/',
+            '',
+            \App\Services\EncryptionService::foldDigits($identity),
+        ) ?? '';
+
+        // AMIAL-KYC-EVIDENCE-FIXTURE-002 — المساعد السابق كان يصنع
+        // `TST-{id}-IDENTITY`، وبعد تنقية غير الأرقام لا يبقى غالباً إلا
+        // رقم السجل نفسه (1، 2، ...). الإنتاج يرفض أقل من MIN_DIGITS بحق؛
+        // لذلك نصحح الـfixture ولا نخفض الحارس الحقيقي.
+        if (mb_strlen($digits) < \App\Services\Kyc\IdentityLookupService::MIN_DIGITS) {
+            $identity = '990'.str_pad((string) $customer->id, 9, '0', STR_PAD_LEFT);
+            $customer->forceFill(['identification_number' => $identity])->save();
+        }
+
+        $idDocument = KycDocument::query()
+            ->where('user_id', $customer->id)
+            ->whereIn('doc_type', [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK])
+            ->where('status', KycDocument::STATUS_APPROVED)
+            ->orderBy('id')
+            ->first();
+
+        if (!$idDocument) {
+            throw new \LogicException('لا يمكن بناء إثبات ملكية KYC بلا وثيقة هوية معتمدة.');
+        }
+
+        $reviewer ??= User::factory()->create([
+            'type' => defined('ADMIN_TYPE') ? ADMIN_TYPE : 0,
+            'role' => 'super_admin',
+        ]);
+
+        app(\App\Services\KycOcrService::class)->confirmFields(
+            $idDocument,
+            $reviewer,
+            ['national_id' => $identity],
+        );
     }
 }

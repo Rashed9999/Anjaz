@@ -10,6 +10,9 @@ use App\Models\MerchantSale;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\MerchantSaleRefundService;
+use App\Services\Merchant\MerchantPermissionService;
+use App\Support\Merchant\MerchantPermissions as P;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -28,6 +31,7 @@ class CashierRefundController extends Controller
 
     public function __construct(
         private readonly MerchantSaleRefundService $refundSvc,
+        private readonly MerchantPermissionService $perm,
     ) {}
 
     /** إنشاء مرتجع جديد. */
@@ -43,6 +47,13 @@ class CashierRefundController extends Controller
             'reason' => 'sometimes|nullable|string|max:500',
         ]);
         if ($v->fails()) return $this->validationError($v);
+        try {
+            $this->perm->assert(
+                $request->user(), P::RETAIL_RETURN_CREATE, [], (string) $request->input('amount'),
+            );
+        } catch (DomainException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        }
 
         // ══════════════════════════════════════════════════════════════
         // **المرتجعُ الكاملُ مجّانيّ، والسطريُّ مدفوع — والمسارُ واحد.**

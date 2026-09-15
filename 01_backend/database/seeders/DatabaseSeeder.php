@@ -15,7 +15,7 @@ use Illuminate\Database\Seeder;
  *
  * البذور التالية لا تُشغّل تلقائياً (شغّلها يدوياً عند الحاجة):
  *   - DemoDataSeeder                 (حسابات العرض القديمة)
- *   - MerchantDemoMatrixSeeder       (30 حساب تاجر × قطاع/باقة؛ بيئات Demo/Test فقط)
+ *   - MerchantDemoMatrixSeeder       (١٨ حساب تاجر = ٦ قطاعات × ٣ باقات؛ بيئات Demo/Test فقط)
  *   - LoadTestSeeder                 (بيانات اختبار حمل فقط)
  *   - MerchantProfileBackfillSeeder  (backfill لبيانات قائمة)
  */

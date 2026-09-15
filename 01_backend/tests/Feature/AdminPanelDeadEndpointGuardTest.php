@@ -43,15 +43,16 @@ class AdminPanelDeadEndpointGuardTest extends TestCase
      */
     private const PANELS = [
         'admin/amial/aml' => 'admin-views/amial/aml/index.blade.php',
-        // AMIAL-PROFILE-CHANGE-004 — **ولوحةُ الهويّة صارت شاشتين.**
+        // AMIAL-PROFILE-CHANGE-004 — **ولوحةُ الهويّة صارت ثلاث شاشات.**
         //
-        // طلباتُ تحديث البيانات تُسجَّل تحت البادئة نفسِها وتخدمها شاشةٌ
-        // ثانية. **والصوابُ توسيعُ النطاق لا كتابةُ إعفاء** — وهو نصُّ ما
-        // يقوله شرحُ هذه القائمة: «فيُسكَت الحارس بإعفاءاتٍ كاذبة بدل أن
-        // يُوسَّع نطاقه».
+        // طلباتُ تحديث البيانات ومركزُ الخصوصية/التتبّع يُسجَّلان تحت
+        // البادئة نفسها. الحارس يجب أن يقرأ القوالب الثلاثة، وإلا سيعدّ
+        // endpoints حقيقية في شاشة الخصوصية «ميتة» لمجرد أنها ليست في
+        // شاشة طابور الوثائق الأولى.
         'admin/amial/kyc' => [
             'admin-views/amial/kyc/index.blade.php',
             'admin-views/amial/kyc/change-requests.blade.php',
+            'admin-views/amial/kyc/forensics.blade.php',
         ],
         'admin/amial/partner-settlements' => 'admin-views/amial/settlements_partners/index.blade.php',
         'admin/amial/ledger' => 'admin-views/amial/ledger/index.blade.php',

@@ -101,6 +101,7 @@ class AmialReceipt {
       case 'pos_payment':
       case 'qr_payment':
       case 'split_bill_payment': return 'تم الدفع';
+      case 'debt_payment': return 'تم سداد الدين';
       case 'refund': return 'تم الاسترجاع';
       case 'safe_payment_funded': return 'مجمّد بأمان';
       case 'safe_payment_released': return 'تم الإفراج';
@@ -122,6 +123,7 @@ class AmialReceipt {
       case 'pay_merchant': return 'دفع لتاجر';
       case 'pos_payment': return 'دفع نقطة بيع';
       case 'qr_payment': return 'دفع QR';
+      case 'debt_payment': return 'سند سداد دين';
       case 'refund': return 'استرجاع';
       case 'safe_payment_funded': return 'تجميد دفع آمن';
       case 'safe_payment_released': return 'إفراج دفع آمن';

@@ -88,6 +88,27 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round">
 
+        <!--
+          AMIAL-FCM-CHANNEL-001 — **هذه الثلاثةُ تُقرأ من <application> وحدَها.**
+
+          كانت داخل <activity>، **وFirebase لا ينظر هناك إطلاقاً**. فإشعارُ
+          الخلفيّة الذي يعرضه النظامُ بنفسه (والتطبيقُ مغلق) كان يذهب إلى
+          قناة FCM الاحتياطيّة — بلا نغمتنا، وبأيقونةٍ بيضاء، وبلا لون.
+
+          **ولا يظهر هذا في أيّ سجلّ ولا يكسر بناءً**: الملفُّ صحيحٌ
+          نحويّاً، وgradle يبنيه، والإشعارُ يصل — صامتاً.
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="amial_pay_default" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_color"
+            tools:replace="android:resource" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -99,18 +120,6 @@
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
-
-            <!-- AMIAL-BRANDING-001: notification channel + icon + color -->
-            <meta-data
-                android:name="com.google.firebase.messaging.default_notification_channel_id"
-                android:value="amial_pay_default" />
-            <meta-data
-                android:name="com.google.firebase.messaging.default_notification_icon"
-                android:resource="@drawable/ic_notification" />
-            <meta-data
-                android:name="com.google.firebase.messaging.default_notification_color"
-                android:resource="@color/notification_color"
-                tools:replace="android:resource" />
 
             <meta-data
                 android:name="io.flutter.embedding.android.SplashScreenDrawable"

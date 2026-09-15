@@ -128,12 +128,18 @@ class SupportConsoleTest extends TestCase
 
     public function test_transaction_inspection_builds_timeline(): void
     {
+        $recipient = User::factory()->create([
+            'type' => CUSTOMER_TYPE, 'phone' => '967771555002',
+            'f_name' => 'ليان', 'l_name' => 'العولقي', 'zone_code' => 'NORTH',
+        ]);
         $tx = Transaction::create([
             'user_id' => $this->customer->id,
             'transaction_id' => 'TRXTIMELINE00001',
             'transaction_type' => 'send_money',
-            'debit' => '2000', 'credit' => '0', 'amount' => '2000',
-            'balance' => '23000',
+            'ref_trans_id' => 'REF-TL-001', 'from_user_id' => $this->customer->id,
+            'to_user_id' => $recipient->id, 'debit' => '2000', 'credit' => '0',
+            'charge' => '25', 'amount' => '2000', 'balance' => '23000',
+            'decision_code' => 'COMPLETED', 'zone_code' => 'SOUTH',
         ]);
         \App\Models\Receipt::create([
             'receipt_number' => 'RC-TL-0001',
@@ -154,7 +160,20 @@ class SupportConsoleTest extends TestCase
         $events = collect($r->json('meta.timeline'))->pluck('event');
         $this->assertTrue($events->contains('transaction_created'));
         $this->assertTrue($events->contains('receipt_issued'));
-        $r->assertJsonPath('meta.receipt.receipt_number', 'RC-TL-0001');
+        $r->assertJsonPath('meta.receipt.receipt_number', 'RC-TL-0001')
+            ->assertJsonPath('meta.receipt.direction', 'debit')
+            ->assertJsonPath('meta.transaction.charge', '25.0000')
+            ->assertJsonPath('meta.transaction.ref_trans_id', 'REF-TL-001')
+            ->assertJsonPath('meta.transaction.decision_code', 'COMPLETED');
+
+        $parties = collect($r->json('meta.parties'));
+        $this->assertTrue($parties->contains('user_id', $this->customer->id));
+        $this->assertTrue($parties->contains('user_id', $recipient->id));
+        $this->assertDatabaseHas('pii_access_logs', [
+            'actor_user_id' => $this->admin->id,
+            'subject_type' => 'transaction', 'subject_id' => $tx->id,
+            'field_name' => 'support_transaction_trace',
+        ]);
     }
 
     // ==================== إجراءات التحقّق ====================

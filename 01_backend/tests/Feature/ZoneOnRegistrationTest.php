@@ -81,6 +81,7 @@ class ZoneOnRegistrationTest extends TestCase
         return [
             'f_name' => 'راشد', 'l_name' => 'المعربي', 'gender' => 'male',
             'dial_country_code' => '+967', 'phone' => $phone,
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'password' => '4321',
         ];
     }
