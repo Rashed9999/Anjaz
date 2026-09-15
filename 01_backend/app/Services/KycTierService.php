@@ -9,6 +9,7 @@ use App\Services\Kyc\ResidenceVerificationService;
 use App\Support\YemenGovernorates;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 /**
@@ -19,17 +20,17 @@ use RuntimeException;
  * Tier 2: هوية قانونية موثقة — حد متوسط، بلا سيلفي إلزامي.
  * Tier 3: KYC كامل + إثبات قوي لصاحب الهوية — الحدود الأعلى.
  *
- * AMIAL-PROGRESSIVE-KYC-TURNOVER-001
- * الحدود اليومية والشهرية هي **إجمالي حركة المحفظة** لا الإنفاق فقط:
- * كل مبلغ حقيقي يدخل إلى محفظة العميل أو يخرج منها يستهلك الحد. بذلك لا
- * يستطيع الحساب المحدود تدوير 100 ألف عدّة مرات باستقبالها بعد صرفها.
- * القيود الفنية (رصيد افتتاحي/تسوية) والقيود المعكوسة لا تُحتسب استخداماً.
+ * AMIAL-PROGRESSIVE-KYC-TURNOVER-002
+ * الحدود اليومية والشهرية = إجمالي أصل حركة العميل (وارد + صادر).
+ * الرسوم وعمولات أميال لا تستهلك حد KYC، لأنها تكلفة خدمة وليست مبلغ
+ * المعاملة الذي حرّكه العميل. customer_turnover_usage هو projection مخصص
+ * لهذا القرار، والدفتر يبقى مصدر الحقيقة المحاسبي.
  *
  * الأرقام هنا fallback فقط؛ DB (kyc_tier_limits) هي مصدر سياسة التشغيل.
  */
 class KycTierService
 {
-    /** قيود دفترية فنية لا تمثل استعمال العميل لمحفظته. */
+    /** قيود دفترية فنية لا تمثل استعمال العميل لمحفظته — fallback قبل migration. */
     private const NON_USAGE_LEDGER_SOURCES = [
         'opening_balance',
         'external_adjustment',
@@ -212,8 +213,8 @@ class KycTierService
 
     /**
      * يطبّق حد العملية الواحدة وحد إجمالي الحركة اليومية والشهرية على
-     * الوارد والصادر معاً. المتبقي يُذكر في رسالة الرفض حتى يفهم العميل
-     * لماذا لم تمر العملية وما أقصى مبلغ يمكنه تحريكه قبل الترقية.
+     * أصل الوارد والصادر معاً. الرسوم لا تدخل في `$amount` هنا ولا في
+     * customer_turnover_usage، لذلك لا تقلل حدود التوثيق.
      *
      * @param array<string,mixed> $limits
      */
@@ -280,26 +281,35 @@ class KycTierService
         ]);
     }
 
-    /** إجمالي الحركة الحقيقية اليوم: كل debit + credit لمحفظة العميل. */
+    /** إجمالي أصل الحركة الحقيقية اليوم: وارد + صادر، بلا رسوم. */
     private function getTodayMovementTotal(int $userId): string
     {
         return $this->getMovementTotalSince($userId, Carbon::now()->startOfDay());
     }
 
-    /** إجمالي الحركة الحقيقية هذا الشهر: كل debit + credit لمحفظة العميل. */
+    /** إجمالي أصل الحركة الحقيقية هذا الشهر: وارد + صادر، بلا رسوم. */
     private function getMonthMovementTotal(int $userId): string
     {
         return $this->getMovementTotalSince($userId, Carbon::now()->startOfMonth());
     }
 
     /**
-     * مصدر الحقيقة هو الدفتر. نستبعد:
-     * - القيود المعكوسة أو الأصل الذي عُكس: لا معاملة نهائية.
-     * - opening_balance: ترحيل رصيد قائم وليس استخداماً جديداً.
-     * - external_adjustment: تصحيح محاسبي بأربع عيون وليس حركة عميل.
+     * المصدر الأساسي هو projection المخصص للحدود. كل صف فيه مبني من
+     * Transaction.amount (أصل العملية) وليس debit/credit المحاسبي الذي قد
+     * يشمل الرسوم. الـfallback للدفتر موجود فقط أثناء انتقال نسخة لم تُنفذ
+     * فيها migration الجديدة بعد.
      */
     private function getMovementTotalSince(int $userId, Carbon $since): string
     {
+        if (Schema::hasTable('customer_turnover_usage')) {
+            $total = DB::table('customer_turnover_usage')
+                ->where('user_id', $userId)
+                ->where('occurred_at', '>=', $since)
+                ->sum('principal_amount');
+
+            return (string) ($total ?: '0');
+        }
+
         $wallet = DB::table('ledger_accounts')
             ->where('account_code', "USER_WALLET_{$userId}")
             ->first();
@@ -330,8 +340,7 @@ class KycTierService
             'stored_tier' => $storedTier,
             'tier_name' => $limits['name_ar'],
             'limits' => $limits,
-            // "used" هنا إجمالي الحركة (وارد + صادر)، وليس الإنفاق فقط.
-            'usage_basis' => 'gross_wallet_turnover',
+            'usage_basis' => 'principal_wallet_turnover_excluding_fees',
             'today_used' => $this->getTodayMovementTotal($user->id),
             'month_used' => $this->getMonthMovementTotal($user->id),
             'next_tier' => $nextTier,
