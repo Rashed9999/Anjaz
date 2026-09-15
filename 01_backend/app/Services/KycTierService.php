@@ -20,17 +20,14 @@ use RuntimeException;
  * Tier 2: هوية قانونية موثقة — حد متوسط، بلا سيلفي إلزامي.
  * Tier 3: KYC كامل + إثبات قوي لصاحب الهوية — الحدود الأعلى.
  *
- * AMIAL-PROGRESSIVE-KYC-TURNOVER-002
+ * AMIAL-PROGRESSIVE-KYC-TURNOVER-003
  * الحدود اليومية والشهرية = إجمالي أصل حركة العميل (وارد + صادر).
- * الرسوم وعمولات أميال لا تستهلك حد KYC، لأنها تكلفة خدمة وليست مبلغ
- * المعاملة الذي حرّكه العميل. customer_turnover_usage هو projection مخصص
- * لهذا القرار، والدفتر يبقى مصدر الحقيقة المحاسبي.
- *
- * الأرقام هنا fallback فقط؛ DB (kyc_tier_limits) هي مصدر سياسة التشغيل.
+ * الرسوم وعمولات أميال لا تستهلك حد KYC، والحركات المحجوزة تستهلكه مؤقتاً
+ * حتى تنجح أو تُلغى. customer_turnover_usage هو projection القرار، والدفتر
+ * يبقى مصدر الحقيقة المحاسبي.
  */
 class KycTierService
 {
-    /** قيود دفترية فنية لا تمثل استعمال العميل لمحفظته — fallback قبل migration. */
     private const NON_USAGE_LEDGER_SOURCES = [
         'opening_balance',
         'external_adjustment',
@@ -83,13 +80,6 @@ class KycTierService
         ],
     ];
 
-    /**
-     * سياسة مستوى بعينه كما ستطبقها العمليات فعلياً.
-     *
-     * أُخرجت كواجهة قراءة فقط لكي لا تنسخ واجهة العميل أرقام الحدود أو
-     * المزايا داخل Flutter. قاعدة البيانات تبقى المصدر الأول، والـfallback
-     * هنا يبقى المصدر الثاني نفسه الذي تستخدمه الحواجز المالية.
-     */
     public function getLimits(int $tier): array
     {
         $tier = max(0, min(3, $tier));
@@ -126,10 +116,6 @@ class KycTierService
         return $limits;
     }
 
-    /**
-     * الحساب موجود فور التسجيل، لكن تحريك المال يحتاج إقامة موثقة داخل
-     * المحافظات التشغيلية. الأصل وGPS لا يستطيعان اجتياز هذه البوابة.
-     */
     private function assertOperationalResidence(User $user): string
     {
         $code = app(ResidenceVerificationService::class)->verifiedGovernorate($user);
@@ -153,12 +139,6 @@ class KycTierService
         }
     }
 
-    /**
-     * بوابة الميزة بلا احتساب مبلغ. مناسبة لفتح شاشة/إنشاء طلب لا يحرك مالاً.
-     * لا تستخدمها مكان assertTransactionAllowed عند الخصم الفعلي.
-     *
-     * @return array<string,mixed> حدود المستوى الفعلية للمستخدم.
-     */
     public function assertFeatureAllowed(User $user, string $feature): array
     {
         $limits = $this->getLimitsForUser($user);
@@ -189,11 +169,6 @@ class KycTierService
         $this->assertMovementAllowed($user, $amount, $limits);
     }
 
-    /**
-     * الاستقبال يستهلك الحد أيضاً. الفرق الوحيد عن الإرسال أن الاستقبال
-     * يحتاج بالإضافة إلى حد الحركة التأكد من أن الرصيد الناتج لا يتجاوز
-     * سقف الرصيد الخاص بالمستوى.
-     */
     public function assertCanReceive(User $user, string $incomingAmount): void
     {
         $limits = $this->assertFeatureAllowed($user, 'receive_money');
@@ -211,13 +186,6 @@ class KycTierService
         $this->assertBalanceAllowed($user, bcadd($current, $incomingAmount, 4));
     }
 
-    /**
-     * يطبّق حد العملية الواحدة وحد إجمالي الحركة اليومية والشهرية على
-     * أصل الوارد والصادر معاً. الرسوم لا تدخل في `$amount` هنا ولا في
-     * customer_turnover_usage، لذلك لا تقلل حدود التوثيق.
-     *
-     * @param array<string,mixed> $limits
-     */
     private function assertMovementAllowed(User $user, string $amount, array $limits): void
     {
         if (bccomp($amount, $limits['max_single_transaction'], 4) > 0) {
@@ -281,33 +249,24 @@ class KycTierService
         ]);
     }
 
-    /** إجمالي أصل الحركة الحقيقية اليوم: وارد + صادر، بلا رسوم. */
     private function getTodayMovementTotal(int $userId): string
     {
         return $this->getMovementTotalSince($userId, Carbon::now()->startOfDay());
     }
 
-    /** إجمالي أصل الحركة الحقيقية هذا الشهر: وارد + صادر، بلا رسوم. */
     private function getMonthMovementTotal(int $userId): string
     {
         return $this->getMovementTotalSince($userId, Carbon::now()->startOfMonth());
     }
 
     /**
-     * المصدر الأساسي هو projection المخصص للحدود. كل صف فيه مبني من
-     * Transaction.amount (أصل العملية) وليس debit/credit المحاسبي الذي قد
-     * يشمل الرسوم. الـfallback للدفتر موجود فقط أثناء انتقال نسخة لم تُنفذ
-     * فيها migration الجديدة بعد.
+     * customer_turnover_usage يحسب reserved + posted فقط؛ released لا يعود
+     * يستهلك من الحد. fallback الدفتر موجود فقط قبل تنفيذ migration الجديدة.
      */
     private function getMovementTotalSince(int $userId, Carbon $since): string
     {
         if (Schema::hasTable('customer_turnover_usage')) {
-            $total = DB::table('customer_turnover_usage')
-                ->where('user_id', $userId)
-                ->where('occurred_at', '>=', $since)
-                ->sum('principal_amount');
-
-            return (string) ($total ?: '0');
+            return app(CustomerTurnoverService::class)->totalSince($userId, $since);
         }
 
         $wallet = DB::table('ledger_accounts')
