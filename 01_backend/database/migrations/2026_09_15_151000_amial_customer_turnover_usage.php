@@ -7,13 +7,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * AMIAL-PROGRESSIVE-KYC-TURNOVER-002
+ * AMIAL-PROGRESSIVE-KYC-TURNOVER-003
  *
- * سجل مستقل لاستخدام حدود KYC. لا نستخدم الرسوم أو عمولات أميال في هذا
- * العداد؛ القيمة المسجلة هي أصل العملية (`transactions.amount`) فقط.
- *
- * الدفتر يبقى مصدر الحقيقة المحاسبي، وtransactions يبقى سجل العملية، وهذا
- * الجدول هو projection مخصص لحدود KYC حتى لا تختلط المحاسبة بسياسة التوثيق.
+ * Projection مستقل لحدود KYC. القيمة هي أصل الحركة فقط (principal)، ولا
+ * تشمل الرسوم أو العمولات. يدعم posted للحركة النهائية، reserved للحركة
+ * المحجوزة، وreleased للحركة الملغاة/المستردة حتى لا يُعاقب العميل مرتين.
  */
 return new class extends Migration
 {
@@ -23,20 +21,25 @@ return new class extends Migration
             Schema::create('customer_turnover_usage', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('user_id')->index();
-                $table->unsignedBigInteger('transaction_row_id')->unique();
+                $table->string('source_key', 191)->unique();
+                $table->unsignedBigInteger('transaction_row_id')->nullable()->unique();
                 $table->string('transaction_id', 80)->nullable()->index();
                 $table->string('transaction_type', 64)->nullable()->index();
                 $table->string('direction', 8)->index(); // in | out
                 $table->decimal('principal_amount', 24, 4);
+                $table->string('status', 16)->default('posted')->index(); // reserved|posted|released
                 $table->timestamp('occurred_at')->index();
+                $table->timestamp('finalized_at')->nullable();
+                $table->timestamp('released_at')->nullable();
+                $table->string('release_reason', 255)->nullable();
                 $table->timestamps();
 
-                $table->index(['user_id', 'occurred_at']);
+                $table->index(['user_id', 'status', 'occurred_at']);
             });
         }
 
-        // Backfill الشهر الجاري فقط: هو المطلوب لحدود اليوم/الشهر لحظة النشر.
-        // نأخذ amount لا debit/credit حتى لا تدخل الرسوم ضمن الحد.
+        // Backfill الشهر الجاري فقط. transactions.amount هو أصل العملية،
+        // بينما debit قد يشمل رسوماً في بعض المسارات.
         if (!Schema::hasTable('transactions') || !Schema::hasTable('users')) {
             return;
         }
@@ -70,12 +73,15 @@ return new class extends Migration
 
                     $insert[] = [
                         'user_id' => (int) $row->user_id,
+                        'source_key' => 'transaction:' . (int) $row->id,
                         'transaction_row_id' => (int) $row->id,
                         'transaction_id' => $row->transaction_id,
                         'transaction_type' => $row->transaction_type,
                         'direction' => $direction,
                         'principal_amount' => (string) $row->amount,
+                        'status' => 'posted',
                         'occurred_at' => $row->created_at ?: $now,
+                        'finalized_at' => $row->created_at ?: $now,
                         'created_at' => $now,
                         'updated_at' => $now,
                     ];
