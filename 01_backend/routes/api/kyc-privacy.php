@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\Amial\KycFullProfileController;
 use App\Http\Controllers\Api\V1\Amial\KycIdentityUpgradeController;
+use App\Http\Controllers\Api\V1\Amial\KycOwnershipEvidenceController;
 use App\Http\Controllers\Api\V1\Amial\KycPrivacyController;
 use App\Http\Controllers\Api\V1\Amial\KycResidenceController;
 use App\Http\Controllers\Api\V1\Amial\VerificationStatusController;
@@ -39,3 +40,8 @@ Route::post('me/kyc/identity', [KycIdentityUpgradeController::class, 'submit'])
 Route::post('me/kyc/profile', [KycFullProfileController::class, 'update'])
     ->middleware('amial.rate-limit:kyc_profile_update,10,10')
     ->name('amial.me.kyc.profile.update');
+
+// AMIAL-KYC-COMPLETE-ACCOUNT-002 — صورة الملكية للمسار اليدوي/المقيد.
+Route::post('me/kyc/ownership/selfie', [KycOwnershipEvidenceController::class, 'selfie'])
+    ->middleware('amial.rate-limit:kyc_selfie_submit,3,60')
+    ->name('amial.me.kyc.ownership.selfie');
