@@ -29,6 +29,17 @@ class RouteServiceProvider extends ServiceProvider
                 ->namespace($this->namespace)
                 ->group(base_path('routes/api/v1/api.php'));
 
+            // AMIAL-PROGRESSIVE-MONEY-ROUTES-001 — **نفس العنوان، قرارٌ واحد.**
+            //
+            // الملف السابق يعرّف أبواب 6cash التاريخية. نعيد تعريف الأبواب
+            // المالية الأربعة وحدها بعده، تحت URI نفسه، لتصبح سياسة KYC
+            // التدريجي هي المسار الفعلي للتطبيق وكل عميل API. لا endpoint
+            // موازياً ولا تبديل constants في Flutter.
+            Route::prefix('api/v1')
+                ->middleware('api')
+                ->namespace($this->namespace)
+                ->group(base_path('routes/api/progressive-customer-money.php'));
+
             Route::prefix('admin')
                 ->middleware('web')
                 ->namespace($this->namespace)
