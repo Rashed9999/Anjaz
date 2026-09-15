@@ -78,28 +78,30 @@ class KycIdentityUpgradeController extends Controller
             ], 409);
         }
 
-        try {
-            $uploaded = DB::transaction(function () use ($request, $documents, $user, $number) {
-                // رقم الهوية يمر عبر HasEncryptedPII: تشفير + blind index + masked.
-                $user->identification_number = $number;
-                $user->identification_type = (string) $request->input('identification_type');
-                $user->is_kyc_verified = 0;
-                // لا نرفع المستوى هنا؛ المراجع هو من يمنح Tier 2 بعد اعتماد الدليل.
-                $user->save();
+        // المعاملة هنا قصيرة: بيانات الهوية المهيكلة فقط. OCR/فك الملف لا
+        // يجريان داخلها حتى لا نحجز صفوفاً أثناء قراءة صور قد تستغرق ثواني.
+        DB::transaction(function () use ($request, $user, $number): void {
+            $locked = $user->newQuery()->lockForUpdate()->findOrFail($user->id);
+            $locked->identification_number = $number;
+            $locked->identification_type = (string) $request->input('identification_type');
+            $locked->is_kyc_verified = 0;
+            // لا نرفع المستوى هنا؛ المراجع هو من يمنح Tier 2 بعد اعتماد الدليل.
+            $locked->save();
+        });
 
-                return [
-                    $documents->uploadAndRead(
-                        $user,
-                        KycDocument::TYPE_ID_FRONT,
-                        $request->file('id_front'),
-                    ),
-                    $documents->uploadAndRead(
-                        $user,
-                        KycDocument::TYPE_ID_BACK,
-                        $request->file('id_back'),
-                    ),
-                ];
-            });
+        try {
+            $uploaded = [
+                $documents->uploadAndRead(
+                    $user->fresh(),
+                    KycDocument::TYPE_ID_FRONT,
+                    $request->file('id_front'),
+                ),
+                $documents->uploadAndRead(
+                    $user->fresh(),
+                    KycDocument::TYPE_ID_BACK,
+                    $request->file('id_back'),
+                ),
+            ];
         } catch (\DomainException $e) {
             return response()->json([
                 'success' => false,
