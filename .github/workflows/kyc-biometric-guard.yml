@@ -6,28 +6,38 @@ on:
     paths:
       - '01_backend/app/Services/Kyc/Biometric/**'
       - '01_backend/app/Services/Kyc/KycPrivacyService.php'
+      - '01_backend/app/Services/KycTierService.php'
+      - '01_backend/app/Services/DonationsService.php'
       - '01_backend/app/Http/Controllers/Api/V1/Amial/KycBiometricWebhookController.php'
       - '01_backend/app/Http/Controllers/Api/V1/Amial/KycPrivacyController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/SafePaymentController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/FamilyFundController.php'
       - '01_backend/app/Http/Controllers/Admin/KycPrivacyAdminController.php'
       - '01_backend/config/amial_kyc.php'
       - '01_backend/database/migrations/*kyc_biometric*'
       - '01_backend/routes/api/kyc-biometric-webhook.php'
       - '01_backend/routes/api/kyc-privacy.php'
       - '01_backend/tests/Feature/KycBiometricProviderRuntimeTest.php'
+      - '01_backend/tests/Feature/KycCrossTierServiceGuardTest.php'
       - '.github/workflows/kyc-biometric-guard.yml'
   pull_request:
     branches: ['**']
     paths:
       - '01_backend/app/Services/Kyc/Biometric/**'
       - '01_backend/app/Services/Kyc/KycPrivacyService.php'
+      - '01_backend/app/Services/KycTierService.php'
+      - '01_backend/app/Services/DonationsService.php'
       - '01_backend/app/Http/Controllers/Api/V1/Amial/KycBiometricWebhookController.php'
       - '01_backend/app/Http/Controllers/Api/V1/Amial/KycPrivacyController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/SafePaymentController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/FamilyFundController.php'
       - '01_backend/app/Http/Controllers/Admin/KycPrivacyAdminController.php'
       - '01_backend/config/amial_kyc.php'
       - '01_backend/database/migrations/*kyc_biometric*'
       - '01_backend/routes/api/kyc-biometric-webhook.php'
       - '01_backend/routes/api/kyc-privacy.php'
       - '01_backend/tests/Feature/KycBiometricProviderRuntimeTest.php'
+      - '01_backend/tests/Feature/KycCrossTierServiceGuardTest.php'
       - '.github/workflows/kyc-biometric-guard.yml'
 
 concurrency:
@@ -85,6 +95,9 @@ jobs:
           php artisan passport:keys --force
           echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
           echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
+
+      - name: حارس Cross-Tier لخدمات العميل
+        run: php artisan test --compact tests/Feature/KycCrossTierServiceGuardTest.php
 
       - name: حارس Runtime البيومتري
         run: php artisan test --compact tests/Feature/KycBiometricProviderRuntimeTest.php
