@@ -11,11 +11,13 @@ class VerificationCenterController extends GetxController implements GetxService
   VerificationCenterController({required this.repo});
 
   Map<String, dynamic>? _data;
+  Map<String, dynamic> _completion = <String, dynamic>{};
   bool _isLoading = false;
   bool _isActionLoading = false;
   List<Map<String, dynamic>> _residenceOptions = const [];
 
   Map<String, dynamic>? get data => _data;
+  Map<String, dynamic> get completion => _completion;
   bool get isLoading => _isLoading;
   bool get isActionLoading => _isActionLoading;
   List<Map<String, dynamic>> get residenceOptions => _residenceOptions;
@@ -33,13 +35,19 @@ class VerificationCenterController extends GetxController implements GetxService
   }
 
   List<String> get tier3ProfileMissingCodes {
-    final raw = _map(_data?['completion'])['tier3_profile_missing_codes'];
+    final raw = _completion['tier3_profile_missing_codes'];
     if (raw is! List) return const [];
     return raw.map((e) => e.toString()).toList();
   }
 
+  List<Map<String, dynamic>> get incomeSourceOptions =>
+      _optionList(_map(_completion['profile_options'])['income_sources']);
+
+  List<Map<String, dynamic>> get accountPurposeOptions =>
+      _optionList(_map(_completion['profile_options'])['account_purposes']);
+
   Map<String, dynamic> get tier3Ownership =>
-      _map(_map(_data?['completion'])['tier3_ownership']);
+      _map(_completion['tier3_ownership']);
 
   double get usageProgress {
     final bar = _map(_data?['usage_bar']);
@@ -58,6 +66,14 @@ class VerificationCenterController extends GetxController implements GetxService
     final response = await repo.status();
     if (response.statusCode == 200 && response.body is Map && response.body['success'] == true) {
       _data = Map<String, dynamic>.from(response.body['data'] as Map);
+
+      final completionResponse = await repo.completion();
+      if (completionResponse.statusCode == 200 &&
+          completionResponse.body is Map &&
+          completionResponse.body['success'] == true &&
+          completionResponse.body['data'] is Map) {
+        _completion = Map<String, dynamic>.from(completionResponse.body['data'] as Map);
+      }
     } else {
       ApiChecker.checkApi(response);
     }
@@ -247,6 +263,11 @@ class VerificationCenterController extends GetxController implements GetxService
 
   static Map<String, dynamic> _map(dynamic value) =>
       value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+
+  static List<Map<String, dynamic>> _optionList(dynamic value) {
+    if (value is! List) return const [];
+    return value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
 
   static int _asInt(dynamic value) => int.tryParse('$value') ?? 0;
 }
