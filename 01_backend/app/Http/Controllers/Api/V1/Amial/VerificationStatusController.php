@@ -141,7 +141,7 @@ class VerificationStatusController extends Controller
             $tier,
             $identity,
             $phoneVerified,
-            $residenceState,
+            $operationalResidence,
             $ownership,
             $docs,
         );
@@ -203,12 +203,11 @@ class VerificationStatusController extends Controller
         array $tierInfo,
         array $identity,
         bool $phoneVerified,
-        array $residence,
+        bool $operationalResidence,
         KycOwnershipGuardService $ownership,
         array $docs,
     ): array {
         $current = (int) $tierInfo['current_tier'];
-        $residenceVerified = ($residence['status'] ?? null) === ResidenceVerificationService::STATUS_VERIFIED;
         $profileMissing = KycProfileFields::missingFor($user);
         $ownership3 = $ownership->assess($user, 3);
         $addressDoc = $docs[KycDocument::TYPE_ADDRESS_PROOF] ?? null;
@@ -216,7 +215,7 @@ class VerificationStatusController extends Controller
         $requirements = [
             1 => [
                 ['code' => 'phone', 'label' => 'إثبات ملكية رقم الهاتف', 'complete' => $phoneVerified],
-                ['code' => 'residence', 'label' => 'إثبات محل الإقامة الحالي داخل نطاق التشغيل', 'complete' => $residenceVerified],
+                ['code' => 'residence', 'label' => 'إثبات محل الإقامة الحالي داخل نطاق التشغيل', 'complete' => $operationalResidence],
             ],
             2 => [
                 ['code' => 'tier1', 'label' => 'استكمال متطلبات المستوى الأساسي', 'complete' => $current >= 1],
