@@ -19,25 +19,65 @@ class OTPController extends Controller
 
     public function checkOtp(Request $request): JsonResponse
     {
-        try {
-            $otp = (string) app(\App\Services\Otp\OtpPolicy::class)
-                ->codeFor((string) $request->user()->phone);
+        $phone = (string) $request->user()->phone;
+        $policy = app(\App\Services\Otp\OtpPolicy::class);
 
-            DB::table('phone_verifications')->updateOrInsert(['phone' => $request->user()->phone], [
+        // الرقم الحقيقي لا يُقال له «أرسلنا» إذا لم توجد قناة فعالة.
+        // أرقام العرض لا تحتاج قناة: رمزها ثابت ومقصور عليها فقط.
+        if ($policy->needsDelivery($phone) && ! $policy->deliveryReady()) {
+            return response()->json([
+                'success' => false,
+                'code' => 'OTP_DELIVERY_UNAVAILABLE',
+                'message' => $policy->unavailableMessage(),
+            ], 503);
+        }
+
+        try {
+            // OtpPolicy يصدر ستة أرقام للأرقام الحقيقية، ورمز العرض الافتراضي
+            // ستة أيضاً. مسار verifyOtp أدناه يلتزم بالعقد نفسه.
+            $otp = (string) $policy->codeFor($phone);
+
+            DB::table('phone_verifications')->updateOrInsert(['phone' => $phone], [
                 'otp' => $otp,
+                'otp_hit_count' => 0,
+                'is_temp_blocked' => 0,
+                'temp_block_time' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
 
-            if (addon_published_status('Gateways')) {
-                SmsGateway::send($request->user()->phone, $otp);
-            } else {
-                SmsModule::send($request->user()->phone, $otp);
+            if ($policy->needsDelivery($phone)) {
+                $result = addon_published_status('Gateways')
+                    ? SmsGateway::send($phone, $otp)
+                    : SmsModule::send($phone, $otp);
+
+                // مزود موجود لكنه فشل ليس نجاحاً. نحذف الرمز الذي لم يصل
+                // حتى لا يبقى تحدٍ صالح لا يعرفه صاحبه.
+                if (!in_array($result, ['success', true, 1], true)) {
+                    DB::table('phone_verifications')->where('phone', $phone)->delete();
+
+                    return response()->json([
+                        'success' => false,
+                        'code' => 'OTP_DELIVERY_FAILED',
+                        'message' => 'تعذر إرسال رمز التحقق حالياً. حاول مرة أخرى لاحقاً.',
+                    ], 502);
+                }
             }
 
-            return response()->json(['message' => 'success'], 200);
-        } catch (\Exception $e) {
-            return response()->json(['message' => 'failed'], 200);
+            return response()->json([
+                'success' => true,
+                'code' => 'OTP_SENT',
+                'message' => 'تم إرسال رمز التحقق',
+                // الإفصاح لأرقام العرض وحدها؛ الرقم الحقيقي لا يخرج رمزه.
+                'demo_otp' => $policy->mayDisclose($phone) ? $otp : null,
+                'digits' => 6,
+            ], 200);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'code' => 'OTP_DELIVERY_FAILED',
+                'message' => 'تعذر إرسال رمز التحقق حالياً. حاول مرة أخرى لاحقاً.',
+            ], 503);
         }
     }
 
@@ -47,7 +87,7 @@ class OTPController extends Controller
      */
     public function verifyOtp(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), ['otp' => 'required|min:4|max:4']);
+        $validator = Validator::make($request->all(), ['otp' => 'required|digits:6']);
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
@@ -93,8 +133,6 @@ class OTPController extends Controller
             DB::transaction(function () use ($row, $user) {
                 $account = \App\Models\User::query()->lockForUpdate()->findOrFail($user->id);
                 $account->is_phone_verified = 1;
-                // AMIAL-PROGRESSIVE-KYC-001: الهاتف المملوك يمنح Tier 1،
-                // لكنه لا يتجاوز إثبات الإقامة أو حدود المال.
                 if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
                     $account->kyc_tier = max(1, (int) ($account->kyc_tier ?? 0));
                 }
@@ -112,7 +150,7 @@ class OTPController extends Controller
                     'action' => 'PHONE_OWNERSHIP_VERIFIED',
                     'decision_code' => 'PHONE_OTP_VERIFIED',
                     'severity' => 'info',
-                    'context' => ['channel' => 'sms', 'progressive_kyc_tier' => 1],
+                    'context' => ['progressive_kyc_tier' => 1],
                 ]);
             });
 
