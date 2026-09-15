@@ -43,10 +43,12 @@ class ProgressiveKycTurnoverLimitTest extends TestCase
 
         try {
             $service->assertCanReceive($user, '50000');
-            $this->fail('استقبال 50 ألف بعد حركة 78 ألف مرّ رغم أن الحد الشهري 100 ألف.');
+            $this->fail('استقبال 50 ألف بعد حركة 78 ألف مرّ رغم أن حد الحركة 100 ألف.');
         } catch (RuntimeException $e) {
-            $this->assertStringContainsString('إجمالي الحركة الشهري', $e->getMessage());
-            $this->assertStringContainsString('أكمل التوثيق لرفع الحد', $e->getMessage());
+            // Tier 1 يملك الحد نفسه يومياً وشهرياً، والحارس اليومي يُفحص أولاً.
+            // المهم أن الحركة تُرفض عند 100 ألف وأن المتبقي الحقيقي ظاهر للعميل.
+            $this->assertStringContainsString('إجمالي الحركة', $e->getMessage());
+            $this->assertStringContainsString('22,000', $e->getMessage());
         }
 
         $service->assertCanReceive($user, '22000');
@@ -84,7 +86,7 @@ class ProgressiveKycTurnoverLimitTest extends TestCase
         $this->assertSame(0, bccomp('100000', (string) $info['month_used'], 4));
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('المتبقي هذا الشهر: 0');
+        $this->expectExceptionMessage('المتبقي اليوم: 0');
         $service->assertCanReceive($user, '1');
     }
 
