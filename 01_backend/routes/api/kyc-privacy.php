@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Amial\KycIdentityUpgradeController;
 use App\Http\Controllers\Api\V1\Amial\KycPrivacyController;
 use App\Http\Controllers\Api\V1\Amial\KycResidenceController;
 use Illuminate\Support\Facades\Route;
@@ -22,3 +23,9 @@ Route::prefix('me/kyc/residence')->name('amial.me.kyc.residence.')->group(functi
         ->middleware('amial.rate-limit:kyc_residence_submit,5,60')
         ->name('submit');
 });
+
+// AMIAL-PROGRESSIVE-KYC-UPGRADE-001 — Tier 2 يثبت الهوية القانونية فقط:
+// رقم مهيكل + وجه الوثيقة + ظهرها. لا selfie ولا نسخة في التخزين القديم.
+Route::post('me/kyc/identity', [KycIdentityUpgradeController::class, 'submit'])
+    ->middleware('amial.rate-limit:kyc_identity_submit,5,60')
+    ->name('amial.me.kyc.identity.submit');
