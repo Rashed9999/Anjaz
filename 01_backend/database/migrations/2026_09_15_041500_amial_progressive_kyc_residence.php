@@ -48,6 +48,57 @@ return new class extends Migration
             });
         }
 
+        // AMIAL-RESIDENCE-MIGRATE-001 — لا نجمّد عميلاً قديماً سبق أن
+        // راجع الفريق إثبات عنوانه واعتمده. لكننا أيضاً لا نثق بـzone_code
+        // ولا بمحافظة الأصل ولا بمجرد نص residence_governorate. الترحيل
+        // التلقائي يخص حصراً حساباً موثقاً لديه address_proof معتمد فعلياً.
+        if (Schema::hasTable('kyc_documents')) {
+            $legacy = DB::table('users as u')
+                ->join('kyc_documents as d', function ($join) {
+                    $join->on('d.user_id', '=', 'u.id')
+                        ->where('d.doc_type', '=', 'address_proof')
+                        ->where('d.status', '=', 'approved');
+                })
+                ->where('u.is_kyc_verified', 1)
+                ->whereNotNull('u.residence_governorate')
+                ->where('u.residence_governorate', '!=', '')
+                ->orderByDesc('d.id')
+                ->get(['u.id as user_id', 'u.residence_governorate', 'd.id as document_id', 'd.reviewed_by', 'd.reviewed_at'])
+                ->unique('user_id');
+
+            foreach ($legacy as $row) {
+                $code = \App\Support\YemenGovernorates::codeFromName((string) $row->residence_governorate);
+                if ($code === null) {
+                    continue;
+                }
+
+                $reviewedAt = $row->reviewed_at ?: now();
+                $verificationId = DB::table('residence_verifications')->insertGetId([
+                    'user_id' => (int) $row->user_id,
+                    'kyc_document_id' => (int) $row->document_id,
+                    'declared_governorate' => $code,
+                    'evidence_type' => 'legacy_approved_address_proof',
+                    'evidence_strength' => 'strong',
+                    'evidence_date' => null,
+                    'status' => 'verified',
+                    'reviewed_by' => $row->reviewed_by,
+                    'submitted_at' => $reviewedAt,
+                    'reviewed_at' => $reviewedAt,
+                    'decision_reason' => 'رُحّل من إثبات عنوان KYC معتمد قبل سياسة الإقامة الموثقة.',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                DB::table('users')->where('id', $row->user_id)->update([
+                    'residence_governorate' => $code,
+                    'verified_residence_governorate' => $code,
+                    'residence_verified_at' => $reviewedAt,
+                    'residence_verification_id' => $verificationId,
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
         // سياسة الحدود الجديدة تُكتب في DB لأنها مصدر الحقيقة في التشغيل.
         if (Schema::hasTable('kyc_tier_limits')) {
             $tiers = [
@@ -64,21 +115,26 @@ return new class extends Migration
             ];
 
             foreach ($tiers as $tier => [$name, $balance, $single, $daily, $monthly, $required, $features]) {
-                DB::table('kyc_tier_limits')->updateOrInsert(
-                    ['tier' => $tier],
-                    [
-                        'name_ar' => $name,
-                        'max_balance' => $balance,
-                        'max_single_transaction' => $single,
-                        'max_daily_total' => $daily,
-                        'max_monthly_total' => $monthly,
-                        'required_documents' => json_encode($required, JSON_UNESCAPED_UNICODE),
-                        'allowed_features' => json_encode($features, JSON_UNESCAPED_UNICODE),
-                        'is_active' => true,
-                        'updated_at' => now(),
+                $values = [
+                    'name_ar' => $name,
+                    'max_balance' => $balance,
+                    'max_single_transaction' => $single,
+                    'max_daily_total' => $daily,
+                    'max_monthly_total' => $monthly,
+                    'required_documents' => json_encode($required, JSON_UNESCAPED_UNICODE),
+                    'allowed_features' => json_encode($features, JSON_UNESCAPED_UNICODE),
+                    'is_active' => true,
+                    'updated_at' => now(),
+                ];
+
+                if (DB::table('kyc_tier_limits')->where('tier', $tier)->exists()) {
+                    DB::table('kyc_tier_limits')->where('tier', $tier)->update($values);
+                } else {
+                    DB::table('kyc_tier_limits')->insert($values + [
+                        'tier' => $tier,
                         'created_at' => now(),
-                    ],
-                );
+                    ]);
+                }
             }
         }
     }
