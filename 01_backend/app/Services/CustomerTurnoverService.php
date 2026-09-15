@@ -79,6 +79,39 @@ class CustomerTurnoverService
             ]);
     }
 
+    /**
+     * إنهاء حجز بمبلغ أصغر (مثلاً دفع آمن أُعيد جزء منه). لا يسمح بزيادة
+     * المبلغ المحجوز؛ الزيادة يجب أن تمر كحركة جديدة وحارس حدود جديد.
+     */
+    public function finalizeWithAmount(string $sourceKey, string $finalAmount): void
+    {
+        if (!Schema::hasTable('customer_turnover_usage')) return;
+        if (bccomp($finalAmount, '0', 4) < 0) {
+            throw new RuntimeException('TURNOVER_FINAL_AMOUNT_INVALID');
+        }
+
+        $row = DB::table('customer_turnover_usage')
+            ->where('source_key', $sourceKey)
+            ->lockForUpdate()
+            ->first();
+        if (!$row || $row->status === self::RELEASED) return;
+
+        if (bccomp($finalAmount, (string) $row->principal_amount, 4) > 0) {
+            throw new RuntimeException('TURNOVER_FINAL_AMOUNT_CANNOT_EXCEED_RESERVED');
+        }
+        if (bccomp($finalAmount, '0', 4) === 0) {
+            $this->release($sourceKey, 'final amount is zero');
+            return;
+        }
+
+        DB::table('customer_turnover_usage')->where('id', $row->id)->update([
+            'principal_amount' => $finalAmount,
+            'status' => self::POSTED,
+            'finalized_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     public function release(string $sourceKey, string $reason): void
     {
         if (!Schema::hasTable('customer_turnover_usage')) return;
@@ -128,19 +161,20 @@ class CustomerTurnoverService
         $userId = $user instanceof User ? (int) $user->id : (int) $user;
         if ($userId < 1) return;
 
-        // قفل الحساب نفسه يجعل عمليتي نفس العميل تنتظر إحداهما الأخرى.
         /** @var User|null $locked */
         $locked = User::query()->whereKey($userId)->lockForUpdate()->first();
         if (!$locked || (int) $locked->type !== 2) return;
 
         if (DB::table('customer_turnover_usage')->where('source_key', $sourceKey)->exists()) {
-            return; // idempotent
+            return;
         }
 
         if ($enforceLimits) {
             $tiers = app(KycTierService::class);
             $limits = $tiers->getLimits($tiers->effectiveTier($locked));
 
+            // FOR UPDATE يجعل الفحص الحاليّ قراءةً قفليةً بعد انتظار أي حركة
+            // متزامنة للحساب نفسه، لا snapshot قديمة سبقت الحركة الأولى.
             $dayRows = DB::table('customer_turnover_usage')
                 ->where('user_id', $userId)
                 ->whereIn('status', [self::RESERVED, self::POSTED])
