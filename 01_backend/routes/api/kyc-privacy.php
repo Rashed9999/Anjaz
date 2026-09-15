@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Amial\KycFullProfileController;
 use App\Http\Controllers\Api\V1\Amial\KycIdentityUpgradeController;
 use App\Http\Controllers\Api\V1\Amial\KycPrivacyController;
 use App\Http\Controllers\Api\V1\Amial\KycResidenceController;
@@ -33,3 +34,8 @@ Route::prefix('me/kyc/residence')->name('amial.me.kyc.residence.')->group(functi
 Route::post('me/kyc/identity', [KycIdentityUpgradeController::class, 'submit'])
     ->middleware('amial.rate-limit:kyc_identity_submit,5,60')
     ->name('amial.me.kyc.identity.submit');
+
+// AMIAL-KYC-COMPLETE-ACCOUNT-001 — بيانات «إكمال حسابي» للمستوى الكامل.
+Route::post('me/kyc/profile', [KycFullProfileController::class, 'update'])
+    ->middleware('amial.rate-limit:kyc_profile_update,10,10')
+    ->name('amial.me.kyc.profile.update');
