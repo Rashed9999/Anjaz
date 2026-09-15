@@ -44,6 +44,9 @@ class ProgressiveRegistrationController extends Controller
             'password' => ['required', 'regex:/^\d{4}$/'],
             'email_challenge_id' => ['required', 'string', 'size:26'],
             'email_verification_token' => ['required', 'string', 'min:32', 'max:200'],
+            // الموافقة ليست «معلومة خامسة» عن العميل؛ لكنها قرار قانوني
+            // يجب أن يثبته الخادم، لا checkbox تجميلي يمكن تجاوزه بطلب API.
+            'terms_accepted' => ['required', 'accepted'],
         ]);
 
         if ($validator->fails()) {
@@ -145,6 +148,7 @@ class ProgressiveRegistrationController extends Controller
                         'registration_mode' => 'quick',
                         'email_verified' => true,
                         'phone_verified' => false,
+                        'terms_accepted' => true,
                         'zone' => ZoneAssignmentService::ZONE_UNKNOWN,
                     ],
                 ]);
