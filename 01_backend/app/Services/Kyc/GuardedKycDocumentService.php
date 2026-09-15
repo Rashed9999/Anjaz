@@ -56,19 +56,17 @@ class GuardedKycDocumentService extends KycDocumentService
     }
 
     /**
-     * نعيد تعريف اكتمال المستندات لاختلاف معنى Tier 2 في KYC التدريجي.
-     * استدعاءات الأب ديناميكية، لذلك القرار والطابور كلاهما يقرآن القاعدة نفسها.
+     * Tier 3 لا يفرض وسيلة إثبات واحدة على الجميع:
+     * - standard/restricted: صورة شخصية معتمدة للمراجعة البشرية.
+     * - automated: Liveness + Face Match من مزود حقيقي، فلا معنى لإجبار
+     *   العميل على رفع سيلفي ثانٍ إلى المراجعة البشرية.
+     * - in_person: المراجع المخول يثبت الحضور، فلا نطلب نسخة وجه عن بعد.
      */
     public function completenessFor(User $user, int $targetTier): array
     {
         $required = match ($targetTier) {
             2 => [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK],
-            3 => [
-                KycDocument::TYPE_ID_FRONT,
-                KycDocument::TYPE_ID_BACK,
-                KycDocument::TYPE_SELFIE,
-                KycDocument::TYPE_ADDRESS_PROOF,
-            ],
+            3 => $this->tierThreeRequiredDocuments($user),
             default => [],
         };
 
@@ -90,6 +88,23 @@ class GuardedKycDocumentService extends KycDocumentService
         ];
     }
 
+    /** @return list<string> */
+    private function tierThreeRequiredDocuments(User $user): array
+    {
+        $mode = (string) ($this->privacy->forUser($user)['review_mode'] ?? KycPrivacyService::MODE_STANDARD);
+        $required = [
+            KycDocument::TYPE_ID_FRONT,
+            KycDocument::TYPE_ID_BACK,
+            KycDocument::TYPE_ADDRESS_PROOF,
+        ];
+
+        if (!in_array($mode, [KycPrivacyService::MODE_AUTOMATED, KycPrivacyService::MODE_IN_PERSON], true)) {
+            $required[] = KycDocument::TYPE_SELFIE;
+        }
+
+        return $required;
+    }
+
     public function decideAccountVerification(
         User $user,
         User $reviewer,
@@ -106,11 +121,9 @@ class GuardedKycDocumentService extends KycDocumentService
 
             $ownership = null;
             if ($approve) {
-                // Tier 2 = هوية مؤكدة بلا سيلفي إلزامي. Tier 3 = إثبات قوي.
                 $ownership = $this->ownership->assertReady($account, $targetTier);
 
                 if ($targetTier >= 3) {
-                    // كامل KYC يحتاج عنواناً موثقاً فعلياً، لا محافظة مكتوبة فقط.
                     $this->residence->assertVerified($account);
                 }
             }
