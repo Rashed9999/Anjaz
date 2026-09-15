@@ -79,10 +79,6 @@ class CustomerTurnoverService
             ]);
     }
 
-    /**
-     * إنهاء حجز بمبلغ أصغر (مثلاً دفع آمن أُعيد جزء منه). لا يسمح بزيادة
-     * المبلغ المحجوز؛ الزيادة يجب أن تمر كحركة جديدة وحارس حدود جديد.
-     */
     public function finalizeWithAmount(string $sourceKey, string $finalAmount): void
     {
         if (!Schema::hasTable('customer_turnover_usage')) return;
@@ -171,31 +167,35 @@ class CustomerTurnoverService
 
         if ($enforceLimits) {
             $tiers = app(KycTierService::class);
-            $limits = $tiers->getLimits($tiers->effectiveTier($locked));
+            $tier = $tiers->effectiveTier($locked);
 
-            // FOR UPDATE يجعل الفحص الحاليّ قراءةً قفليةً بعد انتظار أي حركة
-            // متزامنة للحساب نفسه، لا snapshot قديمة سبقت الحركة الأولى.
-            $dayRows = DB::table('customer_turnover_usage')
-                ->where('user_id', $userId)
-                ->whereIn('status', [self::RESERVED, self::POSTED])
-                ->where('occurred_at', '>=', now()->startOfDay())
-                ->lockForUpdate()
-                ->pluck('principal_amount');
-            $monthRows = DB::table('customer_turnover_usage')
-                ->where('user_id', $userId)
-                ->whereIn('status', [self::RESERVED, self::POSTED])
-                ->where('occurred_at', '>=', now()->startOfMonth())
-                ->lockForUpdate()
-                ->pluck('principal_amount');
+            // Tier 0 والحسابات القديمة غير المهاجرة لا تُحوَّل إلى رفض من
+            // Observer تاريخي؛ بوابة التفعيل نفسها تمنعها من الحركة الجديدة.
+            if ($tier > 0) {
+                $limits = $tiers->getLimits($tier);
 
-            $daily = $this->sumValues($dayRows->all());
-            $monthly = $this->sumValues($monthRows->all());
+                $dayRows = DB::table('customer_turnover_usage')
+                    ->where('user_id', $userId)
+                    ->whereIn('status', [self::RESERVED, self::POSTED])
+                    ->where('occurred_at', '>=', now()->startOfDay())
+                    ->lockForUpdate()
+                    ->pluck('principal_amount');
+                $monthRows = DB::table('customer_turnover_usage')
+                    ->where('user_id', $userId)
+                    ->whereIn('status', [self::RESERVED, self::POSTED])
+                    ->where('occurred_at', '>=', now()->startOfMonth())
+                    ->lockForUpdate()
+                    ->pluck('principal_amount');
 
-            if (bccomp(bcadd($daily, $amount, 4), (string) $limits['max_daily_total'], 4) > 0) {
-                throw new RuntimeException('هذه العملية ستتجاوز حد إجمالي الحركة اليومي لمستوى حسابك.');
-            }
-            if (bccomp(bcadd($monthly, $amount, 4), (string) $limits['max_monthly_total'], 4) > 0) {
-                throw new RuntimeException('هذه العملية ستتجاوز حد إجمالي الحركة الشهري لمستوى حسابك. أكمل التوثيق لرفع الحد.');
+                $daily = $this->sumValues($dayRows->all());
+                $monthly = $this->sumValues($monthRows->all());
+
+                if (bccomp(bcadd($daily, $amount, 4), (string) $limits['max_daily_total'], 4) > 0) {
+                    throw new RuntimeException('هذه العملية ستتجاوز حد إجمالي الحركة اليومي لمستوى حسابك.');
+                }
+                if (bccomp(bcadd($monthly, $amount, 4), (string) $limits['max_monthly_total'], 4) > 0) {
+                    throw new RuntimeException('هذه العملية ستتجاوز حد إجمالي الحركة الشهري لمستوى حسابك. أكمل التوثيق لرفع الحد.');
+                }
             }
         }
 
