@@ -2,20 +2,19 @@
 
 namespace Tests\Feature;
 
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\KycTierService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use RuntimeException;
 use Tests\TestCase;
 
 /**
- * AMIAL-PROGRESSIVE-KYC-TURNOVER-001
+ * AMIAL-PROGRESSIVE-KYC-TURNOVER-002
  *
- * حد المستوى هو إجمالي الحركة الحقيقية على محفظة العميل: وارد + صادر.
- * الرصيد الافتتاحي والتسوية الفنية لا يستهلكان الحد، والقيد الملغى لا يحسب.
+ * حد المستوى هو مجموع أصل الحركة الواردة والصادرة للعميل الفردي.
+ * الرسوم/العمولات لا تستهلك الحد، لأنها تكلفة خدمة وليست principal.
  */
 class ProgressiveKycTurnoverLimitTest extends TestCase
 {
@@ -28,16 +27,20 @@ class ProgressiveKycTurnoverLimitTest extends TestCase
     }
 
     /** @test */
-    public function incoming_money_is_rejected_when_it_would_push_monthly_turnover_over_the_tier_limit(): void
+    public function incoming_money_is_rejected_when_principal_would_push_monthly_turnover_over_the_limit(): void
     {
         Carbon::setTestNow('2026-09-15 12:00:00');
         config(['amial.operational_governorates' => ['YE-AD']]);
 
         $user = $this->tierOneCustomer();
-        $this->postWalletMovement($user, '78000', 'credit', 'send_money', '2026-09-10 12:00:00');
+        $this->postCustomerTransaction($user, '78000', 'in', fee: '5000');
 
         $service = app(KycTierService::class);
-        $this->assertSame(0, bccomp('78000', (string) $service->getUserTierInfo($user)['month_used'], 4));
+        $info = $service->getUserTierInfo($user);
+
+        // الرسوم لا ترفع الاستخدام إلى 83 ألف.
+        $this->assertSame('principal_wallet_turnover_excluding_fees', $info['usage_basis']);
+        $this->assertSame(0, bccomp('78000', (string) $info['month_used'], 4));
 
         try {
             $service->assertCanReceive($user, '50000');
@@ -47,50 +50,45 @@ class ProgressiveKycTurnoverLimitTest extends TestCase
             $this->assertStringContainsString('أكمل التوثيق لرفع الحد', $e->getMessage());
         }
 
-        // المتبقي بالضبط يجب أن يمر؛ لا نرفض العميل قبل بلوغ الحد.
+        // المتبقي بالضبط يمر.
         $service->assertCanReceive($user, '22000');
     }
 
     /** @test */
-    public function turnover_counts_real_debits_and_credits_but_not_opening_adjustment_or_reversed_entries(): void
+    public function inbound_and_outbound_principal_are_both_counted_while_fees_are_excluded(): void
     {
         Carbon::setTestNow('2026-09-15 12:00:00');
         config(['amial.operational_governorates' => ['YE-AD']]);
 
         $user = $this->tierOneCustomer();
 
-        $this->postWalletMovement($user, '30000', 'credit', 'send_money', '2026-09-05 10:00:00');
-        $this->postWalletMovement($user, '20000', 'debit', 'merchant_pay', '2026-09-06 10:00:00');
-
-        // قيود فنية لا تمثل استخدام العميل.
-        $this->postWalletMovement($user, '90000', 'credit', 'opening_balance', '2026-09-07 10:00:00');
-        $this->postWalletMovement($user, '70000', 'credit', 'external_adjustment', '2026-09-08 10:00:00');
-
-        // أصل تم عكسه لا يبقى حركة نهائية قابلة للاحتساب.
-        $this->postWalletMovement(
-            $user,
-            '40000',
-            'credit',
-            'send_money',
-            '2026-09-09 10:00:00',
-            status: 'reversed'
-        );
-
-        // قيد العكس نفسه لا يُحسب أيضاً.
-        $this->postWalletMovement(
-            $user,
-            '40000',
-            'debit',
-            'send_money_reversal',
-            '2026-09-09 10:01:00',
-            isReversal: true
-        );
+        $this->postCustomerTransaction($user, '30000', 'in', fee: '2500');
+        $this->postCustomerTransaction($user, '20000', 'out', fee: '1500');
 
         $info = app(KycTierService::class)->getUserTierInfo($user);
-
-        $this->assertSame('gross_wallet_turnover', $info['usage_basis']);
         $this->assertSame(0, bccomp('50000', (string) $info['month_used'], 4),
-            'يجب أن يكون الاستخدام 30 ألف وارد + 20 ألف صادر فقط.');
+            'الاستخدام يجب أن يكون 30 ألف وارد + 20 ألف صادر فقط، دون 4 آلاف رسوم.');
+    }
+
+    /** @test */
+    public function reaching_the_exact_limit_blocks_only_the_next_real_principal_movement(): void
+    {
+        Carbon::setTestNow('2026-09-15 12:00:00');
+        config(['amial.operational_governorates' => ['YE-AD']]);
+
+        $user = $this->tierOneCustomer();
+        $this->postCustomerTransaction($user, '78000', 'out', fee: '9000');
+
+        $service = app(KycTierService::class);
+        $service->assertCanReceive($user, '22000');
+        $this->postCustomerTransaction($user, '22000', 'in', fee: '3000');
+
+        $info = $service->getUserTierInfo($user);
+        $this->assertSame(0, bccomp('100000', (string) $info['month_used'], 4));
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('المتبقي هذا الشهر: 0');
+        $service->assertCanReceive($user, '1');
     }
 
     private function tierOneCustomer(): User
@@ -108,88 +106,25 @@ class ProgressiveKycTurnoverLimitTest extends TestCase
         return $user->fresh();
     }
 
-    private function postWalletMovement(
+    private function postCustomerTransaction(
         User $user,
         string $amount,
         string $direction,
-        string $sourceType,
-        string $at,
-        string $status = 'posted',
-        bool $isReversal = false,
-    ): void {
-        $walletId = DB::table('ledger_accounts')->where('account_code', "USER_WALLET_{$user->id}")->value('id');
-        if (!$walletId) {
-            $walletId = DB::table('ledger_accounts')->insertGetId([
-                'account_code' => "USER_WALLET_{$user->id}",
-                'account_type' => 'liability',
-                'name_ar' => 'محفظة اختبار حدود الحركة',
-                'owner_user_id' => $user->id,
-                'owner_type' => 'user',
-                'current_balance' => '0',
-                'normal_balance' => 'credit',
-                'currency' => 'YER',
-                'zone_code' => 'SOUTH',
-                'is_active' => true,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
-
-        $contraId = DB::table('ledger_accounts')->where('account_code', 'TURNOVER_TEST_CONTRA')->value('id');
-        if (!$contraId) {
-            $contraId = DB::table('ledger_accounts')->insertGetId([
-                'account_code' => 'TURNOVER_TEST_CONTRA',
-                'account_type' => 'asset',
-                'name_ar' => 'مقابل اختبار حدود الحركة',
-                'owner_user_id' => null,
-                'owner_type' => 'platform',
-                'current_balance' => '0',
-                'normal_balance' => 'debit',
-                'currency' => 'YER',
-                'zone_code' => 'SOUTH',
-                'is_active' => true,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
-
-        $journalId = DB::table('ledger_journal_entries')->insertGetId([
-            'entry_ulid' => (string) Str::ulid(),
-            'source_type' => $sourceType,
-            'source_id' => (string) Str::ulid(),
-            'description_ar' => 'قيد اختبار إجمالي الحركة',
-            'total_amount' => $amount,
-            'is_reversal' => $isReversal,
-            'status' => $status,
-            'created_by_user_id' => null,
+        string $fee = '0',
+    ): Transaction {
+        return Transaction::create([
+            'user_id' => $user->id,
+            'transaction_id' => (string) \Illuminate\Support\Str::ulid(),
+            'transaction_type' => $direction === 'out' ? 'send_money' : 'received_money',
+            'debit' => $direction === 'out' ? $amount : '0',
+            'credit' => $direction === 'in' ? $amount : '0',
+            'charge' => $fee,
+            'amount' => $amount,
+            'balance' => '0',
+            'from_user_id' => $direction === 'out' ? $user->id : null,
+            'to_user_id' => $direction === 'in' ? $user->id : null,
+            'decision_code' => 'TX_OK',
             'zone_code' => 'SOUTH',
-            'posted_at' => $at,
-            'created_at' => $at,
-        ]);
-
-        $opposite = $direction === 'credit' ? 'debit' : 'credit';
-
-        DB::table('ledger_entry_lines')->insert([
-            [
-                'journal_entry_id' => $journalId,
-                'account_id' => $walletId,
-                'direction' => $direction,
-                'amount' => $amount,
-                'balance_before' => '0',
-                'balance_after' => '0',
-                'description_ar' => 'حركة محفظة العميل',
-                'created_at' => $at,
-            ],
-            [
-                'journal_entry_id' => $journalId,
-                'account_id' => $contraId,
-                'direction' => $opposite,
-                'amount' => $amount,
-                'balance_before' => '0',
-                'balance_after' => '0',
-                'description_ar' => 'مقابل حركة العميل',
-                'created_at' => $at,
-            ],
         ]);
     }
 }
