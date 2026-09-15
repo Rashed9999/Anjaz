@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\CustomerTurnoverService;
 use App\Services\KycTierService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -11,10 +12,9 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * AMIAL-PROGRESSIVE-KYC-TURNOVER-002
- *
- * حد المستوى هو مجموع أصل الحركة الواردة والصادرة للعميل الفردي.
- * الرسوم/العمولات لا تستهلك الحد، لأنها تكلفة خدمة وليست principal.
+ * AMIAL-PROGRESSIVE-KYC-TURNOVER-003
+ * حد المستوى = أصل الحركة الواردة والصادرة، بلا رسوم. الحجز يستهلك الحد
+ * مؤقتاً، والإلغاء/الاسترداد يحرره.
  */
 class ProgressiveKycTurnoverLimitTest extends TestCase
 {
@@ -38,7 +38,6 @@ class ProgressiveKycTurnoverLimitTest extends TestCase
         $service = app(KycTierService::class);
         $info = $service->getUserTierInfo($user);
 
-        // الرسوم لا ترفع الاستخدام إلى 83 ألف.
         $this->assertSame('principal_wallet_turnover_excluding_fees', $info['usage_basis']);
         $this->assertSame(0, bccomp('78000', (string) $info['month_used'], 4));
 
@@ -50,7 +49,6 @@ class ProgressiveKycTurnoverLimitTest extends TestCase
             $this->assertStringContainsString('أكمل التوثيق لرفع الحد', $e->getMessage());
         }
 
-        // المتبقي بالضبط يمر.
         $service->assertCanReceive($user, '22000');
     }
 
@@ -61,7 +59,6 @@ class ProgressiveKycTurnoverLimitTest extends TestCase
         config(['amial.operational_governorates' => ['YE-AD']]);
 
         $user = $this->tierOneCustomer();
-
         $this->postCustomerTransaction($user, '30000', 'in', fee: '2500');
         $this->postCustomerTransaction($user, '20000', 'out', fee: '1500');
 
@@ -89,6 +86,31 @@ class ProgressiveKycTurnoverLimitTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('المتبقي هذا الشهر: 0');
         $service->assertCanReceive($user, '1');
+    }
+
+    /** @test */
+    public function pending_reservation_consumes_capacity_and_release_returns_it(): void
+    {
+        Carbon::setTestNow('2026-09-15 12:00:00');
+        config(['amial.operational_governorates' => ['YE-AD']]);
+
+        $user = $this->tierOneCustomer();
+        $turnover = app(CustomerTurnoverService::class);
+        $tiers = app(KycTierService::class);
+
+        $turnover->reserve($user, '80000', 'out', 'test:pending', 'cash_out');
+        $this->assertSame(0, bccomp('80000', (string) $tiers->getUserTierInfo($user)['month_used'], 4));
+
+        try {
+            $tiers->assertCanReceive($user, '21000');
+            $this->fail('الطلب المعلّق لم يحجز من الحد.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('إجمالي الحركة', $e->getMessage());
+        }
+
+        $turnover->release('test:pending', 'customer cancelled');
+        $this->assertSame(0, bccomp('0', (string) $tiers->getUserTierInfo($user)['month_used'], 4));
+        $tiers->assertCanReceive($user, '100000');
     }
 
     private function tierOneCustomer(): User
