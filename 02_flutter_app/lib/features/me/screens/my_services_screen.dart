@@ -25,8 +25,12 @@ import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart
 import 'package:amial_pay/shared/widgets/verified_badge.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
-/// خدمات العميل اليومية فقط. الميزات التخصصية لا تُعرض هنا حتى لا تتحول
-/// الصفحة إلى كتالوج طويل أو إلى أزرار بلا رحلة مكتملة.
+/// خدمات العميل الفرد فقط.
+///
+/// AMIAL-CUSTOMER-TIER-SURFACE-001:
+/// لا تكفي قدرة التطبيق العامة لإظهار خدمة مالية؛ يجب كذلك أن يسمح بها
+/// مستوى KYC الفعّال. Tier 0 لا يرى حركة مالية، Tier 1 يرى الخدمات
+/// الأساسية، وTier 2+ يرى الدفع الآمن/التبرعات/صندوق العائلة.
 class MyServicesScreen extends StatefulWidget {
   const MyServicesScreen({super.key});
 
@@ -42,8 +46,6 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
   @override
   void initState() {
     super.initState();
-    // لا نطلب بيانات المحفظة الشخصية أصلاً عند دخول تاجر من route قديم.
-    // الفصل هنا قبل أي API، وليس فقط في build بعد أن تكون البيانات حُمّلت.
     _merchantAtEntry = Get.find<AccessController>().isMerchantSession;
     if (_merchantAtEntry) return;
     me = Get.find<MeController>();
@@ -56,9 +58,6 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // هذا آخر خط دفاع، لا مجرد إخفاء بطاقات. قد يصل التاجر إلى هذه الشاشة
-    // من رابط قديم أو من نافذةٍ بقيت في stack بعد تغيير الدور؛ عندئذٍ لا
-    // يجوز عرض رقم محفظته الشخصية أو السحب/كشف الحساب الخاص بالعميل.
     final access = Get.find<AccessController>();
     if (access.isPos) {
       return const MerchantPosHomeScreen();
@@ -163,8 +162,19 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
     });
   }
 
+  int _currentCustomerTier() {
+    final data = me.me.value;
+    final rawVerification = data?['verification'];
+    if (rawVerification is! Map) return 0;
+    return int.tryParse('${rawVerification['tier'] ?? 0}') ?? 0;
+  }
+
   Widget _servicesGrid() {
     final access = Get.find<AccessController>();
+    final tier = _currentCustomerTier();
+    final basicFinancial = tier >= 1;
+    final enhancedFinancial = tier >= 2;
+
     final cards = <Widget>[
       _notificationCard(),
       _serviceCard(
@@ -179,31 +189,33 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
         subtitle: 'سجل العمليات',
         onTap: () => Get.to(() => const ReceiptsListScreen()),
       ),
-      if (access.hasAny(const ['cash_out', 'wallet']))
+
+      // Tier 0 لا يملك أي حركة مالية. وجود wallet وحده لا يفتح السحب.
+      if (basicFinancial && access.hasAny(const ['cash_out', 'wallet']))
         _serviceCard(
           icon: Icons.arrow_downward,
           label: 'سحب نقدي',
           subtitle: 'عبر الوكيل',
           onTap: () => Get.to(() => const WithdrawRequestScreen()),
         ),
-      if (access.has('payment_requests'))
+
+      // طلب الأموال ليس تحريكاً عند الإنشاء، لكن قبوله يؤدي إلى حركة؛
+      // لذلك لا نظهره قبل تفعيل المستوى الأساسي.
+      if (basicFinancial && access.has('payment_requests'))
         _serviceCard(
           icon: Icons.request_quote,
           label: 'طلب أموال',
           subtitle: 'من شخص آخر',
           onTap: () => Get.to(() => const PaymentRequestCreateScreen()),
         ),
-      if (access.has('payment_requests'))
+      if (basicFinancial && access.has('payment_requests'))
         _serviceCard(
           icon: Icons.inbox,
           label: 'طلبات واردة',
           subtitle: 'وافق أو ارفض',
           onTap: () => Get.to(() => const IncomingRequestsScreen()),
         ),
-      // **والصادرةُ مع الواردة** — كانت في «حسابي» وحدَها، فاختلفت
-      // الشاشتان الشقيقتان على البابِ نفسِه: محروسٌ هنا مكشوفٌ هناك،
-      // ومعروضٌ هناك غائبٌ ها هنا. والبابُ الواحدُ حكمُه واحد.
-      if (access.has('payment_requests'))
+      if (basicFinancial && access.has('payment_requests'))
         _serviceCard(
           icon: Icons.outbox,
           label: 'طلبات صادرة',
@@ -211,37 +223,22 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           onTap: () => Get.to(() => const OutgoingRequestsScreen()),
         ),
 
-      // ══════════════════════════════════════════════════════════════
-      // **استُعيدت هذه الثلاثُ مرّةً ثانية.**
-      //
-      // حذفها `d8a67a6` («fix(customer): simplify services…») فسأل عنها
-      // صاحبُ المشروع بأسمائها، فأُعيدت في `c745614`. ثمّ **حذفها
-      // `797638b` مرّةً أخرى** («fix: separate customer and merchant
-      // surfaces») — ومعها استيراداتُها.
-      //
-      // والشاشاتُ الثلاثُ قائمةٌ في مواضعها لم تُمَسّ: مبنيّةٌ ولا
-      // يُوصَل إليها، وهو نمطُ العطل الأكثرُ تكراراً هنا. **والتبسيطُ
-      // بالحذف ينقل العطلَ ولا يرفعه.**
-      // ══════════════════════════════════════════════════════════════
-      if (access.has('safe_pay'))
+      // Tier 2+ فقط بحسب KycTierService.
+      if (enhancedFinancial && access.has('safe_pay'))
         _serviceCard(
           icon: Icons.shield_outlined,
           label: 'الدفع الآمن',
           subtitle: 'حماية للبيع والشراء',
           onTap: () => Get.to(() => const MySafePaymentsScreen()),
         ),
-      if (access.has('family_fund'))
+      if (enhancedFinancial && access.has('family_fund'))
         _serviceCard(
           icon: Icons.savings_outlined,
           label: 'صندوق العائلة',
           subtitle: 'ادّخارٌ مشترك',
           onTap: () => Get.to(() => const MyFundsScreen()),
         ),
-      // **والتبرّعاتُ بلا قدرةٍ في السجلّ** — قِيس فلا وجودَ لـ`donations`
-      // بين القدرات، ولا وسيطَ `capability:` على مساراتها. فالشرطُ هو
-      // نفسُه الذي كان قبل الحذف: تُعرَض لغير التاجر. **ولا يُخترَع
-      // حاجزٌ يبدو أدقَّ وهو لا يفحص شيئاً.** (القاعدة السابعة.)
-      if (!access.isMerchantSession)
+      if (enhancedFinancial && !access.isMerchantSession)
         _serviceCard(
           icon: Icons.volunteer_activism_outlined,
           label: 'التبرعات',
@@ -249,18 +246,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           onTap: () => Get.to(() => const DonationsHomeScreen()),
         ),
 
-      // ══════════════════════════════════════════════════════════════
-      // **الحلقةُ الأخيرة — وقُطعت مرّتين.**
-      //
-      // الخادمُ يفتح طلبَ تحديثِ البيانات، واللوحةُ تعرض الطابور،
-      // **والشاشةُ مبنيّةٌ ولا بطاقةَ تقود إليها**. فيبقى الطلبُ
-      // `PENDING_CUSTOMER` إلى الأبد: العميلُ مطلوبٌ منه شيءٌ ولا يعلم،
-      // ولا سطرَ خطأٍ في أيّ سجلّ.
-      //
-      // وُصلت في `3818a93`، فقطعها `d8a67a6`، فأُعيدت في `73e4c09`،
-      // **فقطعها `797638b` ثانيةً** مع بطاقاتِ الدفع الآمن وصندوق
-      // العائلة والتبرّعات في الالتزام نفسِه.
-      // ══════════════════════════════════════════════════════════════
+      // خدمات معلومات/إدارة الحساب وليست فتحاً لحركة مالية جديدة.
       _serviceCard(
         icon: Icons.assignment_ind_outlined,
         label: 'تحديث بياناتي',
@@ -415,7 +401,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
             Obx(() {
               final count = notifications.unreadCount.value;
               return Text(
-                count > 0 ? count.toString() + ' غير مقروء' : 'لا جديد',
+                count > 0 ? '$count غير مقروء' : 'لا جديد',
                 style: const TextStyle(
                   fontSize: 11,
                   color: AmialColors.textSecondary,
