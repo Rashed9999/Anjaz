@@ -70,8 +70,16 @@ class KycTierService
         ],
     ];
 
-    private function getLimits(int $tier): array
+    /**
+     * سياسة مستوى بعينه كما ستطبقها العمليات فعلياً.
+     *
+     * أُخرجت كواجهة قراءة فقط لكي لا تنسخ واجهة العميل أرقام الحدود أو
+     * المزايا داخل Flutter. قاعدة البيانات تبقى المصدر الأول، والـfallback
+     * هنا يبقى المصدر الثاني نفسه الذي تستخدمه الحواجز المالية.
+     */
+    public function getLimits(int $tier): array
     {
+        $tier = max(0, min(3, $tier));
         $dbLimit = DB::table('kyc_tier_limits')->where('tier', $tier)->where('is_active', true)->first();
         if ($dbLimit) {
             return [
