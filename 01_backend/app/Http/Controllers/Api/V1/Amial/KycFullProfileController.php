@@ -7,6 +7,7 @@ use App\Services\AuditService;
 use App\Support\Kyc\KycProfileFields;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 /**
@@ -71,6 +72,14 @@ class KycFullProfileController extends Controller
         }
 
         KycProfileFields::fill($user, $request);
+
+        // KycProfileFields يكتب pep_position مع إجابة is_pep الجديدة. لكن إن
+        // كانت الإجابة «نعم» محفوظة سابقاً وبقي المنصب وحده ناقصاً، تصل هذه
+        // الصفحة بـpep_position فقط. نحفظه صراحةً حتى لا يظل الحقل يطلب نفسه.
+        if (Schema::hasColumn('users', 'pep_position') && $request->filled('pep_position')) {
+            $user->pep_position = trim((string) $request->input('pep_position'));
+        }
+
         $user->save();
         $missing = KycProfileFields::missingFor($user->fresh());
 
