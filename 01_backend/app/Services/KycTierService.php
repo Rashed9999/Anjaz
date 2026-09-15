@@ -19,10 +19,22 @@ use RuntimeException;
  * Tier 2: هوية قانونية موثقة — حد متوسط، بلا سيلفي إلزامي.
  * Tier 3: KYC كامل + إثبات قوي لصاحب الهوية — الحدود الأعلى.
  *
+ * AMIAL-PROGRESSIVE-KYC-TURNOVER-001
+ * الحدود اليومية والشهرية هي **إجمالي حركة المحفظة** لا الإنفاق فقط:
+ * كل مبلغ حقيقي يدخل إلى محفظة العميل أو يخرج منها يستهلك الحد. بذلك لا
+ * يستطيع الحساب المحدود تدوير 100 ألف عدّة مرات باستقبالها بعد صرفها.
+ * القيود الفنية (رصيد افتتاحي/تسوية) والقيود المعكوسة لا تُحتسب استخداماً.
+ *
  * الأرقام هنا fallback فقط؛ DB (kyc_tier_limits) هي مصدر سياسة التشغيل.
  */
 class KycTierService
 {
+    /** قيود دفترية فنية لا تمثل استعمال العميل لمحفظته. */
+    private const NON_USAGE_LEDGER_SOURCES = [
+        'opening_balance',
+        'external_adjustment',
+    ];
+
     public function effectiveTier(User $user): int
     {
         $status = app(\App\Services\Kyc\KycAccountStatusService::class)->for($user);
@@ -173,44 +185,70 @@ class KycTierService
             throw new RuntimeException('المبلغ يجب أن يكون أكبر من صفر.');
         }
 
-        if (bccomp($amount, $limits['max_single_transaction'], 4) > 0) {
-            throw new RuntimeException(
-                'المبلغ يتجاوز حد العملية الواحدة (' . Helpers::money($limits['max_single_transaction']) . ' ر.ي) لمستواك'
-            );
-        }
-
-        $todayTotal = $this->getTodayTotal($user->id);
-        if (bccomp(bcadd($todayTotal, $amount, 4), $limits['max_daily_total'], 4) > 0) {
-            throw new RuntimeException(
-                'هذه العملية ستتجاوز حدك اليومي (' . Helpers::money($limits['max_daily_total']) . ' ر.ي)'
-            );
-        }
-
-        $monthTotal = $this->getMonthTotal($user->id);
-        if (bccomp(bcadd($monthTotal, $amount, 4), $limits['max_monthly_total'], 4) > 0) {
-            throw new RuntimeException(
-                'هذه العملية ستتجاوز حدك الشهري (' . Helpers::money($limits['max_monthly_total']) . ' ر.ي)'
-            );
-        }
+        $this->assertMovementAllowed($user, $amount, $limits);
     }
 
     /**
-     * استقبال المال قرار مختلف عن إرساله: لا نضيف المبلغ إلى إنفاق المستلم،
-     * لكننا نلزم أهليته للاستلام ونمنع تجاوز حد الرصيد لمستواه.
+     * الاستقبال يستهلك الحد أيضاً. الفرق الوحيد عن الإرسال أن الاستقبال
+     * يحتاج بالإضافة إلى حد الحركة التأكد من أن الرصيد الناتج لا يتجاوز
+     * سقف الرصيد الخاص بالمستوى.
      */
     public function assertCanReceive(User $user, string $incomingAmount): void
     {
-        $this->assertFeatureAllowed($user, 'receive_money');
+        $limits = $this->assertFeatureAllowed($user, 'receive_money');
 
         if (bccomp($incomingAmount, '0', 4) <= 0) {
             throw new RuntimeException('المبلغ المستلم يجب أن يكون أكبر من صفر.');
         }
+
+        $this->assertMovementAllowed($user, $incomingAmount, $limits);
 
         $current = (string) (EMoney::query()
             ->where('user_id', $user->id)
             ->value('current_balance') ?? '0');
 
         $this->assertBalanceAllowed($user, bcadd($current, $incomingAmount, 4));
+    }
+
+    /**
+     * يطبّق حد العملية الواحدة وحد إجمالي الحركة اليومية والشهرية على
+     * الوارد والصادر معاً. المتبقي يُذكر في رسالة الرفض حتى يفهم العميل
+     * لماذا لم تمر العملية وما أقصى مبلغ يمكنه تحريكه قبل الترقية.
+     *
+     * @param array<string,mixed> $limits
+     */
+    private function assertMovementAllowed(User $user, string $amount, array $limits): void
+    {
+        if (bccomp($amount, $limits['max_single_transaction'], 4) > 0) {
+            throw new RuntimeException(
+                'المبلغ يتجاوز حد العملية الواحدة (' . Helpers::money($limits['max_single_transaction']) . ' ر.ي) لمستواك'
+            );
+        }
+
+        $todayTotal = $this->getTodayMovementTotal($user->id);
+        if (bccomp(bcadd($todayTotal, $amount, 4), $limits['max_daily_total'], 4) > 0) {
+            $remaining = $this->remaining($limits['max_daily_total'], $todayTotal);
+            throw new RuntimeException(
+                'هذه العملية ستتجاوز حد إجمالي الحركة اليومي ('
+                . Helpers::money($limits['max_daily_total']) . ' ر.ي). المتبقي اليوم: '
+                . Helpers::money($remaining) . ' ر.ي'
+            );
+        }
+
+        $monthTotal = $this->getMonthMovementTotal($user->id);
+        if (bccomp(bcadd($monthTotal, $amount, 4), $limits['max_monthly_total'], 4) > 0) {
+            $remaining = $this->remaining($limits['max_monthly_total'], $monthTotal);
+            throw new RuntimeException(
+                'هذه العملية ستتجاوز حد إجمالي الحركة الشهري ('
+                . Helpers::money($limits['max_monthly_total']) . ' ر.ي). المتبقي هذا الشهر: '
+                . Helpers::money($remaining) . ' ر.ي. أكمل التوثيق لرفع الحد.'
+            );
+        }
+    }
+
+    private function remaining(string $limit, string $used): string
+    {
+        return bccomp($limit, $used, 4) > 0 ? bcsub($limit, $used, 4) : '0';
     }
 
     public function assertBalanceAllowed(User $user, string $newBalance): void
@@ -242,31 +280,40 @@ class KycTierService
         ]);
     }
 
-    private function getTodayTotal(int $userId): string
+    /** إجمالي الحركة الحقيقية اليوم: كل debit + credit لمحفظة العميل. */
+    private function getTodayMovementTotal(int $userId): string
     {
-        $wallet = DB::table('ledger_accounts')
-            ->where('account_code', "USER_WALLET_{$userId}")->first();
-        if (!$wallet) return '0';
-
-        $total = DB::table('ledger_entry_lines')
-            ->where('account_id', $wallet->id)
-            ->where('direction', 'debit')
-            ->where('created_at', '>=', Carbon::now()->startOfDay())
-            ->sum('amount');
-        return (string) ($total ?: '0');
+        return $this->getMovementTotalSince($userId, Carbon::now()->startOfDay());
     }
 
-    private function getMonthTotal(int $userId): string
+    /** إجمالي الحركة الحقيقية هذا الشهر: كل debit + credit لمحفظة العميل. */
+    private function getMonthMovementTotal(int $userId): string
+    {
+        return $this->getMovementTotalSince($userId, Carbon::now()->startOfMonth());
+    }
+
+    /**
+     * مصدر الحقيقة هو الدفتر. نستبعد:
+     * - القيود المعكوسة أو الأصل الذي عُكس: لا معاملة نهائية.
+     * - opening_balance: ترحيل رصيد قائم وليس استخداماً جديداً.
+     * - external_adjustment: تصحيح محاسبي بأربع عيون وليس حركة عميل.
+     */
+    private function getMovementTotalSince(int $userId, Carbon $since): string
     {
         $wallet = DB::table('ledger_accounts')
-            ->where('account_code', "USER_WALLET_{$userId}")->first();
+            ->where('account_code', "USER_WALLET_{$userId}")
+            ->first();
         if (!$wallet) return '0';
 
-        $total = DB::table('ledger_entry_lines')
-            ->where('account_id', $wallet->id)
-            ->where('direction', 'debit')
-            ->where('created_at', '>=', Carbon::now()->startOfMonth())
-            ->sum('amount');
+        $total = DB::table('ledger_entry_lines as line')
+            ->join('ledger_journal_entries as journal', 'journal.id', '=', 'line.journal_entry_id')
+            ->where('line.account_id', $wallet->id)
+            ->where('journal.status', 'posted')
+            ->where('journal.is_reversal', false)
+            ->whereNotIn('journal.source_type', self::NON_USAGE_LEDGER_SOURCES)
+            ->where('line.created_at', '>=', $since)
+            ->sum('line.amount');
+
         return (string) ($total ?: '0');
     }
 
@@ -283,8 +330,10 @@ class KycTierService
             'stored_tier' => $storedTier,
             'tier_name' => $limits['name_ar'],
             'limits' => $limits,
-            'today_used' => $this->getTodayTotal($user->id),
-            'month_used' => $this->getMonthTotal($user->id),
+            // "used" هنا إجمالي الحركة (وارد + صادر)، وليس الإنفاق فقط.
+            'usage_basis' => 'gross_wallet_turnover',
+            'today_used' => $this->getTodayMovementTotal($user->id),
+            'month_used' => $this->getMonthMovementTotal($user->id),
             'next_tier' => $nextTier,
             'residence' => $residence,
         ];
