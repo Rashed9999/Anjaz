@@ -3,7 +3,11 @@
 use App\Http\Controllers\Api\V1\Amial\KycIdentityUpgradeController;
 use App\Http\Controllers\Api\V1\Amial\KycPrivacyController;
 use App\Http\Controllers\Api\V1\Amial\KycResidenceController;
+use App\Http\Controllers\Api\V1\Amial\VerificationStatusController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('me/verification-status', [VerificationStatusController::class, 'show'])
+    ->name('amial.me.verification-status');
 
 Route::prefix('me/kyc/privacy')->name('amial.me.kyc.privacy.')->group(function () {
     Route::get('/', [KycPrivacyController::class, 'show'])->name('show');
