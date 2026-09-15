@@ -203,11 +203,11 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
             TextField(
               controller: _otp,
               keyboardType: TextInputType.number,
-              maxLength: 4,
+              maxLength: 6,
               textDirection: TextDirection.ltr,
               decoration: const InputDecoration(
                 labelText: 'رمز التحقق',
-                hintText: '0000',
+                hintText: '000000',
                 border: OutlineInputBorder(),
                 counterText: '',
               ),
@@ -220,8 +220,8 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
                     onPressed: controller.isActionLoading
                         ? null
                         : () {
-                            if (_otp.text.trim().length != 4) {
-                              showCustomSnackBarHelper('أدخل رمز التحقق المكون من 4 أرقام');
+                            if (_otp.text.trim().length != 6) {
+                              showCustomSnackBarHelper('أدخل رمز التحقق المكون من 6 أرقام');
                               return;
                             }
                             controller.verifyPhoneOtp(_otp.text.trim());
@@ -388,7 +388,9 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
             ],
             selected: _isPep == null ? <bool>{} : {_isPep!},
             emptySelectionAllowed: true,
-            onSelectionChanged: (value) => setState(() => _isPep = value.firstOrNull),
+            onSelectionChanged: (value) => setState(() {
+              _isPep = value.isEmpty ? null : value.first;
+            }),
           ),
           const SizedBox(height: 10),
         ],
@@ -510,7 +512,6 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
     String subtitle, {
     bool enabled = true,
   }) {
-    final selected = _ownershipMode == value;
     return Opacity(
       opacity: enabled ? 1 : 0.55,
       child: RadioListTile<String>(
@@ -553,6 +554,11 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
       if (_isPep == true && _pepPosition.text.trim().isNotEmpty) {
         fields['pep_position'] = _pepPosition.text.trim();
       }
+    }
+
+    if (_isPep == true && _pepPosition.text.trim().isEmpty) {
+      showCustomSnackBarHelper('اكتب المنصب أو الصفة السياسية قبل الحفظ');
+      return;
     }
 
     final expected = missing.where((code) => code != 'pep_position' || _isPep != false).length;
