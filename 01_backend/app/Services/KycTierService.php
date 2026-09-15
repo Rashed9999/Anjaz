@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\CentralLogics\Helpers;
+use App\Models\EMoney;
 use App\Models\User;
 use App\Services\Kyc\ResidenceVerificationService;
 use App\Support\YemenGovernorates;
@@ -131,7 +132,13 @@ class KycTierService
         }
     }
 
-    public function assertTransactionAllowed(User $user, string $amount, string $feature = 'send_money'): void
+    /**
+     * بوابة الميزة بلا احتساب مبلغ. مناسبة لفتح شاشة/إنشاء طلب لا يحرك مالاً.
+     * لا تستخدمها مكان assertTransactionAllowed عند الخصم الفعلي.
+     *
+     * @return array<string,mixed> حدود المستوى الفعلية للمستخدم.
+     */
+    public function assertFeatureAllowed(User $user, string $feature): array
     {
         $limits = $this->getLimitsForUser($user);
         if ((int) $limits['tier'] <= 0) {
@@ -145,6 +152,17 @@ class KycTierService
             throw new RuntimeException(
                 "هذه الميزة تتطلب مستوى توثيق أعلى. مستواك الحالي: {$limits['name_ar']}"
             );
+        }
+
+        return $limits;
+    }
+
+    public function assertTransactionAllowed(User $user, string $amount, string $feature = 'send_money'): void
+    {
+        $limits = $this->assertFeatureAllowed($user, $feature);
+
+        if (bccomp($amount, '0', 4) <= 0) {
+            throw new RuntimeException('المبلغ يجب أن يكون أكبر من صفر.');
         }
 
         if (bccomp($amount, $limits['max_single_transaction'], 4) > 0) {
@@ -166,6 +184,25 @@ class KycTierService
                 'هذه العملية ستتجاوز حدك الشهري (' . Helpers::money($limits['max_monthly_total']) . ' ر.ي)'
             );
         }
+    }
+
+    /**
+     * استقبال المال قرار مختلف عن إرساله: لا نضيف المبلغ إلى إنفاق المستلم،
+     * لكننا نلزم أهليته للاستلام ونمنع تجاوز حد الرصيد لمستواه.
+     */
+    public function assertCanReceive(User $user, string $incomingAmount): void
+    {
+        $this->assertFeatureAllowed($user, 'receive_money');
+
+        if (bccomp($incomingAmount, '0', 4) <= 0) {
+            throw new RuntimeException('المبلغ المستلم يجب أن يكون أكبر من صفر.');
+        }
+
+        $current = (string) (EMoney::query()
+            ->where('user_id', $user->id)
+            ->value('current_balance') ?? '0');
+
+        $this->assertBalanceAllowed($user, bcadd($current, $incomingAmount, 4));
     }
 
     public function assertBalanceAllowed(User $user, string $newBalance): void
