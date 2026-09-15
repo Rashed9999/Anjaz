@@ -164,8 +164,14 @@ class WholesaleTest extends TestCase
         $product = $this->svc->addProduct($biz, [
             'name' => 'سكر آجل التطبيق', 'base_price' => '1000', 'initial_stock' => 10,
         ]);
+        config(['amial.operational_governorates' => ['YE-AD']]);
         $appCustomer = User::factory()->create([
             'type' => 2, 'phone' => '+967771700199', 'zone_code' => 'SOUTH',
+            'kyc_tier' => 1,
+            'is_phone_verified' => 1,
+            'is_kyc_verified' => 0,
+            'verified_residence_governorate' => 'YE-AD',
+            'residence_verified_at' => now(),
         ]);
         foreach ([$this->merchant->id => '0', $appCustomer->id => '10000'] as $userId => $balance) {
             EMoney::create([

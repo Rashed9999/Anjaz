@@ -45,7 +45,7 @@ class FamilyFundService
         bool $requireOwnerApproval = true,
         ?string $targetAmount = null, // AMIAL-FUND-002: المبلغ المستهدف
     ): FamilyFund {
-        $this->kyc->assertFeatureAllowed($owner, 'family_fund');
+        $this->kyc->assertIndividualFeatureAllowed($owner, 'family_fund');
 
         if ($owner->zone_code !== 'SOUTH') {
             throw new \RuntimeException('Only SOUTH users can create funds');
@@ -120,8 +120,8 @@ class FamilyFundService
 
         // لا يكفي أن يكون صاحب الصندوق Tier 2/3: المدعو نفسه عضو مالي
         // محتمل، لذلك يمرّ بالحارس قبل إنشاء سجل الدعوة.
-        $this->kyc->assertFeatureAllowed($inviter, 'family_fund');
-        $this->kyc->assertFeatureAllowed($invitee, 'family_fund');
+        $this->kyc->assertIndividualFeatureAllowed($inviter, 'family_fund');
+        $this->kyc->assertIndividualFeatureAllowed($invitee, 'family_fund');
 
         // فحص duplicate
         $existing = FamilyFundMember::where('fund_id', $fund->id)
@@ -170,7 +170,7 @@ class FamilyFundService
      */
     public function acceptInvitation(FamilyFundMember $member, User $user): bool
     {
-        $this->kyc->assertFeatureAllowed($user, 'family_fund');
+        $this->kyc->assertIndividualFeatureAllowed($user, 'family_fund');
 
         if ($member->user_id !== $user->id) {
             throw new \RuntimeException('Cannot accept invitation for another user');
@@ -229,7 +229,7 @@ class FamilyFundService
             throw new \RuntimeException('Amount must be positive');
         }
 
-        $this->kyc->assertTransactionAllowed($user, $amountNormalized, 'family_fund');
+        $this->kyc->assertIndividualTransactionAllowed($user, $amountNormalized, 'family_fund');
 
         // فحص حد المساهمة اليومي إن وُجد
         if ($fund->max_member_contribution_per_day) {
@@ -346,9 +346,9 @@ class FamilyFundService
 
         $amountNormalized = MoneyService::normalize($amount);
 
-        $this->kyc->assertFeatureAllowed($proposer, 'family_fund');
-        $this->kyc->assertFeatureAllowed($beneficiary, 'family_fund');
-        $this->kyc->assertCanReceive($beneficiary, $amountNormalized);
+        $this->kyc->assertIndividualFeatureAllowed($proposer, 'family_fund');
+        $this->kyc->assertIndividualFeatureAllowed($beneficiary, 'family_fund');
+        $this->kyc->assertIndividualCanReceive($beneficiary, $amountNormalized);
 
         if (bccomp($amountNormalized, (string)$fund->balance, 4) > 0) {
             throw new \RuntimeException('Insufficient fund balance');
@@ -415,9 +415,9 @@ class FamilyFundService
             throw new \RuntimeException('Beneficiary no longer exists');
         }
 
-        $this->kyc->assertFeatureAllowed($approver, 'family_fund');
-        $this->kyc->assertFeatureAllowed($beneficiary, 'family_fund');
-        $this->kyc->assertCanReceive($beneficiary, (string) $tx->amount);
+        $this->kyc->assertIndividualFeatureAllowed($approver, 'family_fund');
+        $this->kyc->assertIndividualFeatureAllowed($beneficiary, 'family_fund');
+        $this->kyc->assertIndividualCanReceive($beneficiary, (string) $tx->amount);
 
         return DB::transaction(function () use ($tx, $fund, $approver, $beneficiary) {
             // إعادة فحص الرصيد (قد تغير منذ المقترح)

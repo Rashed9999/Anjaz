@@ -31,6 +31,7 @@ class CustomerCreditSettleTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['amial.operational_governorates' => ['YE-AD']]);
         $this->svc = app(CustomerCreditService::class);
 
         $this->merchant = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
@@ -49,6 +50,11 @@ class CustomerCreditSettleTest extends TestCase
 
         $this->customer = User::factory()->create([
             'type' => 2, 'zone_code' => 'SOUTH', 'phone' => '+967771700066',
+            'kyc_tier' => 1,
+            'is_phone_verified' => 1,
+            'is_kyc_verified' => 0,
+            'verified_residence_governorate' => 'YE-AD',
+            'residence_verified_at' => now(),
             'transaction_pin' => Hash::make('1234'),
         ]);
         EMoney::create([
@@ -130,6 +136,33 @@ class CustomerCreditSettleTest extends TestCase
             'direction' => 'credit',
         ]);
         $this->assertNotEmpty($response->json('meta.receipt_number'));
+    }
+
+    /** @test Tier 0 cannot settle a debt or create financial records. */
+    public function tier_zero_customer_cannot_settle_debt_or_create_financial_records(): void
+    {
+        $account = $this->svc->findOrCreateAccount($this->merchant->id, '+967771700066', 'علي');
+        $this->svc->recordSale($account, '3000', createdBy: $this->merchant->id);
+
+        $this->customer->forceFill([
+            'kyc_tier' => 0,
+            'is_phone_verified' => 0,
+        ])->save();
+
+        Passport::actingAs($this->customer->fresh(), [], 'api');
+        $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+            'amount' => '1000', 'pin' => '1234',
+        ])->assertStatus(422)->assertJsonPath('code', 'SETTLE_FAILED');
+
+        $this->assertSame('10000.0000',
+            (string) EMoney::where('user_id', $this->customer->id)->value('current_balance'));
+        $this->assertSame('0.0000',
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'));
+        $this->assertSame('3000.0000', (string) $account->fresh()->current_balance);
+        $this->assertDatabaseMissing('transactions', [
+            'user_id' => $this->customer->id,
+            'transaction_type' => 'debt_payment',
+        ]);
     }
 
     /** @test رمز خاطئ يرفض السداد. */

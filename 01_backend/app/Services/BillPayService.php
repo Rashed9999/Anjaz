@@ -44,7 +44,6 @@ class BillPayService
         private readonly FinancialGuardService $guard,
         private readonly AuditService $audit,
         private readonly ReceiptService $receipts,
-        private readonly KycTierService $kyc,
     ) {}
 
     /**
@@ -96,7 +95,7 @@ class BillPayService
 
         // يحمي استعمال الخدمة المباشر (مثل WhatsApp) أيضاً، لا controller
         // تطبيق الجوال فقط. الأدوار غير العميل الفردي لا تدخل في Tier KYC.
-        $this->kyc->assertIndividualTransactionAllowed($user, $amountNormalized, 'bill_pay');
+        app(KycTierService::class)->assertIndividualTransactionAllowed($user, $amountNormalized, 'bill_pay');
 
         $fee = $this->calculateFee($product, $amountNormalized);
         $totalDebited = MoneyService::add($amountNormalized, $fee);

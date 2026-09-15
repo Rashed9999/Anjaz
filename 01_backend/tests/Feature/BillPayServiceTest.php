@@ -34,11 +34,20 @@ class BillPayServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['amial.operational_governorates' => ['YE-AD']]);
         Queue::fake();
 
         $this->service = app(BillPayService::class);
 
-        $this->user = User::factory()->create(['zone_code' => 'SOUTH']);
+        $this->user = User::factory()->create([
+            'type' => 2,
+            'zone_code' => 'SOUTH',
+            'kyc_tier' => 1,
+            'is_phone_verified' => 1,
+            'is_kyc_verified' => 0,
+            'verified_residence_governorate' => 'YE-AD',
+            'residence_verified_at' => now(),
+        ]);
         EMoney::create(['user_id' => $this->user->id, 'current_balance' => '1000.0000']);
 
         $this->provider = BillProvider::create([
