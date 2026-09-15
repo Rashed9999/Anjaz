@@ -27,11 +27,6 @@ class AppServiceProvider extends ServiceProvider
         );
 
         // AMIAL-KYC-OCR-001 — محرّك قراءة الوثائق.
-        //
-        // يُربط بالواجهة لا بالصنف: استبدالُ Tesseract بخدمةٍ سحابية لاحقاً
-        // (والوثيقة تُلمّح إليها) يصير تغييرَ سطرٍ هنا لا تعديلاً في كلّ
-        // مستدعٍ. ولا يُفحص وجود الملفّ التنفيذيّ هنا — يفحصه المحرّك عند
-        // أوّل استعمال ويُعيد `unavailable` صراحةً.
         $this->app->bind(
             \App\Services\Ocr\OcrDriverInterface::class,
             fn () => new \App\Services\Ocr\TesseractOcrDriver(
@@ -41,7 +36,6 @@ class AppServiceProvider extends ServiceProvider
             ),
         );
 
-        // Custom class aliases (facades) used in your app
         $aliases = [
             'Helpers'  => \App\CentralLogics\helpers::class,
             'Location' => \Stevebauman\Location\Facades\Location::class,
@@ -52,45 +46,29 @@ class AppServiceProvider extends ServiceProvider
                 class_alias($class, $alias);
             }
         }
-
-        // any other register logic...
     }
 
-    /**
-     * Bootstrap any application services.
-     */
+    /** Bootstrap any application services. */
     public function boot(): void
     {
         Paginator::useBootstrap();
 
-        // AMIAL-EMAIL-ADMIN-001 — مسارات مركز البريد منفصلة عن ملف Amial
-        // الضخم كي تبقى القراءة والإدارة بصلاحيتين دقيقتين. loadRoutesFrom
-        // يحترم route:cache؛ فلا تختفي الشاشة في الإنتاج عند تفعيل الكاش.
         $this->loadRoutesFrom(base_path('routes/admin/email-center.php'));
-
-        // AMIAL-REPORTING-CENTER-001 — مركز التقارير مستقل عن ملف المسارات
-        // الإداري الكبير، ويظل محمّلاً أيضاً عند route:cache.
         $this->loadRoutesFrom(base_path('routes/admin/reporting-center.php'));
-
-        // AMIAL-CUSTOMER-REPORTS-003 — ملخص تقارير العميل من الدفتر، مستقل
-        // عن transaction-history المحدود بالصفحات، ويظل موجوداً مع route:cache.
         $this->loadRoutesFrom(base_path('routes/api/v1/customer-reports.php'));
 
-        // AMIAL-LEDGER-OPENING-002: محفظةٌ تولد مموَّلة تدخل الدفتر برصيدها.
-        // بلا هذا يبدأ حسابها بصفر فيُرفض أوّل خصمٍ ويُبتلع الرفض، فيتحرّك
-        // المال بلا قيد. انظر شرح EMoneyObserver.
         \App\Models\EMoney::observe(\App\Observers\EMoneyObserver::class);
-
-        // AMIAL-EMAIL-IDENTITY-001: حارس واحد يغطي العميل والتاجر والوكيل
-        // والإدارة والموظفين لأنهم جميعاً يعتمدون User كمصدر هوية الحساب.
         \App\Models\User::observe(\App\Observers\UserEmailIdentityObserver::class);
 
-        // AMIAL-PROGRESSIVE-KYC-TURNOVER-002: كل صف معاملة ناجح لعميل فرد
-        // يكتب projection للحدود من أصل المبلغ فقط، بلا الرسوم/العمولات.
-        // الـObserver يعمل داخل نفس DB transaction، فيسقط سجله مع rollback.
+        // AMIAL-PROGRESSIVE-KYC-TURNOVER-003 — حد العميل الفردي يُربط
+        // بالأحداث المالية نفسها، بما فيها المسارات التي لا تكتب Transaction.
         \App\Models\Transaction::observe(\App\Observers\CustomerTurnoverObserver::class);
+        \App\Models\BillPaymentOrder::observe(\App\Observers\BillPaymentTurnoverObserver::class);
+        \App\Models\WithdrawalRequest::observe(\App\Observers\WithdrawalTurnoverObserver::class);
+        \App\Models\Donation::observe(\App\Observers\DonationTurnoverObserver::class);
+        \App\Models\FamilyFundTransaction::observe(\App\Observers\FamilyFundTurnoverObserver::class);
+        \App\Models\SafePayment::observe(\App\Observers\SafePaymentTurnoverObserver::class);
 
-        // AMIAL-CLEANUP: أُزيلت بوّابة تفعيل 6amtech + إعداد addon_admin_routes
-        // (نظام إضافات 6cash — بلا وحدات، ومستهلِكوه محذوفون).
+        // AMIAL-CLEANUP: بوابة تفعيل 6amtech ونظام الإضافات القديم محذوفان.
     }
 }
