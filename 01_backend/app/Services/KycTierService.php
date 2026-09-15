@@ -3,31 +3,26 @@
 namespace App\Services;
 
 use App\CentralLogics\Helpers;
-
 use App\Models\User;
+use App\Services\Kyc\ResidenceVerificationService;
+use App\Support\YemenGovernorates;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
- * AMIAL-KYC-TIERS-001 (v1.9)
+ * AMIAL-PROGRESSIVE-KYC-001 — محفظة تبدأ صغيرة وتكبر مع المعرفة بالعميل.
  *
- * KycTierService — مستويات التحقق وحدودها.
+ * Tier 0: الحساب موجود، لكن ملكية الهاتف لم تُثبت بعد.
+ * Tier 1: هاتف مملوك + إقامة موثقة داخل نطاق التشغيل — محفظة أساسية.
+ * Tier 2: هوية قانونية موثقة — حد متوسط، بلا سيلفي إلزامي.
+ * Tier 3: KYC كامل + إثبات قوي لصاحب الهوية — الحدود الأعلى.
  *
- * **المستويات:**
- *   Tier 0 (unverified): عرض فقط، لا عمليات مالية
- *   Tier 1 (basic): هاتف موثق — حدود منخفضة
- *   Tier 2 (standard): هوية موثقة — حدود متوسطة
- *   Tier 3 (full): توثيق كامل + عنوان — حدود عالية
- *
- * **الفائدة:**
- *   - يقلل المخاطر (مستخدم جديد لا يحرّك مبالغ كبيرة)
- *   - يطابق متطلبات AML/CFT (تدرّج حسب المعرفة بالعميل)
- *   - يحفّز المستخدمين على إكمال التوثيق
+ * الأرقام هنا fallback فقط؛ DB (kyc_tier_limits) هي مصدر سياسة التشغيل.
  */
 class KycTierService
 {
-    private function verifiedTier(User $user): int
+    public function effectiveTier(User $user): int
     {
         $status = app(\App\Services\Kyc\KycAccountStatusService::class)->for($user);
         if ($status['update_required']) return min(1, $status['tier']);
@@ -35,9 +30,7 @@ class KycTierService
         if ($status['tier'] >= 1 && !(bool) ($user->is_phone_verified ?? false)) return 0;
         return $status['tier'];
     }
-    /**
-     * حدود افتراضية (تُحمَّل من DB، fallback هنا).
-     */
+
     private const DEFAULT_LIMITS = [
         0 => [
             'name_ar' => 'غير موثق',
@@ -45,37 +38,37 @@ class KycTierService
             'max_single_transaction' => '0',
             'max_daily_total' => '0',
             'max_monthly_total' => '0',
-            'allowed_features' => [], // عرض فقط
+            'allowed_features' => [],
         ],
         1 => [
             'name_ar' => 'أساسي',
-            'max_balance' => '50000',
-            'max_single_transaction' => '5000',
-            'max_daily_total' => '10000',
-            'max_monthly_total' => '50000',
-            'allowed_features' => ['send_money', 'receive_money', 'bill_pay'],
+            'max_balance' => '100000',
+            'max_single_transaction' => '100000',
+            'max_daily_total' => '100000',
+            'max_monthly_total' => '100000',
+            'allowed_features' => ['send_money', 'receive_money', 'bill_pay', 'cash_out', 'merchant_pay'],
         ],
         2 => [
-            'name_ar' => 'قياسي',
-            'max_balance' => '500000',
-            'max_single_transaction' => '50000',
-            'max_daily_total' => '100000',
-            'max_monthly_total' => '500000',
-            'allowed_features' => ['send_money', 'receive_money', 'bill_pay', 'safe_payment', 'donations', 'family_fund'],
+            'name_ar' => 'هوية موثقة',
+            'max_balance' => '250000',
+            'max_single_transaction' => '250000',
+            'max_daily_total' => '250000',
+            'max_monthly_total' => '250000',
+            'allowed_features' => [
+                'send_money', 'receive_money', 'bill_pay', 'cash_out', 'merchant_pay',
+                'safe_payment', 'donations', 'family_fund',
+            ],
         ],
         3 => [
             'name_ar' => 'كامل',
-            'max_balance' => '5000000',
-            'max_single_transaction' => '500000',
-            'max_daily_total' => '1000000',
-            'max_monthly_total' => '5000000',
-            'allowed_features' => ['*'], // كل الميزات
+            'max_balance' => '2000000',
+            'max_single_transaction' => '400000',
+            'max_daily_total' => '700000',
+            'max_monthly_total' => '2000000',
+            'allowed_features' => ['*'],
         ],
     ];
 
-    /**
-     * جلب حدود مستوى معين.
-     */
     private function getLimits(int $tier): array
     {
         $dbLimit = DB::table('kyc_tier_limits')->where('tier', $tier)->where('is_active', true)->first();
@@ -83,10 +76,10 @@ class KycTierService
             return [
                 'tier' => $tier,
                 'name_ar' => $dbLimit->name_ar,
-                'max_balance' => (string)$dbLimit->max_balance,
-                'max_single_transaction' => (string)$dbLimit->max_single_transaction,
-                'max_daily_total' => (string)$dbLimit->max_daily_total,
-                'max_monthly_total' => (string)$dbLimit->max_monthly_total,
+                'max_balance' => (string) $dbLimit->max_balance,
+                'max_single_transaction' => (string) $dbLimit->max_single_transaction,
+                'max_daily_total' => (string) $dbLimit->max_daily_total,
+                'max_monthly_total' => (string) $dbLimit->max_monthly_total,
                 'allowed_features' => json_decode($dbLimit->allowed_features ?? '[]', true) ?? [],
             ];
         }
@@ -94,13 +87,9 @@ class KycTierService
         return array_merge(['tier' => $tier], self::DEFAULT_LIMITS[$tier] ?? self::DEFAULT_LIMITS[0]);
     }
 
-    /**
-     * مستوى التوثيق هو الأصل؛ الاستثناء الإداري الموثّق يبدّل الأرقام
-     * فقط، ولا يستطيع فتح ميزةٍ أو تجاوز حالة التحقق.
-     */
     private function getLimitsForUser(User $user): array
     {
-        $limits = $this->getLimits($this->verifiedTier($user));
+        $limits = $this->getLimits($this->effectiveTier($user));
         $override = is_array($user->limit_override)
             ? $user->limit_override
             : (json_decode((string) $user->limit_override, true) ?: []);
@@ -112,20 +101,45 @@ class KycTierService
                 $limits[$key] = $value;
             }
         }
-
         return $limits;
     }
 
     /**
-     * فحص: هل المستخدم يستطيع تنفيذ عملية بهذا المبلغ؟
-     *
-     * @throws RuntimeException إذا تجاوز الحدود
+     * الحساب موجود فور التسجيل، لكن تحريك المال يحتاج إقامة موثقة داخل
+     * المحافظات التشغيلية. الأصل وGPS لا يستطيعان اجتياز هذه البوابة.
      */
+    private function assertOperationalResidence(User $user): string
+    {
+        $code = app(ResidenceVerificationService::class)->verifiedGovernorate($user);
+        if ($code === null || empty($user->residence_verified_at)) {
+            throw new RuntimeException(
+                'فعّل محفظتك المالية بإثبات محل إقامتك الحالي أولاً. [RESIDENCE_NOT_VERIFIED]'
+            );
+        }
+        if (!YemenGovernorates::isOperational($code)) {
+            throw new RuntimeException(
+                'محل إقامتك الموثق خارج نطاق تشغيل أميال الحالي. [RESIDENCE_OUTSIDE_OPERATIONAL_AREA]'
+            );
+        }
+        return $code;
+    }
+
+    public function assertMinimumTier(User $user, int $tier): void
+    {
+        if ($this->effectiveTier($user) < $tier) {
+            throw new RuntimeException('هذه العملية تتطلب مستوى توثيق أعلى.');
+        }
+    }
+
     public function assertTransactionAllowed(User $user, string $amount, string $feature = 'send_money'): void
     {
         $limits = $this->getLimitsForUser($user);
+        if ((int) $limits['tier'] <= 0) {
+            throw new RuntimeException('تحقق من ملكية رقم هاتفك لتفعيل المحفظة.');
+        }
 
-        // 1) فحص الميزة مسموحة
+        $this->assertOperationalResidence($user);
+
         $features = $limits['allowed_features'];
         if (!in_array('*', $features, true) && !in_array($feature, $features, true)) {
             throw new RuntimeException(
@@ -133,54 +147,46 @@ class KycTierService
             );
         }
 
-        // 2) فحص حد العملية الواحدة
         if (bccomp($amount, $limits['max_single_transaction'], 4) > 0) {
             throw new RuntimeException(
-                "المبلغ يتجاوز حد العملية الواحدة (" . Helpers::money($limits['max_single_transaction']) . " ر.ي) لمستواك"
+                'المبلغ يتجاوز حد العملية الواحدة (' . Helpers::money($limits['max_single_transaction']) . ' ر.ي) لمستواك'
             );
         }
 
-        // 3) فحص الحد اليومي
         $todayTotal = $this->getTodayTotal($user->id);
-        $newDailyTotal = bcadd($todayTotal, $amount, 4);
-        if (bccomp($newDailyTotal, $limits['max_daily_total'], 4) > 0) {
+        if (bccomp(bcadd($todayTotal, $amount, 4), $limits['max_daily_total'], 4) > 0) {
             throw new RuntimeException(
-                "هذه العملية ستتجاوز حدك اليومي (" . Helpers::money($limits['max_daily_total']) . " ر.ي)"
+                'هذه العملية ستتجاوز حدك اليومي (' . Helpers::money($limits['max_daily_total']) . ' ر.ي)'
             );
         }
 
-        // 4) فحص الحد الشهري
         $monthTotal = $this->getMonthTotal($user->id);
-        $newMonthlyTotal = bcadd($monthTotal, $amount, 4);
-        if (bccomp($newMonthlyTotal, $limits['max_monthly_total'], 4) > 0) {
+        if (bccomp(bcadd($monthTotal, $amount, 4), $limits['max_monthly_total'], 4) > 0) {
             throw new RuntimeException(
-                "هذه العملية ستتجاوز حدك الشهري (" . Helpers::money($limits['max_monthly_total']) . " ر.ي)"
+                'هذه العملية ستتجاوز حدك الشهري (' . Helpers::money($limits['max_monthly_total']) . ' ر.ي)'
             );
         }
     }
 
-    /**
-     * فحص: هل الرصيد الجديد ضمن الحد المسموح؟
-     */
     public function assertBalanceAllowed(User $user, string $newBalance): void
     {
         $limits = $this->getLimitsForUser($user);
+        if ((int) $limits['tier'] <= 0) {
+            throw new RuntimeException('تحقق من ملكية رقم هاتفك لتفعيل المحفظة.');
+        }
+        $this->assertOperationalResidence($user);
 
         if (bccomp($newBalance, $limits['max_balance'], 4) > 0) {
             throw new RuntimeException(
-                "الرصيد سيتجاوز الحد المسموح (" . Helpers::money($limits['max_balance']) . " ر.ي) لمستواك. أكمل التوثيق لرفع الحد."
+                'الرصيد سيتجاوز الحد المسموح (' . Helpers::money($limits['max_balance'])
+                . ' ر.ي) لمستواك. أكمل التوثيق لرفع الحد.'
             );
         }
     }
 
-    /**
-     * ترقية مستوى المستخدم (بعد موافقة admin على التوثيق).
-     */
     public function upgradeTier(User $user, int $newTier, ?int $adminId = null): void
     {
-        if ($newTier < 0 || $newTier > 3) {
-            throw new RuntimeException('مستوى غير صالح');
-        }
+        if ($newTier < 0 || $newTier > 3) throw new RuntimeException('مستوى غير صالح');
 
         $user->kyc_tier = $newTier;
         $user->kyc_tier_updated_at = now();
@@ -191,9 +197,6 @@ class KycTierService
         ]);
     }
 
-    /**
-     * إجمالي عمليات اليوم (من الـ ledger).
-     */
     private function getTodayTotal(int $userId): string
     {
         $wallet = DB::table('ledger_accounts')
@@ -205,8 +208,7 @@ class KycTierService
             ->where('direction', 'debit')
             ->where('created_at', '>=', Carbon::now()->startOfDay())
             ->sum('amount');
-
-        return (string)($total ?: '0');
+        return (string) ($total ?: '0');
     }
 
     private function getMonthTotal(int $userId): string
@@ -220,26 +222,26 @@ class KycTierService
             ->where('direction', 'debit')
             ->where('created_at', '>=', Carbon::now()->startOfMonth())
             ->sum('amount');
-
-        return (string)($total ?: '0');
+        return (string) ($total ?: '0');
     }
 
-    /**
-     * معلومات مستوى المستخدم (للعرض).
-     */
     public function getUserTierInfo(User $user): array
     {
-        $tier = (int)($user->kyc_tier ?? 0);
+        $storedTier = max(0, min(3, (int) ($user->kyc_tier ?? 0)));
+        $effectiveTier = $this->effectiveTier($user);
         $limits = $this->getLimitsForUser($user);
-        $nextTier = $tier < 3 ? $this->getLimits($tier + 1) : null;
+        $nextTier = $effectiveTier < 3 ? $this->getLimits($effectiveTier + 1) : null;
+        $residence = app(ResidenceVerificationService::class)->forUser($user);
 
         return [
-            'current_tier' => $tier,
+            'current_tier' => $effectiveTier,
+            'stored_tier' => $storedTier,
             'tier_name' => $limits['name_ar'],
             'limits' => $limits,
             'today_used' => $this->getTodayTotal($user->id),
             'month_used' => $this->getMonthTotal($user->id),
             'next_tier' => $nextTier,
+            'residence' => $residence,
         ];
     }
 }

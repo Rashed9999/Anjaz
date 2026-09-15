@@ -5,11 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
-/**
- * AMIAL-KYC-TIERS-001 (v1.9)
- *
- * بذور حدود مستويات التحقق.
- */
+/** AMIAL-PROGRESSIVE-KYC-001 — حدود مستويات التحقق التدريجي. */
 class KycTierLimitsSeeder extends Seeder
 {
     public function run(): void
@@ -24,26 +20,31 @@ class KycTierLimitsSeeder extends Seeder
             ],
             [
                 'tier' => 1, 'name_ar' => 'أساسي',
-                'max_balance' => 50000, 'max_single_transaction' => 5000,
-                'max_daily_total' => 10000, 'max_monthly_total' => 50000,
-                'required_documents' => json_encode(['phone_verified']),
-                'allowed_features' => json_encode(['send_money', 'receive_money', 'bill_pay']),
+                'max_balance' => 100000, 'max_single_transaction' => 100000,
+                'max_daily_total' => 100000, 'max_monthly_total' => 100000,
+                'required_documents' => json_encode(['phone_verified', 'verified_residence']),
+                'allowed_features' => json_encode([
+                    'send_money', 'receive_money', 'bill_pay', 'cash_out', 'merchant_pay',
+                ]),
             ],
             [
-                'tier' => 2, 'name_ar' => 'قياسي',
-                'max_balance' => 500000, 'max_single_transaction' => 50000,
-                'max_daily_total' => 100000, 'max_monthly_total' => 500000,
-                'required_documents' => json_encode(['phone_verified', 'national_id']),
+                'tier' => 2, 'name_ar' => 'هوية موثقة',
+                'max_balance' => 250000, 'max_single_transaction' => 250000,
+                'max_daily_total' => 250000, 'max_monthly_total' => 250000,
+                'required_documents' => json_encode(['phone_verified', 'national_id', 'verified_residence']),
                 'allowed_features' => json_encode([
-                    'send_money', 'receive_money', 'bill_pay',
+                    'send_money', 'receive_money', 'bill_pay', 'cash_out', 'merchant_pay',
                     'safe_payment', 'donations', 'family_fund',
                 ]),
             ],
             [
                 'tier' => 3, 'name_ar' => 'كامل',
-                'max_balance' => 5000000, 'max_single_transaction' => 500000,
-                'max_daily_total' => 1000000, 'max_monthly_total' => 5000000,
-                'required_documents' => json_encode(['phone_verified', 'national_id', 'address_proof', 'selfie']),
+                'max_balance' => 2000000, 'max_single_transaction' => 400000,
+                'max_daily_total' => 700000, 'max_monthly_total' => 2000000,
+                'required_documents' => json_encode([
+                    'phone_verified', 'national_id', 'selfie_or_approved_ownership',
+                    'verified_residence', 'full_kyc_profile',
+                ]),
                 'allowed_features' => json_encode(['*']),
             ],
         ];
@@ -55,6 +56,6 @@ class KycTierLimitsSeeder extends Seeder
             );
         }
 
-        $this->command->info('Seeded ' . count($tiers) . ' KYC tier limits.');
+        $this->command->info('Seeded ' . count($tiers) . ' progressive KYC tier limits.');
     }
 }

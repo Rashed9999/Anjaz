@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\KycForensicController;
 use App\Http\Controllers\Admin\KycPrivacyAdminController;
+use App\Http\Controllers\Admin\KycResidenceAdminController;
 use App\Http\Controllers\Admin\KycRestrictedReviewController;
 use Illuminate\Support\Facades\Route;
 
@@ -14,6 +15,18 @@ Route::prefix('kyc/privacy')
         Route::get('/cases', [KycPrivacyAdminController::class, 'cases'])->name('cases');
         Route::get('/cases/{userId}', [KycPrivacyAdminController::class, 'show'])
             ->where('userId', '[0-9]+')->name('cases.show');
+    });
+
+Route::prefix('kyc/residence')
+    ->name('kyc.residence.')
+    ->middleware('platform:platform.customers.kyc.view')
+    ->group(function () {
+        Route::get('/', [KycResidenceAdminController::class, 'index'])->name('page');
+        Route::get('/queue', [KycResidenceAdminController::class, 'queue'])->name('queue');
+        Route::post('/{verificationId}/decision', [KycResidenceAdminController::class, 'decide'])
+            ->where('verificationId', '[0-9]+')
+            ->middleware('platform:platform.customers.freeze')
+            ->name('decision');
     });
 
 // AMIAL-KYC-RESTRICTED-QUEUE-001 — الحالات التي طلب أصحابها خصوصية إضافية
