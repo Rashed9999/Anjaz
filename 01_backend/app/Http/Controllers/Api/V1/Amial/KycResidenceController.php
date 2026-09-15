@@ -10,11 +10,17 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
-/** AMIAL-RESIDENCE-API-001 — صاحب الحساب يثبت مكان إقامته الحالي. */
+/**
+ * AMIAL-RESIDENCE-API-001 — العميل الفرد يثبت مكان إقامته الحالي.
+ * AMIAL-CUSTOMER-KYC-SCOPE-001 — لا يُستخدم هذا المسار لتوثيق التاجر أو
+ * الوكيل أو موظفي POS/الإدارة؛ لكل فئة ملف امتثال وتشغيل مستقل.
+ */
 class KycResidenceController extends Controller
 {
     public function show(Request $request, ResidenceVerificationService $residence): JsonResponse
     {
+        if ($denied = $this->customerOnly($request)) return $denied;
+
         return response()->json([
             'success' => true,
             'data' => $residence->forUser($request->user()),
@@ -27,6 +33,8 @@ class KycResidenceController extends Controller
         ResidenceVerificationService $residence,
         KycDocumentService $documents,
     ): JsonResponse {
+        if ($denied = $this->customerOnly($request)) return $denied;
+
         $data = $request->validate([
             'residence_governorate' => ['required', 'string', 'max:64'],
             'evidence_type' => ['required', 'string', Rule::in(array_keys(ResidenceVerificationService::EVIDENCE_TYPES))],
@@ -68,5 +76,17 @@ class KycResidenceController extends Controller
             'message' => 'تم إرسال إثبات السكن للمراجعة. أصل الهوية لا يؤثر على أهلية الإقامة.',
             'data' => $state,
         ], 201);
+    }
+
+    private function customerOnly(Request $request): ?JsonResponse
+    {
+        $user = $request->user();
+        if ($user && (int) $user->type === 2) return null;
+
+        return response()->json([
+            'success' => false,
+            'code' => 'INDIVIDUAL_CUSTOMER_REQUIRED',
+            'message' => 'مستويات توثيق الأفراد متاحة لحساب العميل فقط.',
+        ], 403);
     }
 }
