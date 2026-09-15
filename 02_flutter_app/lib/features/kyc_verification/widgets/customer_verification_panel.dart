@@ -89,9 +89,13 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
     Map<String, dynamic> tier,
     Map<String, dynamic> bar,
   ) {
+    final current = int.tryParse('${tier['current'] ?? 0}') ?? 0;
+    final usedRaw = double.tryParse('${bar['used'] ?? 0}') ?? 0;
+    final limitRaw = double.tryParse('${bar['limit'] ?? 0}') ?? 0;
     final used = _money(bar['used']);
     final limit = _money(bar['limit']);
     final limits = _map(tier['limits']);
+    final inactive = current <= 0 || limitRaw <= 0;
 
     return Container(
       padding: const EdgeInsets.all(15),
@@ -114,35 +118,72 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
                 ),
               ),
               Text(
-                'Tier ${tier['current'] ?? 0}',
+                current <= 0 ? 'غير مفعّل' : 'Tier $current',
                 style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: controller.usageProgress,
-              minHeight: 10,
-              backgroundColor: const Color(0xFFE4E9F0),
+          if (inactive) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E6),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFF1D997)),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.lock_outline, size: 19, color: Color(0xFF8A6515)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'حدودك المالية غير مفعّلة بعد. أكمل متطلبات المستوى الأساسي لتفعيل الاستخدام المالي وحدوده.',
+                      style: TextStyle(fontSize: 12.5, height: 1.45, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'استخدمت $used ر.ي من حد شهري $limit ر.ي',
-            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              _miniLimit('للعملية', limits['max_single_transaction']),
-              _miniLimit('يومي', limits['max_daily_total']),
-              _miniLimit('الرصيد', limits['max_balance']),
+            if (usedRaw > 0) ...[
+              const SizedBox(height: 10),
+              Text(
+                'حركة مالية مسجلة هذا الشهر: $used ر.ي',
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 3),
+              const Text(
+                'تُعرض الحركة المسجلة للحقيقة التاريخية فقط، ولا تعني أن المستوى غير المفعّل يملك حداً مالياً.',
+                style: TextStyle(fontSize: 11.5, height: 1.4, color: Color(0xFF657184)),
+              ),
             ],
-          ),
+          ] else ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: controller.usageProgress,
+                minHeight: 10,
+                backgroundColor: const Color(0xFFE4E9F0),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'استخدمت $used ر.ي من حد شهري $limit ر.ي',
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _miniLimit('للعملية', limits['max_single_transaction']),
+                _miniLimit('يومي', limits['max_daily_total']),
+                _miniLimit('الرصيد', limits['max_balance']),
+              ],
+            ),
+          ],
         ],
       ),
     );
