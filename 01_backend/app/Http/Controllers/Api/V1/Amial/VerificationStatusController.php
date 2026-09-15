@@ -5,17 +5,20 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
 use App\Services\Kyc\KycAccountStatusService;
+use App\Services\Kyc\KycOwnershipGuardService;
 use App\Services\Kyc\KycPrivacyService;
 use App\Services\Kyc\ResidenceVerificationService;
 use App\Services\KycTierService;
+use App\Support\Kyc\KycProfileFields;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * AMIAL-VERIFICATION-CENTER-001 — مصدر واحد لما يراه صاحب الحساب.
+ * AMIAL-VERIFICATION-CENTER-001 — مصدر واحد لما يراه العميل الفرد.
  *
  * لا نعيد مسار ملف، reviewer id، OCR خاماً أو بيانات موظفين. الواجهة تحتاج
- * قراراً تشغيلياً فقط: ما الذي تحقق؟ ما الذي ينتظر؟ وما الخطوة التالية؟
+ * قراراً تشغيلياً فقط: حدود الاستخدام، مستوى التوثيق، ما الذي اكتمل، وما
+ * الذي ينقص. هذا المركز لا يخص التاجر/الوكيل/POS/الإدارة.
  */
 class VerificationStatusController extends Controller
 {
@@ -25,13 +28,14 @@ class VerificationStatusController extends Controller
         KycAccountStatusService $accounts,
         ResidenceVerificationService $residence,
         KycPrivacyService $privacy,
+        KycOwnershipGuardService $ownership,
     ): JsonResponse {
         $user = $request->user();
         if (!$user || (int) $user->type !== 2) {
             return response()->json([
                 'success' => false,
-                'code' => 'CUSTOMER_REQUIRED',
-                'message' => 'مركز التحقق متاح لحساب العميل.',
+                'code' => 'INDIVIDUAL_CUSTOMER_REQUIRED',
+                'message' => 'مركز توثيق الأفراد متاح لحساب العميل فقط.',
             ], 403);
         }
 
@@ -56,7 +60,7 @@ class VerificationStatusController extends Controller
                 'code' => 'verify_phone',
                 'priority' => 1,
                 'title' => 'أثبت ملكية رقم الهاتف',
-                'description' => 'مطلوب للوصول إلى Tier 1.',
+                'description' => 'مطلوب لتفعيل المستوى الأساسي.',
             ];
         }
 
@@ -103,7 +107,7 @@ class VerificationStatusController extends Controller
                     'code' => 'wait_identity_review',
                     'priority' => 3,
                     'title' => 'الهوية قيد المراجعة',
-                    'description' => 'بعد اعتماد الوجه والظهر يقرر المراجع ترقية الحساب إلى Tier 2.',
+                    'description' => 'بعد اعتماد وجه الوثيقة وظهرها يقرر المراجع ترقية الحساب.',
                 ],
                 'rejected' => [
                     'code' => 'upgrade_identity',
@@ -115,7 +119,7 @@ class VerificationStatusController extends Controller
                     'code' => 'upgrade_identity',
                     'priority' => 3,
                     'title' => 'ارفع حدودك بتوثيق الهوية',
-                    'description' => 'Tier 2 يحتاج رقم الهوية + وجه الوثيقة + ظهرها فقط، بلا سيلفي.',
+                    'description' => 'المستوى الثاني يحتاج رقم الهوية + وجه الوثيقة + ظهرها فقط، بلا سيلفي.',
                 ],
             };
         }
@@ -124,32 +128,45 @@ class VerificationStatusController extends Controller
             $actions[] = [
                 'code' => 'upgrade_full_kyc',
                 'priority' => 4,
-                'title' => 'الترقية إلى Tier 3',
-                'description' => 'تتطلب ملف KYC الكامل وإثباتاً أقوى لملكية الهوية.',
+                'title' => 'الترقية إلى التوثيق الكامل',
+                'description' => 'أكمل ملف اعرف عميلك واختر طريقة إثبات أقوى لملكية الهوية.',
             ];
         }
 
         usort($actions, fn (array $a, array $b) => $a['priority'] <=> $b['priority']);
 
+        $levels = $this->verificationLevels(
+            $user,
+            $tiers,
+            $tier,
+            $identity,
+            $phoneVerified,
+            $residenceState,
+            $ownership,
+            $docs,
+        );
+
         return response()->json([
             'success' => true,
             'code' => 'VERIFICATION_STATUS_OK',
             'data' => [
+                'audience' => 'individual_customer',
                 'tier' => [
                     'current' => (int) $tier['current_tier'],
                     'stored' => (int) $tier['stored_tier'],
                     'name' => (string) $tier['tier_name'],
-                    'limits' => [
-                        'max_balance' => (string) $tier['limits']['max_balance'],
-                        'max_single_transaction' => (string) $tier['limits']['max_single_transaction'],
-                        'max_daily_total' => (string) $tier['limits']['max_daily_total'],
-                        'max_monthly_total' => (string) $tier['limits']['max_monthly_total'],
-                        'allowed_features' => $tier['limits']['allowed_features'],
-                    ],
+                    'limits' => $this->limitView($tier['limits']),
                     'usage' => [
                         'today' => (string) $tier['today_used'],
                         'month' => (string) $tier['month_used'],
                     ],
+                ],
+                'usage_bar' => [
+                    'used' => (string) $tier['month_used'],
+                    'limit' => (string) $tier['limits']['max_monthly_total'],
+                    'period' => 'month',
+                    'currency' => 'YER',
+                    'label' => 'استخدامك الشهري',
                 ],
                 'contact' => [
                     'email_verified' => $emailVerified,
@@ -173,9 +190,120 @@ class VerificationStatusController extends Controller
                     ),
                 ],
                 'account_kyc_state' => $account['state'],
+                'verification_levels' => $levels,
                 'next_actions' => $actions,
             ],
         ]);
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    private function verificationLevels(
+        $user,
+        KycTierService $tiers,
+        array $tierInfo,
+        array $identity,
+        bool $phoneVerified,
+        array $residence,
+        KycOwnershipGuardService $ownership,
+        array $docs,
+    ): array {
+        $current = (int) $tierInfo['current_tier'];
+        $residenceVerified = ($residence['status'] ?? null) === ResidenceVerificationService::STATUS_VERIFIED;
+        $profileMissing = KycProfileFields::missingFor($user);
+        $ownership3 = $ownership->assess($user, 3);
+        $addressDoc = $docs[KycDocument::TYPE_ADDRESS_PROOF] ?? null;
+
+        $requirements = [
+            1 => [
+                ['code' => 'phone', 'label' => 'إثبات ملكية رقم الهاتف', 'complete' => $phoneVerified],
+                ['code' => 'residence', 'label' => 'إثبات محل الإقامة الحالي داخل نطاق التشغيل', 'complete' => $residenceVerified],
+            ],
+            2 => [
+                ['code' => 'tier1', 'label' => 'استكمال متطلبات المستوى الأساسي', 'complete' => $current >= 1],
+                ['code' => 'identity_number', 'label' => 'رقم الهوية القانونية', 'complete' => trim((string) ($user->identification_number ?? '')) !== ''],
+                ['code' => 'identity_document', 'label' => 'وجه وثيقة الهوية وظهرها — بلا سيلفي', 'complete' => ($identity['status'] ?? '') === 'verified'],
+            ],
+            3 => [
+                ['code' => 'tier2', 'label' => 'استكمال توثيق الهوية', 'complete' => $current >= 2],
+                ['code' => 'profile', 'label' => 'إكمال بيانات اعرف عميلك التنظيمية', 'complete' => $profileMissing === []],
+                ['code' => 'address_proof', 'label' => 'دليل سكن/عنوان صالح ضمن ملف KYC', 'complete' => (bool) ($addressDoc['usable'] ?? false)],
+                ['code' => 'ownership', 'label' => 'إثبات أقوى أن صاحب الحساب هو صاحب الهوية', 'complete' => (bool) ($ownership3['ready'] ?? false)],
+            ],
+        ];
+
+        $descriptions = [
+            1 => 'محفظة أساسية للاستخدام اليومي ضمن حدود منخفضة.',
+            2 => 'هوية قانونية موثقة وحدود أعلى ومزايا مالية إضافية.',
+            3 => 'توثيق كامل للوصول إلى أعلى حدود ومزايا الحساب الفردي.',
+        ];
+
+        $out = [];
+        foreach ([1, 2, 3] as $level) {
+            $limits = $tiers->getLimits($level);
+            $missing = array_values(array_map(
+                fn (array $r) => $r['label'],
+                array_filter($requirements[$level], fn (array $r) => !$r['complete'])
+            ));
+
+            if ($level === 3 && $profileMissing !== []) {
+                $missing = array_values(array_unique(array_merge($missing, $profileMissing)));
+            }
+
+            $out[] = [
+                'tier' => $level,
+                'name' => (string) $limits['name_ar'],
+                'description' => $descriptions[$level],
+                'status' => $current >= $level ? 'completed' : 'incomplete',
+                'current' => $current === $level,
+                'requirements' => $requirements[$level],
+                'missing' => $missing,
+                'benefits' => $this->featureLabels($limits['allowed_features']),
+                'limits' => $this->limitView($limits),
+                'action' => $current >= $level ? null : [
+                    'code' => 'complete_account',
+                    'label' => 'إكمال حسابي',
+                    'target_tier' => $level,
+                ],
+            ];
+        }
+
+        return $out;
+    }
+
+    /** @return array<int,string> */
+    private function featureLabels(array $features): array
+    {
+        if (in_array('*', $features, true)) {
+            return ['جميع مزايا المحفظة المتاحة للعميل الفرد'];
+        }
+
+        $labels = [
+            'send_money' => 'تحويل الأموال',
+            'receive_money' => 'استقبال الأموال',
+            'bill_pay' => 'سداد الخدمات والفواتير',
+            'cash_out' => 'السحب النقدي',
+            'merchant_pay' => 'الدفع للتاجر',
+            'safe_payment' => 'الدفع الآمن',
+            'donations' => 'التبرعات',
+            'family_fund' => 'الصندوق العائلي',
+        ];
+
+        return array_values(array_map(
+            fn (string $feature) => $labels[$feature] ?? $feature,
+            array_values(array_unique($features))
+        ));
+    }
+
+    /** @return array<string,mixed> */
+    private function limitView(array $limits): array
+    {
+        return [
+            'max_balance' => (string) ($limits['max_balance'] ?? '0'),
+            'max_single_transaction' => (string) ($limits['max_single_transaction'] ?? '0'),
+            'max_daily_total' => (string) ($limits['max_daily_total'] ?? '0'),
+            'max_monthly_total' => (string) ($limits['max_monthly_total'] ?? '0'),
+            'allowed_features' => array_values($limits['allowed_features'] ?? []),
+        ];
     }
 
     /** @return array<string,array<string,mixed>> */
