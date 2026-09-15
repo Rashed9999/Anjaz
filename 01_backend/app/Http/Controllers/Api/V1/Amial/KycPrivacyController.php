@@ -10,11 +10,19 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
-/** AMIAL-KYC-PRIVACY-API-001 — الخصوصية اختيار صاحب الحساب، لا تخمين النظام. */
+/**
+ * AMIAL-KYC-PRIVACY-API-001 — الخصوصية اختيار صاحب الحساب، لا تخمين النظام.
+ *
+ * AMIAL-CUSTOMER-KYC-SCOPE-001 — هذا المسار خاص بالعميل الفرد فقط، رجلاً
+ * أو امرأة. توثيق التاجر والوكيل وموظفي POS وموظفي الإدارة له نماذج أعمال
+ * وصلاحيات مستقلة ولا يجوز خلطها بمستويات توثيق العميل الشخصي.
+ */
 class KycPrivacyController extends Controller
 {
     public function show(Request $request, KycPrivacyService $privacy): JsonResponse
     {
+        if ($denied = $this->customerOnly($request)) return $denied;
+
         return response()->json([
             'success' => true,
             'data' => $privacy->ensure($request->user()),
@@ -24,6 +32,8 @@ class KycPrivacyController extends Controller
 
     public function update(Request $request, KycPrivacyService $privacy): JsonResponse
     {
+        if ($denied = $this->customerOnly($request)) return $denied;
+
         $data = $request->validate([
             'review_mode' => ['required', 'string', Rule::in(KycPrivacyService::MODES)],
         ]);
@@ -53,12 +63,11 @@ class KycPrivacyController extends Controller
         ]);
     }
 
-    /**
-     * يبدأ جلسة مزود حقيقي فقط بعد أن يختار صاحب الحساب المسار automated.
-     * لا يكتب هذا الباب نتيجة ولا يعتمد الحساب؛ يستلم بيانات إطلاق الجلسة فقط.
-     */
+    /** يبدأ جلسة مزود حقيقي فقط بعد أن يختار العميل المسار automated. */
     public function startBiometric(Request $request, BiometricVerificationService $biometrics): JsonResponse
     {
+        if ($denied = $this->customerOnly($request)) return $denied;
+
         try {
             $data = $biometrics->start($request->user());
         } catch (DomainException $e) {
@@ -88,6 +97,18 @@ class KycPrivacyController extends Controller
         ], 201);
     }
 
+    private function customerOnly(Request $request): ?JsonResponse
+    {
+        $user = $request->user();
+        if ($user && (int) $user->type === 2) return null;
+
+        return response()->json([
+            'success' => false,
+            'code' => 'INDIVIDUAL_CUSTOMER_REQUIRED',
+            'message' => 'مستويات توثيق الأفراد متاحة لحساب العميل فقط.',
+        ], 403);
+    }
+
     private function options(KycPrivacyService $privacy): array
     {
         return [
@@ -100,7 +121,7 @@ class KycPrivacyController extends Controller
             [
                 'code' => KycPrivacyService::MODE_RESTRICTED,
                 'label' => 'خصوصية إضافية',
-                'description' => 'صورة الوجه لا تُعرض إلا لمراجع يملك صلاحية بيومترية مستقلة، مع تتبع جنائي لكل مشاهدة.',
+                'description' => 'المستندات الحساسة لا تُعرض إلا لمراجع يملك صلاحية مستقلة، مع تتبع جنائي لكل مشاهدة.',
                 'available' => true,
             ],
             [
