@@ -12,6 +12,9 @@ class VerificationCenterRepo {
   Future<Response> status() =>
       apiClient.getData('/api/v1/amial/me/verification-status');
 
+  Future<Response> completion() =>
+      apiClient.getData('/api/v1/amial/me/kyc/completion');
+
   Future<Response> requestPhoneOtp() =>
       apiClient.postData('/api/v1/customer/check-otp', <String, dynamic>{});
 
