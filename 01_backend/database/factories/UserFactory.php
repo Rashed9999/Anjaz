@@ -40,6 +40,8 @@ class UserFactory extends Factory
             // الاختبارات المالية تنشئ عميلاً صالحاً افتراضياً؛ الاختبارات
             // التي تريد رفض KYC تصرّح بالمستوى الأقل صراحةً.
             'kyc_tier' => 2,
+            // Tier 2 في بيانات الاختبار يعني اعتماد KYC صريحاً، لا استنتاجاً من الاعتماد لاحقاً.
+            'is_kyc_verified' => 1,
             'is_active' => true,
             'zone_code' => 'SOUTH',
             // AMIAL-RESIDENCE-TEST-001 — SOUTH وحده لم يعد دليلاً. المصنع
