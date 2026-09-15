@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * AMIAL-KYC-TIERS-001 + AMIAL-SANCTION-001 (v1.9) — اختبارات.
+ * AMIAL-KYC-TIERS-001 + AMIAL-SANCTION-001 (v2.0) — اختبارات.
  */
 class KycSanctionTest extends TestCase
 {
@@ -42,9 +42,9 @@ class KycSanctionTest extends TestCase
     public function tier_1_allows_small_transactions()
     {
         $user = User::factory()->create(['kyc_tier' => 1]);
-        // 1000 ضمن حد 5000 لـ tier 1
+        // 1000 ضمن حد 100000 لـ Tier 1 التدريجي.
         $this->kyc->assertTransactionAllowed($user, '1000', 'send_money');
-        $this->assertTrue(true); // لم يُرمَ exception
+        $this->assertTrue(true);
     }
 
     /** @test */
@@ -53,8 +53,7 @@ class KycSanctionTest extends TestCase
         $user = User::factory()->create(['kyc_tier' => 1]);
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('حد العملية الواحدة');
-        // 10000 > حد 5000
-        $this->kyc->assertTransactionAllowed($user, '10000', 'send_money');
+        $this->kyc->assertTransactionAllowed($user, '100000.0001', 'send_money');
     }
 
     /** @test */
@@ -77,7 +76,6 @@ class KycSanctionTest extends TestCase
         $user = User::factory()->create(['kyc_tier' => 1]);
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('مستوى توثيق أعلى');
-        // safe_payment غير مسموح في tier 1
         $this->kyc->assertTransactionAllowed($user, '1000', 'safe_payment');
     }
 
@@ -105,8 +103,7 @@ class KycSanctionTest extends TestCase
         $user = User::factory()->create(['kyc_tier' => 1]);
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('الرصيد سيتجاوز الحد');
-        // 100000 > حد رصيد tier 1 (50000)
-        $this->kyc->assertBalanceAllowed($user, '100000');
+        $this->kyc->assertBalanceAllowed($user, '100000.0001');
     }
 
     /** @test */
@@ -185,7 +182,6 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function name_normalization_handles_arabic()
     {
-        // الألف بأشكالها → ا، التاء المربوطة → ه
         $a = $this->sanction->normalizeName('أحمد');
         $b = $this->sanction->normalizeName('احمد');
         $this->assertEquals($a, $b);
