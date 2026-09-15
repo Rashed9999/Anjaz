@@ -92,7 +92,15 @@ class RecipientVerificationService
         // **و«غير معروف» ليس «مرفوضاً»** — القاعدة السابعة.
         $zone = $recipient->zone_code ?? 'UNKNOWN';
 
-        if ((int) ($recipient->is_kyc_verified ?? 0) !== 1) {
+        // العميل الفردي لا يُحكم بعلم KYC الكامل القديم: Tier 1 يستطيع
+        // استقبال التحويلات الأساسية بعد تحقق الهاتف والإقامة. أمّا التاجر
+        // (وهو مسموح في تحويلات المحفظة) فتبقى له أهلية اعتماد مستقلة.
+        if ((int) ($recipient->type ?? 0) === CUSTOMER_TYPE) {
+            app(KycTierService::class)->assertIndividualFeatureAllowed(
+                $recipient,
+                'receive_money',
+            );
+        } elseif ((int) ($recipient->is_kyc_verified ?? 0) !== 1) {
             // **و«لم يُوثَّق بعد» لا «لم يُعتمد».**
             //
             // اللفظان يصفان الحدثَ نفسَه من جهتين، **ويُقرآن مختلفين**:

@@ -105,7 +105,10 @@ trait EnforcesFinancialPolicy
      */
     protected function enforceKycTier(User $user, string $feature, string $amount): void
     {
-        app(KycTierService::class)->assertTransactionAllowed($user, $amount, $feature);
+        // هذا trait مشترك أيضاً بين التاجر والوكيل وPOS؛ لا نحملهم Tier
+        // العميل الفردي. المسارات الخاصة بالعميل تُفحص، والبقية تبقى تحت
+        // سياساتها التشغيلية المستقلة.
+        app(KycTierService::class)->assertIndividualTransactionAllowed($user, $amount, $feature);
     }
 
     private function zoneNameAr(string $zone): string

@@ -172,7 +172,9 @@ class CustomerTurnoverService
             // Tier 0 والحسابات القديمة غير المهاجرة لا تُحوَّل إلى رفض من
             // Observer تاريخي؛ بوابة التفعيل نفسها تمنعها من الحركة الجديدة.
             if ($tier > 0) {
-                $limits = $tiers->getLimits($tier);
+                // override العميل جزء من حدّه الفعلي، فلا يجوز أن تقبل
+                // projection حركةً رفضتها البوابة الأمامية أو العكس.
+                $limits = $tiers->getLimitsForUser($locked);
 
                 $dayRows = DB::table('customer_turnover_usage')
                     ->where('user_id', $userId)

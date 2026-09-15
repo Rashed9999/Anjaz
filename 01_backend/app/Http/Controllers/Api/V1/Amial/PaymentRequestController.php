@@ -174,9 +174,10 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
             if (($requester->zone_code ?? 'UNKNOWN') !== 'SOUTH') {
                 throw new \RuntimeException('خدمة طلب المال غير متاحة في منطقتك الحالية');
             }
-            if ((int) $requester->is_kyc_verified !== 1) {
-                throw new \RuntimeException('أكمل توثيق حسابك قبل طلب المال');
-            }
+            // العميل Tier 1 يملك الخدمة الأساسية؛ لا نربط هذه المعاينة
+            // بعلم KYC الكامل القديم.
+            app(\App\Services\KycTierService::class)
+                ->assertIndividualFeatureAllowed($requester, 'receive_money');
 
             // المصدر المركزي نفسه المستخدم قبل التحويل: اسم ورقم مقنّعان
             // + token أحادي الاستخدام. لا نعيد بناء بحث هاتف أضعف هنا.
@@ -192,9 +193,9 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
             if (!(bool) $recipient->is_active) {
                 throw new \RuntimeException('حساب العميل موقوف حالياً');
             }
-            if ((int) $recipient->is_kyc_verified !== 1) {
-                throw new \RuntimeException('حساب العميل غير موثّق لاستقبال الطلب');
-            }
+            app(\App\Services\KycTierService::class)
+                ->assertIndividualFeatureAllowed($recipient, 'send_money');
+
             return $this->ok([
                 // مفاتيح found/name باقية لتوافق النسخة السابقة.
                 'found' => true,

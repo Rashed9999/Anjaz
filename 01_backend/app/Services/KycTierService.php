@@ -99,7 +99,13 @@ class KycTierService
         return array_merge(['tier' => $tier], self::DEFAULT_LIMITS[$tier] ?? self::DEFAULT_LIMITS[0]);
     }
 
-    private function getLimitsForUser(User $user): array
+    /**
+     * حدود العميل الفردي الفعلية بعد تطبيق أي override إداري مشروع.
+     *
+     * لا تُستخدم هذه الدالة للتاجر أو الوكيل أو موظفي POS/الإدارة؛ نظام
+     * الـTier التدريجي خاص بحساب العميل الفردي (type=2) فقط.
+     */
+    public function getLimitsForUser(User $user): array
     {
         $limits = $this->getLimits($this->effectiveTier($user));
         $override = is_array($user->limit_override)
@@ -136,6 +142,39 @@ class KycTierService
     {
         if ($this->effectiveTier($user) < $tier) {
             throw new RuntimeException('هذه العملية تتطلب مستوى توثيق أعلى.');
+        }
+    }
+
+    /** هل هذا حساب العميل الفردي الذي تنطبق عليه مستويات KYC؟ */
+    public function isIndividualCustomer(User $user): bool
+    {
+        return (int) ($user->type ?? 0) === 2;
+    }
+
+    /**
+     * بوابة آمنة للاستدعاءات المشتركة: لا تفرض Tier العميل على أي دور آخر.
+     * تعيد null للأدوار المؤسسية عمداً؛ لها سياساتها وصلاحياتها المستقلة.
+     */
+    public function assertIndividualFeatureAllowed(User $user, string $feature): ?array
+    {
+        return $this->isIndividualCustomer($user)
+            ? $this->assertFeatureAllowed($user, $feature)
+            : null;
+    }
+
+    /** يفرض الميزة والحدود فقط عندما يكون صاحب الحركة عميلاً فردياً. */
+    public function assertIndividualTransactionAllowed(User $user, string $amount, string $feature): void
+    {
+        if ($this->isIndividualCustomer($user)) {
+            $this->assertTransactionAllowed($user, $amount, $feature);
+        }
+    }
+
+    /** يفرض أهلية الاستقبال وحدّ الرصيد فقط على العميل الفردي المستلم. */
+    public function assertIndividualCanReceive(User $user, string $incomingAmount): void
+    {
+        if ($this->isIndividualCustomer($user)) {
+            $this->assertCanReceive($user, $incomingAmount);
         }
     }
 

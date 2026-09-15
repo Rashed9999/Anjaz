@@ -68,6 +68,7 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Donation::observe(\App\Observers\DonationTurnoverObserver::class);
         \App\Models\FamilyFundTransaction::observe(\App\Observers\FamilyFundTurnoverObserver::class);
         \App\Models\SafePayment::observe(\App\Observers\SafePaymentTurnoverObserver::class);
+        \App\Models\PendingTransfer::observe(\App\Observers\PendingTransferTurnoverObserver::class);
 
         // AMIAL-CLEANUP: بوابة تفعيل 6amtech ونظام الإضافات القديم محذوفان.
     }

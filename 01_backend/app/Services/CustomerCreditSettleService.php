@@ -66,6 +66,13 @@ class CustomerCreditSettleService
             throw new RuntimeException('حساب التاجر غير متاح حالياً');
         }
 
+        // سداد الدين دفعٌ لتاجر، فيبقى ضمن خدمة Tier 1+ للعميل الفردي.
+        $this->assertIndividualCustomerTransactionAllowed(
+            (int) $customer->id,
+            $amount,
+            'merchant_pay',
+        );
+
         // نفس حراس العمليات المالية الأخرى: الحساب/المنطقة ثم AML قبل تحريك المال.
         $this->assertFinancialEligibility((int) $customer->id);
         $this->screenAml(

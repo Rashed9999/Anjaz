@@ -146,6 +146,34 @@ trait TransactionTrait
     }
 
     /**
+     * طبقة KYC الخاصة بالعميل الفردي فوق الحارس المالي العام.
+     *
+     * لا نضعها داخل assertFinancialEligibility لأن تلك الدالة تُستعمل أيضاً
+     * للتاجر والوكيل وموظفي POS والإدارة، وهذه الأدوار ليست ضمن Tier 0..3.
+     */
+    protected function assertIndividualCustomerTransactionAllowed(
+        int $userId,
+        string $amount,
+        string $feature,
+    ): void {
+        $user = User::find($userId);
+        if ($user) {
+            app(\App\Services\KycTierService::class)
+                ->assertIndividualTransactionAllowed($user, $amount, $feature);
+        }
+    }
+
+    /** يمنع إدخال أصل حركة واردة إلى عميل غير مؤهل أو متجاوز لحده. */
+    protected function assertIndividualCustomerCanReceive(int $userId, string $amount): void
+    {
+        $user = User::find($userId);
+        if ($user) {
+            app(\App\Services\KycTierService::class)
+                ->assertIndividualCanReceive($user, $amount);
+        }
+    }
+
+    /**
      * AMIAL-AML-001 (وُصِّل في AMIAL-AUDIT-FIX-001) — فحص مكافحة غسل الأموال.
      *
      * يُستدعى قبل فتح معاملة المال (pre-flight) لا داخلها: هكذا لو صدر
@@ -312,6 +340,11 @@ trait TransactionTrait
         $amount = MoneyService::normalize($amount);
         $charge = MoneyService::normalize($charge);
         $total = MoneyService::add($amount, $charge);
+
+        // Tier 0 لا يحرّك مالاً؛ Tier 1 يملك التحويل الأساسي فقط. نضع
+        // الحارس في القلب حتى لا يلتف أي controller أو job جديد على الواجهة.
+        $this->assertIndividualCustomerTransactionAllowed($from_user_id, $amount, 'send_money');
+        $this->assertIndividualCustomerCanReceive($to_user_id, $amount);
 
         // AMIAL-ZONE-001 hotfix (v0.7-A.1): فحص zone + security hold في بداية كل عملية
         // هذا defense-in-depth — الـ middleware amial.zone يجب أن يلتقطها أولاً،
@@ -682,6 +715,8 @@ trait TransactionTrait
         $charge = MoneyService::normalize($charge);
         $total = MoneyService::add($amount, $charge);
 
+        $this->assertIndividualCustomerTransactionAllowed($from_user_id, $amount, 'cash_out');
+
         // حصة الوكيل: من محرّك الرسوم إن مُرّرت، وإلا fallback للسلوك القديم
         $agentCommission = $agentCommissionOverride !== null
             ? MoneyService::normalize($agentCommissionOverride)
@@ -979,6 +1014,8 @@ trait TransactionTrait
         $customerDebit = (string) $breakdown['total_debit'];  // ما يُخصم من العميل
         $net = (string) $breakdown['net_credit'];             // ما يصل للتاجر
 
+        $this->assertIndividualCustomerTransactionAllowed($customer_user_id, $amount, 'merchant_pay');
+
         $this->assertFinancialEligibility($customer_user_id);
 
         // AMIAL-AML-COVERAGE-001 — `pay_merchant` مُعلَنٌ في الإعداد ولم
@@ -1200,6 +1237,10 @@ trait TransactionTrait
     ): ?string {
         $amount = MoneyService::normalize($amount);
 
+        // الإيداع النقدي لا يتجاوز Tier 0 ولا حد الاستقبال اليومي/الشهري
+        // للعميل، بينما الوكيل لا يدخل أصلاً في نظام KYC الفردي.
+        $this->assertIndividualCustomerCanReceive($to_user_id, $amount);
+
         // AMIAL-ZONE-001 hotfix (v0.7-A.1)
         $this->assertFinancialEligibility($from_user_id);
         $this->assertFinancialEligibility($to_user_id);
@@ -1307,6 +1348,15 @@ trait TransactionTrait
     ): ?string {
         $amount = MoneyService::normalize($amount);
         $userInfo = User::find($to_user_id);
+
+        // لا يصبح الشحن منفذاً خلفياً لإدخال مال إلى Tier 0؛ ويُطبق الحد
+        // على الأصل فقط، أما bonus أدناه فلا يستهلكه.
+        if (!$userInfo) {
+            throw new \RuntimeException("Recipient user {$to_user_id} not found");
+        }
+        app(\App\Services\KycTierService::class)
+            ->assertIndividualCanReceive($userInfo, $amount);
+
         $userType = $userInfo->type == 1 ? 'agent' : ($userInfo->type == 2 ? 'customer' : null);
         $bonus = MoneyService::normalize(
             Helpers::get_add_money_bonus((float)$amount, $to_user_id, $userType)
@@ -1315,9 +1365,6 @@ trait TransactionTrait
         // AMIAL-ZONE-001 hotfix (v0.7-A.1): فحص zone للمستلم.
         // الأدمن (from_user_id) لا نفحصه — admin user دائماً مسموح كحامل لأموال النظام.
         // لكن المستلم: لو محفظته خارج SOUTH أو في security_hold، نرفض إضافة المال.
-        if (!$userInfo) {
-            throw new \RuntimeException("Recipient user {$to_user_id} not found");
-        }
         if ($userInfo->security_hold_until && $userInfo->security_hold_until->isFuture()) {
             throw new \RuntimeException(
                 "Recipient is in security hold until {$userInfo->security_hold_until}"
@@ -1488,6 +1535,10 @@ trait TransactionTrait
         $total = MoneyService::add($amount, $charge);
 
         $adminUserId = Helpers::get_admin_id();
+
+        // تنفيذ طلب سحب قديم لا يعفي العميل الفردي من Tier الحالي؛ لا
+        // يُسمح لحساب Tier 0 بأن يتحول طلبه المؤجل إلى حركة مالية لاحقاً.
+        $this->assertIndividualCustomerTransactionAllowed($receiver_user_id, $amount, 'cash_out');
 
         // AMIAL-ZONE-001 hotfix (v0.7-A.1)
         $this->assertFinancialEligibility($receiver_user_id);

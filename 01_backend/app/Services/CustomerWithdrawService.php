@@ -34,6 +34,9 @@ class CustomerWithdrawService
         if (!MoneyService::isPositive($amount)) {
             throw new InvalidArgumentException('مبلغ السحب يجب أن يكون موجباً');
         }
+        // السحب النقدي خدمة Tier 1+ للعميل الفردي. لا يمتد هذا الفحص إلى
+        // الوكيل الذي ينفذ الصرف لاحقاً؛ له حدود وسياسات وكالة مستقلة.
+        $this->assertIndividualCustomerTransactionAllowed($customer->id, $amount, 'cash_out');
         $this->assertFinancialEligibility($customer->id);
 
         $breakdown = app(FeeService::class)->calculate('CASH_OUT', $amount, ['applies_to' => 'customer']);
@@ -180,6 +183,11 @@ class CustomerWithdrawService
             $adminId = \App\CentralLogics\Helpers::get_admin_id();
             $agentCredit = MoneyService::add((string)$req->amount, (string)$req->agent_commission);
             $txId = $this->newTransactionId();
+
+            // يربط صفوف Transaction التالية بطلب السحب قبل إنشائها. بذلك
+            // يعرف CustomerTurnoverObserver أنها تسوية لحجز قائم ولا
+            // يسجّل أصل المبلغ مرةً ثانية بجانب WithdrawalTurnoverObserver.
+            $req->update(['transaction_id' => $txId]);
 
             // 1) صرف المحجوز من العميل (المال غادر)
             $this->guard()->captureHold($req->customer_user_id, (string)$req->total_debit, 'withdraw_execute');
