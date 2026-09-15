@@ -7,6 +7,7 @@ use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\FeeService;
+use App\Services\KycTierService;
 use App\Traits\TransactionTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,7 @@ class MerchantPaymentController extends Controller
 
     public function __construct(
         private readonly FeeService $fees,
+        private readonly KycTierService $kyc,
     ) {}
 
     /** POST /api/v1/amial/merchant/quote — لا يحرّك مالاً */
@@ -77,21 +79,11 @@ class MerchantPaymentController extends Controller
         $customer = $request->user();
 
         // AMIAL-MERCHANT-PAY-002 — **ورمزُ المعاملات هنا كما هو في التحويل.**
-        //
-        // قِيس قبل الإضافة: `customer/send-money` يشترط PIN، و**دفعُ التاجر
-        // لم يكن يشترطه**. أي أنّ دفعَ مالٍ في متجرٍ كان محميّاً أقلَّ من
-        // إرساله لصديق — ومن أخذ هاتفاً مفتوحاً يدفع به بلا حاجز.
-        //
-        // **وموضعُ الفحص هنا لا في `merchant_payment_transaction`:**
-        // تلك الدالّة يناديها `FuelStationService` و`SplitBillService`
-        // بمساراتٍ لها حواجزُها، فاشتراطُ PIN داخلها يكسرهما. (تحليلُ
-        // الأثر قبل التعديل — لا بعده.)
         if (!\App\CentralLogics\Helpers::pin_check($customer->id, (string) $request->input('pin'))) {
             return $this->error('PIN_INVALID', 'رمز الحماية غير صحيح', 403);
         }
         $channel = $request->input('channel', 'qr');
 
-        // حلّ التاجر
         $merchant = $request->filled('merchant_user_id')
             ? User::find($request->input('merchant_user_id'))
             : User::whereIn('phone', \App\Support\Phone::variants((string) $request->input('merchant_phone')))->first();
@@ -111,7 +103,6 @@ class MerchantPaymentController extends Controller
             return $this->error('MERCHANT_SUSPENDED', 'توثيق التاجر موقوف', 422);
         }
 
-        // تحقق موظف POS (إن مُرّر)
         $posUserId = $request->input('pos_user_id');
         if ($posUserId !== null) {
             $pos = PosUser::where('id', $posUserId)
@@ -121,6 +112,19 @@ class MerchantPaymentController extends Controller
             if (!$pos) {
                 return $this->error('POS_USER_INVALID', 'موظف POS غير صالح لهذا التاجر', 422);
             }
+        }
+
+        // AMIAL-PROGRESSIVE-MONEY-002 — الدفع للتاجر ميزة Tier 1 صريحة،
+        // لكنه لا يُفتح بالهاتف وحده: الإقامة الموثقة والحدود تأتي من نفس
+        // KycTierService الذي يحرس التحويل. لا نغيّر is_kyc_verified.
+        try {
+            $this->kyc->assertTransactionAllowed(
+                $customer,
+                (string) $request->input('amount'),
+                'merchant_pay',
+            );
+        } catch (\RuntimeException $e) {
+            return $this->error('PROGRESSIVE_KYC_POLICY_DENIED', $e->getMessage(), 403);
         }
 
         try {
@@ -141,20 +145,13 @@ class MerchantPaymentController extends Controller
             return $this->error('MERCHANT_PAY_FAILED', $e->getMessage(), 422);
         }
 
-        // معاينة الأرقام للعرض/الإيصال
         $code = $channel === 'pos' ? 'MERCHANT_POS' : 'MERCHANT_QR';
-
-        // AMIAL-FEE-PLAN-001 — **الباقةُ تُمرَّر، وإلّا فالميزةُ حبرٌ على ورق.**
-        //
-        // بلا هذا السطر يُضبَط سعرُ «البداية» في الشاشة ولا يُطبَّق على
-        // تاجرٍ واحد: يقرأ المحرّكُ النسخةَ العامّةَ أبداً.
         $b = $this->fees->calculate($code, (string) $request->input('amount'), [
             'applies_to' => 'merchant',
             'plan' => \App\Support\Access\AccessConstants::canonicalPlan(
                 $profile->subscription_plan ?? null),
         ]);
 
-        // AMIAL-CASHIER-001 — ربط بيع الكاشير المعلّق (إن مُرّر sale_ulid)
         $linkedSale = null;
         if ($request->filled('sale_ulid')) {
             $linkedSale = app(\App\Services\CashierService::class)
@@ -179,14 +176,13 @@ class MerchantPaymentController extends Controller
             'merchant_receives' => $b['net_credit'],
             'channel' => $channel,
             'sale_linked' => $linkedSale !== null,
+            'kyc_tier' => $this->kyc->effectiveTier($customer),
             'merchant' => [
                 'name' => $merchant->f_name ?? $merchant->name ?? null,
                 'verified' => $profile->verification_status === 'verified',
             ],
         ], 'MERCHANT_PAY_OK', 'تم الدفع بنجاح');
     }
-
-    // ---- ردود منظّمة (نفس نمط متحكمات أميال) ----
 
     private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
     {
