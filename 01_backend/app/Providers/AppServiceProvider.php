@@ -2,8 +2,8 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -16,6 +16,15 @@ class AppServiceProvider extends ServiceProvider
         // email credential mutations. It is a singleton so the User observer
         // and OTP controller share the same short-lived authorization context.
         $this->app->singleton(\App\Services\EmailIdentityService::class);
+
+        // AMIAL-PROGRESSIVE-KYC-DOCS-001 — كل مستهلك قديم يطلب
+        // KycDocumentService يمر من السياسة التدريجية نفسها. بهذه الطريقة
+        // لا يبقى مسار إداري قديم يعتبر selfie شرطاً لـ Tier 2 بينما
+        // التطبيق الحديث يعرض وجه/ظهر الهوية فقط.
+        $this->app->bind(
+            \App\Services\KycDocumentService::class,
+            \App\Services\ProgressiveKycDocumentService::class,
+        );
 
         // AMIAL-KYC-OCR-001 — محرّك قراءة الوثائق.
         //
@@ -46,7 +55,6 @@ class AppServiceProvider extends ServiceProvider
 
         // any other register logic...
     }
-
 
     /**
      * Bootstrap any application services.
