@@ -48,8 +48,14 @@ class WrongTransferRecoveryGuardTest extends TestCase
 
         $this->svc = app(WrongTransferRecoveryService::class);
 
-        $this->ahmed = User::factory()->create(['zone_code' => 'SOUTH', 'phone' => '+967700111222', 'type' => 2]);
-        $this->salem = User::factory()->create(['zone_code' => 'SOUTH', 'phone' => '+967700111223', 'type' => 2]);
+        $this->ahmed = User::factory()->create([
+            'zone_code' => 'SOUTH', 'phone' => '+967700111222', 'type' => 2,
+            'kyc_tier' => 3, 'is_kyc_verified' => 1,
+        ]);
+        $this->salem = User::factory()->create([
+            'zone_code' => 'SOUTH', 'phone' => '+967700111223', 'type' => 2,
+            'kyc_tier' => 3, 'is_kyc_verified' => 1,
+        ]);
         $this->merchant = User::factory()->create(['zone_code' => 'SOUTH', 'phone' => '+967700999888', 'type' => 3]);
 
         foreach ([$this->ahmed, $this->salem, $this->merchant] as $u) {

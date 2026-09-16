@@ -58,8 +58,14 @@ class DisputeDecisionDoesNotLieGuardTest extends TestCase
             ['created_at' => now(), 'updated_at' => now()],
         );
 
-        $this->ahmed = User::factory()->create(['zone_code' => 'SOUTH', 'phone' => '+967700222111', 'type' => 2]);
-        $this->salem = User::factory()->create(['zone_code' => 'SOUTH', 'phone' => '+967700222112', 'type' => 2]);
+        $this->ahmed = User::factory()->create([
+            'zone_code' => 'SOUTH', 'phone' => '+967700222111', 'type' => 2,
+            'kyc_tier' => 3, 'is_kyc_verified' => 1,
+        ]);
+        $this->salem = User::factory()->create([
+            'zone_code' => 'SOUTH', 'phone' => '+967700222112', 'type' => 2,
+            'kyc_tier' => 3, 'is_kyc_verified' => 1,
+        ]);
 
         foreach ([$this->ahmed, $this->salem] as $u) {
             EMoney::create(['user_id' => $u->id, 'current_balance' => '0.0000',
