@@ -37,7 +37,12 @@ class KycTierService
     {
         $status = app(\App\Services\Kyc\KycAccountStatusService::class)->for($user);
         if ($status['update_required']) return min(1, $status['tier']);
-        if ($status['tier'] >= 2 && !$status['is_verified']) return 0;
+        if ($status['tier'] >= 2 && !$status['is_verified']) {
+            // طلب Tier أعلى أو مراجعته لا يلغي Tier 1 المستقل: ما دام
+            // الهاتف مملوكاً يبقى المسار الأساسي متاحاً، بينما تبقى مزايا
+            // Tier 2/3 مغلقة حتى اعتماد الـKYC صراحةً.
+            return (bool) ($user->is_phone_verified ?? false) ? 1 : 0;
+        }
         if ($status['tier'] >= 1 && !(bool) ($user->is_phone_verified ?? false)) return 0;
         return $status['tier'];
     }
