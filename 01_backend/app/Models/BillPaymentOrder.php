@@ -10,10 +10,12 @@ class BillPaymentOrder extends Model
 {
     protected $table = 'bill_payment_orders';
     protected $fillable = [
-        'order_ulid', 'user_id', 'provider_id', 'service_id', 'product_id',
+        'order_ulid', 'idempotency_key', 'user_id', 'provider_id', 'service_id', 'product_id',
         'subscriber_account', 'subscriber_extra',
-        'amount', 'fee', 'total_debited',
+        'amount', 'fee', 'total_debited', 'funds_state',
         'status', 'wallet_transaction_id', 'provider_reference', 'provider_message',
+        'provider_attempt_count', 'last_provider_check_at', 'next_reconciliation_at',
+        'fee_scheme_id', 'fee_scheme_version', 'fee_configuration_state',
         'zone_code', 'completed_at', 'reversed_at', 'reverse_reason',
     ];
     protected $casts = [
@@ -21,6 +23,11 @@ class BillPaymentOrder extends Model
         'amount' => 'decimal:4',
         'fee' => 'decimal:4',
         'total_debited' => 'decimal:4',
+        'provider_attempt_count' => 'integer',
+        'last_provider_check_at' => 'datetime',
+        'next_reconciliation_at' => 'datetime',
+        'fee_scheme_id' => 'integer',
+        'fee_scheme_version' => 'integer',
         'completed_at' => 'datetime',
         'reversed_at' => 'datetime',
     ];

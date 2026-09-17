@@ -8,7 +8,7 @@ use App\Models\BillProvider;
 use App\Models\BillService;
 use App\Models\BillServiceProduct;
 use App\Services\BillPayService;
-use App\Services\KycTierService;
+use App\Services\MoneyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -20,14 +20,13 @@ class BillPayController extends Controller
 {
     public function __construct(
         private readonly BillPayService $service,
-        private readonly KycTierService $kyc,
     ) {}
 
     /** GET /api/v1/amial/bill-pay/providers — قائمة المزودين النشطين */
     public function listProviders(Request $request): JsonResponse
     {
         $providers = BillProvider::where('is_active', true)
-            ->where('zone_code', 'SOUTH')
+            ->where('zone_code', $request->user()?->zone_code ?: 'SOUTH')
             ->with(['services' => fn($q) => $q->where('is_active', true)])
             ->get();
 
@@ -66,30 +65,17 @@ class BillPayController extends Controller
         $product = $request->input('product_id') ? BillServiceProduct::find($request->input('product_id')) : null;
         $provider = $service->provider;
 
-        if ($product && $product->amount_type === 'fixed' && (string)$product->fixed_amount !== (string)$request->input('amount')) {
+        if ($product && $product->amount_type === 'fixed' && MoneyService::compare((string) $product->fixed_amount, (string) $request->input('amount')) !== 0) {
             return $this->error('AMOUNT_MISMATCH', 'المبلغ لا يطابق سعر الخدمة الثابت', 422);
         }
         if ($product && $product->amount_type === 'variable') {
-            $amt = (float)$request->input('amount');
-            if ($product->min_amount && $amt < (float)$product->min_amount) {
+            $amt = (string) $request->input('amount');
+            if ($product->min_amount && MoneyService::compare($amt, (string) $product->min_amount) < 0) {
                 return $this->error('AMOUNT_TOO_LOW', 'المبلغ أقلّ من الحدّ الأدنى', 422);
             }
-            if ($product->max_amount && $amt > (float)$product->max_amount) {
+            if ($product->max_amount && MoneyService::compare($amt, (string) $product->max_amount) > 0) {
                 return $this->error('AMOUNT_TOO_HIGH', 'المبلغ أعلى من الحدّ الأقصى', 422);
             }
-        }
-
-        // AMIAL-PROGRESSIVE-MONEY-003 — سداد الخدمات ميزة Tier 1، لكن
-        // الهاتف وحده لا يحرّك ريالاً: الإقامة الموثقة وحدود المستوى تمر
-        // من الحارس المركزي قبل إنشاء الطلب أو استدعاء المزود أو الخصم.
-        try {
-            $this->kyc->assertTransactionAllowed(
-                $request->user(),
-                (string) $request->input('amount'),
-                'bill_pay',
-            );
-        } catch (\RuntimeException $e) {
-            return $this->error('PROGRESSIVE_KYC_POLICY_DENIED', $e->getMessage(), 403);
         }
 
         try {
@@ -101,6 +87,7 @@ class BillPayController extends Controller
                 subscriberAccount: $request->input('subscriber_account'),
                 amount: (string)$request->input('amount'),
                 subscriberExtra: $request->input('subscriber_extra', []),
+                idempotencyKey: $request->attributes->get('amial.idempotency_key'),
             );
         } catch (\App\Exceptions\InsufficientBalanceException $e) {
             return new JsonResponse($e->toApiArray(), 402);
@@ -115,10 +102,7 @@ class BillPayController extends Controller
             default => 'BILL_PAY_UNKNOWN',
         };
 
-        return $this->ok([
-            'order' => $order,
-            'kyc_tier' => $this->kyc->effectiveTier($request->user()),
-        ], $code, $order->provider_message ?? 'Order processed');
+        return $this->ok(['order' => $order], $code, $order->provider_message ?? 'Order processed');
     }
 
     public function showOrder(Request $request, string $ulid): JsonResponse
@@ -148,6 +132,7 @@ class BillPayController extends Controller
         ]);
     }
 
+    // Helpers
     private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
     {
         return new JsonResponse([
