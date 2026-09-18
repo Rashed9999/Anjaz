@@ -116,7 +116,8 @@ class CustomerAuthController extends Controller
             // `AMIAL_DEMO_OTP` يبقى طوال التجربة، وهي لا تحتاج قناةً
             // أصلاً. فالحاجزُ على الحقيقيّ وحدَه.
             // ══════════════════════════════════════════════════════════
-            if ($policy->needsDelivery((string) $request['phone']) && ! $policy->deliveryReady()) {
+            if ($policy->customerPhoneOwnershipNeedsDelivery((string) $request['phone'])
+                && ! $policy->deliveryReady()) {
                 app(\App\Services\OpsAlertService::class)->note(
                     'otp.delivery.unavailable',
                     'لا قناةَ إيصالٍ لرمز التحقّق — والتسجيلُ مقفلٌ على الأرقام الحقيقيّة',
@@ -130,7 +131,7 @@ class CustomerAuthController extends Controller
                 ], 503);
             }
 
-            $otp = $policy->codeFor($request['phone']);
+            $otp = $policy->customerPhoneOwnershipCode((string) $request['phone']);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $request['phone']], [
                 'otp' => $otp,
@@ -141,10 +142,14 @@ class CustomerAuthController extends Controller
                 'updated_at' => now(),
             ]);
 
-            if(addon_published_status('Gateways')){
-                $response = SmsGateway::send($request['phone'],$otp);
-            }else{
-                $response = SmsModule::send($request['phone'], $otp);
+            if ($policy->customerPhoneOwnershipNeedsDelivery((string) $request['phone'])) {
+                if(addon_published_status('Gateways')){
+                    $response = SmsGateway::send($request['phone'],$otp);
+                }else{
+                    $response = SmsModule::send($request['phone'], $otp);
+                }
+            } else {
+                $response = 'success';
             }
 
             // AMIAL-OTP-SPLIT-001: **الإفصاح لأرقام العرض وحدها.**
@@ -152,12 +157,15 @@ class CustomerAuthController extends Controller
             // كان يُفصح عن الرمز لأيّ رقم — فيُلغى التحقّق من أصله: يصير
             // «أثبت أنّك تملك الرقم» «انسخ ما أعطيناك». ولرقمٍ حقيقيّ
             // يبقى `null` مهما كان `AMIAL_DEMO_OTP` مضبوطاً.
-            $demoHint = $policy->mayDisclose($request['phone']) ? (string) $otp : null;
+            $demoHint = $policy->mayDiscloseCustomerPhoneOwnership((string) $request['phone'])
+                ? (string) $otp
+                : null;
 
             return response()->json([
                 'message' => 'Number is ready to register',
                 'otp' => 'active',
                 'demo_otp' => $demoHint,
+                'pilot_mode' => $policy->pilotCustomerPhoneCode() !== null,
             ], 200);
         }
         else{
@@ -189,10 +197,14 @@ class CustomerAuthController extends Controller
                 'updated_at' => now(),
             ]);
 
-            if(addon_published_status('Gateways')){
-                $response = SmsGateway::send($phone,$otp);
-            }else{
-                $response = SmsModule::send($phone, $otp);
+            if ($policy->customerPhoneOwnershipNeedsDelivery((string) $phone)) {
+                if(addon_published_status('Gateways')){
+                    $response = SmsGateway::send($phone,$otp);
+                }else{
+                    $response = SmsModule::send($phone, $otp);
+                }
+            } else {
+                $response = 'success';
             }
 
             return response()->json([
