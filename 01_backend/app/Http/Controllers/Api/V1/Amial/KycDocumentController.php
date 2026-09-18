@@ -173,7 +173,7 @@ class KycDocumentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'تم اعتماد الحساب وتفعيل التحويلات الداخلية بحسب حدود الفئة الثانية.',
+            'message' => 'تم اعتماد الهوية وأصبح الحساب بحالة عميل موثق بهوية.',
             'data' => [
                 'user_id' => (int) $account->id,
                 'is_kyc_verified' => (int) $account->is_kyc_verified === 1,
