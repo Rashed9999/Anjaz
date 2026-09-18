@@ -41,16 +41,20 @@ class KycTierService
         $status = app(\App\Services\Kyc\KycAccountStatusService::class)->for($user);
         if ($status['update_required']) return min(1, $status['tier']);
         if ($status['tier'] >= 2 && !$status['is_verified']) {
-            // طلب Tier أعلى أو مراجعته لا يلغي Tier 1 المستقل: ما دام
-            // الهاتف مملوكاً يبقى المسار الأساسي متاحاً، بينما تبقى مزايا
-            // Tier 2/3 مغلقة حتى اعتماد الـKYC صراحةً.
-            return (bool) ($user->is_phone_verified ?? false) ? 1 : 0;
+            // طلب توثيق أعلى لا يلغي «موثق جزئيا» إن كان مكتمل الشروط:
+            // الهاتف مثبت + السكن معتمد. نطاق التشغيل لا يحدد حالة KYC.
+            $residence = app(ResidenceVerificationService::class)->forUser($user);
+
+            return (bool) ($user->is_phone_verified ?? false)
+                && ($residence['status'] ?? null) === ResidenceVerificationService::STATUS_VERIFIED
+                    ? 1
+                    : 0;
         }
         if ($status['tier'] >= 1 && !(bool) ($user->is_phone_verified ?? false)) return 0;
 
         // «عميل موثق جزئيا» ليس مجرد OTP هاتف. للحسابات القديمة التي
         // حصلت على tier=1 قبل إصلاح المسار، نحسبها 🟤 حتى يوجد سكن
-        // معتمد داخل نطاق التشغيل. هكذا يصبح الاسم الظاهر مطابقاً للعقد.
+        // معتمد. نطاق التشغيل منفصل عن حالة التوثيق.
         if ($status['tier'] === 1) {
             $residence = app(ResidenceVerificationService::class)->forUser($user);
             if (($residence['status'] ?? null) !== ResidenceVerificationService::STATUS_VERIFIED) {
