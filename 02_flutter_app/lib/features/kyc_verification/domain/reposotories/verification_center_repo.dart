@@ -27,8 +27,9 @@ class VerificationCenterRepo {
   Future<Response> submitResidence({
     required String birthGovernorate,
     required String governorate,
-    required String district,
-    String? area,
+    required int districtId,
+    int? uzlahId,
+    int? villageId,
     String? landmark,
     required String evidenceType,
     required File evidence,
@@ -37,8 +38,9 @@ class VerificationCenterRepo {
     final fields = <String, String>{
       'birth_governorate': birthGovernorate,
       'residence_governorate': governorate,
-      'residence_district': district,
-      if (area != null && area.trim().isNotEmpty) 'residence_area': area.trim(),
+      'residence_district_id': '$districtId',
+      if (uzlahId != null) 'residence_uzlah_id': '$uzlahId',
+      if (villageId != null) 'residence_village_id': '$villageId',
       if (landmark != null && landmark.trim().isNotEmpty)
         'residence_landmark': landmark.trim(),
       'evidence_type': evidenceType,
