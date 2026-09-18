@@ -52,6 +52,7 @@ class CustomerVerificationReviewScreen extends StatefulWidget {
 class _CustomerVerificationReviewScreenState
     extends State<CustomerVerificationReviewScreen> {
   bool _busy = false;
+  bool _declarationAccepted = false;
 
   @override
   Widget build(BuildContext context) {
@@ -161,6 +162,25 @@ class _CustomerVerificationReviewScreenState
                         ),
                       ),
                     const SizedBox(height: 10),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _declarationAccepted,
+                      onChanged: _busy
+                          ? null
+                          : (value) => setState(
+                                () => _declarationAccepted = value == true,
+                              ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text(
+                        'أقر بأن البيانات المعروضة صحيحة، وأن المستندات المرفقة تخصني، وأوافق على إرسالها للمراجعة والتوثيق.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          height: 1.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     const Text(
                       'لن نطلب منك إعادة رفع مستند سبق اعتماده في حالة توثيق أدنى.',
                       style: TextStyle(
@@ -196,7 +216,8 @@ class _CustomerVerificationReviewScreenState
                   Expanded(
                     flex: 2,
                     child: FilledButton(
-                      onPressed: _busy ? null : _confirm,
+                      onPressed:
+                          _busy || !_declarationAccepted ? null : _confirm,
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(52),
                       ),
