@@ -148,13 +148,10 @@ class RegistrationDossierService
             'residence_landmark' => (string) ($subject->residence_landmark ?? ''),
             'identification_type' => (string) ($subject->identification_type ?? ''),
             'identification_number' => (string) ($subject->identification_number ?? ''),
-            'identification_issue_date' => optional($subject->identification_issue_date)->format('Y-m-d')
-                ?? (string) ($subject->identification_issue_date ?? ''),
-            'identification_expiry_date' => optional($subject->identification_expiry_date)->format('Y-m-d')
-                ?? (string) ($subject->identification_expiry_date ?? ''),
+            'identification_issue_date' => (string) ($subject->identification_issue_date ?? ''),
+            'identification_expiry_date' => (string) ($subject->identification_expiry_date ?? ''),
             'id_place_of_issue' => (string) ($subject->id_place_of_issue ?? ''),
-            'date_of_birth' => optional($subject->date_of_birth)->format('Y-m-d')
-                ?? (string) ($subject->date_of_birth ?? ''),
+            'date_of_birth' => (string) ($subject->date_of_birth ?? ''),
             'confirmed_by_customer_at' => now()->toIso8601String(),
         ], $payload);
 
