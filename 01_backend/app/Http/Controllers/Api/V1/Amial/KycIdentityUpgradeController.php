@@ -17,8 +17,9 @@ use Illuminate\Validation\Rule;
  * AMIAL-PROGRESSIVE-KYC-UPGRADE-001
  *
  * ترقية Tier 1 -> Tier 2 ليست إعادة تسجيل وليست KYC كامل.
- * المطلوب هنا: رقم الهوية + نوعها + وجه/ظهر الوثيقة فقط. لا selfie ولا
- * عنوان ولا دخل ولا توقيع. الصور تدخل KycDocumentService المشفّر مباشرةً
+ * المطلوب هنا: بيانات الهوية القانونية (النوع، الرقم، الميلاد، مكان
+ * الإصدار، تاريخ الإصدار والانتهاء) + وجه/ظهر الوثيقة. لا selfie ولا
+ * إعادة إثبات للسكن ولا بيانات دخل كاملة. الصور تدخل KycDocumentService المشفّر مباشرةً
  * ولا تُنسخ إلى identification_image[] القديم.
  */
 class KycIdentityUpgradeController extends Controller
