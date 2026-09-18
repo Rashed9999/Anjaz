@@ -168,6 +168,8 @@ class RegistrationDossierService
             'account_purpose' => (string) ($subject->account_purpose ?? ''),
             'is_pep' => $subject->is_pep === null ? '' : ((bool) $subject->is_pep ? '1' : '0'),
             'pep_position' => (string) ($subject->pep_position ?? ''),
+            'declaration_accepted' => true,
+            'confirmation_channel' => 'customer_app_review_screen',
             'confirmed_by_customer_at' => now()->toIso8601String(),
         ], $payload);
 
