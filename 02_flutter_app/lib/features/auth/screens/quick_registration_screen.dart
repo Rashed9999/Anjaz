@@ -613,6 +613,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           if (_residenceLandmark.text.trim().isNotEmpty)
             'residence_landmark': _residenceLandmark.text.trim(),
           'evidence_type': _evidenceType!,
+          'declaration_accepted': '1',
         },
         [MultipartBody('evidence', File(_residenceEvidence!.path))],
       );
