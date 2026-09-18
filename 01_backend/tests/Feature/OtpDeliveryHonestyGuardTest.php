@@ -48,6 +48,9 @@ class OtpDeliveryHonestyGuardTest extends TestCase
         DB::table('business_settings')->updateOrInsert(
             ['key' => 'phone_verification'],
             ['value' => '1', 'created_at' => now(), 'updated_at' => now()]);
+
+        // هذا الصنف يحرس سلوك ما بعد إغلاق وضع Pilot وربط مزوّد حقيقي.
+        config(['amial.otp.pilot_customer_phone_enabled' => false]);
     }
 
     private function ask(string $phone)
