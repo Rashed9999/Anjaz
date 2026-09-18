@@ -130,7 +130,7 @@ class VerificationStatusController extends Controller
                 'code' => 'upgrade_full_kyc',
                 'priority' => 4,
                 'title' => 'الترقية إلى عميل موثق',
-                'description' => 'أكمل ملف اعرف عميلك واختر طريقة إثبات أقوى لملكية الهوية.',
+                'description' => 'أكمل بيانات اعرف عميلك والتقط صورة سيلفي حديثة لإثبات صاحب الهوية.',
             ];
         }
 
@@ -228,7 +228,7 @@ class VerificationStatusController extends Controller
                 ['code' => 'tier2', 'label' => 'استكمال متطلبات عميل موثق بهوية', 'complete' => $current >= 2],
                 ['code' => 'profile', 'label' => 'إكمال بيانات اعرف عميلك التنظيمية', 'complete' => $profileMissing === []],
                 ['code' => 'address_proof', 'label' => 'دليل سكن/عنوان صالح ضمن ملف KYC', 'complete' => (bool) ($addressDoc['usable'] ?? false)],
-                ['code' => 'ownership', 'label' => 'إثبات أقوى أن صاحب الحساب هو صاحب الهوية', 'complete' => (bool) ($ownership3['ready'] ?? false)],
+                ['code' => 'ownership', 'label' => 'صورة سيلفي حديثة لإثبات صاحب الهوية', 'complete' => (bool) ($ownership3['ready'] ?? false)],
             ],
         ];
 
