@@ -88,7 +88,14 @@ class VerificationCenterController extends GetxController implements GetxService
     _setActionLoading(false);
 
     if (response.statusCode == 200) {
-      showCustomSnackBarHelper('تم إرسال رمز التحقق إلى رقم حسابك', isError: false);
+      final body = response.body;
+      final pilot = body is Map && body['pilot_mode'] == true;
+      showCustomSnackBarHelper(
+        pilot
+            ? 'وضع تجريبي: رمز تحقق الهاتف هو 123456'
+            : 'تم إرسال رمز التحقق إلى رقم حسابك',
+        isError: false,
+      );
       return true;
     }
     _showError(response, 'تعذر إرسال رمز التحقق');
