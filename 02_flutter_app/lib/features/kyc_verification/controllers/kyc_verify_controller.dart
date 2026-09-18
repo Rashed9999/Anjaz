@@ -62,7 +62,7 @@ class KycVerifyController extends GetxController implements GetxService {
     final remaining = 2 - _identityImage.length;
     _identityImage.addAll(picked.take(remaining));
     if (picked.length > remaining) {
-      showCustomSnackBarHelper('المستوى الثاني يحتاج صورتين فقط: وجه الهوية وظهرها');
+      showCustomSnackBarHelper('توثيق الهوية يحتاج صورتين فقط: وجه الهوية وظهرها');
     }
     update();
   }
