@@ -134,7 +134,7 @@ class FamilyFundController extends AmialApiController
             } catch (\RuntimeException $e) {
                 return $this->error(
                     'INVITEE_KYC_TIER_REQUIRED',
-                    'المستخدم المدعو يحتاج إكمال توثيق المستوى الثاني قبل الانضمام إلى صندوق العائلة.',
+                    'المستخدم المدعو يجب أن يكون عميلاً موثقاً بهوية قبل الانضمام إلى صندوق العائلة.',
                     422,
                 );
             }
