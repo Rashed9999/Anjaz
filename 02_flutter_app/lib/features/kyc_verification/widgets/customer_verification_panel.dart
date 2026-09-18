@@ -55,6 +55,10 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
               _usageCard(context, controller, tier, bar),
               const SizedBox(height: 12),
               _verificationCallout(context, controller, current, nextTier),
+              if (controller.verificationDocuments.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _verificationArchive(controller),
+              ],
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -225,6 +229,66 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
               label: const Text('وثّق حسابك وارفع الحدود'),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _verificationArchive(VerificationCenterController controller) {
+    final rows = controller.verificationDocuments.take(3).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDDE4ED)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.inventory_2_outlined, size: 20, color: Color(0xFF315F95)),
+              SizedBox(width: 8),
+              Text(
+                'نماذج التوثيق المؤرشفة',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'هذه مراجع النماذج التي راجعتها وأكدتها قبل الإرسال. تحتفظ الإدارة بنسخة قابلة للطباعة مع المستندات.',
+            style: TextStyle(fontSize: 11.5, height: 1.45, color: Color(0xFF637083)),
+          ),
+          const SizedBox(height: 10),
+          ...rows.map((row) => Container(
+                margin: const EdgeInsets.only(bottom: 7),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: const Color(0xFFE2E7EE)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.description_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${row['label'] ?? 'طلب توثيق'}',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+                      ),
+                    ),
+                    Text(
+                      '${row['reference'] ?? ''}',
+                      textDirection: TextDirection.ltr,
+                      style: const TextStyle(fontSize: 9.5, color: Color(0xFF697586)),
+                    ),
+                  ],
+                ),
+              )),
         ],
       ),
     );
