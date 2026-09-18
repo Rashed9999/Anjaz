@@ -97,7 +97,7 @@ class CustomerServicesScreenGatesGuardTest extends TestCase
      * صفرُ بوّاباتٍ خاطئة لأنّ صفرَ بوّابات. **وهو الصمتُ بثوب نجاح.**
      */
     /** @test */
-    public function the_three_restored_screens_each_have_a_card_that_opens_them(): void
+    public function the_four_customer_services_each_have_a_card_that_opens_them(): void
     {
         $src = $this->screen();
 
