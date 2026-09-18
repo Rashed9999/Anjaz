@@ -10,6 +10,7 @@ import 'package:amial_pay/features/auth/controllers/unified_auth_controller.dart
 import 'package:amial_pay/features/auth/screens/role_router.dart';
 import 'package:amial_pay/features/auth/widgets/governorate_picker.dart';
 import 'package:amial_pay/features/kyc_verification/domain/customer_verification_level.dart';
+import 'package:amial_pay/features/kyc_verification/screens/customer_verification_review_screen.dart';
 import 'package:amial_pay/features/kyc_verification/widgets/yemen_residence_picker.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:flutter/material.dart';
@@ -543,7 +544,64 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       return;
     }
 
+    final evidence = _evidenceOptions.firstWhere(
+      (item) => item['code']?.toString() == _evidenceType,
+      orElse: () => <String, dynamic>{'label': _evidenceType!},
+    );
+
+    final confirmed = await Get.to<bool>(
+      () => CustomerVerificationReviewScreen(
+        targetTier: 1,
+        rows: [
+          VerificationReviewRow('الاسم الكامل', _name.text.trim()),
+          VerificationReviewRow('رقم الهاتف', '$_dialCode${_phone.text.trim()}'),
+          VerificationReviewRow(
+            'محافظة الميلاد',
+            GovernoratePicker.nameOf(_birthGovernorate) ?? _birthGovernorate!,
+          ),
+          VerificationReviewRow(
+            'محافظة السكن',
+            GovernoratePicker.nameOf(_residenceLocation.governorateCode) ??
+                _residenceLocation.governorateCode!,
+          ),
+          VerificationReviewRow(
+            'المديرية',
+            _residenceLocation.districtName ?? '—',
+          ),
+          VerificationReviewRow('الحي / المنطقة', _residenceArea.text.trim()),
+          VerificationReviewRow(
+            'أقرب معلم',
+            _residenceLandmark.text.trim(),
+          ),
+          VerificationReviewRow(
+            'نوع إثبات السكن',
+            evidence['label']?.toString() ?? _evidenceType!,
+          ),
+        ],
+        documents: [
+          VerificationReviewDocument(
+            label: 'إثبات محل السكن',
+            path: _residenceEvidence!.path,
+          ),
+        ],
+        onConfirm: _submitResidenceConfirmed,
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      _residenceSubmitted = true;
+      setState(() => _step = 4);
+      _snack(
+        'تم إرسال طلب التوثيق الجزئي وحفظ نسخة مؤرشفة للمراجعة والطباعة.',
+        error: false,
+      );
+    }
+  }
+
+  Future<bool> _submitResidenceConfirmed() async {
+    if (_busy) return false;
     setState(() => _busy = true);
+
     try {
       final response = await Get.find<ApiClient>().postMultipartData(
         '/api/v1/amial/me/kyc/residence',
@@ -563,18 +621,12 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           response.body is! Map ||
           response.body['success'] != true) {
         _snack(_responseMessage(response, 'تعذر إرسال إثبات السكن.'));
-        return;
+        return false;
       }
-
-      _residenceSubmitted = true;
-      if (!mounted) return;
-      setState(() => _step = 4);
-      _snack(
-        'تم إرسال بيانات السكن ودليله للمراجعة. توفر الخدمات يعتمد على نطاق التشغيل ولا يؤثر على قبول التسجيل.',
-        error: false,
-      );
+      return true;
     } catch (_) {
       _snack('تعذر إرسال إثبات السكن. تحقق من الاتصال وحاول مرة أخرى.');
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
