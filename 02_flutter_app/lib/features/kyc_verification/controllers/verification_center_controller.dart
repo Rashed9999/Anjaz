@@ -124,14 +124,22 @@ class VerificationCenterController extends GetxController implements GetxService
   }
 
   Future<bool> submitResidence({
+    required String birthGovernorate,
     required String governorate,
+    required String district,
+    String? area,
+    String? landmark,
     required String evidenceType,
     required File evidence,
     String? evidenceDate,
   }) async {
     _setActionLoading(true);
     final response = await repo.submitResidence(
+      birthGovernorate: birthGovernorate,
       governorate: governorate,
+      district: district,
+      area: area,
+      landmark: landmark,
       evidenceType: evidenceType,
       evidence: evidence,
       evidenceDate: evidenceDate,
