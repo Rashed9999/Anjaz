@@ -41,8 +41,8 @@ void main() {
   });
 
   test('كلمة الدخول وPIN المالي منفصلان وKYC الكامل مؤجل', () {
-    expect(quick, contains("'كلمة مرور الدخول يجب أن تكون 8 محارف على الأقل.'"));
-    expect(quick, contains("'رمز PIN المالي يجب أن يتكون من 4 أرقام.'"));
+    expect(quick, contains("'registration_password_min'.tr"));
+    expect(quick, contains("'registration_transaction_pin_digits'.tr"));
     expect(quick, contains("'password': _password.text"));
     expect(quick, contains("'password_confirmation': _passwordConfirm.text"));
     expect(quick, contains("'transaction_pin': _pin.text"));
