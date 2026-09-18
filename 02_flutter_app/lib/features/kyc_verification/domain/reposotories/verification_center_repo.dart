@@ -42,6 +42,7 @@ class VerificationCenterRepo {
       if (landmark != null && landmark.trim().isNotEmpty)
         'residence_landmark': landmark.trim(),
       'evidence_type': evidenceType,
+      'declaration_accepted': '1',
       if (evidenceDate != null && evidenceDate.isNotEmpty)
         'evidence_date': evidenceDate,
     };
@@ -64,7 +65,10 @@ class VerificationCenterRepo {
   }) =>
       apiClient.postMultipartData(
         '/api/v1/amial/me/kyc/ownership/selfie',
-        {'review_mode': mode},
+        {
+          'review_mode': mode,
+          'declaration_accepted': '1',
+        },
         [MultipartBody('selfie', selfie)],
       );
 
