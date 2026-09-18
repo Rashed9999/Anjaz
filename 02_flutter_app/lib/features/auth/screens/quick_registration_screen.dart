@@ -9,6 +9,7 @@ import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/features/auth/controllers/unified_auth_controller.dart';
 import 'package:amial_pay/features/auth/screens/role_router.dart';
 import 'package:amial_pay/features/auth/widgets/governorate_picker.dart';
+import 'package:amial_pay/features/kyc_verification/domain/customer_verification_level.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,8 +21,9 @@ import 'package:image_picker/image_picker.dart';
 /// فتح محفظة العميل على مراحل واضحة:
 /// 1) بيانات الاتصال + كلمة مرور دخول + PIN مالي مستقل + موافقة الشروط.
 /// 2) إثبات البريد ثم إنشاء الحساب.
-/// 3) إثبات ملكية الهاتف -> Tier 1 مخزّن.
-/// 4) رفع إثبات الإقامة -> مراجعة بشرية قبل فتح المال.
+/// 3) إثبات ملكية الهاتف — لا يرفع حالة التوثيق وحده.
+/// 4) محافظة الميلاد + عنوان السكن الحالي + دليل السكن.
+/// 5) اعتماد السكن يرفع العميل إلى «موثق جزئيا»؛ نطاق التشغيل مستقل.
 ///
 /// لا هوية ولا سيلفي في التسجيل الأساسي. ترقية الهوية تتم لاحقاً من الحساب.
 class QuickRegistrationScreen extends StatefulWidget {
@@ -41,6 +43,9 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   final _pinConfirm = TextEditingController();
   final _emailOtp = TextEditingController();
   final _phoneOtp = TextEditingController();
+  final _residenceDistrict = TextEditingController();
+  final _residenceArea = TextEditingController();
+  final _residenceLandmark = TextEditingController();
 
   int _step = 0;
   bool _busy = false;
@@ -55,6 +60,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   int _emailResendSeconds = 0;
   Timer? _emailTimer;
 
+  String? _birthGovernorate;
   String? _residenceGovernorate;
   XFile? _residenceEvidence;
   String? _evidenceType;
@@ -124,6 +130,9 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _pinConfirm,
       _emailOtp,
       _phoneOtp,
+      _residenceDistrict,
+      _residenceArea,
+      _residenceLandmark,
     ]) {
       c.dispose();
     }
@@ -391,29 +400,45 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   Future<void> _requestPhoneOtp({bool silentSuccess = false}) async {
     if (_busy && !silentSuccess) return;
     if (!silentSuccess) setState(() => _busy = true);
+
     try {
       final response = await Get.find<ApiClient>().postData(
         '/api/v1/customer/check-otp',
         const <String, dynamic>{},
       );
+
       final ok = response.statusCode == 200 &&
           response.body is Map &&
           response.body['success'] == true &&
           response.body['code']?.toString() == 'OTP_SENT';
+
       if (!ok) {
         _snack(
           _responseMessage(
             response,
-            'الحساب جاهز، لكن تعذر إرسال رمز الهاتف الآن. يمكنك إكماله لاحقاً.',
+            'الحساب جاهز، لكن تعذر تجهيز رمز الهاتف الآن. يمكنك إكماله لاحقاً.',
           ),
         );
         return;
       }
+
       final body = Map<String, dynamic>.from(response.body as Map);
       final demoOtp = body['demo_otp']?.toString();
-      if (demoOtp != null && RegExp(r'^\d{6}
+
+      if (demoOtp != null && RegExp(r'^\d{6}$').hasMatch(demoOtp)) {
+        _phoneOtp.text = demoOtp;
+      }
+
+      if (!silentSuccess) {
+        _snack(
+          body['pilot_mode'] == true
+              ? 'وضع تجريبي: رمز الهاتف الحالي هو 123456'
+              : 'أرسلنا رمز التحقق إلى رقم هاتفك.',
+          error: false,
+        );
+      }
     } catch (_) {
-      _snack('الحساب جاهز، لكن تعذر إرسال رمز الهاتف الآن. يمكنك إكماله لاحقاً.');
+      _snack('الحساب جاهز، لكن تعذر تجهيز رمز الهاتف الآن. يمكنك إكماله لاحقاً.');
     } finally {
       if (!silentSuccess && mounted) setState(() => _busy = false);
     }
@@ -421,28 +446,34 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
 
   Future<void> _verifyPhoneOtp() async {
     if (_busy) return;
-    if (!RegExp(r'^\d{6}
+
+    if (!RegExp(r'^\d{6}$').hasMatch(_phoneOtp.text.trim())) {
+      _snack('أدخل رمز الهاتف المكوّن من 6 أرقام.');
       return;
     }
+
     setState(() => _busy = true);
     try {
       final response = await Get.find<ApiClient>().postData(
         '/api/v1/customer/verify-otp',
         {'otp': _phoneOtp.text.trim()},
       );
+
       if (response.statusCode != 200 || response.body is! Map) {
         _snack(_responseMessage(response, 'رمز الهاتف غير صحيح.'));
         return;
       }
+
       _phoneVerified = response.body['is_phone_verified'] == true;
       if (!_phoneVerified) {
         _snack(_responseMessage(response, 'لم يكتمل توثيق الهاتف.'));
         return;
       }
+
       if (!mounted) return;
       setState(() => _step = 3);
       _snack(
-        'تم إثبات ملكية الهاتف. يبقى الحساب غير موثق مالياً حتى اعتماد إثبات السكن.',
+        'تم إثبات ملكية الهاتف. أكمل بيانات الميلاد والسكن وإثبات الإقامة.',
         error: false,
       );
     } catch (_) {
@@ -491,8 +522,17 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
 
   Future<void> _submitResidence() async {
     if (_busy) return;
+
+    if (_birthGovernorate == null || _birthGovernorate!.isEmpty) {
+      _snack('اختر محافظة الميلاد.');
+      return;
+    }
     if (_residenceGovernorate == null || _residenceGovernorate!.isEmpty) {
-      _snack('اختر محافظة إقامتك الحالية.');
+      _snack('اختر محافظة السكن الحالية.');
+      return;
+    }
+    if (_residenceDistrict.text.trim().length < 2) {
+      _snack('أدخل المديرية التي تسكن فيها حالياً.');
       return;
     }
     if (_evidenceType == null || _evidenceType!.isEmpty) {
@@ -509,21 +549,32 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       final response = await Get.find<ApiClient>().postMultipartData(
         '/api/v1/amial/me/kyc/residence',
         {
+          'birth_governorate': _birthGovernorate!,
           'residence_governorate': _residenceGovernorate!,
+          'residence_district': _residenceDistrict.text.trim(),
+          if (_residenceArea.text.trim().isNotEmpty)
+            'residence_area': _residenceArea.text.trim(),
+          if (_residenceLandmark.text.trim().isNotEmpty)
+            'residence_landmark': _residenceLandmark.text.trim(),
           'evidence_type': _evidenceType!,
         },
         [MultipartBody('evidence', File(_residenceEvidence!.path))],
       );
+
       if (response.statusCode != 201 ||
           response.body is! Map ||
           response.body['success'] != true) {
         _snack(_responseMessage(response, 'تعذر إرسال إثبات السكن.'));
         return;
       }
+
       _residenceSubmitted = true;
       if (!mounted) return;
       setState(() => _step = 4);
-      _snack('تم إرسال إثبات السكن للمراجعة.', error: false);
+      _snack(
+        'تم إرسال بيانات السكن ودليله للمراجعة. توفر الخدمات يعتمد على نطاق التشغيل ولا يؤثر على قبول التسجيل.',
+        error: false,
+      );
     } catch (_) {
       _snack('تعذر إرسال إثبات السكن. تحقق من الاتصال وحاول مرة أخرى.');
     } finally {
@@ -947,7 +998,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
             _phoneOtp,
             'رمز الهاتف',
             keyboardType: TextInputType.number,
-            maxLength: 4,
+            maxLength: 6,
             formatters: [FilteringTextInputFormatter.digitsOnly],
           ),
           _primaryButton('تأكيد الهاتف', _verifyPhoneOtp),
@@ -970,6 +1021,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _evidenceOptions = _fallbackEvidence;
       _evidenceType ??= _evidenceOptions.first['code']?.toString();
     }
+
     final selected = _evidenceOptions.firstWhere(
       (e) => e['code']?.toString() == _evidenceType,
       orElse: () => _evidenceOptions.first,
@@ -979,17 +1031,41 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     return _page(children: [
       _card([
         _title(
-          'أثبت محل إقامتك الحالي',
-          'المحافظة التي تسكن فيها فعلياً هي التي تحدد نطاق التشغيل. محافظة الأصل لا تستخدم لهذا القرار.',
+          'بيانات الميلاد والسكن الحالي',
+          'يمكن لأي عميل التسجيل والتوثيق مهما كانت محافظته. نطاق التشغيل يحدد توفر الخدمات المالية فقط ولا يرفض إنشاء الحساب.',
           Icons.home_work_outlined,
         ),
         GovernoratePicker(
-          label: 'محافظة الإقامة الحالية',
+          label: 'محافظة الميلاد',
+          value: _birthGovernorate,
+          helper: 'بيان تعريفي فقط ولا يؤثر على نطاق تشغيل أميال.',
+          onChanged: (v) => setState(() => _birthGovernorate = v),
+        ),
+        const SizedBox(height: 10),
+        GovernoratePicker(
+          label: 'محافظة السكن الحالية',
           value: _residenceGovernorate,
-          helper: 'اختر مكان السكن الحالي، وليس محافظة الأصل.',
+          helper: 'اختر مكان إقامتك الفعلي الآن. المحافظة غير المدعومة لا تمنع التسجيل أو التوثيق.',
           onChanged: (v) => setState(() => _residenceGovernorate = v),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 10),
+        _field(_residenceDistrict, 'المديرية الحالية'),
+        _field(_residenceArea, 'المنطقة / الحي — اختياري'),
+        _field(_residenceLandmark, 'أقرب معلم — اختياري'),
+        const SizedBox(height: 2),
+        Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F8FF),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Text(
+            'بعد اعتماد السكن تصبح حالة الحساب «عميل موثق جزئيا». '
+            'إذا كانت محافظة السكن خارج نطاق التشغيل الحالي، يبقى الحساب مسجلاً وموثقاً لكن الخدمات المالية المقيدة بالتغطية لن تعمل حتى تتوسع الخدمة.',
+            style: TextStyle(fontSize: 12.5, height: 1.55),
+          ),
+        ),
+        const SizedBox(height: 14),
         DropdownButtonFormField<String>(
           initialValue: _evidenceType,
           isExpanded: true,
@@ -1062,7 +1138,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           ],
         ),
         const SizedBox(height: 14),
-        _primaryButton('إرسال للمراجعة', _submitResidence),
+        _primaryButton('إرسال السكن للمراجعة', _submitResidence),
         const SizedBox(height: 8),
         TextButton(
           onPressed: _busy ? null : () => setState(() => _step = 4),
@@ -1077,8 +1153,8 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     final message = !_phoneVerified
         ? 'تم إنشاء حسابك. أثبت ملكية الهاتف لاحقاً للانتقال إلى عميل موثق جزئيا.'
         : _residenceSubmitted
-            ? 'تم إنشاء حسابك وإثبات هاتفك، وإثبات السكن الآن في قائمة المراجعة. ستفتح الحركة المالية بعد اعتماده.'
-            : 'تم إنشاء حسابك وإثبات هاتفك. بقي إثبات محل الإقامة قبل تشغيل الحركة المالية.';
+            ? 'تم إنشاء حسابك وإثبات هاتفك، وبيانات السكن الآن في المراجعة. اعتماد السكن يرفع حالة التوثيق، وتوفر الخدمات يعتمد على نطاق التشغيل.'
+            : 'تم إنشاء حسابك وإثبات هاتفك. بقي تسجيل السكن ورفع إثباته.';
 
     return _page(children: [
       _card([
