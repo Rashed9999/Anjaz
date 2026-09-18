@@ -75,6 +75,10 @@ class KycVerifyController extends GetxController implements GetxService {
 
   Future<bool> kycVerify(
     String idNumber, {
+    required String dateOfBirth,
+    required String idPlaceOfIssue,
+    required String issueDate,
+    required String expiryDate,
     String reviewMode = 'standard',
   }) async {
     if (_isLoading) return false;
@@ -86,6 +90,10 @@ class KycVerifyController extends GetxController implements GetxService {
     final field = <String, String>{
       'identification_number': idNumber.trim(),
       'identification_type': _dropDownSelectedValue,
+      'date_of_birth': dateOfBirth,
+      'id_place_of_issue': idPlaceOfIssue,
+      'identification_issue_date': issueDate,
+      'identification_expiry_date': expiryDate,
       'declaration_accepted': '1',
     };
     final multipart = <MultipartBody>[
