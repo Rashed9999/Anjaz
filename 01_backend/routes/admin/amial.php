@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\AdminSafePaymentController;
 use App\Http\Controllers\Admin\AuditDecisionsController;
 use App\Http\Controllers\Admin\LegalTermsController;
 use App\Http\Controllers\Admin\OperatorRolesController;
+use App\Http\Controllers\Admin\OperatorWorkspaceController;
 use App\Http\Controllers\Admin\OpsConsoleController;
 use App\Http\Controllers\Admin\SecurityEventsController;
 use App\Http\Controllers\Admin\SupervisionController;
@@ -27,6 +28,12 @@ use Illuminate\Support\Facades\Route;
  *
  *   Route::prefix('amial')->name('amial.')->group(base_path('routes/admin/amial.php'));
  */
+
+// ============ Operator Workspace ============
+// الصفحة الأم لكل موظف منصة. الصلاحيات الدقيقة لا تُمنح هنا؛
+// OperatorWorkspaceController يرشّح البطاقات والطوابير حسب صلاحيات المستخدم.
+Route::get('/workspace', [OperatorWorkspaceController::class, 'index'])
+    ->name('workspace.index');
 
 // ============ Zone Management ============
 Route::prefix('zones')->name('zones.')->group(function () {
