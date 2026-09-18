@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:amial_pay/features/auth/widgets/governorate_picker.dart';
 import 'package:amial_pay/features/kyc_verification/controllers/verification_center_controller.dart';
+import 'package:amial_pay/features/kyc_verification/domain/customer_verification_level.dart';
 import 'package:amial_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/helper/custom_snackbar_helper.dart';
@@ -113,7 +114,7 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
                   if (controller.currentTier < 2)
                     _lockedStep(
                       'التوثيق الكامل',
-                      'أكمل توثيق الهوية أولاً. لن نطلب منك بيانات Tier 3 قبل إنهاء المرحلة السابقة.',
+                      'أكمل توثيق الهوية أولاً. لن نطلب منك متطلبات عميل موثق قبل إنهاء المرحلة السابقة.',
                     )
                   else ...[
                     if (controller.tier3ProfileMissingCodes.isNotEmpty) ...[
@@ -150,13 +151,32 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'المستوى ${widget.targetTier} · ${level?['name'] ?? ''}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 11,
+                height: 11,
+                decoration: BoxDecoration(
+                  color: CustomerVerificationLevel
+                      .fromTier(widget.targetTier)
+                      .color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  CustomerVerificationLevel
+                      .fromTier(widget.targetTier)
+                      .label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 7),
           Text(
@@ -338,7 +358,7 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
       number: 3,
       icon: Icons.badge_outlined,
       title: status == 'rejected' ? 'تصحيح توثيق الهوية' : 'توثيق الهوية القانونية',
-      subtitle: 'المستوى الثاني يحتاج رقم الهوية ووجه الوثيقة وظهرها فقط. لا سيلفي في هذه المرحلة.',
+      subtitle: 'حالة عميل موثق بهوية تحتاج رقم الهوية ووجه الوثيقة وظهرها فقط. لا سيلفي في هذه المرحلة.',
       children: [
         FilledButton.icon(
           onPressed: () async {
@@ -680,7 +700,7 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
             SizedBox(width: 9),
             Expanded(
               child: Text(
-                'متطلبات هذا المستوى مكتملة. إذا كانت هناك مراجعة بشرية معلقة فستتغير الحدود بعد اعتمادها.',
+                'متطلبات حالة التوثيق المطلوبة مكتملة. إذا كانت هناك مراجعة بشرية معلقة فستتغير الحدود بعد اعتمادها.',
                 style: TextStyle(fontSize: 12.5, height: 1.4),
               ),
             ),
