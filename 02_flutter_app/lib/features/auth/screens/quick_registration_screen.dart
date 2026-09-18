@@ -1055,7 +1055,9 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   }
 
   Widget _successStep() {
-    final tier = _phoneVerified ? 'Tier 1' : 'Tier 0';
+    final verificationState = CustomerVerificationLevel.fromTier(
+      _phoneVerified ? 1 : 0,
+    );
     final message = !_phoneVerified
         ? 'تم إنشاء حسابك. أثبت ملكية الهاتف لاحقاً لتفعيل المستوى الأساسي.'
         : _residenceSubmitted
@@ -1105,7 +1107,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'مستواك الحالي: $tier. حدود المال وسياسة التشغيل تُطبّق من الخادم وليست أرقاماً شكلية في التطبيق.',
+                  'حالة توثيقك الحالية: ${verificationState.label}. حدود المال وسياسة التشغيل تُطبّق من الخادم.',
                   style: const TextStyle(fontSize: 13, height: 1.5),
                 ),
               ),
