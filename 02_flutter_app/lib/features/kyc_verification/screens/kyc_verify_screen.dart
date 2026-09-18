@@ -27,6 +27,10 @@ class KycVerifyScreen extends StatefulWidget {
 
 class _KycVerifyScreenState extends State<KycVerifyScreen> {
   final TextEditingController _identityNumberController = TextEditingController();
+  final TextEditingController _dateOfBirthController = TextEditingController();
+  final TextEditingController _idPlaceOfIssueController = TextEditingController();
+  final TextEditingController _issueDateController = TextEditingController();
+  final TextEditingController _expiryDateController = TextEditingController();
 
   // حق خصوصية للجميع، لا مسار مبني على جنس المستخدم.
   String _reviewMode = 'standard';
@@ -40,6 +44,10 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
   @override
   void dispose() {
     _identityNumberController.dispose();
+    _dateOfBirthController.dispose();
+    _idPlaceOfIssueController.dispose();
+    _issueDateController.dispose();
+    _expiryDateController.dispose();
     super.dispose();
   }
 
@@ -76,6 +84,34 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                   isShowBorder: true,
                   maxLines: 1,
                   hintText: 'identity_number'.tr,
+                ),
+                const SizedBox(height: 12),
+                _dateField(
+                  controller: _dateOfBirthController,
+                  label: 'تاريخ الميلاد',
+                  firstDate: DateTime(1900),
+                  lastDate: DateTime.now(),
+                ),
+                const SizedBox(height: 12),
+                CustomTextFieldWidget(
+                  controller: _idPlaceOfIssueController,
+                  isShowBorder: true,
+                  maxLines: 1,
+                  hintText: 'مكان إصدار الهوية',
+                ),
+                const SizedBox(height: 12),
+                _dateField(
+                  controller: _issueDateController,
+                  label: 'تاريخ إصدار الهوية',
+                  firstDate: DateTime(1950),
+                  lastDate: DateTime.now(),
+                ),
+                const SizedBox(height: 12),
+                _dateField(
+                  controller: _expiryDateController,
+                  label: 'تاريخ انتهاء الهوية',
+                  firstDate: DateTime.now().add(const Duration(days: 1)),
+                  lastDate: DateTime.now().add(const Duration(days: 365 * 20)),
                 ),
               ]),
               const SizedBox(height: 14),
@@ -165,6 +201,43 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _dateField({
+    required TextEditingController controller,
+    required String label,
+    required DateTime firstDate,
+    required DateTime lastDate,
+  }) {
+    return TextField(
+      controller: controller,
+      readOnly: true,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        suffixIcon: const Icon(Icons.calendar_month_outlined),
+      ),
+      onTap: () async {
+        final current = DateTime.tryParse(controller.text);
+        var initial = current ?? lastDate;
+        if (initial.isBefore(firstDate)) initial = firstDate;
+        if (initial.isAfter(lastDate)) initial = lastDate;
+
+        final selected = await showDatePicker(
+          context: context,
+          initialDate: initial,
+          firstDate: firstDate,
+          lastDate: lastDate,
+        );
+        if (selected != null && mounted) {
+          controller.text =
+              '${selected.year.toString().padLeft(4, '0')}-'
+              '${selected.month.toString().padLeft(2, '0')}-'
+              '${selected.day.toString().padLeft(2, '0')}';
+          setState(() {});
+        }
+      },
     );
   }
 
@@ -479,6 +552,15 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
       showCustomSnackBarHelper('select_identity_type'.tr);
       return;
     }
+    if (_dateOfBirthController.text.isEmpty ||
+        _idPlaceOfIssueController.text.trim().length < 2 ||
+        _issueDateController.text.isEmpty ||
+        _expiryDateController.text.isEmpty) {
+      showCustomSnackBarHelper(
+        'أكمل تاريخ الميلاد ومكان الإصدار وتاريخ الإصدار والانتهاء',
+      );
+      return;
+    }
     if (controller.identityImage.length != 2) {
       showCustomSnackBarHelper('ارفع صورتين بالترتيب: وجه الهوية ثم ظهرها');
       return;
@@ -541,6 +623,22 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
             _identityNumberController.text.trim(),
           ),
           VerificationReviewRow(
+            'تاريخ الميلاد',
+            _dateOfBirthController.text,
+          ),
+          VerificationReviewRow(
+            'مكان إصدار الهوية',
+            _idPlaceOfIssueController.text.trim(),
+          ),
+          VerificationReviewRow(
+            'تاريخ إصدار الهوية',
+            _issueDateController.text,
+          ),
+          VerificationReviewRow(
+            'تاريخ انتهاء الهوية',
+            _expiryDateController.text,
+          ),
+          VerificationReviewRow(
             'خصوصية المراجعة',
             _reviewMode == 'restricted_review'
                 ? 'خصوصية إضافية'
@@ -559,6 +657,10 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
         ],
         onConfirm: () => controller.kycVerify(
           _identityNumberController.text.trim(),
+          dateOfBirth: _dateOfBirthController.text,
+          idPlaceOfIssue: _idPlaceOfIssueController.text.trim(),
+          issueDate: _issueDateController.text,
+          expiryDate: _expiryDateController.text,
           reviewMode: _reviewMode,
         ),
       ),
