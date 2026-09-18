@@ -25,13 +25,22 @@ class VerificationCenterRepo {
       apiClient.getData('/api/v1/amial/me/kyc/residence');
 
   Future<Response> submitResidence({
+    required String birthGovernorate,
     required String governorate,
+    required String district,
+    String? area,
+    String? landmark,
     required String evidenceType,
     required File evidence,
     String? evidenceDate,
   }) {
     final fields = <String, String>{
+      'birth_governorate': birthGovernorate,
       'residence_governorate': governorate,
+      'residence_district': district,
+      if (area != null && area.trim().isNotEmpty) 'residence_area': area.trim(),
+      if (landmark != null && landmark.trim().isNotEmpty)
+        'residence_landmark': landmark.trim(),
       'evidence_type': evidenceType,
       if (evidenceDate != null && evidenceDate.isNotEmpty)
         'evidence_date': evidenceDate,
