@@ -32,7 +32,7 @@ class CorrelationTraceTest extends TestCase
     }
 
     /** @test */
-    public function audit_records inherit_the_request_correlation_id(): void
+    public function audit_records_inherit_the_request_correlation_id(): void
     {
         $request = Request::create('/api/v1/amial/health', 'GET', [], [], [], [
             'HTTP_X_CORRELATION_ID' => 'case-otp-001',
