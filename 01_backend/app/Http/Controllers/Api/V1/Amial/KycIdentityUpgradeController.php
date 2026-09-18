@@ -32,6 +32,10 @@ class KycIdentityUpgradeController extends Controller
         $validator = Validator::make($request->all(), [
             'identification_number' => ['required', 'string', 'min:5', 'max:50'],
             'identification_type' => ['required', Rule::in(['nid', 'passport', 'driving_licence'])],
+            'date_of_birth' => ['required', 'date', 'before:today'],
+            'id_place_of_issue' => ['required', 'string', 'min:2', 'max:180'],
+            'identification_issue_date' => ['required', 'date', 'before_or_equal:today'],
+            'identification_expiry_date' => ['required', 'date', 'after:identification_issue_date'],
             'declaration_accepted' => ['required', 'accepted'],
             'id_front' => ['required', 'file', 'max:8192',
                 'mimetypes:image/jpeg,image/png,image/heic,image/heif,application/pdf'],
@@ -43,7 +47,7 @@ class KycIdentityUpgradeController extends Controller
             return response()->json([
                 'success' => false,
                 'code' => 'VALIDATION_FAILED',
-                'message' => 'تحقّق من رقم الهوية وصور الوثيقة.',
+                'message' => 'تحقّق من بيانات الهوية وتواريخها وصورتي الوثيقة.',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -87,6 +91,10 @@ class KycIdentityUpgradeController extends Controller
             $locked = $user->newQuery()->lockForUpdate()->findOrFail($user->id);
             $locked->identification_number = $number;
             $locked->identification_type = (string) $request->input('identification_type');
+            $locked->date_of_birth = (string) $request->input('date_of_birth');
+            $locked->id_place_of_issue = (string) $request->input('id_place_of_issue');
+            $locked->identification_issue_date = (string) $request->input('identification_issue_date');
+            $locked->identification_expiry_date = (string) $request->input('identification_expiry_date');
             $locked->is_kyc_verified = 0;
             // لا نرفع المستوى هنا؛ المراجع هو من يمنح Tier 2 بعد اعتماد الدليل.
             $locked->save();
@@ -119,6 +127,10 @@ class KycIdentityUpgradeController extends Controller
             [
                 'identification_number' => $number,
                 'identification_type' => (string) $request->input('identification_type'),
+                'date_of_birth' => (string) $request->input('date_of_birth'),
+                'id_place_of_issue' => (string) $request->input('id_place_of_issue'),
+                'identification_issue_date' => (string) $request->input('identification_issue_date'),
+                'identification_expiry_date' => (string) $request->input('identification_expiry_date'),
                 'identity_front_document_id' => (int) $uploaded[0]->id,
                 'identity_back_document_id' => (int) $uploaded[1]->id,
             ],
