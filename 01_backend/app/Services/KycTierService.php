@@ -15,10 +15,13 @@ use RuntimeException;
 /**
  * AMIAL-PROGRESSIVE-KYC-001 — محفظة تبدأ صغيرة وتكبر مع المعرفة بالعميل.
  *
- * Tier 0: الحساب موجود، لكن ملكية الهاتف لم تُثبت بعد.
- * Tier 1: هاتف مملوك + إقامة موثقة داخل نطاق التشغيل — محفظة أساسية.
- * Tier 2: هوية قانونية موثقة — حد متوسط، بلا سيلفي إلزامي.
- * Tier 3: KYC كامل + إثبات قوي لصاحب الهوية — الحدود الأعلى.
+ * داخلياً تبقى القيم 0..3 كما هي، لكن واجهة العميل وأسماء الحالة هي:
+ * 0 = عميل غير موثق.
+ * 1 = عميل موثق جزئيا.
+ * 2 = عميل موثق بهوية.
+ * 3 = عميل موثق.
+ *
+ * الأرقام مفاتيح سياسة داخلية وليست تسمية واجهة.
  *
  * AMIAL-PROGRESSIVE-KYC-TURNOVER-003
  * الحدود اليومية والشهرية = إجمالي أصل حركة العميل (وارد + صادر).
@@ -49,7 +52,7 @@ class KycTierService
 
     private const DEFAULT_LIMITS = [
         0 => [
-            'name_ar' => 'غير موثق',
+            'name_ar' => 'عميل غير موثق',
             'max_balance' => '0',
             'max_single_transaction' => '0',
             'max_daily_total' => '0',
@@ -57,7 +60,7 @@ class KycTierService
             'allowed_features' => [],
         ],
         1 => [
-            'name_ar' => 'أساسي',
+            'name_ar' => 'عميل موثق جزئيا',
             'max_balance' => '100000',
             'max_single_transaction' => '100000',
             'max_daily_total' => '100000',
@@ -65,7 +68,7 @@ class KycTierService
             'allowed_features' => ['send_money', 'receive_money', 'bill_pay', 'cash_out', 'merchant_pay'],
         ],
         2 => [
-            'name_ar' => 'هوية موثقة',
+            'name_ar' => 'عميل موثق بهوية',
             'max_balance' => '250000',
             'max_single_transaction' => '250000',
             'max_daily_total' => '250000',
@@ -76,7 +79,7 @@ class KycTierService
             ],
         ],
         3 => [
-            'name_ar' => 'كامل',
+            'name_ar' => 'عميل موثق',
             'max_balance' => '2000000',
             'max_single_transaction' => '400000',
             'max_daily_total' => '700000',
