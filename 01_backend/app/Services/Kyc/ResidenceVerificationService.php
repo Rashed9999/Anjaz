@@ -121,13 +121,22 @@ class ResidenceVerificationService
     /** @return array<string,mixed> */
     public function submit(
         User $user,
+        string $birthGovernorate,
         string $governorate,
+        string $district,
+        ?string $area,
+        ?string $landmark,
         string $evidenceType,
         KycDocument $document,
         ?string $evidenceDate = null,
     ): array {
         if (!Schema::hasTable('residence_verifications')) {
             throw new DomainException('RESIDENCE_VERIFICATION_SCHEMA_UNAVAILABLE');
+        }
+
+        $birthCode = YemenGovernorates::codeFromName($birthGovernorate);
+        if ($birthCode === null) {
+            throw new DomainException('BIRTH_GOVERNORATE_INVALID');
         }
 
         $code = YemenGovernorates::codeFromName($governorate);
@@ -142,9 +151,31 @@ class ResidenceVerificationService
             throw new DomainException('RESIDENCE_EVIDENCE_DOCUMENT_INVALID');
         }
 
-        $id = DB::transaction(function () use ($user, $code, $evidenceType, $document, $evidenceDate) {
+        $id = DB::transaction(function () use (
+            $user,
+            $birthCode,
+            $code,
+            $district,
+            $area,
+            $landmark,
+            $evidenceType,
+            $document,
+            $evidenceDate,
+        ) {
             $account = User::query()->lockForUpdate()->findOrFail($user->id);
+            if (Schema::hasColumn('users', 'birth_governorate')) {
+                $account->birth_governorate = $birthCode;
+            }
             $account->residence_governorate = $code; // تصريح العميل، لا يعني «موثق».
+            if (Schema::hasColumn('users', 'residence_district')) {
+                $account->residence_district = trim($district);
+            }
+            if (Schema::hasColumn('users', 'residence_area')) {
+                $account->residence_area = $area ? trim($area) : null;
+            }
+            if (Schema::hasColumn('users', 'residence_landmark')) {
+                $account->residence_landmark = $landmark ? trim($landmark) : null;
+            }
             $account->save();
 
             return DB::table('residence_verifications')->insertGetId([
@@ -230,10 +261,11 @@ class ResidenceVerificationService
                 $account->residence_verified_at = now();
                 $account->residence_verification_id = (int) $row->id;
 
-                // الانتقال الحقيقي من 🟤 إلى 🟠:
-                // هاتف مثبت + سكن معتمد + السكن داخل نطاق التشغيل.
+                // الانتقال من 🟤 إلى 🟠 يعتمد على التوثيق فقط:
+                // هاتف مثبت + سكن معتمد. نطاق التشغيل سياسة خدمة مستقلة
+                // وقد تكون محافظة العميل غير مدعومة حالياً دون أن يفقد
+                // حقه في التسجيل أو التوثيق.
                 if ((bool) ($account->is_phone_verified ?? false)
-                    && YemenGovernorates::isOperational((string) $row->declared_governorate)
                     && Schema::hasColumn('users', 'kyc_tier')) {
                     $account->kyc_tier = max(1, (int) ($account->kyc_tier ?? 0));
                     if (Schema::hasColumn('users', 'kyc_tier_updated_at')) {
