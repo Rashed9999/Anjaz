@@ -44,6 +44,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   final _pinConfirm = TextEditingController();
   final _emailOtp = TextEditingController();
   final _phoneOtp = TextEditingController();
+  final _residenceArea = TextEditingController();
   final _residenceLandmark = TextEditingController();
 
   int _step = 0;
@@ -129,6 +130,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _pinConfirm,
       _emailOtp,
       _phoneOtp,
+      _residenceArea,
       _residenceLandmark,
     ]) {
       c.dispose();
@@ -528,6 +530,10 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _snack('اختر محافظة السكن الحالية والمديرية.');
       return;
     }
+    if (_residenceArea.text.trim().length < 2) {
+      _snack('اكتب اسم الحي أو المنطقة التي تسكن فيها.');
+      return;
+    }
     if (_evidenceType == null || _evidenceType!.isEmpty) {
       _snack('اختر نوع دليل السكن.');
       return;
@@ -545,10 +551,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           'birth_governorate': _birthGovernorate!,
           'residence_governorate': _residenceLocation.governorateCode!,
           'residence_district_id': '${_residenceLocation.districtId!}',
-          if (_residenceLocation.uzlahId != null)
-            'residence_uzlah_id': '${_residenceLocation.uzlahId!}',
-          if (_residenceLocation.villageId != null)
-            'residence_village_id': '${_residenceLocation.villageId!}',
+          'residence_area': _residenceArea.text.trim(),
           if (_residenceLandmark.text.trim().isNotEmpty)
             'residence_landmark': _residenceLandmark.text.trim(),
           'evidence_type': _evidenceType!,
@@ -1041,6 +1044,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           onChanged: (value) => setState(() => _residenceLocation = value),
         ),
         const SizedBox(height: 10),
+        _field(_residenceArea, 'اسم الحي / المنطقة *'),
         _field(_residenceLandmark, 'أقرب معلم — اختياري'),
         const SizedBox(height: 2),
         Container(
