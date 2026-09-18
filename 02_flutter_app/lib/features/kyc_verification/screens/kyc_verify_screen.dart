@@ -12,9 +12,9 @@ import '../../../util/dimensions.dart';
 
 /// AMIAL-PROGRESSIVE-KYC-UPGRADE-APP-002
 ///
-/// هذه الشاشة تخص Tier 2 فقط: إثبات الهوية القانونية. إثبات الإقامة له
-/// مساره المستقل، وإثبات صاحب الهوية الأقوى (Liveness/Face Match أو مسار
-/// حضوري/مقيد) يخص Tier 3. فصل المراحل يمنع إجبار العميل على KYC كامل كي
+/// هذه الشاشة تخص حالة «عميل موثق بهوية»: إثبات الهوية القانونية.
+/// إثبات الإقامة له مساره المستقل، وإثبات صاحب الهوية الأقوى
+/// (Liveness/Face Match أو مسار حضوري/مقيد) يخص حالة «عميل موثق».
 /// يرفع حدوده من المحفظة الأساسية.
 class KycVerifyScreen extends StatefulWidget {
   const KycVerifyScreen({super.key});
@@ -81,7 +81,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                 _sectionTitle(
                   Icons.document_scanner_outlined,
                   'صورتا الوثيقة',
-                  'المستوى الثاني يحتاج وجه الهوية وظهرها فقط. لا نطلب صورة شخصية في هذه المرحلة.',
+                  'حالة عميل موثق بهوية تحتاج وجه الهوية وظهرها فقط. لا نطلب صورة شخصية في هذه المرحلة.',
                 ),
                 _privacyNotice(),
                 const SizedBox(height: 12),
@@ -136,7 +136,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Liveness + Face Match والتحقق الحضوري ليست مطلوبة للمستوى الثاني. تظهر كخيارات إثبات أقوى عند طلب المستوى الثالث بعد ربط مزود بيومتري حقيقي ومعتمد.',
+                          'Liveness + Face Match والتحقق الحضوري ليست مطلوبة لحالة عميل موثق بهوية. تظهر كخيارات إثبات أقوى عند طلب حالة عميل موثق بعد ربط مزود بيومتري حقيقي ومعتمد.',
                           style: TextStyle(
                             fontSize: 12.5,
                             height: 1.55,
