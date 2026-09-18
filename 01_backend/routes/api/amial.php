@@ -310,7 +310,7 @@ Route::middleware(['auth:api'])->group(function () {
     // -------- Payment Requests (AMIAL-PAYMENT-REQUESTS-001) --------
     Route::prefix('payment-requests')->name('amial.payment-requests.')->middleware('amial.idempotency')->group(function () {
         Route::post('/', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'create'])
-            ->middleware('amial.rate-limit:payment_request_create,30,1')->name('create');
+            ->middleware(['amial.terms', 'amial.rate-limit:payment_request_create,30,1'])->name('create');
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'list'])->name('list');
         // AMIAL-REQUEST-DIRECT-002 — «أهذا الرقم مشترك؟» تُنادى أثناء
         // الكتابة، فتقول الشاشةُ قبل الإرسال أيصل الطلبُ أم يبقى رابطاً.
@@ -327,7 +327,7 @@ Route::middleware(['auth:api'])->group(function () {
             ->middleware('amial.rate-limit:invoice_lookup,60,1')->name('invoice.lookup');
         Route::post('/code/{code}/pay', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'pay'])
             ->where('code', '[A-Z0-9]{6,8}')
-            ->middleware('amial.rate-limit:payment_request_pay,30,1')->name('pay');
+            ->middleware(['amial.terms', 'amial.rate-limit:payment_request_pay,30,1'])->name('pay');
         Route::post('/{id}/cancel', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'cancel'])
             ->where('id', '[0-9]+')->name('cancel');
 
@@ -421,12 +421,12 @@ Route::middleware(['auth:api'])->group(function () {
 
         Route::post('/{ulid}/contribute', [FamilyFundController::class, 'contribute'])
             ->where('ulid', '[A-Z0-9]{26}')
-            ->middleware('amial.zone:family_fund_contribute')
+            ->middleware(['amial.terms', 'amial.zone:family_fund_contribute'])
             ->name('contribute');
 
         Route::post('/{ulid}/propose-disbursement', [FamilyFundController::class, 'proposeDisbursement'])
             ->where('ulid', '[A-Z0-9]{26}')
-            ->middleware('amial.zone:family_fund_disburse')
+            ->middleware(['amial.terms', 'amial.zone:family_fund_disburse'])
             ->name('propose-disbursement');
 
         Route::get('/{ulid}/transactions', [FamilyFundController::class, 'transactions'])
@@ -448,7 +448,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/services/{service_id}/products', [BillPayController::class, 'listProducts'])
             ->where('service_id', '[0-9]+')->name('products');
         Route::post('/pay', [BillPayController::class, 'pay'])
-            ->middleware('amial.zone:pay_bill')
+            ->middleware(['amial.terms', 'amial.zone:pay_bill'])
             ->name('pay');
         Route::get('/orders', [BillPayController::class, 'listOrders'])->name('orders');
         Route::get('/orders/{ulid}', [BillPayController::class, 'showOrder'])
@@ -465,7 +465,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/evidence/{id}/file', [SafePaymentController::class, 'evidenceFile'])
             ->where('id', '[0-9]+')->name('evidence.file');
         Route::post('/', [SafePaymentController::class, 'create'])
-            ->middleware(['amial.zone:safe_payment_create', 'amial.rate-limit:safe_pay_create,5,1'])
+            ->middleware(['amial.terms', 'amial.zone:safe_payment_create', 'amial.rate-limit:safe_pay_create,5,1'])
             ->name('create');
 
         Route::get('/{ulid}', [SafePaymentController::class, 'show'])
@@ -498,7 +498,7 @@ Route::middleware(['auth:api'])->group(function () {
         // حارس — أي حُرس فتح الصندوق ولم يُحرس إخراج المال منه. buyer-confirm
         // هو ما ينقل المبلغ فعلاً إلى البائع.
         Route::post('/{ulid}/buyer-confirm', [SafePaymentController::class, 'buyerConfirm'])
-            ->middleware('amial.zone:safe_payment_release')
+            ->middleware(['amial.terms', 'amial.zone:safe_payment_release'])
             ->where('ulid', '[A-Z0-9]{26}')->name('buyer-confirm');
         Route::post('/{ulid}/buyer-cancel', [SafePaymentController::class, 'buyerCancel'])
             ->where('ulid', '[A-Z0-9]{26}')->name('buyer-cancel');
@@ -519,7 +519,7 @@ Route::middleware(['auth:api'])->group(function () {
 
         // -------- AMIAL-TRANSFER-COOLDOWN-001 (v2.7) --------
         Route::post('/initiate', [PendingTransferController::class, 'initiate'])
-            ->middleware(['amial.zone:send_money', 'amial.idempotency', 'amial.rate-limit:transfer_initiate,20,1'])
+            ->middleware(['amial.terms', 'amial.zone:send_money', 'amial.idempotency', 'amial.rate-limit:transfer_initiate,20,1'])
             ->name('initiate');
         Route::post('/{ulid}/cancel', [PendingTransferController::class, 'cancel'])
             ->name('cancel');
@@ -574,7 +574,7 @@ Route::middleware(['auth:api'])->group(function () {
             ->withoutMiddleware('amial.idempotency')
             ->name('quote');
         Route::post('/pay', [\App\Http\Controllers\Api\V1\Amial\MerchantPaymentController::class, 'pay'])
-            ->middleware(['amial.zone:merchant_payment', 'amial.idempotency', 'amial.rate-limit:merchant_pay,30,1'])
+            ->middleware(['amial.terms', 'amial.zone:merchant_payment', 'amial.idempotency', 'amial.rate-limit:merchant_pay,30,1'])
             ->name('pay');
 
         // AMIAL-SPLIT-BILL-001 — التاجر/POS ينشئ ويعرض الفواتير المقسّمة
@@ -1079,7 +1079,7 @@ Route::middleware(['auth:api'])->group(function () {
     Route::prefix('me/installments')->name('amial.me.installments.')->middleware('amial.idempotency')->group(function () {
         $c = \App\Http\Controllers\Api\V1\Amial\InstallmentController::class;
         Route::get('/', [$c, 'myContracts'])->name('mine');
-        Route::post('/{id}/pay', [$c, 'pay'])->where('id', '[0-9]+')->name('pay');
+        Route::post('/{id}/pay', [$c, 'pay'])->where('id', '[0-9]+')->middleware('amial.terms')->name('pay');
     });
 
     // -------- AMIAL-MULTI-CURRENCY-001 — عملات التاجر --------
@@ -1138,13 +1138,13 @@ Route::middleware(['auth:api'])->group(function () {
             ->where('id', '[0-9]+')->name('statement');
         Route::post('/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'settle'])
             ->where('id', '[0-9]+')
-            ->middleware('amial.rate-limit:credit_settle,30,1')->name('settle');
+            ->middleware(['amial.terms', 'amial.rate-limit:credit_settle,30,1'])->name('settle');
     });
 
     // -------- AMIAL-CUSTOMER-WITHDRAW-001 — السحب المبدوء من العميل --------
     Route::prefix('withdraw')->name('amial.withdraw.')->middleware('amial.idempotency')->group(function () {
         Route::post('/request', [\App\Http\Controllers\Api\V1\Amial\CustomerWithdrawController::class, 'request'])
-            ->middleware(['amial.zone:cash_out', 'amial.idempotency', 'amial.rate-limit:withdraw_req,20,1'])
+            ->middleware(['amial.terms', 'amial.zone:cash_out', 'amial.idempotency', 'amial.rate-limit:withdraw_req,20,1'])
             ->name('request');
         Route::get('/mine', [\App\Http\Controllers\Api\V1\Amial\CustomerWithdrawController::class, 'mine'])->name('mine');
         Route::post('/{id}/cancel', [\App\Http\Controllers\Api\V1\Amial\CustomerWithdrawController::class, 'cancel'])->name('cancel');
@@ -1182,7 +1182,7 @@ Route::middleware(['auth:api'])->group(function () {
     Route::prefix('split-bills')->name('amial.split-bills.')->middleware('amial.idempotency')->group(function () {
         Route::get('/mine', [\App\Http\Controllers\Api\V1\Amial\SplitBillController::class, 'mine'])->name('mine');
         Route::post('/participants/{id}/pay', [\App\Http\Controllers\Api\V1\Amial\SplitBillController::class, 'payShare'])
-            ->middleware(['amial.zone:split_bill', 'amial.rate-limit:split_pay,30,1'])
+            ->middleware(['amial.terms', 'amial.zone:split_bill', 'amial.rate-limit:split_pay,30,1'])
             ->name('pay');
     });
 
@@ -1209,7 +1209,7 @@ Route::middleware(['auth:api'])->group(function () {
             ->where('ulid', '[A-Z0-9]{26}')->name('campaign-show');
 
         Route::post('/donate', [DonationsController::class, 'donate'])
-            ->middleware(['amial.zone:donate', 'amial.rate-limit:donate,10,1'])
+            ->middleware(['amial.terms', 'amial.zone:donate', 'amial.rate-limit:donate,10,1'])
             ->name('donate');
 
         Route::get('/my-donations', [DonationsController::class, 'myDonations'])->name('my-donations');
