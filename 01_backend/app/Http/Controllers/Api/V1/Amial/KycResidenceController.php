@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Kyc\ResidenceVerificationService;
 use App\Services\Geo\YemenRegionsService;
 use App\Services\KycDocumentService;
+use App\Services\RegistrationDossierService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,6 +35,7 @@ class KycResidenceController extends Controller
         ResidenceVerificationService $residence,
         KycDocumentService $documents,
         YemenRegionsService $regions,
+        RegistrationDossierService $dossiers,
     ): JsonResponse {
         if ($denied = $this->customerOnly($request)) return $denied;
 
@@ -73,6 +75,21 @@ class KycResidenceController extends Controller
                 $doc,
                 $data['evidence_date'] ?? null,
             );
+
+            $dossier = $dossiers->archiveVerificationSubmission(
+                $request->user()->fresh(),
+                1,
+                [
+                    'birth_governorate' => (string) $data['birth_governorate'],
+                    'residence_governorate' => (string) $selection['governorate_code'],
+                    'residence_district' => (string) $selection['district_name'],
+                    'residence_district_geo_id' => (int) $selection['district_id'],
+                    'residence_area' => (string) $data['residence_area'],
+                    'residence_landmark' => (string) ($data['residence_landmark'] ?? ''),
+                    'residence_evidence_type' => (string) $data['evidence_type'],
+                    'residence_evidence_document_id' => (int) $doc->id,
+                ],
+            );
         } catch (DomainException $e) {
             return response()->json([
                 'success' => false,
@@ -90,7 +107,9 @@ class KycResidenceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'تم إرسال إثبات السكن للمراجعة. أصل الهوية لا يؤثر على أهلية الإقامة.',
-            'data' => $state,
+            'data' => $state + [
+                'verification_dossier_reference' => $dossier->reference ?? null,
+            ],
         ], 201);
     }
 
