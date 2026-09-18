@@ -86,6 +86,7 @@ class KycVerifyController extends GetxController implements GetxService {
     final field = <String, String>{
       'identification_number': idNumber.trim(),
       'identification_type': _dropDownSelectedValue,
+      'declaration_accepted': '1',
     };
     final multipart = <MultipartBody>[
       MultipartBody('id_front', File(_identityImage[0].path)),
