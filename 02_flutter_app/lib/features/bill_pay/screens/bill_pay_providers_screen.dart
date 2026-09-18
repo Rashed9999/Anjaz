@@ -27,7 +27,7 @@ class _BillPayProvidersScreenState extends State<BillPayProvidersScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('دفع الفواتير'),
+        title: const Text('السداد'),
       ),
       body: Obx(() {
         final ctrl = Get.find<BillPayController>();
