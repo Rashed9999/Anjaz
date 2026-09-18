@@ -47,6 +47,18 @@ class KycTierService
             return (bool) ($user->is_phone_verified ?? false) ? 1 : 0;
         }
         if ($status['tier'] >= 1 && !(bool) ($user->is_phone_verified ?? false)) return 0;
+
+        // «عميل موثق جزئيا» ليس مجرد OTP هاتف. للحسابات القديمة التي
+        // حصلت على tier=1 قبل إصلاح المسار، نحسبها 🟤 حتى يوجد سكن
+        // معتمد داخل نطاق التشغيل. هكذا يصبح الاسم الظاهر مطابقاً للعقد.
+        if ($status['tier'] === 1) {
+            $residence = app(ResidenceVerificationService::class)->forUser($user);
+            if (($residence['status'] ?? null) !== ResidenceVerificationService::STATUS_VERIFIED
+                || ! (bool) ($residence['operational'] ?? false)) {
+                return 0;
+            }
+        }
+
         return $status['tier'];
     }
 
@@ -190,7 +202,7 @@ class KycTierService
     {
         $limits = $this->getLimitsForUser($user);
         if ((int) $limits['tier'] <= 0) {
-            throw new RuntimeException('تحقق من ملكية رقم هاتفك لتفعيل المحفظة.');
+            throw new RuntimeException('أكمل إثبات الهاتف واعتماد السكن لتفعيل المحفظة.');
         }
 
         $this->assertOperationalResidence($user);
