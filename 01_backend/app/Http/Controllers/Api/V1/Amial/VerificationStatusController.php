@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
+use App\Models\RegistrationDossier;
 use App\Services\Kyc\KycAccountStatusService;
 use App\Services\Kyc\KycOwnershipGuardService;
 use App\Services\Kyc\KycPrivacyService;
@@ -141,7 +142,7 @@ class VerificationStatusController extends Controller
             $tier,
             $identity,
             $phoneVerified,
-            $operationalResidence,
+            $residenceVerified,
             $ownership,
             $docs,
         );
@@ -192,6 +193,7 @@ class VerificationStatusController extends Controller
                 'account_kyc_state' => $account['state'],
                 'verification_levels' => $levels,
                 'next_actions' => $actions,
+                'verification_documents' => $this->verificationDocuments((int) $user->id),
             ],
         ]);
     }
@@ -203,7 +205,7 @@ class VerificationStatusController extends Controller
         array $tierInfo,
         array $identity,
         bool $phoneVerified,
-        bool $operationalResidence,
+        bool $residenceVerified,
         KycOwnershipGuardService $ownership,
         array $docs,
     ): array {
@@ -215,7 +217,7 @@ class VerificationStatusController extends Controller
         $requirements = [
             1 => [
                 ['code' => 'phone', 'label' => 'إثبات ملكية رقم الهاتف', 'complete' => $phoneVerified],
-                ['code' => 'residence', 'label' => 'إثبات محل الإقامة الحالي داخل نطاق التشغيل', 'complete' => $operationalResidence],
+                ['code' => 'residence', 'label' => 'إثبات محل الإقامة الحالي', 'complete' => $residenceVerified],
             ],
             2 => [
                 ['code' => 'tier1', 'label' => 'استكمال متطلبات عميل موثق جزئيا', 'complete' => $current >= 1],
@@ -267,6 +269,29 @@ class VerificationStatusController extends Controller
         }
 
         return $out;
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    private function verificationDocuments(int $userId): array
+    {
+        return RegistrationDossier::query()
+            ->where('subject_user_id', $userId)
+            ->whereIn('source', RegistrationDossier::VERIFICATION_SOURCES)
+            ->orderByDesc('id')
+            ->limit(12)
+            ->get()
+            ->map(function (RegistrationDossier $dossier): array {
+                $payload = (array) $dossier->payload_encrypted;
+
+                return [
+                    'reference' => (string) $dossier->reference,
+                    'label' => (string) ($payload['verification_target_label'] ?? 'طلب توثيق'),
+                    'status' => (string) $dossier->state,
+                    'confirmed_at' => optional($dossier->confirmed_at)->toIso8601String(),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /** @return array<int,string> */
