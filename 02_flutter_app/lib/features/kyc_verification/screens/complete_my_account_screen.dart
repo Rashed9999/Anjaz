@@ -4,6 +4,7 @@ import 'package:amial_pay/features/auth/widgets/governorate_picker.dart';
 import 'package:amial_pay/features/kyc_verification/controllers/verification_center_controller.dart';
 import 'package:amial_pay/features/kyc_verification/domain/customer_verification_level.dart';
 import 'package:amial_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
+import 'package:amial_pay/features/kyc_verification/screens/customer_verification_review_screen.dart';
 import 'package:amial_pay/features/kyc_verification/widgets/yemen_residence_picker.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/helper/custom_snackbar_helper.dart';
@@ -373,17 +374,70 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
                     return;
                   }
 
-                  await controller.submitResidence(
-                    birthGovernorate: _birthGovernorate!,
-                    governorate: _residenceLocation.governorateCode!,
-                    districtId: _residenceLocation.districtId!,
-                    area: _area.text.trim(),
-                    landmark: _landmark.text.trim(),
-                    evidenceType: _evidenceType!,
-                    evidence: File(_residenceEvidence!.path),
+                  final selected = options.firstWhereOrNull(
+                    (item) => '${item['code']}' == _evidenceType,
+                  );
+                  final profile = Get.find<ProfileController>().userInfo;
+
+                  await Get.to<bool>(
+                    () => CustomerVerificationReviewScreen(
+                      targetTier: 1,
+                      rows: [
+                        VerificationReviewRow(
+                          'الاسم الكامل',
+                          '${profile?.fName ?? ''} ${profile?.lName ?? ''}'.trim(),
+                        ),
+                        VerificationReviewRow('رقم الهاتف', profile?.phone ?? ''),
+                        VerificationReviewRow('البريد الإلكتروني', profile?.email ?? ''),
+                        VerificationReviewRow('رقم الحساب', profile?.accountNumber ?? ''),
+                        VerificationReviewRow(
+                          'محافظة الميلاد',
+                          GovernoratePicker.nameOf(_birthGovernorate) ??
+                              _birthGovernorate!,
+                        ),
+                        VerificationReviewRow(
+                          'محافظة السكن',
+                          GovernoratePicker.nameOf(
+                                _residenceLocation.governorateCode,
+                              ) ??
+                              _residenceLocation.governorateCode!,
+                        ),
+                        VerificationReviewRow(
+                          'المديرية',
+                          _residenceLocation.districtName ?? '—',
+                        ),
+                        VerificationReviewRow(
+                          'الحي / المنطقة',
+                          _area.text.trim(),
+                        ),
+                        VerificationReviewRow(
+                          'أقرب معلم',
+                          _landmark.text.trim(),
+                        ),
+                        VerificationReviewRow(
+                          'نوع إثبات السكن',
+                          '${selected?['label'] ?? _evidenceType}',
+                        ),
+                      ],
+                      documents: [
+                        VerificationReviewDocument(
+                          label: 'إثبات محل السكن',
+                          path: _residenceEvidence!.path,
+                        ),
+                      ],
+                      onConfirm: () => controller.submitResidence(
+                        birthGovernorate: _birthGovernorate!,
+                        governorate: _residenceLocation.governorateCode!,
+                        districtId: _residenceLocation.districtId!,
+                        area: _area.text.trim(),
+                        landmark: _landmark.text.trim(),
+                        evidenceType: _evidenceType!,
+                        evidence: File(_residenceEvidence!.path),
+                      ),
+                    ),
                   );
                 },
-          child: const Text('إرسال إثبات السكن للمراجعة'),
+          child: const Text('مراجعة وإرسال إثبات السكن'),
         ),
       ],
     );
@@ -472,13 +526,15 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
 
   Widget _ownershipStep(VerificationCenterController controller) {
     final blockers = controller.tier3Ownership['blockers'];
-    final blockerList = blockers is List ? blockers.map((e) => e.toString()).toList() : <String>[];
+    final blockerList =
+        blockers is List ? blockers.map((e) => e.toString()).toList() : <String>[];
 
     return _stepCard(
       number: 5,
       icon: Icons.privacy_tip_outlined,
       title: 'إثبات صاحب الهوية',
-      subtitle: 'هذه الخطوة تخص التوثيق الكامل فقط. اختر طريقة الإثبات التي تناسبك؛ لا يوجد مسار مختلف للذكر أو الأنثى.',
+      subtitle:
+          'حالة عميل موثق تحتاج صورة سيلفي حديثة من الكاميرا بعد اكتمال السكن والهوية. لا نطلب إعادة رفع المستندات المعتمدة.',
       children: [
         if (blockerList.isNotEmpty) ...[
           Container(
@@ -490,10 +546,15 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: blockerList
-                  .map((e) => Padding(
-                        padding: const EdgeInsets.only(bottom: 3),
-                        child: Text('• $e', style: const TextStyle(fontSize: 11.5)),
-                      ))
+                  .map(
+                    (e) => Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Text(
+                        '• $e',
+                        style: const TextStyle(fontSize: 11.5),
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
           ),
@@ -502,72 +563,96 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
         _ownershipOption(
           'restricted_review',
           'خصوصية إضافية',
-          'صورة شخصية حديثة تُعرض فقط لمراجع يملك صلاحية KYC المقيدة، وكل مشاهدة تحمل Trace ID وعلامة مائية.',
+          'السيلفي يراه فقط مراجع KYC المقيد، مع Trace ID وعلامة مائية.',
         ),
         _ownershipOption(
           'standard',
           'مراجعة محمية',
-          'صورة شخصية حديثة يراجعها فريق KYC المخول مع العلامة المائية والتتبع.',
-        ),
-        _ownershipOption(
-          'automated',
-          'تحقق آلي خاص',
-          controller.biometricAvailable
-              ? 'Liveness + Face Match لدى المزود البيومتري المعتمد.'
-              : 'غير متاح الآن حتى يتم ربط مزود بيومتري حقيقي ومعتمد.',
-          enabled: controller.biometricAvailable,
-        ),
-        _ownershipOption(
-          'in_person',
-          'تحقق حضوري',
-          'طلب مراجعة حضورية من موظف مخول؛ اختيار المسار لا يعني الاعتماد حتى يصدر قرار المراجع.',
+          'السيلفي يراجعه فريق KYC المخول مع التتبع والعلامة المائية.',
         ),
         const SizedBox(height: 8),
-        if (_ownershipMode == 'standard' || _ownershipMode == 'restricted_review') ...[
-          OutlinedButton.icon(
-            onPressed: () async {
-              final image = await _picker.pickImage(source: ImageSource.camera, imageQuality: 90);
-              if (image != null && mounted) setState(() => _selfie = image);
-            },
-            icon: Icon(_selfie == null ? Icons.photo_camera_outlined : Icons.check_circle_outline),
-            label: Text(_selfie == null ? 'التقاط صورة شخصية حديثة' : 'تم التقاط الصورة'),
+        OutlinedButton.icon(
+          onPressed: () async {
+            final image = await _picker.pickImage(
+              source: ImageSource.camera,
+              imageQuality: 90,
+            );
+            if (image != null && mounted) {
+              setState(() => _selfie = image);
+            }
+          },
+          icon: Icon(
+            _selfie == null
+                ? Icons.photo_camera_outlined
+                : Icons.check_circle_outline,
           ),
-          const SizedBox(height: 8),
-          FilledButton(
-            onPressed: controller.isActionLoading
-                ? null
-                : () {
-                    if (_selfie == null) {
-                      showCustomSnackBarHelper('التقط صورة شخصية حديثة أولاً');
-                      return;
-                    }
-                    controller.submitOwnershipSelfie(
-                      mode: _ownershipMode,
-                      selfie: File(_selfie!.path),
-                    );
-                  },
-            child: const Text('إرسال للمراجعة'),
+          label: Text(
+            _selfie == null
+                ? 'التقاط صورة سيلفي حديثة'
+                : 'تم التقاط السيلفي',
           ),
-        ] else if (_ownershipMode == 'automated')
-          FilledButton.icon(
-            onPressed: !controller.biometricAvailable || controller.isActionLoading
-                ? null
-                : () => controller.startBiometric(),
-            icon: const Icon(Icons.face_retouching_natural),
-            label: const Text('بدء Liveness + Face Match'),
-          )
-        else if (_ownershipMode == 'in_person')
-          FilledButton.icon(
-            onPressed: controller.isActionLoading
-                ? null
-                : () async {
-                    if (await controller.choosePrivacy('in_person')) {
-                      showCustomSnackBarHelper('تم اختيار التحقق الحضوري. بانتظار إجراء المراجعة المخولة.', isError: false);
-                    }
-                  },
-            icon: const Icon(Icons.person_pin_circle_outlined),
-            label: const Text('طلب التحقق الحضوري'),
-          ),
+        ),
+        const SizedBox(height: 8),
+        FilledButton(
+          onPressed: controller.isActionLoading
+              ? null
+              : () async {
+                  if (_selfie == null) {
+                    showCustomSnackBarHelper('التقط صورة سيلفي حديثة أولاً');
+                    return;
+                  }
+
+                  final profile = Get.find<ProfileController>().userInfo;
+                  await Get.to<bool>(
+                    () => CustomerVerificationReviewScreen(
+                      targetTier: 3,
+                      rows: [
+                        VerificationReviewRow(
+                          'الاسم الكامل',
+                          '${profile?.fName ?? ''} ${profile?.lName ?? ''}'.trim(),
+                        ),
+                        VerificationReviewRow(
+                          'رقم الهاتف',
+                          profile?.phone ?? '',
+                        ),
+                        VerificationReviewRow(
+                          'البريد الإلكتروني',
+                          profile?.email ?? '',
+                        ),
+                        VerificationReviewRow(
+                          'رقم الحساب',
+                          profile?.accountNumber ?? '',
+                        ),
+                        const VerificationReviewRow(
+                          'توثيق السكن',
+                          'مكتمل ومعتمد',
+                        ),
+                        const VerificationReviewRow(
+                          'توثيق الهوية',
+                          'مكتمل ومعتمد من الجهتين',
+                        ),
+                        VerificationReviewRow(
+                          'مراجعة السيلفي',
+                          _ownershipMode == 'restricted_review'
+                              ? 'خصوصية إضافية'
+                              : 'مراجعة محمية',
+                        ),
+                      ],
+                      documents: [
+                        VerificationReviewDocument(
+                          label: 'صورة السيلفي الحديثة',
+                          path: _selfie!.path,
+                        ),
+                      ],
+                      onConfirm: () => controller.submitOwnershipSelfie(
+                        mode: _ownershipMode,
+                        selfie: File(_selfie!.path),
+                      ),
+                    ),
+                  );
+                },
+          child: const Text('مراجعة وإرسال طلب التوثيق الكامل'),
+        ),
       ],
     );
   }
