@@ -938,5 +938,15 @@
   "email_profile_female": "Female",
   "email_profile_saving": "Saving…",
   "email_profile_save": "Save details",
-  "email_profile_required": "Required"
+  "email_profile_required": "Required",
+  "registration_password_min": "Login password must be at least 8 characters.",
+  "registration_password_not_numeric": "Login password cannot contain digits only.",
+  "registration_password_confirmation_mismatch": "Login password confirmation does not match.",
+  "registration_transaction_pin_digits": "Financial PIN must contain exactly 4 digits.",
+  "registration_transaction_pin_weak": "Choose a financial PIN that is not sequential or repeated.",
+  "registration_login_password_label": "Login password",
+  "registration_login_password_confirm_label": "Confirm password",
+  "registration_financial_pin_label": "4-digit financial PIN",
+  "registration_password_pin_separation_help": "Your password opens the account. Your PIN authorizes money movement. Do not use the same secret for both.",
+  "terms_acceptance_required_to_continue": "Read and accept the latest terms of use to continue."
 }
