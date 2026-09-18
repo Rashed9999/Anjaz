@@ -117,7 +117,11 @@ class PilotCustomerPhoneOtpTest extends TestCase
         $service = app(ResidenceVerificationService::class);
         $submitted = $service->submit(
             $user->fresh(),
+            'YE-SN',
             'YE-AD',
+            'المعلا',
+            'حي الشهداء',
+            'قرب المستشفى',
             'lease_contract',
             $document,
         );
@@ -143,4 +147,61 @@ class PilotCustomerPhoneOtpTest extends TestCase
             app(KycTierService::class)->getUserTierInfo($fresh)['tier_name'],
         );
     }
+
+    /** @test */
+    public function unsupported_residence_does_not_block_registration_or_partial_verification(): void
+    {
+        config(['amial.operational_governorates' => ['YE-AD']]);
+
+        $user = $this->customer();
+        $user->is_phone_verified = 1;
+        $user->save();
+
+        $document = KycDocument::create([
+            'user_id' => $user->id,
+            'doc_type' => KycDocument::TYPE_ADDRESS_PROOF,
+            'status' => KycDocument::STATUS_APPROVED,
+            'encrypted_path' => 'kyc/'.Str::random(12).'.enc',
+            'size_bytes' => 1024,
+            'ocr_status' => 'not_run',
+            'reviewed_at' => now(),
+        ]);
+
+        $service = app(ResidenceVerificationService::class);
+        $submitted = $service->submit(
+            $user->fresh(),
+            'YE-TA',
+            'YE-SN',
+            'السبعين',
+            'حدة',
+            'قرب الجامعة',
+            'lease_contract',
+            $document,
+        );
+
+        $reviewer = User::factory()->create([
+            'type' => 0,
+            'role' => 'admin',
+            'is_active' => 1,
+        ]);
+
+        $service->decide(
+            (int) $submitted['verification_id'],
+            $reviewer,
+            ResidenceVerificationService::STATUS_VERIFIED,
+        );
+
+        $fresh = $user->fresh();
+
+        // التوثيق نجح رغم أن السكن خارج نطاق التشغيل الحالي.
+        $this->assertSame(1, (int) $fresh->kyc_tier);
+        $this->assertSame(1, app(KycTierService::class)->effectiveTier($fresh));
+
+        // لكن الخدمة المالية نفسها تبقى خلف سياسة التغطية.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('خارج نطاق تشغيل أميال الحالي');
+
+        app(KycTierService::class)->assertFeatureAllowed($fresh, 'send_money');
+    }
+
 }
