@@ -53,8 +53,7 @@ class KycTierService
         // معتمد داخل نطاق التشغيل. هكذا يصبح الاسم الظاهر مطابقاً للعقد.
         if ($status['tier'] === 1) {
             $residence = app(ResidenceVerificationService::class)->forUser($user);
-            if (($residence['status'] ?? null) !== ResidenceVerificationService::STATUS_VERIFIED
-                || ! (bool) ($residence['operational'] ?? false)) {
+            if (($residence['status'] ?? null) !== ResidenceVerificationService::STATUS_VERIFIED) {
                 return 0;
             }
         }
