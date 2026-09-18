@@ -60,7 +60,7 @@ class VerificationStatusController extends Controller
                 'code' => 'verify_phone',
                 'priority' => 1,
                 'title' => 'أثبت ملكية رقم الهاتف',
-                'description' => 'مطلوب لتفعيل المستوى الأساسي.',
+                'description' => 'مطلوب للانتقال إلى حالة عميل موثق جزئيا.',
             ];
         }
 
@@ -118,8 +118,8 @@ class VerificationStatusController extends Controller
                 default => [
                     'code' => 'upgrade_identity',
                     'priority' => 3,
-                    'title' => 'ارفع حدودك بتوثيق الهوية',
-                    'description' => 'المستوى الثاني يحتاج رقم الهوية + وجه الوثيقة + ظهرها فقط، بلا سيلفي.',
+                    'title' => 'وثّق هويتك وارفع حدودك',
+                    'description' => 'حالة عميل موثق بهوية تحتاج رقم الهوية + وجه الوثيقة + ظهرها فقط، بلا سيلفي.',
                 ],
             };
         }
@@ -128,7 +128,7 @@ class VerificationStatusController extends Controller
             $actions[] = [
                 'code' => 'upgrade_full_kyc',
                 'priority' => 4,
-                'title' => 'الترقية إلى التوثيق الكامل',
+                'title' => 'الترقية إلى عميل موثق',
                 'description' => 'أكمل ملف اعرف عميلك واختر طريقة إثبات أقوى لملكية الهوية.',
             ];
         }
@@ -218,12 +218,12 @@ class VerificationStatusController extends Controller
                 ['code' => 'residence', 'label' => 'إثبات محل الإقامة الحالي داخل نطاق التشغيل', 'complete' => $operationalResidence],
             ],
             2 => [
-                ['code' => 'tier1', 'label' => 'استكمال متطلبات المستوى الأساسي', 'complete' => $current >= 1],
+                ['code' => 'tier1', 'label' => 'استكمال متطلبات عميل موثق جزئيا', 'complete' => $current >= 1],
                 ['code' => 'identity_number', 'label' => 'رقم الهوية القانونية', 'complete' => trim((string) ($user->identification_number ?? '')) !== ''],
                 ['code' => 'identity_document', 'label' => 'وجه وثيقة الهوية وظهرها — بلا سيلفي', 'complete' => ($identity['status'] ?? '') === 'verified'],
             ],
             3 => [
-                ['code' => 'tier2', 'label' => 'استكمال توثيق الهوية', 'complete' => $current >= 2],
+                ['code' => 'tier2', 'label' => 'استكمال متطلبات عميل موثق بهوية', 'complete' => $current >= 2],
                 ['code' => 'profile', 'label' => 'إكمال بيانات اعرف عميلك التنظيمية', 'complete' => $profileMissing === []],
                 ['code' => 'address_proof', 'label' => 'دليل سكن/عنوان صالح ضمن ملف KYC', 'complete' => (bool) ($addressDoc['usable'] ?? false)],
                 ['code' => 'ownership', 'label' => 'إثبات أقوى أن صاحب الحساب هو صاحب الهوية', 'complete' => (bool) ($ownership3['ready'] ?? false)],
@@ -231,9 +231,9 @@ class VerificationStatusController extends Controller
         ];
 
         $descriptions = [
-            1 => 'محفظة أساسية للاستخدام اليومي ضمن حدود منخفضة.',
-            2 => 'هوية قانونية موثقة وحدود أعلى ومزايا مالية إضافية.',
-            3 => 'توثيق كامل للوصول إلى أعلى حدود ومزايا الحساب الفردي.',
+            1 => 'توثيق جزئي يفتح الاستخدام المالي الأساسي ضمن الحدود المعتمدة.',
+            2 => 'هوية قانونية موثقة تفتح حدوداً أعلى ومزايا مالية إضافية.',
+            3 => 'توثيق مكتمل للوصول إلى أعلى حدود ومزايا الحساب الفردي.',
         ];
 
         $out = [];
