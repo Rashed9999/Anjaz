@@ -113,7 +113,13 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
                   _residenceStep(controller),
                   const SizedBox(height: 12),
                 ],
-                if (widget.targetTier >= 2 && controller.currentTier < 2) ...[
+                if (widget.targetTier >= 2 && controller.currentTier < 1) ...[
+                  _lockedStep(
+                    'توثيق الهوية',
+                    'أكمل إثبات الهاتف واعتماد السكن أولاً. بعد الوصول إلى حالة عميل موثق جزئيا تُفتح خطوة الهوية.',
+                  ),
+                  const SizedBox(height: 12),
+                ] else if (widget.targetTier >= 2 && controller.currentTier < 2) ...[
                   _identityStep(controller),
                   const SizedBox(height: 12),
                 ],
