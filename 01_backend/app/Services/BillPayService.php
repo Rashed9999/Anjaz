@@ -40,6 +40,7 @@ class BillPayService
         private readonly AuditService $audit,
         private readonly ReceiptService $receipts,
         private readonly FeeService $fees,
+        private readonly KycTierService $kyc,
     ) {}
 
     /**
@@ -118,6 +119,17 @@ class BillPayService
         $this->assertSubscriberAccount($service, $subscriberAccount);
 
         $amountNormalized = MoneyService::normalize($amount);
+
+        // AMIAL-CUSTOMER-SERVICES-KYC-001:
+        // «السداد» خدمة Tier 1 في KycTierService. الواجهة تشرح القفل،
+        // لكن التنفيذ المالي نفسه يجب أن يرفض Tier 0 حتى عند استدعاء API
+        // مباشرة أو من قناة أخرى كواتساب.
+        $this->kyc->assertIndividualTransactionAllowed(
+            $user,
+            $amountNormalized,
+            'bill_pay',
+        );
+
         $quote = $this->quote($user, $amountNormalized);
         $fee = (string) $quote['fee'];
         $totalDebited = (string) $quote['total_debit'];
