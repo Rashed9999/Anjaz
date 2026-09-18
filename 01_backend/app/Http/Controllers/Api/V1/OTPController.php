@@ -22,9 +22,9 @@ class OTPController extends Controller
         $phone = (string) $request->user()->phone;
         $policy = app(\App\Services\Otp\OtpPolicy::class);
 
-        // الرقم الحقيقي لا يُقال له «أرسلنا» إذا لم توجد قناة فعالة.
-        // أرقام العرض لا تحتاج قناة: رمزها ثابت ومقصور عليها فقط.
-        if ($policy->needsDelivery($phone) && ! $policy->deliveryReady()) {
+        // وضع Pilot الحالي: إثبات هاتف العميل يستخدم 123456 بلا مزوّد.
+        // عند تعطيله يعود المسار تلقائياً إلى مزوّد SMS/WhatsApp الحقيقي.
+        if ($policy->customerPhoneOwnershipNeedsDelivery($phone) && ! $policy->deliveryReady()) {
             return response()->json([
                 'success' => false,
                 'code' => 'OTP_DELIVERY_UNAVAILABLE',
@@ -33,9 +33,7 @@ class OTPController extends Controller
         }
 
         try {
-            // OtpPolicy يصدر ستة أرقام للأرقام الحقيقية، ورمز العرض الافتراضي
-            // ستة أيضاً. مسار verifyOtp أدناه يلتزم بالعقد نفسه.
-            $otp = (string) $policy->codeFor($phone);
+            $otp = (string) $policy->customerPhoneOwnershipCode($phone);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $phone], [
                 'otp' => $otp,
@@ -46,7 +44,7 @@ class OTPController extends Controller
                 'updated_at' => now(),
             ]);
 
-            if ($policy->needsDelivery($phone)) {
+            if ($policy->customerPhoneOwnershipNeedsDelivery($phone)) {
                 $result = addon_published_status('Gateways')
                     ? SmsGateway::send($phone, $otp)
                     : SmsModule::send($phone, $otp);
@@ -67,9 +65,11 @@ class OTPController extends Controller
             return response()->json([
                 'success' => true,
                 'code' => 'OTP_SENT',
-                'message' => 'تم إرسال رمز التحقق',
-                // الإفصاح لأرقام العرض وحدها؛ الرقم الحقيقي لا يخرج رمزه.
-                'demo_otp' => $policy->mayDisclose($phone) ? $otp : null,
+                'message' => $policy->pilotCustomerPhoneCode() !== null
+                    ? 'وضع تجريبي: استخدم رمز التحقق 123456'
+                    : 'تم إرسال رمز التحقق',
+                'demo_otp' => $policy->mayDiscloseCustomerPhoneOwnership($phone) ? $otp : null,
+                'pilot_mode' => $policy->pilotCustomerPhoneCode() !== null,
                 'digits' => 6,
             ], 200);
         } catch (\Throwable $e) {
@@ -82,8 +82,9 @@ class OTPController extends Controller
     }
 
     /**
-     * نجاح OTP = إثبات ملكية الهاتف، وهو بوابة Tier 1 في KYC التدريجي.
-     * لا يفتح المال وحده: ResidenceVerification + حدود KycTier تبقى حارسة.
+     * نجاح OTP = إثبات ملكية الهاتف فقط.
+     * لا يرفع حالة العميل إلى «موثق جزئيا» وحده؛ اعتماد السكن التشغيلي
+     * هو الذي يكمل الانتقال من «غير موثق» إلى «موثق جزئيا».
      */
     public function verifyOtp(Request $request): JsonResponse
     {
@@ -150,14 +151,18 @@ class OTPController extends Controller
                     'action' => 'PHONE_OWNERSHIP_VERIFIED',
                     'decision_code' => 'PHONE_OTP_VERIFIED',
                     'severity' => 'info',
-                    'context' => ['progressive_kyc_tier' => 1],
+                    'context' => [
+                        'phone_verified' => true,
+                        'verification_state' => 'customer_unverified_until_residence',
+                    ],
                 ]);
             });
 
             return response()->json([
                 'message' => 'تم التحقّق من ملكية رقم الهاتف',
                 'is_phone_verified' => true,
-                'kyc_tier' => 1,
+                'kyc_tier' => (int) ($request->user()->fresh()->kyc_tier ?? 0),
+                'verification_label' => 'عميل غير موثق',
                 'next_step' => 'verify_residence',
             ], 200);
         }
