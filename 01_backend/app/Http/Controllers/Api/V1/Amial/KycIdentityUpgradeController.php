@@ -32,6 +32,7 @@ class KycIdentityUpgradeController extends Controller
         $validator = Validator::make($request->all(), [
             'identification_number' => ['required', 'string', 'min:5', 'max:50'],
             'identification_type' => ['required', Rule::in(['nid', 'passport', 'driving_licence'])],
+            'declaration_accepted' => ['required', 'accepted'],
             'id_front' => ['required', 'file', 'max:8192',
                 'mimetypes:image/jpeg,image/png,image/heic,image/heif,application/pdf'],
             'id_back' => ['required', 'file', 'max:8192',
