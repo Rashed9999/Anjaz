@@ -71,7 +71,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                 _sectionTitle(
                   Icons.badge_outlined,
                   'بيانات الهوية',
-                  'أدخل رقم الوثيقة كما هو مكتوب عليها، ثم اختر نوعها.',
+                  'أدخل بيانات الوثيقة كما هي مكتوبة عليها: الرقم، الميلاد، مكان الإصدار، وتواريخ الإصدار والانتهاء.',
                 ),
                 CustomDropDownButtonWidget(
                   value: controller.dropDownSelectedValue,
@@ -119,7 +119,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                 _sectionTitle(
                   Icons.document_scanner_outlined,
                   'صورتا الوثيقة',
-                  'حالة عميل موثق بهوية تحتاج وجه الهوية وظهرها فقط. لا نطلب صورة شخصية في هذه المرحلة.',
+                  'ارفع وجه الهوية وظهرها. السيلفي غير مطلوب في هذه المرحلة ويظهر فقط عند طلب حالة عميل موثق.',
                 ),
                 _privacyNotice(),
                 const SizedBox(height: 12),
