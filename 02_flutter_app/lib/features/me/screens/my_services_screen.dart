@@ -17,9 +17,7 @@ import 'package:amial_pay/features/requested_money/screens/incoming_requests_scr
 import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
 import 'package:amial_pay/features/kyc_verification/screens/my_profile_changes_screen.dart';
-import 'package:amial_pay/features/donations/screens/donations_home_screen.dart';
-import 'package:amial_pay/features/family_fund/screens/my_funds_screen.dart';
-import 'package:amial_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
+import 'package:amial_pay/features/me/screens/customer_services_hub_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
 import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
 import 'package:amial_pay/shared/widgets/verified_badge.dart';
@@ -173,7 +171,6 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
     final access = Get.find<AccessController>();
     final tier = _currentCustomerTier();
     final basicFinancial = tier >= 1;
-    final enhancedFinancial = tier >= 2;
 
     final cards = <Widget>[
       _notificationCard(),
@@ -223,28 +220,15 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           onTap: () => Get.to(() => const OutgoingRequestsScreen()),
         ),
 
-      // Tier 2+ فقط بحسب KycTierService.
-      if (enhancedFinancial && access.has('safe_pay'))
-        _serviceCard(
-          icon: Icons.shield_outlined,
-          label: 'الدفع الآمن',
-          subtitle: 'حماية للبيع والشراء',
-          onTap: () => Get.to(() => const MySafePaymentsScreen()),
-        ),
-      if (enhancedFinancial && access.has('family_fund'))
-        _serviceCard(
-          icon: Icons.savings_outlined,
-          label: 'صندوق العائلة',
-          subtitle: 'ادّخارٌ مشترك',
-          onTap: () => Get.to(() => const MyFundsScreen()),
-        ),
-      if (enhancedFinancial && !access.isMerchantSession)
-        _serviceCard(
-          icon: Icons.volunteer_activism_outlined,
-          label: 'التبرعات',
-          subtitle: 'تبرّع لجهة موثوقة',
-          onTap: () => Get.to(() => const DonationsHomeScreen()),
-        ),
+      // AMIAL-CUSTOMER-SERVICES-HUB-001:
+      // السداد + الدفع الآمن + التبرعات + الصندوق العائلي لها مركز واحد.
+      // المركز نفسه يشرح متطلبات Tier 1 / Tier 2 ويقود لإكمال التوثيق.
+      _serviceCard(
+        icon: Icons.apps_rounded,
+        label: 'الخدمات',
+        subtitle: 'السداد · الدفع الآمن · التبرعات · الصندوق',
+        onTap: () => Get.to(() => const CustomerServicesHubScreen()),
+      ),
 
       // خدمات معلومات/إدارة الحساب وليست فتحاً لحركة مالية جديدة.
       _serviceCard(
