@@ -229,6 +229,18 @@ class ResidenceVerificationService
                 $account->verified_residence_governorate = $row->declared_governorate;
                 $account->residence_verified_at = now();
                 $account->residence_verification_id = (int) $row->id;
+
+                // الانتقال الحقيقي من 🟤 إلى 🟠:
+                // هاتف مثبت + سكن معتمد + السكن داخل نطاق التشغيل.
+                if ((bool) ($account->is_phone_verified ?? false)
+                    && YemenGovernorates::isOperational((string) $row->declared_governorate)
+                    && Schema::hasColumn('users', 'kyc_tier')) {
+                    $account->kyc_tier = max(1, (int) ($account->kyc_tier ?? 0));
+                    if (Schema::hasColumn('users', 'kyc_tier_updated_at')) {
+                        $account->kyc_tier_updated_at = now();
+                    }
+                }
+
                 $account->save();
 
                 // المصدر هنا هو الإقامة الموثقة نفسها، لا الأصل ولا GPS.
