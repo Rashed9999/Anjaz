@@ -29,6 +29,20 @@ use Illuminate\Support\Facades\Route;
  *   Route::prefix('amial')->name('amial.')->group(base_path('routes/admin/amial.php'));
  */
 
+// ============ Admin locale ============
+// تفضيل واجهة خاص بجلسة الموظف؛ لا يغيّر بيانات أعمال ولا يحتاج صلاحية RBAC إضافية.
+Route::post('/locale', function (\Illuminate\Http\Request $request) {
+    $validated = $request->validate([
+        'locale' => ['required', 'in:ar,en'],
+    ]);
+
+    $locale = (string) $validated['locale'];
+    session(['local' => $locale]);
+    \Illuminate\Support\Facades\App::setLocale($locale);
+
+    return back();
+})->name('locale');
+
 // ============ Operator Workspace ============
 // الصفحة الأم لكل موظف منصة. الصلاحيات الدقيقة لا تُمنح هنا؛
 // OperatorWorkspaceController يرشّح البطاقات والطوابير حسب صلاحيات المستخدم.
