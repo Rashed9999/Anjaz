@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
 use App\Services\Kyc\KycPrivacyService;
 use App\Services\KycDocumentService;
+use App\Services\RegistrationDossierService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class KycOwnershipEvidenceController extends Controller
         Request $request,
         KycPrivacyService $privacy,
         KycDocumentService $documents,
+        RegistrationDossierService $dossiers,
     ): JsonResponse {
         $user = $request->user();
         if (!$user || (int) $user->type !== 2) {
@@ -57,7 +59,18 @@ class KycOwnershipEvidenceController extends Controller
                 $request->file('selfie'),
             );
         } catch (DomainException $e) {
-            return response()->json([
+            $dossier = $dossiers->archiveVerificationSubmission(
+            $user->fresh(),
+            3,
+            [
+                'ownership_method' => 'selfie',
+                'review_mode' => (string) $data['review_mode'],
+                'verification_dossier_reference' => $dossier->reference,
+                'selfie_document_id' => (int) $doc->id,
+            ],
+        );
+
+        return response()->json([
                 'success' => false,
                 'code' => 'KYC_OWNERSHIP_EVIDENCE_REJECTED',
                 'message' => $e->getMessage(),
