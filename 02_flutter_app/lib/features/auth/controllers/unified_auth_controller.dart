@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/helper/amial_crash_reporter.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/amial/controllers/amial_controller.dart';
+import 'package:amial_pay/features/amial/screens/terms_acceptance_screen.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/auth/screens/role_router.dart';
@@ -351,6 +353,25 @@ class UnifiedAuthController extends GetxController implements GetxService {
             userName: _displayName,
           ));
       return;
+    }
+
+    // AMIAL-LEGAL-LOGIN-001 — إذا كان الإصدار القانوني الحالي جديداً،
+    // نغلق الحلقة هنا قبل بوابة PIN. فشل قراءة الحالة لا يحبس الحساب:
+    // الخادم نفسه يحرس كل فعل مالي بـ amial.terms وسيعيد الشاشة عبر ApiChecker.
+    if (currentRole.value != 'admin') {
+      try {
+        final legal = Get.find<AmialController>();
+        final loaded = await legal.refreshLegalStatus();
+        if (loaded && legal.legalStatus.value?.needsAcceptance == true) {
+          await Get.to(() => TermsAcceptanceScreen(
+                mandatory: true,
+                onAccepted: () => Get.back(result: true),
+              ));
+          if (legal.legalStatus.value?.needsAcceptance == true) return;
+        }
+      } catch (_) {
+        // Fail closed for money happens on the server; login itself remains usable.
+      }
     }
 
     // AMIAL-ADMIN: مدير النظام يدخل بالبريد وكلمة المرور فقط — بوابة PIN
