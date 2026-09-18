@@ -239,7 +239,7 @@ class ProgressiveRegistrationController extends Controller
                 'wallet_created' => true,
                 'transaction_pin_configured' => true,
                 'kyc_tier' => 0,
-                'tier_name' => 'غير موثق',
+                'tier_name' => 'عميل غير موثق',
                 'access_token' => $token,
                 'token_type' => $token ? 'Bearer' : null,
                 'next_steps' => [
