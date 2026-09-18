@@ -200,6 +200,13 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'amial.rate-limit' => PerUserRateLimit::class,
             'amial.usage' => EnforceUsageLimit::class,
             'amial.pos-permission' => \App\Http\Middleware\PosPermission::class,
+            // AMIAL-POS-DEVICES-003 — المسارات تستخدم الاسم منذ بناء
+            // ربط مقعد الجهاز؛ غياب alias يجعل Laravel يحاول حل الاسم
+            // كصنف ويُسقط الطلب قبل الوصول للحارس.
+            'amial.pos-device' => \App\Http\Middleware\EnsurePosDevice::class,
+            // AMIAL-AUTH-PIN-FORCE-001 — جلسة موظف المنصة لا تستمر إذا
+            // وُسم PIN بأنه يحتاج تغييراً.
+            'amial.force-pin-change' => \App\Http\Middleware\ForcePlatformPinChange::class,
             // AMIAL-API-ACCESS-001 — مصادقة الشركاء بمفتاح API
             'amial.api-key' => \App\Http\Middleware\AuthenticateApiKey::class,
             'amial.agent' => \App\Http\Middleware\EnsureAgent::class,  // AMIAL-FIX-004
