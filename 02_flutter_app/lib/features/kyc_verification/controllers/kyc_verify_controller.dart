@@ -73,14 +73,14 @@ class KycVerifyController extends GetxController implements GetxService {
     update();
   }
 
-  Future<void> kycVerify(
+  Future<bool> kycVerify(
     String idNumber, {
     String reviewMode = 'standard',
   }) async {
-    if (_isLoading) return;
+    if (_isLoading) return false;
     if (_identityImage.length != 2) {
       showCustomSnackBarHelper('ارفع وجه الهوية وظهرها فقط');
-      return;
+      return false;
     }
 
     final field = <String, String>{
@@ -107,7 +107,7 @@ class KycVerifyController extends GetxController implements GetxService {
         showCustomSnackBarHelper(
           _responseMessage(privacyResponse, 'تعذّر حفظ إعداد الخصوصية'),
         );
-        return;
+        return false;
       }
 
       final response = await kycVerifyRepo.kycVerifyApi(field, multipart);
@@ -122,9 +122,8 @@ class KycVerifyController extends GetxController implements GetxService {
           response,
           'تم إرسال الهوية للمراجعة. لا نطلب صورة شخصية للمستوى الثاني.',
         );
-        Get.back();
         showCustomSnackBarHelper(message, isError: false);
-        return;
+        return true;
       }
 
       final message = _responseMessage(response, 'تعذّر إرسال الهوية للمراجعة');
@@ -133,6 +132,7 @@ class KycVerifyController extends GetxController implements GetxService {
       } else {
         showCustomSnackBarHelper(message);
       }
+      return false;
     } finally {
       _isLoading = false;
       update();
