@@ -34,10 +34,11 @@ use Tests\TestCase;
 class CustomerServicesScreenGatesGuardTest extends TestCase
 {
     private const SCREEN =
-        '02_flutter_app/lib/features/me/screens/my_services_screen.dart';
+        '02_flutter_app/lib/features/me/screens/customer_services_hub_screen.dart';
 
-    /** الشاشاتُ الثلاثُ التي سأل عنها صاحبُ المشروع بالاسم. */
+    /** الخدمات الأربع التي يجب أن تبقى مجمعة في مركز العميل. */
     private const RESTORED = [
+        'BillPayProvidersScreen' => 'السداد',
         'MySafePaymentsScreen' => 'الدفع الآمن',
         'MyFundsScreen' => 'صندوق العائلة',
         'DonationsHomeScreen' => 'التبرعات',
@@ -74,25 +75,19 @@ class CustomerServicesScreenGatesGuardTest extends TestCase
     /** @test */
     public function every_gate_on_the_services_screen_is_a_feature_the_server_grants(): void
     {
-        preg_match_all("/access\.has\('([a-z_]+)'\)/", $this->screen(), $m);
+        preg_match_all("/featureCode: '([a-z_]+)'/", $this->screen(), $m);
 
         $gates = array_values(array_unique($m[1]));
 
         $this->assertNotEmpty($gates,
-            '**صفرُ بوّاباتٍ في الشاشة** — إمّا نُزعت كلُّها، وإمّا تغيّرت '
-            .'صيغةُ الكتابة فصار هذا الحارسُ يفحص العدم. (القاعدة السابعة.)');
+            'مركز الخدمات بلا أي بوابة قدرة للخدمات التي لها FeatureAccess.');
 
         $granted = $this->customerFeatures('unverified');
-
         $dead = array_values(array_diff($gates, $granted));
 
         $this->assertSame([], $dead, sprintf(
-            "**بوّاباتٌ لا يمنحها الخادمُ لعميلٍ جديد:**\n  %s\n\n"
-            ."و`AccessController.has()` هي `features.contains(code)` — "
-            ."**صارمة**. فالبطاقةُ خلف كلٍّ منها **لا تظهر أبداً**، ولا "
-            ."خطأَ ولا سطرَ في سجلّ.\n\n"
-            .'وما يمنحه الخادمُ فعلاً: %s',
-            implode('، ', $dead), implode('، ', $granted)));
+            "بوابات لا يمنحها الخادم للعميل: %s",
+            implode('، ', $dead)));
     }
 
     /**
@@ -148,4 +143,20 @@ class CustomerServicesScreenGatesGuardTest extends TestCase
             "**شاشاتٌ تُنادى ولا تُستورَد:**\n  %s",
             implode("\n  ", $unimported)));
     }
+    /** @test */
+    public function services_hub_keeps_the_existing_kyc_tier_contract(): void
+    {
+        $src = $this->screen();
+
+        $this->assertStringContainsString("title: 'السداد'", $src);
+        $this->assertMatchesRegularExpression("/title: 'السداد'[\\s\\S]*?requiredTier: 1,/", $src);
+        foreach (['الدفع الآمن', 'التبرعات', 'الصندوق العائلي'] as $label) {
+            $this->assertMatchesRegularExpression(
+                "/title: '".preg_quote($label, '/')."'[\\s\\S]*?requiredTier: 2,/",
+                $src,
+                "{$label} يجب أن تبقى خلف Tier 2 كما يقرر KycTierService"
+            );
+        }
+    }
+
 }
