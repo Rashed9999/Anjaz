@@ -25,23 +25,15 @@ class YemenRegionsServiceTest extends TestCase
     }
 
     /** @test */
-    public function district_uzlah_and_village_form_one_verified_chain(): void
+    public function district_selection_is_resolved_without_uzlah_or_village_data(): void
     {
-        $uzaal = $this->regions()->uzaal(181);
-        $this->assertTrue(collect($uzaal)->contains(
-            fn (array $row) => $row['id'] === 1508 && $row['name_ar'] === 'الروضه'
-        ));
+        $selected = $this->regions()->resolveDistrict('YE-SH', 181);
 
-        $villages = $this->regions()->villages(1508);
-        $this->assertTrue(collect($villages)->contains(
-            fn (array $row) => $row['id'] === 19271 && $row['name_ar'] === 'الحوطه'
-        ));
-
-        $selected = $this->regions()->resolveSelection('YE-SH', 181, 1508, 19271);
-
+        $this->assertSame('YE-SH', $selected['governorate_code']);
+        $this->assertSame(181, $selected['district_id']);
         $this->assertSame('الروضة', $selected['district_name']);
-        $this->assertSame('الروضه', $selected['uzlah_name']);
-        $this->assertSame('الحوطه', $selected['village_name']);
+        $this->assertArrayNotHasKey('uzlah_id', $selected);
+        $this->assertArrayNotHasKey('village_id', $selected);
     }
 
     /** @test */
@@ -50,7 +42,7 @@ class YemenRegionsServiceTest extends TestCase
         $this->expectException(DomainException::class);
         $this->expectExceptionMessage('DISTRICT_NOT_IN_GOVERNORATE');
 
-        $this->regions()->resolveSelection('YE-AD', 181, 1508, 19271);
+        $this->regions()->resolveDistrict('YE-AD', 181);
     }
 
     /** @test */
@@ -60,5 +52,9 @@ class YemenRegionsServiceTest extends TestCase
 
         $this->assertSame('YemenOpenSource/Yemen-info', $source['name'] ?? null);
         $this->assertSame('MIT', $source['license'] ?? null);
+        $this->assertSame(
+            'governorates_and_districts_only',
+            $source['scope'] ?? null,
+        );
     }
 }
