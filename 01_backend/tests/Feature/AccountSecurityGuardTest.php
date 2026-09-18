@@ -187,6 +187,31 @@ class AccountSecurityGuardTest extends TestCase
     }
 
     /** @test */
+    public function no_registration_entrypoint_reuses_the_login_password_as_the_money_pin(): void
+    {
+        $legacy = (string) file_get_contents(
+            base_path('app/Http/Controllers/Api/V1/RegisterController.php')
+        );
+        $quick = (string) file_get_contents(
+            base_path('app/Http/Controllers/Api/V1/Auth/ProgressiveRegistrationController.php')
+        );
+
+        $this->assertStringNotContainsString(
+            '$user->transaction_pin = $request->password',
+            $legacy,
+            'التسجيل القديم أعاد ربط PIN بكلمة الدخول'
+        );
+        $this->assertStringNotContainsString(
+            "$user->transaction_pin = (string) $request->input('password')",
+            $quick,
+            'التسجيل السريع أعاد ربط PIN بكلمة الدخول'
+        );
+        $this->assertStringContainsString("input('transaction_pin')", $legacy);
+        $this->assertStringContainsString("input('transaction_pin')", $quick);
+        $this->assertStringContainsString('transaction_pin_set_at = now()', $quick);
+    }
+
+    /** @test */
     public function the_pin_route_is_shut_to_a_guest(): void
     {
         $this->getJson(self::BASE)->assertStatus(401);
