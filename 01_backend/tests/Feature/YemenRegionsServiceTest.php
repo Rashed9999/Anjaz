@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Services\Geo\YemenRegionsService;
+use App\Support\YemenGovernorates;
 use DomainException;
 use Tests\TestCase;
 
@@ -22,6 +23,17 @@ class YemenRegionsServiceTest extends TestCase
         $this->assertTrue(collect($rows)->contains(
             fn (array $row) => $row['id'] === 181 && $row['name_ar'] === 'الروضة'
         ));
+    }
+
+    /** @test */
+    public function local_dataset_contains_all_335_yemeni_districts(): void
+    {
+        $count = 0;
+        foreach (YemenGovernorates::codes() as $code) {
+            $count += count($this->regions()->districts($code));
+        }
+
+        $this->assertSame(335, $count);
     }
 
     /** @test */
