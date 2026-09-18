@@ -27,10 +27,13 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
   final _fatherName = TextEditingController();
   final _grandfatherName = TextEditingController();
   final _district = TextEditingController();
+  final _area = TextEditingController();
+  final _landmark = TextEditingController();
   final _pepPosition = TextEditingController();
   final _picker = ImagePicker();
 
   bool _otpRequested = false;
+  String? _birthGovernorate;
   String? _governorate;
   String? _evidenceType;
   XFile? _residenceEvidence;
@@ -59,6 +62,8 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
     _fatherName.dispose();
     _grandfatherName.dispose();
     _district.dispose();
+    _area.dispose();
+    _landmark.dispose();
     _pepPosition.dispose();
     super.dispose();
   }
@@ -277,15 +282,31 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
     return _stepCard(
       number: 2,
       icon: Icons.home_work_outlined,
-      title: status == 'needs_more_evidence' ? 'إرسال دليل سكن أقوى' : 'إثبات محل الإقامة الحالي',
-      subtitle: 'محل الإقامة الموثق هو الذي يحدد نطاق تشغيل المحفظة، وليس محافظة الأصل.',
+      title: status == 'needs_more_evidence'
+          ? 'إرسال دليل سكن أقوى'
+          : 'بيانات الميلاد والسكن الحالي',
+      subtitle:
+          'محافظة الميلاد بيان تعريفي. محافظة السكن تحدد توفر الخدمات بعد التوثيق، لكنها لا تمنع التسجيل أو اعتماد الحساب.',
       children: [
+        GovernoratePicker(
+          label: 'محافظة الميلاد',
+          value: _birthGovernorate,
+          helper: 'لا علاقة لها بنطاق التشغيل.',
+          onChanged: (value) => setState(() => _birthGovernorate = value),
+        ),
+        const SizedBox(height: 10),
         GovernoratePicker(
           label: 'محافظة السكن الحالية',
           value: _governorate,
-          helper: 'اختر مكان إقامتك الفعلي الحالي.',
+          helper: 'اختر مكان إقامتك الفعلي الحالي. المحافظة غير المدعومة لا تمنع التوثيق.',
           onChanged: (value) => setState(() => _governorate = value),
         ),
+        const SizedBox(height: 10),
+        _field(_district, 'المديرية الحالية'),
+        const SizedBox(height: 10),
+        _field(_area, 'المنطقة / الحي — اختياري'),
+        const SizedBox(height: 10),
+        _field(_landmark, 'أقرب معلم — اختياري'),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
           value: _evidenceType,
@@ -306,33 +327,62 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
         if (_evidenceType != null) ...[
           const SizedBox(height: 7),
           Builder(builder: (_) {
-            final selected = options.firstWhereOrNull((e) => '${e['code']}' == _evidenceType);
+            final selected =
+                options.firstWhereOrNull((e) => '${e['code']}' == _evidenceType);
             return Text(
               '${selected?['description'] ?? ''}',
-              style: const TextStyle(fontSize: 11.5, height: 1.4, color: Color(0xFF667386)),
+              style: const TextStyle(
+                fontSize: 11.5,
+                height: 1.4,
+                color: Color(0xFF667386),
+              ),
             );
           }),
         ],
         const SizedBox(height: 11),
         OutlinedButton.icon(
           onPressed: () async {
-            final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 88);
-            if (file != null && mounted) setState(() => _residenceEvidence = file);
+            final file = await _picker.pickImage(
+              source: ImageSource.gallery,
+              imageQuality: 88,
+            );
+            if (file != null && mounted) {
+              setState(() => _residenceEvidence = file);
+            }
           },
-          icon: Icon(_residenceEvidence == null ? Icons.upload_file : Icons.check_circle_outline),
-          label: Text(_residenceEvidence == null ? 'اختيار صورة واضحة لدليل السكن' : 'تم اختيار المستند'),
+          icon: Icon(
+            _residenceEvidence == null
+                ? Icons.upload_file
+                : Icons.check_circle_outline,
+          ),
+          label: Text(
+            _residenceEvidence == null
+                ? 'اختيار صورة واضحة لدليل السكن'
+                : 'تم اختيار المستند',
+          ),
         ),
         const SizedBox(height: 8),
         FilledButton(
           onPressed: controller.isActionLoading
               ? null
               : () async {
-                  if (_governorate == null || _evidenceType == null || _residenceEvidence == null) {
-                    showCustomSnackBarHelper('اختر المحافظة ونوع الدليل وارفع صورة المستند');
+                  if (_birthGovernorate == null ||
+                      _governorate == null ||
+                      _district.text.trim().length < 2 ||
+                      _evidenceType == null ||
+                      _residenceEvidence == null) {
+                    showCustomSnackBarHelper(
+                      'أكمل محافظة الميلاد ومحافظة السكن والمديرية ونوع الدليل والمستند',
+                    );
                     return;
                   }
+
                   await controller.submitResidence(
+                    birthGovernorate: _birthGovernorate!,
                     governorate: _governorate!,
+                    district: _district.text.trim(),
+                    area: _area.text.trim(),
+                    landmark: _landmark.text.trim(),
                     evidenceType: _evidenceType!,
                     evidence: File(_residenceEvidence!.path),
                   );
