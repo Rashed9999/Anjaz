@@ -41,7 +41,7 @@ class VerifiedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (tier == null || tier!.isEmpty) {
+    if (tier == null || tier!.isEmpty || tier == 'unverified') {
       return const SizedBox.shrink();
     }
 
