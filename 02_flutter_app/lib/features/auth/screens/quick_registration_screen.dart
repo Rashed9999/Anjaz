@@ -10,6 +10,7 @@ import 'package:amial_pay/features/auth/controllers/unified_auth_controller.dart
 import 'package:amial_pay/features/auth/screens/role_router.dart';
 import 'package:amial_pay/features/auth/widgets/governorate_picker.dart';
 import 'package:amial_pay/features/kyc_verification/domain/customer_verification_level.dart';
+import 'package:amial_pay/features/kyc_verification/widgets/yemen_residence_picker.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -43,8 +44,6 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   final _pinConfirm = TextEditingController();
   final _emailOtp = TextEditingController();
   final _phoneOtp = TextEditingController();
-  final _residenceDistrict = TextEditingController();
-  final _residenceArea = TextEditingController();
   final _residenceLandmark = TextEditingController();
 
   int _step = 0;
@@ -61,7 +60,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   Timer? _emailTimer;
 
   String? _birthGovernorate;
-  String? _residenceGovernorate;
+  YemenResidenceSelection _residenceLocation = const YemenResidenceSelection();
   XFile? _residenceEvidence;
   String? _evidenceType;
   List<Map<String, dynamic>> _evidenceOptions = const [];
@@ -130,8 +129,6 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _pinConfirm,
       _emailOtp,
       _phoneOtp,
-      _residenceDistrict,
-      _residenceArea,
       _residenceLandmark,
     ]) {
       c.dispose();
@@ -527,12 +524,8 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _snack('اختر محافظة الميلاد.');
       return;
     }
-    if (_residenceGovernorate == null || _residenceGovernorate!.isEmpty) {
-      _snack('اختر محافظة السكن الحالية.');
-      return;
-    }
-    if (_residenceDistrict.text.trim().length < 2) {
-      _snack('أدخل المديرية التي تسكن فيها حالياً.');
+    if (!_residenceLocation.hasRequired) {
+      _snack('اختر محافظة السكن الحالية والمديرية.');
       return;
     }
     if (_evidenceType == null || _evidenceType!.isEmpty) {
@@ -550,10 +543,12 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         '/api/v1/amial/me/kyc/residence',
         {
           'birth_governorate': _birthGovernorate!,
-          'residence_governorate': _residenceGovernorate!,
-          'residence_district': _residenceDistrict.text.trim(),
-          if (_residenceArea.text.trim().isNotEmpty)
-            'residence_area': _residenceArea.text.trim(),
+          'residence_governorate': _residenceLocation.governorateCode!,
+          'residence_district_id': '${_residenceLocation.districtId!}',
+          if (_residenceLocation.uzlahId != null)
+            'residence_uzlah_id': '${_residenceLocation.uzlahId!}',
+          if (_residenceLocation.villageId != null)
+            'residence_village_id': '${_residenceLocation.villageId!}',
           if (_residenceLandmark.text.trim().isNotEmpty)
             'residence_landmark': _residenceLandmark.text.trim(),
           'evidence_type': _evidenceType!,
@@ -1042,15 +1037,10 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           onChanged: (v) => setState(() => _birthGovernorate = v),
         ),
         const SizedBox(height: 10),
-        GovernoratePicker(
-          label: 'محافظة السكن الحالية',
-          value: _residenceGovernorate,
-          helper: 'اختر مكان إقامتك الفعلي الآن. المحافظة غير المدعومة لا تمنع التسجيل أو التوثيق.',
-          onChanged: (v) => setState(() => _residenceGovernorate = v),
+        YemenResidencePicker(
+          onChanged: (value) => setState(() => _residenceLocation = value),
         ),
         const SizedBox(height: 10),
-        _field(_residenceDistrict, 'المديرية الحالية'),
-        _field(_residenceArea, 'المنطقة / الحي — اختياري'),
         _field(_residenceLandmark, 'أقرب معلم — اختياري'),
         const SizedBox(height: 2),
         Container(
