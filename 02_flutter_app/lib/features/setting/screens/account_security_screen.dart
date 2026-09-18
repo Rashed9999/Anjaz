@@ -100,8 +100,12 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
       _snack('التأكيدُ لا يطابق الكلمةَ الجديدة', error: true);
       return;
     }
-    if (_newPass.text.length < 4) {
-      _snack('كلمةُ المرور أربعةُ محارفَ فأكثر', error: true);
+    if (_newPass.text.length < 8) {
+      _snack('كلمة المرور الجديدة يجب أن تكون 8 محارف على الأقل', error: true);
+      return;
+    }
+    if (!RegExp(r'[^0-9]').hasMatch(_newPass.text)) {
+      _snack('كلمة المرور الجديدة لا يجوز أن تكون أرقاماً فقط', error: true);
       return;
     }
 
@@ -244,16 +248,22 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
 
   Widget _pinCard() {
     final chosen = _status['pin_was_chosen'] == true;
+    final hasPin = _status['pin_is_set'] == true;
 
     return _card(
       title: 'رمز التحويل',
       subtitle: chosen
           ? 'رمزٌ مستقلٌّ يُطلب عند تحريك المال.'
-          : 'لم يُختَر بعد — وهو الآن كلمةُ مرورك. أدخلها في «الرمز الحالي».',
+          : hasPin
+              ? 'هذا حساب قديم ما زال رمزه مرتبطاً بسر التسجيل. أدخل الرمز الحالي ثم اختر رمزاً مستقلاً.'
+              : 'لم يُعيَّن رمز مالي بعد. أدخل كلمة مرور الدخول الحالية ثم اختر PIN مستقلاً.',
       icon: Icons.pin_rounded,
       children: [
-        _field(_curPin, 'الرمز الحالي',
-            key: const Key('security-current-pin')),
+        _field(
+          _curPin,
+          hasPin ? 'الرمز الحالي' : 'كلمة مرور الدخول الحالية',
+          key: const Key('security-current-pin'),
+        ),
         _field(_newPin, 'الرمز الجديد (٤ إلى ٦ أرقام)',
             key: const Key('security-new-pin'), digitsOnly: true, maxLength: 6),
         _field(_newPin2, 'تأكيد الرمز', digitsOnly: true, maxLength: 6),
