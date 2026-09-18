@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Services\Kyc\ResidenceVerificationService;
+use App\Services\Geo\YemenRegionsService;
 use App\Services\KycDocumentService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -32,14 +33,16 @@ class KycResidenceController extends Controller
         Request $request,
         ResidenceVerificationService $residence,
         KycDocumentService $documents,
+        YemenRegionsService $regions,
     ): JsonResponse {
         if ($denied = $this->customerOnly($request)) return $denied;
 
         $data = $request->validate([
             'birth_governorate' => ['required', 'string', 'max:64'],
             'residence_governorate' => ['required', 'string', 'max:64'],
-            'residence_district' => ['required', 'string', 'min:2', 'max:80'],
-            'residence_area' => ['nullable', 'string', 'max:120'],
+            'residence_district_id' => ['required', 'integer', 'min:1'],
+            'residence_uzlah_id' => ['nullable', 'integer', 'min:1'],
+            'residence_village_id' => ['nullable', 'integer', 'min:1'],
             'residence_landmark' => ['nullable', 'string', 'max:150'],
             'evidence_type' => ['required', 'string', Rule::in(array_keys(ResidenceVerificationService::EVIDENCE_TYPES))],
             'evidence_date' => ['nullable', 'date', 'before_or_equal:today'],
@@ -56,12 +59,17 @@ class KycResidenceController extends Controller
                 $request->file('evidence'),
             );
 
+            $selection = $regions->resolveSelection(
+                (string) $data['residence_governorate'],
+                (int) $data['residence_district_id'],
+                isset($data['residence_uzlah_id']) ? (int) $data['residence_uzlah_id'] : null,
+                isset($data['residence_village_id']) ? (int) $data['residence_village_id'] : null,
+            );
+
             $state = $residence->submit(
                 $request->user(),
                 (string) $data['birth_governorate'],
-                (string) $data['residence_governorate'],
-                (string) $data['residence_district'],
-                $data['residence_area'] ?? null,
+                $selection,
                 $data['residence_landmark'] ?? null,
                 (string) $data['evidence_type'],
                 $doc,
@@ -75,6 +83,10 @@ class KycResidenceController extends Controller
                     'BIRTH_GOVERNORATE_INVALID' => 'محافظة الميلاد غير معروفة.',
                     'RESIDENCE_GOVERNORATE_INVALID' => 'محافظة السكن غير معروفة.',
                     'RESIDENCE_EVIDENCE_TYPE_INVALID' => 'نوع دليل السكن غير مدعوم.',
+                    'DISTRICT_NOT_IN_GOVERNORATE' => 'المديرية المختارة لا تتبع محافظة السكن.',
+                    'UZLAH_NOT_IN_DISTRICT' => 'العزلة/المنطقة المختارة لا تتبع المديرية.',
+                    'VILLAGE_NOT_IN_UZLAH' => 'القرية/الحي المختار لا يتبع العزلة.',
+                    'VILLAGE_REQUIRES_UZLAH' => 'اختر العزلة/المنطقة قبل القرية/الحي.',
                     default => 'تعذر إرسال إثبات السكن. راجع البيانات وحاول مرة أخرى.',
                 },
             ], 422);
