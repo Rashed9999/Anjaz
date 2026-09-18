@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/kyc_verification/controllers/kyc_verify_controller.dart';
+import 'package:amial_pay/features/kyc_verification/screens/customer_verification_review_screen.dart';
 import 'package:amial_pay/features/kyc_verification/widgets/dotted_border_widget.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/util/styles.dart';
@@ -468,7 +469,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
         ),
       );
 
-  void _submit(KycVerifyController controller) {
+  Future<void> _submit(KycVerifyController controller) async {
     if (_identityNumberController.text.trim().length < 5) {
       showCustomSnackBarHelper('أدخل رقم هوية صحيحاً');
       return;
@@ -482,17 +483,64 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
       return;
     }
 
-    controller
-        .kycVerify(
+    final profile = Get.find<ProfileController>().userInfo;
+    final type = controller.dropDownSelectedValue;
+    final typeLabel = switch (type) {
+      'nid' => 'بطاقة هوية',
+      'passport' => 'جواز سفر',
+      'driving_licence' => 'رخصة قيادة',
+      _ => type,
+    };
+
+    final confirmed = await Get.to<bool>(
+      () => CustomerVerificationReviewScreen(
+        targetTier: 2,
+        rows: [
+          VerificationReviewRow(
+            'الاسم الكامل',
+            '${profile?.fName ?? ''} ${profile?.lName ?? ''}'.trim(),
+          ),
+          VerificationReviewRow('رقم الهاتف', profile?.phone ?? ''),
+          VerificationReviewRow('البريد الإلكتروني', profile?.email ?? ''),
+          VerificationReviewRow('رقم الحساب', profile?.accountNumber ?? ''),
+          VerificationReviewRow('نوع الهوية', typeLabel),
+          VerificationReviewRow(
+            'رقم الهوية',
+            _identityNumberController.text.trim(),
+          ),
+          VerificationReviewRow(
+            'خصوصية المراجعة',
+            _reviewMode == 'restricted_review'
+                ? 'خصوصية إضافية'
+                : 'مراجعة محمية',
+          ),
+        ],
+        documents: [
+          VerificationReviewDocument(
+            label: 'وجه الهوية',
+            path: controller.identityImage[0].path,
+          ),
+          VerificationReviewDocument(
+            label: 'ظهر الهوية',
+            path: controller.identityImage[1].path,
+          ),
+        ],
+        onConfirm: () => controller.kycVerify(
           _identityNumberController.text.trim(),
           reviewMode: _reviewMode,
-        )
-        .then((_) {
+        ),
+      ),
+    );
+
+    if (confirmed == true) {
       try {
-        Get.find<ProfileController>().getProfileData(isUpdate: true, reload: true);
+        await Get.find<ProfileController>()
+            .getProfileData(isUpdate: true, reload: true);
       } catch (_) {
-        // تحديث الملف تحسين واجهة فقط؛ نجاح رفع الهوية لا يعتمد عليه.
+        // تحديث الواجهة فقط؛ الأرشفة والرفع تمّا في الخادم بالفعل.
       }
-    });
+      Get.back(result: true);
+    }
   }
+
 }
