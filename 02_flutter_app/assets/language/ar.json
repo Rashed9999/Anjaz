@@ -938,5 +938,15 @@
   "email_profile_female": "أنثى",
   "email_profile_saving": "جارٍ الحفظ…",
   "email_profile_save": "حفظ البيانات",
-  "email_profile_required": "مطلوب"
+  "email_profile_required": "مطلوب",
+  "registration_password_min": "كلمة مرور الدخول يجب أن تكون 8 محارف على الأقل.",
+  "registration_password_not_numeric": "كلمة مرور الدخول لا يجوز أن تكون أرقاماً فقط.",
+  "registration_password_confirmation_mismatch": "تأكيد كلمة مرور الدخول غير مطابق.",
+  "registration_transaction_pin_digits": "رمز PIN المالي يجب أن يتكون من 4 أرقام.",
+  "registration_transaction_pin_weak": "اختر PIN مالياً غير متسلسل وغير مكرر.",
+  "registration_login_password_label": "كلمة مرور الدخول",
+  "registration_login_password_confirm_label": "تأكيد كلمة المرور",
+  "registration_financial_pin_label": "PIN مالي من 4 أرقام",
+  "registration_password_pin_separation_help": "كلمة المرور تفتح الحساب، أما PIN فيُطلب عند تحريك المال. لا تستخدم السر نفسه للاثنين.",
+  "terms_acceptance_required_to_continue": "اقرأ أحدث شروط الاستخدام ووافق عليها للمتابعة"
 }
