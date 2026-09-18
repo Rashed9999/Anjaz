@@ -22,6 +22,11 @@ class VerificationCenterController extends GetxController implements GetxService
   bool get isActionLoading => _isActionLoading;
   List<Map<String, dynamic>> get residenceOptions => _residenceOptions;
 
+  List<Map<String, dynamic>> get verificationDocuments =>
+      _optionList(_data?['verification_documents']);
+
+
+
   int get currentTier => _asInt(_map(_data?['tier'])['current']);
   bool get phoneVerified => _map(_data?['contact'])['phone_verified'] == true;
   String get identityStatus => _map(_data?['identity'])['status']?.toString() ?? 'not_submitted';
