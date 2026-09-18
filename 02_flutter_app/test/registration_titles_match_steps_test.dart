@@ -40,8 +40,13 @@ void main() {
     expect(quick, contains('labels[index]'));
   });
 
-  test('PIN موجود في الحساب الأساسي وKYC الكامل مؤجل لما بعد التسجيل', () {
-    expect(quick, contains("'رمز PIN يجب أن يتكون من 4 أرقام.'"));
+  test('كلمة الدخول وPIN المالي منفصلان وKYC الكامل مؤجل', () {
+    expect(quick, contains("'كلمة مرور الدخول يجب أن تكون 8 محارف على الأقل.'"));
+    expect(quick, contains("'رمز PIN المالي يجب أن يتكون من 4 أرقام.'"));
+    expect(quick, contains("'password': _password.text"));
+    expect(quick, contains("'password_confirmation': _passwordConfirm.text"));
+    expect(quick, contains("'transaction_pin': _pin.text"));
+    expect(quick, isNot(contains("'password': _pin.text")));
     expect(quick, contains('لا هوية ولا سيلفي في التسجيل الأساسي'));
     expect(completion, contains("appBar: AppBar(title: const Text('إكمال حسابي'))"));
     expect(completion, contains('widget.targetTier >= 2'));
