@@ -43,6 +43,7 @@ class KycOwnershipEvidenceController extends Controller
                 KycPrivacyService::MODE_STANDARD,
                 KycPrivacyService::MODE_RESTRICTED,
             ])],
+            'declaration_accepted' => ['required', 'accepted'],
             'selfie' => [
                 'required', 'file', 'max:8192',
                 'mimetypes:image/jpeg,image/png,image/heic,image/heif',
