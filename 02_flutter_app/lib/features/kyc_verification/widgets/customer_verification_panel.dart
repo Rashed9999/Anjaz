@@ -2,6 +2,7 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/kyc_verification/controllers/verification_center_controller.dart';
 import 'package:amial_pay/features/kyc_verification/domain/reposotories/verification_center_repo.dart';
 import 'package:amial_pay/features/kyc_verification/screens/complete_my_account_screen.dart';
+import 'package:amial_pay/features/kyc_verification/domain/customer_verification_level.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -59,12 +60,12 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
                 children: [
                   const Expanded(
                     child: Text(
-                      'جدول مستويات التوثيق',
+                      'حالات توثيق العميل',
                       style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                     ),
                   ),
                   Text(
-                    'مستواك: ${tier['name'] ?? 'غير موثق'}',
+                    'حالتك: ${tier['name'] ?? CustomerVerificationLevel.unverified.label}',
                     style: const TextStyle(fontSize: 11.5, color: Color(0xFF637083)),
                   ),
                 ],
@@ -117,10 +118,7 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                 ),
               ),
-              Text(
-                current <= 0 ? 'غير مفعّل' : 'Tier $current',
-                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
-              ),
+              _statusBadge(current),
             ],
           ),
           const SizedBox(height: 12),
@@ -140,7 +138,7 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'حدودك المالية غير مفعّلة بعد. أكمل متطلبات المستوى الأساسي لتفعيل الاستخدام المالي وحدوده.',
+                      'حدودك المالية غير مفعّلة بعد. أكمل متطلبات حالة عميل موثق جزئيا لتفعيل الاستخدام المالي وحدوده.',
                       style: TextStyle(fontSize: 12.5, height: 1.45, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -155,7 +153,7 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
               ),
               const SizedBox(height: 3),
               const Text(
-                'تُعرض الحركة المسجلة للحقيقة التاريخية فقط، ولا تعني أن المستوى غير المفعّل يملك حداً مالياً.',
+                'تُعرض الحركة المسجلة للحقيقة التاريخية فقط، ولا تعني أن حالة التوثيق الحالية تملك حداً مالياً.',
                 style: TextStyle(fontSize: 11.5, height: 1.4, color: Color(0xFF657184)),
               ),
             ],
@@ -250,7 +248,9 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
         color: current ? const Color(0xFFF2F6FC) : Colors.white,
         borderRadius: BorderRadius.circular(15),
         border: Border.all(
-          color: current ? const Color(0xFF7B9CC4) : const Color(0xFFE0E5EC),
+          color: current
+              ? CustomerVerificationLevel.fromTier(tier).color
+              : const Color(0xFFE0E5EC),
           width: current ? 1.4 : 1,
         ),
       ),
@@ -265,11 +265,13 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: completed ? const Color(0xFFE3F4E9) : const Color(0xFFEAF0F7),
+                  color: CustomerVerificationLevel.fromTier(tier).color,
                 ),
-                child: completed
-                    ? const Icon(Icons.check, size: 19, color: Color(0xFF177848))
-                    : Text('$tier', style: const TextStyle(fontWeight: FontWeight.w800)),
+                child: Icon(
+                  completed ? Icons.check : Icons.shield_outlined,
+                  size: 19,
+                  color: CustomerVerificationLevel.fromTier(tier).foreground,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -323,6 +325,25 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
               child: const Text('إكمال حسابي'),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _statusBadge(int tier) {
+    final level = CustomerVerificationLevel.fromTier(tier);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: level.color,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        level.label,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          color: level.foreground,
+        ),
       ),
     );
   }
