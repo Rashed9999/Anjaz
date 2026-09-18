@@ -6,6 +6,7 @@ import 'package:amial_pay/features/bill_pay/screens/bill_pay_providers_screen.da
 import 'package:amial_pay/features/donations/screens/donations_home_screen.dart';
 import 'package:amial_pay/features/family_fund/screens/my_funds_screen.dart';
 import 'package:amial_pay/features/kyc_verification/screens/complete_my_account_screen.dart';
+import 'package:amial_pay/features/kyc_verification/domain/customer_verification_level.dart';
 import 'package:amial_pay/features/me/domain/me_repo.dart';
 import 'package:amial_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -87,8 +88,10 @@ class _CustomerServicesHubScreenState
           ],
         ),
         content: Text(
-          '${service.title} تتطلب مستوى التوثيق '
-          '${service.requiredTier}. مستواك الحالي هو ${_currentTier()}. '
+          '${service.title} تتطلب حالة '
+          '${CustomerVerificationLevel.labelFor(service.requiredTier)}. '
+          'حالتك الحالية هي '
+          '${CustomerVerificationLevel.labelFor(_currentTier())}. '
           'أكمل التوثيق ثم عد إلى الخدمة.',
           style: const TextStyle(height: 1.6),
         ),
@@ -186,6 +189,7 @@ class _CustomerServicesHubScreenState
   }
 
   Widget _tierBanner(int tier) {
+    final level = CustomerVerificationLevel.fromTier(tier);
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
@@ -218,12 +222,28 @@ class _CustomerServicesHubScreenState
                   ),
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  'المستوى $tier',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: level.color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      child: Text(
+                        level.label,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: level.color,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -330,7 +350,9 @@ class _CustomerServicesHubScreenState
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        unlocked ? 'متاح' : 'يتطلب مستوى $requiredTier',
+        unlocked
+            ? 'متاح'
+            : CustomerVerificationLevel.labelFor(requiredTier),
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,
