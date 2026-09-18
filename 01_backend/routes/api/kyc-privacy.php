@@ -7,12 +7,19 @@ use App\Http\Controllers\Api\V1\Amial\KycOwnershipEvidenceController;
 use App\Http\Controllers\Api\V1\Amial\KycPrivacyController;
 use App\Http\Controllers\Api\V1\Amial\KycResidenceController;
 use App\Http\Controllers\Api\V1\Amial\VerificationStatusController;
+use App\Http\Controllers\Api\V1\Amial\YemenRegionsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('me/verification-status', [VerificationStatusController::class, 'show'])
     ->name('amial.me.verification-status');
 Route::get('me/kyc/completion', [KycCompletionController::class, 'show'])
     ->name('amial.me.kyc.completion');
+
+Route::prefix('geo/yemen')->name('amial.geo.yemen.')->group(function () {
+    Route::get('/districts', [YemenRegionsController::class, 'districts'])->name('districts');
+    Route::get('/uzaal', [YemenRegionsController::class, 'uzaal'])->name('uzaal');
+    Route::get('/villages', [YemenRegionsController::class, 'villages'])->name('villages');
+});
 
 Route::prefix('me/kyc/privacy')->name('amial.me.kyc.privacy.')->group(function () {
     Route::get('/', [KycPrivacyController::class, 'show'])->name('show');
