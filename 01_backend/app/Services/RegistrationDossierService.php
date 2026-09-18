@@ -107,6 +107,87 @@ class RegistrationDossierService
         });
     }
 
+    /**
+     * لقطة ثابتة لطلب التوثيق الذي أكده العميل بنفسه.
+     *
+     * لا تُحدَّث هذه اللقطة لاحقاً؛ الغرض منها أن تكون النسخة المطبوعة
+     * في الأرشيف مطابقة لما وافق عليه العميل وقت الإرسال.
+     *
+     * @param array<string,mixed> $payload
+     */
+    public function archiveVerificationSubmission(
+        User $subject,
+        int $targetTier,
+        array $payload,
+    ): RegistrationDossier {
+        if (! in_array($targetTier, [1, 2, 3], true)) {
+            throw new \InvalidArgumentException('VERIFICATION_TIER_INVALID');
+        }
+
+        $source = match ($targetTier) {
+            1 => RegistrationDossier::VERIFICATION_TIER_1,
+            2 => RegistrationDossier::VERIFICATION_TIER_2,
+            3 => RegistrationDossier::VERIFICATION_TIER_3,
+        };
+
+        $snapshot = array_merge([
+            'verification_target_tier' => $targetTier,
+            'verification_target_label' => match ($targetTier) {
+                1 => 'عميل موثق جزئيا',
+                2 => 'عميل موثق بهوية',
+                3 => 'عميل موثق',
+            },
+            'full_name' => trim((string) ($subject->f_name.' '.$subject->l_name)),
+            'account_number' => (string) ($subject->account_number ?? ''),
+            'phone' => (string) ($subject->phone ?? ''),
+            'email' => (string) ($subject->email ?? ''),
+            'birth_governorate' => (string) ($subject->birth_governorate ?? ''),
+            'residence_governorate' => (string) ($subject->residence_governorate ?? ''),
+            'residence_district' => (string) ($subject->residence_district ?? ''),
+            'residence_area' => (string) ($subject->residence_area ?? ''),
+            'residence_landmark' => (string) ($subject->residence_landmark ?? ''),
+            'identification_type' => (string) ($subject->identification_type ?? ''),
+            'identification_number' => (string) ($subject->identification_number ?? ''),
+            'identification_issue_date' => optional($subject->identification_issue_date)->format('Y-m-d')
+                ?? (string) ($subject->identification_issue_date ?? ''),
+            'identification_expiry_date' => optional($subject->identification_expiry_date)->format('Y-m-d')
+                ?? (string) ($subject->identification_expiry_date ?? ''),
+            'id_place_of_issue' => (string) ($subject->id_place_of_issue ?? ''),
+            'date_of_birth' => optional($subject->date_of_birth)->format('Y-m-d')
+                ?? (string) ($subject->date_of_birth ?? ''),
+            'confirmed_by_customer_at' => now()->toIso8601String(),
+        ], $payload);
+
+        $dossier = RegistrationDossier::create([
+            'reference' => (string) Str::ulid(),
+            'subject_type' => RegistrationDossier::CUSTOMER,
+            'subject_user_id' => $subject->id,
+            'source' => $source,
+            'state' => RegistrationDossier::SUBMITTED,
+            'phone_hash' => hash('sha256', (string) $subject->phone),
+            'payload_encrypted' => $snapshot,
+            'created_by_user_id' => $subject->id,
+            'confirmed_at' => now(),
+        ]);
+
+        $this->audit->record([
+            'actor_type' => 'customer',
+            'actor_user_id' => (int) $subject->id,
+            'subject_type' => 'registration_dossier',
+            'subject_id' => (string) $dossier->id,
+            'action' => 'CUSTOMER_VERIFICATION_DOSSIER_ARCHIVED',
+            'decision_code' => 'VERIFICATION_SUBMISSION_CONFIRMED',
+            'severity' => 'notice',
+            'context' => [
+                'reference' => $dossier->reference,
+                'target_tier' => $targetTier,
+                'source' => $source,
+            ],
+        ]);
+
+        return $dossier;
+    }
+
     /** @param array<string,mixed> $payload */
     public function archiveSelfRegistration(string $type, string $phone, User $subject, array $payload): RegistrationDossier
     {
