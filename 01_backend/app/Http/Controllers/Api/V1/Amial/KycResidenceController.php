@@ -72,6 +72,7 @@ class KycResidenceController extends Controller
                 'success' => false,
                 'code' => $e->getMessage(),
                 'message' => match ($e->getMessage()) {
+                    'BIRTH_GOVERNORATE_INVALID' => 'محافظة الميلاد غير معروفة.',
                     'RESIDENCE_GOVERNORATE_INVALID' => 'محافظة السكن غير معروفة.',
                     'RESIDENCE_EVIDENCE_TYPE_INVALID' => 'نوع دليل السكن غير مدعوم.',
                     default => 'تعذر إرسال إثبات السكن. راجع البيانات وحاول مرة أخرى.',
