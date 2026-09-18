@@ -52,7 +52,7 @@ use Illuminate\Support\Facades\Validator;
 class AccountSecurityController extends Controller
 {
     /** أدنى طولٍ لكلمة المرور الجديدة — والتسجيلُ اليومَ يقبل أربعةَ أرقام. */
-    public const MIN_PASSWORD = 4;
+    public const MIN_PASSWORD = 8;
 
     public function __construct(
         private readonly TransactionPinService $pins,
@@ -93,7 +93,14 @@ class AccountSecurityController extends Controller
     {
         $v = Validator::make($request->all(), [
             'current_password' => 'required|string',
-            'new_password' => 'required|string|min:'.self::MIN_PASSWORD.'|max:64|confirmed',
+            'new_password' => [
+                'required', 'string', 'min:8', 'max:64', 'confirmed',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (preg_match('/^\d+$/u', (string) $value) === 1) {
+                        $fail('كلمة المرور الجديدة لا يجوز أن تكون أرقاماً فقط.');
+                    }
+                },
+            ],
         ], [], [
             'current_password' => 'كلمة المرور الحالية',
             'new_password' => 'كلمة المرور الجديدة',
@@ -125,6 +132,15 @@ class AccountSecurityController extends Controller
         if (Hash::check($new, (string) $user->password)) {
             return $this->error('SAME_PASSWORD',
                 'الكلمةُ الجديدةُ هي القديمةُ نفسُها', 422);
+        }
+
+        if (! empty($user->transaction_pin)
+            && Hash::check($new, (string) $user->transaction_pin)) {
+            return $this->error(
+                'PASSWORD_EQUALS_PIN',
+                'كلمة المرور الجديدة لا يجوز أن تساوي رمز التحويل',
+                422,
+            );
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -192,6 +208,35 @@ class AccountSecurityController extends Controller
             return $this->error('PIN_EQUALS_PASSWORD',
                 'لا يكون الرمزُ كلمةَ مرورك — اختر رمزاً مختلفاً، '
                 .'فالغرضُ من الرمز أن يكون سرّاً ثانياً', 422);
+        }
+
+        // حسابات ما قبل فصل الأسرار، أو نسخة قديمة أنشأت الحساب بلا PIN:
+        // «current» هنا هو كلمة مرور الدخول. بعد أول تعيين ينتقل الباب
+        // نهائياً إلى TransactionPinService وعدّاد المحاولات.
+        if (empty($user->transaction_pin)) {
+            if (! Hash::check((string) $request->input('current'), (string) $user->password)) {
+                $this->audit->record([
+                    'actor_type' => 'user',
+                    'actor_user_id' => $user->id,
+                    'subject_type' => 'pin',
+                    'subject_id' => (string) $user->id,
+                    'action' => 'PIN_INITIAL_SETUP_REFUSED',
+                    'decision_code' => 'BAD_CURRENT_PASSWORD',
+                    'severity' => 'warning',
+                ]);
+
+                return $this->error(
+                    'BAD_PASSWORD',
+                    'كلمة المرور الحالية غير صحيحة',
+                    422,
+                );
+            }
+
+            $this->pins->setPin($user, $new);
+
+            return $this->ok([
+                'pin_was_chosen' => true,
+            ], 'PIN_SET', 'تم تعيين رمز التحويل وأصبح مستقلاً عن كلمة المرور');
         }
 
         if (! $this->pins->changePin($user, (string) $request->input('current'), $new)) {
