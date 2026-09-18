@@ -72,13 +72,34 @@ class AccountDossierPrintService
     public function data(User $user, ?User $reviewer = null): array
     {
         $dossier = RegistrationDossier::where('subject_user_id', $user->id)
-            ->latest('id')->first();
+            ->whereNotIn('source', RegistrationDossier::VERIFICATION_SOURCES)
+            ->latest('id')
+            ->first();
+
+        $verificationDossiers = RegistrationDossier::query()
+            ->where('subject_user_id', $user->id)
+            ->whereIn('source', RegistrationDossier::VERIFICATION_SOURCES)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (RegistrationDossier $item) => [
+                'reference' => (string) $item->reference,
+                'source' => (string) $item->source,
+                'target_tier' => (int) ((array) $item->payload_encrypted)['verification_target_tier'],
+                'target_label' => (string) (((array) $item->payload_encrypted)['verification_target_label'] ?? ''),
+                'payload' => (array) $item->payload_encrypted,
+                'confirmed_at' => optional($item->confirmed_at)->format('Y-m-d H:i')
+                    ?: optional($item->created_at)->format('Y-m-d H:i')
+                    ?: '—',
+            ])
+            ->values()
+            ->all();
 
         return [
             'user' => $user,
             'identity' => $this->identity($user),
             'dossier' => $dossier,
             'payload' => $dossier ? (array) $dossier->payload_encrypted : [],
+            'verification_dossiers' => $verificationDossiers,
             'evidence' => $this->evidence->for($user, 2, $reviewer),
             'images' => $this->images($user),
             'printed_at' => now()->format('Y-m-d H:i'),
@@ -95,26 +116,35 @@ class AccountDossierPrintService
      */
     private function identity(User $user): array
     {
-        $governorate = YemenGovernorates::name(
-            YemenGovernorates::codeFromName(
-                (string) ($user->residence_governorate ?: $user->origin_governorate)));
+        $residence = YemenGovernorates::name(
+            YemenGovernorates::codeFromName((string) ($user->residence_governorate ?? ''))
+        );
+        $birth = YemenGovernorates::name(
+            YemenGovernorates::codeFromName((string) ($user->birth_governorate ?? ''))
+        );
+        $tierLabel = match ((int) ($user->kyc_tier ?? 0)) {
+            1 => 'عميل موثق جزئيا',
+            2 => 'عميل موثق بهوية',
+            3 => 'عميل موثق',
+            default => 'عميل غير موثق',
+        };
 
-        $rows = [
+        return [
             ['الاسم', trim((string) ($user->f_name.' '.$user->l_name)) ?: '—'],
             ['رقم الحساب', (string) ($user->account_number ?: '—')],
             ['رقم الجوال', (string) ($user->phone ?: '—')],
             ['نوع الحساب', $this->typeLabel((int) $user->type)],
+            ['محافظة الميلاد', $birth ?: 'غير محدَّدة'],
+            ['محافظة السكن', $residence ?: 'غير محدَّدة'],
+            ['المديرية', (string) ($user->residence_district ?: 'غير محدَّدة')],
+            ['الحي / المنطقة', (string) ($user->residence_area ?: 'غير محدَّدة')],
+            ['أقرب معلم', (string) ($user->residence_landmark ?: '—')],
             ['رقم الهوية', (string) ($user->identification_number ?: 'غير مسجَّل')],
-            ['محافظة السكن', $governorate ?: 'غير محدَّدة'],
-            ['المنطقة', (string) ($user->zone_code ?: 'غير محدَّدة')],
+            ['حالة التوثيق', $tierLabel],
+            ['إثبات الهاتف', ((int) ($user->is_phone_verified ?? 0) === 1) ? 'مثبت' : 'غير مثبت'],
             ['حالة الحساب', ((int) $user->is_active === 1) ? 'نشط' : 'موقوف'],
-            ['توثيق الهويّة', ((int) ($user->is_kyc_verified ?? 0) === 1)
-                ? 'موثَّق' : 'غير موثَّق'],
-            ['فئة التوثيق', (string) ((int) ($user->kyc_tier ?? 0))],
             ['تاريخ الإنشاء', optional($user->created_at)->format('Y-m-d H:i') ?: '—'],
         ];
-
-        return $rows;
     }
 
     private function typeLabel(int $type): string
