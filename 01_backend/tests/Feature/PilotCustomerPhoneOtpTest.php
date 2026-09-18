@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\OTPController;
 use App\Models\KycDocument;
 use App\Models\User;
 use App\Services\Kyc\ResidenceVerificationService;
+use App\Services\Geo\YemenRegionsService;
 use App\Services\KycTierService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -115,12 +116,16 @@ class PilotCustomerPhoneOtpTest extends TestCase
         ]);
 
         $service = app(ResidenceVerificationService::class);
+        $selection = app(YemenRegionsService::class)->resolveSelection(
+            'YE-AD',
+            29,
+            160,
+            2177,
+        );
         $submitted = $service->submit(
             $user->fresh(),
             'YE-SN',
-            'YE-AD',
-            'المعلا',
-            'حي الشهداء',
+            $selection,
             'قرب المستشفى',
             'lease_contract',
             $document,
@@ -168,12 +173,16 @@ class PilotCustomerPhoneOtpTest extends TestCase
         ]);
 
         $service = app(ResidenceVerificationService::class);
+        $selection = app(YemenRegionsService::class)->resolveSelection(
+            'YE-SN',
+            13,
+            16,
+            81,
+        );
         $submitted = $service->submit(
             $user->fresh(),
             'YE-TA',
-            'YE-SN',
-            'السبعين',
-            'حدة',
+            $selection,
             'قرب الجامعة',
             'lease_contract',
             $document,
