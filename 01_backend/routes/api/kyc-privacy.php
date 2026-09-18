@@ -17,8 +17,6 @@ Route::get('me/kyc/completion', [KycCompletionController::class, 'show'])
 
 Route::prefix('geo/yemen')->name('amial.geo.yemen.')->group(function () {
     Route::get('/districts', [YemenRegionsController::class, 'districts'])->name('districts');
-    Route::get('/uzaal', [YemenRegionsController::class, 'uzaal'])->name('uzaal');
-    Route::get('/villages', [YemenRegionsController::class, 'villages'])->name('villages');
 });
 
 Route::prefix('me/kyc/privacy')->name('amial.me.kyc.privacy.')->group(function () {
