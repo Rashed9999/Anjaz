@@ -116,16 +116,15 @@ class PilotCustomerPhoneOtpTest extends TestCase
         ]);
 
         $service = app(ResidenceVerificationService::class);
-        $selection = app(YemenRegionsService::class)->resolveSelection(
+        $selection = app(YemenRegionsService::class)->resolveDistrict(
             'YE-AD',
             29,
-            160,
-            2177,
         );
         $submitted = $service->submit(
             $user->fresh(),
             'YE-SN',
             $selection,
+            'دار سعد',
             'قرب المستشفى',
             'lease_contract',
             $document,
@@ -173,16 +172,15 @@ class PilotCustomerPhoneOtpTest extends TestCase
         ]);
 
         $service = app(ResidenceVerificationService::class);
-        $selection = app(YemenRegionsService::class)->resolveSelection(
+        $selection = app(YemenRegionsService::class)->resolveDistrict(
             'YE-SN',
             13,
-            16,
-            81,
         );
         $submitted = $service->submit(
             $user->fresh(),
             'YE-TA',
             $selection,
+            'حي الجامعة',
             'قرب الجامعة',
             'lease_contract',
             $document,
