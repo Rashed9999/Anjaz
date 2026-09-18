@@ -15,6 +15,14 @@
 @push('script')
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (() => { const root='{{ url('admin/amial/registration-dossiers') }}', body=document.getElementById('dossiers-body'), esc=s=>String(s??'—').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-fetch(root+'/index',{headers:{Accept:'application/json'}}).then(r=>r.json()).then(j=>{ const rows=j.data||[]; body.innerHTML=rows.length?rows.map(d=>`<tr><td class="font-monospace small">${esc(d.reference)}</td><td>${d.type==='merchant'?'منشأة':'عميل'}</td><td>${d.subject_user_id?`#${d.subject_user_id}`:'—'}</td><td>${esc(d.state)}</td><td>${esc(d.creator)}</td><td class="small">${esc(d.created_at)}</td><td><a class="btn btn-sm btn-outline-primary" target="_blank" href="${root}/${encodeURIComponent(d.reference)}/pdf">طباعة PDF</a>${d.has_paper_form?` <a class="btn btn-sm btn-outline-secondary" target="_blank" href="${root}/${encodeURIComponent(d.reference)}/paper">النسخة الموقعة</a>`:''}</td></tr>`).join(''):'<tr><td colspan="7" class="text-center text-muted py-4">لا ملفات بعد</td></tr>'; }).catch(()=>body.innerHTML='<tr><td colspan="7" class="text-center text-danger py-4">تعذر تحميل الأرشيف</td></tr>'); })();
+    const sourceLabel=s=>({
+      self_service:'تسجيل ذاتي',
+      staff_assisted:'تسجيل بمساعدة موظف',
+      paper_archive:'أرشيف ورقي',
+      verification_tier_1:'توثيق — عميل موثق جزئيا',
+      verification_tier_2:'توثيق — عميل موثق بهوية',
+      verification_tier_3:'توثيق — عميل موثق'
+    }[s]||s||'—');
+fetch(root+'/index',{headers:{Accept:'application/json'}}).then(r=>r.json()).then(j=>{ const rows=j.data||[]; body.innerHTML=rows.length?rows.map(d=>`<tr><td class="font-monospace small">${esc(d.reference)}</td><td>${d.type==='merchant'?'منشأة':'عميل'}<div class="small text-muted">${sourceLabel(d.source)}</div></td><td>${d.subject_user_id?`#${d.subject_user_id}`:'—'}</td><td>${esc(d.state)}</td><td>${esc(d.creator)}</td><td class="small">${esc(d.created_at)}</td><td><a class="btn btn-sm btn-outline-primary" target="_blank" href="${root}/${encodeURIComponent(d.reference)}/pdf">طباعة PDF</a>${d.has_paper_form?` <a class="btn btn-sm btn-outline-secondary" target="_blank" href="${root}/${encodeURIComponent(d.reference)}/paper">النسخة الموقعة</a>`:''}</td></tr>`).join(''):'<tr><td colspan="7" class="text-center text-muted py-4">لا ملفات بعد</td></tr>'; }).catch(()=>body.innerHTML='<tr><td colspan="7" class="text-center text-danger py-4">تعذر تحميل الأرشيف</td></tr>'); })();
 </script>
 @endpush
