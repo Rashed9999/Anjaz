@@ -441,7 +441,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       }
       if (!mounted) return;
       setState(() => _step = 3);
-      _snack('تم إثبات ملكية الهاتف. حسابك الآن Tier 1 بانتظار إثبات السكن.', error: false);
+      _snack('تم إثبات ملكية الهاتف. حسابك الآن موثق جزئيا بانتظار إثبات السكن.', error: false);
     } catch (_) {
       _snack('تعذر التحقق من رمز الهاتف.');
     } finally {
@@ -1059,7 +1059,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _phoneVerified ? 1 : 0,
     );
     final message = !_phoneVerified
-        ? 'تم إنشاء حسابك. أثبت ملكية الهاتف لاحقاً لتفعيل المستوى الأساسي.'
+        ? 'تم إنشاء حسابك. أثبت ملكية الهاتف لاحقاً للانتقال إلى عميل موثق جزئيا.'
         : _residenceSubmitted
             ? 'تم إنشاء حسابك وإثبات هاتفك، وإثبات السكن الآن في قائمة المراجعة. ستفتح الحركة المالية بعد اعتماده.'
             : 'تم إنشاء حسابك وإثبات هاتفك. بقي إثبات محل الإقامة قبل تشغيل الحركة المالية.';
