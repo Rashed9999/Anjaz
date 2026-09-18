@@ -94,7 +94,7 @@ class _CustomerServicesHubScreenState
         ),
         actions: [
           TextButton(
-            onPressed: Get.back,
+            onPressed: () => Get.back(),
             child: const Text('لاحقاً'),
           ),
           FilledButton(
@@ -159,7 +159,9 @@ class _CustomerServicesHubScreenState
                 final tier = _currentTier();
 
                 return RefreshIndicator(
-                  onRefresh: me.load,
+                  onRefresh: () async {
+                    await me.load();
+                  },
                   color: AmialColors.primary,
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
