@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\AuditService;
 use App\Services\EmailIdentityService;
 use App\Services\Kyc\KycPrivacyService;
+use App\Services\LegalTermsService;
 use App\Services\Otp\EmailOtpService;
 use App\Services\ZoneAssignmentService;
 use App\Support\Phone;
@@ -22,9 +23,10 @@ use RuntimeException;
 /**
  * AMIAL-QUICK-REG-001 — إنشاء محفظة أساسية من أربع معلومات فقط.
  *
- * الاسم + الهاتف + البريد + PIN. لا هوية ولا سيلفي ولا دخل ولا PEP هنا.
- * ملكية البريد تُثبت قبل الإنشاء، وملكية الهاتف هي الخطوة التالية التي
- * ترفع الحساب إلى Tier 1. الحركة المالية تبقى خلف الإقامة الموثقة.
+ * الاسم + الهاتف + البريد + كلمة مرور دخول + PIN مالي مستقل.
+ * لا هوية ولا سيلفي ولا دخل ولا PEP هنا. ملكية البريد تُثبت قبل الإنشاء،
+ * وملكية الهاتف هي الخطوة التالية التي ترفع الحساب إلى Tier 1.
+ * الحركة المالية تبقى خلف الإقامة الموثقة.
  */
 class ProgressiveRegistrationController extends Controller
 {
@@ -32,6 +34,7 @@ class ProgressiveRegistrationController extends Controller
         private readonly EmailOtpService $otp,
         private readonly EmailIdentityService $identities,
         private readonly AuditService $audit,
+        private readonly LegalTermsService $legalTerms,
     ) {}
 
     public function register(Request $request): JsonResponse
@@ -41,7 +44,27 @@ class ProgressiveRegistrationController extends Controller
             'dial_country_code' => ['required', 'string', 'max:8'],
             'phone' => ['required', 'string', 'min:5', 'max:20'],
             'email' => ['required', 'email', 'max:255'],
-            'password' => ['required', 'regex:/^\d{4}$/'],
+            // P0-CUSTOMER-CREDENTIAL-SEPARATION:
+            // كلمةُ الدخول ليست PIN. التسجيل الجديد يرفض كلمةً قصيرة أو رقمية فقط،
+            // ويطلب PIN مالياً مستقلاً من أربعة أرقام.
+            'password' => [
+                'required', 'string', 'min:8', 'max:64', 'confirmed',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (preg_match('/^\d+$/u', (string) $value) === 1) {
+                        $fail('كلمة المرور لا يجوز أن تكون أرقاماً فقط.');
+                    }
+                },
+            ],
+            'transaction_pin' => [
+                'required', 'regex:/^\d{4}$/', 'different:password',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $weak = ['0000','1111','2222','3333','4444','5555','6666','7777','8888','9999','1234','4321','0123'];
+                    if (in_array((string) $value, $weak, true)) {
+                        $fail('اختر رمز PIN غير متسلسل وغير مكرر.');
+                    }
+                },
+            ],
+            'locale' => ['nullable', 'in:ar,en'],
             'email_challenge_id' => ['required', 'string', 'size:26'],
             'email_verification_token' => ['required', 'string', 'min:32', 'max:200'],
             // الموافقة ليست «معلومة خامسة» عن العميل؛ لكنها قرار قانوني
@@ -109,7 +132,17 @@ class ProgressiveRegistrationController extends Controller
                     $user->identification_image = json_encode([]);
                 }
                 if (Schema::hasColumn('users', 'transaction_pin')) {
-                    $user->transaction_pin = (string) $request->input('password');
+                    // حقل User يحمل cast=hashed؛ لا نخزن PIN صريحاً.
+                    $user->transaction_pin = (string) $request->input('transaction_pin');
+                }
+                if (Schema::hasColumn('users', 'transaction_pin_set_at')) {
+                    $user->transaction_pin_set_at = now();
+                }
+                if (Schema::hasColumn('users', 'requires_pin_setup')) {
+                    $user->requires_pin_setup = false;
+                }
+                if (Schema::hasColumn('users', 'pin_failed_attempts')) {
+                    $user->pin_failed_attempts = 0;
                 }
                 if (Schema::hasColumn('users', 'kyc_tier')) {
                     $user->kyc_tier = 0;
@@ -127,6 +160,21 @@ class ProgressiveRegistrationController extends Controller
                 EMoney::firstOrCreate(['user_id' => $user->id]);
                 $this->identities->markCurrentEmailVerified($user);
                 app(KycPrivacyService::class)->ensure($user);
+
+                // checkbox التسجيل يصبح قبولاً حقيقياً للإصدار القانوني الحالي،
+                // لا مجرد boolean في سجل التدقيق. إن لم يُنشر إصدار بعد فلا
+                // نسجّل قبولاً وهمياً؛ وحين يُنشر سيحجبه amial.terms حتى يقبله.
+                $locale = (string) $request->input('locale', 'ar');
+                $currentTerm = $this->legalTerms->currentTerm($locale);
+                if ($currentTerm !== null) {
+                    $this->legalTerms->accept(
+                        $user,
+                        $currentTerm,
+                        $request->ip(),
+                        (string) $request->userAgent(),
+                        $request->header('X-Device-Id'),
+                    );
+                }
 
                 DB::table('otp_challenges')->where('id', $challenge->id)->update([
                     'user_id' => $user->id,
@@ -149,6 +197,8 @@ class ProgressiveRegistrationController extends Controller
                         'email_verified' => true,
                         'phone_verified' => false,
                         'terms_accepted' => true,
+                        'legal_version' => $currentTerm?->version,
+                        'credentials_separated' => true,
                         'zone' => ZoneAssignmentService::ZONE_UNKNOWN,
                     ],
                 ]);
@@ -187,6 +237,7 @@ class ProgressiveRegistrationController extends Controller
             'data' => [
                 'user_id' => (int) $user->id,
                 'wallet_created' => true,
+                'transaction_pin_configured' => true,
                 'kyc_tier' => 0,
                 'tier_name' => 'غير موثق',
                 'access_token' => $token,
