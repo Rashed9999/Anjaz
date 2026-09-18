@@ -102,6 +102,8 @@ class ResidenceVerificationService
 
         return [
             'status' => $latest?->status ?? 'not_submitted',
+            'birth_governorate' => $user->birth_governorate ?? null,
+            'birth_governorate_name' => YemenGovernorates::name($user->birth_governorate ?? null),
             'declared_governorate' => $latest?->declared_governorate ?? $user->residence_governorate,
             'declared_governorate_name' => YemenGovernorates::name(
                 $latest?->declared_governorate ?? $user->residence_governorate
@@ -110,6 +112,9 @@ class ResidenceVerificationService
             'verified_governorate_name' => YemenGovernorates::name($verified),
             'operational' => $verified !== null && YemenGovernorates::isOperational($verified),
             'verification_id' => $latest?->id,
+            'residence_district' => $user->residence_district ?? null,
+            'residence_area' => $user->residence_area ?? null,
+            'residence_landmark' => $user->residence_landmark ?? null,
             'evidence_type' => $latest?->evidence_type,
             'evidence_strength' => $latest?->evidence_strength,
             'evidence_date' => $latest?->evidence_date,
@@ -336,6 +341,8 @@ class ResidenceVerificationService
                 'r.id', 'r.user_id', 'r.kyc_document_id', 'r.declared_governorate',
                 'r.evidence_type', 'r.evidence_strength', 'r.evidence_date', 'r.submitted_at',
                 'u.f_name', 'u.l_name', 'u.phone',
+                'u.birth_governorate', 'u.residence_district',
+                'u.residence_area', 'u.residence_landmark',
             ])
             ->map(fn ($row) => [
                 'id' => (int) $row->id,
@@ -343,8 +350,13 @@ class ResidenceVerificationService
                 'name' => trim((string) ($row->f_name . ' ' . $row->l_name)) ?: '—',
                 'phone' => (string) ($row->phone ?? '—'),
                 'kyc_document_id' => $row->kyc_document_id ? (int) $row->kyc_document_id : null,
+                'birth_governorate' => (string) ($row->birth_governorate ?? ''),
+                'birth_governorate_name' => YemenGovernorates::name($row->birth_governorate ?? null),
                 'governorate' => (string) $row->declared_governorate,
                 'governorate_name' => YemenGovernorates::name($row->declared_governorate),
+                'residence_district' => (string) ($row->residence_district ?? ''),
+                'residence_area' => (string) ($row->residence_area ?? ''),
+                'residence_landmark' => (string) ($row->residence_landmark ?? ''),
                 'operational' => YemenGovernorates::isOperational($row->declared_governorate),
                 'evidence_type' => (string) $row->evidence_type,
                 'evidence_label' => self::EVIDENCE_TYPES[$row->evidence_type]['label'] ?? $row->evidence_type,
