@@ -14,6 +14,7 @@ use App\Services\FamilyFundService;
 use App\Services\KycTierService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -212,7 +213,7 @@ class KycCrossTierServiceGuardTest extends TestCase
 
     private function customerAtTier(int $tier): User
     {
-        return User::factory()->create([
+        $user = User::factory()->create([
             'type' => 2,
             'role' => 'customer',
             'kyc_tier' => $tier,
@@ -220,11 +221,36 @@ class KycCrossTierServiceGuardTest extends TestCase
             'is_phone_verified' => $tier >= 1 ? 1 : 0,
             'zone_code' => 'SOUTH',
             'residence_governorate' => 'YE-AD',
-            'verified_residence_governorate' => 'YE-AD',
-            'residence_verified_at' => now(),
+            'verified_residence_governorate' => $tier >= 1 ? 'YE-AD' : null,
+            'residence_verified_at' => $tier >= 1 ? now() : null,
             'sanction_status' => 'clear',
             'is_active' => 1,
         ]);
+
+        // منذ AMIAL-PROGRESSIVE-KYC أصبح «موثق جزئيا» يعني هاتفاً مثبتاً
+        // + قرار إقامة معتمداً فعلياً، لا مجرد قيم محفوظة في users.
+        // الاختبار الذي يريد عميل Tier 1+ مؤهلاً يجب أن ينشئ هذا القرار.
+        if ($tier >= 1) {
+            $verificationId = DB::table('residence_verifications')->insertGetId([
+                'user_id' => (int) $user->id,
+                'kyc_document_id' => null,
+                'declared_governorate' => 'YE-AD',
+                'evidence_type' => 'test_verified_residence',
+                'evidence_strength' => 'strong',
+                'status' => 'verified',
+                'submitted_at' => now(),
+                'reviewed_at' => now(),
+                'decision_reason' => 'بيانات اختبار مؤهلة للحالة المطلوبة.',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $user->forceFill([
+                'residence_verification_id' => $verificationId,
+            ])->save();
+        }
+
+        return $user->fresh();
     }
 
     private function requestAs(User $user, array $data = []): Request
