@@ -534,6 +534,10 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _snack('اكتب اسم الحي أو المنطقة التي تسكن فيها.');
       return;
     }
+    if (_residenceArea.text.trim().length < 2) {
+      _snack('اكتب اسم الحي أو المنطقة.');
+      return;
+    }
     if (_evidenceType == null || _evidenceType!.isEmpty) {
       _snack('اختر نوع دليل السكن.');
       return;
