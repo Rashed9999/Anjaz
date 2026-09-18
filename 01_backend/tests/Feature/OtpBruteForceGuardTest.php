@@ -9,13 +9,13 @@ use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 /**
- * AMIAL-OTP-BRUTEFORCE-001 — **رمزٌ من أربعة أرقام بلا عدّادٍ ولا أجل.**
+ * AMIAL-OTP-BRUTEFORCE-001 — **رمزٌ من ستة أرقام بلا عدّادٍ ولا أجل.**
  *
  * ══════════════════════════════════════════════════════════════════════
  * `OTPController::verifyOtp` كانت تسأل «أيوجد صفٌّ بهذا الهاتف وهذا
  * الرمز؟» ثمّ تنتهي:
  *
- *   ① لا عدّادَ محاولات — والمساحةُ عشرةُ آلاف، والحدُّ العامّ مئةٌ في
+ *   ① لا عدّادَ محاولات — والمساحةُ مليون احتمال، والحدُّ العامّ مئةٌ في
  *      الدقيقة. تُستنفد المساحةُ كلُّها في ساعةٍ ونصف بلا تنبيهٍ واحد.
  *   ② ولا أجلَ — `created_at` مكتوبٌ ولا يُقرأ، فرمزُ الشهر الماضي
  *      يُقبل اليوم.
@@ -68,7 +68,7 @@ class OtpBruteForceGuardTest extends TestCase
         ]);
     }
 
-    private function seedOtp(string $otp = '1234', ?string $createdAt = null): void
+    private function seedOtp(string $otp = '654321', ?string $createdAt = null): void
     {
         DB::table('phone_verifications')->updateOrInsert(['phone' => $this->user->phone], [
             'otp' => $otp,
@@ -95,30 +95,30 @@ class OtpBruteForceGuardTest extends TestCase
     public function test_a_correct_code_still_works(): void
     {
         // حارسٌ لا يُثبت أنّ الطريقَ السليم يعمل يُغلق البابَ على الجميع.
-        $this->seedOtp('4321');
+        $this->seedOtp('654321');
 
-        $this->try('4321')->assertOk();
+        $this->try('654321')->assertOk();
 
         $this->assertDatabaseMissing('phone_verifications', ['phone' => $this->user->phone]);
     }
 
     public function test_wrong_attempts_are_counted(): void
     {
-        $this->seedOtp('4321');
+        $this->seedOtp('654321');
 
-        $this->try('0000')->assertStatus(404);
+        $this->try('000000')->assertStatus(404);
 
         $this->assertSame(1, (int) DB::table('phone_verifications')
             ->where('phone', $this->user->phone)->value('otp_hit_count'),
-            'المحاولةُ الخاطئة لا تُعدّ — والمساحةُ عشرةُ آلافٍ تُمسح بلا أثر');
+            'المحاولةُ الخاطئة لا تُعدّ — والمساحةُ مليون احتمالٍ تُمسح بلا أثر');
     }
 
     public function test_the_account_is_blocked_at_the_threshold(): void
     {
-        $this->seedOtp('4321');
+        $this->seedOtp('654321');
 
         for ($i = 0; $i < 5; $i++) {
-            $this->try('000' . $i);
+            $this->try('00000' . $i);
         }
 
         $this->assertSame(1, (int) DB::table('phone_verifications')
@@ -129,25 +129,25 @@ class OtpBruteForceGuardTest extends TestCase
     {
         // **وهذا هو معنى الحظر.** حظرٌ يُرفع بإدخال الرمز الصحيح ليس
         // حظراً — هو ما يبحث عنه المهاجم أصلاً.
-        $this->seedOtp('4321');
+        $this->seedOtp('654321');
 
         for ($i = 0; $i < 5; $i++) {
-            $this->try('000' . $i);
+            $this->try('00000' . $i);
         }
 
-        $this->try('4321')->assertStatus(403);
+        $this->try('654321')->assertStatus(403);
     }
 
     public function test_the_refusal_says_how_long_to_wait(): void
     {
         // (الدرس المكتوب: رفضٌ لا يقول سببه يُرسل المستعمل إلى الدعم.)
-        $this->seedOtp('4321');
+        $this->seedOtp('654321');
 
         for ($i = 0; $i < 5; $i++) {
-            $this->try('000' . $i);
+            $this->try('00000' . $i);
         }
 
-        $body = $this->try('4321')->json('errors.0');
+        $body = $this->try('654321')->json('errors.0');
 
         $this->assertSame('otp_block_time', $body['code']);
         $this->assertNotEmpty($body['message']);
@@ -155,9 +155,9 @@ class OtpBruteForceGuardTest extends TestCase
 
     public function test_the_user_is_told_how_many_attempts_remain(): void
     {
-        $this->seedOtp('4321');
+        $this->seedOtp('654321');
 
-        $msg = $this->try('0000')->json('errors.0.message');
+        $msg = $this->try('000000')->json('errors.0.message');
 
         $this->assertStringContainsString('4', $msg, 'لا يُقال كم بقي من محاولة');
     }
@@ -172,7 +172,7 @@ class OtpBruteForceGuardTest extends TestCase
 
         $this->seedOtp('4321', now()->subSeconds($lifetime + 60)->toDateTimeString());
 
-        $this->try('4321')->assertStatus(410);
+        $this->try('654321')->assertStatus(410);
     }
 
     public function test_an_expired_code_is_destroyed_not_left_lying(): void
@@ -181,7 +181,7 @@ class OtpBruteForceGuardTest extends TestCase
         $lifetime = (int) config('amial.otp.lifetime_seconds', 600);
 
         $this->seedOtp('4321', now()->subSeconds($lifetime + 60)->toDateTimeString());
-        $this->try('4321');
+        $this->try('654321');
 
         $this->assertDatabaseMissing('phone_verifications', ['phone' => $this->user->phone]);
     }
@@ -190,7 +190,7 @@ class OtpBruteForceGuardTest extends TestCase
     {
         $this->seedOtp('4321', now()->subSeconds(30)->toDateTimeString());
 
-        $this->try('4321')->assertOk();
+        $this->try('654321')->assertOk();
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -201,7 +201,7 @@ class OtpBruteForceGuardTest extends TestCase
     {
         // (القاعدة ٧) لا يُقال «الرمز خطأ» لمن لم يطلب رمزاً — الجوابان
         // مختلفان، والخلطُ يُرسل المستعمل يبحث عن رسالةٍ لم تُرسَل.
-        $body = $this->try('4321')->assertStatus(404)->json('errors.0.message');
+        $body = $this->try('654321')->assertStatus(404)->json('errors.0.message');
 
         $this->assertStringContainsString('لم يُطلب', $body);
     }
