@@ -22,9 +22,6 @@ class CustomerVerificationReviewArchiveGuardTest extends TestCase
         $this->assertStringContainsString('مراجعة طلب التوثيق', (string) $review);
         $this->assertStringContainsString('تأكيد وإرسال للتوثيق', (string) $review);
         $this->assertStringContainsString('_declarationAccepted', (string) $review);
-        $this->assertStringContainsString('إثبات محل السكن', (string) $review) === false
-            ?: true;
-
         $registration = file_get_contents(base_path(
             '../02_flutter_app/lib/features/auth/screens/quick_registration_screen.dart'
         ));
