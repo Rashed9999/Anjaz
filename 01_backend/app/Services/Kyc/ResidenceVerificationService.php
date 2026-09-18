@@ -114,10 +114,6 @@ class ResidenceVerificationService
             'verification_id' => $latest?->id,
             'residence_district' => $user->residence_district ?? null,
             'residence_district_id' => $user->residence_district_geo_id ?? null,
-            'residence_uzlah' => $user->residence_uzlah ?? null,
-            'residence_uzlah_id' => $user->residence_uzlah_geo_id ?? null,
-            'residence_village' => $user->residence_village ?? null,
-            'residence_village_id' => $user->residence_village_geo_id ?? null,
             'residence_area' => $user->residence_area ?? null,
             'residence_landmark' => $user->residence_landmark ?? null,
             'evidence_type' => $latest?->evidence_type,
@@ -133,6 +129,7 @@ class ResidenceVerificationService
         User $user,
         string $birthGovernorate,
         array $selection,
+        string $area,
         ?string $landmark,
         string $evidenceType,
         KycDocument $document,
@@ -164,6 +161,7 @@ class ResidenceVerificationService
             $birthCode,
             $code,
             $selection,
+            $area,
             $landmark,
             $evidenceType,
             $document,
@@ -178,25 +176,12 @@ class ResidenceVerificationService
                 $account->residence_district = (string) $selection['district_name'];
             }
             if (Schema::hasColumn('users', 'residence_area')) {
-                $account->residence_area = $selection['village_name']
-                    ?? $selection['uzlah_name']
-                    ?? null;
-            }
-            if (Schema::hasColumn('users', 'residence_uzlah')) {
-                $account->residence_uzlah = $selection['uzlah_name'] ?? null;
-            }
-            if (Schema::hasColumn('users', 'residence_village')) {
-                $account->residence_village = $selection['village_name'] ?? null;
+                $account->residence_area = trim($area);
             }
             if (Schema::hasColumn('users', 'residence_district_geo_id')) {
                 $account->residence_district_geo_id = (int) $selection['district_id'];
             }
-            if (Schema::hasColumn('users', 'residence_uzlah_geo_id')) {
-                $account->residence_uzlah_geo_id = $selection['uzlah_id'];
-            }
-            if (Schema::hasColumn('users', 'residence_village_geo_id')) {
-                $account->residence_village_geo_id = $selection['village_id'];
-            }
+
             if (Schema::hasColumn('users', 'residence_landmark')) {
                 $account->residence_landmark = $landmark ? trim($landmark) : null;
             }
