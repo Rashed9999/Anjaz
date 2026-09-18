@@ -421,8 +421,14 @@ class CustomerAuthController extends Controller
             // «غير معروف» ليس صفراً.
             // ══════════════════════════════════════════════════════════
             if (empty($user->transaction_pin)) {
-                if (! Helpers::pin_check($user->id, (string) $request->old_pin)) {
-                    return response()->json(['message' => 'Old PIN is incorrect'], 401);
+                // نافذة fallback إلى password انتهت؛ لا نمر عبر pin_check.
+                // أول تعيين PIN يثبت كلمة مرور الدخول مباشرة ثم يخزن PIN
+                // منفصلاً. بعد ذلك كل تغيير يعود إلى TransactionPinService.
+                if (! \Illuminate\Support\Facades\Hash::check(
+                    (string) $request->old_pin,
+                    (string) $user->password,
+                )) {
+                    return response()->json(['message' => 'كلمة المرور الحالية غير صحيحة'], 401);
                 }
 
                 $pinService->setPin($user, (string) $request->confirm_pin);
