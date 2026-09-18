@@ -922,7 +922,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         _card([
           _title(
             'أثبت ملكية هاتفك',
-            'نجح إنشاء الحساب. إثبات الهاتف يرفعك إلى Tier 1، لكنه لا يفتح الحركة المالية قبل اعتماد السكن.',
+            'نجح إنشاء الحساب. إثبات الهاتف ينقلك إلى حالة عميل موثق جزئيا، لكنه لا يفتح الحركة المالية قبل اعتماد السكن.',
             Icons.phonelink_lock_outlined,
           ),
           _field(
