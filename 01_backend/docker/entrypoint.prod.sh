@@ -30,11 +30,15 @@ fi
 # فمن أراد تجربةً على خادمٍ حقيقيّ يفتح المنفذَ بيده ويعرف أنّه فتحه؛
 # ومن نسي إفراغَ الرمز عند الإطلاق **يُوقَف الإقلاعُ فيتذكّر** — لا أن
 # يُطلق منصّةً ماليّةً بابُها مفتوحٌ ولا يدري.
-if [ -n "$AMIAL_DEMO_OTP" ] && [ "$AMIAL_ALLOW_DEMO_OTP" != "true" ]; then
-    echo "❌ خطأ فادح: AMIAL_DEMO_OTP مضبوط في بيئة إنتاج (قيمة: مخفيّة)."
-    echo "   ما دام مضبوطاً، يُقبل رمزُه رمزَ تحقّقٍ لأيّ رقم — تخطٍّ كاملٌ للمصادقة."
-    echo "   عند الإطلاق الحقيقيّ: اضبط AMIAL_DEMO_OTP= فارغاً بعد تشغيل بوابة SMS/واتساب."
-    echo "   وللتجربة على خادمٍ حقيقيّ عمداً: AMIAL_ALLOW_DEMO_OTP=true (وأنت تعلم أنّك فتحتَه)."
+PILOT_CUSTOMER_PHONE_OTP_ENABLED="${AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED:-true}"
+if { [ -n "$AMIAL_DEMO_OTP" ] || [ "$PILOT_CUSTOMER_PHONE_OTP_ENABLED" = "true" ]; } \
+   && [ "$AMIAL_ALLOW_DEMO_OTP" != "true" ]; then
+    echo "❌ مانع إطلاق: OTP الهاتف ما زال في وضع Pilot ثابت."
+    echo "   لا يجوز الانتقال للإنتاج الحقيقي قبل:"
+    echo "   1) ربط مزود SMS/WhatsApp OTP فعلي واختبار وصوله."
+    echo "   2) AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED=false"
+    echo "   3) AMIAL_DEMO_OTP= (فارغ)"
+    echo "   للتجربة على خادم حقيقي فقط: AMIAL_ALLOW_DEMO_OTP=true"
     exit 1
 fi
 
