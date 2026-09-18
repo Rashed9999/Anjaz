@@ -215,7 +215,7 @@ class _CustomerServicesHubScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'مستوى التوثيق الحالي',
+                  'حالة التوثيق الحالية',
                   style: TextStyle(
                     fontSize: 12,
                     color: AmialColors.textSecondary,
@@ -249,7 +249,7 @@ class _CustomerServicesHubScreenState
             ),
           ),
           const Text(
-            'كل خدمة توضح مستواها المطلوب',
+            'كل خدمة توضح حالة التوثيق المطلوبة',
             style: TextStyle(
               fontSize: 10.5,
               color: AmialColors.textSecondary,
