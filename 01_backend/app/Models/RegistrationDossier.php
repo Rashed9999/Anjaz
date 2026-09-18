@@ -9,7 +9,24 @@ class RegistrationDossier extends Model
 {
     public const CUSTOMER = 'customer';
     public const MERCHANT = 'merchant';
-    public const SOURCES = ['self_service', 'staff_assisted', 'paper_archive'];
+    public const VERIFICATION_TIER_1 = 'verification_tier_1';
+    public const VERIFICATION_TIER_2 = 'verification_tier_2';
+    public const VERIFICATION_TIER_3 = 'verification_tier_3';
+
+    public const SOURCES = [
+        'self_service',
+        'staff_assisted',
+        'paper_archive',
+        self::VERIFICATION_TIER_1,
+        self::VERIFICATION_TIER_2,
+        self::VERIFICATION_TIER_3,
+    ];
+
+    public const VERIFICATION_SOURCES = [
+        self::VERIFICATION_TIER_1,
+        self::VERIFICATION_TIER_2,
+        self::VERIFICATION_TIER_3,
+    ];
     public const AWAITING_CONFIRMATION = 'awaiting_customer_confirmation';
     public const SUBMITTED = 'submitted';
 
