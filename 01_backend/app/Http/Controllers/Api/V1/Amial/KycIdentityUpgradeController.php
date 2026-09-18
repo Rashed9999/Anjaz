@@ -35,7 +35,7 @@ class KycIdentityUpgradeController extends Controller
             'date_of_birth' => ['required', 'date', 'before:today'],
             'id_place_of_issue' => ['required', 'string', 'min:2', 'max:180'],
             'identification_issue_date' => ['required', 'date', 'before_or_equal:today'],
-            'identification_expiry_date' => ['required', 'date', 'after:identification_issue_date'],
+            'identification_expiry_date' => ['required', 'date', 'after:today'],
             'declaration_accepted' => ['required', 'accepted'],
             'id_front' => ['required', 'file', 'max:8192',
                 'mimetypes:image/jpeg,image/png,image/heic,image/heif,application/pdf'],
