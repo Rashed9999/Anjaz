@@ -26,5 +26,4 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE.
 
-Amial stores only the fields needed for cascading location selection:
-governorate -> district -> uzlah -> village.
+Amial stores only the fields needed for residence selection: governorate -> district. Neighborhood/area is entered by the customer as free text; uzlah and village lists are intentionally not bundled.
