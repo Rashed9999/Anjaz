@@ -28,6 +28,7 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
   final _fatherName = TextEditingController();
   final _grandfatherName = TextEditingController();
   final _district = TextEditingController();
+  final _area = TextEditingController();
   final _landmark = TextEditingController();
   final _pepPosition = TextEditingController();
   final _picker = ImagePicker();
@@ -62,6 +63,7 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
     _fatherName.dispose();
     _grandfatherName.dispose();
     _district.dispose();
+    _area.dispose();
     _landmark.dispose();
     _pepPosition.dispose();
     super.dispose();
@@ -298,6 +300,8 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
           onChanged: (value) => setState(() => _residenceLocation = value),
         ),
         const SizedBox(height: 10),
+        _field(_area, 'اسم الحي / المنطقة *'),
+        const SizedBox(height: 10),
         _field(_landmark, 'أقرب معلم — اختياري'),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
@@ -360,10 +364,11 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
               : () async {
                   if (_birthGovernorate == null ||
                       !_residenceLocation.hasRequired ||
+                      _area.text.trim().length < 2 ||
                       _evidenceType == null ||
                       _residenceEvidence == null) {
                     showCustomSnackBarHelper(
-                      'أكمل محافظة الميلاد ومحافظة السكن والمديرية ونوع الدليل والمستند',
+                      'أكمل محافظة الميلاد ومحافظة السكن والمديرية واسم الحي ونوع الدليل والمستند',
                     );
                     return;
                   }
@@ -372,8 +377,7 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
                     birthGovernorate: _birthGovernorate!,
                     governorate: _residenceLocation.governorateCode!,
                     districtId: _residenceLocation.districtId!,
-                    uzlahId: _residenceLocation.uzlahId,
-                    villageId: _residenceLocation.villageId,
+                    area: _area.text.trim(),
                     landmark: _landmark.text.trim(),
                     evidenceType: _evidenceType!,
                     evidence: File(_residenceEvidence!.path),
