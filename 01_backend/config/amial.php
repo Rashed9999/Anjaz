@@ -513,6 +513,17 @@ return [
 
         'demo_code' => env('AMIAL_DEMO_OTP', '123456'),
 
+        // AMIAL-PILOT-PHONE-OTP-001 — قرار مرحلي لصاحب المشروع:
+        // لا يوجد مزوّد SMS/WhatsApp للهاتف حالياً، لذلك إثبات هاتف العميل
+        // في التسجيل يستخدم رمزاً ثابتاً 123456 لكل أرقام العملاء أثناء
+        // التجربة فقط. هذا ليس بديلاً عن امتلاك الرقم، ولا يجوز تشغيل
+        // الإنتاج الحقيقي قبل تعطيله وربط مزوّد إرسال فعلي.
+        'pilot_customer_phone_enabled' => filter_var(
+            env('AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED', true),
+            FILTER_VALIDATE_BOOL,
+        ),
+        'pilot_customer_phone_code' => env('AMIAL_PILOT_CUSTOMER_PHONE_OTP', '123456'),
+
         'demo_numbers' => array_filter(array_map('trim', explode(',', (string) env(
             'AMIAL_DEMO_PHONES',
             implode(',', [
