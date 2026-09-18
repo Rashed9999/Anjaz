@@ -115,9 +115,6 @@ class BillPayService
         array $subscriberExtra = [],
         ?string $idempotencyKey = null,
     ): BillPaymentOrder {
-        $this->assertInputsAreConsistent($user, $provider, $service, $product);
-        $this->assertSubscriberAccount($service, $subscriberAccount);
-
         $amountNormalized = MoneyService::normalize($amount);
 
         // AMIAL-CUSTOMER-SERVICES-KYC-001:
@@ -129,6 +126,9 @@ class BillPayService
             $amountNormalized,
             'bill_pay',
         );
+
+        $this->assertInputsAreConsistent($user, $provider, $service, $product);
+        $this->assertSubscriberAccount($service, $subscriberAccount);
 
         $quote = $this->quote($user, $amountNormalized);
         $fee = (string) $quote['fee'];
