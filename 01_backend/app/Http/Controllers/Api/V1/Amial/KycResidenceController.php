@@ -46,6 +46,7 @@ class KycResidenceController extends Controller
             'residence_area' => ['required', 'string', 'min:2', 'max:120'],
             'residence_landmark' => ['nullable', 'string', 'max:150'],
             'evidence_type' => ['required', 'string', Rule::in(array_keys(ResidenceVerificationService::EVIDENCE_TYPES))],
+            'declaration_accepted' => ['required', 'accepted'],
             'evidence_date' => ['nullable', 'date', 'before_or_equal:today'],
             'evidence' => [
                 'required', 'file', 'max:8192',
