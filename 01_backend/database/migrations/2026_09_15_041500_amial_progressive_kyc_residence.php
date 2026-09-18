@@ -102,14 +102,14 @@ return new class extends Migration
         // سياسة الحدود الجديدة تُكتب في DB لأنها مصدر الحقيقة في التشغيل.
         if (Schema::hasTable('kyc_tier_limits')) {
             $tiers = [
-                0 => ['غير موثق', '0', '0', '0', '0', [], []],
-                1 => ['أساسي', '100000', '100000', '100000', '100000',
+                0 => ['عميل غير موثق', '0', '0', '0', '0', [], []],
+                1 => ['عميل موثق جزئيا', '100000', '100000', '100000', '100000',
                     ['phone_verified', 'verified_residence'],
                     ['send_money', 'receive_money', 'bill_pay', 'cash_out', 'merchant_pay']],
-                2 => ['هوية موثقة', '250000', '250000', '250000', '250000',
+                2 => ['عميل موثق بهوية', '250000', '250000', '250000', '250000',
                     ['phone_verified', 'national_id', 'verified_residence'],
                     ['send_money', 'receive_money', 'bill_pay', 'cash_out', 'merchant_pay', 'safe_payment', 'donations', 'family_fund']],
-                3 => ['كامل', '2000000', '400000', '700000', '2000000',
+                3 => ['عميل موثق', '2000000', '400000', '700000', '2000000',
                     ['phone_verified', 'national_id', 'selfie_or_approved_ownership', 'verified_residence', 'full_kyc_profile'],
                     ['*']],
             ];
