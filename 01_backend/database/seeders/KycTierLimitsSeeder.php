@@ -12,14 +12,14 @@ class KycTierLimitsSeeder extends Seeder
     {
         $tiers = [
             [
-                'tier' => 0, 'name_ar' => 'غير موثق',
+                'tier' => 0, 'name_ar' => 'عميل غير موثق',
                 'max_balance' => 0, 'max_single_transaction' => 0,
                 'max_daily_total' => 0, 'max_monthly_total' => 0,
                 'required_documents' => json_encode([]),
                 'allowed_features' => json_encode([]),
             ],
             [
-                'tier' => 1, 'name_ar' => 'أساسي',
+                'tier' => 1, 'name_ar' => 'عميل موثق جزئيا',
                 'max_balance' => 100000, 'max_single_transaction' => 100000,
                 'max_daily_total' => 100000, 'max_monthly_total' => 100000,
                 'required_documents' => json_encode(['phone_verified', 'verified_residence']),
@@ -28,7 +28,7 @@ class KycTierLimitsSeeder extends Seeder
                 ]),
             ],
             [
-                'tier' => 2, 'name_ar' => 'هوية موثقة',
+                'tier' => 2, 'name_ar' => 'عميل موثق بهوية',
                 'max_balance' => 250000, 'max_single_transaction' => 250000,
                 'max_daily_total' => 250000, 'max_monthly_total' => 250000,
                 'required_documents' => json_encode(['phone_verified', 'national_id', 'verified_residence']),
@@ -38,7 +38,7 @@ class KycTierLimitsSeeder extends Seeder
                 ]),
             ],
             [
-                'tier' => 3, 'name_ar' => 'كامل',
+                'tier' => 3, 'name_ar' => 'عميل موثق',
                 'max_balance' => 2000000, 'max_single_transaction' => 400000,
                 'max_daily_total' => 700000, 'max_monthly_total' => 2000000,
                 'required_documents' => json_encode([
