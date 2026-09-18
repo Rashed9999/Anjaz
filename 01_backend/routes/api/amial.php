@@ -538,6 +538,22 @@ Route::middleware(['auth:api'])->group(function () {
     });
 
     // -------- AMIAL-MERCHANT-001 (v1.7) --------
+    // -------- AMIAL-MERCHANT-OPERATIONS-CENTER — مركز التشغيل الموحّد --------
+    // كان الـController والشاشة والاختبار موجودة لكن المسارات الثلاثة سقطت
+    // من التسجيل، ففشل الجرد البنيوي ولم يبدأ بقية CI.
+    Route::prefix('merchant/operations-center')
+        ->name('amial.merchant.operations-center.')
+        ->middleware('amial.pos-device')
+        ->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\V1\Amial\MerchantOperationsCenterController::class, 'summary'])
+                ->name('summary');
+            Route::get('/roles', [\App\Http\Controllers\Api\V1\Amial\MerchantOperationsCenterController::class, 'roles'])
+                ->name('roles');
+            Route::post('/roles', [\App\Http\Controllers\Api\V1\Amial\MerchantOperationsCenterController::class, 'createRole'])
+                ->middleware('amial.rate-limit:merchant_role_create,20,1')
+                ->name('roles.create');
+        });
+
     Route::prefix('merchant')->name('amial.merchant.')->middleware('amial.idempotency')->group(function () {
         // P1-BRANCHES — إدارة الفروع
         Route::prefix('branches')->name('branches.')->group(function () {
