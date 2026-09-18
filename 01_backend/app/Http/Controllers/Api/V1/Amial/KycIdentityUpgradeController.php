@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
 use App\Services\AuditService;
 use App\Services\KycDocumentService;
+use App\Services\RegistrationDossierService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +27,7 @@ class KycIdentityUpgradeController extends Controller
         Request $request,
         KycDocumentService $documents,
         AuditService $audit,
+        RegistrationDossierService $dossiers,
     ): JsonResponse {
         $validator = Validator::make($request->all(), [
             'identification_number' => ['required', 'string', 'min:5', 'max:50'],
@@ -110,6 +112,17 @@ class KycIdentityUpgradeController extends Controller
             ], 422);
         }
 
+        $dossier = $dossiers->archiveVerificationSubmission(
+            $user->fresh(),
+            2,
+            [
+                'identification_number' => $number,
+                'identification_type' => (string) $request->input('identification_type'),
+                'identity_front_document_id' => (int) $uploaded[0]->id,
+                'identity_back_document_id' => (int) $uploaded[1]->id,
+            ],
+        );
+
         $audit->record([
             'actor_type' => 'customer',
             'actor_user_id' => (int) $user->id,
@@ -134,6 +147,7 @@ class KycIdentityUpgradeController extends Controller
                 'status' => 'pending_review',
                 'required_documents' => ['national_id_front', 'national_id_back'],
                 'selfie_required' => false,
+                'verification_dossier_reference' => $dossier->reference,
             ],
         ], 201);
     }
