@@ -38,7 +38,7 @@ class ApiChecker {
         });
       }
       showCustomSnackBarHelper(
-        'اقرأ أحدث شروط الاستخدام ووافق عليها للمتابعة',
+        'terms_acceptance_required_to_continue'.tr,
         isError: true,
       );
       return;
