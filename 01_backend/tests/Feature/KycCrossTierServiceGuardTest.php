@@ -4,9 +4,12 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Api\V1\Amial\FamilyFundController;
 use App\Http\Controllers\Api\V1\Amial\SafePaymentController;
+use App\Models\BillProvider;
+use App\Models\BillService;
 use App\Models\FamilyFundMember;
 use App\Models\SafePayment;
 use App\Models\User;
+use App\Services\BillPayService;
 use App\Services\FamilyFundService;
 use App\Services\KycTierService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -139,6 +142,39 @@ class KycCrossTierServiceGuardTest extends TestCase
                 $this->assertSame('DISBURSE_FAILED', $body['code'] ?? null);
             }
         }
+    }
+
+    /** @test */
+    public function bill_pay_is_tier_1_and_the_service_enforces_it_before_money_moves(): void
+    {
+        $kyc = app(KycTierService::class);
+
+        $tier0 = $this->customerAtTier(0);
+        try {
+            $kyc->assertFeatureAllowed($tier0, 'bill_pay');
+            $this->fail('Tier 0 unexpectedly received bill_pay');
+        } catch (\RuntimeException) {
+            $this->assertTrue(true);
+        }
+
+        foreach ([1, 2, 3] as $tier) {
+            $user = $this->customerAtTier($tier);
+            $limits = $kyc->assertFeatureAllowed($user, 'bill_pay');
+            $this->assertSame($tier, (int) $limits['tier']);
+        }
+
+        // ويُقاس حدّ التنفيذ نفسه، لا خريطة KYC وحدها. النماذج غير
+        // محفوظة عمداً: Tier 0 يجب أن يُرفض قبل التحقق من المزوّد أو
+        // إنشاء hold/ledger/order.
+        $this->expectException(\RuntimeException::class);
+        app(BillPayService::class)->createAndExecute(
+            $tier0,
+            new BillProvider(),
+            new BillService(),
+            null,
+            '777000000',
+            '1000',
+        );
     }
 
     /** @test */
