@@ -213,8 +213,8 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
           const SizedBox(height: 5),
           Text(
             complete
-                ? 'يمكنك مراجعة حدودك ومزايا مستواك من الجدول أدناه.'
-                : 'اختر المستوى المناسب، وستطلب صفحة «إكمال حسابي» منك فقط البيانات التي ما زالت ناقصة.',
+                ? 'يمكنك مراجعة حدودك ومزايا حالة توثيقك من القائمة أدناه.'
+                : 'اختر حالة التوثيق التي تريد الوصول إليها، وستطلب صفحة «إكمال حسابي» منك فقط البيانات التي ما زالت ناقصة.',
             style: const TextStyle(fontSize: 12.5, height: 1.45, color: Color(0xFF5C6675)),
           ),
           if (!complete) ...[
