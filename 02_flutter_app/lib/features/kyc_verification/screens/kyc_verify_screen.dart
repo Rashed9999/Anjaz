@@ -182,7 +182,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
               Icon(Icons.shield_outlined, color: Colors.white),
               SizedBox(width: 8),
               Text(
-                'Tier 2 · هوية موثقة',
+                'عميل موثق بهوية',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -266,7 +266,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                'لا سيلفي في Tier 2. صور الوثيقة تُخزّن مشفّرة ولا تُنسخ إلى مخزن الهوية القديم.',
+                'لا نطلب سيلفي في حالة عميل موثق بهوية. صور الوثيقة تُخزّن مشفّرة ولا تُنسخ إلى مخزن الهوية القديم.',
                 style: TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xFF315D43)),
               ),
             ),
@@ -460,8 +460,8 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
             SizedBox(height: 7),
             Text(
               '• إثبات السكن: مسار مستقل لتفعيل نطاق التشغيل.\n'
-              '• السيلفي أو Liveness: ليس شرطاً لـTier 2.\n'
-              '• الدخل وPEP والملف التنظيمي الكامل: تُستكمل عند طلب Tier 3.',
+              '• السيلفي أو Liveness: ليس شرطاً لحالة عميل موثق بهوية.\n'
+              '• الدخل وPEP والملف التنظيمي الكامل: تُستكمل عند طلب حالة عميل موثق.',
               style: TextStyle(fontSize: 12.5, height: 1.65, color: Color(0xFF655A3D)),
             ),
           ],
