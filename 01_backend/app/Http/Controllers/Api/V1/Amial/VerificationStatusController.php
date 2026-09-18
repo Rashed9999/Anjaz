@@ -120,7 +120,7 @@ class VerificationStatusController extends Controller
                     'code' => 'upgrade_identity',
                     'priority' => 3,
                     'title' => 'وثّق هويتك وارفع حدودك',
-                    'description' => 'حالة عميل موثق بهوية تحتاج رقم الهوية + وجه الوثيقة + ظهرها فقط، بلا سيلفي.',
+                    'description' => 'حالة عميل موثق بهوية تحتاج بيانات الهوية وتواريخها + وجه الوثيقة + ظهرها، بلا سيلفي.',
                 ],
             };
         }
@@ -221,7 +221,13 @@ class VerificationStatusController extends Controller
             ],
             2 => [
                 ['code' => 'tier1', 'label' => 'استكمال متطلبات عميل موثق جزئيا', 'complete' => $current >= 1],
-                ['code' => 'identity_number', 'label' => 'رقم الهوية القانونية', 'complete' => trim((string) ($user->identification_number ?? '')) !== ''],
+                ['code' => 'identity_number', 'label' => 'بيانات الهوية القانونية وتواريخها', 'complete' =>
+                    trim((string) ($user->identification_number ?? '')) !== ''
+                    && trim((string) ($user->date_of_birth ?? '')) !== ''
+                    && trim((string) ($user->id_place_of_issue ?? '')) !== ''
+                    && trim((string) ($user->identification_issue_date ?? '')) !== ''
+                    && trim((string) ($user->identification_expiry_date ?? '')) !== ''
+                ],
                 ['code' => 'identity_document', 'label' => 'وجه وثيقة الهوية وظهرها — بلا سيلفي', 'complete' => ($identity['status'] ?? '') === 'verified'],
             ],
             3 => [
