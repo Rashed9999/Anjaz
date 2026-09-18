@@ -16,6 +16,8 @@ Route::prefix('customer')
         'inactiveAuthCheck',
         'trackLastActiveAt',
         'auth:api',
+        // P0-LEGAL: لا حركة مالية قبل قبول أحدث إصدار منشور.
+        'amial.terms',
         'customerAuth',
         'checkDeviceId',
         'amial.pos-device',
