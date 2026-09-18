@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/kyc_verification/domain/customer_verification_level.dart';
 
 /// AMIAL-VERIFIED-BADGE-001 — شارة موثَّق موحّدة.
 ///
@@ -40,7 +41,7 @@ class VerifiedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (tier == null || tier!.isEmpty || tier == 'unverified') {
+    if (tier == null || tier!.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -91,6 +92,22 @@ class VerifiedBadge extends StatelessWidget {
   }
 
   _BadgeConfig _configFor(String t) {
+    final numericTier = int.tryParse(t);
+    if (numericTier != null) {
+      final level = CustomerVerificationLevel.fromTier(numericTier);
+      return _BadgeConfig(
+        icon: numericTier == 3
+            ? Icons.workspace_premium
+            : numericTier == 0
+                ? Icons.person_outline
+                : Icons.verified_user_outlined,
+        background: level.color,
+        iconColor: level.foreground,
+        textColor: level.foreground,
+        label: level.label,
+      );
+    }
+
     switch (t) {
       case 'gold':
         return _BadgeConfig(
