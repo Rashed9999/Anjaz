@@ -258,6 +258,7 @@ class BillPayService
                 $event = BillProviderWebhookEvent::create([
                     'provider_id' => $provider->id,
                     'order_id' => $order?->id,
+                    'correlation_id' => $order?->correlation_id ?? $this->currentCorrelationId(),
                     'event_fingerprint' => $fingerprint,
                     'provider_transaction_id' => $transactionId,
                     'provider_reference' => isset($normalized['ReferenceID']) ? (string) $normalized['ReferenceID'] : null,
@@ -287,6 +288,7 @@ class BillPayService
             'action' => $created ? 'BILL_PROVIDER_WEBHOOK_RECEIVED' : 'BILL_PROVIDER_WEBHOOK_DUPLICATE',
             'decision_code' => $created ? 'BILL_WEBHOOK_QUEUED' : 'BILL_WEBHOOK_REPLAY',
             'severity' => 'notice',
+            'correlation_id' => $event->correlation_id,
             'context' => [
                 'provider_id' => $provider->id,
                 'order_id' => $event->order_id,
@@ -384,6 +386,7 @@ class BillPayService
                 $order = BillPaymentOrder::create([
                     'order_ulid' => (string) Str::ulid(),
                     'idempotency_key' => $idempotencyKey,
+                    'correlation_id' => $this->currentCorrelationId(),
                     'user_id' => $user->id,
                     'provider_id' => $provider->id,
                     'service_id' => $service->id,
@@ -511,6 +514,7 @@ class BillPayService
             'severity' => 'info',
             'transaction_id' => $fresh->order_ulid,
             'idempotency_key' => $fresh->idempotency_key,
+            'correlation_id' => $fresh->correlation_id,
             'context' => [
                 'amount' => $fresh->amount,
                 'fee' => $fresh->fee,
@@ -567,6 +571,7 @@ class BillPayService
             'severity' => 'warning',
             'transaction_id' => $fresh->order_ulid,
             'idempotency_key' => $fresh->idempotency_key,
+            'correlation_id' => $fresh->correlation_id,
             'context' => ['released' => $fresh->total_debited],
         ]);
     }
@@ -658,6 +663,7 @@ class BillPayService
                 'severity' => 'notice',
                 'transaction_id' => $fresh->order_ulid,
                 'idempotency_key' => $fresh->idempotency_key,
+                'correlation_id' => $fresh->correlation_id,
                 'context' => ['funds_state' => $fresh->funds_state],
             ]);
         }
@@ -669,6 +675,7 @@ class BillPayService
             BillProviderRequest::create([
                 'order_id' => $order->id,
                 'provider_id' => $order->provider_id,
+                'correlation_id' => $order->correlation_id ?? $this->currentCorrelationId(),
                 'request_type' => $type,
                 'request_payload' => $this->requestLogPayload($order),
                 'response_payload' => $this->redactPayload($response->rawResponse),
@@ -689,6 +696,7 @@ class BillPayService
             BillProviderRequest::create([
                 'order_id' => $order->id,
                 'provider_id' => $order->provider_id,
+                'correlation_id' => $order->correlation_id ?? $this->currentCorrelationId(),
                 'request_type' => $type,
                 'request_payload' => $this->requestLogPayload($order),
                 'response_payload' => null,
@@ -728,6 +736,7 @@ class BillPayService
             'subscriber_suffix' => $this->maskSubscriber($order->subscriber_account),
             'amount' => (string) $order->amount,
             'attempt' => (int) $order->provider_attempt_count,
+            'correlation_id' => $order->correlation_id,
         ];
     }
 
@@ -735,6 +744,16 @@ class BillPayService
     {
         $length = mb_strlen($value);
         return $length <= 4 ? str_repeat('•', $length) : str_repeat('•', $length - 4) . mb_substr($value, -4);
+    }
+
+    private function currentCorrelationId(): ?string
+    {
+        if (! app()->bound('request')) {
+            return null;
+        }
+
+        $value = app('request')->attributes->get('amial.correlation_id');
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     /** @param array<string, mixed> $payload @return array<string, mixed> */

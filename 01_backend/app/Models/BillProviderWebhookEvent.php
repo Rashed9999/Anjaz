@@ -22,7 +22,7 @@ class BillProviderWebhookEvent extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'provider_id', 'order_id', 'event_fingerprint',
+        'provider_id', 'order_id', 'correlation_id', 'event_fingerprint',
         'provider_transaction_id', 'provider_reference', 'operation_status',
         'price', 'message', 'payload', 'received_at', 'processed_at',
         'processing_result', 'processing_error',

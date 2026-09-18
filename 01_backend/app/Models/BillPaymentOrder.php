@@ -10,7 +10,7 @@ class BillPaymentOrder extends Model
 {
     protected $table = 'bill_payment_orders';
     protected $fillable = [
-        'order_ulid', 'idempotency_key', 'user_id', 'provider_id', 'service_id', 'product_id',
+        'order_ulid', 'idempotency_key', 'correlation_id', 'user_id', 'provider_id', 'service_id', 'product_id',
         'subscriber_account', 'subscriber_extra',
         'amount', 'fee', 'total_debited', 'funds_state',
         'status', 'wallet_transaction_id', 'provider_reference', 'provider_message',
