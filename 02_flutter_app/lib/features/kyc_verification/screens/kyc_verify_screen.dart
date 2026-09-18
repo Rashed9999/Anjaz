@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/kyc_verification/controllers/kyc_verify_controller.dart';
 import 'package:amial_pay/features/kyc_verification/screens/customer_verification_review_screen.dart';
@@ -484,6 +485,19 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
     }
 
     final profile = Get.find<ProfileController>().userInfo;
+    Map<String, dynamic> residence = <String, dynamic>{};
+    try {
+      final response = await Get.find<ApiClient>()
+          .getData('/api/v1/amial/me/kyc/residence');
+      if (response.statusCode == 200 &&
+          response.body is Map &&
+          response.body['data'] is Map) {
+        residence = Map<String, dynamic>.from(response.body['data'] as Map);
+      }
+    } catch (_) {
+      // المراجعة تستمر بالبيانات المتاحة؛ لا نمنع رفع الهوية بسبب فشل عرض إضافي.
+    }
+
     final type = controller.dropDownSelectedValue;
     final typeLabel = switch (type) {
       'nid' => 'بطاقة هوية',
@@ -503,6 +517,24 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
           VerificationReviewRow('رقم الهاتف', profile?.phone ?? ''),
           VerificationReviewRow('البريد الإلكتروني', profile?.email ?? ''),
           VerificationReviewRow('رقم الحساب', profile?.accountNumber ?? ''),
+          VerificationReviewRow(
+            'محافظة الميلاد',
+            residence['birth_governorate_name']?.toString() ?? '',
+          ),
+          VerificationReviewRow(
+            'محافظة السكن',
+            residence['verified_governorate_name']?.toString() ??
+                residence['declared_governorate_name']?.toString() ??
+                '',
+          ),
+          VerificationReviewRow(
+            'المديرية',
+            residence['residence_district']?.toString() ?? '',
+          ),
+          VerificationReviewRow(
+            'الحي / المنطقة',
+            residence['residence_area']?.toString() ?? '',
+          ),
           VerificationReviewRow('نوع الهوية', typeLabel),
           VerificationReviewRow(
             'رقم الهوية',
