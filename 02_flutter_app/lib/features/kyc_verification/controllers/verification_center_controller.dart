@@ -133,8 +133,9 @@ class VerificationCenterController extends GetxController implements GetxService
   Future<bool> submitResidence({
     required String birthGovernorate,
     required String governorate,
-    required String district,
-    String? area,
+    required int districtId,
+    int? uzlahId,
+    int? villageId,
     String? landmark,
     required String evidenceType,
     required File evidence,
@@ -144,8 +145,9 @@ class VerificationCenterController extends GetxController implements GetxService
     final response = await repo.submitResidence(
       birthGovernorate: birthGovernorate,
       governorate: governorate,
-      district: district,
-      area: area,
+      districtId: districtId,
+      uzlahId: uzlahId,
+      villageId: villageId,
       landmark: landmark,
       evidenceType: evidenceType,
       evidence: evidence,
