@@ -212,6 +212,42 @@ class AccountSecurityGuardTest extends TestCase
     }
 
     /** @test */
+    public function an_account_without_a_pin_can_set_the_first_pin_with_its_login_password(): void
+    {
+        $u = $this->account('LegacyPass9');
+        $u->transaction_pin = null;
+        $u->transaction_pin_set_at = null;
+        $u->requires_pin_setup = true;
+        $u->save();
+
+        $this->actingAs($u->fresh(), 'api')->postJson(self::BASE.'/pin', [
+            'current' => 'LegacyPass9',
+            'new_pin' => '4821',
+            'new_pin_confirmation' => '4821',
+        ])->assertOk()->assertJsonPath('code', 'PIN_SET');
+
+        $fresh = $u->fresh();
+        $this->assertTrue(Hash::check('4821', $fresh->transaction_pin));
+        $this->assertNotNull($fresh->transaction_pin_set_at);
+        $this->assertFalse((bool) $fresh->requires_pin_setup);
+    }
+
+    /** @test */
+    public function a_new_login_password_cannot_equal_the_existing_money_pin(): void
+    {
+        $u = $this->account('OldPassword9');
+        $u->transaction_pin = '4821';
+        $u->transaction_pin_set_at = now();
+        $u->save();
+
+        $this->actingAs($u->fresh(), 'api')->postJson(self::BASE.'/password', [
+            'current_password' => 'OldPassword9',
+            'new_password' => '4821',
+            'new_password_confirmation' => '4821',
+        ])->assertStatus(422)->assertJsonPath('code', 'VALIDATION');
+    }
+
+    /** @test */
     public function the_pin_route_is_shut_to_a_guest(): void
     {
         $this->getJson(self::BASE)->assertStatus(401);
