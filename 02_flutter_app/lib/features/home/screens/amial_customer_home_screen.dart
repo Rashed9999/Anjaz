@@ -12,7 +12,7 @@ import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
-import 'package:amial_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
+import 'package:amial_pay/features/me/screens/customer_services_hub_screen.dart';
 import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
@@ -1139,8 +1139,8 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
           () => Get.to(() => const PaymentRequestCreateScreen())),
       _Svc('ادفع لتاجر', Icons.storefront_outlined,
           () => Get.to(() => const MerchantPayScreen())),
-      _Svc('دفع الفواتير', Icons.receipt_long_outlined,
-          () => Get.to(() => const BillPayProvidersScreen())),
+      _Svc('الخدمات', Icons.apps_rounded,
+          () => Get.to(() => const CustomerServicesHubScreen())),
       _Svc('سحب نقدي', Icons.account_balance_outlined,
           () => Get.to(() => const WithdrawRequestScreen())),
       _Svc('الإيصالات', Icons.description_outlined,
