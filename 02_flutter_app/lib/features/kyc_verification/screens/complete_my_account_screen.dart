@@ -4,6 +4,7 @@ import 'package:amial_pay/features/auth/widgets/governorate_picker.dart';
 import 'package:amial_pay/features/kyc_verification/controllers/verification_center_controller.dart';
 import 'package:amial_pay/features/kyc_verification/domain/customer_verification_level.dart';
 import 'package:amial_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
+import 'package:amial_pay/features/kyc_verification/widgets/yemen_residence_picker.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 import 'package:flutter/material.dart';
@@ -27,14 +28,13 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
   final _fatherName = TextEditingController();
   final _grandfatherName = TextEditingController();
   final _district = TextEditingController();
-  final _area = TextEditingController();
   final _landmark = TextEditingController();
   final _pepPosition = TextEditingController();
   final _picker = ImagePicker();
 
   bool _otpRequested = false;
   String? _birthGovernorate;
-  String? _governorate;
+  YemenResidenceSelection _residenceLocation = const YemenResidenceSelection();
   String? _evidenceType;
   XFile? _residenceEvidence;
   String? _incomeSource;
@@ -62,7 +62,6 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
     _fatherName.dispose();
     _grandfatherName.dispose();
     _district.dispose();
-    _area.dispose();
     _landmark.dispose();
     _pepPosition.dispose();
     super.dispose();
@@ -295,16 +294,9 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
           onChanged: (value) => setState(() => _birthGovernorate = value),
         ),
         const SizedBox(height: 10),
-        GovernoratePicker(
-          label: 'محافظة السكن الحالية',
-          value: _governorate,
-          helper: 'اختر مكان إقامتك الفعلي الحالي. المحافظة غير المدعومة لا تمنع التوثيق.',
-          onChanged: (value) => setState(() => _governorate = value),
+        YemenResidencePicker(
+          onChanged: (value) => setState(() => _residenceLocation = value),
         ),
-        const SizedBox(height: 10),
-        _field(_district, 'المديرية الحالية'),
-        const SizedBox(height: 10),
-        _field(_area, 'المنطقة / الحي — اختياري'),
         const SizedBox(height: 10),
         _field(_landmark, 'أقرب معلم — اختياري'),
         const SizedBox(height: 10),
@@ -367,8 +359,7 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
               ? null
               : () async {
                   if (_birthGovernorate == null ||
-                      _governorate == null ||
-                      _district.text.trim().length < 2 ||
+                      !_residenceLocation.hasRequired ||
                       _evidenceType == null ||
                       _residenceEvidence == null) {
                     showCustomSnackBarHelper(
@@ -379,9 +370,10 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
 
                   await controller.submitResidence(
                     birthGovernorate: _birthGovernorate!,
-                    governorate: _governorate!,
-                    district: _district.text.trim(),
-                    area: _area.text.trim(),
+                    governorate: _residenceLocation.governorateCode!,
+                    districtId: _residenceLocation.districtId!,
+                    uzlahId: _residenceLocation.uzlahId,
+                    villageId: _residenceLocation.villageId,
                     landmark: _landmark.text.trim(),
                     evidenceType: _evidenceType!,
                     evidence: File(_residenceEvidence!.path),
