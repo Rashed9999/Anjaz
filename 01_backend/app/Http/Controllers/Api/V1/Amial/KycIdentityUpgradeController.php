@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
 use App\Services\AuditService;
 use App\Services\KycDocumentService;
+use App\Services\KycTierService;
 use App\Services\RegistrationDossierService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,7 @@ class KycIdentityUpgradeController extends Controller
     public function submit(
         Request $request,
         KycDocumentService $documents,
+        KycTierService $tiers,
         AuditService $audit,
         RegistrationDossierService $dossiers,
     ): JsonResponse {
@@ -67,6 +69,13 @@ class KycIdentityUpgradeController extends Controller
                 'code' => 'PHONE_VERIFICATION_REQUIRED',
                 'message' => 'أثبت ملكية رقم هاتفك قبل رفع الهوية.',
             ], 403);
+        }
+        if ($tiers->effectiveTier($user) < 1) {
+            return response()->json([
+                'success' => false,
+                'code' => 'PARTIAL_VERIFICATION_REQUIRED',
+                'message' => 'أكمل إثبات السكن واعتماده لتصبح عميلاً موثقاً جزئياً قبل رفع الهوية.',
+            ], 409);
         }
         if ((int) ($user->kyc_tier ?? 0) >= 2 && (int) ($user->is_kyc_verified ?? 0) === 1) {
             return response()->json([
