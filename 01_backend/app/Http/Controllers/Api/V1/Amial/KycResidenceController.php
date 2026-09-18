@@ -36,7 +36,11 @@ class KycResidenceController extends Controller
         if ($denied = $this->customerOnly($request)) return $denied;
 
         $data = $request->validate([
+            'birth_governorate' => ['required', 'string', 'max:64'],
             'residence_governorate' => ['required', 'string', 'max:64'],
+            'residence_district' => ['required', 'string', 'min:2', 'max:80'],
+            'residence_area' => ['nullable', 'string', 'max:120'],
+            'residence_landmark' => ['nullable', 'string', 'max:150'],
             'evidence_type' => ['required', 'string', Rule::in(array_keys(ResidenceVerificationService::EVIDENCE_TYPES))],
             'evidence_date' => ['nullable', 'date', 'before_or_equal:today'],
             'evidence' => [
@@ -54,7 +58,11 @@ class KycResidenceController extends Controller
 
             $state = $residence->submit(
                 $request->user(),
+                (string) $data['birth_governorate'],
                 (string) $data['residence_governorate'],
+                (string) $data['residence_district'],
+                $data['residence_area'] ?? null,
+                $data['residence_landmark'] ?? null,
                 (string) $data['evidence_type'],
                 $doc,
                 $data['evidence_date'] ?? null,
