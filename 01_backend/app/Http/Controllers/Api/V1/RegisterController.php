@@ -65,6 +65,19 @@ class RegisterController extends Controller
             ],
             'email' => 'required|email|max:255',
             'password' => 'required|min:4|max:4',
+            // P0-CREDENTIAL-SEPARATION — هذا endpoint قديم وتستعمله نسخ
+            // سابقة. لا نكسره، لكن لا نسمح له بعد اليوم بنسخ كلمة الدخول
+            // إلى PIN. النسخة الحديثة ترسل transaction_pin صراحةً؛ القديمة
+            // تُنشئ الحساب مع requires_pin_setup=true ولا تحرّك المال.
+            'transaction_pin' => [
+                'sometimes', 'nullable', 'digits_between:4,6', 'different:password',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $weak = ['0000','1111','2222','3333','4444','5555','6666','7777','8888','9999','1234','4321','0123'];
+                    if ($value !== null && in_array((string) $value, $weak, true)) {
+                        $fail('اختر رمز PIN غير متسلسل وغير مكرر.');
+                    }
+                },
+            ],
             // AMIAL-SIGNATURE-001: التوقيع الإلكتروني (base64 PNG مرسوم على الشاشة) —
             // اختياري للتوافق الخلفي، ويُحفَظ مشفّراً كسجلّ قانوني لفتح الحساب.
             'signature' => 'nullable|string|max:3000000',
@@ -204,9 +217,19 @@ class RegisterController extends Controller
             $user->password = bcrypt($request->password);
             $user->type = $accountType;
             $user->referral_id = $request->referral_id ?? null;
-            // PIN المعاملات = نفس رمز الدخول المُدخل (يغيّره المستخدم لاحقاً)
+            // لا fallback إلى كلمة المرور. إن كانت نسخة العميل حديثة تضبط
+            // PIN مستقلاً الآن؛ وإلا يبقى الحساب بحاجة إعداد PIN صريح.
             if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'transaction_pin')) {
-                $user->transaction_pin = $request->password;
+                $pin = $request->filled('transaction_pin')
+                    ? (string) $request->input('transaction_pin')
+                    : null;
+                $user->transaction_pin = $pin;
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'transaction_pin_set_at')) {
+                    $user->transaction_pin_set_at = $pin !== null ? now() : null;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'requires_pin_setup')) {
+                    $user->requires_pin_setup = $pin === null;
+                }
             }
             if ($accountType === AGENT_TYPE && \Illuminate\Support\Facades\Schema::hasColumn('users', 'agent_number')) {
                 $user->agent_number = sprintf('AG-%03d', User::where('type', AGENT_TYPE)->count() + 1);
@@ -403,6 +426,7 @@ class RegisterController extends Controller
             'agent_number' => $loginNumbers['agent_number'],
             'merchant_number' => $loginNumbers['merchant_number'],
             'verification_status' => 'pending_review',
+            'requires_pin_setup' => !$request->filled('transaction_pin'),
         ], 200);
     }
 
