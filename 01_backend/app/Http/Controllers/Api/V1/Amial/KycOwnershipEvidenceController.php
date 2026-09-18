@@ -50,8 +50,6 @@ class KycOwnershipEvidenceController extends Controller
         ]);
 
         try {
-            // اختيار الخصوصية يقع قبل الرفع: لا توجد لحظة تصل فيها الصورة
-            // لمسار عادي ثم يُطلب لاحقاً تقييدها.
             $privacy->choose($user, (string) $data['review_mode']);
             $doc = $documents->upload(
                 $user,
@@ -59,23 +57,22 @@ class KycOwnershipEvidenceController extends Controller
                 $request->file('selfie'),
             );
         } catch (DomainException $e) {
-            $dossier = $dossiers->archiveVerificationSubmission(
-            $user->fresh(),
-            3,
-            [
-                'ownership_method' => 'selfie',
-                'review_mode' => (string) $data['review_mode'],
-                'verification_dossier_reference' => $dossier->reference,
-                'selfie_document_id' => (int) $doc->id,
-            ],
-        );
-
-        return response()->json([
+            return response()->json([
                 'success' => false,
                 'code' => 'KYC_OWNERSHIP_EVIDENCE_REJECTED',
                 'message' => $e->getMessage(),
             ], 422);
         }
+
+        $dossier = $dossiers->archiveVerificationSubmission(
+            $user->fresh(),
+            3,
+            [
+                'ownership_method' => 'selfie',
+                'review_mode' => (string) $data['review_mode'],
+                'selfie_document_id' => (int) $doc->id,
+            ],
+        );
 
         return response()->json([
             'success' => true,
@@ -87,6 +84,7 @@ class KycOwnershipEvidenceController extends Controller
                 'document_id' => (int) $doc->id,
                 'status' => (string) $doc->status,
                 'review_mode' => (string) $data['review_mode'],
+                'verification_dossier_reference' => $dossier->reference,
             ],
         ], 201);
     }
