@@ -183,15 +183,15 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       return false;
     }
     if (_password.text.length < 8) {
-      _snack('كلمة مرور الدخول يجب أن تكون 8 محارف على الأقل.');
+      _snack('registration_password_min'.tr);
       return false;
     }
     if (!RegExp(r'[^0-9]').hasMatch(_password.text)) {
-      _snack('كلمة مرور الدخول لا يجوز أن تكون أرقاماً فقط.');
+      _snack('registration_password_not_numeric'.tr);
       return false;
     }
     if (_password.text != _passwordConfirm.text) {
-      _snack('تأكيد كلمة مرور الدخول غير مطابق.');
+      _snack('registration_password_confirmation_mismatch'.tr);
       return false;
     }
     if (!RegExp(r'^\d{4}
@@ -813,7 +813,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
               Expanded(
                 child: _field(
                   _password,
-                  'كلمة مرور الدخول',
+                  'registration_login_password_label'.tr,
                   obscure: true,
                 ),
               ),
@@ -821,7 +821,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
               Expanded(
                 child: _field(
                   _passwordConfirm,
-                  'تأكيد كلمة المرور',
+                  'registration_login_password_confirm_label'.tr,
                   obscure: true,
                 ),
               ),
@@ -836,8 +836,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Text(
-              'كلمة المرور تفتح الحساب، أما PIN فيُطلب عند تحريك المال. '
-              'لا تستخدم السر نفسه للاثنين.',
+              'registration_password_pin_separation_help'.tr,
               style: TextStyle(fontSize: 12.5, height: 1.5),
             ),
           ),
@@ -846,7 +845,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
               Expanded(
                 child: _field(
                   _pin,
-                  'PIN مالي من 4 أرقام',
+                  'registration_financial_pin_label'.tr,
                   keyboardType: TextInputType.number,
                   obscure: true,
                   maxLength: 4,
@@ -1109,7 +1108,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   }
 }
 ).hasMatch(_pin.text)) {
-      _snack('رمز PIN المالي يجب أن يتكون من 4 أرقام.');
+      _snack('registration_transaction_pin_digits'.tr);
       return false;
     }
     const weakPins = {
@@ -1117,7 +1116,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       '1234','4321','0123',
     };
     if (weakPins.contains(_pin.text)) {
-      _snack('اختر PIN مالياً غير متسلسل وغير مكرر.');
+      _snack('registration_transaction_pin_weak'.tr);
       return false;
     }
     if (_pin.text != _pinConfirm.text) {
