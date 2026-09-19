@@ -53,6 +53,31 @@ class AppServiceProvider extends ServiceProvider
     {
         Paginator::useBootstrap();
 
+        // AMIAL-OPERATIONAL-GOV-POLICY-001 — بعد إنشاء جدول السياسة تصبح
+        // النسخة النشطة هي مصدر نطاق التشغيل لجميع الاستدعاءات الحالية التي
+        // تقرأ config('amial.operational_governorates'). env يبقى fallback
+        // قبل الهجرة أو عند تعذر قاعدة البيانات فقط.
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('operational_governorate_policies')) {
+                $policy = \Illuminate\Support\Facades\DB::table('operational_governorate_policies')
+                    ->where('is_active', true)
+                    ->orderByDesc('version')
+                    ->first();
+
+                if ($policy) {
+                    $codes = json_decode((string) $policy->governorate_codes, true);
+                    if (is_array($codes)) {
+                        config(['amial.operational_governorates' => array_values(array_unique($codes))]);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // لا نجعل تعطل قراءة السياسة يمنع boot/migrate؛ env هو fallback الآمن.
+            \Log::warning('Operational governorate policy fallback to config', [
+                'exception' => get_class($e),
+            ]);
+        }
+
         $this->loadRoutesFrom(base_path('routes/admin/email-center.php'));
         $this->loadRoutesFrom(base_path('routes/admin/reporting-center.php'));
         $this->loadRoutesFrom(base_path('routes/admin/user-limits.php'));
