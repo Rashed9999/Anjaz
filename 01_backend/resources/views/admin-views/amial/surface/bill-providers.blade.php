@@ -16,5 +16,66 @@
             @if($p->integration_type === 'free_sadad' && $canConfigure)<div class="mt-3"><h6>توجيه خدمات Free Sadad</h6>@foreach($p->services as $service)@include('admin-views.amial.surface.partials.bill-service-routing-form', ['provider' => $p, 'service' => $service])@endforeach @include('admin-views.amial.surface.partials.bill-service-routing-form', ['provider' => $p, 'service' => null])</div>@endif
         </div></div>
     @empty <div class="alert alert-info mt-3">لا مزوّدون بعد.</div> @endforelse
+
+    <div class="alert alert-warning mt-4 mb-3">
+        <strong>قاعدة مالية:</strong>
+        العكس التلقائي لعملية ناجحة غير مفعّل في تكامل Free Sadad الحالي.
+        لا يُعاد رصيد العميل بعد نجاح المزود إلا بعد وجود تأكيد عكس موثّق من المزود ومسار مالي معتمد.
+    </div>
+
+    <div class="card border-0 shadow-sm" style="border-radius:16px">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="mb-1">آخر عمليات السداد</h5>
+                    <small class="text-muted">آخر 50 عملية — للمراقبة والتسوية، بلا كشف بيانات اعتماد المزود.</small>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>مرجع أميال</th><th>العميل</th><th>الخدمة</th><th>المبلغ</th>
+                        <th>الحالة</th><th>مرجع المزود</th><th>المحاولات</th><th>آخر تحديث</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @forelse($recentOrders as $o)
+                        @php
+                            $statusClass = match($o->status) {
+                                'success' => 'bg-success',
+                                'failed', 'reversed' => 'bg-danger',
+                                'pending_provider_confirmation', 'processing', 'pending' => 'bg-warning text-dark',
+                                default => 'bg-secondary',
+                            };
+                            $phone = (string) ($o->user?->phone ?? '');
+                            $maskedPhone = strlen($phone) > 6
+                                ? substr($phone, 0, 4).'***'.substr($phone, -3)
+                                : '—';
+                        @endphp
+                        <tr>
+                            <td><code>{{ $o->order_ulid }}</code></td>
+                            <td>{{ trim(($o->user?->f_name ?? '').' '.($o->user?->l_name ?? '')) ?: '—' }}<br><small class="text-muted">{{ $maskedPhone }}</small></td>
+                            <td>{{ $o->service?->display_name_ar ?? $o->service?->name ?? '—' }}<br><small class="text-muted">{{ $o->provider?->display_name_ar ?? $o->provider?->name ?? '—' }}</small></td>
+                            <td>{{ number_format((float)$o->amount, 2) }} ر.ي<br><small class="text-muted">رسوم {{ number_format((float)$o->fee, 2) }}</small></td>
+                            <td><span class="badge {{ $statusClass }}">{{ $o->status }}</span>
+                                @if($o->status === 'pending_provider_confirmation' && $o->next_reconciliation_at)
+                                    <br><small class="text-muted">الفحص: {{ $o->next_reconciliation_at->format('Y-m-d H:i:s') }}</small>
+                                @endif
+                            </td>
+                            <td><code>{{ $o->provider_reference ?: '—' }}</code>
+                                @if($o->provider_message)<br><small class="text-muted">{{ IlluminateSupportStr::limit($o->provider_message, 80) }}</small>@endif
+                            </td>
+                            <td>{{ $o->provider_attempt_count ?? 0 }}</td>
+                            <td>{{ $o->updated_at?->format('Y-m-d H:i:s') ?? '—' }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="8" class="text-center text-muted py-4">لا توجد عمليات سداد بعد.</td></tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 @endsection
