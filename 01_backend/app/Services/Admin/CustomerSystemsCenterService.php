@@ -216,6 +216,49 @@ class CustomerSystemsCenterService
                 null,
             ),
             $this->system(
+                'installments',
+                'أقساط العميل',
+                Schema::hasTable('installment_contracts') && Schema::hasTable('installment_schedules'),
+                'عقود التقسيط وأقساطها المستحقة تُراقَب من المنصة، لكن إنشاء العقد وشروطه ملك للتاجر والسداد ملك للعميل.',
+                [
+                    ['label' => 'عقود نشطة', 'value' => $this->count('installment_contracts', fn ($q) => $q->where('status', 'active'))],
+                    ['label' => 'أقساط متأخرة', 'value' => $this->count('installment_schedules', fn ($q) => $q->where('status', 'overdue'))],
+                ],
+                [
+                    $this->action('كشف المعاملات', 'admin.transaction.index'),
+                    $this->action('مركز التجار', 'admin.amial.hub.merchants'),
+                    $this->action('ملف العميل', 'admin.amial.customer.page'),
+                ],
+            ),
+            $this->system(
+                'gift_cards',
+                'بطاقات الهدايا',
+                Schema::hasTable('gift_cards') && Schema::hasTable('gift_card_transactions'),
+                'رصيد البطاقات وحركات الإصدار/الشحن/الاستبدال/الإلغاء قابلة للمراقبة؛ إصدار البطاقة وإدارتها من التاجر.',
+                [
+                    ['label' => 'بطاقات نشطة', 'value' => $this->count('gift_cards', fn ($q) => $q->where('status', 'active'))],
+                    ['label' => 'رصيد بطاقات نشط', 'value' => $this->sum('gift_cards', 'balance', fn ($q) => $q->where('status', 'active')), 'money' => true],
+                ],
+                [
+                    $this->action('مركز التجار', 'admin.amial.hub.merchants'),
+                    $this->action('كشف المعاملات', 'admin.transaction.index'),
+                ],
+            ),
+            $this->system(
+                'split_bills',
+                'تقسيم الفاتورة وحصص العملاء',
+                Schema::hasTable('split_bills') && Schema::hasTable('split_bill_participants'),
+                'الفاتورة المقسمة وحصة كل عميل وحالة السداد مرئية؛ دفع الحصة يمر من مسار دفع التاجر الموثق.',
+                [
+                    ['label' => 'فواتير مفتوحة/جزئية', 'value' => $this->count('split_bills', fn ($q) => $q->whereIn('status', ['open', 'partially_paid']))],
+                    ['label' => 'حصص تنتظر الدفع', 'value' => $this->count('split_bill_participants', fn ($q) => $q->where('status', 'pending'))],
+                ],
+                [
+                    $this->action('كشف المعاملات', 'admin.transaction.index'),
+                    $this->action('فواتير التجار', 'admin.amial.invoices.page'),
+                ],
+            ),
+            $this->system(
                 'credits',
                 'الأجل وديون العملاء',
                 Schema::hasTable('customer_credit_accounts') && Schema::hasTable('customer_credit_movements'),
@@ -508,6 +551,12 @@ class CustomerSystemsCenterService
                 'مراقبة الصندوق وحركاته؛ لا تعديل مباشر للرصيد من الإدارة',
             'withdrawals' =>
                 'اعتماد/رفض الطلب من شاشة السحب حسب الصلاحيات؛ لا صرف من المركز',
+            'installments' =>
+                'مراقبة فقط؛ شروط العقد وإنشاؤه للتاجر وسداد القسط للعميل',
+            'gift_cards' =>
+                'مراقبة فقط؛ الإصدار والشحن والاستبدال/الإلغاء من التاجر',
+            'split_bills' =>
+                'مراقبة فقط؛ إنشاء التقسيم للتاجر ودفع الحصة للعميل',
             'credits' =>
                 'لا تعديل مباشر للدين؛ السداد/المرتجع/التسوية من المسارات الأصلية الموثقة',
             'payment_requests' =>
@@ -542,6 +591,9 @@ class CustomerSystemsCenterService
             'donations' => 'wallet_transaction_id + receipt_id + settlement + audit',
             'family_funds' => 'سجل حركات append-only + مرجع المحفظة + قرارات الصرف',
             'withdrawals' => 'طلب السحب + op_code + transaction_id + الحالة',
+            'installments' => 'العقد + جدول الأقساط + حالة due/paid/overdue + معاملات السداد',
+            'gift_cards' => 'gift_card_transactions + balance_after + sale_ulid عند الاستبدال',
+            'split_bills' => 'split_ulid + participant + paid_transaction_id + معاملة دفع التاجر',
             'credits' => 'حركات ائتمان append-only + balance_after + مراجع البيع/السداد',
             'payment_requests' => 'request_ulid + paid_transaction_id + حالة الطلب + audit',
             'bill_pay' => 'order_ulid + provider_reference + طلبات المزود + إيصال + audit',
