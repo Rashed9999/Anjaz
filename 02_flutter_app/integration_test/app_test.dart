@@ -32,7 +32,7 @@ void main() {
     // تهيئة الاعتماديات الكاملة (controllers + services + إضافات native).
     final languages = await di.init();
 
-    await tester.pumpWidget(MyApp(languages: languages, orderID: null));
+    await tester.pumpWidget(MyApp(languages: languages));
 
     // إطارات محدودة للسماح للـ Splash بالظهور دون انتظار استقرار لا يحدث أبداً.
     await tester.pump();
