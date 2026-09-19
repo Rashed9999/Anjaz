@@ -125,6 +125,9 @@ class BillPayController extends GetxController implements GetxService {
         orders.value = items
             .map((j) => AmialBillOrder.fromJson(Map<String, dynamic>.from(j)))
             .toList();
+        lastError.value = '';
+      } else {
+        lastError.value = _msg(r) ?? 'تعذّر تحميل سجل السداد';
       }
     } catch (e) {
       lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
