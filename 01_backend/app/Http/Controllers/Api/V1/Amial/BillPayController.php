@@ -102,7 +102,7 @@ class BillPayController extends Controller
             default => 'BILL_PAY_UNKNOWN',
         };
 
-        return $this->ok(['order' => $order], $code, $order->provider_message ?? 'Order processed');
+        return $this->ok(['order' => $this->customerOrder($order)], $code, $order->provider_message ?? 'Order processed');
     }
 
     public function showOrder(Request $request, string $ulid): JsonResponse
@@ -113,7 +113,7 @@ class BillPayController extends Controller
 
         if (!$order) return $this->error('NOT_FOUND', 'الطلب غير موجود', 404);
 
-        return $this->ok(['order' => $order]);
+        return $this->ok(['order' => $this->customerOrder($order)]);
     }
 
     public function listOrders(Request $request): JsonResponse
@@ -128,8 +128,36 @@ class BillPayController extends Controller
                 'per_page' => $orders->perPage(),
                 'current_page' => $orders->currentPage(),
             ],
-            'items' => $orders->items(),
+            'items' => collect($orders->items())
+                ->map(fn (BillPaymentOrder $order) => $this->customerOrder($order))
+                ->values()
+                ->all(),
         ]);
+    }
+
+    /**
+     * عقد العميل متعمّد وصغير. لا نسرّب idempotency_key أو correlation_id
+     * أو subscriber_extra أو إعدادات الرسوم الداخلية لمجرد أن Eloquent
+     * يستطيع تحويل النموذج كاملاً إلى JSON.
+     *
+     * @return array<string,mixed>
+     */
+    private function customerOrder(BillPaymentOrder $order): array
+    {
+        return [
+            'id' => (int) $order->id,
+            'order_ulid' => (string) $order->order_ulid,
+            'user_id' => (int) $order->user_id,
+            'subscriber_account' => (string) $order->subscriber_account,
+            'amount' => (string) $order->amount,
+            'fee' => (string) $order->fee,
+            'total_debited' => (string) $order->total_debited,
+            'status' => (string) $order->status,
+            'provider_reference' => $order->provider_reference,
+            'provider_message' => $order->provider_message,
+            'completed_at' => $order->completed_at?->toIso8601String(),
+            'created_at' => $order->created_at?->toIso8601String(),
+        ];
     }
 
     // Helpers
