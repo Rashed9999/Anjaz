@@ -116,7 +116,7 @@ class _YemenResidencePickerState extends State<YemenResidencePicker> {
           value: _governorate,
           helper:
               'اختر مكان إقامتك الفعلي. المحافظة غير المدعومة لا تمنع التسجيل أو التوثيق.',
-          onChanged: widget.enabled ? _selectGovernorate : null,
+          onChanged: widget.enabled ? (value) { _selectGovernorate(value); } : null,
         ),
         const SizedBox(height: 10),
         _districtDropdown(),
