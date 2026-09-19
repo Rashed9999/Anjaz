@@ -93,6 +93,7 @@ class LegalNameService
             null,
             null,
             null,
+            null,
         );
 
         return $name;
