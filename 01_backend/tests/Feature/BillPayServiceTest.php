@@ -282,6 +282,7 @@ class BillPayServiceTest extends TestCase
                 app(\App\Services\AuditService::class),
                 app(\App\Services\ReceiptService::class),
                 app(\App\Services\FeeService::class),
+                app(\App\Services\KycTierService::class),
             ])
             ->onlyMethods(['resolveProvider'])
             ->getMock();
