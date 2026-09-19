@@ -52,7 +52,7 @@ class ProfileChangeRequestService
      * `zone_code` أو أيِّ عمودٍ في الجدول.
      */
     public const CHANGEABLE = [
-        'f_name', 'l_name', 'family_name', 'father_name', 'grandfather_name', 'name_en',
+        'f_name', 'family_name', 'father_name', 'grandfather_name', 'name_en',
         'email', 'occupation', 'marital_status',
         'address', 'residence_district', 'residence_area',
         'residence_landmark', 'housing_type', 'residence_governorate',
