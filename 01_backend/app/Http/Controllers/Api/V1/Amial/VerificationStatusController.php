@@ -160,6 +160,7 @@ class VerificationStatusController extends Controller
                     'usage' => [
                         'today' => (string) $tier['today_used'],
                         'month' => (string) $tier['month_used'],
+                        'year' => (string) $tier['year_used'],
                     ],
                 ],
                 'usage_bar' => [
@@ -332,6 +333,7 @@ class VerificationStatusController extends Controller
             'max_single_transaction' => (string) ($limits['max_single_transaction'] ?? '0'),
             'max_daily_total' => (string) ($limits['max_daily_total'] ?? '0'),
             'max_monthly_total' => (string) ($limits['max_monthly_total'] ?? '0'),
+            'max_annual_total' => (string) ($limits['max_annual_total'] ?? '0'),
             'allowed_features' => array_values($limits['allowed_features'] ?? []),
         ];
     }
