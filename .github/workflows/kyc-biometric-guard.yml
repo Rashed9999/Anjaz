@@ -99,5 +99,8 @@ jobs:
       - name: حارس Cross-Tier لخدمات العميل
         run: php artisan test --compact tests/Feature/KycCrossTierServiceGuardTest.php
 
+      - name: حارس حدود مستويات التوثيق المالية
+        run: php artisan test --compact tests/Feature/KycRegulatoryLimitsTest.php
+
       - name: حارس Runtime البيومتري
         run: php artisan test --compact tests/Feature/KycBiometricProviderRuntimeTest.php
