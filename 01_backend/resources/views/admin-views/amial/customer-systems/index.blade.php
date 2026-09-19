@@ -92,6 +92,27 @@
                             </span>
                         </div>
 
+                        <div class="row g-2 mt-2">
+                            <div class="col-md-4">
+                                <div class="border rounded p-2 h-100">
+                                    <div class="small text-muted mb-1">الرؤية</div>
+                                    <div class="small fw-semibold">{{ $system['visibility'] ?? '—' }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="border rounded p-2 h-100">
+                                    <div class="small text-muted mb-1">الأوامر</div>
+                                    <div class="small fw-semibold">{{ $system['controls'] ?? '—' }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="border rounded p-2 h-100">
+                                    <div class="small text-muted mb-1">الأثر</div>
+                                    <div class="small fw-semibold">{{ $system['audit'] ?? '—' }}</div>
+                                </div>
+                            </div>
+                        </div>
+
                         @if(!empty($system['metrics']))
                             <div class="row g-2 mt-2">
                                 @foreach($system['metrics'] as $metric)
