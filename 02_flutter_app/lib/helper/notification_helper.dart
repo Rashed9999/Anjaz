@@ -150,6 +150,13 @@ class NotificationHelper {
 
           }else if (notificationBody.type == 'download' && notificationBody.filePath != null) {
             await OpenFile.open(notificationBody.filePath!);
+          }else{
+            await Get.find<NotificationController>().getNotificationList(true);
+            if(Get.currentRoute != RouteHelper.navbar){
+              Get.toNamed(RouteHelper.getNavBarRoute(selectedPage: 'notification'));
+            }else{
+              menuItemController.selectNotificationPage();
+            }
           }
 
         }
@@ -200,7 +207,7 @@ class NotificationHelper {
         }
 
       } else{
-        Get.find<RequestedMoneyController>().getRequestedMoneyList(true);
+        Get.find<NotificationController>().getNotificationList(true);
       }
 
     });
@@ -319,6 +326,13 @@ class NotificationHelper {
             requestedMoneyController.setIndex(1, isUpdate: false);
             Get.to(()=> const RequestedMoneyListScreen(requestType: RequestType.withdraw, isFromNotification: true));
 
+          }else{
+            await Get.find<NotificationController>().getNotificationList(true);
+            if(Get.currentRoute != RouteHelper.navbar){
+              Get.toNamed(RouteHelper.getNavBarRoute(selectedPage: 'notification'));
+            }else{
+              menuItemController.selectNotificationPage();
+            }
           }
 
         }
