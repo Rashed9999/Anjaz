@@ -64,6 +64,38 @@ class CustomerSystemsCenterGuardTest extends TestCase
         $this->assertSame('safe_payment', $snapshot['policy_blocks'][0]['feature']);
     }
 
+    public function test_center_covers_the_core_customer_layer_instead_of_only_recent_work(): void
+    {
+        $snapshot = app(CustomerSystemsCenterService::class)->snapshot();
+        $keys = collect($snapshot['systems'])->pluck('key')->all();
+
+        foreach ([
+            'kyc',
+            'limits',
+            'guards',
+            'wallet_transfers',
+            'merchant_payments',
+            'safe_payment',
+            'donations',
+            'family_funds',
+            'withdrawals',
+            'idempotency',
+            'credits',
+            'payment_requests',
+            'bill_pay',
+            'receipts',
+            'notifications',
+            'reports',
+            'quick_pay',
+        ] as $key) {
+            $this->assertContains(
+                $key,
+                $keys,
+                "نظام العميل {$key} اختفى من مركز الأنظمة الإداري."
+            );
+        }
+    }
+
     public function test_center_declares_notification_delivery_gap_instead_of_claiming_delivery(): void
     {
         $snapshot = app(CustomerSystemsCenterService::class)->snapshot();
