@@ -452,13 +452,55 @@ class CustomerSystemsCenterService
             'actions' => array_values(array_filter($actions)),
             'gap' => $gap,
             'visibility' => $ready ? 'مرئي من لوحة الإدارة' : 'غير مكتمل إدارياً',
-            'controls' => in_array($key, ['guards', 'idempotency'], true)
-                ? 'مراقبة فقط — لا يوجد زر لتعطيل الحارس'
-                : ($actions !== [] ? 'الأوامر من الشاشات الأصلية المحمية' : 'لا إجراء إداري مطلوب'),
-            'audit' => Schema::hasTable('audit_decisions')
-                ? 'له أثر قابل للتتبع في السجل أو المرجع التشغيلي'
-                : 'سجل التدقيق غير متاح',
+            'controls' => $this->controlDescription($key, $actions),
+            'audit' => $this->auditDescription($key),
         ];
+    }
+
+    /** @param array<int,array<string,mixed>|null> $actions */
+    private function controlDescription(string $key, array $actions): string
+    {
+        return match ($key) {
+            'guards', 'idempotency' =>
+                'مراقبة فقط — لا يوجد زر لتعطيل الحارس أو تجاوز القرار',
+            'reports', 'receipts' =>
+                'قراءة وتتبع؛ أي تصحيح يتم من مصدر العملية لا من التقرير/السند',
+            'wallet_transfers', 'merchant_payments' =>
+                'التتبع من الشاشات المالية؛ لا تعديل رصيد مباشر من المركز',
+            'safe_payment' =>
+                'الحسم من شاشة النزاع المحمية وبصلاحياتها، لا من هذا المركز',
+            'kyc' =>
+                'الاعتماد والرفض وإعادة الطلب من لجنة التحقق فقط',
+            'limits' =>
+                'تعديل السياسة والاستثناء المنخفض من مركز الحدود مع سبب وتدقيق',
+            default =>
+                $actions !== [] ? 'الأوامر من الشاشات الأصلية المحمية' : 'لا إجراء إداري مطلوب',
+        };
+    }
+
+    private function auditDescription(string $key): string
+    {
+        return match ($key) {
+            'kyc' => 'وثائق + مراجع/قرار + ملف تسجيل + audit_decisions',
+            'limits' => 'قبل/بعد + الموظف + السبب داخل audit_decisions',
+            'guards' => 'CUSTOMER_POLICY_BLOCKED مع العميل والسبب والميزة والمبلغ',
+            'idempotency' => 'IDEMPOTENCY_BODY_MISMATCH + المفتاح/الارتباط عند توفره',
+            'wallet_transfers' => 'transaction_id + قيود الدفتر + سجل التدقيق',
+            'merchant_payments' => 'مرجع المعاملة + إيصال + رسوم + قيود الدفتر',
+            'safe_payment' => 'دورة الحالة + الأموال المحجوزة + قرار النزاع + audit',
+            'donations' => 'wallet_transaction_id + receipt_id + settlement + audit',
+            'family_funds' => 'سجل حركات append-only + مرجع المحفظة + قرارات الصرف',
+            'withdrawals' => 'طلب السحب + op_code + transaction_id + الحالة',
+            'credits' => 'حركات ائتمان append-only + balance_after + مراجع البيع/السداد',
+            'payment_requests' => 'request_ulid + paid_transaction_id + حالة الطلب + audit',
+            'bill_pay' => 'order_ulid + provider_reference + طلبات المزود + إيصال + audit',
+            'receipts' => 'receipt_number + verification_code + مرجع المعاملة + حالة PDF',
+            'notifications' => 'إنشاء/قراءة داخليان؛ Delivery الخارجي معلن كفجوة إن لم يوجد سجله',
+            'reports' => 'قراءة من الدفتر/المعاملات؛ التقرير لا يكتب حقيقة مالية جديدة',
+            default => Schema::hasTable('audit_decisions')
+                ? 'مرجع تشغيلي وسجل تدقيق عند وجود قرار'
+                : 'سجل التدقيق غير متاح',
+        };
     }
 
     /** @return array<string,mixed>|null */
