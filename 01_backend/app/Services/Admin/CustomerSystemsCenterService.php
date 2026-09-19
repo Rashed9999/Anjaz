@@ -103,6 +103,118 @@ class CustomerSystemsCenterService
                 ],
             ),
             $this->system(
+                'wallet_transfers',
+                'المحفظة والتحويلات',
+                Schema::hasTable('transactions') && $this->hasRoute('admin.transaction.index'),
+                'الحركة الأساسية للعميل: إرسال واستقبال وحركات المحفظة، مع التتبع من كشف المعاملات إلى ملف العميل والدفتر.',
+                [
+                    ['label' => 'حركات عملاء اليوم', 'value' => $this->customerTransactionCountToday()],
+                    ['label' => 'تحويلات اليوم', 'value' => $this->customerTransactionTypeCountToday(['send_money', 'received_money'])],
+                ],
+                [
+                    $this->action('كشف المعاملات', 'admin.transaction.index'),
+                    $this->action('ملف العميل', 'admin.amial.customer.page'),
+                    $this->action('مركز الدفتر', 'admin.amial.ledger.page'),
+                ],
+            ),
+            $this->system(
+                'merchant_payments',
+                'دفع العملاء للتجار',
+                Schema::hasTable('transactions') && $this->hasRoute('admin.transaction.index'),
+                'دفعات QR/POS/التاجر ظاهرة من كشف المعاملات، ويمكن تتبع مرجعها إلى التاجر والرسوم والدفتر.',
+                [
+                    ['label' => 'دفعات اليوم', 'value' => $this->customerTransactionTypeCountToday([
+                        'merchant_payment', 'pay_merchant', 'pos_payment', 'qr_payment',
+                    ])],
+                    ['label' => 'دفعات آخر 7 أيام', 'value' => $this->customerTransactionTypeCountSince([
+                        'merchant_payment', 'pay_merchant', 'pos_payment', 'qr_payment',
+                    ], now()->subDays(7))],
+                ],
+                [
+                    $this->action('كشف المعاملات', 'admin.transaction.index', ['trx_type' => 'merchant_payment']),
+                    $this->action('فواتير التجار', 'admin.amial.invoices.page'),
+                    $this->action('مركز التجار', 'admin.amial.hub.merchants'),
+                ],
+            ),
+            $this->system(
+                'safe_payment',
+                'الدفع الآمن',
+                Schema::hasTable('safe_payments') && $this->hasRoute('admin.amial.safe-payments.index'),
+                'الأموال المحجوزة والنزاعات والحسم الإداري تمر من شاشة الدفع الآمن نفسها، ولا تُحل من هذا المركز مباشرةً.',
+                [
+                    ['label' => 'نزاعات مفتوحة', 'value' => $this->count('safe_payments', fn ($q) => $q->where('status', 'disputed'))],
+                    ['label' => 'مبلغ محجوز', 'value' => $this->sum('safe_payments', 'held_amount', fn ($q) => $q->where('held_amount', '>', 0)), 'money' => true],
+                ],
+                [
+                    $this->action('الدفع الآمن والنزاعات', 'admin.amial.safe-payments.index'),
+                    $this->action('سجل التدقيق', 'admin.amial.audit.index', ['action' => 'SAFE_PAYMENT']),
+                ],
+            ),
+            $this->system(
+                'donations',
+                'التبرعات والجمعيات',
+                Schema::hasTable('donations') && $this->hasRoute('admin.amial.charity.page'),
+                'التبرعات والحملات والتسويات لها لوحة إدارة مستقلة، مع مرجع المحفظة والإيصال والتسوية.',
+                [
+                    ['label' => 'تبرعات اليوم', 'value' => $this->count('donations', fn ($q) => $q->whereDate('donated_at', today()))],
+                    ['label' => 'قيمة اليوم', 'value' => $this->sum('donations', 'amount', fn ($q) => $q->whereDate('donated_at', today())), 'money' => true],
+                ],
+                [
+                    $this->action('لوحة التبرعات', 'admin.amial.charity.page'),
+                    $this->action('سجل التدقيق', 'admin.amial.audit.index', ['action' => 'CHARITY']),
+                ],
+            ),
+            $this->system(
+                'family_funds',
+                'الصندوق العائلي',
+                Schema::hasTable('family_funds')
+                    && Schema::hasTable('family_fund_transactions')
+                    && $this->hasRoute('admin.amial.surface.funds'),
+                'الصناديق وأرصدة الحوض وحركات المساهمة والصرف والطلبات المعلقة ظاهرة للإدارة من مصدرها التشغيلي.',
+                [
+                    ['label' => 'صناديق نشطة', 'value' => $this->count('family_funds', fn ($q) => $q->where('status', 'active'))],
+                    ['label' => 'صرف ينتظر اعتماداً', 'value' => $this->count('family_fund_transactions', fn ($q) => $q->where('status', 'pending_approval'))],
+                ],
+                [
+                    $this->action('صناديق العائلة', 'admin.amial.surface.funds'),
+                    $this->action('سجل التدقيق', 'admin.amial.audit.index', ['action' => 'FAMILY_FUND']),
+                ],
+            ),
+            $this->system(
+                'withdrawals',
+                'السحب المبدوء من العميل',
+                Schema::hasTable('withdrawal_requests') && $this->hasRoute('admin.withdraw.index'),
+                'طلبات السحب الصادرة من تطبيق العميل تبقى قابلة للمراقبة حتى التنفيذ أو الإلغاء أو الانتهاء.',
+                [
+                    ['label' => 'طلبات معلقة', 'value' => $this->count('withdrawal_requests', fn ($q) => $q->where('status', 'pending'))],
+                    ['label' => 'مبلغ محجوز للطلبات المعلقة', 'value' => $this->sum('withdrawal_requests', 'total_debit', fn ($q) => $q->where('status', 'pending')), 'money' => true],
+                ],
+                [
+                    $this->action('طلبات السحب', 'admin.withdraw.index'),
+                    $this->action('كشف المعاملات', 'admin.transaction.index'),
+                ],
+            ),
+            $this->system(
+                'idempotency',
+                'سلامة التكرار وإعادة الإرسال',
+                Schema::hasTable('audit_decisions'),
+                'منع تنفيذ الطلب المالي نفسه مرتين حارس خلفي إلزامي؛ الإدارة ترى الاصطدامات ولا تملك زر تعطيله.',
+                [
+                    ['label' => 'محتوى مختلف / 24س', 'value' => $this->count('audit_decisions', fn ($q) => $q
+                        ->where('action', 'IDEMPOTENCY_BODY_MISMATCH')
+                        ->where('created_at', '>=', now()->subDay()))],
+                    ['label' => 'محتوى مختلف / 7 أيام', 'value' => $this->count('audit_decisions', fn ($q) => $q
+                        ->where('action', 'IDEMPOTENCY_BODY_MISMATCH')
+                        ->where('created_at', '>=', now()->subDays(7)))],
+                ],
+                [
+                    $this->action('أحداث منع التكرار', 'admin.amial.audit.index', ['action' => 'IDEMPOTENCY_BODY_MISMATCH']),
+                    $this->action('كشف المعاملات', 'admin.transaction.index'),
+                ],
+                'complete',
+                null,
+            ),
+            $this->system(
                 'credits',
                 'الأجل وديون العملاء',
                 Schema::hasTable('customer_credit_accounts') && Schema::hasTable('customer_credit_movements'),
@@ -340,7 +452,7 @@ class CustomerSystemsCenterService
             'actions' => array_values(array_filter($actions)),
             'gap' => $gap,
             'visibility' => $ready ? 'مرئي من لوحة الإدارة' : 'غير مكتمل إدارياً',
-            'controls' => $key === 'guards'
+            'controls' => in_array($key, ['guards', 'idempotency'], true)
                 ? 'مراقبة فقط — لا يوجد زر لتعطيل الحارس'
                 : ($actions !== [] ? 'الأوامر من الشاشات الأصلية المحمية' : 'لا إجراء إداري مطلوب'),
             'audit' => Schema::hasTable('audit_decisions')
@@ -362,6 +474,40 @@ class CustomerSystemsCenterService
     private function hasRoute(string $name): bool
     {
         return Route::has($name);
+    }
+
+    private function customerTransactionCountToday(): int
+    {
+        if (!Schema::hasTable('transactions') || !Schema::hasTable('users')) {
+            return 0;
+        }
+
+        return (int) DB::table('transactions as t')
+            ->join('users as u', 'u.id', '=', 't.user_id')
+            ->where('u.type', 2)
+            ->whereDate('t.created_at', today())
+            ->count();
+    }
+
+    /** @param array<int,string> $types */
+    private function customerTransactionTypeCountToday(array $types): int
+    {
+        return $this->customerTransactionTypeCountSince($types, now()->startOfDay());
+    }
+
+    /** @param array<int,string> $types */
+    private function customerTransactionTypeCountSince(array $types, \DateTimeInterface $since): int
+    {
+        if (!Schema::hasTable('transactions') || !Schema::hasTable('users')) {
+            return 0;
+        }
+
+        return (int) DB::table('transactions as t')
+            ->join('users as u', 'u.id', '=', 't.user_id')
+            ->where('u.type', 2)
+            ->whereIn('t.transaction_type', $types)
+            ->where('t.created_at', '>=', $since)
+            ->count();
     }
 
     private function count(string $table, ?callable $scope = null): int
