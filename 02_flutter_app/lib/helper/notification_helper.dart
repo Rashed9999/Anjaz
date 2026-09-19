@@ -52,6 +52,138 @@ class NotificationHelper {
     await android?.createNotificationChannel(_androidChannel);
   }
 
+  // AMIAL-NOTIFY-DEEPLINK-002 — إشعار cold-start يبقى معلّقاً حتى
+  // ينجح تسجيل الدخول. لا نفتح بيانات مالية فوق شاشة الدخول ولا نرمي الحدث.
+  static NotificationBody? _pendingInitialNotification;
+
+  static void setPendingInitialNotification(NotificationBody? body) {
+    _pendingInitialNotification = body;
+  }
+
+  static Future<bool> consumePendingInitialNotification() async {
+    final body = _pendingInitialNotification;
+    if (body == null) return false;
+
+    // consume-once: الضغط نفسه لا يعيد فتح الشاشة عند rebuild أو login ثانٍ.
+    _pendingInitialNotification = null;
+    await _routeNotificationBody(body);
+    return true;
+  }
+
+  static Future<void> _openNotificationCenter() async {
+    try {
+      await Get.find<NotificationController>().getNotificationList(true);
+    } catch (_) {
+      // القائمة ستُحمّل من الشاشة نفسها إن لم يكن controller جاهزاً بعد.
+    }
+
+    final MenuItemController menuItemController = Get.find();
+    if (Get.currentRoute != RouteHelper.navbar) {
+      Get.toNamed(RouteHelper.getNavBarRoute(selectedPage: 'notification'));
+    } else {
+      menuItemController.selectNotificationPage();
+    }
+  }
+
+  static Future<void> _routeNotificationBody(NotificationBody notificationBody) async {
+    final String? type = notificationBody.type;
+    if (type == null || type.isEmpty || type == 'general') {
+      await _openNotificationCenter();
+      return;
+    }
+
+    final TransactionHistoryController transactionHistoryController = Get.find();
+
+    if (transactionHistoryController.transactionType.contains(type)) {
+      final int index = transactionHistoryController.transactionType.indexOf(type);
+      transactionHistoryController.setIndex(index, reload: true);
+      await transactionHistoryController.getTransactionData(
+        1,
+        transactionType: transactionHistoryController.transactionType[index],
+      );
+
+      final MenuItemController menuItemController = Get.find();
+      if (Get.currentRoute != RouteHelper.navbar) {
+        Get.toNamed(RouteHelper.getNavBarRoute(selectedPage: 'history'));
+      } else {
+        menuItemController.selectHistoryPage();
+      }
+      return;
+    }
+
+    if (type == 'add_money_bonus') {
+      transactionHistoryController.setIndex(
+        transactionHistoryController.transactionType.indexOf('add_money'),
+        reload: false,
+      );
+      final MenuItemController menuItemController = Get.find();
+      if (Get.currentRoute != RouteHelper.navbar) {
+        Get.toNamed(RouteHelper.getNavBarRoute(selectedPage: 'history'));
+      } else {
+        menuItemController.selectHistoryPage();
+      }
+      return;
+    }
+
+    if (_isBillPaymentType(type)) {
+      await Get.find<BillPayController>().loadOrders();
+      Get.to(() => const BillPayHistoryScreen());
+      return;
+    }
+
+    if (type == 'payment_request_received') {
+      Get.to(() => const IncomingRequestsScreen());
+      return;
+    }
+
+    if (type == 'payment_request_declined') {
+      Get.to(() => const OutgoingRequestsScreen());
+      return;
+    }
+
+    if (type == 'request_money') {
+      Get.to(() => const RequestedMoneyListScreen(requestType: RequestType.request));
+      return;
+    }
+
+    if (type == 'send_request_money') {
+      Get.to(() => const RequestedMoneyListScreen(requestType: RequestType.sendRequest));
+      return;
+    }
+
+    final RequestedMoneyController requestedMoneyController = Get.find();
+    if (type == 'denied_money') {
+      requestedMoneyController.setIndex(2, isUpdate: false);
+      Get.to(() => const RequestedMoneyListScreen(
+        requestType: RequestType.sendRequest,
+        isFromNotification: true,
+      ));
+      return;
+    }
+
+    if (type == 'withdraw_money_denied') {
+      requestedMoneyController.setIndex(2, isUpdate: false);
+      Get.to(() => const RequestedMoneyListScreen(
+        requestType: RequestType.withdraw,
+        isFromNotification: true,
+      ));
+      return;
+    }
+
+    if (type == 'withdraw_money_approved') {
+      requestedMoneyController.setIndex(1, isUpdate: false);
+      Get.to(() => const RequestedMoneyListScreen(
+        requestType: RequestType.withdraw,
+        isFromNotification: true,
+      ));
+      return;
+    }
+
+    // أي نوع جديد (KYC/دين/أمان/اشتراك...) يفتح المصدر الصحيح العام
+    // بدلاً من ربطه خطأً بصندوق «طلبات الأموال» القديم.
+    await _openNotificationCenter();
+  }
+
   /// تهيئة آمنة للعامل الخلفي: بلا GetX أو تنقل، فقط قناة النظام وعرضه.
   static Future<void> initializeBackground(
       FlutterLocalNotificationsPlugin plugin) async {
