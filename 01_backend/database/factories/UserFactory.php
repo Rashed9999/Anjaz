@@ -34,7 +34,7 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'is_phone_verified' => 1,
             'is_email_verified' => 1,
-            'type' => 2,                 // 0=admin, 1=merchant, 2=customer
+            'type' => 2,                 // 0=admin, 1=agent, 2=customer, 3=merchant
             'role' => 'customer',
             'verification_level' => 'basic',
             // الاختبارات المالية تنشئ عميلاً صالحاً افتراضياً؛ الاختبارات
@@ -60,10 +60,10 @@ class UserFactory extends Factory
         return $this->state(fn () => ['type' => 0, 'role' => 'super_admin']);
     }
 
-    /** مستخدم تاجر (type=1). */
+    /** مستخدم تاجر حقيقي وفق app/Lib/Constant.php (MERCHANT_TYPE = 3). */
     public function merchant(): static
     {
-        return $this->state(fn () => ['type' => 1, 'role' => 'merchant']);
+        return $this->state(fn () => ['type' => 3, 'role' => 'merchant']);
     }
 
     /** خارج منطقة التشغيل (لاختبار سياسة الـ Zone). */
