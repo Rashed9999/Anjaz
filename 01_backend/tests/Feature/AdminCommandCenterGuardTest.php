@@ -281,6 +281,7 @@ class AdminCommandCenterGuardTest extends TestCase
         'admin.amial.catalog.page',
         'admin.amial.charity.page',
         'admin.amial.customer.page',
+        'admin.amial.customer-systems.index',
         'admin.amial.entitlements.page',
         'admin.amial.executive.index',
         'admin.amial.fees.index',
