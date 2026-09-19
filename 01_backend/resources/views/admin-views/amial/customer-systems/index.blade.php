@@ -377,7 +377,7 @@
         </div>
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">
-                <thead><tr><th>الوقت</th><th>العميل</th><th>النوع</th><th>المرجع</th><th>الحالة</th><th>المحاولة</th><th>HTTP</th><th>مرجع FCM</th><th>الخطأ</th></tr></thead>
+                <thead><tr><th>الوقت</th><th>العميل</th><th>القناة</th><th>النوع</th><th>المرجع</th><th>الحالة</th><th>المحاولة</th><th>HTTP</th><th>مرجع FCM</th><th>الخطأ</th></tr></thead>
                 <tbody>
                 @forelse($snapshot['notification_deliveries'] ?? [] as $row)
                     <tr>
@@ -387,6 +387,7 @@
                                 <a href="{{ route('admin.amial.customer.page') }}?open={{ $row['user_id'] }}">#{{ $row['user_id'] }}</a>
                             @else — @endif
                         </td>
+                        <td><code>{{ $row['channel'] ?: 'fcm' }}</code></td>
                         <td><code>{{ $row['notification_type'] ?: '—' }}</code></td>
                         <td class="font-monospace small">{{ $row['transaction_id'] ?: '—' }}</td>
                         <td>
@@ -400,7 +401,7 @@
                         <td class="small">{{ $row['error_code'] ?: '—' }}{{ $row['error_message'] ? ' — '.IlluminateSupportStr::limit((string)$row['error_message'], 90) : '' }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="9" class="text-center text-muted py-4">لا توجد نتائج إرسال Push مسجلة بعد.</td></tr>
+                    <tr><td colspan="10" class="text-center text-muted py-4">لا توجد نتائج إرسال Push مسجلة بعد.</td></tr>
                 @endforelse
                 </tbody>
             </table>
