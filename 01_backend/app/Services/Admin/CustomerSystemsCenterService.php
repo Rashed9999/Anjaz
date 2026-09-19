@@ -196,6 +196,9 @@ class CustomerSystemsCenterService
                 'metrics' => [],
                 'actions' => [],
                 'gap' => 'مؤجل عمداً.',
+                'visibility' => 'ظاهر كمؤجل بقرار المشروع',
+                'controls' => 'لا أوامر حتى استئناف العمل عليه',
+                'audit' => 'لا أحداث تشغيلية لأنه غير مفعّل',
             ],
         ];
     }
@@ -336,6 +339,13 @@ class CustomerSystemsCenterService
             'metrics' => $metrics,
             'actions' => array_values(array_filter($actions)),
             'gap' => $gap,
+            'visibility' => $ready ? 'مرئي من لوحة الإدارة' : 'غير مكتمل إدارياً',
+            'controls' => $key === 'guards'
+                ? 'مراقبة فقط — لا يوجد زر لتعطيل الحارس'
+                : ($actions !== [] ? 'الأوامر من الشاشات الأصلية المحمية' : 'لا إجراء إداري مطلوب'),
+            'audit' => Schema::hasTable('audit_decisions')
+                ? 'له أثر قابل للتتبع في السجل أو المرجع التشغيلي'
+                : 'سجل التدقيق غير متاح',
         ];
     }
 
