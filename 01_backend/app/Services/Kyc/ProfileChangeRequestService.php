@@ -52,7 +52,7 @@ class ProfileChangeRequestService
      * `zone_code` أو أيِّ عمودٍ في الجدول.
      */
     public const CHANGEABLE = [
-        'f_name', 'l_name', 'father_name', 'grandfather_name', 'name_en',
+        'f_name', 'l_name', 'family_name', 'father_name', 'grandfather_name', 'name_en',
         'email', 'occupation', 'marital_status',
         'address', 'residence_district', 'residence_area',
         'residence_landmark', 'housing_type', 'residence_governorate',
@@ -69,7 +69,7 @@ class ProfileChangeRequestService
      * حقولٌ لا تُقبل بلا وثيقةٍ داعمة — وهي التي تُعرّف الشخص.
      */
     public const NEEDS_DOCUMENT = [
-        'f_name', 'l_name', 'father_name', 'grandfather_name', 'name_en',
+        'f_name', 'l_name', 'family_name', 'father_name', 'grandfather_name', 'name_en',
         'identification_number', 'identification_type',
         'identification_issue_date', 'identification_expiry_date',
         'id_place_of_issue',
@@ -82,12 +82,18 @@ class ProfileChangeRequestService
      * بيانٍ جديدٍ لم تُراجَع وثيقتُه هو التزويرُ بعينه.
      */
     public const RESETS_VERIFICATION = [
-        'f_name', 'l_name', 'father_name', 'grandfather_name', 'name_en',
+        'f_name', 'l_name', 'family_name', 'father_name', 'grandfather_name', 'name_en',
         'identification_number', 'identification_type',
     ];
 
-    public function __construct(private readonly AuditService $audit)
-    {
+    private const LEGAL_NAME_FIELDS = [
+        'f_name', 'l_name', 'family_name', 'father_name', 'grandfather_name',
+    ];
+
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly LegalNameService $legalNames,
+    ) {
     }
 
     /**
@@ -215,6 +221,12 @@ class ProfileChangeRequestService
                     $account->{$row->field} = $row->new_value;
                 }
 
+                if ($row->field === 'l_name' && Schema::hasColumn('users', 'family_name')) {
+                    $account->family_name = $row->new_value;
+                } elseif ($row->field === 'family_name') {
+                    $account->l_name = $row->new_value;
+                }
+
                 // **والاعتمادُ يُبطل التوثيقَ حين يمسّ الهويّة.**
                 //
                 // الوثيقةُ المعتمَدةُ تخصّ البيانَ القديم، وإبقاءُ
@@ -227,6 +239,16 @@ class ProfileChangeRequestService
                 }
 
                 $account->save();
+
+                if (in_array($row->field, self::LEGAL_NAME_FIELDS, true)) {
+                    $this->legalNames->rebuildDeclaredNameFromAccount(
+                        $account,
+                        'profile_change_request',
+                        $reviewer->id,
+                        $reason ?: 'اعتماد طلب تحديث جزء من الاسم القانوني',
+                    );
+                    $account->refresh();
+                }
             }
 
             DB::table('profile_change_requests')->where('id', $requestId)->update([
@@ -250,8 +272,13 @@ class ProfileChangeRequestService
                 'context' => [
                     'request_id' => $requestId,
                     'field' => $row->field,
-                    'old_value' => $row->old_value,
-                    'new_value' => $row->new_value,
+                    // القيم نفسها تبقى في جدول طلب التغيير المحدود؛ لا نكرر
+                    // الاسم/رقم الهوية في audit العام واسع القراءة.
+                    'values_redacted' => in_array($row->field, self::NEEDS_DOCUMENT, true),
+                    'old_value' => in_array($row->field, self::NEEDS_DOCUMENT, true)
+                        ? null : $row->old_value,
+                    'new_value' => in_array($row->field, self::NEEDS_DOCUMENT, true)
+                        ? null : $row->new_value,
                     'reset_verification' => $approve
                         && in_array($row->field, self::RESETS_VERIFICATION, true),
                 ],
