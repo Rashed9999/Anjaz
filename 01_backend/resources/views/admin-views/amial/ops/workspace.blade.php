@@ -38,6 +38,7 @@
             ['مراجعة الهوية', route('admin.amial.kyc.page'), 'platform.customers.kyc.view'], ['طلبات تحديث بيانات العملاء', route('admin.amial.kyc.changes.page'), 'platform.customers.freeze'], ['ملفات فتح الحسابات', route('admin.amial.registration-dossiers.page'), 'platform.registrations.view'], ['مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.audit.view'], ['سجل التدقيق', route('admin.amial.audit.index'), 'platform.audit.view'], ['الإشراف والأمن', route('admin.amial.supervision.index'), 'platform.audit.view'], ['أحداث الأمان', route('admin.amial.security-events.index'), 'platform.audit.view'], ['حارس الأمان', route('admin.amial.sentinel.index'), 'platform.audit.view'], ['صحة النظام', route('admin.amial.system.health'), 'platform.audit.view'], ['ساهر — رادار النظام', route('admin.amial.saher.index'), 'saher.view'],
         ]],
         ['id'=>'services','title'=>'خدمات المنصّة','icon'=>'🧩','desc'=>'إدارة الخدمات، التكاملات، وواجهات البرمجة.','items'=>[
+            ['مركز أنظمة العميل', route('admin.amial.customer-systems.index'), 'platform.audit.view'],
             ['النزاعات والدفع الآمن', route('admin.amial.hub.disputes'), 'platform.transactions.view'], ['الجمعيات والتبرعات', route('admin.amial.charity.page'), 'platform.transactions.view'], ['مزوّدو الفواتير', route('admin.amial.surface.bill-providers'), 'platform.settings.update'], ['صناديق العائلة', route('admin.amial.surface.funds'), 'platform.transactions.view'], ['طلبات الأموال', route('admin.amial.surface.payment-requests'), 'platform.transactions.view'],
         ]],
         ['id'=>'content','title'=>'المحتوى والتواصل','icon'=>'📣','desc'=>'البانرات، الإشعارات، الأسئلة الشائعة، واللغات.','items'=>[
@@ -58,6 +59,7 @@
     $frequent = array_values(array_filter([
         ['إنشاء عميل جديد', route('admin.amial.hub.customers'), 'platform.customers.view', 'tio-user-add'],
         ['بحث عن معاملة', route('admin.transaction.index'), 'platform.transactions.view', 'tio-search'],
+        ['أنظمة العميل', route('admin.amial.customer-systems.index'), 'platform.audit.view', 'tio-dashboard-vs-outlined'],
         ['تقارير الامتثال', route('admin.amial.aml.page'), 'platform.audit.view', 'tio-shield-outlined'],
         ['الموافقات المعلّقة', route('admin.amial.ops.index'), 'platform.ops.view', 'tio-checkmark-square'],
         ['تنبيهات النظام', route('admin.amial.system.health'), 'platform.audit.view', 'tio-notifications'],
