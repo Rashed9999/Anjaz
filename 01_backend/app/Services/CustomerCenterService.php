@@ -114,7 +114,21 @@ class CustomerCenterService
         return [
             'profile' => [
                 'id' => (int) $customer->id,
-                'name' => trim((string) ($customer->f_name . ' ' . $customer->l_name)) ?: '—',
+                'name' => trim((string) ($customer->verified_legal_name
+                    ?: $customer->declared_legal_name
+                    ?: trim((string) ($customer->f_name . ' ' . $customer->l_name)))) ?: '—',
+                'declared_legal_name' => (string) ($customer->declared_legal_name ?? ''),
+                'verified_legal_name' => (string) ($customer->verified_legal_name ?? ''),
+                'legal_name_status' => (string) ($customer->legal_name_status ?? 'legacy'),
+                'legal_name_status_label' => match ((string) ($customer->legal_name_status ?? 'legacy')) {
+                    'declared' => 'مصرّح به — غير موثق',
+                    'legacy_declared' => 'اسم تاريخي — يحتاج تحقق',
+                    'residence_matched' => 'مطابق لإثبات السكن',
+                    'identity_verified' => 'موثق بالهوية',
+                    'declared_changed' => 'تغيّر — يحتاج مطابقة جديدة',
+                    'change_pending_reverification' => 'تغيّر — إعادة التوثيق مطلوبة',
+                    default => 'حالة الاسم غير محسومة',
+                },
                 'phone' => $revealPii ? (string) $customer->phone : $this->maskPhone($customer->phone),
                 'email' => $revealPii ? (string) ($customer->email ?? '—') : $this->maskEmail($customer->email),
                 'type' => $this->typeLabel((int) $customer->type),
