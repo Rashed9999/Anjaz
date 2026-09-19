@@ -34,10 +34,32 @@ class KycDocumentReuseGuardTest extends TestCase
 
     private function account(): User
     {
-        return User::factory()->create([
-            'type' => CUSTOMER_TYPE, 'is_active' => 1, 'is_kyc_verified' => 0,
-            'zone_code' => 'SOUTH', 'residence_governorate' => 'عدن',
+        $user = User::factory()->create([
+            'type' => CUSTOMER_TYPE,
+            'is_active' => 1,
+            'is_kyc_verified' => 0,
+            'kyc_tier' => 1,
+            'is_phone_verified' => 1,
+            'zone_code' => 'SOUTH',
+            'residence_governorate' => 'YE-AD',
+            'verified_residence_governorate' => 'YE-AD',
+            'residence_verified_at' => now(),
         ]);
+
+        \Illuminate\Support\Facades\DB::table('residence_verifications')->insert([
+            'user_id' => $user->id,
+            'kyc_document_id' => null,
+            'declared_governorate' => 'YE-AD',
+            'evidence_type' => 'government_residence_document',
+            'evidence_strength' => 'strong',
+            'status' => 'verified',
+            'submitted_at' => now()->subMinute(),
+            'reviewed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user->fresh();
     }
 
     private function doc(User $u, string $type, ?string $sha = null,
