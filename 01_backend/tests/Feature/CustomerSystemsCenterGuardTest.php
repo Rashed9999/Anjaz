@@ -80,6 +80,9 @@ class CustomerSystemsCenterGuardTest extends TestCase
             'family_funds',
             'withdrawals',
             'idempotency',
+            'installments',
+            'gift_cards',
+            'split_bills',
             'credits',
             'payment_requests',
             'bill_pay',
@@ -93,6 +96,16 @@ class CustomerSystemsCenterGuardTest extends TestCase
                 $keys,
                 "نظام العميل {$key} اختفى من مركز الأنظمة الإداري."
             );
+        }
+    }
+
+    public function test_provider_call_trace_never_exposes_provider_payloads(): void
+    {
+        $snapshot = app(CustomerSystemsCenterService::class)->snapshot();
+
+        foreach ($snapshot['bill_provider_requests'] as $row) {
+            $this->assertArrayNotHasKey('request_payload', $row);
+            $this->assertArrayNotHasKey('response_payload', $row);
         }
     }
 
