@@ -25,6 +25,7 @@ class CustomerSystemsCenterService
             'credits' => $this->credits(),
             'receipts' => $this->receipts(),
             'bill_pay' => $this->billPay(),
+            'bill_provider_requests' => $this->billProviderRequests(),
             'payment_requests' => $this->paymentRequests(),
             'notifications' => $this->notifications(),
         ];
@@ -397,6 +398,39 @@ class CustomerSystemsCenterService
     }
 
     /** @return array<int,array<string,mixed>> */
+    private function billProviderRequests(): array
+    {
+        if (!Schema::hasTable('bill_provider_requests')) {
+            return [];
+        }
+
+        // لا نعرض request_payload/response_payload هنا: قد تحتوي رقم حساب
+        // المشترك أو حقول مزود لا يحتاجها موظف المراقبة. نعرض أثر الاتصال فقط.
+        return DB::table('bill_provider_requests as r')
+            ->leftJoin('bill_payment_orders as o', 'o.id', '=', 'r.order_id')
+            ->orderByDesc('r.id')
+            ->limit(40)
+            ->get([
+                'o.order_ulid',
+                'r.request_type',
+                'r.http_status',
+                'r.latency_ms',
+                'r.was_successful',
+                'r.error_message',
+                'r.created_at',
+            ])
+            ->map(fn ($r) => [
+                'order_ulid' => $r->order_ulid,
+                'request_type' => (string) $r->request_type,
+                'http_status' => $r->http_status,
+                'latency_ms' => $r->latency_ms,
+                'was_successful' => (bool) $r->was_successful,
+                'error_message' => $r->error_message,
+                'created_at' => (string) $r->created_at,
+            ])->all();
+    }
+
+    /** @return array<int,array<string,mixed>> */
     private function paymentRequests(): array
     {
         if (!Schema::hasTable('payment_requests')) {
@@ -458,17 +492,34 @@ class CustomerSystemsCenterService
     }
 
     /** @param array<int,array<string,mixed>|null> $actions */
+    /** @param array<int,array<string,mixed>|null> $actions */
     private function controlDescription(string $key, array $actions): string
     {
         return match ($key) {
             'guards', 'idempotency' =>
                 'مراقبة فقط — لا يوجد زر لتعطيل الحارس أو تجاوز القرار',
-            'reports', 'receipts' =>
-                'قراءة وتتبع؛ أي تصحيح يتم من مصدر العملية لا من التقرير/السند',
             'wallet_transfers', 'merchant_payments' =>
-                'التتبع من الشاشات المالية؛ لا تعديل رصيد مباشر من المركز',
+                'قراءة وتتبع فقط؛ لا تعديل رصيد أو معاملة مالية من المركز',
             'safe_payment' =>
-                'الحسم من شاشة النزاع المحمية وبصلاحياتها، لا من هذا المركز',
+                'الحسم Release/Refund/Partial من شاشة النزاع وبصلاحياتها فقط',
+            'donations' =>
+                'اعتماد الجهات والحملات والتسويات من لوحة التبرعات المحمية',
+            'family_funds' =>
+                'مراقبة الصندوق وحركاته؛ لا تعديل مباشر للرصيد من الإدارة',
+            'withdrawals' =>
+                'اعتماد/رفض الطلب من شاشة السحب حسب الصلاحيات؛ لا صرف من المركز',
+            'credits' =>
+                'لا تعديل مباشر للدين؛ السداد/المرتجع/التسوية من المسارات الأصلية الموثقة',
+            'payment_requests' =>
+                'متابعة وتصدير؛ الإدارة لا تدفع الطلب نيابةً عن العميل',
+            'bill_pay' =>
+                'إعداد/تعطيل المزود وفحصه؛ لا رد عملية ناجحة بلا تأكيد عكس موثق من المزود',
+            'receipts' =>
+                'قراءة/تحقق/مستند؛ تصحيح العملية يتم من مصدرها لا بتعديل السند',
+            'notifications' =>
+                'إعداد القنوات من Firebase؛ لا تحويل «أُنشئ» إلى «وصل» دون دليل Delivery',
+            'reports' =>
+                'قراءة وتصدير؛ التقرير لا يكتب أو يصحح الحقيقة المالية',
             'kyc' =>
                 'الاعتماد والرفض وإعادة الطلب من لجنة التحقق فقط',
             'limits' =>
