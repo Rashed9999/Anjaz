@@ -17,6 +17,8 @@ import 'package:amial_pay/features/setting/controllers/profile_screen_controller
 import 'package:amial_pay/features/requested_money/controllers/requested_money_controller.dart';
 import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
 import 'package:amial_pay/features/history/controllers/transaction_history_controller.dart';
+import 'package:amial_pay/features/bill_pay/controllers/bill_pay_controller.dart';
+import 'package:amial_pay/features/bill_pay/screens/bill_pay_history_screen.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/util/app_constants.dart';
 import 'package:open_file/open_file.dart';
@@ -24,6 +26,11 @@ import 'package:open_file/open_file.dart';
 
 
 class NotificationHelper {
+  static bool _isBillPaymentType(dynamic type) => const {
+        'bill_payment_success',
+        'bill_payment_pending',
+        'bill_payment_failed',
+      }.contains(type?.toString());
   /// هذا هو القناة الوحيدة لإشعارات أميال على Android. يطابق المعرّف
   /// المعلن في AndroidManifest وFCM، فلا يفقد إشعار الخلفية صوته بسبب
   /// إنشاء قناة باسم مختلف عن القناة التي يرسل إليها الخادم.
@@ -100,6 +107,10 @@ class NotificationHelper {
               menuItemController.selectHistoryPage();
             }
 
+          }else if(_isBillPaymentType(notificationBody.type)){
+            await Get.find<BillPayController>().loadOrders();
+            Get.to(()=> const BillPayHistoryScreen());
+
           }else if(notificationBody.type == 'payment_request_received'){
             // AMIAL-REQUEST-DIRECT-003 — **إشعارٌ يصل ولا يقود إلى شيء.**
             //
@@ -162,6 +173,9 @@ class NotificationHelper {
       if(message.data['type'] == 'general'){
         Get.find<NotificationController>().getNotificationList(true);
 
+      }else if(_isBillPaymentType(message.data['type'])){
+        Get.find<BillPayController>().loadOrders();
+
       }else if(message.data['type'] == 'payment_request_received'){
         // الطلب الجديد ينتمي إلى payment_requests لا صندوق 6cash القديم.
         Get.find<PaymentRequestController>().loadList('incoming', status: 'pending');
@@ -202,6 +216,9 @@ class NotificationHelper {
 
       if(message.data['type'] == 'general'){
         await Get.find<NotificationController>().getNotificationList(true);
+
+      }else if(_isBillPaymentType(message.data['type'])){
+        await Get.find<BillPayController>().loadOrders();
 
       }else if(message.data['type'] == 'payment_request_received'){
         await Get.find<PaymentRequestController>().loadList('incoming', status: 'pending');
@@ -265,6 +282,10 @@ class NotificationHelper {
               menuItemController.selectHistoryPage();
             }
 
+
+          }else if(_isBillPaymentType(notificationBody.type)){
+            await Get.find<BillPayController>().loadOrders();
+            Get.to(()=> const BillPayHistoryScreen());
 
           }else if(notificationBody.type == 'payment_request_received'){
             // AMIAL-REQUEST-DIRECT-003 — **إشعارٌ يصل ولا يقود إلى شيء.**
