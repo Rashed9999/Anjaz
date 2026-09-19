@@ -152,6 +152,48 @@ class LegalNameService
     }
 
     /**
+     * يعيد تكوين الاسم المُصرّح به بعد طلب تغيير رسمي لأحد أجزائه.
+     * الاسم الموثق السابق لا يُمحى؛ يبقى مرجعاً تاريخياً حتى إعادة KYC.
+     */
+    public function rebuildDeclaredNameFromAccount(
+        User $user,
+        string $source,
+        ?int $reviewerId = null,
+        ?string $reason = null,
+    ): string {
+        $before = $this->declared($user);
+        $after = $this->compose([
+            'given_name' => (string) $user->f_name,
+            'father_name' => (string) $user->father_name,
+            'grandfather_name' => (string) $user->grandfather_name,
+            'family_name' => (string) ($user->family_name ?: $user->l_name),
+        ]);
+
+        $user->declared_legal_name = $after;
+        $user->legal_name_status = trim((string) ($user->verified_legal_name ?? '')) !== ''
+            ? 'change_pending_reverification'
+            : 'declared_changed';
+        $user->save();
+
+        if ($before !== $after) {
+            $this->event(
+                $user,
+                'DECLARED_NAME_CHANGED',
+                $source,
+                $before,
+                $after,
+                null,
+                $reviewerId,
+                null,
+                null,
+                $reason,
+            );
+        }
+
+        return $after;
+    }
+
+    /**
      * المراجع يكتب/يؤكد الاسم الظاهر في إثبات السكن. لا OCR وحده يقرر.
      *
      * @return array{status:string,score:int,declared:string,document:string,shared:int,declared_tokens:int,document_tokens:int}
