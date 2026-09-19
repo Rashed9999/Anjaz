@@ -49,8 +49,13 @@ class RegisterController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'f_name' => 'required',
-            'l_name' => 'required',
+            // AMIAL-LEGAL-NAME-001 — التسجيل الذاتي لا يقبل لقب عرض حر.
+            // الأجزاء الأربعة مطلوبة حتى في الباب القديم.
+            'f_name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            'father_name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            'grandfather_name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            'family_name' => ['required', 'string', 'min:2', 'max:80', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            'l_name' => 'sometimes|nullable|string|max:80',
             'image' => 'nullable|image|max:'. $this->maxImageSizeKB .'|mimes:' . implode(',', array_column(IMAGE_EXTENSIONS, 'key')),
             'gender' => 'required',
             'occupation' => 'nullable',
@@ -104,8 +109,6 @@ class RegisterController extends Controller
             // موضعُه بوّابةُ الاعتماد لا بوّابةُ الدخول.
             // ══════════════════════════════════════════════════════════
             'name_en' => 'sometimes|nullable|string|max:150|regex:/^[A-Za-z\s.\-\x27]+$/',
-            'father_name' => 'sometimes|nullable|string|max:60',
-            'grandfather_name' => 'sometimes|nullable|string|max:60',
             'country_of_birth' => 'sometimes|nullable|string|max:60',
             'dual_nationality' => 'sometimes|nullable|string|max:60',
             'id_place_of_issue' => 'sometimes|nullable|string|max:80',
@@ -205,8 +208,18 @@ class RegisterController extends Controller
 
             // A reused controller must never mutate the previous registrant.
             $user = $this->user->newInstance();
-            $user->f_name = $request->f_name;
-            $user->l_name = $request->l_name;
+            $user->f_name = trim((string) $request->f_name);
+            $user->father_name = trim((string) $request->father_name);
+            $user->grandfather_name = trim((string) $request->grandfather_name);
+            $user->family_name = trim((string) $request->family_name);
+            $user->l_name = $user->family_name;
+            $user->declared_legal_name = app(\App\Services\Kyc\LegalNameService::class)->compose([
+                'given_name' => $user->f_name,
+                'father_name' => $user->father_name,
+                'grandfather_name' => $user->grandfather_name,
+                'family_name' => $user->family_name,
+            ]);
+            $user->legal_name_status = 'declared';
             $user->image = $request->has('image') ? Helpers::upload('customer/', APPLICATION_IMAGE_FORMAT, $request->file('image')) : null;
             $user->gender = $request->gender;
             $user->occupation = $request->occupation;
@@ -306,6 +319,24 @@ class RegisterController extends Controller
 
             $user->save();
 
+            if (\Illuminate\Support\Facades\Schema::hasTable('legal_name_events')) {
+                \Illuminate\Support\Facades\DB::table('legal_name_events')->insert([
+                    'user_id' => $user->id,
+                    'event_type' => 'DECLARED_AT_REGISTRATION',
+                    'source' => 'legacy_self_registration',
+                    'old_name_encrypted' => null,
+                    'new_name_encrypted' => \Illuminate\Support\Facades\Crypt::encryptString(
+                        (string) $user->declared_legal_name
+                    ),
+                    'document_id' => null,
+                    'reviewer_id' => null,
+                    'match_status' => null,
+                    'match_score' => null,
+                    'reason' => null,
+                    'created_at' => now(),
+                ]);
+            }
+
             $user->find($user->id);
             $user->unique_id = $user->id . mt_rand(1111, 99999);
             $user->save();
@@ -387,7 +418,7 @@ class RegisterController extends Controller
                 // نفس مخطط الملف الذي تستعمله لوحة الموظف؛ لا نطبع نسخة
                 // مبتورة للتسجيل الإلكتروني ثم ندّعي أن الأرشيف موحّد.
                 $dossierPayload = $request->only([
-                    'dial_country_code', 'phone', 'gender', 'email', 'name_en', 'father_name', 'grandfather_name',
+                    'dial_country_code', 'phone', 'gender', 'email', 'name_en', 'father_name', 'grandfather_name', 'family_name',
                     'date_of_birth', 'country_of_birth', 'dual_nationality', 'marital_status',
                     'identification_type', 'identification_number', 'identification_issue_date',
                     'identification_expiry_date', 'id_place_of_issue', 'address', 'origin_governorate',
@@ -398,7 +429,8 @@ class RegisterController extends Controller
                     'kin2_phone', 'kin2_relation', 'store_name', 'business_type', 'declaration_accepted',
                 ]);
                 $dossierPayload += [
-                    'full_name' => trim((string) ($user->f_name . ' ' . $user->l_name)),
+                    'full_name' => (string) ($user->declared_legal_name
+                        ?: trim((string) ($user->f_name . ' ' . $user->l_name))),
                     'gender' => $user->gender, 'phone' => $phone,
                     'identification_number' => $user->identification_number,
                     'identification_type' => $user->identification_type,
