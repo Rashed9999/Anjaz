@@ -60,58 +60,65 @@ class NotificationService
             'data' => $data,
         ]);
 
-        // AMIAL-NOTIFICATION-PUSH-001: كل إشعار داخلي له Push افتراضياً.
-        // الإطلاق بعد commit حتى لا يرن الهاتف لعملية تراجعت في قاعدة البيانات.
+        // كل قناة خارجية تنتظر commit: لا Push ولا واتساب لعملية تراجعت.
         // push=false مخصص فقط لمسار يملك Push مالي متخصصاً مسبقاً لمنع الازدواج.
-        if ($push) {
-            $this->queuePushAfterCommit($notification, $user);
-        }
-
-        // AMIAL-WHATSAPP-OTP-001: نسخة واتساب اختيارية من الإشعار (لا تكسر الإرسال أبداً)
-        $this->echoToWhatsapp($user, $type, $title, $body);
+        $this->queueExternalAfterCommit($notification, $user, $push);
 
         return $notification;
     }
 
-    private function queuePushAfterCommit(AmialNotification $notification, User $user): void
-    {
-        $enqueue = function () use ($notification, $user): void {
-            try {
-                SendAmialNotificationPushJob::dispatch(
-                    userId: (int) $user->id,
-                    notificationId: (int) $notification->id,
-                    type: (string) $notification->type,
-                    title: (string) $notification->title,
-                    body: (string) $notification->body,
-                    actionUrl: $notification->action_url ? (string) $notification->action_url : null,
-                );
-            } catch (\Throwable $e) {
-                app(NotificationDeliveryLogService::class)->failed(
-                    (int) $user->id,
-                    'PUSH_QUEUE_DISPATCH_FAILED',
-                    $e->getMessage(),
-                    (string) $notification->type,
-                    null,
-                    null,
-                    1,
-                    true,
-                    (int) $notification->id,
-                );
+    private function queueExternalAfterCommit(
+        AmialNotification $notification,
+        User $user,
+        bool $push,
+    ): void {
+        $afterCommit = function () use ($notification, $user, $push): void {
+            if ($push) {
+                try {
+                    SendAmialNotificationPushJob::dispatch(
+                        userId: (int) $user->id,
+                        notificationId: (int) $notification->id,
+                        type: (string) $notification->type,
+                        title: (string) $notification->title,
+                        body: (string) $notification->body,
+                        actionUrl: $notification->action_url ? (string) $notification->action_url : null,
+                    );
+                } catch (\Throwable $e) {
+                    app(NotificationDeliveryLogService::class)->failed(
+                        (int) $user->id,
+                        'PUSH_QUEUE_DISPATCH_FAILED',
+                        $e->getMessage(),
+                        (string) $notification->type,
+                        null,
+                        null,
+                        1,
+                        true,
+                        (int) $notification->id,
+                    );
 
-                Log::warning('Amial notification push queue dispatch failed', [
-                    'user_id' => $user->id,
-                    'notification_id' => $notification->id,
-                    'type' => $notification->type,
-                    'error' => mb_substr($e->getMessage(), 0, 200),
-                ]);
+                    Log::warning('Amial notification push queue dispatch failed', [
+                        'user_id' => $user->id,
+                        'notification_id' => $notification->id,
+                        'type' => $notification->type,
+                        'error' => mb_substr($e->getMessage(), 0, 200),
+                    ]);
+                }
             }
+
+            // AMIAL-WHATSAPP-OTP-001: القناة الثانوية أيضاً بعد commit.
+            $this->echoToWhatsapp(
+                $user,
+                (string) $notification->type,
+                (string) $notification->title,
+                (string) $notification->body,
+            );
         };
 
         try {
-            DB::afterCommit($enqueue);
+            DB::afterCommit($afterCommit);
         } catch (\Throwable $e) {
-            // خارج transaction أو في driver قديم: لا نخسر التنبيه بسبب hook.
-            $enqueue();
+            // خارج transaction أو في driver قديم: لا نخسر القنوات بسبب hook.
+            $afterCommit();
         }
     }
 
