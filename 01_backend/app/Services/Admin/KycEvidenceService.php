@@ -105,6 +105,19 @@ class KycEvidenceService
             $out[] = 'لا يعتمد المراجعُ حسابَ نفسِه (المبدأ الرباعيّ).';
         }
 
+        if ((int) ($user->type ?? 0) === 2) {
+            try {
+                app(\App\Services\KycTierService::class)
+                    ->assertSequentialVerificationDecision($user, $tier);
+            } catch (\DomainException $e) {
+                $out[] = str_replace(
+                    [' [KYC_TIER_SEQUENCE_VIOLATION]', ' [KYC_TIER_TARGET_INVALID]'],
+                    '',
+                    $e->getMessage(),
+                );
+            }
+        }
+
         if (! $completeness['complete']) {
             $missing = $this->labels($completeness['missing'] ?? []);
 
