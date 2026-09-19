@@ -7,6 +7,7 @@ use App\Services\KycTierService;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 /**
@@ -121,6 +122,19 @@ class KycSequentialTierGuardTest extends TestCase
         } catch (DomainException $e) {
             $this->assertStringContainsString('KYC_TIER_SEQUENCE_VIOLATION', $e->getMessage());
         }
+    }
+
+    public function test_legacy_admin_kyc_decision_route_requires_approval_permission(): void
+    {
+        $route = Route::getRoutes()->getByName('admin.amial.hub.users.kyc')
+            ?? Route::getRoutes()->getByName('amial.hub.users.kyc');
+
+        $this->assertNotNull($route, 'مسار قرار KYC الإداري غير مسجل.');
+        $this->assertContains(
+            'platform:platform.approvals.decide',
+            $route->gatherMiddleware(),
+            'مسار قرار KYC الإداري يستطيع الاعتماد دون صلاحية approvals.decide.'
+        );
     }
 
     public function test_direct_customer_tier_mutation_is_closed(): void
