@@ -201,7 +201,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         _snack('أدخل ${entry.key} الحقيقي كما يظهر في وثائقك الرسمية.');
         return false;
       }
-      if (!RegExp(r"^[\p{L}\p{M}\s\-']+$", unicode: true).hasMatch(entry.value)) {
+      if (!RegExp(r"^[A-Za-z\u0600-\u06FF\s\-']+$").hasMatch(entry.value)) {
         _snack('${entry.key} يحتوي على أحرف غير صالحة.');
         return false;
       }
@@ -865,6 +865,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     bool obscure = false,
     int? maxLength,
     List<TextInputFormatter>? formatters,
+    ValueChanged<String>? onChanged,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 13),
@@ -874,6 +875,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         obscureText: obscure,
         maxLength: maxLength,
         inputFormatters: formatters,
+        onChanged: onChanged,
         decoration: InputDecoration(
           labelText: label,
           counterText: '',
@@ -936,16 +938,16 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           ),
           Row(
             children: [
-              Expanded(child: _field(_givenName, 'الاسم *')),
+              Expanded(child: _field(_givenName, 'الاسم *', onChanged: (_) => setState(() {}))),
               const SizedBox(width: 10),
-              Expanded(child: _field(_fatherName, 'اسم الأب *')),
+              Expanded(child: _field(_fatherName, 'اسم الأب *', onChanged: (_) => setState(() {}))),
             ],
           ),
           Row(
             children: [
-              Expanded(child: _field(_grandfatherName, 'اسم الجد *')),
+              Expanded(child: _field(_grandfatherName, 'اسم الجد *', onChanged: (_) => setState(() {}))),
               const SizedBox(width: 10),
-              Expanded(child: _field(_familyName, 'اللقب / اسم العائلة *')),
+              Expanded(child: _field(_familyName, 'اللقب / اسم العائلة *', onChanged: (_) => setState(() {}))),
             ],
           ),
           if (_declaredLegalName.isNotEmpty)
