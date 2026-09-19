@@ -75,6 +75,7 @@
         <a class="btn btn-sm btn-outline-secondary" href="#bill-pay">السداد</a>
         <a class="btn btn-sm btn-outline-secondary" href="#payment-requests">طلبات الأموال</a>
         <a class="btn btn-sm btn-outline-secondary" href="#notifications">الإشعارات</a>
+        <a class="btn btn-sm btn-outline-secondary" href="#push-delivery">تسليم Push</a>
     </div>
 
     <div id="systems" class="row g-3 mb-5">
@@ -363,6 +364,43 @@
                     </tr>
                 @empty
                     <tr><td colspan="5" class="text-center text-muted py-4">لا توجد إشعارات.</td></tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="push-delivery" class="card border-0 shadow-sm mb-4" style="border-radius:16px">
+        <div class="card-header bg-white">
+            <h5 class="mb-1">سجل إرسال Push الخارجي</h5>
+            <small class="text-muted">يسجل نتيجة إرسال FCM دون حفظ token أو payload. حالة provider_accepted تعني أن FCM قبل الرسالة، لا أنها عُرضت حتماً على الجهاز.</small>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>الوقت</th><th>العميل</th><th>النوع</th><th>المرجع</th><th>الحالة</th><th>المحاولة</th><th>HTTP</th><th>مرجع FCM</th><th>الخطأ</th></tr></thead>
+                <tbody>
+                @forelse($snapshot['notification_deliveries'] ?? [] as $row)
+                    <tr>
+                        <td class="text-nowrap">{{ $row['created_at'] }}</td>
+                        <td>
+                            @if($row['user_id'])
+                                <a href="{{ route('admin.amial.customer.page') }}?open={{ $row['user_id'] }}">#{{ $row['user_id'] }}</a>
+                            @else — @endif
+                        </td>
+                        <td><code>{{ $row['notification_type'] ?: '—' }}</code></td>
+                        <td class="font-monospace small">{{ $row['transaction_id'] ?: '—' }}</td>
+                        <td>
+                            <span class="badge bg-{{ $row['status'] === 'provider_accepted' ? 'success' : ($row['status'] === 'skipped' ? 'secondary' : 'danger') }}">
+                                {{ $row['status'] }}
+                            </span>
+                        </td>
+                        <td>{{ $row['attempt'] }}</td>
+                        <td>{{ $row['http_status'] ?? '—' }}</td>
+                        <td class="font-monospace small">{{ $row['provider_message_id'] ?: '—' }}</td>
+                        <td class="small">{{ $row['error_code'] ?: '—' }}{{ $row['error_message'] ? ' — '.IlluminateSupportStr::limit((string)$row['error_message'], 90) : '' }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="9" class="text-center text-muted py-4">لا توجد نتائج إرسال Push مسجلة بعد.</td></tr>
                 @endforelse
                 </tbody>
             </table>
