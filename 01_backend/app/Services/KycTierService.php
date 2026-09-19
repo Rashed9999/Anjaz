@@ -195,18 +195,23 @@ class KycTierService
             if (!preg_match('/^\d+(?:\.\d{1,4})?$/', $value)) continue;
 
             $baseValue = (string) ($base[$key] ?? '0');
-            // صفر في السنوي للمستويين 1 و2 يعني «لا قيد سنوي إضافي».
-            // يسمح باستثناء أقل فقط، بينما الحقول ذات السقف الموجب تُحصر
-            // دائماً في سقف المستوى الجاري.
+            // الصفر في أي حد مالي غير السنوي يعني «ممنوع» وليس «غير محدود».
+            // لذلك لا يستطيع override قديم أن يفتح Tier 0 من الصفر.
+            if ($key !== 'max_annual_total' && bccomp($baseValue, '0', 4) === 0) {
+                $limits[$key] = '0';
+                continue;
+            }
+
+            // صفر السنوي للمستويين 1 و2 يعني «لا قيد سنوي إضافي».
+            // يسمح باستثناء أكثر تحفظاً فقط إن أرادت الإدارة وضع سقف سنوي.
             if ($key === 'max_annual_total' && bccomp($baseValue, '0', 4) === 0) {
                 $limits[$key] = $value;
                 continue;
             }
 
-            $limits[$key] = bccomp($baseValue, '0', 4) > 0
-                && bccomp($value, $baseValue, 4) > 0
-                    ? $baseValue
-                    : $value;
+            $limits[$key] = bccomp($value, $baseValue, 4) > 0
+                ? $baseValue
+                : $value;
         }
 
         return $limits;
