@@ -145,6 +145,10 @@ jobs:
           echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
           echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
 
+      - name: تحقق شاشتي الرسوم وسجل التدقيق ضد 500
+        working-directory: 01_backend
+        run: php artisan test --compact
+
       - name: تحقق دورة البريد قبل الاختبارات الشاملة
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/EmailOtpLifecycleTest.php tests/Feature/EmailIdentityGuardTest.php tests/Feature/AmialOtpEmailTemplateTest.php tests/Feature/EmailVerificationCenterGuardTest.php tests/Feature/AgentLifecycleChainTest.php tests/Feature/InsiderDefenseTest.php tests/Feature/ArabicUserMessagesGuardTest.php tests/Feature/OpsAlertResendGuardTest.php tests/Feature/DemoOtpTest.php tests/Feature/DemoMoneyGuardTest.php tests/Feature/KycRegulatoryFieldsTest.php tests/Feature/PortalHostSeparationTest.php
