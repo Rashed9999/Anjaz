@@ -151,6 +151,14 @@ class KycDocumentController extends Controller
         $governorate = (string) $request->input('governorate');
 
         try {
+            // افحص التسلسل قبل أي كتابة جانبية؛ رفض القفز لا يجب أن يغيّر
+            // حتى محافظة السكن في الحساب.
+            app(\App\Services\KycTierService::class)
+                ->assertSequentialVerificationDecision(
+                    $account,
+                    (int) $request->input('target_tier'),
+                );
+
             // لا تُخمن المحافظة من الاسم أو رقم الهاتف. هذا اختيار مراجع
             // ظاهر ومراجَع في ملف الهوية، ثم ZoneAssignmentService يحوّله
             // إلى المنطقة التشغيلية ويسجل الأثر.
