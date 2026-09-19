@@ -284,15 +284,30 @@ class CustomerActionService
 
     private function updateLimits(User $c, User $actor, array $payload): array
     {
-        $allowed = ['max_balance', 'max_single_transaction', 'max_daily_total', 'max_monthly_total'];
+        $allowed = [
+            'max_balance',
+            'max_single_transaction',
+            'max_daily_total',
+            'max_monthly_total',
+            'max_annual_total',
+        ];
         $clean = [];
+
+        $tiers = app(KycTierService::class);
+        $base = $tiers->getLimits($tiers->effectiveTier($c));
 
         foreach ($allowed as $k) {
             if (array_key_exists($k, $payload) && $payload[$k] !== null && $payload[$k] !== '') {
                 $value = trim((string) $payload[$k]);
-                if (!preg_match('/^\d+(?:\.\d{1,4})?$/', $value)) {
+                if (!preg_match('/^\\d+(?:\\.\\d{1,4})?$/', $value)) {
                     throw new DomainException('قيمة الحدّ «' . $k . '» غير صالحة');
                 }
+
+                $baseValue = (string) ($base[$k] ?? '0');
+                if (bccomp($baseValue, '0', 4) > 0 && bccomp($value, $baseValue, 4) > 0) {
+                    throw new DomainException('لا يمكن رفع استثناء العميل فوق سقف مستوى التوثيق');
+                }
+
                 $clean[$k] = $value;
             }
         }
@@ -307,10 +322,22 @@ class CustomerActionService
         // Patch لا Replace: تعديل سقفٍ واحد لا يمحو الاستثناءات الأخرى.
         $merged = array_merge($existing, $clean);
 
-        // حدٌّ يوميّ يفوق الشهريّ يمرّ في الحفظ ويُربك في التنفيذ — يُمنع هنا.
-        if (isset($merged['max_daily_total'], $merged['max_monthly_total'])
-            && bccomp((string) $merged['max_daily_total'], (string) $merged['max_monthly_total'], 4) > 0) {
-            throw new DomainException('الحدّ اليوميّ أكبر من الشهريّ — راجع القيم');
+        $effective = $tiers->getLimitsForUser($c);
+        foreach ($merged as $key => $value) {
+            if (in_array($key, $allowed, true)) {
+                $effective[$key] = (string) $value;
+            }
+        }
+
+        if (bccomp((string) $effective['max_single_transaction'], (string) $effective['max_daily_total'], 4) > 0
+            || bccomp((string) $effective['max_daily_total'], (string) $effective['max_monthly_total'], 4) > 0) {
+            throw new DomainException('يجب أن يكون حد العملية ≤ اليومي ≤ الشهري');
+        }
+
+        $annual = (string) ($effective['max_annual_total'] ?? '0');
+        if (bccomp($annual, '0', 4) > 0
+            && bccomp((string) $effective['max_monthly_total'], $annual, 4) > 0) {
+            throw new DomainException('يجب أن يكون الحد الشهري ≤ السنوي');
         }
 
         $c->forceFill([
