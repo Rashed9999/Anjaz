@@ -254,7 +254,7 @@ class NotificationHelper {
         await transactionHistoryController.getRecentTransactionList();
 
       }else{
-        await Get.find<RequestedMoneyController>().getRequestedMoneyList(true);
+        await Get.find<NotificationController>().getNotificationList(true);
       }
 
 
