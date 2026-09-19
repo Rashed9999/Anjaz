@@ -8,6 +8,15 @@ on:
       - '01_backend/app/Services/Kyc/KycPrivacyService.php'
       - '01_backend/app/Services/KycTierService.php'
       - '01_backend/app/Services/KycDocumentService.php'
+      - '01_backend/database/migrations/*legal_name*'
+      - '01_backend/tests/Feature/CustomerLegalNameLifecycleTest.php'
+      - '02_flutter_app/lib/features/auth/screens/quick_registration_screen.dart'
+      - '01_backend/app/Http/Controllers/Api/V1/RegisterController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Auth/ProgressiveRegistrationController.php'
+      - '01_backend/app/Http/Controllers/Admin/KycResidenceAdminController.php'
+      - '01_backend/app/Services/Kyc/ProfileChangeRequestService.php'
+      - '01_backend/app/Services/Kyc/ResidenceVerificationService.php'
+      - '01_backend/app/Services/Kyc/LegalNameService.php'
       - '01_backend/app/Services/Admin/KycEvidenceService.php'
       - '01_backend/app/Http/Controllers/Admin/AdminHubController.php'
       - '01_backend/routes/admin/amial.php'
@@ -35,6 +44,15 @@ on:
       - '01_backend/app/Services/Kyc/KycPrivacyService.php'
       - '01_backend/app/Services/KycTierService.php'
       - '01_backend/app/Services/KycDocumentService.php'
+      - '01_backend/database/migrations/*legal_name*'
+      - '01_backend/tests/Feature/CustomerLegalNameLifecycleTest.php'
+      - '02_flutter_app/lib/features/auth/screens/quick_registration_screen.dart'
+      - '01_backend/app/Http/Controllers/Api/V1/RegisterController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Auth/ProgressiveRegistrationController.php'
+      - '01_backend/app/Http/Controllers/Admin/KycResidenceAdminController.php'
+      - '01_backend/app/Services/Kyc/ProfileChangeRequestService.php'
+      - '01_backend/app/Services/Kyc/ResidenceVerificationService.php'
+      - '01_backend/app/Services/Kyc/LegalNameService.php'
       - '01_backend/app/Services/Admin/KycEvidenceService.php'
       - '01_backend/app/Http/Controllers/Admin/AdminHubController.php'
       - '01_backend/routes/admin/amial.php'
@@ -120,6 +138,9 @@ jobs:
 
       - name: حارس تسلسل مستويات العميل 0 → 1 → 2 → 3
         run: php artisan test --compact tests/Feature/KycSequentialTierGuardTest.php
+
+      - name: حارس الاسم القانوني من التسجيل إلى الهوية
+        run: php artisan test --compact tests/Feature/CustomerLegalNameLifecycleTest.php
 
       - name: حارس Runtime البيومتري
         run: php artisan test --compact tests/Feature/KycBiometricProviderRuntimeTest.php
