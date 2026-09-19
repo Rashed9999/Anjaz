@@ -112,7 +112,15 @@ class User extends Authenticatable
 
     protected $casts = [
         'f_name' => 'string',
+        'father_name' => 'string',
+        'grandfather_name' => 'string',
+        'family_name' => 'string',
         'l_name' => 'string',
+        'declared_legal_name' => 'string',
+        'verified_legal_name' => 'string',
+        'legal_name_status' => 'string',
+        'legal_name_verified_at' => 'datetime',
+        'legal_name_locked_at' => 'datetime',
         'dial_country_code' => 'string',
         'phone' => 'string',
         'email' => 'string',
