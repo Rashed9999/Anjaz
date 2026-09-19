@@ -638,7 +638,9 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     Route::post('/users/{id}/toggle-active', [$hc, 'toggleActive'])
         ->where('id', '[0-9]+')->name('users.toggle-active');
     Route::post('/users/{id}/kyc', [$hc, 'kycStatus'])
-        ->where('id', '[0-9]+')->name('users.kyc');
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.approvals.decide')
+        ->name('users.kyc');
     Route::post('/transfer', [$hc, 'transfer'])->name('transfer');
     Route::post('/agents/{id}/credit', [$hc, 'agentCredit'])
         ->where('id', '[0-9]+')->name('agents.credit');
