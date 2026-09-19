@@ -34,23 +34,23 @@ class KycRegulatoryLimitsTest extends TestCase
         $service = app(KycTierService::class);
 
         $tier1 = $service->getLimits(1);
-        $this->assertSame('100000.0000', (string) $tier1['max_balance']);
-        $this->assertSame('100000.0000', (string) $tier1['max_single_transaction']);
-        $this->assertSame('100000.0000', (string) $tier1['max_daily_total']);
-        $this->assertSame('100000.0000', (string) $tier1['max_monthly_total']);
+        $this->assertSame(0, bccomp('100000', (string) $tier1['max_balance'], 4));
+        $this->assertSame(0, bccomp('100000', (string) $tier1['max_single_transaction'], 4));
+        $this->assertSame(0, bccomp('100000', (string) $tier1['max_daily_total'], 4));
+        $this->assertSame(0, bccomp('100000', (string) $tier1['max_monthly_total'], 4));
 
         $tier2 = $service->getLimits(2);
-        $this->assertSame('250000.0000', (string) $tier2['max_balance']);
-        $this->assertSame('250000.0000', (string) $tier2['max_single_transaction']);
-        $this->assertSame('250000.0000', (string) $tier2['max_daily_total']);
-        $this->assertSame('250000.0000', (string) $tier2['max_monthly_total']);
+        $this->assertSame(0, bccomp('250000', (string) $tier2['max_balance'], 4));
+        $this->assertSame(0, bccomp('250000', (string) $tier2['max_single_transaction'], 4));
+        $this->assertSame(0, bccomp('250000', (string) $tier2['max_daily_total'], 4));
+        $this->assertSame(0, bccomp('250000', (string) $tier2['max_monthly_total'], 4));
 
         $tier3 = $service->getLimits(3);
-        $this->assertSame('8000000.0000', (string) $tier3['max_balance']);
-        $this->assertSame('1000000.0000', (string) $tier3['max_single_transaction']);
-        $this->assertSame('2000000.0000', (string) $tier3['max_daily_total']);
-        $this->assertSame('5000000.0000', (string) $tier3['max_monthly_total']);
-        $this->assertSame('50000000.0000', (string) $tier3['max_annual_total']);
+        $this->assertSame(0, bccomp('8000000', (string) $tier3['max_balance'], 4));
+        $this->assertSame(0, bccomp('1000000', (string) $tier3['max_single_transaction'], 4));
+        $this->assertSame(0, bccomp('2000000', (string) $tier3['max_daily_total'], 4));
+        $this->assertSame(0, bccomp('5000000', (string) $tier3['max_monthly_total'], 4));
+        $this->assertSame(0, bccomp('50000000', (string) $tier3['max_annual_total'], 4));
     }
 
     /** @test */
