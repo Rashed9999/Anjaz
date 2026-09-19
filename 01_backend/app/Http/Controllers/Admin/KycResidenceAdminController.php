@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
 use App\Models\User;
 use App\Services\Kyc\KycPrivacyService;
+use App\Services\Kyc\LegalNameService;
 use App\Services\Kyc\ResidenceVerificationService;
 use App\Services\KycDocumentService;
 use DomainException;
@@ -52,10 +53,13 @@ class KycResidenceAdminController extends Controller
         ResidenceVerificationService $residence,
         KycPrivacyService $privacy,
         KycDocumentService $documents,
+        LegalNameService $legalNames,
     ): JsonResponse {
         $data = $request->validate([
             'status' => ['required', 'in:verified,needs_more_evidence,rejected'],
             'reason' => ['nullable', 'string', 'max:1000'],
+            'document_name' => ['nullable', 'string', 'min:2', 'max:300'],
+            'name_review_note' => ['nullable', 'string', 'max:500'],
         ]);
 
         $row = DB::table('residence_verifications')->where('id', $verificationId)->first();
@@ -81,6 +85,17 @@ class KycResidenceAdminController extends Controller
             }
 
             if ($data['status'] === ResidenceVerificationService::STATUS_VERIFIED) {
+                $documentName = trim((string) ($data['document_name'] ?? ''));
+                if ($documentName === '') {
+                    throw new DomainException('RESIDENCE_DOCUMENT_NAME_REQUIRED');
+                }
+                $legalNames->confirmResidenceDocumentName(
+                    $verificationId,
+                    $actor,
+                    $documentName,
+                    $data['name_review_note'] ?? null,
+                );
+
                 if ($doc->status === KycDocument::STATUS_PENDING) {
                     $documents->approve($doc, $actor);
                 } elseif ($doc->status !== KycDocument::STATUS_APPROVED) {
@@ -107,6 +122,9 @@ class KycResidenceAdminController extends Controller
                 'message' => match ($e->getMessage()) {
                     'RESIDENCE_STRONGER_EVIDENCE_REQUIRED' => 'هذا دليل مساعد فقط؛ اطلب دليلاً أقوى أو تحققاً حضوريّاً.',
                     'RESIDENCE_DOCUMENT_MUST_BE_APPROVED' => 'لا يمكن اعتماد السكن قبل اعتماد المستند نفسه.',
+                    'RESIDENCE_DOCUMENT_NAME_REQUIRED' => 'اكتب الاسم كما يظهر فعلياً في إثبات السكن قبل الاعتماد.',
+                    'RESIDENCE_NAME_MISMATCH' => 'الاسم في إثبات السكن يختلف جوهرياً عن الاسم القانوني المصرّح به. اطلب تصحيح الاسم أو دليلاً مناسباً.',
+                    'LEGAL_NAME_PARTIAL_MATCH_REQUIRES_NOTE' => 'التطابق جزئي؛ اكتب ملاحظة مراجعة واضحة (10 أحرف على الأقل) قبل الاعتماد.',
                     'FOUR_EYES_VIOLATION' => 'لا يجوز للمراجع اعتماد ملفه الشخصي.',
                     default => $e->getMessage(),
                 },
