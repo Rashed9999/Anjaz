@@ -497,8 +497,9 @@ class BillPayService
             $this->receipts->issueDebit([
                 'user_id' => $fresh->user_id,
                 'reference_transaction_id' => $fresh->order_ulid,
-                // Existing receipt enum has no bill_payment type yet.
-                'receipt_type' => 'fee_charge',
+                // سند السداد مستقل عن سند الرسوم؛ الرسم يبقى حقلاً داخل
+                // السند نفسه ولا يحوّل العملية كلها إلى fee_charge.
+                'receipt_type' => 'bill_payment',
                 'amount' => (string) $fresh->amount,
                 'fee' => (string) $fresh->fee,
                 'reference_type' => 'bill_payment_order',
@@ -535,6 +536,8 @@ class BillPayService
                 'fee_scheme_version' => $fresh->fee_scheme_version,
             ],
         ]);
+
+        $this->notifyBillOrder($fresh, 'success');
     }
 
     /** Release a known-failed order exactly once. */
@@ -586,6 +589,8 @@ class BillPayService
             'correlation_id' => $fresh->correlation_id,
             'context' => ['released' => $fresh->total_debited],
         ]);
+
+        $this->notifyBillOrder($fresh, 'failed');
     }
 
     private function captureHeldFunds(BillPaymentOrder $order): void
@@ -677,6 +682,70 @@ class BillPayService
                 'idempotency_key' => $fresh->idempotency_key,
                 'correlation_id' => $fresh->correlation_id,
                 'context' => ['funds_state' => $fresh->funds_state],
+            ]);
+
+            $this->notifyBillOrder($fresh, 'pending');
+        }
+    }
+
+    private function notifyBillOrder(BillPaymentOrder $order, string $event): void
+    {
+        try {
+            $fresh = BillPaymentOrder::with(['provider', 'service'])->find($order->id) ?? $order;
+            $user = User::find($fresh->user_id);
+            if (!$user) {
+                return;
+            }
+
+            $provider = $fresh->provider?->display_name_ar
+                ?? $fresh->provider?->name
+                ?? 'مزود الخدمة';
+            $service = $fresh->service?->display_name_ar
+                ?? $fresh->service?->name
+                ?? 'الخدمة';
+            $amount = MoneyService::normalize((string) $fresh->amount);
+            $total = MoneyService::normalize((string) $fresh->total_debited);
+
+            [$type, $title, $body] = match ($event) {
+                'success' => [
+                    'bill_payment_success',
+                    'تم سداد الفاتورة',
+                    "تم سداد {$service} بمبلغ {$amount} ر.ي عبر {$provider}. مرجع العملية: {$fresh->order_ulid}",
+                ],
+                'failed' => [
+                    'bill_payment_failed',
+                    'تعذر سداد الفاتورة',
+                    "أكد المزود فشل {$service} وأُعيد كامل المبلغ المحجوز ({$total} ر.ي) إلى محفظتك. مرجع العملية: {$fresh->order_ulid}",
+                ],
+                default => [
+                    'bill_payment_pending',
+                    'السداد قيد التأكيد',
+                    "تم حجز {$total} ر.ي مؤقتاً لعملية {$service}. لن نكرر الدفع؛ سيتم التحقق من النتيجة تلقائياً باستخدام نفس المرجع.",
+                ],
+            };
+
+            app(NotificationService::class)->dispatch(
+                $user,
+                $type,
+                $title,
+                $body,
+                data: [
+                    'order_ulid' => $fresh->order_ulid,
+                    'status' => $fresh->status,
+                    'provider_reference' => $fresh->provider_reference,
+                    'service' => $service,
+                    'provider' => $provider,
+                    'amount' => $amount,
+                    'total_debited' => $total,
+                ],
+            );
+        } catch (\Throwable $e) {
+            // الإشعار طبقة لاحقة للمال؛ لا نغيّر نتيجة سداد مؤكدة أو ردّاً
+            // مؤكداً إذا تعطل التخزين/القناة.
+            Log::warning('Bill payment notification failed', [
+                'order_ulid' => $order->order_ulid,
+                'event' => $event,
+                'exception' => get_class($e),
             ]);
         }
     }
