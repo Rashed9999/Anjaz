@@ -72,6 +72,26 @@ class CustomerSystemsCenterService
                 ],
             ),
             $this->system(
+                'account_security',
+                'المصادقة والجلسات وأمان الحساب',
+                Schema::hasTable('account_security_events')
+                    && $this->hasRoute('admin.amial.security-events.index')
+                    && $this->hasRoute('admin.amial.customer.page'),
+                'أحداث PIN وتغيير الهاتف وإبطال الجلسات والدخول من جهاز جديد مرتبطة بملف العميل ومركز OTP وأحداث الأمان.',
+                [
+                    ['label' => 'أحداث أمن اليوم', 'value' => $this->count('account_security_events', fn ($q) => $q->whereDate('created_at', today()))],
+                    ['label' => 'حرجة / 7 أيام', 'value' => $this->count('account_security_events', fn ($q) => $q
+                        ->where('severity', 'critical')
+                        ->where('created_at', '>=', now()->subDays(7)))],
+                ],
+                [
+                    $this->action('ملف العميل — الأمان', 'admin.amial.customer.page'),
+                    $this->action('أحداث الأمان', 'admin.amial.security-events.index'),
+                    $this->action('مركز OTP', 'admin.amial.otp.page'),
+                    $this->action('الاستعادة', 'admin.amial.recovery.index'),
+                ],
+            ),
+            $this->system(
                 'limits',
                 'الحدود المالية',
                 Schema::hasTable('kyc_tier_limits') && $this->hasRoute('admin.amial.hub.limits.index'),
@@ -569,6 +589,8 @@ class CustomerSystemsCenterService
                 'إعداد القنوات من Firebase؛ لا تحويل «أُنشئ» إلى «وصل» دون دليل Delivery',
             'reports' =>
                 'قراءة وتصدير؛ التقرير لا يكتب أو يصحح الحقيقة المالية',
+            'account_security' =>
+                'إجراءات الجلسات/الرمز والاستعادة من ملف العميل ومراكز الأمان حسب الصلاحيات',
             'kyc' =>
                 'الاعتماد والرفض وإعادة الطلب من لجنة التحقق فقط',
             'limits' =>
@@ -581,6 +603,7 @@ class CustomerSystemsCenterService
     private function auditDescription(string $key): string
     {
         return match ($key) {
+            'account_security' => 'account_security_events + audit_decisions؛ لا PIN/password/OTP خام في السجل',
             'kyc' => 'وثائق + مراجع/قرار + ملف تسجيل + audit_decisions',
             'limits' => 'قبل/بعد + الموظف + السبب داخل audit_decisions',
             'guards' => 'CUSTOMER_POLICY_BLOCKED مع العميل والسبب والميزة والمبلغ',
