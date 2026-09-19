@@ -61,7 +61,9 @@ class KycEvidenceService
         }
 
         $completeness = $this->kyc->completenessFor($user, $targetTier);
-        $ownership = $this->ownership->assess($user);
+        // الشاشة والقرار النهائي يجب أن يقيسا إثبات الملكية بالمستوى نفسه.
+        // Tier 3 يحتاج دليلاً أقوى من Tier 2، فلا نعرض «جاهز» بمعيار أخف.
+        $ownership = $this->ownership->assess($user, $targetTier);
 
         return [
             'tier' => $targetTier,
