@@ -153,7 +153,7 @@
                         <td class="text-nowrap">{{ $row['at'] }}</td>
                         <td>
                             @if($row['customer_id'])
-                                <a href="{{ route('admin.amial.customer.page') }}?customer_id={{ urlencode((string)$row['customer_id']) }}">
+                                <a href="{{ route('admin.amial.customer.page') }}?open={{ urlencode((string)$row['customer_id']) }}">
                                     #{{ $row['customer_id'] }}
                                 </a>
                             @else — @endif
@@ -187,7 +187,7 @@
                         <td>
                             {{ $row['customer_name'] }}
                             @if($row['customer_user_id'])
-                                <a class="ms-1" href="{{ route('admin.amial.customer.page') }}?customer_id={{ $row['customer_user_id'] }}">
+                                <a class="ms-1" href="{{ route('admin.amial.customer.page') }}?open={{ $row['customer_user_id'] }}">
                                     (#{{ $row['customer_user_id'] }})
                                 </a>
                             @endif
@@ -218,7 +218,7 @@
                 @forelse($snapshot['receipts'] ?? [] as $row)
                     <tr>
                         <td class="font-monospace">{{ $row['receipt_number'] }}</td>
-                        <td><a href="{{ route('admin.amial.customer.page') }}?customer_id={{ $row['user_id'] }}">#{{ $row['user_id'] }}</a></td>
+                        <td><a href="{{ route('admin.amial.customer.page') }}?open={{ $row['user_id'] }}">#{{ $row['user_id'] }}</a></td>
                         <td>{{ $row['receipt_type'] }}</td>
                         <td>{{ number_format((float)$row['amount'], 2) }} ر.ي</td>
                         <td>{{ number_format((float)$row['fee'], 2) }} ر.ي</td>
@@ -246,7 +246,7 @@
                 @forelse($snapshot['bill_pay'] ?? [] as $row)
                     <tr>
                         <td class="font-monospace small">{{ $row['order_ulid'] }}</td>
-                        <td><a href="{{ route('admin.amial.customer.page') }}?customer_id={{ $row['user_id'] }}">#{{ $row['user_id'] }}</a></td>
+                        <td><a href="{{ route('admin.amial.customer.page') }}?open={{ $row['user_id'] }}">#{{ $row['user_id'] }}</a></td>
                         <td>{{ number_format((float)$row['amount'], 2) }} ر.ي</td>
                         <td>{{ number_format((float)$row['fee'], 2) }} ر.ي</td>
                         <td><span class="badge bg-{{ $row['status'] === 'failed' ? 'danger' : 'warning' }}">{{ $row['status'] }}</span></td>
@@ -300,7 +300,7 @@
                 <tbody>
                 @forelse($snapshot['notifications'] ?? [] as $row)
                     <tr>
-                        <td><a href="{{ route('admin.amial.customer.page') }}?customer_id={{ $row['user_id'] }}">#{{ $row['user_id'] }}</a></td>
+                        <td><a href="{{ route('admin.amial.customer.page') }}?open={{ $row['user_id'] }}">#{{ $row['user_id'] }}</a></td>
                         <td><code>{{ $row['type'] }}</code></td>
                         <td>{{ $row['title'] }}</td>
                         <td>{{ $row['read_at'] ? 'مقروء' : 'غير مقروء' }}</td>
