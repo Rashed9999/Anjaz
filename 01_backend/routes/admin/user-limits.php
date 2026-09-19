@@ -21,7 +21,7 @@ Route::middleware(['web', 'admin', 'amial.force-pin-change'])
 
         Route::post('/users/{userId}', [UserLimitCenterController::class, 'update'])
             ->where('userId', '[0-9]+')
-            ->middleware(['platform:platform.customers.limits.update', 'amial.idempotency'])
+            ->middleware('amial.idempotency')
             ->name('users.update');
 
         Route::post('/tiers/{tier}', [UserLimitCenterController::class, 'updateTierPolicy'])
