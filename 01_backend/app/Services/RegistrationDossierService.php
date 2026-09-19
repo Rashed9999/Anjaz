@@ -137,7 +137,13 @@ class RegistrationDossierService
                 2 => 'عميل موثق بهوية',
                 3 => 'عميل موثق',
             },
-            'full_name' => trim((string) ($subject->f_name.' '.$subject->l_name)),
+            'full_name' => (string) ($subject->verified_legal_name
+                ?: $subject->declared_legal_name
+                ?: trim((string) ($subject->f_name.' '.$subject->l_name))),
+            'declared_legal_name' => (string) ($subject->declared_legal_name ?? ''),
+            'verified_legal_name' => (string) ($subject->verified_legal_name ?? ''),
+            'legal_name_status' => (string) ($subject->legal_name_status ?? 'legacy'),
+            'family_name' => (string) ($subject->family_name ?? $subject->l_name ?? ''),
             'account_number' => (string) ($subject->account_number ?? ''),
             'phone' => (string) ($subject->phone ?? ''),
             'email' => (string) ($subject->email ?? ''),
