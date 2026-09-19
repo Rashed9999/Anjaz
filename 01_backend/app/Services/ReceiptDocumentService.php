@@ -939,6 +939,7 @@ class ReceiptDocumentService
             'send_money', 'received_money' => 'سند تحويل أموال',
             'refund', 'safe_payment_refunded' => 'سند استرجاع',
             'bank_settlement' => 'سند تسوية',
+            'bill_payment' => 'سند سداد فاتورة',
             'fee_charge' => 'سند رسوم',
             'family_fund_contribute' => 'سند مساهمة',
             'family_fund_disburse' => 'سند صرف',
