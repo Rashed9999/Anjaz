@@ -495,6 +495,17 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
 
     Route::get('/', [$kyc, 'page'])->middleware('platform:platform.customers.freeze')->name('page');
     Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.customers.freeze')->name('queue');
+
+    // القرار النهائي منفصل عن اعتماد المستند المفرد. كانت الشاشة تنادي
+    // هذين المسارين من دون أن يكونا مسجلين، فتضطر عملياً إلى الباب القديم.
+    Route::get('/activation-queue', [$kyc, 'activationQueue'])
+        ->middleware('platform:platform.customers.freeze')
+        ->name('activation-queue');
+    Route::post('/users/{id}/activate', [$kyc, 'activateAccount'])
+        ->where('id', '[0-9]+')
+        ->middleware(['platform:platform.approvals.decide', 'amial.idempotency'])
+        ->name('activate');
+
     Route::get('/documents/{id}/file', [$kyc, 'file'])
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('file');
     // AMIAL-KYC-OCR-001 — الحقول المستخرَجة وإقرارها
