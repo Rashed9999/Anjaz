@@ -527,9 +527,17 @@ class KycDocumentService
             })
             ->orderBy('id')
             ->limit($limit)
-            ->get(['id', 'f_name', 'l_name', 'phone', 'kyc_tier', 'residence_governorate', 'zone_code'])
+            ->get([
+                'id', 'f_name', 'l_name', 'phone', 'kyc_tier',
+                'residence_governorate', 'zone_code',
+                'declared_legal_name', 'verified_legal_name', 'legal_name_status',
+            ])
             ->filter(fn (User $user) => $this->completenessFor($user, 2)['complete'])
-            ->map(fn (User $user) => [
+            ->map(function (User $user) { 
+                $name = app(\App\Services\Kyc\LegalNameService::class)
+                    ->identityComparison($user);
+
+                return [
                 'user_id' => (int) $user->id,
                 'customer_name' => trim((string) ($user->f_name . ' ' . $user->l_name)) ?: '—',
                 'customer_phone' => (string) ($user->phone ?? '—'),
@@ -537,7 +545,14 @@ class KycDocumentService
                 'residence_governorate' => $user->residence_governorate,
                 'residence_governorate_name' => \App\Support\YemenGovernorates::name($user->residence_governorate),
                 'zone_code' => $user->zone_code ?? ZoneAssignmentService::ZONE_UNKNOWN,
-            ])->values()->all();
+                'declared_legal_name' => (string) ($user->declared_legal_name
+                    ?: trim((string) ($user->f_name . ' ' . $user->l_name))),
+                'identity_document_name' => $name['document'],
+                'legal_name_match_status' => $name['status'],
+                'legal_name_match_score' => $name['score'],
+                'legal_name_ready' => !in_array($name['status'], ['unavailable', 'mismatch'], true),
+            ];
+            })->values()->all();
     }
 
     /** الملفّ مفكوكَ التشفير — للعرض على المراجع وحده. */
