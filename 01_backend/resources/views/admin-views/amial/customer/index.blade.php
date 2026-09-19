@@ -195,6 +195,15 @@
                             <span class="badge bg-${s.severity}">${esc(s.label)}</span></h4>
                         <div class="text-muted font-monospace">#${p.id} • ${esc(p.phone)} • ${esc(p.email)}</div>
                         <div class="small text-muted">${esc(p.type)} • ${esc(p.zone_code)} • مسجَّل ${dt(p.registered_at)}</div>
+                        <div class="small mt-1">
+                            <strong>حالة الاسم:</strong> ${esc(p.legal_name_status_label || '—')}
+                            ${p.verified_legal_name
+                                ? '<span class="badge bg-success ms-1">اسم قانوني موثق</span>'
+                                : '<span class="badge bg-warning text-dark ms-1">غير موثق بالهوية</span>'}
+                        </div>
+                        ${p.declared_legal_name && p.verified_legal_name && p.declared_legal_name !== p.verified_legal_name
+                            ? `<div class="small text-warning mt-1"><strong>المصرّح به:</strong> ${esc(p.declared_legal_name)}</div>`
+                            : ''}
                     </div>
                     <button class="btn btn-outline-primary btn-sm" id="cc-actions-btn">⚡ الإجراءات</button>
                 </div>
