@@ -351,30 +351,24 @@ class CustomerCenterService
         ];
     }
 
-    /** الحدّ النافذ: استثناء العميل إن وُجد، وإلّا حدّ فئته. */
+    /** الحدّ النافذ من نفس محرك التنفيذ المالي، لا قراءة DB موازية. */
     private function limits(User $customer): array
     {
         $override = is_array($customer->limit_override)
             ? $customer->limit_override
             : (json_decode((string) $customer->limit_override, true) ?: []);
 
-        $tier = Schema::hasTable('kyc_tier_limits')
-            ? DB::table('kyc_tier_limits')->where('tier', (int) ($customer->kyc_tier ?? 0))->first()
-            : null;
-
-        $pick = fn (string $key) => $override[$key] ?? ($tier ? $tier->{$key} : null);
+        $limits = app(KycTierService::class)->getLimitsForUser($customer);
 
         return [
-            'source' => $override !== [] ? 'استثناء خاصّ بالعميل' : 'حدّ الفئة',
-            // الصفر رقم صالح في بعض السياسات؛ أمّا null فهو «لا توجد سياسة
-            // صالحة معرّفة» ولا يجوز للواجهة أن تخلطهما.
-            'max_balance' => $pick('max_balance') === null ? null : (string) $pick('max_balance'),
-            'max_single_transaction' => $pick('max_single_transaction') === null ? null : (string) $pick('max_single_transaction'),
-            'max_daily_total' => $pick('max_daily_total') === null ? null : (string) $pick('max_daily_total'),
-            'max_monthly_total' => $pick('max_monthly_total') === null ? null : (string) $pick('max_monthly_total'),
-            'max_annual_total' => $pick('max_annual_total') === null ? null : (string) $pick('max_annual_total'),
+            'source' => $override !== [] ? 'استثناء خاصّ بالعميل ضمن سقف المستوى' : 'حدّ مستوى التوثيق',
+            'max_balance' => (string) ($limits['max_balance'] ?? '0'),
+            'max_single_transaction' => (string) ($limits['max_single_transaction'] ?? '0'),
+            'max_daily_total' => (string) ($limits['max_daily_total'] ?? '0'),
+            'max_monthly_total' => (string) ($limits['max_monthly_total'] ?? '0'),
+            'max_annual_total' => (string) ($limits['max_annual_total'] ?? '0'),
             'has_override' => $override !== [],
-            'state' => $tier || $override !== [] ? 'configured' : 'not_configured',
+            'state' => 'configured',
         ];
     }
 
