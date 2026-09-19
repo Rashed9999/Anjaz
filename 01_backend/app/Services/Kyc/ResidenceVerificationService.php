@@ -69,7 +69,10 @@ class ResidenceVerificationService
         ],
     ];
 
-    public function __construct(private readonly AuditService $audit) {}
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly LegalNameService $legalNames,
+    ) {}
 
     /** @return array<int,array<string,string>> */
     public function evidenceOptions(): array
@@ -118,6 +121,10 @@ class ResidenceVerificationService
             'residence_landmark' => $user->residence_landmark ?? null,
             'evidence_type' => $latest?->evidence_type,
             'evidence_strength' => $latest?->evidence_strength,
+            'declared_legal_name' => $this->legalNames->declared($user),
+            'document_name' => $latest?->document_name,
+            'name_match_status' => $latest?->name_match_status,
+            'name_match_score' => $latest?->name_match_score,
             'evidence_date' => $latest?->evidence_date,
             'decision_reason' => $latest?->decision_reason,
             'reviewed_at' => $latest?->reviewed_at,
@@ -242,6 +249,10 @@ class ResidenceVerificationService
             throw new DomainException('RESIDENCE_STRONGER_EVIDENCE_REQUIRED');
         }
 
+        if ($status === self::STATUS_VERIFIED) {
+            $this->legalNames->assertResidenceNameReady($verificationId);
+        }
+
         $document = $row->kyc_document_id
             ? KycDocument::find((int) $row->kyc_document_id) : null;
         if ($status === self::STATUS_VERIFIED
@@ -280,6 +291,12 @@ class ResidenceVerificationService
                     if (Schema::hasColumn('users', 'kyc_tier_updated_at')) {
                         $account->kyc_tier_updated_at = now();
                     }
+                }
+                if (Schema::hasColumn('users', 'legal_name_status')) {
+                    $account->legal_name_status = 'residence_matched';
+                }
+                if (Schema::hasColumn('users', 'legal_name_locked_at')) {
+                    $account->legal_name_locked_at = now();
                 }
 
                 $account->save();
@@ -345,13 +362,22 @@ class ResidenceVerificationService
                 'r.id', 'r.user_id', 'r.kyc_document_id', 'r.declared_governorate',
                 'r.evidence_type', 'r.evidence_strength', 'r.evidence_date', 'r.submitted_at',
                 'u.f_name', 'u.l_name', 'u.phone',
+                'u.declared_legal_name', 'u.family_name',
                 'u.birth_governorate', 'u.residence_district',
+                'r.document_name', 'r.name_match_status', 'r.name_match_score',
+                'r.name_review_note',
                 'u.residence_area', 'u.residence_landmark',
             ])
             ->map(fn ($row) => [
                 'id' => (int) $row->id,
                 'user_id' => (int) $row->user_id,
                 'name' => trim((string) ($row->f_name . ' ' . $row->l_name)) ?: '—',
+                'declared_legal_name' => (string) ($row->declared_legal_name
+                    ?: trim((string) ($row->f_name . ' ' . $row->l_name))),
+                'document_name' => (string) ($row->document_name ?? ''),
+                'name_match_status' => $row->name_match_status,
+                'name_match_score' => $row->name_match_score,
+                'name_review_note' => $row->name_review_note,
                 'phone' => (string) ($row->phone ?? '—'),
                 'kyc_document_id' => $row->kyc_document_id ? (int) $row->kyc_document_id : null,
                 'birth_governorate' => (string) ($row->birth_governorate ?? ''),
