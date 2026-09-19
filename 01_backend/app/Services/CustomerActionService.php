@@ -323,10 +323,11 @@ class CustomerActionService
         $merged = array_merge($existing, $clean);
 
         $effective = $tiers->getLimitsForUser($c);
-        foreach ($merged as $key => $value) {
-            if (in_array($key, $allowed, true)) {
-                $effective[$key] = (string) $value;
-            }
+        // القيم القديمة قد تحتوي override أعلى من السياسة قبل إضافة الحارس.
+        // getLimitsForUser() يكون قد قيّدها؛ نضيف فقط القيم الجديدة التي
+        // تحقّقنا منها أعلاه، ولا نعيد حقن القديم غير الآمن في الفحص.
+        foreach ($clean as $key => $value) {
+            $effective[$key] = (string) $value;
         }
 
         if (bccomp((string) $effective['max_single_transaction'], (string) $effective['max_daily_total'], 4) > 0
