@@ -222,6 +222,10 @@ class UserLimitCenterController extends Controller
 
     private function updateMerchant(Request $request, User $user, string $reason): JsonResponse
     {
+        if (!$request->user()->hasPlatformPermission('platform.money.move')) {
+            throw new DomainException('لا تملك صلاحية تعديل الحدود المالية للتاجر');
+        }
+
         $v = Validator::make($request->all(), [
             'single_receive_limit' => 'required|numeric|min:0',
             'daily_receive_limit' => 'required|numeric|min:0',
@@ -265,6 +269,10 @@ class UserLimitCenterController extends Controller
 
     private function updateAgent(Request $request, User $user, string $reason): JsonResponse
     {
+        if (!$request->user()->hasPlatformPermission('platform.money.move')) {
+            throw new DomainException('لا تملك صلاحية تعديل حدود تشغيل الوكيل');
+        }
+
         $v = Validator::make($request->all(), [
             'single_transaction_limit' => 'required|numeric|min:0',
             'daily_cash_in_limit' => 'required|numeric|min:0',
