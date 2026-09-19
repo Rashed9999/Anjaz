@@ -37,8 +37,8 @@ class Helpers
                 'Content-Type' => 'application/json',
             ];
 
-            Http::withHeaders($headers)->post($url, $data);
-            return true;
+            $response = Http::withHeaders($headers)->timeout(10)->post($url, $data);
+            return $response->successful();
         }catch (\Exception $exception){
             return false;
         }
@@ -887,11 +887,43 @@ class Helpers
             ];
 
             try {
-                Helpers::send_push_notif_to_device($fcm_token, $data);
-                return true;
-            } catch (\Exception $exception) {
+                $sent = Helpers::send_push_notif_to_device($fcm_token, $data);
+                $delivery = app(\App\Services\NotificationDeliveryLogService::class);
+                if ($sent) {
+                    $delivery->accepted(
+                        $user_id,
+                        $notificationType ?? $transaction_type,
+                        null,
+                        null,
+                        null,
+                        1,
+                    );
+                } else {
+                    $delivery->failed(
+                        $user_id,
+                        'LEGACY_FCM_SEND_FAILED',
+                        'مسار FCM القديم أعاد نتيجة فاشلة.',
+                        $notificationType ?? $transaction_type,
+                    );
+                }
+                return $sent;
+            } catch (\Throwable $exception) {
+                app(\App\Services\NotificationDeliveryLogService::class)->failed(
+                    $user_id,
+                    'LEGACY_FCM_EXCEPTION',
+                    $exception->getMessage(),
+                    $notificationType ?? $transaction_type,
+                );
                 return false;
             }
+        }
+
+        if ($user) {
+            app(\App\Services\NotificationDeliveryLogService::class)->skipped(
+                $user_id,
+                empty($user->fcm_token) ? 'FCM_TOKEN_MISSING' : 'NOTIFICATION_MESSAGE_DISABLED',
+                $notificationType ?? $transaction_type,
+            );
         }
 
         return false;
