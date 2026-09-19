@@ -164,6 +164,25 @@ class KycSequentialTierGuardTest extends TestCase
         }
     }
 
+    public function test_modern_activation_routes_exist_and_final_decision_requires_approval_permission(): void
+    {
+        $queue = Route::getRoutes()->getByName('admin.amial.kyc.activation-queue');
+        $activate = Route::getRoutes()->getByName('admin.amial.kyc.activate');
+
+        $this->assertNotNull($queue, 'طابور قرار KYC الحديث غير مسجل رغم أن الشاشة تستدعيه.');
+        $this->assertNotNull($activate, 'مسار اعتماد حساب KYC الحديث غير مسجل رغم أن الشاشة تستدعيه.');
+        $this->assertContains(
+            'platform:platform.approvals.decide',
+            $activate->gatherMiddleware(),
+            'المسار الحديث لاعتماد الحساب لا يحرسه إذن approvals.decide.'
+        );
+        $this->assertContains(
+            'amial.idempotency',
+            $activate->gatherMiddleware(),
+            'قرار اعتماد الحساب الحرج غير محمي من إعادة الإرسال.'
+        );
+    }
+
     public function test_direct_customer_tier_mutation_is_closed(): void
     {
         $user = $this->customerAt(0);
