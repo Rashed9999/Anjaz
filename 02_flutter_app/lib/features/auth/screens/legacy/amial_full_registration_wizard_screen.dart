@@ -554,10 +554,9 @@ class _AmialRegistrationWizardScreenState
       }
 
       final signature = await _sigKey1.currentState?.exportBase64Png();
-      final lastName = [_name2.text, _name3.text, _name4.text]
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .join(' ');
+      // l_name يبقى لقب العائلة فقط للتوافق؛ الاسم القانوني الرباعي
+      // يُرسل بأجزائه الصريحة ولا يُضغط ثلاثة أجزاء في حقل واحد.
+      final lastName = _name4.text.trim();
       final address = [
         _govName(_residenceGov), _addrDir.text, _addrArea.text,
         _addrStreet.text, _addrLandmark.text,
@@ -566,6 +565,7 @@ class _AmialRegistrationWizardScreenState
       final fields = <String, String>{
         'f_name': _name1.text.trim(),
         'l_name': lastName,
+        'family_name': lastName,
         'father_name': _name2.text.trim(),
         'grandfather_name': _name3.text.trim(),
         'name_en': _nameEn.text.trim(),
