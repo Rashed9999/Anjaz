@@ -7,6 +7,11 @@ on:
       - '01_backend/app/Services/Kyc/Biometric/**'
       - '01_backend/app/Services/Kyc/KycPrivacyService.php'
       - '01_backend/app/Services/KycTierService.php'
+      - '01_backend/app/Services/KycDocumentService.php'
+      - '01_backend/app/Http/Controllers/Admin/AdminHubController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/KycDocumentController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/VerificationStatusController.php'
+      - '01_backend/tests/Feature/KycSequentialTierGuardTest.php'
       - '01_backend/app/Services/DonationsService.php'
       - '01_backend/app/Http/Controllers/Api/V1/Amial/KycBiometricWebhookController.php'
       - '01_backend/app/Http/Controllers/Api/V1/Amial/KycPrivacyController.php'
@@ -26,6 +31,11 @@ on:
       - '01_backend/app/Services/Kyc/Biometric/**'
       - '01_backend/app/Services/Kyc/KycPrivacyService.php'
       - '01_backend/app/Services/KycTierService.php'
+      - '01_backend/app/Services/KycDocumentService.php'
+      - '01_backend/app/Http/Controllers/Admin/AdminHubController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/KycDocumentController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/VerificationStatusController.php'
+      - '01_backend/tests/Feature/KycSequentialTierGuardTest.php'
       - '01_backend/app/Services/DonationsService.php'
       - '01_backend/app/Http/Controllers/Api/V1/Amial/KycBiometricWebhookController.php'
       - '01_backend/app/Http/Controllers/Api/V1/Amial/KycPrivacyController.php'
@@ -101,6 +111,9 @@ jobs:
 
       - name: حارس حدود مستويات التوثيق المالية
         run: php artisan test --compact tests/Feature/KycRegulatoryLimitsTest.php
+
+      - name: حارس تسلسل مستويات العميل 0 → 1 → 2 → 3
+        run: php artisan test --compact tests/Feature/KycSequentialTierGuardTest.php
 
       - name: حارس Runtime البيومتري
         run: php artisan test --compact tests/Feature/KycBiometricProviderRuntimeTest.php
