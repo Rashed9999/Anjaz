@@ -461,6 +461,31 @@ class AdminHubController extends Controller
         }
 
         $user = User::findOrFail($id);
+        $targetTier = (int) $request->input('target_tier', 2);
+
+        if ($status === 1 && !in_array($targetTier, [2, 3], true)) {
+            return response()->json([
+                'message' => 'مستوى التوثيق المطلوب غير صالح.',
+                'code' => 'KYC_TIER_TARGET_INVALID',
+            ], 422);
+        }
+
+        if ($status === 1 && (int) $user->type === CUSTOMER_TYPE) {
+            try {
+                // الحارس قبل أي تعديل جانبي (حتى محافظة السكن): محاولة قفز
+                // مرفوضة يجب ألا تغيّر شيئاً في ملف العميل.
+                app(\App\Services\KycTierService::class)
+                    ->assertSequentialVerificationDecision($user, $targetTier);
+            } catch (\DomainException $e) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'code' => str_contains($e->getMessage(), 'KYC_TIER_SEQUENCE_VIOLATION')
+                        ? 'KYC_TIER_SEQUENCE_VIOLATION'
+                        : 'KYC_TIER_DECISION_REJECTED',
+                ], 409);
+            }
+        }
+
         if ($status === 1) {
             // هذه واجهة توافقية قديمة؛ لا نسمح لها بعد اليوم بإنتاج حساب
             // "مقبول" ومنطقته UNKNOWN. إن لم يكن في الملف اختيار محفوظ،
@@ -484,7 +509,7 @@ class AdminHubController extends Controller
                 user: $user,
                 reviewer: $request->user(),
                 approve: $status === 1,
-                targetTier: (int) $request->input('target_tier', 2),
+                targetTier: $targetTier,
                 reason: $request->input('reason'),
             );
         } catch (\DomainException $e) {
