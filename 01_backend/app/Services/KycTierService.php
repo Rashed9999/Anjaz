@@ -7,6 +7,7 @@ use App\Models\EMoney;
 use App\Models\User;
 use App\Services\Kyc\ResidenceVerificationService;
 use App\Support\YemenGovernorates;
+use DomainException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -24,7 +25,7 @@ use RuntimeException;
  * الأرقام مفاتيح سياسة داخلية وليست تسمية واجهة.
  *
  * AMIAL-PROGRESSIVE-KYC-TURNOVER-003
- * الحدود اليومية والشهرية = إجمالي أصل حركة العميل (وارد + صادر).
+ * الحدود اليومية والشهرية والسنوية = إجمالي أصل حركة العميل (وارد + صادر).
  * الرسوم وعمولات أميال لا تستهلك حد KYC، والحركات المحجوزة تستهلكه مؤقتاً
  * حتى تنجح أو تُلغى. customer_turnover_usage هو projection القرار، والدفتر
  * يبقى مصدر الحقيقة المحاسبي.
@@ -34,6 +35,34 @@ class KycTierService
     private const NON_USAGE_LEDGER_SOURCES = [
         'opening_balance',
         'external_adjustment',
+    ];
+
+    /**
+     * السقف الأعلى الذي لا تستطيع لوحة الإدارة تجاوزه.
+     * يمكن للإدارة خفض السياسة التشغيلية، لكنها لا تستطيع رفعها فوق هذه القيم.
+     */
+    private const POLICY_CEILINGS = [
+        1 => [
+            'max_balance' => '100000',
+            'max_single_transaction' => '100000',
+            'max_daily_total' => '100000',
+            'max_monthly_total' => '100000',
+            'max_annual_total' => '0',
+        ],
+        2 => [
+            'max_balance' => '250000',
+            'max_single_transaction' => '250000',
+            'max_daily_total' => '250000',
+            'max_monthly_total' => '250000',
+            'max_annual_total' => '0',
+        ],
+        3 => [
+            'max_balance' => '8000000',
+            'max_single_transaction' => '1000000',
+            'max_daily_total' => '2000000',
+            'max_monthly_total' => '5000000',
+            'max_annual_total' => '50000000',
+        ],
     ];
 
     public function effectiveTier(User $user): int
@@ -72,6 +101,7 @@ class KycTierService
             'max_single_transaction' => '0',
             'max_daily_total' => '0',
             'max_monthly_total' => '0',
+            'max_annual_total' => '0',
             'allowed_features' => [],
         ],
         1 => [
@@ -80,6 +110,7 @@ class KycTierService
             'max_single_transaction' => '100000',
             'max_daily_total' => '100000',
             'max_monthly_total' => '100000',
+            'max_annual_total' => '0',
             'allowed_features' => ['send_money', 'receive_money', 'bill_pay', 'cash_out', 'merchant_pay'],
         ],
         2 => [
@@ -88,6 +119,7 @@ class KycTierService
             'max_single_transaction' => '250000',
             'max_daily_total' => '250000',
             'max_monthly_total' => '250000',
+            'max_annual_total' => '0',
             'allowed_features' => [
                 'send_money', 'receive_money', 'bill_pay', 'cash_out', 'merchant_pay',
                 'safe_payment', 'donations', 'family_fund',
@@ -95,13 +127,23 @@ class KycTierService
         ],
         3 => [
             'name_ar' => 'عميل موثق',
-            'max_balance' => '2000000',
-            'max_single_transaction' => '400000',
-            'max_daily_total' => '700000',
-            'max_monthly_total' => '2000000',
+            'max_balance' => '8000000',
+            'max_single_transaction' => '1000000',
+            'max_daily_total' => '2000000',
+            'max_monthly_total' => '5000000',
+            'max_annual_total' => '50000000',
             'allowed_features' => ['*'],
         ],
     ];
+
+    public function getPolicyCeiling(int $tier): array
+    {
+        if (! isset(self::POLICY_CEILINGS[$tier])) {
+            throw new DomainException('مستوى الحدود غير قابل للإدارة');
+        }
+
+        return ['tier' => $tier] + self::POLICY_CEILINGS[$tier];
+    }
 
     public function getLimits(int $tier): array
     {
@@ -115,6 +157,9 @@ class KycTierService
                 'max_single_transaction' => (string) $dbLimit->max_single_transaction,
                 'max_daily_total' => (string) $dbLimit->max_daily_total,
                 'max_monthly_total' => (string) $dbLimit->max_monthly_total,
+                'max_annual_total' => isset($dbLimit->max_annual_total)
+                    ? (string) $dbLimit->max_annual_total
+                    : '0',
                 'allowed_features' => json_decode($dbLimit->allowed_features ?? '[]', true) ?? [],
             ];
         }
@@ -125,24 +170,152 @@ class KycTierService
     /**
      * حدود العميل الفردي الفعلية بعد تطبيق أي override إداري مشروع.
      *
-     * لا تُستخدم هذه الدالة للتاجر أو الوكيل أو موظفي POS/الإدارة؛ نظام
-     * الـTier التدريجي خاص بحساب العميل الفردي (type=2) فقط.
+     * الاستثناء الفردي لا يستطيع رفع حد العميل فوق سياسة مستوى KYC.
+     * هذه قاعدة أمنية متعمدة: تعديل عميل واحد ليس طريقاً خلفياً لتجاوز
+     * سقف المستوى أو السقف التنظيمي.
      */
     public function getLimitsForUser(User $user): array
     {
-        $limits = $this->getLimits($this->effectiveTier($user));
+        $base = $this->getLimits($this->effectiveTier($user));
+        $limits = $base;
         $override = is_array($user->limit_override)
             ? $user->limit_override
             : (json_decode((string) $user->limit_override, true) ?: []);
 
-        foreach (['max_balance', 'max_single_transaction', 'max_daily_total', 'max_monthly_total'] as $key) {
+        foreach ([
+            'max_balance',
+            'max_single_transaction',
+            'max_daily_total',
+            'max_monthly_total',
+            'max_annual_total',
+        ] as $key) {
             if (!array_key_exists($key, $override)) continue;
-            $value = (string) $override[$key];
-            if (preg_match('/^\d+(?:\.\d{1,4})?$/', $value)) {
+
+            $value = trim((string) $override[$key]);
+            if (!preg_match('/^\d+(?:\.\d{1,4})?$/', $value)) continue;
+
+            $baseValue = (string) ($base[$key] ?? '0');
+            // صفر في السنوي للمستويين 1 و2 يعني «لا قيد سنوي إضافي».
+            // يسمح باستثناء أقل فقط، بينما الحقول ذات السقف الموجب تُحصر
+            // دائماً في سقف المستوى الجاري.
+            if ($key === 'max_annual_total' && bccomp($baseValue, '0', 4) === 0) {
                 $limits[$key] = $value;
+                continue;
             }
+
+            $limits[$key] = bccomp($baseValue, '0', 4) > 0
+                && bccomp($value, $baseValue, 4) > 0
+                    ? $baseValue
+                    : $value;
         }
+
         return $limits;
+    }
+
+    /**
+     * تعديل سياسة مستوى كامل من لوحة الإدارة.
+     * لا DB update مباشر من Controller؛ التحقق والتدقيق والمعاملة هنا.
+     */
+    public function updateTierPolicy(
+        int $tier,
+        array $payload,
+        User $actor,
+        string $reason,
+    ): array {
+        if (! isset(self::POLICY_CEILINGS[$tier])) {
+            throw new DomainException('لا يمكن تعديل هذا المستوى');
+        }
+        if (mb_strlen(trim($reason)) < 10) {
+            throw new DomainException('سبب تعديل السياسة إلزامي (10 أحرف على الأقل)');
+        }
+        if (! Schema::hasColumn('kyc_tier_limits', 'max_annual_total')) {
+            throw new RuntimeException('ترحيل الحد السنوي لم يُطبّق بعد');
+        }
+
+        $fields = [
+            'max_balance',
+            'max_single_transaction',
+            'max_daily_total',
+            'max_monthly_total',
+            'max_annual_total',
+        ];
+        $current = $this->getLimits($tier);
+        $next = [];
+        foreach ($fields as $field) {
+            $value = array_key_exists($field, $payload)
+                ? trim((string) $payload[$field])
+                : (string) ($current[$field] ?? '0');
+
+            if (!preg_match('/^\d+(?:\.\d{1,4})?$/', $value)) {
+                throw new DomainException('قيمة حد غير صالحة: ' . $field);
+            }
+
+            $ceiling = (string) self::POLICY_CEILINGS[$tier][$field];
+            if (bccomp($ceiling, '0', 4) === 0) {
+                if (bccomp($value, '0', 4) !== 0) {
+                    throw new DomainException('لا يوجد سقف سنوي إضافي لهذا المستوى؛ اترك القيمة صفراً');
+                }
+            } elseif (bccomp($value, '0', 4) <= 0 || bccomp($value, $ceiling, 4) > 0) {
+                throw new DomainException(
+                    'القيمة تتجاوز سقف أميال المسموح لهذا المستوى: ' . $field
+                );
+            }
+
+            $next[$field] = $value;
+        }
+
+        if (bccomp($next['max_single_transaction'], $next['max_daily_total'], 4) > 0
+            || bccomp($next['max_daily_total'], $next['max_monthly_total'], 4) > 0) {
+            throw new DomainException('يجب أن يكون حد العملية ≤ اليومي ≤ الشهري');
+        }
+        if (bccomp($next['max_annual_total'], '0', 4) > 0
+            && bccomp($next['max_monthly_total'], $next['max_annual_total'], 4) > 0) {
+            throw new DomainException('يجب أن يكون الحد الشهري ≤ السنوي');
+        }
+
+        return DB::transaction(function () use ($tier, $actor, $reason, $next, $fields) {
+            $row = DB::table('kyc_tier_limits')->where('tier', $tier)->lockForUpdate()->first();
+            if (!$row) {
+                throw new RuntimeException('سياسة المستوى غير موجودة');
+            }
+
+            $before = [];
+            foreach ($fields as $field) {
+                $before[$field] = (string) ($row->{$field} ?? '0');
+            }
+
+            DB::table('kyc_tier_limits')->where('tier', $tier)->update(
+                $next + ['updated_at' => now()]
+            );
+
+            $auditId = app(AuditService::class)->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $actor->id,
+                'subject_type' => 'kyc_tier_limits',
+                'subject_id' => (string) $tier,
+                'action' => 'KYC_TIER_LIMITS_UPDATED',
+                'decision_code' => 'OK',
+                'reason' => mb_substr(trim($reason), 0, 500),
+                'severity' => 'critical',
+                'context' => [
+                    'tier' => $tier,
+                    'before' => $before,
+                    'after' => $next,
+                    'policy_ceiling' => self::POLICY_CEILINGS[$tier],
+                ],
+            ]);
+
+            if ($auditId === null) {
+                throw new RuntimeException('تعذر حفظ سجل التدقيق؛ لم تُغيّر السياسة');
+            }
+
+            return [
+                'message' => 'تم تحديث سياسة حدود المستوى وتوثيق القرار',
+                'tier' => $tier,
+                'limits' => $this->getLimits($tier),
+                'ceiling' => $this->getPolicyCeiling($tier),
+            ];
+        });
     }
 
     private function assertOperationalResidence(User $user): string
@@ -275,6 +448,19 @@ class KycTierService
                 . Helpers::money($remaining) . ' ر.ي. أكمل التوثيق لرفع الحد.'
             );
         }
+
+        $annualLimit = (string) ($limits['max_annual_total'] ?? '0');
+        if (bccomp($annualLimit, '0', 4) > 0) {
+            $yearTotal = $this->getYearMovementTotal($user->id);
+            if (bccomp(bcadd($yearTotal, $amount, 4), $annualLimit, 4) > 0) {
+                $remaining = $this->remaining($annualLimit, $yearTotal);
+                throw new RuntimeException(
+                    'هذه العملية ستتجاوز حد إجمالي الحركة السنوي ('
+                    . Helpers::money($annualLimit) . ' ر.ي). المتبقي هذه السنة: '
+                    . Helpers::money($remaining) . ' ر.ي'
+                );
+            }
+        }
     }
 
     private function remaining(string $limit, string $used): string
@@ -321,6 +507,11 @@ class KycTierService
         return $this->getMovementTotalSince($userId, Carbon::now()->startOfMonth());
     }
 
+    private function getYearMovementTotal(int $userId): string
+    {
+        return $this->getMovementTotalSince($userId, Carbon::now()->startOfYear());
+    }
+
     /**
      * customer_turnover_usage يحسب reserved + posted فقط؛ released لا يعود
      * يستهلك من الحد. fallback الدفتر موجود فقط قبل تنفيذ migration الجديدة.
@@ -364,6 +555,7 @@ class KycTierService
             'usage_basis' => 'principal_wallet_turnover_excluding_fees',
             'today_used' => $this->getTodayMovementTotal($user->id),
             'month_used' => $this->getMonthMovementTotal($user->id),
+            'year_used' => $this->getYearMovementTotal($user->id),
             'next_tier' => $nextTier,
             'residence' => $residence,
         ];
