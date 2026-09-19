@@ -156,6 +156,7 @@ class AuditVocabulary
         'ADMIN_OPERATOR_CREATED' => ['أُنشئ مشغّلٌ إداريّ', 'security'],
 
         // ── الامتثال ────────────────────────────────────────────────
+        'CUSTOMER_POLICY_BLOCKED' => ['حارسُ سياسة العميل منع عملية', 'compliance'],
         'KYC_DOCUMENT_UPLOADED' => ['رُفعت وثيقةُ تحقّق', 'compliance'],
         'KYC_DOCUMENT_APPROVED' => ['اعتُمدت وثيقةُ تحقّق', 'compliance'],
         'KYC_DOCUMENT_REJECTED' => ['رُفضت وثيقةُ تحقّق', 'compliance'],
