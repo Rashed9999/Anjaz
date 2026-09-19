@@ -317,7 +317,16 @@ class EmailOtpLifecycleTest extends TestCase
         $this->assertSame(403, $failed->getStatusCode());
         $this->assertNull($this->row($issued['challenge_id'])->consumed_at);
         $this->assertDatabaseMissing('users', ['email_canonical' => 'recipient@example.com']);
-        $ok = $controller->register(Request::create('/api/v1/auth/register/email', 'POST', $data + ['f_name' => 'Email', 'l_name' => 'Owner']));
+        // AMIAL-LEGAL-NAME-001: نجاح التسجيل الحديث يتطلب الاسم القانوني
+        // بأجزائه الأربعة. هذا الاختبار يختبر قابلية إعادة استخدام إثبات
+        // البريد بعد فشل الكتابة، لا التهرب من عقد الاسم القانوني.
+        $ok = $controller->register(Request::create('/api/v1/auth/register/email', 'POST', $data + [
+            'f_name' => 'Email',
+            'father_name' => 'Test',
+            'grandfather_name' => 'Account',
+            'family_name' => 'Owner',
+            'l_name' => 'Owner',
+        ]));
         $this->assertSame(200, $ok->getStatusCode());
         $user = User::where('email_canonical', 'recipient@example.com')->firstOrFail();
         $this->assertSame(1, (int) $user->is_email_verified);
