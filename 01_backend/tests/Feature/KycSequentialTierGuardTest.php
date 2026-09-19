@@ -137,6 +137,33 @@ class KycSequentialTierGuardTest extends TestCase
         );
     }
 
+    public function test_tier_three_reverification_cannot_fall_back_to_tier_two_evidence(): void
+    {
+        $user = $this->customerAt(3, true);
+        $user->forceFill([
+            'kyc_update_required' => 1,
+            'kyc_update_previous_tier' => 3,
+        ])->save();
+
+        try {
+            app(KycTierService::class)
+                ->assertSequentialVerificationDecision($user->fresh(), 2);
+            $this->fail('Tier 3 أُعيد توثيقه كـ Tier 2 مع إبقاء المستوى الأعلى.');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('KYC_TIER_SEQUENCE_VIOLATION', $e->getMessage());
+        }
+
+        $user->forceFill(['kyc_update_previous_tier' => 2])->save();
+
+        try {
+            app(KycTierService::class)
+                ->assertSequentialVerificationDecision($user->fresh(), 3);
+            $this->fail('حالة update_required غير المتسقة مرّت دون رفض.');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('KYC_UPDATE_TIER_STATE_INVALID', $e->getMessage());
+        }
+    }
+
     public function test_direct_customer_tier_mutation_is_closed(): void
     {
         $user = $this->customerAt(0);
