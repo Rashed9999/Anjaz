@@ -34,9 +34,19 @@ class AdminSurfaceController extends Controller
                 'orders as today_orders_count' => fn ($q) => $q->whereDate('created_at', today()),
             ])->orderBy('name')->get();
         $ordersToday = BillPaymentOrder::whereDate('created_at', today())->count();
+        $recentOrders = BillPaymentOrder::with([
+                'provider:id,name,display_name_ar,integration_type',
+                'service:id,name,display_name_ar',
+                'user:id,f_name,l_name,phone',
+            ])
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get();
+
         return view('admin-views.amial.surface.bill-providers', [
             'providers' => $providers,
             'ordersToday' => $ordersToday,
+            'recentOrders' => $recentOrders,
             'canConfigure' => (bool) auth('user')->user()?->hasPlatformPermission('platform.settings.update'),
         ]);
     }
