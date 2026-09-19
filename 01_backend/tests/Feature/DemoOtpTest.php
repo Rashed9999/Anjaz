@@ -55,6 +55,9 @@ class DemoOtpTest extends TestCase
     {
         return [
             'f_name' => 'راشد',
+            'father_name' => 'محمد',
+            'grandfather_name' => 'عوض',
+            'family_name' => 'المهدي',
             'l_name' => 'المهدي',
             'gender' => 'male',
             'dial_country_code' => '+967',
