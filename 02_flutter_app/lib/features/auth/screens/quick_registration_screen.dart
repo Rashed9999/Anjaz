@@ -36,7 +36,10 @@ class QuickRegistrationScreen extends StatefulWidget {
 }
 
 class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
-  final _name = TextEditingController();
+  final _givenName = TextEditingController();
+  final _fatherName = TextEditingController();
+  final _grandfatherName = TextEditingController();
+  final _familyName = TextEditingController();
   final _phone = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
@@ -122,7 +125,10 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   void dispose() {
     _emailTimer?.cancel();
     for (final c in [
-      _name,
+      _givenName,
+      _fatherName,
+      _grandfatherName,
+      _familyName,
       _phone,
       _email,
       _password,
@@ -138,6 +144,13 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     }
     super.dispose();
   }
+
+  String get _declaredLegalName => [
+        _givenName.text.trim(),
+        _fatherName.text.trim(),
+        _grandfatherName.text.trim(),
+        _familyName.text.trim(),
+      ].where((part) => part.isNotEmpty).join(' ');
 
   String get _normalizedEmail => _email.text.trim().toLowerCase();
 
@@ -177,9 +190,21 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   }
 
   bool _validateBasics() {
-    if (_name.text.trim().length < 2) {
-      _snack('أدخل اسمك كما تريد أن يظهر في حساب أميال.');
-      return false;
+    final nameParts = <String, String>{
+      'الاسم': _givenName.text.trim(),
+      'اسم الأب': _fatherName.text.trim(),
+      'اسم الجد': _grandfatherName.text.trim(),
+      'اللقب / اسم العائلة': _familyName.text.trim(),
+    };
+    for (final entry in nameParts.entries) {
+      if (entry.value.length < 2) {
+        _snack('أدخل ${entry.key} الحقيقي كما يظهر في وثائقك الرسمية.');
+        return false;
+      }
+      if (!RegExp(r"^[\p{L}\p{M}\s\-']+$", unicode: true).hasMatch(entry.value)) {
+        _snack('${entry.key} يحتوي على أحرف غير صالحة.');
+        return false;
+      }
     }
     final digits = _phone.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.length < 7) {
@@ -326,7 +351,10 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       final register = await Get.find<ApiClient>().postData(
         '/api/v1/auth/register/quick',
         {
-          'full_name': _name.text.trim(),
+          'given_name': _givenName.text.trim(),
+          'father_name': _fatherName.text.trim(),
+          'grandfather_name': _grandfatherName.text.trim(),
+          'family_name': _familyName.text.trim(),
           'dial_country_code': _dialCode,
           'phone': _phone.text.trim(),
           'email': _normalizedEmail,
@@ -388,7 +416,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       } catch (_) {}
     }
     await UnifiedAuthController.rememberLastUser(
-      name: _name.text.trim(),
+      name: _declaredLegalName,
       phone: '$_dialCode${_phone.text.trim()}',
       kind: 'customer',
     );
@@ -553,7 +581,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       () => CustomerVerificationReviewScreen(
         targetTier: 1,
         rows: [
-          VerificationReviewRow('الاسم الكامل', _name.text.trim()),
+          VerificationReviewRow('الاسم القانوني المصرّح به', _declaredLegalName),
           VerificationReviewRow('رقم الهاتف', '$_dialCode${_phone.text.trim()}'),
           VerificationReviewRow(
             'محافظة الميلاد',
@@ -890,7 +918,54 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
             'أنشئ كلمة مرور للدخول وPIN مالياً مستقلاً. يمكنك توثيق الهوية ورفع الحدود لاحقاً من حسابك.',
             Icons.account_balance_wallet_outlined,
           ),
-          _field(_name, 'الاسم الكامل'),
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF8E6),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE9C46A)),
+            ),
+            child: const Text(
+              'اكتب اسمك الحقيقي كما يظهر في وثائقك الرسمية. '
+              'سيتم مطابقة هذا الاسم مع إثبات السكن ثم الهوية عند رفع مستوى التوثيق. '
+              'الاسم المستعار أو اسم النشاط قد يوقف اعتماد التوثيق.',
+              style: TextStyle(fontSize: 12.5, height: 1.55),
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(child: _field(_givenName, 'الاسم *')),
+              const SizedBox(width: 10),
+              Expanded(child: _field(_fatherName, 'اسم الأب *')),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(child: _field(_grandfatherName, 'اسم الجد *')),
+              const SizedBox(width: 10),
+              Expanded(child: _field(_familyName, 'اللقب / اسم العائلة *')),
+            ],
+          ),
+          if (_declaredLegalName.isNotEmpty)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F8FF),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                'الاسم القانوني المصرّح به: $_declaredLegalName',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  height: 1.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1085,6 +1160,21 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           'بيانات الميلاد والسكن الحالي',
           'يمكن لأي عميل التسجيل والتوثيق مهما كانت محافظته. نطاق التشغيل يحدد توفر الخدمات المالية فقط ولا يرفض إنشاء الحساب.',
           Icons.home_work_outlined,
+        ),
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F8FF),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFD9E7FA)),
+          ),
+          child: Text(
+            'الاسم الذي سيُقارن بإثبات السكن: $_declaredLegalName\n'
+            'تأكد أن إثبات السكن يحمل اسمك الحقيقي. الاختلاف الجوهري سيوقف اعتماد التوثيق الجزئي للمراجعة.',
+            style: const TextStyle(fontSize: 12.5, height: 1.55),
+          ),
         ),
         GovernoratePicker(
           label: 'محافظة الميلاد',
