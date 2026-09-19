@@ -323,18 +323,46 @@ class KycTierService
         });
     }
 
+    /**
+     * كل رفض حرج في سياسة العميل يجب أن يترك أثراً مرئياً للإدارة.
+     * AuditService fail-soft؛ فتعطل التدقيق لا يغيّر قرار المنع نفسه.
+     */
+    private function recordPolicyBlock(
+        User $user,
+        string $code,
+        string $reason,
+        array $context = [],
+    ): void {
+        app(AuditService::class)->record([
+            'actor_type' => 'system',
+            'actor_user_id' => $user->id,
+            'subject_type' => 'user',
+            'subject_id' => (string) $user->id,
+            'action' => 'CUSTOMER_POLICY_BLOCKED',
+            'decision_code' => $code,
+            'reason' => mb_substr($reason, 0, 255),
+            'severity' => 'warning',
+            'zone_code' => $user->zone_code ?? null,
+            'context' => array_merge([
+                'stored_tier' => max(0, min(3, (int) ($user->kyc_tier ?? 0))),
+            ], $context),
+        ]);
+    }
+
     private function assertOperationalResidence(User $user): string
     {
         $code = app(ResidenceVerificationService::class)->verifiedGovernorate($user);
         if ($code === null || empty($user->residence_verified_at)) {
-            throw new RuntimeException(
-                'فعّل محفظتك المالية بإثبات محل إقامتك الحالي أولاً. [RESIDENCE_NOT_VERIFIED]'
-            );
+            $message = 'فعّل محفظتك المالية بإثبات محل إقامتك الحالي أولاً. [RESIDENCE_NOT_VERIFIED]';
+            $this->recordPolicyBlock($user, 'RESIDENCE_NOT_VERIFIED', $message);
+            throw new RuntimeException($message);
         }
         if (!YemenGovernorates::isOperational($code)) {
-            throw new RuntimeException(
-                'محل إقامتك الموثق خارج نطاق تشغيل أميال الحالي. [RESIDENCE_OUTSIDE_OPERATIONAL_AREA]'
-            );
+            $message = 'محل إقامتك الموثق خارج نطاق تشغيل أميال الحالي. [RESIDENCE_OUTSIDE_OPERATIONAL_AREA]';
+            $this->recordPolicyBlock($user, 'RESIDENCE_OUTSIDE_OPERATIONAL_AREA', $message, [
+                'verified_governorate' => $code,
+            ]);
+            throw new RuntimeException($message);
         }
         return $code;
     }
@@ -342,7 +370,11 @@ class KycTierService
     public function assertMinimumTier(User $user, int $tier): void
     {
         if ($this->effectiveTier($user) < $tier) {
-            throw new RuntimeException('هذه العملية تتطلب مستوى توثيق أعلى.');
+            $message = 'هذه العملية تتطلب مستوى توثيق أعلى.';
+            $this->recordPolicyBlock($user, 'KYC_MINIMUM_TIER_REQUIRED', $message, [
+                'required_tier' => $tier,
+            ]);
+            throw new RuntimeException($message);
         }
     }
 
@@ -383,16 +415,24 @@ class KycTierService
     {
         $limits = $this->getLimitsForUser($user);
         if ((int) $limits['tier'] <= 0) {
-            throw new RuntimeException('أكمل إثبات الهاتف واعتماد السكن لتفعيل المحفظة.');
+            $message = 'أكمل إثبات الهاتف واعتماد السكن لتفعيل المحفظة.';
+            $this->recordPolicyBlock($user, 'KYC_WALLET_NOT_ACTIVATED', $message, [
+                'feature' => $feature,
+                'tier' => (int) $limits['tier'],
+            ]);
+            throw new RuntimeException($message);
         }
 
         $this->assertOperationalResidence($user);
 
         $features = $limits['allowed_features'];
         if (!in_array('*', $features, true) && !in_array($feature, $features, true)) {
-            throw new RuntimeException(
-                "هذه الميزة تتطلب مستوى توثيق أعلى. مستواك الحالي: {$limits['name_ar']}"
-            );
+            $message = "هذه الميزة تتطلب مستوى توثيق أعلى. مستواك الحالي: {$limits['name_ar']}";
+            $this->recordPolicyBlock($user, 'KYC_FEATURE_NOT_ALLOWED', $message, [
+                'feature' => $feature,
+                'tier' => (int) $limits['tier'],
+            ]);
+            throw new RuntimeException($message);
         }
 
         return $limits;
@@ -406,7 +446,7 @@ class KycTierService
             throw new RuntimeException('المبلغ يجب أن يكون أكبر من صفر.');
         }
 
-        $this->assertMovementAllowed($user, $amount, $limits);
+        $this->assertMovementAllowed($user, $amount, $limits, $feature);
     }
 
     public function assertCanReceive(User $user, string $incomingAmount): void
@@ -417,7 +457,7 @@ class KycTierService
             throw new RuntimeException('المبلغ المستلم يجب أن يكون أكبر من صفر.');
         }
 
-        $this->assertMovementAllowed($user, $incomingAmount, $limits);
+        $this->assertMovementAllowed($user, $incomingAmount, $limits, 'receive_money');
 
         $current = (string) (EMoney::query()
             ->where('user_id', $user->id)
@@ -426,32 +466,49 @@ class KycTierService
         $this->assertBalanceAllowed($user, bcadd($current, $incomingAmount, 4));
     }
 
-    private function assertMovementAllowed(User $user, string $amount, array $limits): void
+    private function assertMovementAllowed(User $user, string $amount, array $limits, string $feature = 'money_movement'): void
     {
         if (bccomp($amount, $limits['max_single_transaction'], 4) > 0) {
-            throw new RuntimeException(
-                'المبلغ يتجاوز حد العملية الواحدة (' . Helpers::money($limits['max_single_transaction']) . ' ر.ي) لمستواك'
-            );
+            $message = 'المبلغ يتجاوز حد العملية الواحدة (' . Helpers::money($limits['max_single_transaction']) . ' ر.ي) لمستواك';
+            $this->recordPolicyBlock($user, 'KYC_SINGLE_LIMIT_EXCEEDED', $message, [
+                'feature' => $feature,
+                'tier' => (int) $limits['tier'],
+                'amount' => $amount,
+                'limit' => (string) $limits['max_single_transaction'],
+            ]);
+            throw new RuntimeException($message);
         }
 
         $todayTotal = $this->getTodayMovementTotal($user->id);
         if (bccomp(bcadd($todayTotal, $amount, 4), $limits['max_daily_total'], 4) > 0) {
             $remaining = $this->remaining($limits['max_daily_total'], $todayTotal);
-            throw new RuntimeException(
-                'هذه العملية ستتجاوز حد إجمالي الحركة اليومي ('
+            $message = 'هذه العملية ستتجاوز حد إجمالي الحركة اليومي ('
                 . Helpers::money($limits['max_daily_total']) . ' ر.ي). المتبقي اليوم: '
-                . Helpers::money($remaining) . ' ر.ي'
-            );
+                . Helpers::money($remaining) . ' ر.ي';
+            $this->recordPolicyBlock($user, 'KYC_DAILY_LIMIT_EXCEEDED', $message, [
+                'feature' => $feature,
+                'tier' => (int) $limits['tier'],
+                'amount' => $amount,
+                'used' => $todayTotal,
+                'limit' => (string) $limits['max_daily_total'],
+            ]);
+            throw new RuntimeException($message);
         }
 
         $monthTotal = $this->getMonthMovementTotal($user->id);
         if (bccomp(bcadd($monthTotal, $amount, 4), $limits['max_monthly_total'], 4) > 0) {
             $remaining = $this->remaining($limits['max_monthly_total'], $monthTotal);
-            throw new RuntimeException(
-                'هذه العملية ستتجاوز حد إجمالي الحركة الشهري ('
+            $message = 'هذه العملية ستتجاوز حد إجمالي الحركة الشهري ('
                 . Helpers::money($limits['max_monthly_total']) . ' ر.ي). المتبقي هذا الشهر: '
-                . Helpers::money($remaining) . ' ر.ي. أكمل التوثيق لرفع الحد.'
-            );
+                . Helpers::money($remaining) . ' ر.ي. أكمل التوثيق لرفع الحد.';
+            $this->recordPolicyBlock($user, 'KYC_MONTHLY_LIMIT_EXCEEDED', $message, [
+                'feature' => $feature,
+                'tier' => (int) $limits['tier'],
+                'amount' => $amount,
+                'used' => $monthTotal,
+                'limit' => (string) $limits['max_monthly_total'],
+            ]);
+            throw new RuntimeException($message);
         }
 
         $annualLimit = (string) ($limits['max_annual_total'] ?? '0');
@@ -459,11 +516,17 @@ class KycTierService
             $yearTotal = $this->getYearMovementTotal($user->id);
             if (bccomp(bcadd($yearTotal, $amount, 4), $annualLimit, 4) > 0) {
                 $remaining = $this->remaining($annualLimit, $yearTotal);
-                throw new RuntimeException(
-                    'هذه العملية ستتجاوز حد إجمالي الحركة السنوي ('
+                $message = 'هذه العملية ستتجاوز حد إجمالي الحركة السنوي ('
                     . Helpers::money($annualLimit) . ' ر.ي). المتبقي هذه السنة: '
-                    . Helpers::money($remaining) . ' ر.ي'
-                );
+                    . Helpers::money($remaining) . ' ر.ي';
+                $this->recordPolicyBlock($user, 'KYC_ANNUAL_LIMIT_EXCEEDED', $message, [
+                    'feature' => $feature,
+                    'tier' => (int) $limits['tier'],
+                    'amount' => $amount,
+                    'used' => $yearTotal,
+                    'limit' => $annualLimit,
+                ]);
+                throw new RuntimeException($message);
             }
         }
     }
@@ -477,15 +540,26 @@ class KycTierService
     {
         $limits = $this->getLimitsForUser($user);
         if ((int) $limits['tier'] <= 0) {
-            throw new RuntimeException('تحقق من ملكية رقم هاتفك لتفعيل المحفظة.');
+            $message = 'تحقق من ملكية رقم هاتفك لتفعيل المحفظة.';
+            $this->recordPolicyBlock($user, 'KYC_BALANCE_NOT_ACTIVATED', $message, [
+                'feature' => 'balance',
+                'tier' => (int) $limits['tier'],
+                'new_balance' => $newBalance,
+            ]);
+            throw new RuntimeException($message);
         }
         $this->assertOperationalResidence($user);
 
         if (bccomp($newBalance, $limits['max_balance'], 4) > 0) {
-            throw new RuntimeException(
-                'الرصيد سيتجاوز الحد المسموح (' . Helpers::money($limits['max_balance'])
-                . ' ر.ي) لمستواك. أكمل التوثيق لرفع الحد.'
-            );
+            $message = 'الرصيد سيتجاوز الحد المسموح (' . Helpers::money($limits['max_balance'])
+                . ' ر.ي) لمستواك. أكمل التوثيق لرفع الحد.';
+            $this->recordPolicyBlock($user, 'KYC_BALANCE_LIMIT_EXCEEDED', $message, [
+                'feature' => 'balance',
+                'tier' => (int) $limits['tier'],
+                'new_balance' => $newBalance,
+                'limit' => (string) $limits['max_balance'],
+            ]);
+            throw new RuntimeException($message);
         }
     }
 
@@ -504,9 +578,12 @@ class KycTierService
         }
 
         if (!in_array($targetTier, [2, 3], true)) {
-            throw new DomainException(
-                'مستوى التوثيق المطلوب غير صالح لمسار قرار الهوية. [KYC_TIER_TARGET_INVALID]'
-            );
+            $message = 'مستوى التوثيق المطلوب غير صالح لمسار قرار الهوية. [KYC_TIER_TARGET_INVALID]';
+            $this->recordPolicyBlock($user, 'KYC_TIER_TARGET_INVALID', $message, [
+                'feature' => 'kyc_upgrade',
+                'target_tier' => $targetTier,
+            ]);
+            throw new DomainException($message);
         }
 
         $storedTier = max(0, min(3, (int) ($user->kyc_tier ?? 0)));
@@ -522,10 +599,14 @@ class KycTierService
             // المستوى الذي ما زال الحساب يحمله؛ وإلا أمكن تنظيف Tier 3
             // بوثائق Tier 2 ثم إبقاء الحد المالي الأعلى.
             if ($previousTier >= 2 && $previousTier !== $storedTier) {
-                throw new DomainException(
-                    'حالة تحديث التوثيق غير متسقة مع مستوى الحساب الحالي. '
-                    . '[KYC_UPDATE_TIER_STATE_INVALID]'
-                );
+                $message = 'حالة تحديث التوثيق غير متسقة مع مستوى الحساب الحالي. '
+                    . '[KYC_UPDATE_TIER_STATE_INVALID]';
+                $this->recordPolicyBlock($user, 'KYC_UPDATE_TIER_STATE_INVALID', $message, [
+                    'feature' => 'kyc_reverification',
+                    'target_tier' => $targetTier,
+                    'previous_tier' => $previousTier,
+                ]);
+                throw new DomainException($message);
             }
 
             // إعادة التوثيق ليست ترقية ولا تخفيضاً: تعيد إثبات المستوى نفسه.
@@ -533,21 +614,30 @@ class KycTierService
                 return;
             }
 
-            throw new DomainException(
-                'إعادة التوثيق يجب أن تتم لمستوى الحساب الحالي نفسه. '
-                . '[KYC_TIER_SEQUENCE_VIOLATION]'
-            );
+            $message = 'إعادة التوثيق يجب أن تتم لمستوى الحساب الحالي نفسه. '
+                . '[KYC_TIER_SEQUENCE_VIOLATION]';
+            $this->recordPolicyBlock($user, 'KYC_TIER_SEQUENCE_VIOLATION', $message, [
+                'feature' => 'kyc_reverification',
+                'target_tier' => $targetTier,
+                'current_tier' => $storedTier,
+            ]);
+            throw new DomainException($message);
         }
 
         $effectiveTier = $this->effectiveTier($user);
         $expectedTarget = $effectiveTier + 1;
 
         if ($effectiveTier < 1 || $targetTier !== $expectedTarget) {
-            throw new DomainException(
-                'لا يمكن تجاوز مراحل التوثيق. يجب الانتقال بالتسلسل: '
+            $message = 'لا يمكن تجاوز مراحل التوثيق. يجب الانتقال بالتسلسل: '
                 . 'غير موثق ← موثق جزئياً ← موثق بهوية ← موثق بالكامل. '
-                . '[KYC_TIER_SEQUENCE_VIOLATION]'
-            );
+                . '[KYC_TIER_SEQUENCE_VIOLATION]';
+            $this->recordPolicyBlock($user, 'KYC_TIER_SEQUENCE_VIOLATION', $message, [
+                'feature' => 'kyc_upgrade',
+                'tier' => $effectiveTier,
+                'target_tier' => $targetTier,
+                'expected_target' => $expectedTarget,
+            ]);
+            throw new DomainException($message);
         }
     }
 
@@ -562,10 +652,14 @@ class KycTierService
         }
 
         if ($this->isIndividualCustomer($user)) {
-            throw new RuntimeException(
-                'تغيير مستوى توثيق العميل مباشرةً ممنوع؛ استخدم مسار قرار KYC المتدرج. '
-                . '[KYC_DIRECT_TIER_MUTATION_FORBIDDEN]'
-            );
+            $message = 'تغيير مستوى توثيق العميل مباشرةً ممنوع؛ استخدم مسار قرار KYC المتدرج. '
+                . '[KYC_DIRECT_TIER_MUTATION_FORBIDDEN]';
+            $this->recordPolicyBlock($user, 'KYC_DIRECT_TIER_MUTATION_FORBIDDEN', $message, [
+                'feature' => 'kyc_upgrade',
+                'target_tier' => $newTier,
+                'admin_id' => $adminId,
+            ]);
+            throw new RuntimeException($message);
         }
 
         $currentTier = max(0, min(3, (int) ($user->kyc_tier ?? 0)));
