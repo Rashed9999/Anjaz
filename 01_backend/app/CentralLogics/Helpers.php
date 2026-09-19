@@ -102,7 +102,35 @@ class Helpers
             ]
         ];
 
-        return self::sendNotificationToHttp($postData);
+        $sent = self::sendNotificationToHttp($postData);
+
+        // AMIAL-NOTIFICATION-DELIVERY-001 — المسارات القديمة المباشرة
+        // أصبحت تترك الأثر الإداري نفسه بدلاً من Push لا يمكن تتبعه.
+        try {
+            $userId = $fcm_token
+                ? User::where('fcm_token', $fcm_token)->value('id')
+                : null;
+
+            if ($userId) {
+                $delivery = app(\App\Services\NotificationDeliveryLogService::class);
+                $type = (string) ($data['type'] ?? 'legacy_push');
+
+                if ($sent) {
+                    $delivery->accepted((int) $userId, $type);
+                } else {
+                    $delivery->failed(
+                        (int) $userId,
+                        'LEGACY_FCM_SEND_FAILED',
+                        'مسار FCM القديم لم يحصل على قبول ناجح من المزود.',
+                        $type,
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            // التدقيق fail-soft ولا يغيّر نتيجة إرسال الإشعار.
+        }
+
+        return $sent;
     }
 
     public static function send_push_notif_to_topic(array $data): bool
@@ -874,10 +902,7 @@ class Helpers
         $user = User::find($user_id);
         $value = Helpers::order_status_update_message($transaction_type);
 
-        if(isset($user) && $user->fcm_token && $value)
-        {
-            $fcm_token = $user->fcm_token;
-
+        if (isset($user) && $user->fcm_token && $value) {
             $data = [
                 'title' => '',
                 'description' => self::set_symbol($amount) . ' ' . $value,
@@ -886,36 +911,7 @@ class Helpers
                 'type' => $notificationType ?? $transaction_type,
             ];
 
-            try {
-                $sent = Helpers::send_push_notif_to_device($fcm_token, $data);
-                $delivery = app(\App\Services\NotificationDeliveryLogService::class);
-                if ($sent) {
-                    $delivery->accepted(
-                        $user_id,
-                        $notificationType ?? $transaction_type,
-                        null,
-                        null,
-                        null,
-                        1,
-                    );
-                } else {
-                    $delivery->failed(
-                        $user_id,
-                        'LEGACY_FCM_SEND_FAILED',
-                        'مسار FCM القديم أعاد نتيجة فاشلة.',
-                        $notificationType ?? $transaction_type,
-                    );
-                }
-                return $sent;
-            } catch (\Throwable $exception) {
-                app(\App\Services\NotificationDeliveryLogService::class)->failed(
-                    $user_id,
-                    'LEGACY_FCM_EXCEPTION',
-                    $exception->getMessage(),
-                    $notificationType ?? $transaction_type,
-                );
-                return false;
-            }
+            return Helpers::send_push_notif_to_device($user->fcm_token, $data);
         }
 
         if ($user) {
