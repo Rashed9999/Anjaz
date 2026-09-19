@@ -238,6 +238,13 @@ class KycDocumentService
                     ));
                 }
 
+                // AMIAL-LEGAL-NAME-001 — Tier 2 لا يعتمد صور هوية بلا
+                // اسم أقره المراجع ومقارنته بالاسم الرباعي المصرّح به.
+                if ($requiredTier >= 2) {
+                    app(\App\Services\Kyc\LegalNameService::class)
+                        ->assertIdentityNameReady($account);
+                }
+
                 // ══════════════════════════════════════════════════════
                 // AMIAL-KYC-REUSE-001 — **ورقةٌ واحدةٌ لا تفتح حسابين.**
                 //
@@ -303,6 +310,14 @@ class KycDocumentService
                 $account->is_kyc_verified = 1;
                 $account->kyc_tier = max((int) ($account->kyc_tier ?? 0), $requiredTier);
                 $account->kyc_tier_updated_at = now();
+
+                if ($requiredTier >= 2) {
+                    app(\App\Services\Kyc\LegalNameService::class)
+                        ->verifyIdentityName($account, $reviewer);
+                    // الخدمة حفظت الاسم القانوني الموثق؛ أعِد قفل الصف قبل
+                    // بقية تحديثات قرار الحساب داخل المعاملة نفسها.
+                    $account->refresh();
+                }
                 // لا يُمسح طلب التحديث بمجرد رفع ملفات أو اعتماد ملفٍ مفرد؛
                 // يُمسح هنا فقط، بعد قرار الحساب النهائي ومستندات مكتملة.
                 foreach ([
