@@ -196,7 +196,11 @@
 
     function activationRow(a, restricted) {
         const ownershipReady = !!(a.ownership && a.ownership.ready);
-        const canActivate = CAN_ACTIVATE && ownershipReady && (!restricted || CAN_RESTRICTED_DECIDE);
+        const legalReady = !!a.legal_name_ready;
+        const canActivate = CAN_ACTIVATE && ownershipReady && legalReady && (!restricted || CAN_RESTRICTED_DECIDE);
+        const legalClass = a.legal_name_match_status === 'mismatch'
+            ? 'text-danger'
+            : (legalReady ? 'text-success' : 'text-warning');
         return `<div class="list-group-item d-flex justify-content-between align-items-start gap-2">
                 <div class="flex-grow-1">
                     <div class="fw-bold">${esc(a.customer_name)}</div>
@@ -204,6 +208,11 @@
                     <div class="small text-muted">${a.residence_governorate_name
                         ? 'محافظة محفوظة: ' + esc(a.residence_governorate_name)
                         : 'محافظة السكن مطلوبة'}</div>
+                    <div class="small mt-1"><strong>الاسم المصرّح به:</strong> ${esc(a.declared_legal_name)}</div>
+                    <div class="small ${legalClass}">
+                        <strong>اسم الهوية:</strong> ${esc(a.identity_document_name || 'لم يؤكده المراجع بعد')}
+                        ${a.legal_name_match_score != null ? ' · ' + esc(a.legal_name_match_score) + '%' : ''}
+                    </div>
                     ${restricted ? '<span class="badge badge-soft-danger mt-1">قرار مقيد</span>' : ''}
                     ${ownershipHtml(a.ownership)}
                 </div>
@@ -212,7 +221,7 @@
                         data-user="${a.user_id}" data-name="${esc(a.customer_name)}"
                         data-governorate="${esc(a.residence_governorate || '')}"
                         data-restricted="${restricted ? '1' : '0'}">اعتماد الحساب</button>`
-                    : '<span class="badge badge-soft-secondary">غير جاهز للقرار</span>'}
+                    : '<span class="badge badge-soft-secondary">غير جاهز: الهوية/الاسم</span>'}
             </div>`;
     }
 
