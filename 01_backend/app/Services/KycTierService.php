@@ -489,16 +489,93 @@ class KycTierService
         }
     }
 
+    /**
+     * الحارس المركزي لتسلسل توثيق العميل الفرد.
+     *
+     * لا يكفي أن تكون وثائق Tier 3 مكتملة: لا يجوز منحها لحساب لم يمر
+     * فعلياً بـ Tier 2. نستخدم effectiveTier حتى لا يُحسب OTP وحده Tier 1
+     * قبل اعتماد السكن. الاستثناء الوحيد هو إعادة توثيق مستوى سبق للحساب
+     * امتلاكه فعلاً عند kyc_update_required.
+     */
+    public function assertSequentialVerificationDecision(User $user, int $targetTier): void
+    {
+        if (!$this->isIndividualCustomer($user)) {
+            return;
+        }
+
+        if (!in_array($targetTier, [2, 3], true)) {
+            throw new DomainException(
+                'مستوى التوثيق المطلوب غير صالح لمسار قرار الهوية. [KYC_TIER_TARGET_INVALID]'
+            );
+        }
+
+        $storedTier = max(0, min(3, (int) ($user->kyc_tier ?? 0)));
+        $updateRequired = Schema::hasColumn('users', 'kyc_update_required')
+            && (int) ($user->kyc_update_required ?? 0) === 1;
+
+        if ($updateRequired) {
+            $previousTier = Schema::hasColumn('users', 'kyc_update_previous_tier')
+                ? max(0, min(3, (int) ($user->kyc_update_previous_tier ?? 0)))
+                : 0;
+            $refreshTier = in_array($previousTier, [2, 3], true)
+                ? $previousTier
+                : $storedTier;
+
+            // إعادة توثيق ليست ترقية. لا نسمح بها إلا إذا كان الحساب قد بلغ
+            // المستوى نفسه سابقاً؛ وبذلك لا يمكن اصطناع update_required
+            // لحساب Tier 0 ثم القفز به إلى Tier 3.
+            if ($refreshTier >= 2
+                && $storedTier >= $refreshTier
+                && $targetTier === $refreshTier) {
+                return;
+            }
+        }
+
+        $effectiveTier = $this->effectiveTier($user);
+        $expectedTarget = $effectiveTier + 1;
+
+        if ($effectiveTier < 1 || $targetTier !== $expectedTarget) {
+            throw new DomainException(
+                'لا يمكن تجاوز مراحل التوثيق. يجب الانتقال بالتسلسل: '
+                . 'غير موثق ← موثق جزئياً ← موثق بهوية ← موثق بالكامل. '
+                . '[KYC_TIER_SEQUENCE_VIOLATION]'
+            );
+        }
+    }
+
+    /**
+     * @deprecated تغيير مستوى العميل الفرد مباشرةً ممنوع. Tier 2 وTier 3
+     * لا يُمنحان إلا من قرار KYC الموثق الذي يمر بالمستندات والمراجعة.
+     */
     public function upgradeTier(User $user, int $newTier, ?int $adminId = null): void
     {
-        if ($newTier < 0 || $newTier > 3) throw new RuntimeException('مستوى غير صالح');
+        if ($newTier < 0 || $newTier > 3) {
+            throw new RuntimeException('مستوى غير صالح');
+        }
+
+        if ($this->isIndividualCustomer($user)) {
+            throw new RuntimeException(
+                'تغيير مستوى توثيق العميل مباشرةً ممنوع؛ استخدم مسار قرار KYC المتدرج. '
+                . '[KYC_DIRECT_TIER_MUTATION_FORBIDDEN]'
+            );
+        }
+
+        $currentTier = max(0, min(3, (int) ($user->kyc_tier ?? 0)));
+        if ($newTier !== $currentTier + 1) {
+            throw new RuntimeException(
+                'لا يمكن تجاوز مستوى توثيق أثناء الترقية. [KYC_TIER_SEQUENCE_VIOLATION]'
+            );
+        }
 
         $user->kyc_tier = $newTier;
         $user->kyc_tier_updated_at = now();
         $user->save();
 
         \Log::info('KYC tier upgraded', [
-            'user_id' => $user->id, 'new_tier' => $newTier, 'admin_id' => $adminId,
+            'user_id' => $user->id,
+            'old_tier' => $currentTier,
+            'new_tier' => $newTier,
+            'admin_id' => $adminId,
         ]);
     }
 
