@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\AuditService;
 use App\Services\EmailIdentityService;
 use App\Services\Kyc\KycPrivacyService;
+use App\Services\Kyc\LegalNameService;
 use App\Services\LegalTermsService;
 use App\Services\Otp\EmailOtpService;
 use App\Services\ZoneAssignmentService;
@@ -35,12 +36,18 @@ class ProgressiveRegistrationController extends Controller
         private readonly EmailIdentityService $identities,
         private readonly AuditService $audit,
         private readonly LegalTermsService $legalTerms,
+        private readonly LegalNameService $legalNames,
     ) {}
 
     public function register(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'full_name' => ['required', 'string', 'min:2', 'max:180'],
+            // الاسم هنا ليس لقب عرض. هو الاسم القانوني المُصرّح به
+            // الذي سنقارنه بإثبات السكن ثم الهوية.
+            'given_name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            'father_name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            'grandfather_name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            'family_name' => ['required', 'string', 'min:2', 'max:80', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
             'dial_country_code' => ['required', 'string', 'max:8'],
             'phone' => ['required', 'string', 'min:5', 'max:20'],
             'email' => ['required', 'email', 'max:255'],
@@ -97,13 +104,13 @@ class ProgressiveRegistrationController extends Controller
             ], 409);
         }
 
-        $name = preg_replace('/\s+/u', ' ', trim((string) $request->input('full_name'))) ?: '';
-        $parts = preg_split('/\s+/u', $name) ?: [];
-        $first = array_shift($parts) ?: $name;
-        $last = trim(implode(' ', $parts));
+        $given = trim((string) $request->input('given_name'));
+        $father = trim((string) $request->input('father_name'));
+        $grandfather = trim((string) $request->input('grandfather_name'));
+        $family = trim((string) $request->input('family_name'));
 
         try {
-            $user = DB::transaction(function () use ($request, $email, $phone, $first, $last): User {
+            $user = DB::transaction(function () use ($request, $email, $phone, $given, $father, $grandfather, $family): User {
                 $challenge = $this->otp->consumeVerification(
                     (string) $request->input('email_challenge_id'),
                     $email,
@@ -118,8 +125,18 @@ class ProgressiveRegistrationController extends Controller
                 }
 
                 $user = new User();
-                $user->f_name = $first;
-                $user->l_name = $last !== '' ? $last : null;
+                $user->f_name = $given;
+                $user->father_name = $father;
+                $user->grandfather_name = $grandfather;
+                $user->family_name = $family;
+                $user->l_name = $family; // توافق الشاشات القديمة
+                $user->declared_legal_name = $this->legalNames->compose([
+                    'given_name' => $given,
+                    'father_name' => $father,
+                    'grandfather_name' => $grandfather,
+                    'family_name' => $family,
+                ]);
+                $user->legal_name_status = 'declared';
                 $user->dial_country_code = (string) $request->input('dial_country_code');
                 $user->phone = $phone;
                 $user->email = $email;
@@ -151,6 +168,24 @@ class ProgressiveRegistrationController extends Controller
                     $user->zone_code = ZoneAssignmentService::ZONE_UNKNOWN;
                 }
                 $user->save();
+
+                if (Schema::hasTable('legal_name_events')) {
+                    DB::table('legal_name_events')->insert([
+                        'user_id' => $user->id,
+                        'event_type' => 'DECLARED_AT_REGISTRATION',
+                        'source' => 'registration',
+                        'old_name_encrypted' => null,
+                        'new_name_encrypted' => \Illuminate\Support\Facades\Crypt::encryptString(
+                            (string) $user->declared_legal_name
+                        ),
+                        'document_id' => null,
+                        'reviewer_id' => null,
+                        'match_status' => null,
+                        'match_score' => null,
+                        'reason' => null,
+                        'created_at' => now(),
+                    ]);
+                }
 
                 if (Schema::hasColumn('users', 'unique_id')) {
                     $user->unique_id = $user->id . random_int(1111, 99999);
@@ -194,6 +229,8 @@ class ProgressiveRegistrationController extends Controller
                     'severity' => 'info',
                     'context' => [
                         'registration_mode' => 'quick',
+                        'declared_legal_name_parts' => 4,
+                        'legal_name_status' => 'declared',
                         'email_verified' => true,
                         'phone_verified' => false,
                         'terms_accepted' => true,
@@ -240,6 +277,8 @@ class ProgressiveRegistrationController extends Controller
                 'transaction_pin_configured' => true,
                 'kyc_tier' => 0,
                 'tier_name' => 'عميل غير موثق',
+                'declared_legal_name' => (string) $user->declared_legal_name,
+                'legal_name_status' => (string) $user->legal_name_status,
                 'access_token' => $token,
                 'token_type' => $token ? 'Bearer' : null,
                 'next_steps' => [
