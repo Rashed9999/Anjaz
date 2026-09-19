@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amial_pay/features/bill_pay/controllers/bill_pay_controller.dart';
 import 'package:amial_pay/features/bill_pay/domain/models/bill_pay_models.dart';
 import 'package:amial_pay/features/bill_pay/screens/bill_pay_form_screen.dart';
+import 'package:amial_pay/features/bill_pay/screens/bill_pay_history_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-BILL-PAY-001 (v0.9-D)
@@ -28,6 +29,13 @@ class _BillPayProvidersScreenState extends State<BillPayProvidersScreen> {
       backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('السداد'),
+        actions: [
+          IconButton(
+            tooltip: 'عمليات السداد',
+            onPressed: () => Get.to(() => const BillPayHistoryScreen()),
+            icon: const Icon(Icons.history_rounded),
+          ),
+        ],
       ),
       body: Obx(() {
         final ctrl = Get.find<BillPayController>();
