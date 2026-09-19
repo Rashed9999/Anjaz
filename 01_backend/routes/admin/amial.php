@@ -701,6 +701,9 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         Route::get('/', [$zc, 'index'])->name('index');
         Route::get('/summary.json', [$zc, 'summary'])->name('summary');
         Route::get('/events.json', [$zc, 'events'])->name('events');
+        Route::post('/operational-policy', [$zc, 'updateOperationalPolicy'])
+            ->middleware(['platform:platform.settings.update', 'amial.idempotency'])
+            ->name('operational-policy.update');
         Route::get('/users/{id}/geo-check.json', [$zc, 'geoCheck'])
             ->where('id', '[0-9]+')->name('geo-check');
         Route::post('/users/{id}/reassign', [$zc, 'reassign'])
