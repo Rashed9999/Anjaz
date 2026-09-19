@@ -344,6 +344,7 @@ class ReceiptService
             'cash_out', 'withdraw' => 'سحب نقدي',
             'add_money' => 'إضافة رصيد',
             'pay_merchant' => 'دفع لتاجر',
+            'bill_payment' => 'سداد فاتورة',
             'pos_payment' => 'دفع نقطة بيع',
             'qr_payment' => 'دفع عبر رمز QR',
             'refund' => 'استرجاع',
