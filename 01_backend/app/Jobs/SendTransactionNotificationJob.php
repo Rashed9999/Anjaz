@@ -192,7 +192,7 @@ class SendTransactionNotificationJob implements ShouldQueue
             $this->notificationType ?? $this->transactionType,
             $this->transactionId,
             null,
-            max(1, $this->attempts()),
+            $this->tries,
             true,
         );
     }
