@@ -176,16 +176,19 @@ class KycOcrService
         $name = $fields['full_name']['value'] ?? null;
         if ($name !== null) {
             $user = User::find($doc->user_id);
-            $account = trim((string) ($user?->f_name . ' ' . $user?->l_name));
+            if ($user) {
+                $comparison = app(\App\Services\Kyc\LegalNameService::class)
+                    ->compare($user, (string) $name);
 
-            if ($account !== '' && !$this->namesLookAlike($name, $account)) {
-                // تنبيهٌ لا رفض: الأسماء تُكتب بصيغٍ مختلفة وتُنقل حرفيّاً
-                // بطرقٍ شتّى، ورفضٌ آليّ هنا يحجب عملاء صادقين.
-                $out[] = [
-                    'code' => 'NAME_MISMATCH',
-                    'severity' => 'warning',
-                    'message' => "اسم الوثيقة «{$name}» يختلف عن اسم الحساب «{$account}» — تحقّق",
-                ];
+                if (in_array($comparison['status'], ['partial', 'mismatch'], true)) {
+                    // OCR يرفع الراية فقط؛ المراجع يؤكد الاسم من الصورة.
+                    $out[] = [
+                        'code' => 'NAME_' . strtoupper($comparison['status']),
+                        'severity' => $comparison['status'] === 'mismatch' ? 'warning' : 'info',
+                        'message' => 'اسم الوثيقة يحتاج مقارنة مع الاسم القانوني المصرّح به — '
+                            . $comparison['status'] . ' / ' . $comparison['score'] . '%',
+                    ];
+                }
             }
         }
 
@@ -198,25 +201,6 @@ class KycOcrService
         }
 
         return $out;
-    }
-
-    /** مقارنةٌ متساهلة: تطابقُ كلمتين من الاسم يكفي لعدّه متوافقاً. */
-    private function namesLookAlike(string $a, string $b): bool
-    {
-        $clean = static fn (string $s): array => array_values(array_filter(
-            preg_split('/\s+/u', preg_replace('/[^\p{Arabic}\p{L}\s]/u', ' ', $s) ?? '') ?: [],
-            static fn ($w) => mb_strlen($w) >= 2,
-        ));
-
-        $wa = $clean($a);
-        $wb = $clean($b);
-
-        if ($wa === [] || $wb === []) {
-            return true;   // لا بيانات للمقارنة — لا تُثار ملاحظة
-        }
-
-        return count(array_intersect($wa, $wb)) >= 2
-            || (count($wa) === 1 && in_array($wa[0], $wb, true));
     }
 
     // ── ما يُعرَض للمراجع ───────────────────────────────────────────────
