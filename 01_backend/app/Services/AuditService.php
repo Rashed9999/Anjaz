@@ -51,8 +51,9 @@ class AuditService
     public function record(array $payload): ?string
     {
         try {
-            // فلترة context
-            $context = $payload['context'] ?? [];
+            // فلترة context. كثير من مسارات الوكلاء التاريخية ترسل الاسم
+            // metadata؛ نحافظ عليه كمرادف، مع أولوية context إن حضرا معاً.
+            $context = $payload['context'] ?? $payload['metadata'] ?? [];
             if (is_array($context)) {
                 $context = $this->sanitizeContext($context);
             }
@@ -202,15 +203,15 @@ class AuditService
         $decoded = $rawContext !== '' ? json_decode($rawContext, true) : null;
 
         $hypotheses = [
-            [['subject_type' => 'safe_payment'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجع هجرة التعداد', true],
-            [['subject_type' => 'e_payment'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجع هجرة التعداد', true],
-            [['subject_type' => 'family_fund'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجع هجرة التعداد', true],
-            [['subject_type' => 'donation'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجع هجرة التعداد', true],
-            [['subject_type' => 'pending_transfer'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجع هجرة التعداد', true],
-            [['subject_type' => 'agent_shift'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجع هجرة التعداد', true],
-            [['subject_type' => 'agent_staff'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجع هجرة التعداد', true],
-            [['subject_type' => 'support_ticket'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجع هجرة التعداد', true],
-            [['subject_type' => ''], 'نوعُ الموضوع', 'قُصّ إلى فراغ عند كتابة تعداد قديم', true],
+            [['subject_type' => 'safe_payment'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'e_payment'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'family_fund'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'donation'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'pending_transfer'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'agent_shift'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'agent_staff'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'support_ticket'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => ''], 'نوعُ الموضوع', 'قُصّ إلى فراغٍ عند الكتابة — العمودُ كان تعداداً لا يقبل القيمة', true],
         ];
 
         if (is_array($decoded)) {
