@@ -72,6 +72,19 @@ class KycRegulatoryLimitsTest extends TestCase
             ],
         ]);
 
+        DB::table('residence_verifications')->insert([
+            'user_id' => $user->id,
+            'kyc_document_id' => null,
+            'declared_governorate' => 'YE-AD',
+            'evidence_type' => 'government_residence_document',
+            'evidence_strength' => 'strong',
+            'status' => 'verified',
+            'submitted_at' => now()->subMinute(),
+            'reviewed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $limits = app(KycTierService::class)->getLimitsForUser($user->fresh());
 
         $this->assertSame(0, bccomp('100000', (string) $limits['max_balance'], 4));
