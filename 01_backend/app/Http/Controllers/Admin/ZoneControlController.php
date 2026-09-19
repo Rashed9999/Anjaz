@@ -36,9 +36,14 @@ class ZoneControlController extends Controller
 
     public function index(): View
     {
+        $policy = DB::table('operational_governorate_policies')
+            ->where('is_active', true)->orderByDesc('version')->first();
+
         return view('admin-views.amial.hub.zones', [
             'operational' => $this->operationalTable(),
             'agentLocationMode' => (string) config('amial.agent_location_mode', 'soft'),
+            'operationalPolicy' => $policy,
+            'canManageOperationalPolicy' => (bool) auth('user')->user()?->hasPlatformPermission('platform.settings.update'),
         ]);
     }
 
@@ -66,6 +71,92 @@ class ZoneControlController extends Controller
         }
 
         return $rows;
+    }
+
+    /**
+     * تغيير نطاق التشغيل — نسخة جديدة لا UPDATE صامت.
+     */
+    public function updateOperationalPolicy(Request $request)
+    {
+        $validated = $request->validate([
+            'governorates' => ['required', 'array', 'min:1'],
+            'governorates.*' => [
+                'required',
+                'string',
+                \Illuminate\Validation\Rule::in(YemenGovernorates::codes()),
+            ],
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $codes = array_values(array_unique($validated['governorates']));
+        sort($codes);
+        $actor = $request->user();
+        abort_unless($actor, 401);
+
+        $result = DB::transaction(function () use ($codes, $validated, $actor) {
+            $current = DB::table('operational_governorate_policies')
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->orderByDesc('version')
+                ->first();
+
+            $before = $current
+                ? (json_decode((string) $current->governorate_codes, true) ?: [])
+                : (array) config('amial.operational_governorates', []);
+            sort($before);
+
+            if ($before === $codes) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'governorates' => 'لم يتغير نطاق التشغيل؛ لا توجد سياسة جديدة للحفظ.',
+                ]);
+            }
+
+            $nextVersion = ((int) DB::table('operational_governorate_policies')->max('version')) + 1;
+
+            DB::table('operational_governorate_policies')
+                ->where('is_active', true)
+                ->update(['is_active' => false, 'updated_at' => now()]);
+
+            DB::table('operational_governorate_policies')->insert([
+                'version' => $nextVersion,
+                'governorate_codes' => json_encode($codes, JSON_UNESCAPED_UNICODE),
+                'reason' => trim($validated['reason']),
+                'created_by_admin_id' => $actor->id,
+                'is_active' => true,
+                'effective_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $auditId = $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $actor->id,
+                'subject_type' => 'platform',
+                'subject_id' => 'operational_governorates',
+                'action' => 'OPERATIONAL_GOVERNORATES_UPDATED',
+                'decision_code' => 'ZONE_POLICY_UPDATED',
+                'reason' => trim($validated['reason']),
+                'severity' => 'critical',
+                'context' => [
+                    'version' => $nextVersion,
+                    'before' => $before,
+                    'after' => $codes,
+                ],
+            ]);
+
+            if ($auditId === null) {
+                throw new \RuntimeException('تعذر حفظ سجل التدقيق؛ لم تُغيّر سياسة نطاق التشغيل.');
+            }
+
+            return ['version' => $nextVersion, 'before' => $before, 'after' => $codes];
+        });
+
+        // الطلب الجاري يقرأ النسخة الجديدة أيضاً؛ الطلبات التالية تُحمّلها في boot.
+        config(['amial.operational_governorates' => $codes]);
+
+        return redirect()
+            ->route('admin.amial.hub.zones.index')
+            ->with('success', 'تم حفظ سياسة نطاق التشغيل — النسخة ' . $result['version']);
     }
 
     /**
