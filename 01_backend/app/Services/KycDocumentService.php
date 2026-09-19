@@ -220,6 +220,13 @@ class KycDocumentService
             }
 
             if ($approve) {
+                // AMIAL-KYC-SEQUENCE-001 — القرار النهائي نفسه يفرض التسلسل.
+                // لا نعتمد على Flutter أو Controller؛ أي مدخل قديم أو استدعاء
+                // خدمة مباشر يمر من هنا قبل توسيع الحدود المالية.
+                app(KycTierService::class)
+                    ->assertSequentialVerificationDecision($account, $requiredTier);
+
+
                 $completeness = $this->completenessFor($account, $requiredTier);
                 if (!$completeness['complete']) {
                     throw new DomainException($this->sayMissing(
