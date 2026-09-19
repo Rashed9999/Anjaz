@@ -4,10 +4,12 @@ namespace App\Services;
 
 use App\Models\MerchantProfile;
 use App\Models\User;
+use App\Services\Merchant\MerchantPermissionService;
 use Illuminate\Support\Facades\DB;
 use App\Models\PosUser;
 use App\Support\Access\AccessConstants as A;
 use App\Support\Access\AccessPresets;
+use App\Support\Access\CapabilityRegistry;
 
 /**
  * CRITICAL-001 — Feature Access Service.
@@ -23,6 +25,10 @@ use App\Support\Access\AccessPresets;
  */
 class FeatureAccessService
 {
+    public function __construct(
+        private readonly MerchantPermissionService $merchantPermissions,
+    ) {}
+
     /**
      * يُرجع كل البيانات اللازمة للواجهة:
      *   - role
@@ -72,7 +78,7 @@ class FeatureAccessService
             $merchantProfile = MerchantProfile::where('user_id', $user->id)->first();
             if ($merchantProfile) {
                 $businessType = $merchantProfile->business_type;
-                $plan = $merchantProfile->subscription_plan ?? A::PLAN_FREE;
+                $plan = A::canonicalPlan($merchantProfile->subscription_plan);
                 $extraFeatures = is_array($merchantProfile->extra_features)
                     ? $merchantProfile->extra_features : [];
                 $expiresAt = $merchantProfile->subscription_expires_at?->toIso8601String();
@@ -110,7 +116,7 @@ class FeatureAccessService
 
                 if ($merchantProfile) {
                     $businessType = $merchantProfile->business_type;
-                    $plan = $merchantProfile->subscription_plan ?? A::PLAN_FREE;
+                    $plan = A::canonicalPlan($merchantProfile->subscription_plan);
 
                     if ($plan !== A::PLAN_FREE
                         && $merchantProfile->subscription_expires_at !== null
@@ -152,7 +158,7 @@ class FeatureAccessService
 
                 if ($ownerProfile) {
                     $businessType = $ownerProfile->business_type;
-                    $plan = $ownerProfile->subscription_plan ?? A::PLAN_FREE;
+                    $plan = A::canonicalPlan($ownerProfile->subscription_plan);
 
                     if ($plan !== A::PLAN_FREE
                         && $ownerProfile->subscription_expires_at !== null
@@ -173,8 +179,20 @@ class FeatureAccessService
             $features = $this->restrictToPosPermissions($features, $posUser);
         }
 
+        if ($actor === 'staff') {
+            $features = $this->restrictToMerchantRolePermissions($features, $user);
+        }
+
         $limits = in_array($actor, ['owner', 'pos'], true)
             ? AccessPresets::planLimits($plan) : [];
+
+        // AMIAL-MERCHANT-VERIFY-RECEIVE-001 — حالةُ توثيق التاجر (أو تاجرِ
+        // موظّف POS) من مصدرها، تُقرأ في كلّ فتحٍ للتطبيق لا عند الدخول وحده.
+        // بها تعرض واجهةُ التاجر لافتةَ «القبضُ قيد المراجعة» بحقيقةٍ حيّة،
+        // لا بحالةٍ محفوظةٍ تشيخ. (غيرُ التاجر: null فلا لافتة.)
+        $merchantVerificationStatus = $ownerId
+            ? MerchantProfile::where('user_id', $ownerId)->value('verification_status')
+            : null;
 
         return [
             'role' => $role,
@@ -182,6 +200,7 @@ class FeatureAccessService
             // **الفاعلُ مصرَّحٌ به** — لا يُستنتج في التطبيق من غياب حقل.
             'actor' => $actor,
             'merchant_user_id' => $ownerId,
+            'merchant_verification_status' => $merchantVerificationStatus,
             'pos' => $posUser ? [
                 'id' => $posUser->id,
                 'pos_number' => $posUser->pos_number,
@@ -191,7 +210,20 @@ class FeatureAccessService
 
             'verification_level' => $verificationLevel,
             'business_type' => $businessType,
-            'business_type_label' => $businessType ? (A::BUSINESS_TYPE_LABELS[$businessType] ?? null) : null,
+            // AMIAL-VERTICAL-COMPOSE-001 — **من السجلّ لا من الثابت**: ثابتُ
+            // الشيفرة لا يعرف قطاعاً أنشأته الإدارة، فيصل التطبيقَ `null`
+            // فتُعرَض ترويسةُ التاجر بلا نشاط.
+            'business_type_label' => $businessType
+                ? (\App\Domain\Verticals\VerticalRegistry::labels()[$businessType] ?? null)
+                : null,
+
+            // **الشاشةُ التي يفتح عليها هذا القطاعُ تطبيقَه** — رمزُ قدرةٍ
+            // يعرف `CapabilityScreens` شاشتَها. وبدونها يهبط تاجرُ قطاعٍ
+            // مُضافٍ على الشاشة الاحتياطيّة العامّة: حسابٌ يعمل وواجهةٌ
+            // لا تدلّ على شيء. والستّةُ المبنيّةُ لها موزِّعُها في
+            // التطبيق فتُرسَل `null` ولا يتغيّر لها شيء.
+            'business_type_home' => \App\Domain\Verticals\VerticalRegistry::find($businessType)
+                ?->homeCapability(),
             'subscription_plan' => $plan,
             'subscription_plan_label' => A::PLAN_LABELS[$plan] ?? $plan,
             'subscription_price_sar' => A::PLAN_PRICES_SAR[$plan] ?? 0,
@@ -242,6 +274,33 @@ class FeatureAccessService
     }
 
     /**
+     * موظفُ الأدوار يرث خطةَ المنشأة ونشاطها، لا قائمةَ مالكها كاملة.
+     *
+     * يظل ما ليس قدرةَ تاجرٍ مسجّلةً (المحفظة والحساب الشخصي مثلاً) خارج
+     * هذه المصفوفة. أمّا كلُّ قدرةٍ يعلن سجلّها صلاحيّةً فتظهر فقط حين
+     * يملك الموظف إحدى صلاحياتها. هذا يطابق قرارَ `EntitlementService`
+     * الذي يعرِضه مركز الاستحقاقات، كي لا تقول شاشة التطبيق شيئاً ويقول
+     * مركز الصلاحيات شيئاً آخر.
+     *
+     * @param  array<int,string>  $features
+     * @return array<int,string>
+     */
+    private function restrictToMerchantRolePermissions(array $features, User $user): array
+    {
+        $granted = $this->merchantPermissions->effective($user);
+
+        return array_values(array_filter(
+            $features,
+            static function (string $feature) use ($granted): bool {
+                $capability = CapabilityRegistry::find($feature);
+
+                return $capability === null
+                    || $capability->satisfiedByPermissions($granted);
+            },
+        ));
+    }
+
+    /**
      * يحسب قائمة Features النهائية بدمج كل المصادر.
      */
     public function resolveFeatures(
@@ -264,6 +323,9 @@ class FeatureAccessService
         // 3. Plan
         if ($role === A::ROLE_MERCHANT) {
             foreach (AccessPresets::planFeatures($plan) as $f) $features[$f] = true;
+            foreach (AccessPresets::verticalPlanFeatures($businessType, $plan) as $f) {
+                $features[$f] = true;
+            }
         }
 
         // 4. Verification
@@ -272,6 +334,32 @@ class FeatureAccessService
         // 5. Extra (يُفعّلها الأدمن يدوياً)
         foreach ($extraFeatures as $f) {
             if (is_string($f)) $features[$f] = true;
+        }
+
+        // 6. سجلّ القدرات هو الحكم الأخير، لا اتّحاد قوائم قديمة.
+        //
+        // كانت feature تصل من businessTypeFeatures فتنجو من حد الباقة
+        // المعلن في CapabilityRegistry؛ الاتحاد لا يعرف «الأدنى» ويمنح
+        // ما وصل إليه أولاً. هنا تُراجع كل قدرة مسجّلة أمام نوع النشاط
+        // والباقة، فلا تتحول قائمة شاشة قديمة إلى باب مجاني في الخادم.
+        // الإضافات الإدارية استثناء متعمد ومراجع (extra_features).
+        if ($role === A::ROLE_MERCHANT) {
+            $extra = array_fill_keys(array_filter($extraFeatures, 'is_string'), true);
+            foreach (array_keys($features) as $feature) {
+                if (isset($extra[$feature])) {
+                    continue;
+                }
+                $capability = CapabilityRegistry::find($feature);
+                if ($capability === null) {
+                    continue; // ميزة قديمة غير معروضة في السجل بعد.
+                }
+                $minimumPlan = $capability->minimumPlan();
+                if (! $capability->appliesTo($businessType)
+                    || ($minimumPlan !== null
+                        && CapabilityRegistry::planRank($plan) < CapabilityRegistry::planRank($minimumPlan))) {
+                    unset($features[$feature]);
+                }
+            }
         }
 
         return array_keys($features);
@@ -305,7 +393,7 @@ class FeatureAccessService
     /** Admin: تغيير business_type تاجر. */
     public function updateBusinessType(MerchantProfile $merchant, ?string $type): MerchantProfile
     {
-        if ($type !== null && !in_array($type, A::ALL_BUSINESS_TYPES, true)) {
+        if ($type !== null && !in_array($type, \App\Domain\Verticals\VerticalRegistry::codes(), true)) {
             throw new \InvalidArgumentException("نوع نشاط غير صحيح: {$type}");
         }
         $merchant->update(['business_type' => $type]);

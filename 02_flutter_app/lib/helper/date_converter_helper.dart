@@ -3,30 +3,76 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 class DateConverterHelper {
+  /// الوقت المالي يُخزَّن ويُرسل من الخادم كـ UTC، لكن أميال تعرضه دائماً
+  /// بتوقيت مكة. لا نعتمد على منطقة الجهاز: فقد يكون العميل في بلد آخر أو
+  /// ضبط الساعة يدوياً، بينما تاريخ الحركة يجب أن يكون واحداً لدى الأطراف.
+  static const Duration _meccaOffset = Duration(hours: 3);
+
+  /// يحوّل لحظةً مطلقة إلى وقت مكة (`Asia/Riyadh`، بلا توقيت صيفي).
+  /// القيمة الناتجة تستعمل للعرض فقط؛ لا تُعاد إلى الخادم بدلاً من UTC.
+  static DateTime toMecca(DateTime value) {
+    final utc = value.isUtc
+        ? value
+        : DateTime.utc(value.year, value.month, value.day, value.hour,
+            value.minute, value.second, value.millisecond, value.microsecond);
+    return utc.add(_meccaOffset);
+  }
+
+  /// تواريخ API غير المزوّدة بمنطقة تُعد UTC أيضاً؛ هذا يحافظ على توافق
+  /// السجلات القديمة التي كانت تُسجّل والخادم مضبوط على UTC.
+  static DateTime parseApiInstant(String value) {
+    final parsed = DateTime.parse(value);
+    return parsed.isUtc
+        ? parsed
+        : DateTime.utc(parsed.year, parsed.month, parsed.day, parsed.hour,
+            parsed.minute, parsed.second, parsed.millisecond, parsed.microsecond);
+  }
+
+  static DateTime fromApi(String value) {
+    return toMecca(parseApiInstant(value));
+  }
+
+  static DateTime? tryParseApiInstant(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    try {
+      return parseApiInstant(value);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static DateTime? tryFromApi(String? value) {
+    final instant = tryParseApiInstant(value);
+    return instant == null ? null : toMecca(instant);
+  }
+
+  static DateTime nowInMecca() => DateTime.now().toUtc().add(_meccaOffset);
+
   static String formatDate(DateTime dateTime) {
-    return DateFormat('yyyy-MM-dd hh:mm:ss').format(dateTime);
+    return DateFormat('yyyy-MM-dd HH:mm:ss').format(dateTime.toUtc());
   }
 
   static String estimatedDate(DateTime dateTime) {
-    return DateFormat('dd MMM yyyy').format(dateTime);
+    return DateFormat('dd MMM yyyy').format(toMecca(dateTime));
   }
 
   static DateTime convertStringToDatetime(String dateTime) {
-    return DateFormat("yyyy-MM-ddTHH:mm:ss.SSS").parse(dateTime);
+    return fromApi(dateTime);
   }
   static String localDateToIsoStringAMPM(DateTime dateTime) {
-    return DateFormat('h:mm a | d-MMM-yyyy ').format(dateTime.toLocal());
+    return DateFormat('HH:mm | d-MMM-yyyy').format(toMecca(dateTime));
   }
 
   static DateTime isoStringToLocalDate(String dateTime) {
-    return DateFormat('yyyy-MM-ddTHH:mm:ss.SSS').parse(dateTime, true).toLocal();
+    return fromApi(dateTime);
   }
 
   static String isoStringToLocalTimeOnly(String dateTime) {
-    return DateFormat('hh:mm aa').format(isoStringToLocalDate(dateTime));
+    return DateFormat('HH:mm').format(isoStringToLocalDate(dateTime));
   }
   static String isoStringToLocalAMPM(String dateTime) {
-    return DateFormat('a').format(isoStringToLocalDate(dateTime));
+    // اسم الدالة تاريخي؛ العقد الموحد لأميال لا يعرض AM/PM.
+    return isoStringToLocalTimeOnly(dateTime);
   }
 
   static String isoStringToLocalDateOnly(String dateTime) {
@@ -38,7 +84,7 @@ class DateConverterHelper {
   }
 
   static String convertTimeToTime(String time) {
-    return DateFormat('hh:mm a').format(DateFormat('hh:mm:ss').parse(time));
+    return DateFormat('HH:mm').format(DateFormat('HH:mm:ss').parse(time));
   }
 
   static String dateStringMonthYear(DateTime ? dateTime) {
@@ -46,8 +92,8 @@ class DateConverterHelper {
   }
 
   static int getDifferenceFromPresent(String date){
-    final parsedDate = DateTime.parse(date);
-    final currentDate = DateTime.now();
+    final parsedDate = fromApi(date);
+    final currentDate = nowInMecca();
     final normalizedParsedDate = DateTime(parsedDate.year, parsedDate.month, parsedDate.day);
     final normalizedCurrentDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
     final difference = normalizedCurrentDate.difference(normalizedParsedDate).inDays;
@@ -63,7 +109,7 @@ class DateConverterHelper {
       } else if (difference == 1) {
         return 'yesterday'.tr;
       } else {
-        return DateFormat('dd/MM/yyyy').format(DateTime.parse(inputDate));
+        return DateFormat('dd/MM/yyyy').format(fromApi(inputDate));
       }
     } catch (e) {
       return 'invalid_date'.tr; // Localized "Invalid date"
@@ -71,8 +117,8 @@ class DateConverterHelper {
   }
 
   static String timeAgo(String date){
-    final parsedDate = DateTime.parse(date);
-    final now = DateTime.now();
+    final parsedDate = fromApi(date);
+    final now = nowInMecca();
     final difference = now.difference(parsedDate);
 
     if (difference.inSeconds < 60) {
@@ -98,7 +144,7 @@ class DateConverterHelper {
   }
 
   static Map<String, DateTime?> getDateRangeForFilter(String? filterKey) {
-    final DateTime now = DateTime.now();
+    final DateTime now = nowInMecca();
     final DateTime today = DateTime(now.year, now.month, now.day);
 
     late DateTime startDate;

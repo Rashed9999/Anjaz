@@ -26,20 +26,15 @@ class FamilyFundServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['amial.operational_governorates' => ['YE-AD']]);
         Queue::fake(); // PDF receipts عبر queue
 
         $this->service = app(FamilyFundService::class);
 
-        $this->owner = User::factory()->create([
-            'zone_code' => 'SOUTH',
-            'phone' => '+967700000001',
-        ]);
+        $this->owner = $this->tierTwoCustomer(['phone' => '+967700000001']);
         EMoney::create(['user_id' => $this->owner->id, 'current_balance' => '1000.0000']);
 
-        $this->memberUser = User::factory()->create([
-            'zone_code' => 'SOUTH',
-            'phone' => '+967700000002',
-        ]);
+        $this->memberUser = $this->tierTwoCustomer(['phone' => '+967700000002']);
         EMoney::create(['user_id' => $this->memberUser->id, 'current_balance' => '500.0000']);
     }
 
@@ -66,7 +61,7 @@ class FamilyFundServiceTest extends TestCase
     /** @test */
     public function it_rejects_creation_from_non_south_users()
     {
-        $north = User::factory()->create(['zone_code' => 'NORTH']);
+        $north = $this->tierTwoCustomer(['zone_code' => 'NORTH']);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('SOUTH');
@@ -107,7 +102,7 @@ class FamilyFundServiceTest extends TestCase
         $this->service->acceptInvitation($member, $this->memberUser);
 
         // member يحاول دعوة - يجب أن يفشل
-        $thirdUser = User::factory()->create(['zone_code' => 'SOUTH', 'phone' => '+967700000003']);
+        $thirdUser = $this->tierTwoCustomer(['phone' => '+967700000003']);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Only owner or admin');
@@ -334,4 +329,17 @@ class FamilyFundServiceTest extends TestCase
         $fund->refresh();
         $this->assertEquals('280.0000', (string)$fund->balance);
     }
+    private function tierTwoCustomer(array $attributes = []): User
+    {
+        return User::factory()->create(array_merge([
+            'type' => 2,
+            'zone_code' => 'SOUTH',
+            'kyc_tier' => 2,
+            'is_phone_verified' => 1,
+            'is_kyc_verified' => 1,
+            'verified_residence_governorate' => 'YE-AD',
+            'residence_verified_at' => now(),
+        ], $attributes));
+    }
+
 }

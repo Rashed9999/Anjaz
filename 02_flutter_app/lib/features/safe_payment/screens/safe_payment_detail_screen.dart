@@ -634,11 +634,23 @@ class _StagesStrip extends StatelessWidget {
                 child: Icon(
                   i < current ? Icons.check : icons[i],
                   size: 20,
+                  // ══════════════════════════════════════════════════
+                  // AMIAL-CONTRAST-001 — **الخطوةُ القادمة كانت لا تُقرأ.**
+                  //
+                  // قِيس لا خُمّن: `textMuted` (‏#8B97A8) على #F0F1F3
+                  // = **2.62:1**، والحدُّ 4.5:1. و`textSecondary` عليه
+                  // 4.79:1 فيجتاز. وهي شكوى «الألوان الكتابة في الدفع
+                  // الآمن غير واضحة».
+                  //
+                  // **ولا يُخترَع لونٌ رابع**: `textSecondary` توكِنٌ
+                  // قائمٌ في اللوحة. ومن لم يجد ما يحتاجه اخترع، فصار
+                  // في المشروع ستّةُ أخضرَ تعني «نجح».
+                  // ══════════════════════════════════════════════════
                   color: i < current
                       ? AmialColors.primary
                       : i == current
                           ? (current == 2 ? Colors.white : AmialColors.primary)
-                          : AmialColors.textMuted,
+                          : AmialColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 6),
@@ -647,9 +659,10 @@ class _StagesStrip extends StatelessWidget {
                       fontSize: 10,
                       fontWeight:
                           i == current ? FontWeight.bold : FontWeight.normal,
+                      // AMIAL-CONTRAST-001 — انظر الأيقونةَ أعلاه.
                       color: i <= current
                           ? AmialColors.primary
-                          : AmialColors.textMuted)),
+                          : AmialColors.textSecondary)),
             ]),
           ],
         ]),

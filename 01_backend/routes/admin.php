@@ -81,6 +81,29 @@ Route::group(['as' => 'admin.'], function () {
     Route::group(['middleware' => ['admin', 'amial.force-pin-change']], function () {
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-WRONG-TRANSFER-001 — **بلاغاتُ العملاء: بابٌ لم يكن موجوداً.**
+        //
+        // `DisputeController::list()` و`changeStatus()` مبنيّتان منذ زمن،
+        // **ولا مسارَ لواحدةٍ منهما**. والعميلُ يرفع بلاغَه من التطبيق
+        // (‏`POST /api/v1/customer/dispute/create` موصولةٌ وتعمل) فيدخل
+        // جدولَ `disputes` **ولا يراه أحد**.
+        //
+        // **والصلاحيّتان مفترقتان:** القراءةُ لمن يقرأ العمليّات،
+        // والحسمُ لمن يقرّر النزاعات — فالثاني ينقل مالاً.
+        //
+        // **وقد ضاع هذا الحاجزُ مرّةً في إعادة تأسيسٍ قالت «نجحت»**، فبقيت
+        // مجموعةٌ فارغةٌ مكانَه والرابطُ في القائمة الجانبيّة قائم —
+        // **فسقطت كلُّ شاشات اللوحة بـ٥٠٠** لأنّ القائمةَ في التخطيط
+        // المشترك. ولذلك يحرسه `DisputeDecisionDoesNotLieGuardTest`.
+        // ══════════════════════════════════════════════════════════════
+        Route::group(['prefix' => 'disputes', 'as' => 'disputes.'], function () {
+            Route::get('/', [DisputeController::class, 'list'])
+                ->middleware('platform:platform.transactions.view')->name('index');
+            Route::post('change-status', [DisputeController::class, 'changeStatus'])
+                ->middleware('platform:platform.disputes.decide')->name('change-status');
+        });
+
         // AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (واجهة ويب + JSON بجلسة الأدمن)
         // AMIAL-ADMIN-DOORS-001 — مركزُ الدعم عملُ الدعم، وله صلاحيّتُه.
         Route::group(['prefix' => 'support-center', 'as' => 'support-center.'], function () {
@@ -116,6 +139,29 @@ Route::group(['as' => 'admin.'], function () {
             Route::post('approvals/{id}/reject', [$sc, 'rejectRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.reject');
             Route::get('insider/overview', [$sc, 'insiderOverview'])->middleware('platform:platform.audit.view')->name('insider.overview');
             Route::post('insider/alerts/{id}/ack', [$sc, 'acknowledgeAlert'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('insider.alerts.ack');
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-WRONG-TRANSFER-001 — **بابُ الشاشة، ومعه بابُ الـAPI.**
+            //
+            // **والبابان لازمان معاً**: الشاشةُ تنادي مسارَ الويب،
+            // والتطبيقاتُ تنادي الـAPI — **وناقصُ أحدِهما زرٌّ يَعِد ولا
+            // يفعل**. (القاعدة الرابعة: ميزةٌ لها مدخلان تُختبَر من
+            // مدخليها.)
+            //
+            // والصلاحيّاتُ هي هي في البابين — تتبع الأثرَ لا الشاشة:
+            // فتحٌ قابلٌ للرجوع، وحسمٌ ورفضٌ ينقلان مالاً نهائيّاً.
+            // ══════════════════════════════════════════════════════════
+            // **ومفتاحُ التفرّد هنا أيضاً** — والبابان يحملان الشرطَ
+            // نفسَه، وإلّا كان النقصُ في أحدِهما بابَ ازدواجٍ للمال.
+            Route::group(['prefix' => 'wrong-transfer', 'as' => 'wrong-transfer.',
+                'middleware' => 'amial.idempotency'], function () use ($sc) {
+                Route::post('open', [$sc, 'openWrongTransferClaim'])
+                    ->middleware('platform:platform.customers.freeze')->name('open');
+                Route::post('{ulid}/resolve', [$sc, 'resolveWrongTransferClaim'])
+                    ->middleware('platform:platform.disputes.decide')->name('resolve');
+                Route::post('{ulid}/reject', [$sc, 'rejectWrongTransferClaim'])
+                    ->middleware('platform:platform.disputes.decide')->name('reject');
+            });
         });
 
         // AMIAL-MAINT-001 — لوحة «الصيانة الأولية» (تشغيل/إيقاف الميزات)
@@ -256,9 +302,22 @@ Route::group(['as' => 'admin.'], function () {
         });
 
         Route::group(['prefix' => 'merchant', 'as' => 'merchant.'], function () {
-            Route::post('search', [MerchantController::class, 'search'])
-                ->middleware('platform:platform.merchants.compliance')->name('search');
-
+            // AMIAL-ORPHAN-ROUTE-001 — **مسارٌ يُنادي دالّةً محذوفة.**
+            //
+            // كان هنا `POST merchant/search → MerchantController::search()`،
+            // **والدالّةُ لا وجودَ لها**: بقيّةُ بحثِ التجّار في قالب 6cash،
+            // حُذفت مع قوالبها وبقي تسجيلُ المسار.
+            //
+            // **ولا يمسكه شيء**: `route:list` يعرضه، و`route:cache` ينجح،
+            // و`php -l` راضٍ — لأنّ ربطَ المتحكّم بالدالّة **نصٌّ يُحلّ في
+            // وقت التشغيل**. فلا يظهر إلّا بـ500 في وجه من يطلبه.
+            //
+            // وقِيس فلا يشير إليه شيء: لا قالبٌ ولا سكربت. فأُزيل — إزالةُ
+            // مسارٍ لا يُنتج إلّا خطأً تُنقص سطحَ العطل ولا تُفقد وظيفة.
+            // (وهو قرارُ `routes/merchant.php` نفسُه: «تسجيلُه يُبقي سطحَ
+            // خطأٍ بلا وظيفة».)
+            //
+            // وبحثُ التجّار الحيُّ في مركز التجّار الحديث.
         });
 
         Route::group(['prefix' => 'user', 'as' => 'user.'], function () {
@@ -373,9 +432,6 @@ Route::group(['as' => 'admin.'], function () {
                 Route::post('update/{id}', [FAQCategoryController::class, 'update'])->name('update');
                 Route::post('delete/{id}', [FAQCategoryController::class, 'delete'])->name('delete');
             });
-        });
-
-        Route::group(['prefix' => 'disputes', 'as' => 'disputes.'], function () {
         });
 
     });

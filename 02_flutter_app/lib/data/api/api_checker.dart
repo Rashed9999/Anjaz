@@ -2,16 +2,68 @@ import 'dart:io';
 import 'package:get/get.dart';
 import 'package:amial_pay/common/models/error_model.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/amial/screens/terms_acceptance_screen.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 
 class ApiChecker {
+  static bool _openingTerms = false;
+
   static void checkApi(Response response) {
     // AMIAL-FIX(POST-LOGIN): عند انتهاء الجلسة (401/429) نُعيد لشاشة الدخول
     // الموحّدة لأميال باي — لا لشاشة PIN القديمة (6cash) التي تظهر بعلم دولة
     // أجنبية ولا تخصّ المشروع. نحرس من الحلقة بتفادي إعادة التوجيه إن كنّا فيها.
     final onUnifiedLogin = Get.currentRoute.contains(RouteHelper.unifiedLoginScreen);
-    if((response.statusCode == 401 || response.statusCode == 429) && !onUnifiedLogin) {
+    final responseCode = response.body is Map
+        ? response.body['code']?.toString()
+        : null;
+
+    // AMIAL-LEGAL-LOOP-001:
+    // الخادم هو مصدر الحقيقة. إذا تغيّر إصدار الشروط أثناء جلسة قائمة،
+    // لا نكتفي برسالة 403؛ نفتح شاشة الإصدار الحالي مرة واحدة، ونعود
+    // للشاشة التي كان عليها العميل بعد القبول.
+    if (response.statusCode == 403 &&
+        responseCode == 'TERMS_ACCEPTANCE_REQUIRED') {
+      if (!_openingTerms) {
+        _openingTerms = true;
+        Future<void>.microtask(() async {
+          try {
+            await Get.to(() => TermsAcceptanceScreen(
+                  mandatory: true,
+                  onAccepted: () => Get.back(result: true),
+                ));
+          } finally {
+            _openingTerms = false;
+          }
+        });
+      }
+      showCustomSnackBarHelper(
+        'terms_acceptance_required_to_continue'.tr,
+        isError: true,
+      );
+      return;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-MERCHANT-SESSION-001 — **٤٢٩ لم تعد تُنهي الجلسة.**
+    //
+    // ٤٢٩ = «تجاوزتَ حدَّ المحاولات في الدقيقة» — حدٌّ يمرّ بعد ثوانٍ.
+    // ومعاملتُه معاملةَ رمزٍ منتهٍ **تحذف رمزَ الدخول وتطرد المستعمل**
+    // على ضغطتين متتاليتين، ولا سبيلَ له إلى فهم ما جرى: يُعاد إلى شاشة
+    // الدخول برسالةٍ عن حدٍّ لا عن جلسة.
+    //
+    // **و٤٠١ وحدَها تعني «الرمزُ لم يعد صالحاً»** — وهي وحدَها ما يستحقّ
+    // إنهاءَ الجلسة. والباقي يُقال ولا يُطرَد صاحبُه.
+    // ══════════════════════════════════════════════════════════════════
+    if(response.statusCode == 429 && !onUnifiedLogin) {
+      showCustomSnackBarHelper(
+        'محاولاتٌ كثيرةٌ في وقتٍ قصير — انتظر دقيقةً ثمّ أعد المحاولة',
+        isError: true,
+      );
+      return;
+    }
+
+    if(response.statusCode == 401 && !onUnifiedLogin) {
       Get.find<AuthController>().removeCustomerToken();
       Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
 

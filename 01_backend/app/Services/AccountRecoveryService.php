@@ -58,6 +58,7 @@ class AccountRecoveryService
         ?string $ip,
         ?string $userAgent,
     ): AccountRecoveryRequest {
+        $newPhone = $this->canonicalAvailablePhone($user, $newPhone);
         $this->assertEligibleForSelfService($user, $newPhone);
 
         // إن وُجد طلب نشط، نلغيه ونبدأ جديداً
@@ -122,6 +123,7 @@ class AccountRecoveryService
         ?string $ip,
         ?string $userAgent,
     ): AccountRecoveryRequest {
+        $newPhone = $this->canonicalAvailablePhone($user, $newPhone);
         $this->cancelActiveRequests($user, 'replaced by new lost-phone request');
 
         return DB::transaction(function () use ($user, $newPhone, $identificationDocuments, $userNotes, $ip, $userAgent) {
@@ -413,9 +415,10 @@ class AccountRecoveryService
         }
 
         return DB::transaction(function () use ($user, $request) {
+            $newPhone = $this->canonicalAvailablePhone($user, (string) $request->new_phone);
             $oldPhone = $user->phone;
             $user->update([
-                'phone' => $request->new_phone,
+                'phone' => $newPhone,
                 'security_hold_until' => null,
                 'security_hold_reason' => null,
             ]);
@@ -424,12 +427,51 @@ class AccountRecoveryService
                 'user_id' => $user->id,
                 'event_type' => 'PHONE_CHANGED',
                 'severity' => 'critical',
-                'note' => 'Phone changed from ' . $this->maskPhone($oldPhone) . ' to ' . $this->maskPhone($request->new_phone),
+                'note' => 'Phone changed from ' . $this->maskPhone($oldPhone) . ' to ' . $this->maskPhone($newPhone),
                 'metadata' => ['request_ulid' => $request->request_ulid],
             ]);
 
             return true;
         });
+    }
+
+    /**
+     * يطبّع الرقم ثم يفحصه ضد المفتاح الجديد والبيانات التاريخية معاً.
+     * لا نعتمد على القيد وحده هنا: طلب الاسترداد يجب أن يرفض برسالة مفهومه
+     * قبل إرسال OTP أو وضع الحساب في فترة تعليق.
+     */
+    private function canonicalAvailablePhone(User $user, string $rawPhone): string
+    {
+        $phone = \App\Support\Phone::canonical($rawPhone);
+        if ($phone === '') {
+            throw new \RuntimeException('رقم الهاتف الجديد غير صالح.');
+        }
+
+        if ($phone === \App\Support\Phone::canonical((string) $user->phone)) {
+            throw new \RuntimeException('رقم الهاتف الجديد هو الرقم المسجّل للحساب نفسه.');
+        }
+
+        $existing = User::query()
+            ->where('id', '!=', $user->id)
+            ->whereNull('deleted_at')
+            ->where(function ($query) use ($phone) {
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'phone_canonical')) {
+                    $query->where('phone_canonical', $phone);
+                }
+
+                $query->orWhereIn('phone', \App\Support\Phone::variants($phone));
+            })
+            ->exists();
+
+        if ($existing) {
+            // صياغة متوافقة مع عملاء API الحاليين؛ الواجهة تترجم رمز الحقل.
+            throw new \RuntimeException('New phone number already in use');
+        }
+
+        // لا نعيد كتابة صيغة الهاتف الظاهرة في طلب الاسترداد هنا؛ المفتاح
+        // `phone_canonical` هو مصدر منع التكرار، أما `phone` فيبقى متوافقاً
+        // مع العملاء والبيانات التاريخية إلى أن تُستكمل خطة الترحيل.
+        return trim($rawPhone);
     }
 
     /**
@@ -452,13 +494,6 @@ class AccountRecoveryService
             throw new \RuntimeException('Phone changed within cooldown period; admin review required');
         }
 
-        // فحص duplicate: الرقم الجديد ليس مستخدماً
-        $exists = User::where('phone', $newPhone)
-            ->where('id', '!=', $user->id)
-            ->exists();
-        if ($exists) {
-            throw new \RuntimeException('New phone number already in use');
-        }
     }
 
     /**

@@ -18,7 +18,16 @@ class TransactionHistoryWidget extends StatelessWidget {
   final Transactions? transactions;
   const TransactionHistoryWidget({super.key, this.transactions});
 
-
+  String _typeLabel(String? type) {
+    switch (type) {
+      case 'debt_payment':
+        return 'سداد دين آجل';
+      case 'debt_payment_received':
+        return 'تحصيل دين آجل';
+      default:
+        return type?.tr ?? '';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,22 +37,23 @@ class TransactionHistoryWidget extends StatelessWidget {
     final bool isCredit = (transactions?.credit ?? 0) > 0;
     final TransactionAdminInfo? transactionAdminInfo = Get.find<TransactionHistoryController>().transactionModel?.transactionAdminInfo;
 
-
     try{
 
       switch (transactions?.transactionType) {
         case AppConstants.sendMoney:
-          userPhone = transactions?.receiver!.phone;
+        case 'debt_payment':
+          userPhone = transactions?.receiver?.phone;
           break;
         case AppConstants.receivedMoney:
+        case 'debt_payment_received':
         case AppConstants.addMoney:
         case 'add_money_bonus':
         case AppConstants.cashIn:
-          userPhone = transactions?.sender!.phone;
+          userPhone = transactions?.sender?.phone;
           break;
         case AppConstants.withdraw:
         case AppConstants.cashOut:
-          userPhone = transactions?.receiver!.phone;
+          userPhone = transactions?.receiver?.phone;
           break;
         case AppConstants.deductDisputedMoney || AppConstants.addDisputedMoney:
           userPhone = transactionAdminInfo?.phone;
@@ -53,20 +63,21 @@ class TransactionHistoryWidget extends StatelessWidget {
           userPhone = transactions?.userInfo?.phone;
       }
 
-
       switch (transactions?.transactionType) {
         case AppConstants.sendMoney:
-          userName = transactions!.receiver!.name;
+        case 'debt_payment':
+          userName = transactions?.receiver?.name;
           break;
         case AppConstants.receivedMoney:
+        case 'debt_payment_received':
         case AppConstants.addMoney:
         case 'add_money_bonus':
         case AppConstants.cashIn:
-          userName = transactions?.sender!.name;
+          userName = transactions?.sender?.name;
           break;
         case AppConstants.withdraw:
         case AppConstants.cashOut:
-          userName = transactions?.receiver!.name;
+          userName = transactions?.receiver?.name;
           break;
         case AppConstants.deductDisputedMoney || AppConstants.addDisputedMoney:
           userName = transactionAdminInfo?.name;
@@ -76,20 +87,21 @@ class TransactionHistoryWidget extends StatelessWidget {
           userName = (transactions?.userInfo?.name ?? '');
       }
 
-
       switch (transactions?.transactionType) {
         case AppConstants.sendMoney:
-          userImage = transactions?.receiver!.image;
+        case 'debt_payment':
+          userImage = transactions?.receiver?.image;
           break;
         case AppConstants.receivedMoney:
+        case 'debt_payment_received':
         case AppConstants.addMoney:
         case 'add_money_bonus':
         case AppConstants.cashIn:
-          userImage = transactions?.sender!.image;
+          userImage = transactions?.sender?.image;
           break;
         case AppConstants.withdraw:
         case AppConstants.cashOut:
-          userImage = transactions?.receiver!.image;
+          userImage = transactions?.receiver?.image;
           break;
         case AppConstants.deductDisputedMoney || AppConstants.addDisputedMoney:
           userImage = transactionAdminInfo?.image;
@@ -101,6 +113,16 @@ class TransactionHistoryWidget extends StatelessWidget {
     }catch(e){
      userName = 'no_user'.tr;
     }
+
+    // AMIAL-TXN-NO-001: الرقم الذي يراه العميل ويُمليه للدعم هو الرقم
+    // الرسمي الرقمي. الـ ULID يبقى مرجعاً هندسياً فقط عند غياب رقم قديم.
+    final officialNo = transactions?.transactionNo?.trim();
+    final visibleReference = (officialNo != null && officialNo.isNotEmpty)
+        ? officialNo
+        : (transactions?.transactionId ?? '');
+    final referenceLabel = (officialNo != null && officialNo.isNotEmpty)
+        ? 'رقم العملية:'
+        : 'مرجع العملية:';
 
     return InkWell(
       onTap: ()=> showCustomBottomSheet(child: TransactionDetailsBottomSheetWidget(transactions: transactions)),
@@ -133,7 +155,7 @@ class TransactionHistoryWidget extends StatelessWidget {
                 Text(userPhone ?? '', style: rubikLight.copyWith(fontSize: Dimensions.fontSizeDefault)),
               ]),
             ]),
-            Spacer(),
+            const Spacer(),
 
             Column(crossAxisAlignment: CrossAxisAlignment.end,children: [
               Text(
@@ -154,7 +176,7 @@ class TransactionHistoryWidget extends StatelessWidget {
               ),
             ]),
           ]),
-          SizedBox(height: Dimensions.paddingSizeSmall),
+          const SizedBox(height: Dimensions.paddingSizeSmall),
 
           Row(children: [
             Expanded(child: Container(
@@ -164,20 +186,22 @@ class TransactionHistoryWidget extends StatelessWidget {
               ),
               padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeSmall, vertical: Dimensions.paddingSizeSmall),
               child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.spaceBetween,children: [
-                Column( crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('TrxID:', style: rubikRegular.copyWith(fontSize: Dimensions.fontSizeSmall, color: Theme.of(context).hintColor)),
+                Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(referenceLabel, style: rubikRegular.copyWith(fontSize: Dimensions.fontSizeSmall, color: Theme.of(context).hintColor)),
 
                   Text(
-                    '${transactions!.transactionId}',
+                    visibleReference,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: rubikLight.copyWith(fontSize: Dimensions.fontSizeSmall, color: Theme.of(context).textTheme.bodyLarge?.color),
                   ),
-                ]),
+                ])),
                 const SizedBox(width: Dimensions.paddingSizeDefault),
 
                 GestureDetector(
                   onTap: () {
-                    Clipboard.setData(ClipboardData(text: "${transactions!.transactionId}"));
-                    showCustomSnackBarHelper('transaction_id_copied'.tr,isError: false);
+                    Clipboard.setData(ClipboardData(text: visibleReference));
+                    showCustomSnackBarHelper('تم نسخ رقم العملية',isError: false);
                   },
                   child: Container(
                     decoration: BoxDecoration(
@@ -190,11 +214,11 @@ class TransactionHistoryWidget extends StatelessWidget {
                 ),
               ]),
             )),
-            SizedBox(width: Dimensions.paddingSizeSmall),
+            const SizedBox(width: Dimensions.paddingSizeSmall),
 
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end,children: [
               Text(
-                transactions?.transactionType?.tr ?? "",
+                _typeLabel(transactions?.transactionType),
                 style: rubikRegular.copyWith(fontSize: Dimensions.fontSizeSmall+2),
               ),
 
@@ -207,7 +231,7 @@ class TransactionHistoryWidget extends StatelessWidget {
               ),
             ])),
           ]),
-          SizedBox(height: Dimensions.paddingSizeSmall),
+          const SizedBox(height: Dimensions.paddingSizeSmall),
 
           Divider(thickness: 0.4, color: Theme.of(context).hintColor.withValues(alpha:0.3)),
         ]),
@@ -215,4 +239,3 @@ class TransactionHistoryWidget extends StatelessWidget {
     );
   }
 }
-

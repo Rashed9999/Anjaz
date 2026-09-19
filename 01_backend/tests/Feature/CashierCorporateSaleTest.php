@@ -35,6 +35,14 @@ class CashierCorporateSaleTest extends TestCase
             'verification_status' => 'verified',
             'subscription_plan' => A::PLAN_FREE,
         ]);
+
+        // AMIAL-SHIFT-GATE-001 — **وتُفتَح ورديّةٌ لأنّ البيعَ صار يشترطها.**
+        //
+        // «لا يُقبض نقدٌ بلا وردية تحمل اسمَ فاتحها». وهذا الملفُّ يفحص
+        // شيئاً آخر، **فيُهيَّأ الشرطُ ولا يُطفأ الحدّ**: إطفاؤه يجعل
+        // الاختبارَ يمرّ على مسارٍ لا يسلكه تاجرٌ حقيقيّ.
+        app(\App\Services\CashierShiftService::class)
+            ->open($this->merchant, null, '0');
     }
 
     private function enterpriseAndAccount(string $limit = '50000'): void

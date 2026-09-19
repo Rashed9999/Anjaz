@@ -12,25 +12,19 @@ use Illuminate\Support\Carbon;
 /**
  * AMIAL-WHOLESALE-001 — تقارير الجملة.
  *
- * 3 تقارير رئيسية:
- *   1. Aging Report — تقادم المديونيات (0-30, 30-60, 60-90, 90+ يوم).
- *   2. Customer Statement — كشف حساب كامل لعميل (فواتير + تحصيلات).
- *   3. Sales Reps Performance — أداء مندوبي المبيعات.
+ * كل مبلغ يبقى DECIMAL نصياً حتى العرض. لا float في تقادم الذمم،
+ * كشف الحساب، أو أداء المندوبين.
  */
 class WholesaleReportsService
 {
-    /**
-     * تقرير تقادم المديونيات.
-     * يُرجع كل عميل عليه balance > 0 موزّعاً على شرائح عمرية.
-     */
     public function agingReport(WholesaleBusiness $business): array
     {
         $today = Carbon::today();
         $buckets = [
-            'current' => 0,        // 0-30 يوم
-            '30_60' => 0,          // 30-60 يوم
-            '60_90' => 0,          // 60-90 يوم
-            'over_90' => 0,        // 90+ يوم
+            'current' => '0.0000',
+            '30_60' => '0.0000',
+            '60_90' => '0.0000',
+            'over_90' => '0.0000',
         ];
         $byCustomer = [];
 
@@ -41,23 +35,13 @@ class WholesaleReportsService
             ->get();
 
         foreach ($invoices as $inv) {
-            $daysOverdue = $today->diffInDays($inv->due_date, false);
-            $balance = (float)$inv->balance_due;
+            $balance = MoneyService::normalize((string) $inv->balance_due);
 
-            $bucket = match(true) {
-                $daysOverdue >= 0 => 'current',       // لم يحن بعد أو في يوم الاستحقاق
-                $daysOverdue > -30 => 'current',
-                $daysOverdue > -60 => '30_60',
-                $daysOverdue > -90 => '60_90',
-                default => 'over_90',
-            };
-            // ملاحظة: $daysOverdue سالب إن due_date في الماضي.
-            // أعيد الحساب بشكل مباشر:
             if ($inv->due_date >= $today) {
                 $bucket = 'current';
             } else {
-                $overdue = abs($today->diffInDays($inv->due_date)); // Carbon 3: diffInDays موقّع — نأخذ المطلق
-                $bucket = match(true) {
+                $overdue = abs($today->diffInDays($inv->due_date));
+                $bucket = match (true) {
                     $overdue <= 30 => 'current',
                     $overdue <= 60 => '30_60',
                     $overdue <= 90 => '60_90',
@@ -65,53 +49,60 @@ class WholesaleReportsService
                 };
             }
 
-            $buckets[$bucket] += $balance;
+            $buckets[$bucket] = MoneyService::add($buckets[$bucket], $balance);
 
-            $cid = $inv->customer_id;
-            if (!isset($byCustomer[$cid])) {
-                $byCustomer[$cid] = [
-                    'customer_id' => $cid,
+            $customerId = (int) $inv->customer_id;
+            if (! isset($byCustomer[$customerId])) {
+                $byCustomer[$customerId] = [
+                    'customer_id' => $customerId,
                     'customer_name' => $inv->customer?->full_name,
                     'company_name' => $inv->customer?->company_name,
                     'phone' => $inv->customer?->phone,
-                    'current' => 0, '30_60' => 0, '60_90' => 0, 'over_90' => 0,
-                    'total' => 0,
+                    'current' => '0.0000',
+                    '30_60' => '0.0000',
+                    '60_90' => '0.0000',
+                    'over_90' => '0.0000',
+                    'total' => '0.0000',
                     'invoices_count' => 0,
                 ];
             }
-            $byCustomer[$cid][$bucket] += $balance;
-            $byCustomer[$cid]['total'] += $balance;
-            $byCustomer[$cid]['invoices_count']++;
+            $byCustomer[$customerId][$bucket] = MoneyService::add(
+                $byCustomer[$customerId][$bucket], $balance
+            );
+            $byCustomer[$customerId]['total'] = MoneyService::add(
+                $byCustomer[$customerId]['total'], $balance
+            );
+            $byCustomer[$customerId]['invoices_count']++;
         }
 
-        $totalReceivable = array_sum($buckets);
-        uasort($byCustomer, fn($a, $b) => $b['total'] <=> $a['total']);
+        $totalReceivable = '0.0000';
+        foreach ($buckets as $amount) {
+            $totalReceivable = MoneyService::add($totalReceivable, $amount);
+        }
+
+        uasort($byCustomer, fn ($a, $b) => bccomp($b['total'], $a['total'], 4));
 
         return [
             'as_of_date' => $today->toDateString(),
             'total_receivable' => $totalReceivable,
             'buckets' => $buckets,
-            'percentages' => $totalReceivable > 0 ? [
-                'current' => round($buckets['current'] / $totalReceivable * 100, 1),
-                '30_60' => round($buckets['30_60'] / $totalReceivable * 100, 1),
-                '60_90' => round($buckets['60_90'] / $totalReceivable * 100, 1),
-                'over_90' => round($buckets['over_90'] / $totalReceivable * 100, 1),
-            ] : ['current' => 0, '30_60' => 0, '60_90' => 0, 'over_90' => 0],
+            'percentages' => [
+                'current' => $this->percent($buckets['current'], $totalReceivable),
+                '30_60' => $this->percent($buckets['30_60'], $totalReceivable),
+                '60_90' => $this->percent($buckets['60_90'], $totalReceivable),
+                'over_90' => $this->percent($buckets['over_90'], $totalReceivable),
+            ],
             'by_customer' => array_values($byCustomer),
         ];
     }
 
-    /**
-     * كشف حساب عميل.
-     * يُرجع كل الفواتير + التحصيلات بترتيب زمني، مع running_balance.
-     */
     public function customerStatement(
         WholesaleCustomer $customer,
         ?Carbon $from = null,
         ?Carbon $to = null,
     ): array {
-        $from = $from ?? Carbon::today()->subYear();
-        $to = $to ?? Carbon::today();
+        $from ??= Carbon::today()->subYear();
+        $to ??= Carbon::today();
 
         $invoices = WholesaleInvoice::where('customer_id', $customer->id)
             ->whereBetween('invoice_date', [$from, $to])
@@ -124,44 +115,47 @@ class WholesaleReportsService
             ->orderBy('collection_date')
             ->get();
 
-        // ادمج وادفع بـ running balance
         $events = [];
-        foreach ($invoices as $inv) {
+        foreach ($invoices as $invoice) {
             $events[] = [
-                'date' => $inv->invoice_date->toDateString(),
+                'date' => $invoice->invoice_date->toDateString(),
                 'type' => 'invoice',
-                'reference' => $inv->invoice_number,
-                'description' => "فاتورة {$inv->invoice_number}",
-                'debit' => (float)$inv->total_amount,
-                'credit' => 0,
-                'sort_key' => $inv->invoice_date->timestamp . '_1',
+                'reference' => $invoice->invoice_number,
+                'description' => "فاتورة {$invoice->invoice_number}",
+                'debit' => MoneyService::normalize((string) $invoice->total_amount),
+                'credit' => '0.0000',
+                'sort_key' => $invoice->invoice_date->timestamp . '_1',
             ];
         }
-        foreach ($collections as $col) {
+        foreach ($collections as $collection) {
             $events[] = [
-                'date' => $col->collection_date->toDateString(),
+                'date' => $collection->collection_date->toDateString(),
                 'type' => 'collection',
-                'reference' => $col->collection_ulid,
-                'description' => "تحصيل ({$col->payment_method})"
-                    . ($col->reference_number ? " #{$col->reference_number}" : ''),
-                'debit' => 0,
-                'credit' => (float)$col->amount,
-                'sort_key' => $col->collection_date->timestamp . '_2',
+                'reference' => $collection->collection_ulid,
+                'description' => "تحصيل ({$collection->payment_method})"
+                    . ($collection->reference_number ? " #{$collection->reference_number}" : ''),
+                'debit' => '0.0000',
+                'credit' => MoneyService::normalize((string) $collection->amount),
+                'sort_key' => $collection->collection_date->timestamp . '_2',
             ];
         }
 
-        usort($events, fn($a, $b) => strcmp($a['sort_key'], $b['sort_key']));
+        usort($events, fn ($a, $b) => strcmp($a['sort_key'], $b['sort_key']));
 
-        $balance = 0;
-        $totalInvoiced = 0;
-        $totalPaid = 0;
-        foreach ($events as &$e) {
-            $balance += $e['debit'] - $e['credit'];
-            $e['running_balance'] = $balance;
-            $totalInvoiced += $e['debit'];
-            $totalPaid += $e['credit'];
-            unset($e['sort_key']);
+        $balance = '0.0000';
+        $totalInvoiced = '0.0000';
+        $totalPaid = '0.0000';
+        foreach ($events as &$event) {
+            $balance = MoneyService::add(
+                $balance,
+                MoneyService::sub($event['debit'], $event['credit'])
+            );
+            $event['running_balance'] = $balance;
+            $totalInvoiced = MoneyService::add($totalInvoiced, $event['debit']);
+            $totalPaid = MoneyService::add($totalPaid, $event['credit']);
+            unset($event['sort_key']);
         }
+        unset($event);
 
         return [
             'customer' => [
@@ -169,10 +163,13 @@ class WholesaleReportsService
                 'full_name' => $customer->full_name,
                 'company_name' => $customer->company_name,
                 'phone' => $customer->phone,
-                'credit_limit' => (float)$customer->credit_limit,
-                'current_balance' => (float)$customer->current_balance,
+                'credit_limit' => MoneyService::normalize((string) $customer->credit_limit),
+                'current_balance' => MoneyService::normalize((string) $customer->current_balance),
             ],
-            'period' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
+            'period' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+            ],
             'summary' => [
                 'total_invoiced' => $totalInvoiced,
                 'total_paid' => $totalPaid,
@@ -182,16 +179,13 @@ class WholesaleReportsService
         ];
     }
 
-    /**
-     * أداء مندوبي المبيعات.
-     */
     public function salesRepsPerformance(
         WholesaleBusiness $business,
         ?Carbon $from = null,
         ?Carbon $to = null,
     ): array {
-        $from = $from ?? Carbon::today()->subMonth();
-        $to = $to ?? Carbon::today();
+        $from ??= Carbon::today()->subMonth();
+        $to ??= Carbon::today();
 
         $reps = WholesaleSalesRep::where('business_id', $business->id)
             ->where('is_active', true)
@@ -203,33 +197,54 @@ class WholesaleReportsService
                 ->whereBetween('invoice_date', [$from, $to])
                 ->where('status', '!=', 'voided');
 
-            $totalSales = (float)(clone $periodInvoices)->sum('total_amount');
-            $totalCommission = (float)(clone $periodInvoices)->sum('sales_rep_commission_amount');
+            $totalSales = MoneyService::normalize(
+                (string) ((clone $periodInvoices)->sum('total_amount') ?: '0')
+            );
+            $totalCommission = MoneyService::normalize(
+                (string) ((clone $periodInvoices)->sum('sales_rep_commission_amount') ?: '0')
+            );
             $invoicesCount = (clone $periodInvoices)->count();
+            $earned = MoneyService::normalize((string) $rep->total_commission_earned);
+            $paid = MoneyService::normalize((string) $rep->total_commission_paid);
 
             $result[] = [
                 'rep_id' => $rep->id,
                 'full_name' => $rep->full_name,
-                'commission_rate' => (float)$rep->default_commission_rate,
+                'commission_rate' => (string) $rep->default_commission_rate,
                 'period' => [
                     'invoices_count' => $invoicesCount,
                     'total_sales' => $totalSales,
                     'total_commission' => $totalCommission,
                 ],
                 'all_time' => [
-                    'total_sales' => (float)$rep->total_sales,
-                    'total_commission_earned' => (float)$rep->total_commission_earned,
-                    'total_commission_paid' => (float)$rep->total_commission_paid,
-                    'pending_commission' => $rep->pendingCommission(),
+                    'total_sales' => MoneyService::normalize((string) $rep->total_sales),
+                    'total_commission_earned' => $earned,
+                    'total_commission_paid' => $paid,
+                    'pending_commission' => MoneyService::sub($earned, $paid),
                 ],
             ];
         }
 
-        usort($result, fn($a, $b) => $b['period']['total_sales'] <=> $a['period']['total_sales']);
+        usort(
+            $result,
+            fn ($a, $b) => bccomp($b['period']['total_sales'], $a['period']['total_sales'], 4)
+        );
 
         return [
-            'period' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
+            'period' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+            ],
             'reps' => $result,
         ];
+    }
+
+    private function percent(string $part, string $total): string
+    {
+        if (bccomp($total, '0', 4) === 0) {
+            return '0.0';
+        }
+
+        return bcmul(bcdiv($part, $total, 6), '100', 1);
     }
 }

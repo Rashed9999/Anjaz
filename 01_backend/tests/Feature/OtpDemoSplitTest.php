@@ -31,6 +31,14 @@ class OtpDemoSplitTest extends TestCase
     private const DEMO_PHONE = '967777100001';
     private const REAL_PHONE = '967739555444';
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // هذا الصنف يختبر فصل «أرقام العرض» القديم بعد إيقاف Pilot العام.
+        config(['amial.otp.pilot_customer_phone_enabled' => false]);
+    }
+
     private function policy(): OtpPolicy
     {
         return app(OtpPolicy::class);

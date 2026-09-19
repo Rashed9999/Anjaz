@@ -1,10 +1,18 @@
+import 'package:amial_pay/features/merchant/widgets/quick_calculator_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:amial_pay/features/merchant/widgets/shift_gate.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/pharmacy/controllers/pharmacy_controller.dart';
 import 'package:amial_pay/features/barcode/screens/continuous_scanner_screen.dart';
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_receipt_screen.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/features/merchant/widgets/credit_sale_notice.dart';
+import 'package:amial_pay/features/merchant/widgets/customer_balance_badge.dart';
+import 'package:amial_pay/features/merchant/widgets/cash_tendered_field.dart';
+import 'package:amial_pay/features/merchant/widgets/merchant_payment_method_picker.dart';
 
 /// AMIAL-PHARMACY-001 — شاشة بيع الصيدلية (الجوهر).
 ///
@@ -27,10 +35,15 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
   late final PharmacyController c;
   final _searchCtrl = TextEditingController();
   final _customerPhoneCtrl = TextEditingController();
+  final _creditPhoneCtrl = TextEditingController();
+  final _creditNameCtrl = TextEditingController();
   final _prescriptionCtrl = TextEditingController();
   final _doctorCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
   String _paymentMethod = 'cash';
+
+  /// AMIAL-CASH-TENDERED-001 — ما استلمه البائعُ نقداً. و`null` = لم يُدخَل.
+  double? _received;
   bool _searching = false;
 
   @override
@@ -45,10 +58,25 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
   void dispose() {
     _searchCtrl.dispose();
     _customerPhoneCtrl.dispose();
+    _creditPhoneCtrl.dispose();
+    _creditNameCtrl.dispose();
     _prescriptionCtrl.dispose();
     _doctorCtrl.dispose();
     _discountCtrl.dispose();
     super.dispose();
+  }
+
+  /// AMIAL-SECTOR-PAY-UNIFY-001 — قيمةُ الخصم المُدخَلة.
+  double get _discountValue =>
+      double.tryParse(_discountCtrl.text.trim()) ?? 0;
+
+  /// الصافي بعد الخصم — **ولا ينزل تحت الصفر**، فخصمٌ أكبرُ من الفاتورة
+  /// يُنتج مبلغاً سالباً يُرسَل إلى الخادم فيُرفَض بعد أن يكتبه الصيدليّ.
+  double _netTotal(double gross) {
+    final d = _discountValue;
+    if (d <= 0) return gross;
+
+    return (gross - d).clamp(0, gross).toDouble();
   }
 
   Future<void> _searchProducts(String q) async {
@@ -71,6 +99,18 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
   }
 
   Future<void> _submitSale() async {
+    final selectedCustomer = c.selectedCustomer.value;
+    final creditPhone = selectedCustomer?['phone']?.toString().trim().isNotEmpty == true
+        ? selectedCustomer!['phone'].toString().trim()
+        : _creditPhoneCtrl.text.trim();
+    final creditName = selectedCustomer?['full_name']?.toString().trim().isNotEmpty == true
+        ? selectedCustomer!['full_name'].toString().trim()
+        : _creditNameCtrl.text.trim();
+
+    if (_paymentMethod == 'credit' && creditPhone.isEmpty) {
+      return _showSnack('أدخل رقم العميل للبيع الآجل', AmialColors.red);
+    }
+
     // فحص الوصفة
     if (c.cartRequiresPrescription && _prescriptionCtrl.text.trim().isEmpty) {
       return _showSnack('السلّة تحتوي منتجات تستلزم وصفة طبية', AmialColors.red);
@@ -112,10 +152,13 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
 
     final ok = await c.recordCurrentSale(
       paymentMethod: _paymentMethod,
+      customerPhone: _paymentMethod == 'credit' ? creditPhone : null,
+      customerName: _paymentMethod == 'credit' ? creditName : null,
       prescriptionNumber: _prescriptionCtrl.text.trim(),
       prescribingDoctor: _doctorCtrl.text.trim(),
       discountAmount: _discountCtrl.text.trim(),
       acknowledgedWarnings: ackList,
+      amountReceived: _paymentMethod == 'cash' ? _received : null,
     );
     if (!mounted) return;
     if (ok) {
@@ -182,30 +225,21 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
   void _showSuccessDialog() {
     final sale = c.lastSale.value;
     if (sale == null) return;
-    showDialog(context: context, barrierDismissible: false, builder: (_) => AlertDialog(
-      title: const Row(children: [
-        Icon(Icons.check_circle, color: Colors.green, size: 28),
-        SizedBox(width: 8),
-        Text('تم البيع بنجاح'),
-      ]),
-      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Text('الإجمالي: ${sale['total_amount']} ر.ي',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary)),
-        const SizedBox(height: 4),
-        Text('#${(sale['sale_ulid'] ?? '').toString().substring((sale['sale_ulid'] ?? '').toString().length - 8)}',
-            style: TextStyle(color: Colors.grey.shade600, fontFamily: 'monospace')),
-      ]),
-      actions: [
-        TextButton(
-          onPressed: () { Navigator.pop(context); _prescriptionCtrl.clear(); _doctorCtrl.clear(); _discountCtrl.clear(); },
-          child: const Text('بيع جديد'),
-        ),
-        FilledButton(
-          onPressed: () { Navigator.pop(context); Get.back(); },
-          child: const Text('إغلاق'),
-        ),
-      ],
-    ));
+    final total = double.tryParse('${sale['total_amount'] ?? c.cartTotal}') ?? 0;
+    final customer = sale['customer'] is Map
+        ? Map<String, dynamic>.from(sale['customer'] as Map)
+        : c.selectedCustomer.value;
+    final ulid = '${sale['sale_ulid'] ?? ''}';
+    Get.off(() => CashierReceiptScreen(
+          sale: sale,
+          total: total,
+          method: '${sale['payment_method'] ?? _paymentMethod}',
+          customerName: customer?['full_name']?.toString(),
+          customerPhone: customer?['phone']?.toString(),
+          invoiceTitle: _paymentMethod == 'credit' ? 'فاتورة صيدلية آجل' : 'فاتورة صيدلية',
+          invoicePath: '/api/v1/amial/merchant/pharmacy/sales/$ulid/invoice',
+          nextSalePage: () => const PharmacySaleScreen(),
+        ));
   }
 
   void _showSnack(String msg, Color color) {
@@ -236,11 +270,27 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // AMIAL-SHIFT-GATE-001 — **وشبّاكُ الصيدليّة درجُ الورديّة نفسُه**
+    // (‏`computeCash` يعدّ نقدَه)، فحارسُه واحدٌ مع الكاشير — وإلّا ظهر
+    // في «المتوقَّع» نقدٌ لم تأذن به ورديّة.
+    return ShiftGate(child: _till(context));
+  }
+
+  Widget _till(BuildContext context) {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('بيع صيدلية'),
         actions: [
+          // AMIAL-CALCULATOR-001 — **الحاسبةُ حيث يُحسَب، لا في قائمة.**
+          // من يحسب وهو على الشبّاك يحسب **والسلّةُ أمامه** — وشاشةٌ
+          // مستقلّةٌ تُخرجه من السلّة. وورقةٌ تعلو الشاشة تُغلَق بسحبة.
+          IconButton(
+            key: const Key('calc-open'),
+            icon: const Icon(Icons.calculate_outlined),
+            tooltip: 'آلة حاسبة',
+            onPressed: () => QuickCalculatorSheet.open(context),
+          ),
           // زر مسح الباركود السريع
           IconButton(
             icon: const Icon(Icons.qr_code_scanner),
@@ -393,8 +443,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
                 )),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('$price', style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary, fontSize: 15)),
-            const Text('ر.ي', style: TextStyle(fontSize: 10, color: Colors.grey)),
+            Text(AmialMoney.yer(price), style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary, fontSize: 15)),
           ]),
         ]),
       ),
@@ -507,12 +556,53 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
                 ),
             ]),
           ),
+        // ══════════════════════════════════════════════════════════
+        // AMIAL-SECTOR-PAY-UNIFY-001 — **خصمُ الصيدليّة: مبنيٌّ ولا
+        // يُوصَل إليه.**
+        //
+        // `_discountCtrl` **معرَّفٌ ويُرسَل في نداءي البيع كليهما** —
+        // ولا حقلَ له في الشاشة إطلاقاً. فيُرسَل **فارغاً أبداً**،
+        // والصيدليُّ لا يستطيع خصمَ ريالٍ واحد.
+        //
+        // والخادمُ يقبله منذ البداية (`discount_amount` في المُحقِّق،
+        // و`PharmacySaleService` يطرحه من الإجمالي). **فالقطعةُ
+        // الوحيدةُ الغائبةُ حقلُ إدخال** — وهو نمطُ العطل الأكثر
+        // تكراراً في هذا المشروع.
+        // ══════════════════════════════════════════════════════════
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _discountCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.right,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'خصم (ر.ي)',
+                isDense: true,
+                prefixIcon: const Icon(Icons.local_offer_outlined, size: 18),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 8),
+
         // الإجمالي + الدفع
         Row(children: [
-          Text(c.cartTotal.toStringAsFixed(0),
+          Text(_netTotal(c.cartTotal).toStringAsFixed(0),
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary)),
           const SizedBox(width: 4),
           const Text('ر.ي', style: TextStyle(fontSize: 12)),
+          if (_discountValue > 0) ...[
+            const SizedBox(width: 8),
+            // **والمشطوبُ يُعرَض بجانبه** — فمن خصم ثمّ نظر إلى رقمٍ
+            // واحدٍ لا يعرف أخُصم أم لا.
+            Text(c.cartTotal.toStringAsFixed(0),
+                style: const TextStyle(
+                    fontSize: 13,
+                    color: AmialColors.textMuted,
+                    decoration: TextDecoration.lineThrough)),
+          ],
           const Spacer(),
           const Text('الإجمالي:', style: TextStyle(color: Colors.grey)),
         ]),
@@ -530,14 +620,84 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
           ),
         ],
         const SizedBox(height: 8),
-        // طرق الدفع
-        Row(children: [
-          Expanded(child: _payTile('cash', Icons.payments, 'نقد')),
-          const SizedBox(width: 4),
-          Expanded(child: _payTile('amial_pay', Icons.qr_code, 'أميال')),
-          const SizedBox(width: 4),
-          Expanded(child: _payTile('credit', Icons.event, 'آجل')),
-        ]),
+        // طرق الدفع الأساسية موحّدة مع بقية نقاط البيع؛ يبقى إدخال الدواء
+        // والوصفة وتحذيرات الحساسية خاصاً بالصيدلية.
+        MerchantPaymentMethodPicker(
+          selectedValue: _paymentMethod,
+          onChanged: (value) => setState(() => _paymentMethod = value),
+          options: const [
+            MerchantPaymentOption.cash,
+            MerchantPaymentOption.amialPay,
+            MerchantPaymentOption.credit,
+          ],
+        ),
+        // ====== المبلغ المستلم والباقي (نقداً فقط) ======
+        //
+        // AMIAL-CASH-TENDERED-001 — وشبّاكُ الصيدليّة يبيع نقداً كالكاشير،
+        // فيأخذ الأداةَ نفسَها ولا تُكتب له نسخةٌ ثانيةٌ تفترق عنها.
+        if (_paymentMethod == 'cash')
+          CashTenderedField(
+            net: _netTotal(c.cartTotal),
+            onChanged: (v) => setState(() => _received = v),
+          ),
+
+        if (_paymentMethod == 'credit') ...[
+          // **وتُقال حقيقةُ الفعل** — سأل صاحبُ المشروع «أيٌّ منهم مرتبطٌ
+          // الآجلُ فيه بنظام الديون؟»، وهو سؤالٌ لا يُجاب من الشاشة.
+          // والأداةُ مشتركةٌ مع الكاشير فلا يفترق النصّان.
+          CreditSaleNotice(
+            dense: true,
+            customerLabel: c.selectedCustomer.value != null
+                ? '${c.selectedCustomer.value!['full_name']} — ${c.selectedCustomer.value!['phone']}'
+                : (_creditPhoneCtrl.text.trim().isEmpty
+                    ? null
+                    : _creditPhoneCtrl.text.trim()),
+          ),
+          const SizedBox(height: 10),
+          if (c.selectedCustomer.value != null)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AmialColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('الفاتورة الآجلة مرتبطة بـ ${c.selectedCustomer.value!['full_name']} — ${c.selectedCustomer.value!['phone']}',
+                  textAlign: TextAlign.right),
+            )
+          else ...[
+            TextField(
+              controller: _creditPhoneCtrl,
+              keyboardType: TextInputType.phone,
+              textAlign: TextAlign.right,
+              decoration: InputDecoration(
+                labelText: 'رقم العميل *',
+                helperText: 'يُسجَّل الدين لدى الصيدلية. يظهر في أميال عند تفعيل محفظة بالرقم نفسه.',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              // AMIAL-CREDIT-AT-TILL-001 — والصيدليّةُ تبيع آجلاً كالكاشير،
+              // فتقرأ الدَّينَ بالأداة نفسِها ولا تُكتب لها نسخةٌ ثانية.
+              onChanged: (_) => setState(() {}),
+            ),
+            CustomerBalanceBadge(phone: _creditPhoneCtrl.text),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _creditNameCtrl,
+              textAlign: TextAlign.right,
+              decoration: InputDecoration(
+                labelText: 'اسم العميل (اختياري)',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'لا يلزم العميل تثبيت أو تفعيل تطبيق أميال للشراء الآجل.',
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
+            ),
+          ],
+        ],
         const SizedBox(height: 8),
         Obx(() => FilledButton.icon(
           onPressed: c.isSubmitting.value ? null : _submitSale,
@@ -554,23 +714,4 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
     );
   }
 
-  Widget _payTile(String v, IconData icon, String label) {
-    final selected = _paymentMethod == v;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () => setState(() => _paymentMethod = v),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? AmialColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: selected ? AmialColors.primary : Colors.grey.shade300),
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: selected ? Colors.white : AmialColors.primary, size: 18),
-          Text(label, style: TextStyle(color: selected ? Colors.white : Colors.black, fontSize: 11)),
-        ]),
-      ),
-    );
-  }
 }

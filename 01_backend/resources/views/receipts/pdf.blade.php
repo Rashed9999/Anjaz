@@ -162,6 +162,7 @@
             @case('pay_merchant') دفع لتاجر @break
             @case('pos_payment') دفع نقطة بيع @break
             @case('qr_payment') دفع QR @break
+            @case('bill_payment') سداد فاتورة @break
             @case('refund') استرجاع @break
             @case('safe_payment_funded') تجميد دفع آمن @break
             @case('safe_payment_released') إفراج دفع آمن @break

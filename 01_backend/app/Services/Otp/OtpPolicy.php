@@ -42,6 +42,41 @@ class OtpPolicy
 {
     public function __construct(private readonly ProviderRegistry $registry) {}
 
+    /**
+     * AMIAL-PILOT-PHONE-OTP-001 — رمز إثبات هاتف العميل في التجربة.
+     *
+     * يختلف عمداً عن demoCode(): demoCode خاص بأرقام العرض العامة،
+     * أما هذا القرار فمحصور في إثبات هاتف العميل إلى أن يُربط مزوّد
+     * SMS/WhatsApp حقيقي. حاجز الإنتاج في entrypoint.prod.sh يمنع نسيانه.
+     */
+    public function pilotCustomerPhoneCode(): ?string
+    {
+        if (! (bool) config('amial.otp.pilot_customer_phone_enabled', true)) {
+            return null;
+        }
+
+        $code = (string) config('amial.otp.pilot_customer_phone_code', '123456');
+
+        return preg_match('/^\d{6}$/', $code) === 1 ? $code : null;
+    }
+
+    public function customerPhoneOwnershipCode(string $phone): string
+    {
+        return $this->pilotCustomerPhoneCode() ?? $this->codeFor($phone);
+    }
+
+    public function customerPhoneOwnershipNeedsDelivery(string $phone): bool
+    {
+        return $this->pilotCustomerPhoneCode() === null
+            && $this->needsDelivery($phone);
+    }
+
+    public function mayDiscloseCustomerPhoneOwnership(string $phone): bool
+    {
+        return $this->pilotCustomerPhoneCode() !== null
+            || $this->mayDisclose($phone);
+    }
+
     /** الرمزُ الثابت المضبوط، أو `null` إن عُطِّل. */
     public function demoCode(): ?string
     {

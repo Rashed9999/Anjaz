@@ -148,6 +148,11 @@ Future<Map<String, Map<String, String>>> init() async {
    Get.lazyPut(() => SplashRepo(sharedPreferences: Get.find(), apiClient: Get.find()));
   Get.lazyPut(() => TransactionRepo(apiClient: Get.find(), sharedPreferences: Get.find()));
   Get.lazyPut(() => AuthRepo(apiClient: Get.find(),sharedPreferences: Get.find()));
+  // AMIAL-AUTH-BOOTSTRAP-001 — رمز الجلسة محفوظ في secure storage، لكن
+  // ApiClient يُنشأ كل مرة بترويسة Bearer null. إعادة تهيئته هنا، قبل أي
+  // شاشة أو طلب بيانات، تمنع أن تبدو خدمات الأعمال «غير موصولة» بعد فتح
+  // التطبيق من جديد بينما المشكلة في المصادقة فقط.
+  await Get.find<AuthRepo>().primeTokenCache();
   Get.lazyPut(() => ProfileRepo(apiClient: Get.find(), sharedPreferences: Get.find()));
   Get.lazyPut(() => ProfileRepo(apiClient: Get.find(), sharedPreferences: Get.find()));
   Get.lazyPut(() => WebsiteLinkRepo(apiClient: Get.find()));

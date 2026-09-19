@@ -18,7 +18,7 @@ class AppBarHeaderWidget extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const CustomLogoWidget(height: 50.0, width: 50.0),
+          const CustomLogoWidget(height: 34.0),
 
           RoundedButtonWidget(
             buttonText: languageText,

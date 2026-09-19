@@ -198,7 +198,8 @@ class ProfileChangeController extends Controller
      */
     private const LABELS = [
         'f_name' => 'الاسم الأوّل',
-        'l_name' => 'اسم العائلة',
+        'family_name' => 'اللقب / اسم العائلة',
+        'l_name' => 'اسم العائلة (حقل قديم)',
         'father_name' => 'اسم الأب',
         'grandfather_name' => 'اسم الجدّ',
         'name_en' => 'الاسم بالإنجليزيّة',

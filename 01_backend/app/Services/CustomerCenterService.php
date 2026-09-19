@@ -9,7 +9,9 @@ use App\Models\AmialNotification;
 use App\Models\EMoney;
 use App\Models\KycDocument;
 use App\Models\PaymentRequest;
+use App\Models\RegistrationDossier;
 use App\Models\User;
+use App\Services\Kyc\KycAccountStatusService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -42,6 +44,7 @@ class CustomerCenterService
         private readonly PiiAccessAuditService $pii,
         private readonly LedgerReportService $ledgerReports,
         private readonly KycDocumentService $kycDocuments,
+        private readonly KycAccountStatusService $kycStatus,
     ) {
     }
 
@@ -111,7 +114,21 @@ class CustomerCenterService
         return [
             'profile' => [
                 'id' => (int) $customer->id,
-                'name' => trim((string) ($customer->f_name . ' ' . $customer->l_name)) ?: '—',
+                'name' => trim((string) ($customer->verified_legal_name
+                    ?: $customer->declared_legal_name
+                    ?: trim((string) ($customer->f_name . ' ' . $customer->l_name)))) ?: '—',
+                'declared_legal_name' => (string) ($customer->declared_legal_name ?? ''),
+                'verified_legal_name' => (string) ($customer->verified_legal_name ?? ''),
+                'legal_name_status' => (string) ($customer->legal_name_status ?? 'legacy'),
+                'legal_name_status_label' => match ((string) ($customer->legal_name_status ?? 'legacy')) {
+                    'declared' => 'مصرّح به — غير موثق',
+                    'legacy_declared' => 'اسم تاريخي — يحتاج تحقق',
+                    'residence_matched' => 'مطابق لإثبات السكن',
+                    'identity_verified' => 'موثق بالهوية',
+                    'declared_changed' => 'تغيّر — يحتاج مطابقة جديدة',
+                    'change_pending_reverification' => 'تغيّر — إعادة التوثيق مطلوبة',
+                    default => 'حالة الاسم غير محسومة',
+                },
                 'phone' => $revealPii ? (string) $customer->phone : $this->maskPhone($customer->phone),
                 'email' => $revealPii ? (string) ($customer->email ?? '—') : $this->maskEmail($customer->email),
                 'type' => $this->typeLabel((int) $customer->type),
@@ -197,7 +214,8 @@ class CustomerCenterService
      */
     private function kycReconciliation(User $customer): array
     {
-        $tier = max(0, min(3, (int) ($customer->kyc_tier ?? 0)));
+        $accountStatus = $this->kycStatus->for($customer);
+        $tier = $accountStatus['tier'];
         // الفئة 0/1 لا تتطلب ملفّات في KycDocumentService. عند غيابها نعرض
         // جاهزية ترقية الفئة 2، لا ندّعي أن الحساب الحالي ناقص المستندات.
         $documentTier = $tier >= 2 ? $tier : 2;
@@ -207,9 +225,8 @@ class CustomerCenterService
         $hasDocuments = $documents->isNotEmpty();
         $hasPending = $documents->contains('status', KycDocument::STATUS_PENDING);
         $hasRejected = $documents->contains('status', KycDocument::STATUS_REJECTED);
-        $accountState = $this->accountKycState($customer);
-        $updateRequired = Schema::hasColumn('users', 'kyc_update_required')
-            && (int) ($customer->kyc_update_required ?? 0) === 1;
+        $accountState = $accountStatus['state'];
+        $updateRequired = $accountStatus['update_required'];
 
         [$state, $severity, $label, $description] = match (true) {
             $accountState === 'rejected' => [
@@ -255,7 +272,7 @@ class CustomerCenterService
         };
 
         return [
-            'is_verified' => $this->isKycVerified($customer),
+            'is_verified' => $accountStatus['is_verified'],
             'account_state' => $accountState,
             'tier' => $tier,
             'document_target_tier' => $documentTier,
@@ -348,29 +365,24 @@ class CustomerCenterService
         ];
     }
 
-    /** الحدّ النافذ: استثناء العميل إن وُجد، وإلّا حدّ فئته. */
+    /** الحدّ النافذ من نفس محرك التنفيذ المالي، لا قراءة DB موازية. */
     private function limits(User $customer): array
     {
         $override = is_array($customer->limit_override)
             ? $customer->limit_override
             : (json_decode((string) $customer->limit_override, true) ?: []);
 
-        $tier = Schema::hasTable('kyc_tier_limits')
-            ? DB::table('kyc_tier_limits')->where('tier', (int) ($customer->kyc_tier ?? 0))->first()
-            : null;
-
-        $pick = fn (string $key) => $override[$key] ?? ($tier ? $tier->{$key} : null);
+        $limits = app(KycTierService::class)->getLimitsForUser($customer);
 
         return [
-            'source' => $override !== [] ? 'استثناء خاصّ بالعميل' : 'حدّ الفئة',
-            // الصفر رقم صالح في بعض السياسات؛ أمّا null فهو «لا توجد سياسة
-            // صالحة معرّفة» ولا يجوز للواجهة أن تخلطهما.
-            'max_balance' => $pick('max_balance') === null ? null : (string) $pick('max_balance'),
-            'max_single_transaction' => $pick('max_single_transaction') === null ? null : (string) $pick('max_single_transaction'),
-            'max_daily_total' => $pick('max_daily_total') === null ? null : (string) $pick('max_daily_total'),
-            'max_monthly_total' => $pick('max_monthly_total') === null ? null : (string) $pick('max_monthly_total'),
+            'source' => $override !== [] ? 'استثناء خاصّ بالعميل ضمن سقف المستوى' : 'حدّ مستوى التوثيق',
+            'max_balance' => (string) ($limits['max_balance'] ?? '0'),
+            'max_single_transaction' => (string) ($limits['max_single_transaction'] ?? '0'),
+            'max_daily_total' => (string) ($limits['max_daily_total'] ?? '0'),
+            'max_monthly_total' => (string) ($limits['max_monthly_total'] ?? '0'),
+            'max_annual_total' => (string) ($limits['max_annual_total'] ?? '0'),
             'has_override' => $override !== [],
-            'state' => $tier || $override !== [] ? 'configured' : 'not_configured',
+            'state' => 'configured',
         ];
     }
 
@@ -577,6 +589,15 @@ class CustomerCenterService
                         ? trim((string) ($d->reviewer->f_name . ' ' . $d->reviewer->l_name)) : null,
                     'reviewed_at' => $d->reviewed_at?->toIso8601String(),
                     'uploaded_at' => $d->created_at?->toIso8601String(),
+                ])->all(),
+            // لا نكشف payload هنا؛ التبويب يثبت وجود ملفه ويقود إلى شاشة
+            // الأرشيف المحروسة التي تسجّل فتح البيانات الحساسة.
+            'registration_dossiers' => RegistrationDossier::query()
+                ->where('subject_user_id', $customer->id)->latest()->limit(10)->get()
+                ->map(fn (RegistrationDossier $d) => [
+                    'reference' => $d->reference, 'source' => $d->source,
+                    'state' => $d->state, 'has_paper_form' => (bool) $d->paper_form_encrypted_path,
+                    'created_at' => $d->created_at?->toIso8601String(),
                 ])->all(),
         ]);
     }

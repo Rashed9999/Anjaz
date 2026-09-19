@@ -130,19 +130,23 @@ class PlatformAdminLoginPinGuardTest extends TestCase
     {
         Mail::fake();
         $admin = $this->operator();
-        $supportRoleId = app(PlatformRoleService::class)->roleId(PlatformRoleService::SUPPORT);
-        $this->assertNotNull($supportRoleId);
 
         $email = 'new.support@example.test';
         $phone = '967777333444';
 
+        // AMIAL-OPERATOR-TABS-001 — **الصلاحيّةُ تُطلب تبويباً لا دوراً.**
+        //
+        // كان يُرسَل `role_ids`، فصار الطلبُ يُردّ بـ٤٢٢ على حقلٍ ناقص
+        // ولا يُنشأ حساب — ثمّ يُقرأ ذلك «رمزُ الدخول لا يُرسَل»، وهو
+        // عطلٌ آخر تماماً. والمحروسُ هنا رمزُ الدخول لا شكلُ الصلاحيّة،
+        // فتُرسَل صلاحيّةٌ صالحةٌ ليبلغ الطلبُ ما كُتب الاختبارُ له.
         $this->actingAs($admin, 'user')->post(route('admin.amial.ops.operators.store'), [
             'f_name' => 'دعم',
             'l_name' => 'جديد',
             'phone' => $phone,
             'email' => $email,
             'password' => 'AnotherStrong123!',
-            'role_ids' => [$supportRoleId],
+            'tab_access' => ['customer_support' => ['read' => 1]],
         ])->assertRedirect();
 
         $employee = User::where('email', $email)->firstOrFail();

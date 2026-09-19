@@ -69,6 +69,12 @@ android {
         getByName("release") {
             // AMIAL-BRANDING-001: release موقّع بـ debug keystore حتى يُولّد keystore حقيقي
             // (وفق قرار المستخدم: توقيع release ليس أولوية الآن)
+            //
+            // ⚠ AMIAL-APK-SIGNING-001 — **مؤقّتٌ، لا نهائيّ.** هذه النسخةُ
+            // تعمل على الهاتف للتجربة، لكنّها **لا تُقبَل في جوجل بلاي**،
+            // ومن فكّكها يزيّف تحديثاً باسم أميال باي. قبل النشر الحقيقيّ
+            // شغّل المرشد ثمّ بدّل السطرَ إلى getByName("release"):
+            //   bash android/wizard-signing-key.sh
             signingConfig = signingConfigs.getByName("debug")
 
             // تعطيل minify/shrink للتسليم السريع — أعِد تفعيلها للـ production الحقيقي

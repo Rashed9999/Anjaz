@@ -8,12 +8,16 @@ use App\Models\BillProviderRequest;
 use App\Models\BillService;
 use App\Models\BillServiceProduct;
 use App\Models\EMoney;
+use App\Models\Receipt;
+use App\Models\AmialNotification;
+use App\Models\FeeScheme;
 use App\Models\User;
 use App\Services\BillPay\BillProviderInterface;
 use App\Services\BillPay\BillProviderResponse;
 use App\Services\BillPayService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -38,8 +42,31 @@ class BillPayServiceTest extends TestCase
 
         $this->service = app(BillPayService::class);
 
-        $this->user = User::factory()->create(['zone_code' => 'SOUTH']);
+        $this->user = User::factory()->create([
+            'zone_code' => 'SOUTH',
+            'kyc_tier' => 2,
+            'is_kyc_verified' => 1,
+        ]);
+        DB::table('residence_verifications')->insert([
+            'user_id' => $this->user->id,
+            'kyc_document_id' => null,
+            'declared_governorate' => 'YE-AD',
+            'evidence_type' => 'government_residence_document',
+            'evidence_strength' => 'strong',
+            'status' => 'verified',
+            'submitted_at' => now()->subMinute(),
+            'reviewed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         EMoney::create(['user_id' => $this->user->id, 'current_balance' => '1000.0000']);
+        FeeScheme::create([
+            'code' => 'BILL_PAY', 'label' => 'Bill pay', 'zone_code' => 'SOUTH',
+            'applies_to' => 'customer', 'scope_key' => 'all', 'fee_type' => 'fixed',
+            'fixed_amount' => '2.0000', 'percent_rate' => '0',
+            'agent_commission_percent' => '0', 'agent_commission_fixed' => '0',
+            'bearer' => 'sender', 'version' => 1, 'is_active' => true,
+        ]);
 
         $this->provider = BillProvider::create([
             'code' => 'test_provider',
@@ -93,6 +120,8 @@ class BillPayServiceTest extends TestCase
                 app(\App\Services\FinancialGuardService::class),
                 app(\App\Services\AuditService::class),
                 app(\App\Services\ReceiptService::class),
+                app(\App\Services\FeeService::class),
+                app(\App\Services\KycTierService::class),
             ])
             ->onlyMethods(['resolveProvider'])
             ->getMock();
@@ -117,6 +146,7 @@ class BillPayServiceTest extends TestCase
         // المحفظة خُصمت بـ amount + fee
         $wallet = EMoney::where('user_id', $this->user->id)->first();
         $this->assertEquals('898.0000', (string)$wallet->current_balance); // 1000 - 102
+        $this->assertEquals('0.0000', (string)$wallet->held_balance);
 
         $this->assertEquals('100.0000', (string)$order->amount);
         $this->assertEquals('2.0000', (string)$order->fee);
@@ -125,6 +155,17 @@ class BillPayServiceTest extends TestCase
 
         // request مُسجَّل
         $this->assertEquals(1, BillProviderRequest::where('order_id', $order->id)->count());
+
+        $receipt = Receipt::where('reference_transaction_id', $order->order_ulid)->first();
+        $this->assertNotNull($receipt);
+        $this->assertSame('bill_payment', $receipt->receipt_type);
+        $this->assertSame('bill_payment_order', $receipt->reference_type);
+        $this->assertSame($order->id, $receipt->reference_id);
+
+        $this->assertDatabaseHas('amial_notifications', [
+            'user_id' => $this->user->id,
+            'type' => 'bill_payment_success',
+        ]);
     }
 
     /** @test */
@@ -142,9 +183,14 @@ class BillPayServiceTest extends TestCase
         // المحفظة عادت لقيمتها الأصلية (تماماً)
         $wallet = EMoney::where('user_id', $this->user->id)->first();
         $this->assertEquals('1000.0000', (string)$wallet->current_balance);
+        $this->assertEquals('0.0000', (string)$wallet->held_balance);
 
         $this->assertNotNull($order->reversed_at);
         $this->assertNotEmpty($order->reverse_reason);
+        $this->assertDatabaseHas('amial_notifications', [
+            'user_id' => $this->user->id,
+            'type' => 'bill_payment_failed',
+        ]);
     }
 
     /** @test */
@@ -160,9 +206,14 @@ class BillPayServiceTest extends TestCase
         $this->assertEquals('pending_provider_confirmation', $order->status);
         $this->assertEquals('REF-PENDING-001', $order->provider_reference);
 
-        // المحفظة لا تزال مخصومة
+        // المبلغ محجوز لا مفقود: current ينخفض وheld يرتفع.
         $wallet = EMoney::where('user_id', $this->user->id)->first();
         $this->assertEquals('898.0000', (string)$wallet->current_balance);
+        $this->assertEquals('102.0000', (string)$wallet->held_balance);
+        $this->assertDatabaseHas('amial_notifications', [
+            'user_id' => $this->user->id,
+            'type' => 'bill_payment_pending',
+        ]);
     }
 
     /** @test */
@@ -230,6 +281,8 @@ class BillPayServiceTest extends TestCase
                 app(\App\Services\FinancialGuardService::class),
                 app(\App\Services\AuditService::class),
                 app(\App\Services\ReceiptService::class),
+                app(\App\Services\FeeService::class),
+                app(\App\Services\KycTierService::class),
             ])
             ->onlyMethods(['resolveProvider'])
             ->getMock();
@@ -240,12 +293,33 @@ class BillPayServiceTest extends TestCase
             '+967700000123', '100.0000',
         );
 
-        $this->assertEquals('failed', $order->status);
+        $this->assertEquals('pending_provider_confirmation', $order->status);
 
         // المحفظة كاملة
         $wallet = EMoney::where('user_id', $this->user->id)->first();
-        $this->assertEquals('1000.0000', (string)$wallet->current_balance);
+        $this->assertEquals('898.0000', (string)$wallet->current_balance);
+        $this->assertEquals('102.0000', (string)$wallet->held_balance);
+        $this->assertStringContainsString('Network timeout', $order->provider_message);
+    }
 
-        $this->assertStringContainsString('Network timeout', $order->reverse_reason);
+    /** @test */
+    public function repeated_idempotency_key_does_not_create_or_submit_a_second_order()
+    {
+        $service = $this->mockProvider('pending');
+        $key = 'bill-replay-key-001';
+
+        $first = $service->createAndExecute(
+            $this->user, $this->provider, $this->service_, $this->product,
+            '+967700000123', '100.0000', [], $key,
+        );
+        $second = $service->createAndExecute(
+            $this->user, $this->provider, $this->service_, $this->product,
+            '+967700000123', '100.0000', [], $key,
+        );
+
+        $this->assertSame($first->order_ulid, $second->order_ulid);
+        $this->assertSame(1, BillPaymentOrder::where('user_id', $this->user->id)->count());
+        $this->assertSame(1, BillProviderRequest::where('order_id', $first->id)->where('request_type', 'pay')->count());
+        $this->assertSame('102.0000', (string) EMoney::where('user_id', $this->user->id)->first()->held_balance);
     }
 }

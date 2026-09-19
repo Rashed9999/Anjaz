@@ -26,6 +26,12 @@ class WholesaleProduct extends Model
     public function prices(): HasMany {
         return $this->hasMany(WholesaleProductPrice::class, 'product_id');
     }
+    public function units(): HasMany {
+        return $this->hasMany(WholesaleProductUnit::class, 'product_id');
+    }
+    public function lots(): HasMany {
+        return $this->hasMany(WholesaleProductLot::class, 'product_id');
+    }
 
     /**
      * يعيد السعر الأنسب لـ tier محدّد و quantity محدّدة.

@@ -39,7 +39,7 @@ class StatusMenu extends StatelessWidget {
 
                 bool? isOn = isAuth ? (authController.biometric && authController.bioList.isNotEmpty) : (profController.userInfo?.twoFactor ?? false);
                return profController.isLoading ? Center(child: Text('off'.tr))
-                   : Text(isOn! ? 'on'.tr : 'off'.tr);
+                   : Text(isOn ? 'on'.tr : 'off'.tr);
 
             });
           })],

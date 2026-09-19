@@ -1,8 +1,16 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
+    @php
+        // AMIAL-CREDIT-SETTLE-TRACE-001 — لا يظهر سداد الآجل بعنوان عام.
+        // ReceiptDocumentService يبقيه wallet_voucher (وليس فاتورة بيع جديدة)،
+        // والقالب يطبع الاسم القانوني/الوظيفي الدقيق للسند.
+        $documentTitle = ($document['operation_type'] ?? null) === 'debt_payment'
+            ? 'سند سداد دين'
+            : $document['title'];
+    @endphp
     <meta charset="utf-8">
-    <title>{{ $document['title'] }} {{ $document['document_number'] }}</title>
+    <title>{{ $documentTitle }} {{ $document['document_number'] }}</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -112,7 +120,7 @@
             @endif
         </td>
         <td class="doc-name">
-            <h1>{{ $document['title'] }}</h1>
+            <h1>{{ $documentTitle }}</h1>
             <p>{{ $document['subtitle'] }}</p>
         </td>
     </tr>

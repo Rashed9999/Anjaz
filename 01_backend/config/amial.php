@@ -8,6 +8,15 @@
 
 return [
 
+    // الوقت المالي يُحفظ في قاعدة البيانات UTC كي تبقى المطابقة والتسوية
+    // مستقرتين بين الخوادم، ثم يُعرض لجميع أدوار أميال بتوقيت مكة فقط.
+    // لا يجوز أن يغيّر جهاز العميل أو الموظف تاريخ حركةٍ مالية.
+    'time' => [
+        'storage_timezone' => 'UTC',
+        'display_timezone' => env('AMIAL_DISPLAY_TIMEZONE', 'Asia/Riyadh'),
+        'use_24_hour_clock' => true,
+    ],
+
     /*
      * AMIAL-WA-LIMIT-001 — الحدّ الافتراضيّ للمال عبر بوت واتساب.
      *
@@ -149,13 +158,11 @@ return [
     'encryption' => [
         // base64-encoded 32 bytes; toggle to fresh ones via:
         // php -r 'echo base64_encode(random_bytes(32)) . PHP_EOL;'
-        // AMIAL-FIX: مفاتيح ثابتة افتراضية (كانت تُولَّد عشوائياً كل نشر فتنكسر
-        // فهارس البحث المُعمّاة → فشل الدخول). للإنتاج: اضبطها كمتغيّرات بيئة.
-        'pii_key' => env('AMIAL_PII_ENCRYPTION_KEY', 'ynZEB1h/HBqgQPmWKH7AuB/NVqpSpqkT+GiqnF+wQmo='),
-        'blind_index_key' => env('AMIAL_PII_BLIND_INDEX_KEY', 'aPq8RXLclEIEz6I26E2UEzaRGT3nQrcZhR5NkcY5Q3k='),
-
-        // فحوصات أمان
-        'require_keys_in_production' => env('AMIAL_REQUIRE_PII_KEYS', true),
+        // لا توجد مفاتيح بديلة في المصدر. المفتاح الافتراضي ليس «احتياطاً»:
+        // كل من يقرأ المستودع يستطيع فك بيانات كل بيئة نسيت متغير البيئة.
+        // تولّد مرةً وتُحفظ في مدير الأسرار، ويُرفض إقلاع الإنتاج عند غيابها.
+        'pii_key' => env('AMIAL_PII_ENCRYPTION_KEY'),
+        'blind_index_key' => env('AMIAL_PII_BLIND_INDEX_KEY'),
     ],
 
     // ============================================================
@@ -505,6 +512,17 @@ return [
         'lifetime_seconds' => (int) env('AMIAL_OTP_LIFETIME_SECONDS', 600),
 
         'demo_code' => env('AMIAL_DEMO_OTP', '123456'),
+
+        // AMIAL-PILOT-PHONE-OTP-001 — قرار مرحلي لصاحب المشروع:
+        // لا يوجد مزوّد SMS/WhatsApp للهاتف حالياً، لذلك إثبات هاتف العميل
+        // في التسجيل يستخدم رمزاً ثابتاً 123456 لكل أرقام العملاء أثناء
+        // التجربة فقط. هذا ليس بديلاً عن امتلاك الرقم، ولا يجوز تشغيل
+        // الإنتاج الحقيقي قبل تعطيله وربط مزوّد إرسال فعلي.
+        'pilot_customer_phone_enabled' => filter_var(
+            env('AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED', true),
+            FILTER_VALIDATE_BOOL,
+        ),
+        'pilot_customer_phone_code' => env('AMIAL_PILOT_CUSTOMER_PHONE_OTP', '123456'),
 
         'demo_numbers' => array_filter(array_map('trim', explode(',', (string) env(
             'AMIAL_DEMO_PHONES',

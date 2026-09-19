@@ -23,6 +23,7 @@ class NotificationService
         'withdrawal_completed', 'withdrawal_failed', 'withdrawal_pending', 'withdraw_pending', 'withdraw_cancelled',
         'credit_sale', 'credit_payment', 'credit_over_limit',
         'merchant_payment_received',
+        'bill_payment_success', 'bill_payment_pending', 'bill_payment_failed',
         'merchant_verified', 'merchant_verification_rejected', 'merchant_verification_submitted', 'merchant_resubmission_required',
         'kyc_update_required',
         'refund_received', 'refund_pending',

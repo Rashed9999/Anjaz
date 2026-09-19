@@ -12,7 +12,7 @@ import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
-import 'package:amial_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
+import 'package:amial_pay/features/me/screens/customer_services_hub_screen.dart';
 import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
@@ -45,7 +45,7 @@ class AmialCustomerHomeScreen extends StatefulWidget {
 class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   String _name = '';
   String _balance = '0';
-  String _qrCode = ''; // SVG رمز العميل لاستقبال المال
+  String _accountNumber = '';
   String _phone = '';
   bool _hideBalance = false;
   bool _loading = true;
@@ -125,7 +125,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         final ln = (b['l_name'] ?? '').toString();
         _name = ('$fn $ln').trim();
         _balance = (b['balance'] ?? '0').toString();
-        _qrCode = (b['qr_code'] ?? '').toString();
+        _accountNumber = (b['account_number'] ?? b['receive_address'] ?? '').toString();
         _phone = (b['phone'] ?? '').toString();
       }
     } catch (_) {/* دفاعي: نُبقي الواجهة نظيفة */}
@@ -302,14 +302,17 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   }
 
   void _openReceiveQr() {
-    if (_qrCode.isEmpty) {
+    if (_accountNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('جارٍ تجهيز رمز الاستلام...')),
       );
       _load();
       return;
     }
-    Get.to(() => QrCodeDownloadOrShareScreen(qrCode: _qrCode, phoneNumber: _phone));
+    Get.to(() => QrCodeDownloadOrShareScreen(
+          qrCode: _accountNumber,
+          phoneNumber: _phone,
+        ));
   }
 
   String get _balanceText {
@@ -1136,8 +1139,8 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
           () => Get.to(() => const PaymentRequestCreateScreen())),
       _Svc('ادفع لتاجر', Icons.storefront_outlined,
           () => Get.to(() => const MerchantPayScreen())),
-      _Svc('دفع الفواتير', Icons.receipt_long_outlined,
-          () => Get.to(() => const BillPayProvidersScreen())),
+      _Svc('الخدمات', Icons.apps_rounded,
+          () => Get.to(() => const CustomerServicesHubScreen())),
       _Svc('سحب نقدي', Icons.account_balance_outlined,
           () => Get.to(() => const WithdrawRequestScreen())),
       _Svc('الإيصالات', Icons.description_outlined,

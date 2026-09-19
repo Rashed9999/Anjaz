@@ -196,6 +196,37 @@ class KycOcrTest extends TestCase
             'حُجب النصّ الخام أيضاً — والمراجع يحتاجه ليقرأ بنفسه');
     }
 
+    /** @test الصورة الحيّة دليل حضور وليست وثيقةً تحمل حقول هوية. */
+    public function a_selfie_is_not_sent_to_the_identity_text_extractor(): void
+    {
+        $doc = app(KycDocumentService::class)->upload(
+            $this->customer,
+            KycDocument::TYPE_SELFIE,
+            UploadedFile::fake()->image('selfie.jpg', 600, 400),
+        );
+
+        $driver = new class implements OcrDriverInterface {
+            public int $calls = 0;
+            public function available(): bool { return true; }
+            public function name(): string { return 'counting'; }
+            public function read(string $path): OcrResult
+            {
+                ++$this->calls;
+                return new OcrResult(OcrResult::STATUS_SUCCESS, 'الرقم الوطني: 01234567890', 98, 'counting');
+            }
+        };
+        $this->app->instance(OcrDriverInterface::class, $driver);
+
+        $doc = app(KycOcrService::class)->process($doc);
+        $view = app(KycOcrService::class)->forReviewer($doc);
+
+        $this->assertSame(0, $driver->calls,
+            'أُرسل سيلفي لمحرك رقم الهوية؛ قد يلتقط نصاً عارضاً ويضلل المراجع');
+        $this->assertFalse($view['applicable'] ?? true,
+            'لم تُخبر واجهة المراجع أن OCR غير منطبق على الصورة الحيّة');
+        $this->assertSame([], $view['fields']);
+    }
+
     /** @test */
     public function a_missing_engine_is_reported_as_a_server_fault_not_a_bad_document(): void
     {

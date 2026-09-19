@@ -145,7 +145,7 @@ class BranchService
      * يتحقّق من حدّ الخطّة قبل إنشاء فرع.
      * @throws UsageLimitExceededException
      */
-    public function ensureWithinPlanLimit(User $merchant): void
+    private function ensureWithinPlanLimit(User $merchant): void
     {
         $plan = $this->planFor($merchant);
         $max = A::maxBranches($plan);
@@ -175,7 +175,7 @@ class BranchService
     {
         $profile = MerchantProfile::where('user_id', $merchant->id)->first();
         if (!$profile) return A::PLAN_FREE;
-        $plan = $profile->subscription_plan ?? A::PLAN_FREE;
+        $plan = A::canonicalPlan($profile->subscription_plan);
         if ($plan !== A::PLAN_FREE
             && $profile->subscription_expires_at !== null
             && $profile->subscription_expires_at->isPast()) {

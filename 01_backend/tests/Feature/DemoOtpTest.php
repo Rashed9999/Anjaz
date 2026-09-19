@@ -55,10 +55,14 @@ class DemoOtpTest extends TestCase
     {
         return [
             'f_name' => 'راشد',
+            'father_name' => 'محمد',
+            'grandfather_name' => 'عوض',
+            'family_name' => 'المهدي',
             'l_name' => 'المهدي',
             'gender' => 'male',
             'dial_country_code' => '+967',
             'phone' => $phone,
+            'email' => 'demo-otp-registration@example.test',
             'password' => '1234',   // العقد: min:4|max:4 (رمز PIN لا كلمة مرور)
             'otp' => $otp,
         ];

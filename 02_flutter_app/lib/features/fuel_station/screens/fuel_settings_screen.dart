@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
 
 /// AMIAL-FUEL-001 — شاشة إعدادات المحطة.
@@ -92,7 +93,7 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
     final IconData icon = dir == 'up'
         ? Icons.arrow_upward
         : (dir == 'down' ? Icons.arrow_downward : Icons.remove);
-    final when = DateTime.tryParse('${h['created_at']}')?.toLocal();
+    final when = DateConverterHelper.tryFromApi('${h['created_at']}');
     final whenStr = when == null
         ? ''
         : '${when.year}-${when.month.toString().padLeft(2, '0')}-${when.day.toString().padLeft(2, '0')} '

@@ -50,7 +50,10 @@ class _FuelPricesScreenState extends State<FuelPricesScreen> {
           c: c,
           isEmpty: station.products.isEmpty && c.pendingPrices.isEmpty,
           emptyTitle: 'لا أنواع وقود معرّفة',
-          emptyHint: 'أضف نوع وقود من الإعدادات ليظهر سعره هنا.',
+          // **الإرشادُ يسمّي طريقَه** — «من الإعدادات» وحدَها أرسلت صاحبَ
+          // المحطّة يبحث عن شاشةٍ لم يكن لها بابٌ في لوحته.
+          emptyHint: 'أضف نوع وقود ليظهر سعره هنا: لوحة المحطة ← الإدارة '
+              '← إعدادات المحطة ← «الأنواع والأسعار».',
           emptyIcon: Icons.price_change_outlined,
           onRetry: _refresh,
           child: Obx(() => ListView(

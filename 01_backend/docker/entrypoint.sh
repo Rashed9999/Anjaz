@@ -62,8 +62,34 @@ done
 # الحلّ الحاسم: نكتب APP_KEY في ملفّ .env فعلي. Laravel/Dotenv يُحمّله في كلّ
 # عامل مهما كان clear_env، ولا يطمس متغيّرات Railway (DB_*) لأنّها ليست فيه.
 ENV_FILE="/var/www/html/.env"
+
+# ── AMIAL-PII-KEY-GATE-001 — مفاتيح الهوية لا تُخترع ولا تُضمَّن ─────
+# APP_KEY يفك جلسات Laravel، أمّا هذان المفتاحان فيفكان الهوية والوثائق
+# المؤرشفة. تشغيل الإنتاج بدونهما (أو بمفتاح مكتوب في المستودع) يعني أن
+# بيانات العملاء صارت قابلة للقراءة لمن يملك نسخة المصدر. لذلك لا نولّد
+# بديلاً ولا نقبل افتراضاً: يتوقف الإقلاع قبل أن يستقبل أول طلب.
+if [ "${APP_ENV:-production}" = "production" ] && \
+   { [ -z "${AMIAL_PII_ENCRYPTION_KEY:-}" ] || [ -z "${AMIAL_PII_BLIND_INDEX_KEY:-}" ]; }; then
+    echo "❌ خطأ فادح: مفاتيح تشفير بيانات الهوية غير مضبوطة."
+    echo "   اضبط AMIAL_PII_ENCRYPTION_KEY و AMIAL_PII_BLIND_INDEX_KEY من مدير الأسرار ثم أعد النشر."
+    exit 1
+fi
+if [ "${APP_ENV:-production}" = "production" ]; then
+    pii_enc_bytes=$(printf '%s' "$AMIAL_PII_ENCRYPTION_KEY" | base64 -d 2>/dev/null | wc -c | tr -d ' ')
+    pii_index_bytes=$(printf '%s' "$AMIAL_PII_BLIND_INDEX_KEY" | base64 -d 2>/dev/null | wc -c | tr -d ' ')
+    if [ "$pii_enc_bytes" != "32" ] || [ "$pii_index_bytes" != "32" ]; then
+        echo "❌ خطأ فادح: مفاتيح تشفير بيانات الهوية يجب أن تكون base64 لـ 32 بايت."
+        exit 1
+    fi
+fi
+
 if [ -z "$APP_KEY" ] || [ "$APP_KEY" = "base64:" ]; then
-    echo "🔑 توليد APP_KEY (اضبط APP_KEY كمتغيّر بيئة ثابت لإبقاء الرموز صالحة عبر النشر)..."
+    if [ "${APP_ENV:-production}" = "production" ]; then
+        echo "❌ خطأ فادح: APP_KEY غير مضبوط في الإنتاج."
+        echo "   يولّد مرة واحدة ويُحفظ في مدير الأسرار؛ لا يجوز تغييره عند كل نشر."
+        exit 1
+    fi
+    echo "🔑 توليد APP_KEY لبيئة غير إنتاجية..."
     APP_KEY=$(php artisan key:generate --show 2>/dev/null || echo "")
 fi
 if [ -n "$APP_KEY" ] && [ "$APP_KEY" != "base64:" ]; then
@@ -112,12 +138,25 @@ fi
 # نولّدها هنا (قبل بدء الخدمة) لا في خلفية مربوطة بالـ DB، فتكون جاهزة قبل
 # أوّل طلب دخول (حلّ حارس api يحمّل المفتاح العامّ؛ غيابه = 500). إن وُجدت
 # (مضبوطة كمتغيّرات بيئة) لا تُلمَس.
-if [ ! -f storage/oauth-private.key ] || [ ! -f storage/oauth-public.key ]; then
-    echo "🔑 توليد مفاتيح Passport (RSA) قبل بدء الخدمة..."
+# AMIAL-PASSPORT-KEYS-PERSIST-001 — **المفاتيحُ في الحجم الدائم.**
+# كانت في `storage/` وهو **ليس** على حجمٍ دائم (الحجمُ على `storage/app`)،
+# فتُولَّد جديدةً مع كلّ نشرة **فيبطل كلُّ رمزِ دخولٍ سابق** ويُطرَد كلُّ
+# المستخدمين بـ«انتهت الجلسة». وموضعُها الآن `storage/app/passport`
+# (‏`Passport::loadKeysFrom` في `AuthServiceProvider`).
+#
+# **وتُنقَل القديمةُ إن وُجدت** — فترحيلٌ يُبقي الرموزَ الحاليّةَ صالحة،
+# ونشرةٌ واحدةٌ بلا طردٍ خيرٌ من نشرةٍ تطرد الجميع.
+mkdir -p storage/app/passport
+if [ -f storage/oauth-private.key ] && [ ! -f storage/app/passport/oauth-private.key ]; then
+    echo "🔑 ترحيل مفاتيح Passport إلى الحجم الدائم..."
+    mv storage/oauth-private.key storage/oauth-public.key storage/app/passport/ 2>/dev/null || true
+fi
+if [ ! -f storage/app/passport/oauth-private.key ] || [ ! -f storage/app/passport/oauth-public.key ]; then
+    echo "🔑 توليد مفاتيح Passport (لم تكن موجودة)..."
     php artisan passport:keys --force 2>&1 | tail -1 || true
 fi
-chmod 600 storage/oauth-private.key storage/oauth-public.key 2>/dev/null || true
-chown www-data:www-data storage/oauth-*.key 2>/dev/null || true
+chmod 600 storage/app/passport/oauth-*.key 2>/dev/null || true
+chown www-data:www-data storage/app/passport/oauth-*.key 2>/dev/null || true
 
 # ── مفاتيح تشفير PII ──────────────────────────────────
 # AMIAL-FIX: أُزيل التوليد العشوائي (كان يكسر فهارس البحث المُعمّاة كل نشر
@@ -168,10 +207,32 @@ php artisan config:clear 2>/dev/null || true
 php artisan route:clear 2>/dev/null || true
 php artisan view:clear 2>/dev/null || true
 
+# ── AMIAL-SHIFT-SCHEMA-GATE-001: لا حركة قبل بنية البيانات ─────────
+#
+# الوردية تكتب pos_device_id. تشغيل PHP قبل هذه الهجرة يجعل أول ضغطة من
+# الكاشير تقرأ كأنها عطل تطبيق، ثم قد تتسرب تفاصيل الاستثناء. لذلك يمر
+# migrate --force بنجاح قبل أن يستقبل Supervisor أي طلب إنتاجي.
+#
+# RESET_DB له مساره الصريح أدناه؛ لا نُجري هجرةً مسبقة ثم نمسحها في بيئة
+# إعادة البناء المتعمدة.
+if [ -n "$DB_HOST" ] && [ "${RESET_DB_FORCE:-false}" != "true" ] && [ "${RESET_DB:-false}" != "true" ]; then
+    echo "🛡️  فحص وتطبيق مهاجرات قاعدة البيانات قبل بدء الخدمة..."
+    MIGRATION_ATTEMPT=0
+    until php artisan migrate --force 2>&1; do
+        MIGRATION_ATTEMPT=$((MIGRATION_ATTEMPT + 1))
+        if [ "$MIGRATION_ATTEMPT" -ge 40 ]; then
+            echo "⛔ تعذّر تطبيق مهاجرات قاعدة البيانات؛ لن تبدأ الخدمة ببنية قديمة."
+            exit 1
+        fi
+        echo "… قاعدة البيانات غير جاهزة أو الهجرة فشلت (محاولة $MIGRATION_ATTEMPT/40)."
+        sleep 4
+    done
+    echo "✓ بنية قاعدة البيانات جاهزة قبل استقبال الطلبات."
+fi
+
 # ── تهيئة قاعدة البيانات في الخلفية (لا تُؤخّر بدء nginx) ──────────
-# مهم: Railway يفحص الصحّة على /health/liveness فور الإقلاع. لذلك نبدأ
-# nginx فوراً، ونؤجّل انتظار قاعدة البيانات + migrations للخلفية حتى لا
-# يفشل الفحص الصحّي إن كانت القاعدة غير جاهزة بعد.
+# تبقى الأعمال غير الحرجة في الخلفية، أما المهاجرات الحرجة فقد اجتازت
+# البوابة أعلاه قبل بدء الخدمة.
 (
     # AMIAL-FIX(LOG-PERMS): أوامر artisan هنا تعمل كـroot — نوجّه سجلّها إلى
     # stderr كي لا تُنشئ laravel.log بملكية root فتكسر كتابة عمّال php-fpm.
@@ -335,7 +396,35 @@ if [ -z "$EFFECTIVE_DEBUG" ] && [ -f "$ENV_FILE" ]; then
         | tail -1 | cut -d= -f2- | tr -d '"'"'"' \r')
 fi
 
-if [ "$EFFECTIVE_DEBUG" = "true" ] && [ "${AMIAL_ALLOW_DEBUG:-false}" != "true" ]; then
+# ══════════════════════════════════════════════════════════════════════
+# AMIAL-DEBUG-ESCAPE-001 — **والمنفذُ يُغلَق في الإنتاج.**
+#
+# `AMIAL_ALLOW_DEBUG=true` كان يفتح الحاجزَ **في أيّ بيئة**، بما فيها
+# `APP_ENV=production`. ومنفذٌ يُفتح مرّةً لتجربةٍ عاجلة يبقى مفتوحاً:
+# لا شيءَ يُغلقه، ولا شيءَ يذكّر به، **وصفحةُ الخطأ تُسرّب مساراتِ
+# الملفّات ونصوصَ الاستعلامات لأيّ مستخدمٍ يستقبل ٥٠٠**.
+#
+# فصار المنفذُ لغيرِ الإنتاج وحدَه. وبيئةُ الديمو المحلّيّةُ لا تضبط
+# `APP_ENV=production` أصلاً، فلا يمسّها هذا.
+#
+# **وبهذا يصير الشرطُ مضموناً بالبناء لا بالتذكُّر**: حاويةُ إنتاجٍ
+# تعمل ⇒ التنقيحُ مغلقٌ حتماً. ولا يبقى «اضبطه ولا تنسَ».
+# ══════════════════════════════════════════════════════════════════════
+DEBUG_ESCAPE="${AMIAL_ALLOW_DEBUG:-false}"
+# لا يكفي أن لا تسمّي البيئة production: خادم Coolify قد يبدأ بلا APP_ENV
+# مضبوط. منفذ التنقيح يُقبل فقط في local/testing صراحةً، وإلا يُغلق.
+case "${APP_ENV:-}" in
+    local|testing)
+        ;;
+    *)
+        if [ "$DEBUG_ESCAPE" = "true" ]; then
+            echo "⚠️  AMIAL_ALLOW_DEBUG يُقبل في local/testing فقط — وتُتجاهَل قيمته هنا."
+            DEBUG_ESCAPE="false"
+        fi
+        ;;
+esac
+
+if [ "$EFFECTIVE_DEBUG" = "true" ] && [ "$DEBUG_ESCAPE" != "true" ]; then
     echo "╔══════════════════════════════════════════════════════════╗"
     echo "║  ⛔ APP_DEBUG=true — والخدمةُ لن تبدأ                     ║"
     echo "╚══════════════════════════════════════════════════════════╝"
@@ -345,6 +434,7 @@ if [ "$EFFECTIVE_DEBUG" = "true" ] && [ "${AMIAL_ALLOW_DEBUG:-false}" != "true" 
     echo ""
     echo "   الإصلاح: اضبط APP_DEBUG=false في متغيّرات البيئة ثمّ أعِد النشر."
     echo "   وإن كانت هذه بيئةَ تطويرٍ عن قصد: AMIAL_ALLOW_DEBUG=true"
+    echo "   (ولا تعمل هذه في APP_ENV=production — المنفذُ مغلقٌ هناك.)"
     exit 1
 fi
 

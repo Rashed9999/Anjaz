@@ -28,6 +28,7 @@ class AuditDecision extends Model
         'context',
         'transaction_id',
         'idempotency_key',
+        'correlation_id',
         'zone_code',
         'severity',
         'created_at',

@@ -47,6 +47,9 @@ class AdminPanelReachabilityGuardTest extends TestCase
         'admin.amial.kyc.page' =>
             'مستندات الهوية تصل مشفَّرة ولا تُراجَع إلّا من شاشة — وبدونها يرفع العميل ولا يبتّ أحد',
 
+        'admin.amial.customer-systems.index' =>
+            'حراس وديون وإيصالات وإشعارات العميل لا يجوز أن تعمل في الخلفية بلا سطح رقابي موحد',
+
         'admin.amial.aml.page' =>
             'العمليات المعلّقة لمكافحة غسل الأموال تحتاج من يعتمدها أو يرفضها — وبلا لوحة تبقى معلّقة بلا أجل',
 

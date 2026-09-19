@@ -66,17 +66,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
                 ->group(base_path('routes/api/amial.php'));
 
             // AMIAL-ADMIN-001 (v0.8): Admin Blade views
-            //
-            // AMIAL-AUTH-PIN-FORCE-001 — **وحاجزُ الرمز الأوّليّ هنا أيضاً.**
-            //
-            // صفحاتُ أميال تُسجَّل في هذه المجموعة لا في `routes/admin.php`،
-            // **فحاجزٌ يُوضَع هناك وحدَه يغطّي جزءاً من اللوحة**: مركزُ
-            // التدقيق وساهر والأدوار كلُّها هنا. **وحاجزٌ يغطّي بعضَ
-            // الأبواب يُوهم بتغطيةِ كلِّها** — وذاك أخطرُ من غيابه.
-            //
-            // (كشفه مقياسٌ يفتح ثلاثَ صفحاتٍ لا صفحةً واحدة — القاعدةُ
-            // الرابعة: ميزةٌ لها مدخلان تُختبَر من مدخليها.)
-            \Illuminate\Support\Facades\Route::middleware(['web', 'admin', 'amial.force-pin-change'])
+            \Illuminate\Support\Facades\Route::middleware(['web', 'admin'])
                 ->prefix('admin/amial')
                 ->name('admin.amial.')
                 ->group(base_path('routes/admin/amial.php'));
@@ -105,6 +95,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // AMIAL-PORTAL-HOSTS-001 — قبل كلّ شيء: من طرق بابَ بوّابةٍ على
         // مضيفٍ ليس مضيفَها يُنقل إليه. ومطفأٌ ما لم يُضبط المتغيّران.
         $middleware->prepend(\App\Http\Middleware\PortalHostRedirect::class);
+        // AMIAL-TRACE-001 — معرّف موحّد يعبر web/api ويعود في الاستجابة.
+        $middleware->prepend(\App\Http\Middleware\CorrelationContext::class);
 
         // AMIAL-DEVOPS-001 — حرج: بلا هذا، PerUserRateLimit و
         // SecuritySentinelService (يعتمدان على $request->ip() في عدّة
@@ -127,12 +119,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
         $middleware->use([
             TrustProxies::class,
-            // AMIAL-PROD-READINESS-005 — **أوّلَ ما يجري، قبل كلّ شيء.**
-            //
-            // المعرّفُ يجب أن يوجد قبل أوّل سطرِ سجلٍّ يُكتب — وإلّا خرجت
-            // أسطرُ الوسائط التي تسبقه بلا خيطٍ يربطها بما بعدها. وهي
-            // بالضبط أسطرُ الرفض والحدّ والصيانة التي يُبحث عنها.
-            \App\Http\Middleware\RequestId::class,
             // **بعد `TrustProxies` مباشرةً وقبل الجلسة.**
             // يقرأ `X-Forwarded-Proto` (فيلزم أن يكون الوسيط موثوقاً
             // قبله)، ويكتب `session.secure` قبل أن تُبنى كوكي الجلسة
@@ -152,31 +138,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
             VerifyCsrfToken::class,
             SubstituteBindings::class,
         ]);
-        // ══════════════════════════════════════════════════════════════
-        // AMIAL-RATELIMIT-CGNAT-001 — **`throttle:60,1` بالـIP يقتل تجربةً
-        // في اليمن.**
-        //
-        // **قِيس بجولةٍ حقيقيّةٍ عبر HTTP لا بقراءة:**
-        //
-        //     360 طلباً · 12 متوازية  →  59 نجحت · **301 ردَّت 429**
-        //
-        // و`throttle:60,1` بصيغته العدديّة **يُفتاح بالـIP** لغير
-        // المصادَق. ومشغّلو الهاتف في اليمن على CGNAT — آلافُ المشتركين
-        // خلف عناوينَ معدودة. فألفا مستخدمٍ على ثلاثة عناوين ⇒ ~٦٦٠
-        // لكلٍّ ⇒ **طلبٌ واحدٌ كلَّ إحدى عشرةَ دقيقةً للمستعمل**.
-        //
-        // ويراه العميلُ «التطبيقُ لا يعمل»، **ولا خطأَ في أيّ سجلٍّ
-        // عندنا** — الحدُّ يعمل كما كُتب.
-        //
-        // **وكان في المشروع `RateLimiter::for('api')` مضبوطاً ولا
-        // يُستعمَل**: الصيغةُ العدديّةُ هنا لا تقرؤه. أي إعدادٌ مبنيٌّ
-        // ولا يُوصَل إليه — النمطُ نفسُه، على حدّ المعدّل.
-        //
-        // فصار `throttle:api` باسم المُحدِّد، وهو يُفرّق بالجهاز تحت
-        // العنوان الواحد. (التفصيل في `RouteServiceProvider`.)
-        // ══════════════════════════════════════════════════════════════
         $middleware->group('api', [
-            'throttle:api',
+            'throttle:60,1',
             SubstituteBindings::class,
         ]);
 
@@ -188,10 +151,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('api', \App\Http\Middleware\AmialMaintenanceMode::class);
 
         // AMIAL-SEC-HEADERS-001 — ترويسات أمان لكل استجابة (كشف غيابها اختبار الاختراق)
-        // AMIAL-419-LOOP-001 — صفحةٌ تحمل رمزَ CSRF لا تُخزَّن في المتصفّح.
-        // (`no-cache` وحدَها تسمح باستعمال النسخة **حين يتعذّر التحقّق** —
-        // وهو ما يقع على اتّصالٍ ضعيف، فيصل رمزٌ من جلسةٍ ماتت ⇒ ٤١٩.)
-        $middleware->appendToGroup('web', \App\Http\Middleware\NoStoreCsrfPages::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\SecurityHeaders::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\SecurityHeaders::class);
 
@@ -241,6 +200,12 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'amial.rate-limit' => PerUserRateLimit::class,
             'amial.usage' => EnforceUsageLimit::class,
             'amial.pos-permission' => \App\Http\Middleware\PosPermission::class,
+            // AMIAL-POS-DEVICES-003 — المسارات تستخدم الاسم منذ بناء
+            // ربط مقعد الجهاز؛ غياب alias يجعل Laravel يحاول حل الاسم
+            // كصنف ويُسقط الطلب قبل الوصول للحارس.
+            'amial.pos-device' => \App\Http\Middleware\EnsurePosDevice::class,
+            // AMIAL-AUTH-PIN-FORCE-001 — جلسة موظف المنصة لا تستمر إذا
+            // وُسم PIN بأنه يحتاج تغييراً.
             'amial.force-pin-change' => \App\Http\Middleware\ForcePlatformPinChange::class,
             // AMIAL-API-ACCESS-001 — مصادقة الشركاء بمفتاح API
             'amial.api-key' => \App\Http\Middleware\AuthenticateApiKey::class,
@@ -258,14 +223,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
             // («الخدمة متوقّفة مؤقتاً»)، وهذه **إذنُ اشتراكٍ لتاجرٍ بعينه**.
             // واسمان متشابهان لمعنيين مختلفين أوقعا خلطاً من قبل.
             'capability' => \App\Http\Middleware\EnsureCapability::class,
-
-            // AMIAL-POS-DEVICES-003 — **مقعدُ الجهاز يُفحص في كلّ طلب.**
-            //
-            // ولا تُخلط بـ`checkDeviceId`: تلك جهازُ **جلسةِ مستخدم**
-            // (‏`UserLogHistory`) — تمنع أن يعمل حسابٌ على هاتفين وتحظر
-            // المسروق. وهذه **مقعدُ ترخيصٍ يملكه التاجر** — تمنع أن يعمل
-            // عشرةُ أجهزةٍ برمزِ مقعدٍ واحدٍ مدفوع.
-            'amial.pos-device' => \App\Http\Middleware\EnsurePosDevice::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
@@ -300,20 +257,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // و`no-cache` ليست `no-store`: الأولى تعني «تحقّق قبل الاستعمال»،
         // والمتصفّح يحتفظ بالنسخة ويستعملها حين يتعذّر التحقّق. والثانية
         // تمنع الاحتفاظ أصلاً — وهي المطلوبة لصفحةٍ قياسُها مطبوعٌ فيها.
-        // ══════════════════════════════════════════════════════════════
-        //  AMIAL-OBSERVABILITY-001 — كلُّ عطلٍ يُسجَّل حيث يُقرأ.
-        //
-        //  **الثمن:** ثلاثةُ أعطالٍ في يومٍ واحدٍ وصلت عبر صاحب المشروع لا
-        //  عبر جهاز. ولم يكن في المنصّة تتبّعُ أخطاءٍ من جهة الخادم.
-        //
-        //  ويُستعمل `respond` لا `report`: الأوّلُ يعرف **رمزَ الردّ**،
-        //  فيُميَّز العطلُ (٥٠٠) من السلوك الصحيح (٤٠٤ · ٤٢٢ · ٤٠٣). وبلا
-        //  ذلك يُغرق الجدولُ برفضٍ سليمٍ فيُخفي ما يستحقّ النظر.
-        // ══════════════════════════════════════════════════════════════
         $exceptions->respond(function ($response, \Throwable $e, $request) {
-            app(\App\Services\ErrorTrackingService::class)
-                ->record($e, $request, $response->getStatusCode());
-
             if ($response->getStatusCode() === 419) {
                 $response->headers->set('Cache-Control',
                     'no-store, no-cache, must-revalidate, max-age=0');
@@ -424,16 +368,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping()
             ->onOneServer()
             ->appendOutputTo(storage_path('logs/backup.log'));
-
-        // AMIAL-OBSERVABILITY-001 — نبضُ التوفّر كلَّ خمس دقائق.
-        //
-        // **بلا هذا لا يُعرف إلّا الحاضر**: تفتح اللوحةَ فتراه سليماً ولا
-        // تعرف أنّه سقط ثلاث مرّاتٍ ليلاً. وخمسٌ حدٌّ وسط: أقلُّ منها
-        // يُنمّي الجدول، وأكثرُ يُخفي انقطاعاً قصيراً.
-        $schedule->command('amial:health-check')
-            ->everyFiveMinutes()
-            ->name('health-check')
-            ->withoutOverlapping();
     })
     ->create();
 

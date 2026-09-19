@@ -1,94 +1,200 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-/// AMIAL-UNIFY-UI-001 — «الدعم» بهوية أميال (كانت شاشة 6cash بأنماط قديمة).
-class SupportScreen extends StatelessWidget {
+/// قناة الدعم الحقيقية. تقرأ من إعداد الدعم المخصص، لا من بيانات شركة
+/// قديمة أو فارغة في config، وتعرض سبباً واضحاً إن تعذر فتح تطبيق الاتصال.
+class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final cfg = Get.find<SplashController>().configModel;
-    final phone = cfg?.companyPhone;
-    final email = cfg?.companyEmail;
+  State<SupportScreen> createState() => _SupportScreenState();
+}
 
-    return Scaffold(
-      backgroundColor: AmialColors.background,
-      appBar: AppBar(
-        title: Text('24_support'.tr),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const SizedBox(height: 12),
-          Center(
-            child: Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                color: AmialColors.primary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.headset_mic_rounded,
-                  size: 46, color: AmialColors.primary),
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text('need_any_help'.tr,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A2433))),
-          const SizedBox(height: 6),
-          Text('feel_free_to_contact'.tr,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 14, color: AmialColors.textSecondary)),
-          const SizedBox(height: 28),
-          if (phone != null && phone.isNotEmpty)
-            _contactCard(
-              icon: Icons.phone_rounded,
-              label: 'make_call'.tr,
-              value: phone,
-              filled: true,
-              onTap: () => launchUrl(Uri.parse('tel://$phone')),
-            ),
-          if (email != null && email.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _contactCard(
-              icon: Icons.email_rounded,
-              label: 'send_email'.tr,
-              value: email,
-              filled: false,
-              onTap: () => launchUrl(Uri(scheme: 'mailto', path: email)),
-            ),
-          ],
-          if ((phone == null || phone.isEmpty) && (email == null || email.isEmpty))
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text('feel_free_to_contact'.tr,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AmialColors.textSecondary)),
-            ),
-        ],
+class _SupportScreenState extends State<SupportScreen> {
+  String _phone = '';
+  String _whatsapp = '';
+  String _email = '';
+  bool _loading = true;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadContact();
+  }
+
+  Future<void> _loadContact() async {
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+
+    final config = Get.find<SplashController>().configModel;
+    var phone = (config?.companyPhone ?? '').trim();
+    var email = (config?.companyEmail ?? '').trim();
+    var whatsapp = '';
+
+    try {
+      final response = await Get.find<ApiClient>()
+          .getData('/api/v1/amial/support-contact');
+      final body = response.body;
+      final meta = body is Map ? body['meta'] : null;
+      final contact = meta is Map ? meta['contact'] : null;
+      if (response.statusCode == 200 && contact is Map) {
+        final serverPhone = contact['phone_number']?.toString().trim() ?? '';
+        final serverEmail = contact['support_email']?.toString().trim() ?? '';
+        phone = serverPhone.isEmpty ? phone : serverPhone;
+        email = serverEmail.isEmpty ? email : serverEmail;
+        whatsapp = contact['whatsapp_number']?.toString().trim() ?? '';
+      } else {
+        _failed = true;
+      }
+    } catch (_) {
+      _failed = true;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _phone = phone;
+      _email = email;
+      _whatsapp = whatsapp;
+      _loading = false;
+    });
+  }
+
+  Future<void> _open(Uri uri, String label) async {
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (opened || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('تعذر فتح $label على هذا الجهاز'),
+        backgroundColor: AmialColors.red,
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AmialColors.background,
+      appBar: AppBar(title: const Text('الدعم والمساعدة')),
+      body: RefreshIndicator(
+        onRefresh: _loadContact,
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            const SizedBox(height: 12),
+            Center(
+              child: Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: AmialColors.primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.support_agent_rounded,
+                  size: 44,
+                  color: AmialColors.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'كيف يمكننا مساعدتك؟',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'اختر وسيلة التواصل المناسبة. لا تُعرض أي وسيلة غير قابلة للاستخدام.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AmialColors.textSecondary),
+            ),
+            const SizedBox(height: 28),
+            if (_loading)
+              const Center(child: CircularProgressIndicator())
+            else ...[
+              if (_whatsapp.isNotEmpty)
+                _contactCard(
+                  icon: Icons.chat_rounded,
+                  label: 'واتساب الدعم',
+                  value: _whatsapp,
+                  filled: true,
+                  onTap: () => _open(
+                    Uri.parse(
+                      'https://wa.me/' +
+                          _whatsapp.replaceAll(RegExp(r'[^0-9]'), ''),
+                    ),
+                    'واتساب',
+                  ),
+                ),
+              if (_whatsapp.isNotEmpty) const SizedBox(height: 12),
+              if (_phone.isNotEmpty)
+                _contactCard(
+                  icon: Icons.phone_rounded,
+                  label: 'اتصال بالدعم',
+                  value: _phone,
+                  filled: _whatsapp.isEmpty,
+                  onTap: () => _open(
+                    Uri(scheme: 'tel', path: _phone),
+                    'تطبيق الاتصال',
+                  ),
+                ),
+              if (_phone.isNotEmpty && _email.isNotEmpty)
+                const SizedBox(height: 12),
+              if (_email.isNotEmpty)
+                _contactCard(
+                  icon: Icons.email_rounded,
+                  label: 'بريد الدعم',
+                  value: _email,
+                  filled: false,
+                  onTap: () => _open(
+                    Uri(scheme: 'mailto', path: _email),
+                    'البريد',
+                  ),
+                ),
+              if (_phone.isEmpty && _email.isEmpty && _whatsapp.isEmpty)
+                _emptyContact(),
+              if (_failed) ...[
+                const SizedBox(height: 18),
+                TextButton.icon(
+                  onPressed: _loadContact,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('إعادة المحاولة'),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyContact() => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AmialColors.border),
+        ),
+        child: const Text(
+          'بيانات الدعم غير متاحة حالياً. أعد المحاولة لاحقاً.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AmialColors.textSecondary),
+        ),
+      );
 
   Widget _contactCard({
     required IconData icon,
     required String label,
     required String value,
     required bool filled,
-    required VoidCallback onTap,
+    required Future<void> Function() onTap,
   }) {
     return InkWell(
       onTap: onTap,
@@ -99,13 +205,8 @@ class SupportScreen extends StatelessWidget {
           color: filled ? AmialColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-              color: filled ? AmialColors.primary : AmialColors.border),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 3)),
-          ],
+            color: filled ? AmialColors.primary : AmialColors.border,
+          ),
         ),
         child: Row(children: [
           Container(
@@ -113,30 +214,39 @@ class SupportScreen extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               color: filled
-                  ? Colors.white.withValues(alpha: 0.18)
+                  ? Colors.white.withValues(alpha: 0.16)
                   : AmialColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon,
-                color: filled ? Colors.white : AmialColors.primary),
+            child: Icon(icon, color: filled ? Colors.white : AmialColors.primary),
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(label,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
                   style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: filled ? Colors.white : const Color(0xFF1A2433))),
-              Text(value,
+                    fontWeight: FontWeight.bold,
+                    color: filled ? Colors.white : AmialColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  value,
                   textDirection: TextDirection.ltr,
                   style: TextStyle(
-                      fontSize: 12,
-                      color: filled ? Colors.white70 : AmialColors.textSecondary)),
-            ]),
+                    fontSize: 12,
+                    color: filled ? Colors.white70 : AmialColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
-          Icon(Icons.chevron_left_rounded,
-              color: filled ? Colors.white70 : AmialColors.textMuted),
+          Icon(
+            Icons.chevron_left_rounded,
+            color: filled ? Colors.white70 : AmialColors.textMuted,
+          ),
         ]),
       ),
     );

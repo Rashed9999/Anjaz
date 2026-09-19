@@ -251,12 +251,17 @@ final class FeeOperationRegistry
                 bearers: ['sender'],
                 agentCommission: false,
                 zoneScoped: true,
-                consumers: [],
+                // AMIAL-FEE-BILLPAY-001 — **القرارُ اتُّخذ: فوق رسم المزوّد.**
+                //
+                // كان مكتوباً هنا «قرارٌ ينتظر». وقاله صاحبُ المشروع
+                // صراحةً: **رسمُ المنصّة**. فرسمُ المزوّد تكلفةٌ تمرّ إليه،
+                // ورسمُ المنصّة أجرُ الخدمة — وجعلُ الثاني بدلَ الأوّل
+                // يجعل المنصّةَ تدفع تكلفةَ المزوّد من جيبها.
+                //
+                // **وحتّى تُضبَط نسخةٌ يبقى صفراً** ويُرفَع عطلُ «تسعيرٌ
+                // مفقود» — فالسلوكُ اليومَ لا يتغيّر بحرف.
+                consumers: ['app/Services/BillPayService.php'],
                 owner: 'App\\Services\\BillPayService',
-                notWiredReason: 'رسمُ الفواتير يُحسب اليوم من عمودَي '
-                    . '`bill_service_products.fee_amount/fee_percent` في `BillPayService`. '
-                    . 'فمن يضبط مخطّطاً هنا لا يتغيّر شيء. **وقرارٌ ينتظر**: أهو رسمُ '
-                    . 'المنصّة فوق رسم المزوّد أم بدله؟ لا يُخترع جوابُه في شيفرة.',
             ),
 
             new FeeOperation(

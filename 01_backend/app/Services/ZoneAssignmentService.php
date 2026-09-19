@@ -278,7 +278,7 @@ class ZoneAssignmentService
     /**
      * جمع كل الإشارات المتاحة (للتسجيل والـ audit).
      */
-    public function gatherSignals(User $user, ?Request $request): array
+    private function gatherSignals(User $user, ?Request $request): array
     {
         return [
             'ip_address' => $request?->ip(),
