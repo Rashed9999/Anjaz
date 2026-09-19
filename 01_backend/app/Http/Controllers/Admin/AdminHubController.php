@@ -538,14 +538,7 @@ class AdminHubController extends Controller
             );
         } catch (\Throwable $e) { /* الإشعار تحسيني */ }
 
-        try {
-            if ($user->fcm_token) {
-                Helpers::send_push_notif_to_device($user->fcm_token, [
-                    'title' => $status === 1 ? translate('verification_request_is_accepted') : translate('verification_request_is_denied'),
-                    'description' => '', 'image' => '', 'type' => 'kyc_verification',
-                ]);
-            }
-        } catch (\Throwable $e) { /* الإشعار تحسيني */ }
+        // Push يخرج الآن من NotificationService بعد commit؛ لا إرسال ثانٍ موازٍ هنا.
 
         return response()->json(['kyc' => $status, 'message' => $status === 1 ? 'تم اعتماد الوثائق' : 'تم رفض الوثائق']);
     }
