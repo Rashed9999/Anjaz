@@ -283,6 +283,40 @@
         </div>
     </div>
 
+    <div class="card border-0 shadow-sm mb-4" style="border-radius:16px" id="provider-requests">
+        <div class="card-header bg-white d-flex justify-content-between">
+            <div>
+                <h5 class="mb-1">سجل اتصال مزوّدي السداد</h5>
+                <small class="text-muted">أثر الاتصال فقط — لا تُعرض request/response payloads الحساسة.</small>
+            </div>
+            <a href="{{ route('admin.amial.surface.bill-providers') }}" class="btn btn-sm btn-outline-primary">مركز السداد</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>مرجع أميال</th><th>الطلب</th><th>HTTP</th><th>الزمن</th><th>النتيجة</th><th>الخطأ</th><th>الوقت</th></tr></thead>
+                <tbody>
+                @forelse($snapshot['bill_provider_requests'] ?? [] as $row)
+                    <tr>
+                        <td class="font-monospace small">{{ $row['order_ulid'] ?: '—' }}</td>
+                        <td>{{ $row['request_type'] }}</td>
+                        <td>{{ $row['http_status'] ?? '—' }}</td>
+                        <td>{{ $row['latency_ms'] !== null ? $row['latency_ms'].' ms' : '—' }}</td>
+                        <td>
+                            <span class="badge bg-{{ $row['was_successful'] ? 'success' : 'danger' }}">
+                                {{ $row['was_successful'] ? 'نجح الاتصال' : 'فشل الاتصال' }}
+                            </span>
+                        </td>
+                        <td class="small">{{ IlluminateSupportStr::limit((string)($row['error_message'] ?? ''), 100) ?: '—' }}</td>
+                        <td>{{ $row['created_at'] }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="7" class="text-center text-muted py-4">لا توجد اتصالات مزوّد مسجلة.</td></tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <div id="payment-requests" class="card border-0 shadow-sm mb-4" style="border-radius:16px">
         <div class="card-header bg-white d-flex justify-content-between">
             <div><h5 class="mb-1">آخر طلبات الأموال</h5><small class="text-muted">من المصدر التشغيلي نفسه، لا نسخة للإدارة.</small></div>
