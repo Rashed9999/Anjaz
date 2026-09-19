@@ -283,7 +283,6 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
                     ),
                     Text(
                       '${row['reference'] ?? ''}',
-                      textDirection: TextDirection.ltr,
                       style: const TextStyle(fontSize: 9.5, color: Color(0xFF697586)),
                     ),
                   ],
