@@ -107,13 +107,14 @@ class KycSanctionTest extends TestCase
     }
 
     /** @test */
-    public function upgrade_tier_works()
+    public function direct_customer_tier_upgrade_is_forbidden()
     {
-        $user = User::factory()->create(['kyc_tier' => 0]);
+        $user = User::factory()->create(['type' => 2, 'kyc_tier' => 0]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('KYC_DIRECT_TIER_MUTATION_FORBIDDEN');
+
         $this->kyc->upgradeTier($user, 2);
-        $user->refresh();
-        $this->assertEquals(2, $user->kyc_tier);
-        $this->assertNotNull($user->kyc_tier_updated_at);
     }
 
     /** @test */
