@@ -75,13 +75,72 @@
     <div class="card border-0 shadow-sm mb-3" style="border-radius:16px">
         <div class="card-body">
             <h6 class="fw-bold mb-1">نطاق التشغيل والتغطية</h6>
-            <p class="text-muted small mb-3">
-                نطاق التشغيل يُضبط بمتغيّر البيئة <code>AMIAL_OPERATIONAL_GOVERNORATES</code> —
-                خريطة السيطرة تتغيّر، وتغييرها إعداد لا إصدار برمجي.
+            <p class="text-muted small mb-2">
+                نطاق التشغيل الآن <strong>سياسة مُرقّمة في قاعدة البيانات</strong>؛
+                متغيّر البيئة يبقى fallback قبل تفعيل الهجرة فقط.
+                أي تعديل يحتاج سبباً ويُحفظ قبل/بعد في سجل التدقيق.
                 <br>
-                <strong>التغطية الصفرية ليست حجباً:</strong> العميل هناك يستقبل ويحوّل،
-                وما يتوقّف هو السحب والدفع لانعدام الوكيل والتاجر.
+                <strong>التسجيل منفصل عن نطاق التشغيل:</strong> كون محافظة ما خارج النطاق لا يمنع إنشاء الحساب.
             </p>
+
+            <div class="d-flex gap-2 flex-wrap align-items-center mb-3">
+                <span class="badge bg-primary">
+                    نسخة السياسة: {{ $operationalPolicy?->version ?? 'fallback' }}
+                </span>
+                <span class="text-muted small">
+                    آخر تفعيل: {{ $operationalPolicy?->effective_at ?? 'من إعداد الخادم' }}
+                </span>
+                @if($operationalPolicy?->reason)
+                    <span class="text-muted small">السبب: {{ $operationalPolicy->reason }}</span>
+                @endif
+            </div>
+
+            @if($canManageOperationalPolicy)
+                <form method="POST"
+                      action="{{ route('admin.amial.hub.zones.operational-policy.update') }}"
+                      class="border rounded p-3 mb-3">
+                    @csrf
+                    <h6 class="mb-2">تعديل المحافظات التي تعمل فيها أميال حالياً</h6>
+                    <div class="row g-2">
+                        @foreach($operational as $g)
+                            <div class="col-6 col-md-4 col-xl-3">
+                                <label class="form-check border rounded p-2 h-100">
+                                    <input class="form-check-input ms-1"
+                                           type="checkbox"
+                                           name="governorates[]"
+                                           value="{{ $g['code'] }}"
+                                           @checked($g['operational'])>
+                                    <span class="form-check-label">
+                                        {{ $g['name'] }}
+                                        <small class="d-block text-muted">{{ $g['code'] }}</small>
+                                    </span>
+                                </label>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="row g-2 mt-2 align-items-end">
+                        <div class="col-md-9">
+                            <label class="form-label">سبب تغيير نطاق التشغيل</label>
+                            <input class="form-control"
+                                   name="reason"
+                                   minlength="10"
+                                   maxlength="500"
+                                   required
+                                   placeholder="قرار تشغيلي واضح — 10 أحرف على الأقل">
+                            @error('reason')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                            @error('governorates')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-danger w-100">حفظ نسخة سياسة جديدة</button>
+                        </div>
+                    </div>
+                </form>
+            @else
+                <div class="alert alert-light border small mb-3">
+                    القراءة متاحة لك؛ تعديل النطاق يحتاج صلاحية إعدادات المنصة.
+                </div>
+            @endif
+
             <div class="table-responsive">
                 <table class="table table-sm align-middle">
                     <thead><tr>
