@@ -269,6 +269,7 @@ class PaymentRequestService
                     'requester_name' => $requester->f_name,
                     'requester_phone' => $requester->phone,
                 ],
+                push: false, // لهذا المسار Push مالي متخصص يحمل request_ulid
             );
 
             // الإشعار الداخلي هو مصدر الحقيقة، وFCM هو التنبيه الفوري.
@@ -339,6 +340,7 @@ class PaymentRequestService
                         . Helpers::money($declined->amount) . ' ر.ي'
                         . ($reason ? " — {$reason}" : ''),
                     data: ['short_code' => $declined->short_code],
+                    push: false, // يتبعه SendTransactionNotificationJob أدناه
                 );
 
                 SendTransactionNotificationJob::dispatch(
@@ -950,6 +952,7 @@ class PaymentRequestService
                         'short_code' => $request->short_code,
                         'payer_phone' => $payer->phone,
                     ],
+                    push: false, // dispatchPaidPushNotifications يرسل المرجع المالي
                 );
             }
 
@@ -963,6 +966,7 @@ class PaymentRequestService
                     'amount' => (string)$request->amount,
                     'short_code' => $request->short_code,
                 ],
+                push: false, // dispatchPaidPushNotifications يرسل المرجع المالي
             );
         } catch (\Throwable $e) {
             logger()->warning('Payment request notifications failed: ' . $e->getMessage());
