@@ -267,11 +267,13 @@ class VerificationStatusController extends Controller
                 'missing' => $missing,
                 'benefits' => $this->featureLabels($limits['allowed_features']),
                 'limits' => $this->limitView($limits),
-                'action' => $current >= $level ? null : [
+                // اعرض كل المستويات للمقارنة، لكن لا تجعل إلا المستوى
+                // التالي مباشرة قابلاً للتنفيذ. الخادم يبقى السلطة النهائية.
+                'action' => ($current < 3 && $level === $current + 1) ? [
                     'code' => 'complete_account',
                     'label' => 'إكمال حسابي',
                     'target_tier' => $level,
-                ],
+                ] : null,
             ];
         }
 
