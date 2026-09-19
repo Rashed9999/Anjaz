@@ -297,6 +297,7 @@ class LegalNameService
                 KycDocument::TYPE_ID_BACK,
                 KycDocument::TYPE_PASSPORT,
             ])
+            ->where('status', KycDocument::STATUS_APPROVED)
             ->whereNotNull('verified_fields')
             ->orderByDesc('id')
             ->get();
