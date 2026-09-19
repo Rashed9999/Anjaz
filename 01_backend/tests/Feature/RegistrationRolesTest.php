@@ -24,7 +24,10 @@ class RegistrationRolesTest extends TestCase
     {
         return array_merge([
             'f_name' => 'مسجّل',
-            'l_name' => 'ذاتياً من التطبيق',
+            'father_name' => 'محمد',
+            'grandfather_name' => 'علي',
+            'family_name' => 'التجريبي',
+            'l_name' => 'التجريبي',
             'gender' => 'male',
             'dial_country_code' => '+967',
             'phone' => $phone,
