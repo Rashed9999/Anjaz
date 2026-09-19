@@ -21,6 +21,7 @@ import 'package:amial_pay/features/auth/domain/models/user_short_data_model.dart
 import 'package:amial_pay/features/auth/domain/quick_receive_preferences.dart';
 import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
 import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/helper/notification_helper.dart';
 import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 
@@ -334,6 +335,12 @@ class AuthController extends GetxController implements GetxService {
       if(Get.currentRoute != RouteHelper.navbar) {
         Get.offAllNamed(RouteHelper.getNavBarRoute(), arguments: true);
       }
+
+      // إن كان الدخول بدأ من ضغط إشعار والتطبيق مغلق، افتحه بعد أن صار
+      // الحساب مصادقاً والـ navbar جاهزاً. consume-once يمنع التكرار.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(NotificationHelper.consumePendingInitialNotification());
+      });
     }
     else{
       ApiChecker.checkApi(response);
