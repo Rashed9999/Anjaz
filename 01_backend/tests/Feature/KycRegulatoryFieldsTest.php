@@ -25,7 +25,10 @@ class KycRegulatoryFieldsTest extends TestCase
     {
         return array_merge([
             'f_name' => 'راشد',
-            'l_name' => 'محمد عوض معرابي',
+            'father_name' => 'محمد',
+            'grandfather_name' => 'عوض',
+            'family_name' => 'معرابي',
+            'l_name' => 'معرابي',
             'gender' => 'male',
             'dial_country_code' => '+967',
             'phone' => '783545525',
