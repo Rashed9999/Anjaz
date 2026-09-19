@@ -105,10 +105,18 @@ trait EstablishesKycEvidence
             'role' => 'super_admin',
         ]);
 
+        $declaredName = app(\App\Services\Kyc\LegalNameService::class)
+            ->declared($customer);
+
         app(\App\Services\KycOcrService::class)->confirmFields(
             $idDocument,
             $reviewer,
-            ['national_id' => $identity],
+            [
+                'national_id' => $identity,
+                'full_name' => $declaredName !== ''
+                    ? $declaredName
+                    : trim((string) ($customer->f_name . ' ' . $customer->l_name)),
+            ],
         );
     }
 }
