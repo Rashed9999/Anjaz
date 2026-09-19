@@ -513,22 +513,30 @@ class KycTierService
         $updateRequired = Schema::hasColumn('users', 'kyc_update_required')
             && (int) ($user->kyc_update_required ?? 0) === 1;
 
-        if ($updateRequired) {
+        if ($updateRequired && $storedTier >= 2) {
             $previousTier = Schema::hasColumn('users', 'kyc_update_previous_tier')
                 ? max(0, min(3, (int) ($user->kyc_update_previous_tier ?? 0)))
                 : 0;
-            $refreshTier = in_array($previousTier, [2, 3], true)
-                ? $previousTier
-                : $storedTier;
 
-            // إعادة توثيق ليست ترقية. لا نسمح بها إلا إذا كان الحساب قد بلغ
-            // المستوى نفسه سابقاً؛ وبذلك لا يمكن اصطناع update_required
-            // لحساب Tier 0 ثم القفز به إلى Tier 3.
-            if ($refreshTier >= 2
-                && $storedTier >= $refreshTier
-                && $targetTier === $refreshTier) {
+            // حالة تحديث صحيحة لا يجوز أن تقول إن المستوى السابق أقل من
+            // المستوى الذي ما زال الحساب يحمله؛ وإلا أمكن تنظيف Tier 3
+            // بوثائق Tier 2 ثم إبقاء الحد المالي الأعلى.
+            if ($previousTier >= 2 && $previousTier !== $storedTier) {
+                throw new DomainException(
+                    'حالة تحديث التوثيق غير متسقة مع مستوى الحساب الحالي. '
+                    . '[KYC_UPDATE_TIER_STATE_INVALID]'
+                );
+            }
+
+            // إعادة التوثيق ليست ترقية ولا تخفيضاً: تعيد إثبات المستوى نفسه.
+            if ($targetTier === $storedTier) {
                 return;
             }
+
+            throw new DomainException(
+                'إعادة التوثيق يجب أن تتم لمستوى الحساب الحالي نفسه. '
+                . '[KYC_TIER_SEQUENCE_VIOLATION]'
+            );
         }
 
         $effectiveTier = $this->effectiveTier($user);
