@@ -372,6 +372,7 @@ class CustomerCenterService
             'max_single_transaction' => $pick('max_single_transaction') === null ? null : (string) $pick('max_single_transaction'),
             'max_daily_total' => $pick('max_daily_total') === null ? null : (string) $pick('max_daily_total'),
             'max_monthly_total' => $pick('max_monthly_total') === null ? null : (string) $pick('max_monthly_total'),
+            'max_annual_total' => $pick('max_annual_total') === null ? null : (string) $pick('max_annual_total'),
             'has_override' => $override !== [],
             'state' => $tier || $override !== [] ? 'configured' : 'not_configured',
         ];
