@@ -342,7 +342,8 @@ class EmailOtpLifecycleTest extends TestCase
     {
         DB::table('business_settings')->updateOrInsert(['key' => 'phone_verification'], ['value' => 1]);
         $response = app(RegisterController::class)->customerRegistration(Request::create('/api/v1/customer/auth/register', 'POST', [
-            'f_name' => 'Phone', 'l_name' => 'Owner', 'gender' => 'Male',
+            'f_name' => 'Phone', 'father_name' => 'Real', 'grandfather_name' => 'Test',
+            'family_name' => 'Owner', 'l_name' => 'Owner', 'gender' => 'Male',
             'dial_country_code' => '+967', 'phone' => '779123988', 'password' => '6392',
             'email' => 'phone-owner@example.com', 'verifiedEmail' => 'phone-owner@example.com',
             'email_authorized' => true,
