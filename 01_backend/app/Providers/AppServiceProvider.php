@@ -55,6 +55,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->loadRoutesFrom(base_path('routes/admin/email-center.php'));
         $this->loadRoutesFrom(base_path('routes/admin/reporting-center.php'));
+        $this->loadRoutesFrom(base_path('routes/admin/user-limits.php'));
         $this->loadRoutesFrom(base_path('routes/api/v1/customer-reports.php'));
 
         \App\Models\EMoney::observe(\App\Observers\EMoneyObserver::class);
