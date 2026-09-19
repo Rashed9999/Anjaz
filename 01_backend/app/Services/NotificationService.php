@@ -28,7 +28,9 @@ class NotificationService
         'merchant_payment_received',
         'bill_payment_success', 'bill_payment_pending', 'bill_payment_failed',
         'merchant_verified', 'merchant_verification_rejected', 'merchant_verification_submitted', 'merchant_resubmission_required',
-        'kyc_update_required',
+        'kyc_update_required', 'kyc_verification',
+        'security_alert',
+        'subscription_expiring', 'subscription_daily_digest',
         'refund_received', 'refund_pending',
         'system', 'promo', 'terms_update',
     ];
