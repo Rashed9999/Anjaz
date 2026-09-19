@@ -535,7 +535,7 @@ class CustomerSystemsCenterService
             ->orderByDesc('id')
             ->limit(40)
             ->get([
-                'user_id', 'notification_type', 'transaction_id', 'status', 'attempt',
+                'user_id', 'channel', 'notification_type', 'transaction_id', 'status', 'attempt',
                 'http_status', 'provider_message_id', 'error_code', 'error_message',
                 'accepted_at', 'failed_at', 'created_at',
             ])
