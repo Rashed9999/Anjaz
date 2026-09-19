@@ -131,9 +131,13 @@ class LegalNameService
             $firstMatches = $a !== [] && $b !== [] && $a[0] === $b[0];
             $lastMatches = $a !== [] && $b !== [] && end($a) === end($b);
 
-            if ($firstMatches && $lastMatches && $shared >= 2) {
+            if ($firstMatches && $lastMatches && $shared >= 2
+                && count($a) === count($b)) {
+                // نفس عدد الأجزاء مع اختلافات كتابة/ترتيب بسيطة: قوي.
                 $status = self::STATUS_STRONG;
             } elseif ($shared >= 2 && ($firstMatches || $lastMatches)) {
+                // مثال: المستند أسقط اسم الجد. لا نرفض، لكن نطلب ملاحظة
+                // مراجعة بدلاً من تحويل النقص إلى تطابق قوي تلقائياً.
                 $status = self::STATUS_PARTIAL;
             } else {
                 $status = self::STATUS_MISMATCH;
