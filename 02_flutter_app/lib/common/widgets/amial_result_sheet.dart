@@ -30,6 +30,10 @@ class AmialResultSheet {
     required String successTitle,
     String successSubtitle = '',
     String successButton = 'تم',
+    bool Function(T result)? pendingWhen,
+    String pendingTitle = 'العملية قيد التأكيد',
+    String pendingSubtitle = 'سيتم تحديث الحالة تلقائياً عند وصول تأكيد الجهة الخارجية.',
+    String pendingButton = 'متابعة',
     String failureTitle = 'تعذّر إتمام العملية',
     String Function(Object error)? errorMessage,
   }) {
@@ -48,6 +52,10 @@ class AmialResultSheet {
           successTitle: successTitle,
           successSubtitle: successSubtitle,
           successButton: successButton,
+          pendingWhen: pendingWhen,
+          pendingTitle: pendingTitle,
+          pendingSubtitle: pendingSubtitle,
+          pendingButton: pendingButton,
           failureTitle: failureTitle,
           errorMessage: errorMessage,
         ),
@@ -56,7 +64,7 @@ class AmialResultSheet {
   }
 }
 
-enum _Phase { processing, success, failure }
+enum _Phase { processing, success, pending, failure }
 
 class _ResultSheetBody<T> extends StatefulWidget {
   final Future<T> Function() action;
@@ -65,6 +73,10 @@ class _ResultSheetBody<T> extends StatefulWidget {
   final String successTitle;
   final String successSubtitle;
   final String successButton;
+  final bool Function(T result)? pendingWhen;
+  final String pendingTitle;
+  final String pendingSubtitle;
+  final String pendingButton;
   final String failureTitle;
   final String Function(Object error)? errorMessage;
 
@@ -75,6 +87,10 @@ class _ResultSheetBody<T> extends StatefulWidget {
     required this.successTitle,
     required this.successSubtitle,
     required this.successButton,
+    required this.pendingWhen,
+    required this.pendingTitle,
+    required this.pendingSubtitle,
+    required this.pendingButton,
     required this.failureTitle,
     required this.errorMessage,
   });
@@ -108,11 +124,14 @@ class _ResultSheetBodyState<T> extends State<_ResultSheetBody<T>> {
     try {
       final r = await widget.action();
       if (!mounted) return;
+      final pending = widget.pendingWhen?.call(r) == true;
       setState(() {
         _result = r;
-        _phase = _Phase.success;
+        _phase = pending ? _Phase.pending : _Phase.success;
       });
-      PaymentFeedback.success();
+      if (!pending) {
+        PaymentFeedback.success();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -179,6 +198,20 @@ class _ResultSheetBodyState<T> extends State<_ResultSheetBody<T>> {
           titleColor: AmialColors.textPrimary,
           button: AmialButton(
             label: widget.successButton,
+            kind: AmialButtonKind.dark,
+            onPressed: () => Navigator.of(context).pop(_result),
+          ),
+        );
+      case _Phase.pending:
+        return _content(
+          key: const ValueKey('pending'),
+          icon: const _StatusBadge(
+              color: AmialColors.warning, icon: Icons.schedule_rounded),
+          title: widget.pendingTitle,
+          subtitle: widget.pendingSubtitle,
+          titleColor: AmialColors.textPrimary,
+          button: AmialButton(
+            label: widget.pendingButton,
             kind: AmialButtonKind.dark,
             onPressed: () => Navigator.of(context).pop(_result),
           ),
