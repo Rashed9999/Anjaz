@@ -167,7 +167,36 @@ class Helpers
             ]
         ];
 
-        return self::sendNotificationToHttp($postData);
+        $sent = self::sendNotificationToHttp($postData);
+
+        try {
+            $delivery = app(\App\Services\NotificationDeliveryLogService::class);
+            $type = (string) ($data['type'] ?? 'general');
+            $topicRef = 'topic:' . (string) ($data['receiver'] ?? 'unknown');
+
+            if ($sent) {
+                $delivery->accepted(
+                    null, $type, $topicRef, null, null, 1, null, 'fcm_topic',
+                );
+            } else {
+                $delivery->failed(
+                    null,
+                    'TOPIC_FCM_SEND_FAILED',
+                    'لم يحصل إرسال FCM الجماعي على قبول ناجح من المزود.',
+                    $type,
+                    $topicRef,
+                    null,
+                    1,
+                    false,
+                    null,
+                    'fcm_topic',
+                );
+            }
+        } catch (\Throwable $e) {
+            // سجل التدقيق ثانوي ولا يغيّر نتيجة الإرسال.
+        }
+
+        return $sent;
     }
 
     public static function order_status_update_message(string $status): string
