@@ -16,16 +16,18 @@ use Illuminate\Support\Facades\Schema;
 class NotificationDeliveryLogService
 {
     public function accepted(
-        int $userId,
+        ?int $userId,
         ?string $notificationType = null,
         ?string $transactionId = null,
         ?string $providerMessageId = null,
         ?int $httpStatus = null,
         int $attempt = 1,
         ?int $notificationId = null,
+        string $channel = 'fcm',
     ): void {
         $this->write([
             'user_id' => $userId,
+            'channel' => $channel,
             'notification_id' => $notificationId,
             'notification_type' => $notificationType,
             'transaction_id' => $transactionId,
@@ -38,7 +40,7 @@ class NotificationDeliveryLogService
     }
 
     public function failed(
-        int $userId,
+        ?int $userId,
         string $errorCode,
         ?string $errorMessage = null,
         ?string $notificationType = null,
@@ -47,9 +49,11 @@ class NotificationDeliveryLogService
         int $attempt = 1,
         bool $permanent = false,
         ?int $notificationId = null,
+        string $channel = 'fcm',
     ): void {
         $this->write([
             'user_id' => $userId,
+            'channel' => $channel,
             'notification_id' => $notificationId,
             'notification_type' => $notificationType,
             'transaction_id' => $transactionId,
@@ -63,15 +67,17 @@ class NotificationDeliveryLogService
     }
 
     public function skipped(
-        int $userId,
+        ?int $userId,
         string $reason,
         ?string $notificationType = null,
         ?string $transactionId = null,
         int $attempt = 1,
         ?int $notificationId = null,
+        string $channel = 'fcm',
     ): void {
         $this->write([
             'user_id' => $userId,
+            'channel' => $channel,
             'notification_id' => $notificationId,
             'notification_type' => $notificationType,
             'transaction_id' => $transactionId,
