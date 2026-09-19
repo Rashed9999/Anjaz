@@ -28,6 +28,7 @@ class CustomerSystemsCenterService
             'bill_provider_requests' => $this->billProviderRequests(),
             'payment_requests' => $this->paymentRequests(),
             'notifications' => $this->notifications(),
+            'notification_deliveries' => $this->notificationDeliveries(),
         ];
     }
 
@@ -339,18 +340,20 @@ class CustomerSystemsCenterService
                 'إشعارات العميل',
                 Schema::hasTable('amial_notifications'),
                 $hasDeliveryProof
-                    ? 'الإشعار الداخلي وإثبات التسليم الخارجي قابلان للتتبع.'
-                    : 'الإشعار الداخلي قابل للتتبع؛ لا يوجد بعد سجل Delivery خارجي يثبت وصول Push للجهاز.',
+                    ? 'الإشعار الداخلي ونتيجة الإرسال إلى FCM قابلان للتتبع. قبول FCM يعني أن المزود استلم الرسالة، ولا ندّعي أنه دليل عرضها على الجهاز.'
+                    : 'الإشعار الداخلي قابل للتتبع؛ لا يوجد بعد سجل مستقل لمحاولات FCM ونتائجها.',
                 [
                     ['label' => 'أُنشئت اليوم', 'value' => $this->count('amial_notifications', fn ($q) => $q->whereDate('created_at', today()))],
                     ['label' => 'غير مقروءة', 'value' => $this->count('amial_notifications', fn ($q) => $q->whereNull('read_at'))],
+                    ['label' => 'FCM قبل اليوم', 'value' => $this->count('notification_delivery_logs', fn ($q) => $q->where('status', 'provider_accepted')->whereDate('created_at', today()))],
+                    ['label' => 'فشل Push / 24س', 'value' => $this->count('notification_delivery_logs', fn ($q) => $q->whereIn('status', ['provider_failed', 'permanent_failure'])->where('created_at', '>=', now()->subDay()))],
                 ],
                 [
                     $this->action('إعداد Firebase', 'admin.business-settings.fcm-index'),
                     $this->action('ملف العميل', 'admin.amial.customer.page'),
                 ],
                 $hasDeliveryProof ? 'complete' : 'partial',
-                $hasDeliveryProof ? null : 'ينقص إثبات Delivery خارجي مستقل عن إنشاء الإشعار داخل قاعدة البيانات.',
+                $hasDeliveryProof ? null : 'ينقص سجل مستقل لمحاولات FCM ونتيجة قبول المزود أو فشل الإرسال.',
             ),
             $this->system(
                 'reports',
@@ -521,6 +524,24 @@ class CustomerSystemsCenterService
             ->map(fn ($r) => (array) $r)->all();
     }
 
+    /** @return array<int,array<string,mixed>> */
+    private function notificationDeliveries(): array
+    {
+        if (!Schema::hasTable('notification_delivery_logs')) {
+            return [];
+        }
+
+        return DB::table('notification_delivery_logs')
+            ->orderByDesc('id')
+            ->limit(40)
+            ->get([
+                'user_id', 'notification_type', 'transaction_id', 'status', 'attempt',
+                'http_status', 'provider_message_id', 'error_code', 'error_message',
+                'accepted_at', 'failed_at', 'created_at',
+            ])
+            ->map(fn ($r) => (array) $r)->all();
+    }
+
     /** @param array<int,array<string,mixed>> $metrics @param array<int,array<string,mixed>|null> $actions */
     private function system(
         string $key,
@@ -586,7 +607,7 @@ class CustomerSystemsCenterService
             'receipts' =>
                 'قراءة/تحقق/مستند؛ تصحيح العملية يتم من مصدرها لا بتعديل السند',
             'notifications' =>
-                'إعداد القنوات من Firebase؛ لا تحويل «أُنشئ» إلى «وصل» دون دليل Delivery',
+                'إعداد القنوات من Firebase؛ قبول FCM يُسجل كقبول مزود ولا يتحول إلى ادعاء «ظهر على الجهاز»',
             'reports' =>
                 'قراءة وتصدير؛ التقرير لا يكتب أو يصحح الحقيقة المالية',
             'account_security' =>
@@ -621,7 +642,7 @@ class CustomerSystemsCenterService
             'payment_requests' => 'request_ulid + paid_transaction_id + حالة الطلب + audit',
             'bill_pay' => 'order_ulid + provider_reference + طلبات المزود + إيصال + audit',
             'receipts' => 'receipt_number + verification_code + مرجع المعاملة + حالة PDF',
-            'notifications' => 'إنشاء/قراءة داخليان؛ Delivery الخارجي معلن كفجوة إن لم يوجد سجله',
+            'notifications' => 'amial_notifications + notification_delivery_logs؛ تُسجل محاولات FCM وHTTP والنتيجة دون token أو payload حساس',
             'reports' => 'قراءة من الدفتر/المعاملات؛ التقرير لا يكتب حقيقة مالية جديدة',
             default => Schema::hasTable('audit_decisions')
                 ? 'مرجع تشغيلي وسجل تدقيق عند وجود قرار'
