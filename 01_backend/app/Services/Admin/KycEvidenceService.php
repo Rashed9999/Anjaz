@@ -6,6 +6,7 @@ use App\Models\KycDocument;
 use App\Models\User;
 use App\Services\Kyc\KycOwnershipGuardService;
 use App\Services\Kyc\KycPrivacyService;
+use App\Services\Kyc\LegalNameService;
 use App\Services\KycDocumentService;
 use App\Support\YemenGovernorates;
 
@@ -24,6 +25,7 @@ class KycEvidenceService
         private \App\Services\Kyc\IdentityExpiryService $expiry,
         private KycOwnershipGuardService $ownership,
         private KycPrivacyService $privacy,
+        private LegalNameService $legalNames,
     ) {}
 
     /**
@@ -56,6 +58,10 @@ class KycEvidenceService
                     'blockers' => ['إثبات الملكية متاح لفريق المراجعة المقيدة فقط.'],
                     'evidence' => [],
                 ],
+                'legal_name' => [
+                    'restricted' => true,
+                    'status' => 'restricted',
+                ],
                 'restricted' => true,
             ];
         }
@@ -81,6 +87,13 @@ class KycEvidenceService
             'identity_expiry' => $this->expiry->stateOf($user),
             // AMIAL-KYC-OWNERSHIP-001 — يظهر قبل زر الاعتماد لا بعد رفضه.
             'ownership' => $ownership,
+            'legal_name' => [
+                'declared' => $this->legalNames->declared($user),
+                'verified' => trim((string) ($user->verified_legal_name ?? '')),
+                'status' => (string) ($user->legal_name_status ?? 'legacy'),
+                'identity_document_name' => $this->legalNames->confirmedIdentityName($user),
+                'comparison' => $this->legalNames->identityComparison($user),
+            ],
             'restricted' => $this->privacy->isRestricted($user),
         ];
     }
@@ -138,6 +151,20 @@ class KycEvidenceService
         if ($tier >= 3 && ($completeness['missing_fields'] ?? []) !== []) {
             $out[] = 'حقولٌ رقابيّةٌ ناقصةٌ للفئة الثالثة: '
                 .implode('، ', $completeness['missing_fields']);
+        }
+
+        if ($tier >= 2) {
+            try {
+                $this->legalNames->assertIdentityNameReady($user);
+            } catch (\DomainException $e) {
+                $out[] = match ($e->getMessage()) {
+                    'IDENTITY_CONFIRMED_NAME_REQUIRED' =>
+                        'أكّد الاسم كما يظهر في الهوية قبل اعتماد مستوى الهوية.',
+                    'IDENTITY_NAME_MISMATCH' =>
+                        'اسم الهوية يختلف جوهرياً عن الاسم القانوني المصرّح به — صحّح الاسم أو اطلب مستنداً مناسباً قبل الاعتماد.',
+                    default => $e->getMessage(),
+                };
+            }
         }
 
         foreach ($this->reuse->findingsFor($user)['blockers'] as $line) {
