@@ -362,6 +362,9 @@ class _CustomerVerificationPanelState extends State<CustomerVerificationPanel> {
           ),
           const SizedBox(height: 10),
           _line('الحد الشهري', '${_money(limits['max_monthly_total'])} ر.ي'),
+          if (double.tryParse('${limits['max_annual_total'] ?? 0}') != null &&
+              (double.tryParse('${limits['max_annual_total'] ?? 0}') ?? 0) > 0)
+            _line('الحد السنوي', '${_money(limits['max_annual_total'])} ر.ي'),
           _line('حد العملية', '${_money(limits['max_single_transaction'])} ر.ي'),
           const Divider(height: 18),
           const Text('المزايا', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
