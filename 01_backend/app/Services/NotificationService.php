@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\Jobs\SendAmialNotificationPushJob;
 use App\Models\AmialNotification;
 use App\Models\User;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 
 /**
@@ -38,6 +41,7 @@ class NotificationService
         ?string $icon = null,
         ?string $actionUrl = null,
         ?array $data = null,
+        bool $push = true,
     ): AmialNotification {
         if (trim($title) === '' || trim($body) === '') {
             throw new InvalidArgumentException('عنوان الإشعار ونصّه مطلوبان');
@@ -56,10 +60,59 @@ class NotificationService
             'data' => $data,
         ]);
 
+        // AMIAL-NOTIFICATION-PUSH-001: كل إشعار داخلي له Push افتراضياً.
+        // الإطلاق بعد commit حتى لا يرن الهاتف لعملية تراجعت في قاعدة البيانات.
+        // push=false مخصص فقط لمسار يملك Push مالي متخصصاً مسبقاً لمنع الازدواج.
+        if ($push) {
+            $this->queuePushAfterCommit($notification, $user);
+        }
+
         // AMIAL-WHATSAPP-OTP-001: نسخة واتساب اختيارية من الإشعار (لا تكسر الإرسال أبداً)
         $this->echoToWhatsapp($user, $type, $title, $body);
 
         return $notification;
+    }
+
+    private function queuePushAfterCommit(AmialNotification $notification, User $user): void
+    {
+        $enqueue = function () use ($notification, $user): void {
+            try {
+                SendAmialNotificationPushJob::dispatch(
+                    userId: (int) $user->id,
+                    notificationId: (int) $notification->id,
+                    type: (string) $notification->type,
+                    title: (string) $notification->title,
+                    body: (string) $notification->body,
+                    actionUrl: $notification->action_url ? (string) $notification->action_url : null,
+                );
+            } catch (\Throwable $e) {
+                app(NotificationDeliveryLogService::class)->failed(
+                    (int) $user->id,
+                    'PUSH_QUEUE_DISPATCH_FAILED',
+                    $e->getMessage(),
+                    (string) $notification->type,
+                    null,
+                    null,
+                    1,
+                    true,
+                    (int) $notification->id,
+                );
+
+                Log::warning('Amial notification push queue dispatch failed', [
+                    'user_id' => $user->id,
+                    'notification_id' => $notification->id,
+                    'type' => $notification->type,
+                    'error' => mb_substr($e->getMessage(), 0, 200),
+                ]);
+            }
+        };
+
+        try {
+            DB::afterCommit($enqueue);
+        } catch (\Throwable $e) {
+            // خارج transaction أو في driver قديم: لا نخسر التنبيه بسبب hook.
+            $enqueue();
+        }
     }
 
     /**
