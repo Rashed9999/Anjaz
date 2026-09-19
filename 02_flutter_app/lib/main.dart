@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:amial_pay/common/models/notification_body.dart';
 import 'package:amial_pay/features/language/controllers/localization_controller.dart';
 import 'package:amial_pay/features/setting/controllers/theme_controller.dart';
 import 'package:amial_pay/helper/amial_crash_reporter.dart';
@@ -67,33 +66,20 @@ Future<void> main() async {
     // (‏وضعٌ صامتٌ أو منعٌ صريح)، وتعطيلُ التطبيق كلِّه أسوأُ من كليهما.
   }
 
-  // ══════════════════════════════════════════════════════════════════
-  // AMIAL-NOTIFY-DEEPLINK-001 — **الإشعارُ يُفتح ولا يذهب بك إلى شيء.**
-  //
-  // `body` تُملأ من الإشعار الذي أطلق التطبيق ثمّ **تُرمى**، و`orderID`
-  // تُعلَن ولا تُسنَد أبداً ثمّ تُمرَّر إلى `MyApp` فتُخزَّن ولا تُقرأ.
-  // فمن ضغط إشعارَ «وصلك تحويل» يفتح الشاشةَ الافتراضيّة كأنّه فتح
-  // التطبيقَ من أيقونته — ولا خطأَ في أيّ سجلّ.
-  //
-  // **ويُترك ظاهراً عمداً**: المحلّلُ يُنذر بـ«متغيّرٌ لا يُستعمل»، وهو
-  // أثرُ ميزةٍ ناقصةٍ لا فضلةُ شيفرة. وحذفُه يُسكت الإنذارَ ويمحو
-  // الدليل، فتُنسى الميزةُ إلى الأبد. (وصنفُها «مبنيٌّ ولا يُوصَل
-  // إليه» — الميزةُ الناقصة، لا الميّتة.)
-  //
-  // ولا يُوصَل قبل قرارِ الوجهات: أيُّ إشعارٍ يفتح أيَّ شاشة.
-  // ══════════════════════════════════════════════════════════════════
-  int? orderID;
-  NotificationBody? body;
+  // AMIAL-NOTIFY-DEEPLINK-002 — نحفظ إشعار cold-start حتى ينجح
+  // تسجيل الدخول، ثم NotificationHelper يفتحه مرة واحدة إلى وجهته الصحيحة.
+  // لا بيانات مالية تُفتح قبل المصادقة، ولا يُرمى الإشعار كما كان سابقاً.
   try {
-    final RemoteMessage? remoteMessage = await FirebaseMessaging.instance.getInitialMessage();
+    final RemoteMessage? remoteMessage =
+        await FirebaseMessaging.instance.getInitialMessage();
     if (remoteMessage != null) {
-      body = NotificationHelper.convertNotification(remoteMessage.data);
+      NotificationHelper.setPendingInitialNotification(
+        NotificationHelper.convertNotification(remoteMessage.data),
+      );
     }
     await NotificationHelper.initialize(flutterLocalNotificationsPlugin);
     FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
-  }catch(e, s) {
-    // AMIAL-CRASH-001: كان يُبتلع صامتاً. وفشلُ التهيئة هنا يعني أن كل
-    // إشعارات هذا الجهاز صامتة — عطل جسيم لا أثر له في الواجهة إطلاقاً.
+  } catch (e, s) {
     AmialCrashReporter.record(e, s, reason: 'تهيئة الإشعارات');
   }
 
@@ -122,14 +108,13 @@ Future<void> main() async {
     systemNavigationBarDividerColor: Color(0xFFE3E6EF),
   ));
 
-  runApp(MyApp(languages: languages, orderID: orderID));
+  runApp(MyApp(languages: languages));
 
 }
 
 class MyApp extends StatelessWidget {
   final Map<String, Map<String, String>>? languages;
-  final int? orderID;
-  const MyApp({super.key, required this.languages, required this.orderID});
+  const MyApp({super.key, required this.languages});
 
   @override
   Widget build(BuildContext context) {
