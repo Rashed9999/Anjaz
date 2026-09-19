@@ -9,6 +9,7 @@ use App\Services\Kyc\KycPrivacyService;
 use App\Services\Kyc\LegalNameService;
 use App\Services\Kyc\ResidenceVerificationService;
 use App\Services\KycDocumentService;
+use App\Services\KycOcrService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,8 @@ class KycResidenceAdminController extends Controller
         Request $request,
         ResidenceVerificationService $residence,
         KycPrivacyService $privacy,
+        KycOcrService $ocr,
+        LegalNameService $legalNames,
     ): JsonResponse {
         $actor = $request->user();
         $canRestricted = (bool) $actor?->hasPlatformPermission('platform.customers.kyc.restricted.view');
@@ -38,7 +41,35 @@ class KycResidenceAdminController extends Controller
                     return false;
                 }
                 return true;
-            })->values()->all();
+            });
+
+        $docs = KycDocument::whereIn(
+            'id',
+            $rows->pluck('kyc_document_id')->filter()->unique()->values()->all()
+        )->get()->keyBy('id');
+
+        $rows = $rows->map(function (array $row) use ($docs, $ocr, $legalNames) {
+            $suggested = '';
+            $doc = $row['kyc_document_id'] ? $docs->get($row['kyc_document_id']) : null;
+            if ($doc) {
+                try {
+                    $review = $ocr->forReviewer($doc);
+                    $suggested = trim((string) data_get($review, 'fields.full_name.value', ''));
+                } catch (\Throwable) {
+                    $suggested = '';
+                }
+            }
+
+            $preview = $suggested !== ''
+                ? $legalNames->compare((string) $row['declared_legal_name'], $suggested)
+                : null;
+
+            return $row + [
+                'ocr_name_suggestion' => $suggested,
+                'ocr_name_match_status' => $preview['status'] ?? null,
+                'ocr_name_match_score' => $preview['score'] ?? null,
+            ];
+        })->values()->all();
 
         return response()->json([
             'success' => true,
