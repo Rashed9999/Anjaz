@@ -188,15 +188,28 @@ class CustomerTurnoverService
                     ->where('occurred_at', '>=', now()->startOfMonth())
                     ->lockForUpdate()
                     ->pluck('principal_amount');
+                $yearRows = DB::table('customer_turnover_usage')
+                    ->where('user_id', $userId)
+                    ->whereIn('status', [self::RESERVED, self::POSTED])
+                    ->where('occurred_at', '>=', now()->startOfYear())
+                    ->lockForUpdate()
+                    ->pluck('principal_amount');
 
                 $daily = $this->sumValues($dayRows->all());
                 $monthly = $this->sumValues($monthRows->all());
+                $annual = $this->sumValues($yearRows->all());
 
                 if (bccomp(bcadd($daily, $amount, 4), (string) $limits['max_daily_total'], 4) > 0) {
                     throw new RuntimeException('هذه العملية ستتجاوز حد إجمالي الحركة اليومي لمستوى حسابك.');
                 }
                 if (bccomp(bcadd($monthly, $amount, 4), (string) $limits['max_monthly_total'], 4) > 0) {
                     throw new RuntimeException('هذه العملية ستتجاوز حد إجمالي الحركة الشهري لمستوى حسابك. أكمل التوثيق لرفع الحد.');
+                }
+
+                $annualLimit = (string) ($limits['max_annual_total'] ?? '0');
+                if (bccomp($annualLimit, '0', 4) > 0
+                    && bccomp(bcadd($annual, $amount, 4), $annualLimit, 4) > 0) {
+                    throw new RuntimeException('هذه العملية ستتجاوز حد إجمالي الحركة السنوي لمستوى حسابك.');
                 }
             }
         }
