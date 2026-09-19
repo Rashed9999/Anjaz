@@ -79,7 +79,8 @@ class ZoneOnRegistrationTest extends TestCase
     private function registrationPayload(string $phone = '783545525'): array
     {
         return [
-            'f_name' => 'راشد', 'l_name' => 'المعربي', 'gender' => 'male',
+            'f_name' => 'راشد', 'father_name' => 'محمد', 'grandfather_name' => 'عوض',
+            'family_name' => 'المعربي', 'l_name' => 'المعربي', 'gender' => 'male',
             'dial_country_code' => '+967', 'phone' => $phone,
             'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'password' => '4321',
