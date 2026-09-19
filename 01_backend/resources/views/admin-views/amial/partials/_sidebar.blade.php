@@ -39,11 +39,12 @@
         [
             'title' => 'المراكز الرئيسية',
             'icon' => '🏢',
-            'match' => ['admin/amial/hub/*', 'admin/amial/customer*'],
+            'match' => ['admin/amial/hub/*', 'admin/amial/customer*', 'admin/amial/customer-systems*'],
             'links' => [
                 // AMIAL-CUSTOMER-CENTER-001: الشاشة الموحَّدة أوّلاً — هي ما
                 // يُدار منه العميل. والقديمة تبقى للقائمة والإنشاء بالجملة.
                 ['🔎 ملفّ العميل الموحَّد (١٠ تبويبات)', route('admin.amial.customer.page'), 'platform.customers.view'],
+                ['🧭 مركز أنظمة العميل', route('admin.amial.customer-systems.index'), 'platform.audit.view'],
                 ['👥 قائمة العملاء وإنشاء الحسابات', route('admin.amial.hub.customers'), null],
                 ['🤝 مركز الوكلاء (الفروع والخزائن)', route('admin.amial.hub.agents'), null],
                 // البوّابة مبنيّة منذ الالتزام السابق ولم يكن إليها بابٌ من هنا:
@@ -136,7 +137,8 @@
             'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*', 'admin/amial/hub/limits*', 'admin/amial/2fa*', 'admin/withdraw*'],
             'links' => [
                 ['🏢 إعدادات الأعمال (عام/رسوم/حدود)', route('admin.business-settings.business-setup'), null],
-                ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), null],\n                ['📏 مركز الحدود المالية', route('admin.amial.hub.limits.index'), 'platform.customers.view'],
+                ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), null],
+                ['📏 مركز الحدود المالية', route('admin.amial.hub.limits.index'), 'platform.customers.view'],
                 ['💬 حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.money.move'],
                 // لوحتا المناطق: كلتاهما تُعيد تعيين المنطقة. تُجمعان هنا
                 // بأسماءٍ تقول الفرق — «النطاق والمخالفات» مقابل «توزيع
