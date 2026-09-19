@@ -231,6 +231,7 @@
                         ${l.state === 'configured' ? table(['الحدّ', 'القيمة'], [
                             ['أقصى رصيد', l.max_balance], ['أقصى عملية', l.max_single_transaction],
                             ['يوميّ', l.max_daily_total], ['شهريّ', l.max_monthly_total],
+                            ['سنويّ', Number(l.max_annual_total || 0) > 0 ? l.max_annual_total : '—'],
                         ].map(r => `<tr><td>${r[0]}</td><td class="text-end">${money(r[1])}</td></tr>`).join(''), '')
                         : '<div class="alert alert-warning mb-0 small">لا توجد سياسة حدود نافذة لهذا العميل؛ لا يُفسَّر ذلك كحدّ صفري.</div>'}
                         {{--
