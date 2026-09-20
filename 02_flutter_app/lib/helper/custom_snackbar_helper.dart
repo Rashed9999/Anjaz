@@ -5,6 +5,44 @@ import 'package:amial_pay/data/api/api_checker.dart';
 import 'package:amial_pay/util/dimensions.dart';
 import 'package:amial_pay/util/styles.dart';
 
+String _arabicUserError(String message) {
+  final raw = message.trim();
+  if (raw.isEmpty) return raw;
+  if (RegExp(r'[\u0600-\u06FF]').hasMatch(raw)) return raw;
+
+  final value = raw.toLowerCase();
+  if (value.contains('access denied') ||
+      value.contains('access forbidden') ||
+      value.contains('permission denied') ||
+      value.contains('forbidden')) {
+    return 'لا تملك صلاحية الوصول إلى هذه الخدمة بحسابك الحالي.';
+  }
+  if (value.contains('unauthorized') ||
+      value.contains('token') ||
+      value.contains('session expired')) {
+    return 'انتهت الجلسة. سجّل الدخول من جديد.';
+  }
+  if (value.contains('not found') || value.contains('no resource')) {
+    return 'المحتوى المطلوب غير متاح حالياً.';
+  }
+  if (value.contains('invalid') || value.contains('missing')) {
+    return 'بعض البيانات المطلوبة غير صحيحة أو ناقصة.';
+  }
+  if (value.contains('connection') ||
+      value.contains('network') ||
+      value.contains('internet')) {
+    return 'تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة.';
+  }
+  if (value.contains('something went wrong') ||
+      value.contains('server error') ||
+      value.contains('internal server')) {
+    return 'حدثت مشكلة في الخادم. أعد المحاولة، وإذا استمرت المشكلة فتواصل مع الدعم.';
+  }
+
+  // لا نعرض نصاً تقنياً إنجليزياً للمستخدم في شريط خطأ.
+  return 'تعذّر تنفيذ الطلب. أعد المحاولة.';
+}
+
 void showCustomSnackBarHelper(String? message, {bool isError = true, bool isIcon = false, bool isVpn = false, Duration? duration}) {
   if(isVpn) {
     SmartDialog.show(
@@ -50,8 +88,8 @@ void showCustomSnackBarHelper(String? message, {bool isError = true, bool isIcon
       Get..closeCurrentSnackbar()..showSnackbar(GetSnackBar(
         snackPosition: SnackPosition.BOTTOM,
 
-        message: message,
-        duration: const Duration(seconds: 5),
+        message: isError ? _arabicUserError(message) : message,
+        duration: duration ?? const Duration(seconds: 5),
         isDismissible: true,
         backgroundColor:  isError ? Colors.red : Colors.green,
 
