@@ -231,7 +231,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
         child: Column(
           children: [
             AmialScreenHeader(
-              title: 'التقارير',
+              title: 'التقارير'.tr,
               actions: [
                 AmialHeaderAction(
                   icon: Icons.description_outlined,
@@ -308,7 +308,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
       ),
       child: Row(
         children: [
-          _reportTab(context, 'المصروفات', Icons.south_east_rounded,
+          _reportTab(context, 'المصروفات'.tr, Icons.south_east_rounded,
               _ReportType.expenses),
           _reportTab(context, 'الإيرادات', Icons.north_east_rounded,
               _ReportType.income),
@@ -401,7 +401,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
             _periodChip('هذا الشهر', _Period.month),
             _periodChip('30 يوماً', _Period.days30),
             _periodChip('90 يوماً', _Period.days90),
-            _periodChip('الكل', _Period.all),
+            _periodChip('الكل'.tr, _Period.all),
           ],
         ),
       ],
