@@ -880,7 +880,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
           () => Get.to(() => const WithdrawRequestScreen())),
       _Svc('الإيصالات', Icons.description_outlined,
           () => Get.to(() => const ReceiptsListScreen())),
-      _Svc('التقارير', Icons.bar_chart_rounded,
+      _Svc('التقارير'.tr, Icons.bar_chart_rounded,
           () => Get.to(() => const AmialReportsScreen())),
       _Svc('المزيد', Icons.grid_view_rounded,
           () => Get.to(() => const MyServicesScreen())),
