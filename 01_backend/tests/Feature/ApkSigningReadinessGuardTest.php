@@ -84,21 +84,23 @@ class ApkSigningReadinessGuardTest extends TestCase
      * يُكتَب عكسُه حيث يُقرأ — في `build.gradle.kts` نفسِه.
      */
     /** @test */
-    public function the_build_file_warns_debug_is_not_for_release(): void
+    public function release_build_never_uses_ephemeral_debug_signing(): void
     {
         $gradle = $this->read('02_flutter_app/android/app/build.gradle.kts');
 
-        // القرارُ الحاليُّ موثَّق: release على debug مؤقّتاً.
-        $this->assertStringContainsString('debug', $gradle);
+        $this->assertStringContainsString(
+            'signingConfig = signingConfigs.getByName("release")',
+            $gradle
+        );
+        $this->assertStringNotContainsString(
+            'signingConfig = signingConfigs.getByName("debug")',
+            $gradle,
+            'release لا يجوز أن يعود إلى debug.keystore لأن هوية التوقيع ستتغير بين GitHub runners.'
+        );
 
-        // ويُذكَر أنّه مؤقّتٌ يُبدَّل — لا حالةٌ نهائيّة.
-        $hasWarning = str_contains($gradle, 'حتى يُولّد keystore')
-            || str_contains($gradle, 'production الحقيقي')
-            || str_contains($gradle, 'wizard-signing-key');
-
-        $this->assertTrue($hasWarning,
-            '**لا تنبيهَ في ملفّ البناء أنّ توقيعَ debug مؤقّت.** فمن قرأه '
-            .'ظنّه نهائيّاً، ونشر نسخةً لا تُقبَل في المتجر ويُزيَّف '
-            .'تحديثُها. والمرشد: `wizard-signing-key.sh`.');
+        $workflow = $this->read('.github/workflows/ci.yml');
+        $this->assertStringContainsString('AMIAL_ANDROID_KEYSTORE_B64', $workflow);
+        $this->assertStringContainsString('AMIAL_ANDROID_CERT_SHA256', $workflow);
+        $this->assertStringContainsString('توقيع APK لا يطابق هوية أميال الثابتة', $workflow);
     }
 }
