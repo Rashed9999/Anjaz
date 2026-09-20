@@ -41,11 +41,12 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
-    public function customer_self_registration_creates_pending_account(): void
+    public function customer_self_registration_creates_active_tier_zero_account(): void
     {
         $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500001'))
             ->assertOk()
-            ->assertJsonPath('verification_status', 'pending_review');
+            ->assertJsonPath('verification_status', 'active_unverified')
+            ->assertJsonPath('kyc_tier', 0);
 
         $user = User::where('phone', '967771500001')->first();
         $this->assertNotNull($user);
@@ -172,15 +173,16 @@ class RegistrationRolesTest extends TestCase
     {
         Artisan::call('passport:install', ['--no-interaction' => true]);
 
-        // عميل مسجَّل ذاتياً = قيد المراجعة
+        // عميل مسجَّل ذاتياً = نشط Tier 0 وليس حساباً محبوساً في المراجعة
         $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500007'))
             ->assertOk();
         $pending = User::where('phone', '967771500007')->first();
 
         $this->postJson('/api/v1/auth/login', [
             'role' => 'customer', 'phone' => '967771500007', 'password' => '1234',
-        ])->assertOk()->assertJsonPath('meta.user.verification_state', 'pending_review')
-          ->assertJsonPath('meta.user.is_kyc_verified', 0);
+        ])->assertOk()->assertJsonPath('meta.user.verification_state', 'active_unverified')
+          ->assertJsonPath('meta.user.is_kyc_verified', 0)
+          ->assertJsonPath('meta.user.kyc_tier', 0);
 
         // بعد اعتماده من الأدمن = موثّق
         $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009200']);
