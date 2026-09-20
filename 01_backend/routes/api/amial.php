@@ -606,7 +606,7 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'addProduct'])->name('products.add');
             Route::put('/products/{id}', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'updateProduct'])->name('products.update');
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'recordSale'])
-                ->middleware('amial.rate-limit:cashier_sale,120,1')->name('sales');
+                ->middleware(['amial.rate-limit:cashier_sale,120,1', 'amial.shift'])->name('sales');
             Route::post('/sales/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'settleCredit'])->name('sales.settle');
             // AMIAL-CASHIER-REFUND-001 — قائمة مبيعات اليوم (مدخل شاشة الاسترجاع)
             Route::get('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'listSales'])->name('sales.list');
@@ -919,7 +919,7 @@ Route::middleware(['auth:api'])->group(function () {
 
             // Sales
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'recordSale'])
-                ->middleware(['amial.rate-limit:pharmacy_sale,300,1', 'amial.usage:sale_operation'])
+                ->middleware(['amial.rate-limit:pharmacy_sale,300,1', 'amial.usage:sale_operation', 'amial.shift'])
                 ->name('sales.record');
             Route::get('/sales', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listSales'])->name('sales.index');
 
@@ -977,7 +977,7 @@ Route::middleware(['auth:api'])->group(function () {
             // Collections
             Route::get('/collections', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'listCollections'])->name('collections.index');
             Route::post('/invoices/{id}/collect', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'recordCollection'])
-                ->where('id', '[0-9]+')->name('collections.record');
+                ->where('id', '[0-9]+')->middleware('amial.shift')->name('collections.record');
 
             // Sales Reps
             Route::get('/sales-reps', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'listSalesReps'])->name('reps.index');
@@ -1049,6 +1049,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/x', [$c, 'xReport'])->name('x');
         Route::post('/close', [$c, 'close'])->name('close');
         Route::get('/history', [$c, 'history'])->name('history');
+        Route::get('/work-time', [$c, 'workTime'])->name('work-time');
     });
 
     // -------- AMIAL-GIFT-CARDS-001 — بطاقات الهدايا ورصيد المتجر --------
@@ -1077,7 +1078,8 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/orders/{id}', [$c, 'showOrder'])->where('id', '[0-9]+')->name('orders.show');
         Route::post('/orders/{id}', [$c, 'updateOrder'])->where('id', '[0-9]+')->name('orders.update');
         Route::post('/orders/{id}/status', [$c, 'setStatus'])->where('id', '[0-9]+')->name('orders.status');
-        Route::post('/orders/{id}/close', [$c, 'closeOrder'])->where('id', '[0-9]+')->name('orders.close');
+        Route::post('/orders/{id}/close', [$c, 'closeOrder'])
+            ->where('id', '[0-9]+')->middleware('amial.shift')->name('orders.close');
     });
 
     // -------- AMIAL-INSTALLMENTS-001 — البيع بالتقسيط --------
