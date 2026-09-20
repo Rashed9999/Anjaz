@@ -321,7 +321,8 @@ class BillPayServiceTest extends TestCase
         $wallet = EMoney::where('user_id', $this->user->id)->first();
         $this->assertEquals('898.0000', (string)$wallet->current_balance);
         $this->assertEquals('102.0000', (string)$wallet->held_balance);
-        $this->assertStringContainsString('تعذّر تأكيد نتيجة المزود', (string) $order->provider_message);\n        $this->assertStringNotContainsString('Network timeout', (string) $order->provider_message);
+        $this->assertStringContainsString('تعذّر تأكيد نتيجة المزود', (string) $order->provider_message);
+        $this->assertStringNotContainsString('Network timeout', (string) $order->provider_message);
     }
 
     /** @test */
