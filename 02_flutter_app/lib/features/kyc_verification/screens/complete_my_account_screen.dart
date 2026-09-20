@@ -52,14 +52,21 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
   void initState() {
     super.initState();
     Future.microtask(() async {
-      // مصدر صلاحية هذه الشاشة هو /me/verification-status نفسه؛
-      // لا نغلقها بسبب ProfileController لم يُحمَّل بعد.
-      final profileController = Get.find<ProfileController>();
-      if (profileController.userInfo == null) {
-        await profileController.getProfileData();
-      }
+      // مصدر الصلاحية والحالة هو مركز التوثيق في الخادم. نحمّله أولاً
+      // حتى لا يفشل مسار الترقية بسبب أن ملف Profile الثانوي لم يُحمّل.
       await _controller.load();
       await _controller.loadResidenceOptions();
+
+      // نحتاج Profile فقط لعرض الاسم/الهاتف في بطاقة المراجعة؛ فشله لا
+      // يجوز أن يغلق رحلة التوثيق نفسها.
+      final profileController = Get.find<ProfileController>();
+      if (profileController.userInfo == null) {
+        try {
+          await profileController.getProfileData();
+        } catch (_) {
+          // تبقى رحلة KYC عاملة، والبيانات الناقصة ستأتي من مركز التوثيق.
+        }
+      }
     });
   }
 
