@@ -457,7 +457,12 @@ class RegisterController extends Controller
             // أرقام الدخول للتاجر/الوكيل — يعرضها التطبيق في شاشة النجاح
             'agent_number' => $loginNumbers['agent_number'],
             'merchant_number' => $loginNumbers['merchant_number'],
-            'verification_status' => 'pending_review',
+            // AMIAL-PROGRESSIVE-KYC-LOGIN-001 — العميل يبدأ نشطاً Tier 0،
+            // لا نسمّيه «قيد المراجعة» قبل أن يرسل أصلاً طلب ترقية.
+            'verification_status' => $accountType === CUSTOMER_TYPE
+                ? 'active_unverified'
+                : 'pending_review',
+            'kyc_tier' => 0,
             'requires_pin_setup' => !$request->filled('transaction_pin'),
         ], 200);
     }
