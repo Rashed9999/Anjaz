@@ -16,7 +16,7 @@ import 'package:amial_pay/data/api/idempotency_key_generator.dart';
 class ApiClient extends GetxService {
    String appBaseUrl = AppConstants.baseUrl ;
   final SharedPreferences sharedPreferences;
-  final String noInternetMessage = 'Connection to API server failed due to internet connection';
+  final String noInternetMessage = 'تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة.';
   final int timeoutInSeconds = 30;
   BaseDeviceInfo deiceInfo;
   final String uniqueId;
