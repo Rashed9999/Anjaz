@@ -100,7 +100,8 @@ class ApkSigningReadinessGuardTest extends TestCase
 
         $workflow = $this->read('.github/workflows/ci.yml');
         $this->assertStringContainsString('AMIAL_ANDROID_KEYSTORE_B64', $workflow);
-        $this->assertStringContainsString('AMIAL_ANDROID_CERT_SHA256', $workflow);
+        $this->assertStringContainsString('AMIAL_ANDROID_KEYSTORE_PASSWORD', $workflow);
+        $this->assertStringContainsString('1db2799f07dad246a5163fc5fa9ca813b47dd65b6db55eb296632bed3bbabcc7', strtolower($workflow));
         $this->assertStringContainsString('توقيع APK لا يطابق هوية أميال الثابتة', $workflow);
     }
 }
