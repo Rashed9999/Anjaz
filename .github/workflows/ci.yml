@@ -21,8 +21,16 @@ on:
   # الفحوصُ تبقى على كلّ دفع؛ **وملفُّ APK لا يُبنى إلّا من زرّ Run workflow.**
   workflow_dispatch:
     inputs:
+      run_mode:
+        description: 'نوع التشغيل'
+        required: true
+        default: full_ci
+        type: choice
+        options:
+          - full_ci
+          - apk_only
       build_type:
-        description: 'نوع APK المطلوب'
+        description: 'نوع APK عند اختيار apk_only'
         required: true
         default: debug
         type: choice
@@ -80,7 +88,7 @@ jobs:
     # يُطلق خطّافَ Coolify — وCoolify عنده على `Source: Manual` عمداً،
     # وهو ينشر بيده. (وهو ما فعله `fe64f3c` بعنوانه: «isolate manual
     # APK builds from deploy jobs».)
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name != 'workflow_dispatch' || inputs.run_mode == 'full_ci'
     services:
       mysql:
         image: mysql:8.0
@@ -270,7 +278,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: flutter
     # لا APK تلقائياً عند دفع الشيفرة؛ صاحب المشروع يبدأه يدوياً فقط.
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'apk_only'
     defaults:
       run:
         working-directory: 02_flutter_app
@@ -347,7 +355,7 @@ jobs:
     # يُطلق خطّافَ Coolify — وCoolify عنده على `Source: Manual` عمداً،
     # وهو ينشر بيده. (وهو ما فعله `fe64f3c` بعنوانه: «isolate manual
     # APK builds from deploy jobs».)
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name != 'workflow_dispatch' || inputs.run_mode == 'full_ci'
     strategy:
       fail-fast: false
       matrix:
@@ -401,7 +409,7 @@ jobs:
     needs: [structural, backend, docker]
     # **ولا نشرَ من زرّ بناء APK** — انظر `AMIAL-CI-APK-002` أعلاه.
     if: >-
-      github.event_name != 'workflow_dispatch'
+      (github.event_name != 'workflow_dispatch' || inputs.run_mode == 'full_ci')
       && github.ref == 'refs/heads/claude/project-code-review-yjagv'
     steps:
       - name: نداء خطّاف النشر
