@@ -52,6 +52,12 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
   void initState() {
     super.initState();
     Future.microtask(() async {
+      // مصدر صلاحية هذه الشاشة هو /me/verification-status نفسه؛
+      // لا نغلقها بسبب ProfileController لم يُحمَّل بعد.
+      final profileController = Get.find<ProfileController>();
+      if (profileController.userInfo == null) {
+        await profileController.getProfileData();
+      }
       await _controller.load();
       await _controller.loadResidenceOptions();
     });
@@ -72,15 +78,6 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final profile = Get.find<ProfileController>().userInfo;
-    if (profile?.type != 2) {
-      return const Scaffold(
-        body: SafeArea(
-          child: Center(child: Text('إكمال توثيق الأفراد متاح لحساب العميل فقط.')),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FB),
       appBar: AppBar(title: const Text('إكمال حسابي')),
