@@ -190,6 +190,7 @@ class _CustomerServicesHubScreenState
 
   Widget _tierBanner(int tier) {
     final level = CustomerVerificationLevel.fromTier(tier);
+    final canUpgrade = tier < 3;
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
@@ -197,64 +198,97 @@ class _CustomerServicesHubScreenState
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AmialColors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AmialColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: const Icon(Icons.verified_user_outlined,
-                color: AmialColors.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'حالة التوثيق الحالية',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AmialColors.textSecondary,
-                  ),
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AmialColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                const SizedBox(height: 3),
-                Row(
+                child: const Icon(
+                  Icons.verified_user_outlined,
+                  color: AmialColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: level.color,
-                        shape: BoxShape.circle,
+                    const Text(
+                      'حالة التوثيق الحالية',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AmialColors.textSecondary,
                       ),
                     ),
-                    const SizedBox(width: 7),
-                    Flexible(
-                      child: Text(
-                        level.label,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: level.color,
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: level.color,
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 7),
+                        Flexible(
+                          child: Text(
+                            level.label,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: level.color,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const Text(
-            'كل خدمة توضح حالة التوثيق المطلوبة',
-            style: TextStyle(
-              fontSize: 10.5,
-              color: AmialColors.textSecondary,
+          if (canUpgrade) ...[
+            const SizedBox(height: 13),
+            const Text(
+              'أكمل بيانات التوثيق خطوة بخطوة لفتح الخدمات ورفع حدود حسابك.',
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.5,
+                color: AmialColors.textSecondary,
+              ),
             ),
-          ),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              key: const Key('customer-kyc-upgrade-cta'),
+              onPressed: () async {
+                await Get.to(
+                  () => CompleteMyAccountScreen(targetTier: tier + 1),
+                );
+                await me.load();
+                if (mounted) setState(() {});
+              },
+              icon: const Icon(Icons.upgrade_rounded),
+              label: const Text('إكمال البيانات ورفع المستوى'),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            const Text(
+              'تم إكمال أعلى مستوى توثيق متاح لهذا الحساب.',
+              style: TextStyle(
+                fontSize: 11.5,
+                color: AmialColors.textSecondary,
+              ),
+            ),
+          ],
         ],
       ),
     );
