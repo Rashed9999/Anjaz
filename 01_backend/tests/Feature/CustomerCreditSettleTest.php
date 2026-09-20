@@ -9,7 +9,8 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\CustomerCreditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;\nuse Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
 
