@@ -300,8 +300,8 @@ class KycRegulatoryFieldsTest extends TestCase
         }
 
         $this->assertStringContainsString('emptySelectionAllowed: true', $src);
-        $this->assertStringContainsString('profile?.type != 2', $src,
-            'إكمال KYC الفردي يجب أن يبقى خاصاً بالعميل لا التاجر/الوكيل/الموظف');
+        $this->assertStringNotContainsString('profile?.type != 2', $src,
+            'لا يجوز رفض العميل محلياً قبل تحميل Profile؛ الخادم هو المرجع النهائي لنوع الحساب');
     }
 
     /** @test */
