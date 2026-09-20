@@ -287,14 +287,22 @@ class UnifiedAuthController extends Controller
                     // هل العطل محصور بمنطقة — وهو ما يفرّق عطل الإعداد عن عطل
                     // الشيفرة — بدل أن يبقى «ينهار عند بعض المستخدمين».
                     'zone_code' => $result['user']->zone_code,
-                    // AMIAL-VERIFY-GATE: حالة التوثيق ليقرّر التطبيق أي شاشة يفتح.
-                    // 0 = قيد المراجعة (لوحة التحقق لم تعتمده بعد) / 1 = موثّق / 2 = مرفوض
+                    // AMIAL-PROGRESSIVE-KYC-LOGIN-001
+                    // العميل غير الموثّق ليس «حساباً قيد المراجعة». هو حساب
+                    // نشط Tier 0 يدخل التطبيق بصفر مالي ثم يرفع مستواه من
+                    // مركز التوثيق. الرفض في KYC يخفض/يبقي المستوى ولا يحبس
+                    // الحساب كله؛ التعطيل الحقيقي له is_active/حراس المخاطر.
                     'is_kyc_verified' => (int) ($result['user']->is_kyc_verified ?? 0),
-                    'verification_state' => match ((int) ($result['user']->is_kyc_verified ?? 0)) {
-                        1 => 'verified',
-                        2 => 'rejected',
-                        default => 'pending_review',
-                    },
+                    'kyc_tier' => (int) ($result['user']->kyc_tier ?? 0),
+                    'verification_state' => $result['role'] === 'customer'
+                        ? (((int) ($result['user']->is_kyc_verified ?? 0) === 1)
+                            ? 'verified'
+                            : 'active_unverified')
+                        : match ((int) ($result['user']->is_kyc_verified ?? 0)) {
+                            1 => 'verified',
+                            2 => 'rejected',
+                            default => 'pending_review',
+                        },
                 ],
                 'token' => $result['token'],
                 'token_type' => $result['token_type'],
