@@ -314,13 +314,10 @@ jobs:
       - name: تجهيز مفتاح التوقيع الثابت
         env:
           KEYSTORE_B64: ${{ secrets.AMIAL_ANDROID_KEYSTORE_B64 }}
-          STORE_PASSWORD: ${{ secrets.AMIAL_ANDROID_STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.AMIAL_ANDROID_KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.AMIAL_ANDROID_KEY_ALIAS }}
-          EXPECTED_CERT_SHA256: ${{ secrets.AMIAL_ANDROID_CERT_SHA256 }}
+          KEYSTORE_PASSWORD: ${{ secrets.AMIAL_ANDROID_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
-          for v in KEYSTORE_B64 STORE_PASSWORD KEY_PASSWORD KEY_ALIAS EXPECTED_CERT_SHA256; do
+          for v in KEYSTORE_B64 KEYSTORE_PASSWORD; do
             if [ -z "${!v:-}" ]; then
               echo "::error::مفتاح توقيع Android الثابت غير مضبوط في GitHub Secrets: $v"
               exit 1
@@ -330,9 +327,9 @@ jobs:
           printf '%s' "$KEYSTORE_B64" | base64 --decode > android/amial-release.jks
           chmod 600 android/amial-release.jks
           cat > android/key.properties <<EOF
-          storePassword=$STORE_PASSWORD
-          keyPassword=$KEY_PASSWORD
-          keyAlias=$KEY_ALIAS
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEYSTORE_PASSWORD
+          keyAlias=amial
           storeFile=amial-release.jks
           EOF
 
@@ -389,9 +386,10 @@ jobs:
             ACTUAL_CERT_SHA256=$(printf '%s\n' "$CERT_OUTPUT" | sed -n 's/^V2 Signer: certificate SHA-256 digest: //p' | head -n 1)
           fi
           test -n "$ACTUAL_CERT_SHA256"
-          if [ "$ACTUAL_CERT_SHA256" != "${{ secrets.AMIAL_ANDROID_CERT_SHA256 }}" ]; then
+          EXPECTED_CERT_SHA256="1db2799f07dad246a5163fc5fa9ca813b47dd65b6db55eb296632bed3bbabcc7"
+          if [ "$(printf '%s' "$ACTUAL_CERT_SHA256" | tr '[:upper:]' '[:lower:]')" != "$EXPECTED_CERT_SHA256" ]; then
             echo "::error::توقيع APK لا يطابق هوية أميال الثابتة"
-            echo "expected=${{ secrets.AMIAL_ANDROID_CERT_SHA256 }}"
+            echo "expected=$EXPECTED_CERT_SHA256"
             echo "actual=$ACTUAL_CERT_SHA256"
             exit 1
           fi
