@@ -17,6 +17,7 @@ import 'package:amial_pay/features/requested_money/screens/incoming_requests_scr
 import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
 import 'package:amial_pay/features/kyc_verification/screens/my_profile_changes_screen.dart';
+import 'package:amial_pay/features/kyc_verification/screens/complete_my_account_screen.dart';
 import 'package:amial_pay/features/me/screens/customer_services_hub_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
 import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
@@ -230,11 +231,27 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
         onTap: () => Get.to(() => const CustomerServicesHubScreen()),
       ),
 
-      // خدمات معلومات/إدارة الحساب وليست فتحاً لحركة مالية جديدة.
+      // AMIAL-CUSTOMER-KYC-ENTRY-001 — مدخل مباشر ودائم لرفع مستوى
+      // التوثيق، لا نجبر العميل على اكتشافه من نافذة خدمة مقفلة.
+      _serviceCard(
+        icon: Icons.verified_user_outlined,
+        label: tier >= 3 ? 'ملف التوثيق' : 'التوثيق ورفع المستوى',
+        subtitle: tier >= 3
+            ? 'مراجعة حالة التوثيق'
+            : 'أكمل بياناتك وارفع مستوى الحساب',
+        onTap: () => Get.to(
+          () => CompleteMyAccountScreen(
+            targetTier: tier >= 3 ? 3 : tier + 1,
+          ),
+        ),
+      ),
+
+      // «تحديث بياناتي» لتغيير بيانات موجودة بعد التسجيل، وليس بديلاً
+      // عن رحلة التوثيق ورفع المستوى.
       _serviceCard(
         icon: Icons.assignment_ind_outlined,
         label: 'تحديث بياناتي',
-        subtitle: 'ما هو مطلوب منك · وصلاحية هويّتك',
+        subtitle: 'طلب تعديل بيانات موجودة ومتابعة الطلبات',
         onTap: () => Get.to(() => const MyProfileChangesScreen()),
       ),
       _serviceCard(
