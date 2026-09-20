@@ -398,7 +398,7 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
                           '${profile?.fName ?? ''} ${profile?.lName ?? ''}'.trim(),
                         ),
                         VerificationReviewRow('رقم الهاتف', profile?.phone ?? ''),
-                        VerificationReviewRow('البريد الإلكتروني', profile?.email ?? ''),
+                        VerificationReviewRow('البريد الإلكتروني'.tr, profile?.email ?? ''),
                         VerificationReviewRow('رقم الحساب', profile?.accountNumber ?? ''),
                         VerificationReviewRow(
                           'محافظة الميلاد',
