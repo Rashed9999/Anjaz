@@ -28,6 +28,41 @@ class KycSanctionTest extends TestCase
         $this->sanction = app(SanctionScreeningService::class);
     }
 
+    /**
+     * حساب عميل يصل فعلياً إلى المستوى المطلوب وفق العقد الحالي:
+     * Tier 1 ليس رقماً في العمود فقط؛ يلزمه هاتف مثبت وسكن معتمد.
+     */
+    private function customerAt(int $tier, bool $verified = false): User
+    {
+        $user = User::factory()->create([
+            'type' => 2,
+            'kyc_tier' => $tier,
+            'is_phone_verified' => $tier >= 1 ? 1 : 0,
+            'is_kyc_verified' => $verified ? 1 : 0,
+            'residence_governorate' => $tier >= 1 ? 'YE-AD' : null,
+            'verified_residence_governorate' => $tier >= 1 ? 'YE-AD' : null,
+            'residence_verified_at' => $tier >= 1 ? now() : null,
+            'zone_code' => 'SOUTH',
+        ]);
+
+        if ($tier >= 1) {
+            DB::table('residence_verifications')->insert([
+                'user_id' => $user->id,
+                'kyc_document_id' => null,
+                'declared_governorate' => 'YE-AD',
+                'evidence_type' => 'government_residence_document',
+                'evidence_strength' => 'strong',
+                'status' => 'verified',
+                'submitted_at' => now()->subMinute(),
+                'reviewed_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return $user->fresh();
+    }
+
     // ============ KYC Tiers ============
 
     /** @test */
@@ -41,7 +76,7 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function tier_1_allows_small_transactions()
     {
-        $user = User::factory()->create(['kyc_tier' => 1]);
+        $user = $this->customerAt(1);
         // 1000 ضمن حد 100000 لـ Tier 1 التدريجي.
         $this->kyc->assertTransactionAllowed($user, '1000', 'send_money');
         $this->assertTrue(true);
@@ -50,7 +85,7 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function tier_1_rejects_large_single_transaction()
     {
-        $user = User::factory()->create(['kyc_tier' => 1]);
+        $user = $this->customerAt(1);
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('حد العملية الواحدة');
         $this->kyc->assertTransactionAllowed($user, '100000.0001', 'send_money');
@@ -73,7 +108,7 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function tier_1_blocks_safe_payment_feature()
     {
-        $user = User::factory()->create(['kyc_tier' => 1]);
+        $user = $this->customerAt(1);
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('مستوى توثيق أعلى');
         $this->kyc->assertTransactionAllowed($user, '1000', 'safe_payment');
@@ -82,7 +117,7 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function tier_2_allows_safe_payment()
     {
-        $user = User::factory()->create(['kyc_tier' => 2, 'is_kyc_verified' => 1]);
+        $user = $this->customerAt(2, true);
         $this->kyc->assertTransactionAllowed($user, '1000', 'safe_payment');
         $this->assertTrue(true);
     }
@@ -90,7 +125,7 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function tier_3_allows_all_features()
     {
-        $user = User::factory()->create(['kyc_tier' => 3, 'is_kyc_verified' => 1]);
+        $user = $this->customerAt(3, true);
         foreach (['send_money', 'safe_payment', 'donations', 'family_fund'] as $feature) {
             $this->kyc->assertTransactionAllowed($user, '1000', $feature);
         }
@@ -100,7 +135,7 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function balance_limit_is_enforced()
     {
-        $user = User::factory()->create(['kyc_tier' => 1]);
+        $user = $this->customerAt(1);
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('الرصيد سيتجاوز الحد');
         $this->kyc->assertBalanceAllowed($user, '100000.0001');
@@ -128,7 +163,7 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function tier_info_includes_next_tier()
     {
-        $user = User::factory()->create(['kyc_tier' => 1]);
+        $user = $this->customerAt(1);
         $info = $this->kyc->getUserTierInfo($user);
         $this->assertEquals(1, $info['current_tier']);
         $this->assertNotNull($info['next_tier']);
