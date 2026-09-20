@@ -204,6 +204,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
             // ربط مقعد الجهاز؛ غياب alias يجعل Laravel يحاول حل الاسم
             // كصنف ويُسقط الطلب قبل الوصول للحارس.
             'amial.pos-device' => \App\Http\Middleware\EnsurePosDevice::class,
+            // AMIAL-SHIFT-GATE-001 — مسارات البيع النقدي لا تعمل بلا وردية.
+            'amial.shift' => \App\Http\Middleware\EnsureOpenShift::class,
             // AMIAL-AUTH-PIN-FORCE-001 — جلسة موظف المنصة لا تستمر إذا
             // وُسم PIN بأنه يحتاج تغييراً.
             'amial.force-pin-change' => \App\Http\Middleware\ForcePlatformPinChange::class,
