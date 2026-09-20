@@ -245,7 +245,7 @@ class BillPayServiceTest extends TestCase
         EMoney::create(['user_id' => $north->id, 'current_balance' => '1000.0000']);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('SOUTH');
+        $this->expectExceptionMessage('خدمة دفع الفواتير غير متاحة في منطقتك');
 
         $this->service->createAndExecute(
             $north, $this->provider, $this->service_, $this->product,
