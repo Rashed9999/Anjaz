@@ -306,30 +306,70 @@ jobs:
           echo "الإصدار  : $(grep '^version:' pubspec.yaml)"
           echo "===================================="
 
-      # --split-per-abi: ملفٌّ لكلّ معالج، فحجمُ كلٍّ منها ~الثلث.
-      # ونزّل `arm64-v8a` للهواتف الحديثة.
-      - name: بناء APK حسب الخيار
+      # AMIAL-APK-INSTALL-001 — ملف واحد Universal.
+      # كانت النشرة تنتج ثلاثة APK حسب المعالج، وفي الهاتف ظهر واحد 0 بايت
+      # وآخر مبتوراً؛ ثم أعطى Android «مشكلة أثناء تحليل الحزمة».
+      # ملف Universal يزيل اختيار المعمارية من يد المستخدم ويُفحص قبل الرفع.
+      - name: بناء APK واحد قابل للتثبيت
         run: |
           if [ "${{ inputs.build_type }}" = "release" ]; then
-            flutter build apk --release --split-per-abi
+            flutter build apk --release
+            SRC="build/app/outputs/flutter-apk/app-release.apk"
           else
             flutter build apk --debug
+            SRC="build/app/outputs/flutter-apk/app-debug.apk"
           fi
 
-      - name: قياسُ ما بُني — فمهمّةٌ تنجح بلا ملفٍّ ليست بناءً
-        run: |
-          ls -lh build/app/outputs/flutter-apk/*.apk
-          COUNT=$(ls build/app/outputs/flutter-apk/*.apk 2>/dev/null | wc -l)
-          if [ "$COUNT" -lt 1 ]; then
-            echo "::error::خرجت المهمّةُ بنجاحٍ ولا APK — بناءٌ صامتٌ لا بناء"
+          test -s "$SRC" || {
+            echo "::error::لم يُنتَج APK صالح أو خرج بحجم صفر"
             exit 1
-          fi
-          echo "✓ $COUNT ملفَّ APK"
+          }
+
+          mkdir -p build/installable
+          OUT="build/installable/AmialPay-${{ inputs.build_type }}-${GITHUB_SHA::7}.apk"
+          cp "$SRC" "$OUT"
+          echo "APK_PATH=$OUT" >> "$GITHUB_ENV"
+
+      - name: فحص سلامة الحزمة والتوقيع قبل الرفع
+        run: |
+          set -euo pipefail
+          APK="$APK_PATH"
+
+          echo "== الملف =="
+          ls -lh "$APK"
+          test "$(stat -c%s "$APK")" -gt 1000000
+
+          echo "== ZIP integrity =="
+          unzip -t "$APK" >/tmp/apk-unzip.txt
+          tail -n 2 /tmp/apk-unzip.txt
+
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)
+          AAPT2=$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -n 1)
+
+          test -n "$APKSIGNER" -a -x "$APKSIGNER"
+          test -n "$ZIPALIGN" -a -x "$ZIPALIGN"
+          test -n "$AAPT2" -a -x "$AAPT2"
+
+          echo "== APK signature =="
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+
+          echo "== ZIP alignment =="
+          "$ZIPALIGN" -c -P 16 -v 4 "$APK"
+
+          echo "== Manifest parse =="
+          "$AAPT2" dump badging "$APK" | tee /tmp/apk-badging.txt
+          grep -q "package: name='amialpay.com'" /tmp/apk-badging.txt
+
+          echo "== SHA256 =="
+          sha256sum "$APK" | tee "build/installable/SHA256SUMS.txt"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: amial-${{ inputs.build_type }}-apk-${{ github.sha }}
-          path: 02_flutter_app/build/app/outputs/flutter-apk/*.apk
+          name: amial-${{ inputs.build_type }}-installable-${{ github.sha }}
+          path: |
+            02_flutter_app/build/installable/*.apk
+            02_flutter_app/build/installable/SHA256SUMS.txt
           retention-days: 30
           if-no-files-found: error
 
