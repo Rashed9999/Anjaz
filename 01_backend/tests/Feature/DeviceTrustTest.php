@@ -53,9 +53,9 @@ class DeviceTrustTest extends TestCase
         // HttpException — والتقاطُ الصنف الخطأ يجعل الاختبار يسقط بخطأٍ بدل
         // أن يقرأ «مُنع»، فيبدو العطل في الشيفرة وهو في الفحص.
         try {
-            (new CheckDeviceId())->handle($request, fn ($r) => response('ok'));
+            $response = (new CheckDeviceId())->handle($request, fn ($r) => response('ok'));
 
-            return true;
+            return $response->getStatusCode() < 400;
         } catch (HttpResponseException) {
             return false;
         }
