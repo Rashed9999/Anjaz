@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 #
-# AMIAL-APK-SIGNING-001 — مرشدٌ لإنشاء مفتاح توقيعٍ حقيقيٍّ للتطبيق.
+# AMIAL-APK-SIGNING-002 — مرشد إنشاء/حفظ هوية توقيع ثابتة للتطبيق.
 #
 # **لماذا هذا مرشدٌ بشريٌّ لا شيفرة:** المفتاحُ سرٌّ لا يُرفَع إلى
 # المستودع أبداً (فمن ملكه زيّف تحديثاً باسمك في جوجل بلاي). فيُنشأ على
 # جهازك، ويُحفَظ عندك، ولا يمرّ بأيّ آلة. وهذه خطوةٌ لا يفعلها إلّا إنسانٌ
 # يملك الجهازَ والقرار.
 #
-# **ما الفجوة:** النسخةُ الحاليّة `release` موقَّعةٌ بمفتاح `debug`
-# (قرارٌ صريح: «ليس أولويّة الآن»). وهي تعمل على هاتفك للتجربة — لكنّها
-# **لا تُقبَل في جوجل بلاي**، ومن فكّكها يزيّف تحديثاً. فقبل النشر
-# الحقيقيّ وحدَه، شغّل هذا المرشد.
+# **الفجوة التي عولجت:** release كان يستخدم debug.keystore المؤقت على
+# GitHub runners. كل تشغيل كان قد يوقّع بهوية مختلفة، فيرفض Android
+# التحديث فوق النسخة السابقة. لذلك يجب استخدام مفتاح ثابت لكل APK.
 #
 #   bash 02_flutter_app/android/wizard-signing-key.sh
 
@@ -30,10 +29,10 @@ ANDROID_DIR="$(cd "$(dirname "$0")" && pwd)"
 KEYSTORE="$ANDROID_DIR/amial-release.jks"
 PROPS="$ANDROID_DIR/key.properties"
 
-step "مرشدُ توقيع أميال باي — قبل النشر في جوجل بلاي فقط"
+step "مرشدُ توقيع أميال باي — هوية ثابتة لكل APK"
 cat <<EOF
 
-هذا المرشدُ ينشئ ${B}مفتاحَ توقيعٍ حقيقيّاً${R} يبقى ${B}على جهازك وحده${R}.
+هذا المرشدُ ينشئ ${B}هوية توقيع ثابتة${R}. إذا تغير المفتاح لاحقاً فلن يقبل Android التحديث فوق النسخة السابقة.
 
 ${YL}⚠ ثلاث حقائق قبل أن تبدأ:${R}
   1. المفتاحُ ${B}لا يُرفَع إلى git أبداً${R} — وهو محميٌّ في .gitignore.
@@ -43,13 +42,6 @@ ${YL}⚠ ثلاث حقائق قبل أن تبدأ:${R}
      المحلّيّ (وهو gitignored).
 
 EOF
-
-read -rp "${B}هل أنت على وشك النشر في جوجل بلاي فعلاً؟ (yes/no) ${R}" ready
-if [[ "$ready" != "yes" ]]; then
-  echo "${GR}حسناً — النسخةُ الحاليّة (debug) تكفي للتجربة على هاتفك."
-  echo "عُد إلى هنا وقتَ النشر الحقيقيّ.${R}"
-  exit 0
-fi
 
 if [[ -f "$KEYSTORE" ]]; then
   echo "${YL}يوجد مفتاحٌ بالفعل: $KEYSTORE${R}"
@@ -81,24 +73,24 @@ storeFile=amial-release.jks
 EOF
 echo "${GR}✓ كُتب $PROPS (وهو gitignored — لن يُرفَع).${R}"
 
-step "الخطوة ٣/٣ — تفعيلُ التوقيع الحقيقيّ في البناء"
+step "الخطوة ٣/٣ — حفظُ الهوية وربطُ GitHub Actions"
 cat <<EOF
-${YL}بقيت خطوةٌ واحدةٌ يدويّة${R} في:
-  02_flutter_app/android/app/build.gradle.kts
+${YL}ملف build.gradle.kts يستخدم release signing بالفعل.${R}
 
-غيّر السطرَ داخل buildTypes { release { ... } } من:
-  ${RD}signingConfig = signingConfigs.getByName("debug")${R}
-إلى:
-  ${GR}signingConfig = signingConfigs.getByName("release")${R}
+لـ GitHub Actions تحتاج سرّين فقط:
+  AMIAL_ANDROID_KEYSTORE_B64
+  AMIAL_ANDROID_KEYSTORE_PASSWORD
 
-وأعِد تفعيل التصغير للإنتاج:
-  ${GR}isMinifyEnabled = true${R}
-  ${GR}isShrinkResources = true${R}
+الاسم الثابت للمفتاح:
+  amial
 
-ثمّ ابنِ نسخةَ الإصدار:
-  flutter build appbundle --release
+أخرج القيمة الأولى:
+  base64 -w 0 "$KEYSTORE"
 
-${B}واحفظ نسخةً من $KEYSTORE خارج الجهاز الآن.${R}
+وبصمة الشهادة:
+  keytool -list -v -keystore "$KEYSTORE" -alias amial | grep SHA256
+
+احفظ نسخةً احتياطيةً مشفّرة من $KEYSTORE وكلمة المرور خارج GitHub.
 EOF
 echo
-echo "${GR}${B}تمّ. المفتاحُ جاهز، والباقي خطوةٌ يدويّةٌ واحدةٌ في build.gradle.kts.${R}"
+echo "${GR}${B}تمّ. هوية التوقيع الثابتة جاهزة.${R}"
