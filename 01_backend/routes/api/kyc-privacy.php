@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Amial\KycFullProfileController;
 use App\Http\Controllers\Api\V1\Amial\KycIdentityUpgradeController;
 use App\Http\Controllers\Api\V1\Amial\KycOwnershipEvidenceController;
 use App\Http\Controllers\Api\V1\Amial\KycPrivacyController;
+use App\Http\Controllers\Api\V1\Amial\ProfileChangeController;
 use App\Http\Controllers\Api\V1\Amial\KycResidenceController;
 use App\Http\Controllers\Api\V1\Amial\VerificationStatusController;
 use App\Http\Controllers\Api\V1\Amial\YemenRegionsController;
@@ -14,6 +15,21 @@ Route::get('me/verification-status', [VerificationStatusController::class, 'show
     ->name('amial.me.verification-status');
 Route::get('me/kyc/completion', [KycCompletionController::class, 'show'])
     ->name('amial.me.kyc.completion');
+
+// AMIAL-PROFILE-CHANGE-ROUTES-001 — شاشة «تحديث بياناتي» كانت موجودة
+// وتستدعي هذه النقاط، لكن الملف المسجّل فعلياً لم يكن يعرّفها؛ لذلك كانت
+// تعرض «تعذّر تحميل طلباتك» دائماً.
+Route::prefix('me/profile-changes')->name('amial.me.profile-changes.')->group(function () {
+    Route::get('/', [ProfileChangeController::class, 'mine'])->name('index');
+    Route::get('/fields', [ProfileChangeController::class, 'fields'])->name('fields');
+    Route::post('/', [ProfileChangeController::class, 'open'])
+        ->middleware('amial.rate-limit:profile_change_open,10,60')->name('open');
+    Route::post('/{id}/submit', [ProfileChangeController::class, 'submit'])
+        ->where('id', '[0-9]+')
+        ->middleware('amial.rate-limit:profile_change_submit,10,60')->name('submit');
+    Route::post('/{id}/cancel', [ProfileChangeController::class, 'cancel'])
+        ->where('id', '[0-9]+')->name('cancel');
+});
 
 Route::prefix('geo/yemen')->name('amial.geo.yemen.')->group(function () {
     Route::get('/districts', [YemenRegionsController::class, 'districts'])->name('districts');
