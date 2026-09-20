@@ -219,7 +219,29 @@ class BillPayServiceTest extends TestCase
     /** @test */
     public function it_rejects_north_zone_user()
     {
-        $north = User::factory()->create(['zone_code' => 'NORTH']);
+        // اختبر النطاق بعد اجتياز KYC، لا أن يسقط الاختبار في باب KYC أولاً.
+        $north = User::factory()->create([
+            'type' => 2,
+            'zone_code' => 'NORTH',
+            'kyc_tier' => 2,
+            'is_phone_verified' => 1,
+            'is_kyc_verified' => 1,
+            'residence_governorate' => 'YE-AD',
+            'verified_residence_governorate' => 'YE-AD',
+            'residence_verified_at' => now(),
+        ]);
+        DB::table('residence_verifications')->insert([
+            'user_id' => $north->id,
+            'kyc_document_id' => null,
+            'declared_governorate' => 'YE-AD',
+            'evidence_type' => 'government_residence_document',
+            'evidence_strength' => 'strong',
+            'status' => 'verified',
+            'submitted_at' => now()->subMinute(),
+            'reviewed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         EMoney::create(['user_id' => $north->id, 'current_balance' => '1000.0000']);
 
         $this->expectException(\RuntimeException::class);
@@ -237,7 +259,7 @@ class BillPayServiceTest extends TestCase
         $this->service_->update(['is_active' => false]);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Service is not active');
+        $this->expectExceptionMessage('خدمة دفع الفواتير غير متاحة حالياً');
 
         $this->service->createAndExecute(
             $this->user, $this->provider, $this->service_, $this->product,
@@ -299,7 +321,7 @@ class BillPayServiceTest extends TestCase
         $wallet = EMoney::where('user_id', $this->user->id)->first();
         $this->assertEquals('898.0000', (string)$wallet->current_balance);
         $this->assertEquals('102.0000', (string)$wallet->held_balance);
-        $this->assertStringContainsString('Network timeout', $order->provider_message);
+        $this->assertStringContainsString('تعذّر تأكيد نتيجة المزود', (string) $order->provider_message);\n        $this->assertStringNotContainsString('Network timeout', (string) $order->provider_message);
     }
 
     /** @test */
