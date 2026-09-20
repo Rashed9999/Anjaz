@@ -62,7 +62,7 @@ class _ServiceCoverageCardState extends State<ServiceCoverageCard> {
     if (mounted) {
       setState(() {
         _loading = false;
-        _error = 'تعذّر التحقق من التغطية حالياً.';
+        _error = 'coverage_check_failed'.tr;
       });
     }
   }
@@ -125,8 +125,7 @@ class _ServiceCoverageCardState extends State<ServiceCoverageCard> {
       if (mounted) {
         setState(() {
           _locating = false;
-          _error =
-              'تعذّر تحديد موقعك. سنبقي محافظة السكن المسجّلة كخيار افتراضي.';
+          _error = 'coverage_location_failed_keep_residence'.tr;
         });
       }
     }
@@ -140,8 +139,8 @@ class _ServiceCoverageCardState extends State<ServiceCoverageCard> {
     if (data == null) {
       return _card(
         icon: Icons.info_outline,
-        title: 'تعذّر التحقق من التغطية',
-        body: _error ?? 'أعد المحاولة لاحقاً.',
+        title: 'coverage_check_failed_title'.tr,
+        body: _error ?? 'coverage_retry_later'.tr,
         warning: true,
       );
     }
@@ -154,16 +153,23 @@ class _ServiceCoverageCardState extends State<ServiceCoverageCard> {
     }
 
     final title = _available
-        ? '${widget.serviceLabel} متاح في موقعك الحالي'
+        ? 'coverage_service_available_current'.trParams({
+            'service': widget.serviceLabel,
+          })
         : needsResidence
-            ? 'محافظة السكن غير مكتملة'
-            : '${widget.serviceLabel} غير متاح حالياً في ${governorate ?? 'هذه المحافظة'}';
+            ? 'coverage_residence_missing'.tr
+            : 'coverage_service_unavailable'.trParams({
+                'service': widget.serviceLabel,
+                'governorate': governorate ?? 'coverage_this_governorate'.tr,
+              });
 
     final body = _available
-        ? 'استخدمنا موقعك لهذه الخدمة فقط، ولم نغيّر عنوان السكن في ملف التوثيق.'
+        ? 'coverage_current_only_notice'.tr
         : needsResidence
-            ? 'نعتمد محافظة السكن في التوثيق كخيار افتراضي. يمكنك استخدام موقعك الحالي مؤقتاً لهذه الخدمة.'
-            : 'التحقق مبني على ${_usingCurrentLocation ? 'موقعك الحالي' : 'محافظة السكن المسجّلة'}. إذا كنت في محافظة أخرى يمكنك فحص موقعك الحالي.';
+            ? 'coverage_residence_default_notice'.tr
+            : (_usingCurrentLocation
+                ? 'coverage_basis_current_notice'.tr
+                : 'coverage_basis_residence_notice'.tr);
 
     return _card(
       icon: _available
@@ -184,8 +190,8 @@ class _ServiceCoverageCardState extends State<ServiceCoverageCard> {
                   : const Icon(Icons.my_location, size: 18),
               label: Text(
                 _locating
-                    ? 'جارٍ تحديد الموقع...'
-                    : 'استخدام موقعي الحالي',
+                    ? 'coverage_locating'.tr
+                    : 'coverage_use_current'.tr,
               ),
             )
           : null,
