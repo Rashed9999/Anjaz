@@ -12,6 +12,7 @@ use App\Models\PosUser;
 use App\Services\BillProviderAdminService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -124,6 +125,60 @@ class AdminSurfaceController extends Controller
         $funds = FamilyFund::withCount('members')
             ->orderByDesc('id')->paginate(25);
         return view('admin-views.amial.surface.funds', compact('funds'));
+    }
+
+    public function fundDetail(int $id): View
+    {
+        $fund = FamilyFund::withCount('members')->findOrFail($id);
+
+        $members = DB::table('family_fund_members as m')
+            ->leftJoin('users as u', 'u.id', '=', 'm.user_id')
+            ->where('m.fund_id', $fund->id)
+            ->orderByDesc('m.total_contributed')
+            ->get([
+                'm.role', 'm.status', 'm.total_contributed', 'm.total_disbursed',
+                'm.joined_at', 'u.id as user_id', 'u.f_name', 'u.l_name', 'u.phone',
+            ]);
+
+        $txs = DB::table('family_fund_transactions as t')
+            ->leftJoin('users as u', 'u.id', '=', 't.user_id')
+            ->leftJoin('users as b', 'b.id', '=', 't.beneficiary_user_id')
+            ->leftJoin('users as a', 'a.id', '=', 't.approved_by_user_id')
+            ->where('t.fund_id', $fund->id)
+            ->orderByDesc('t.id')
+            ->paginate(50, [
+                't.tx_ulid', 't.tx_type', 't.amount', 't.balance_before', 't.balance_after',
+                't.note', 't.status', 't.created_at', 't.wallet_transaction_id',
+                'u.f_name as actor_f', 'u.l_name as actor_l', 'u.id as actor_id',
+                'b.f_name as ben_f', 'b.l_name as ben_l', 'b.id as ben_id',
+                'a.f_name as app_f', 'a.id as app_id',
+            ]);
+
+        $sums = DB::table('family_fund_transactions')
+            ->where('fund_id', $fund->id)
+            ->where('status', 'completed')
+            ->selectRaw("
+                SUM(CASE WHEN tx_type = 'contribute' THEN amount ELSE 0 END) as inflow,
+                SUM(CASE WHEN tx_type IN ('disburse_to_member','disburse_to_external')
+                    THEN amount ELSE 0 END) as outflow,
+                SUM(balance_after - balance_before) as net
+            ")->first();
+
+        $inflow = (string) ($sums->inflow ?? '0');
+        $outflow = (string) ($sums->outflow ?? '0');
+        $derived = (string) ($sums->net ?? '0');
+        $stored = (string) ($fund->balance ?? '0');
+
+        return view('admin-views.amial.surface.fund-detail', [
+            'fund' => $fund,
+            'members' => $members,
+            'txs' => $txs,
+            'inflow' => $inflow,
+            'outflow' => $outflow,
+            'derived' => $derived,
+            'stored' => $stored,
+            'gap' => bccomp($derived, $stored, 4) === 0 ? null : bcsub($stored, $derived, 4),
+        ]);
     }
 
     public function paymentRequests(Request $request): View
