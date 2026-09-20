@@ -61,7 +61,7 @@ class ProfileModel {
     phone: json["phone"],
     email: json["email"],
     image: json["image"],
-    type: json["type"],
+    type: int.tryParse('${json["type"] ?? ''}'),
     gender: json["gender"],
     occupation: json["occupation"],
     twoFactor: json["two_factor"]== 1 ? true : false,
