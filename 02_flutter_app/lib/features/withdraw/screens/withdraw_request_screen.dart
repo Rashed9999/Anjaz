@@ -12,6 +12,7 @@ import 'package:amial_pay/helper/amial_errors.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/common/widgets/amial_button.dart';
 import 'package:amial_pay/common/widgets/amial_quick_amounts.dart';
+import 'package:amial_pay/features/coverage/widgets/service_coverage_card.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — شاشة «سحب الأموال» (تصميم أميال):
 /// بطاقة الرصيد المتاح + المبلغ + مبالغ سريعة + طريقة السحب (وكيل/بنك)
@@ -134,6 +135,11 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
               ]),
             ),
             const SizedBox(height: 20),
+
+            const ServiceCoverageCard(
+              capability: 'cash_out',
+              serviceLabel: 'السحب عبر وكيل',
+            ),
 
             // ====== المبلغ ======
             const Text('مبلغ السحب',
