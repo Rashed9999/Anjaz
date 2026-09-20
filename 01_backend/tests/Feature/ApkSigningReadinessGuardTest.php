@@ -56,6 +56,11 @@ class ApkSigningReadinessGuardTest extends TestCase
             "**مفاتيحُ توقيعٍ مرفوعةٌ إلى git:**\n  %s\n\n"
             .'من نسخها وقّع تطبيقاً خبيثاً يثق به هاتفُ عميلك.',
             implode("\n  ", $leaked)));
+
+        $ignore = $this->read('02_flutter_app/android/.gitignore');
+        $this->assertStringContainsString('key.properties', $ignore);
+        $this->assertStringContainsString('*.jks', $ignore);
+        $this->assertStringContainsString('*.keystore', $ignore);
     }
 
     /**
