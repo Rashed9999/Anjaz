@@ -781,14 +781,17 @@ Route::prefix('ops')->name('ops.')->group(function () {
     Route::post('/pdf-doctor', [OpsConsoleController::class, 'pdfDoctor'])
         ->middleware('platform:platform.ops.retry')->name('pdf-doctor');
 
-    // إسناد الأدوار: من يمنح دور مدير المنصّة يمنح كل شيء دفعةً واحدة،
-    // فلا يملكه إلا مدير المنصّة. ولذلك رُبط بأخطر صلاحية لا بصلاحية تشغيل.
+    // إدارة موظفي المنصّة لها صلاحياتها المستقلة عن إعدادات النظام:
+    // القراءة لا تمنح حق إنشاء/تعديل الموظفين، والكتابة لا تُستعار من settings.
     Route::get('/roles', [OperatorRolesController::class, 'index'])
-        ->middleware('platform:platform.settings.update')->name('roles.index');
+        ->middleware('platform:platform.staff.view')->name('roles.index');
 
     Route::post('/roles/{userId}', [OperatorRolesController::class, 'update'])
         ->where('userId', '[0-9]+')
-        ->middleware('platform:platform.settings.update')->name('roles.update');
+        ->middleware('platform:platform.staff.manage')->name('roles.update');
+
+    Route::post('/operators', [OperatorRolesController::class, 'store'])
+        ->middleware('platform:platform.staff.manage')->name('operators.store');
 });
 
 // ============ AMIAL-SUPERVISION-001 — لوحة الإشراف ============
