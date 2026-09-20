@@ -39,32 +39,32 @@ class ApiChecker {
         normalized.contains('access forbidden') ||
         normalized.contains('permission denied') ||
         response.statusCode == 403) {
-      return 'لا تملك صلاحية الوصول إلى هذه الخدمة بحسابك الحالي.';
+      return 'api_error_forbidden'.tr;
     }
     if (normalized.contains('unauthorized') || response.statusCode == 401) {
-      return 'انتهت الجلسة. سجّل الدخول من جديد.';
+      return 'api_error_session_expired'.tr;
     }
     if (normalized.contains('not found') || response.statusCode == 404) {
-      return 'المحتوى المطلوب غير متاح حالياً.';
+      return 'api_error_not_found'.tr;
     }
     if (normalized.contains('invalid') ||
         normalized.contains('missing') ||
         response.statusCode == 400 ||
         response.statusCode == 422) {
-      return 'بعض البيانات المطلوبة غير صحيحة أو ناقصة.';
+      return 'api_error_invalid'.tr;
     }
     if (response.statusCode == 429) {
-      return 'محاولات كثيرة في وقت قصير. انتظر قليلاً ثم أعد المحاولة.';
+      return 'api_error_rate_limit'.tr;
     }
     if (response.statusCode != null && response.statusCode! >= 500) {
-      return 'حدثت مشكلة في الخادم. أعد المحاولة، وإذا استمرت المشكلة فتواصل مع الدعم.';
+      return 'api_error_server'.tr;
     }
     if (normalized.contains('connection') ||
         normalized.contains('network') ||
         normalized.contains('internet')) {
-      return 'تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة.';
+      return 'api_error_network'.tr;
     }
-    return 'تعذّر تنفيذ الطلب. أعد المحاولة.';
+    return 'api_error_generic'.tr;
   }
 
   static void checkApi(Response response) {
@@ -140,7 +140,7 @@ class ApiChecker {
     // ══════════════════════════════════════════════════════════════════
     if(response.statusCode == 429 && !onUnifiedLogin) {
       showCustomSnackBarHelper(
-        'محاولاتٌ كثيرةٌ في وقتٍ قصير — انتظر دقيقةً ثمّ أعد المحاولة',
+        'api_error_rate_limit'.tr,
         isError: true,
       );
       return;
