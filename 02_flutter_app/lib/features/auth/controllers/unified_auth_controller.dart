@@ -39,9 +39,9 @@ class UnifiedAuthController extends GetxController implements GetxService {
   final RxString currentRole = ''.obs;
   String? _pendingOtpToken;
 
-  // AMIAL-VERIFY-GATE: حالة توثيق آخر دخول ناجح (يقرؤها التوجيه لفتح شاشة
-  // «قيد المراجعة»/«مرفوض» بدل الرئيسية للحساب غير المعتمد).
-  // pending_review | verified | rejected
+  // AMIAL-PROGRESSIVE-KYC-LOGIN-001
+  // customer: active_unverified | verified
+  // merchant/agent: pending_review | verified | rejected
   final RxString verificationState = 'verified'.obs;
   String _displayName = '';
   String get displayName => _displayName;
@@ -324,29 +324,24 @@ class UnifiedAuthController extends GetxController implements GetxService {
     if (currentRole.value.isEmpty) return;
 
     // ══════════════════════════════════════════════════════════════════
-    // AMIAL-MERCHANT-VERIFY-RECEIVE-001 — **«دخولٌ محدود فوراً» للتاجر.**
+    // AMIAL-PROGRESSIVE-KYC-LOGIN-001
     //
-    // كان كلُّ حسابٍ غيرِ معتمدٍ يُحبَس في التطبيق كلِّه بشاشة «قيد
-    // المراجعة» — والمالكُ هو من أنشأ الحساب، فيقرأ «قيد المراجعة» ولا
-    // يعرف من يراجع. وقرارُ صاحب المشروع: **التاجرُ (وموظّفُ POS) يدخل
-    // ويعمل من اللحظة الأولى** (بيعٌ نقديّ، آجل، جردٌ، طباعة)، ويبقى
-    // **القبضُ الماليُّ الحقيقيُّ عبر المنصّة** مقفلاً حتّى تعتمده الإدارة.
+    // العميل Tier 0 حسابٌ صالح للدخول، لكن قدرته المالية = صفر حسب حراس
+    // الخادم. لا نحبسه في شاشة «قيد المراجعة» لأنه لم يرسل طلب ترقية أصلاً.
+    // رفض وثيقة ترقية يعيده لمركز التوثيق ولا يلغي الحساب.
     //
-    // والقفلُ الماليُّ في الخادم لا هنا: `MerchantRiskService::
-    // assertReceiveAllowed` يرفض استلامَ تاجرٍ غيرِ موثّق. فرفعُ الحبس هنا
-    // لا يفتح ثغرة — «إخفاءُ الواجهة ليس أماناً»، والأمانُ خلفه قائم.
-    //
-    // ويبقى الحبسُ الكاملُ حيث يجب:
-    //   · التاجرُ/POS المرفوض (rejected) — يحتاج إعادةَ تقديمٍ لا تجربةً ناقصة
-    //   · وغيرُ التاجر (العميل) غيرُ الموثّق — سلوكُه لم يتغيّر، ومالُه
-    //     محروسٌ خادميّاً بحدّ KYC.
-    // والأدمن مستثنىً (لا يخضع لتوثيق KYC).
+    // التاجر/POS المرفوض فقط يبقى محجوباً بالكامل؛ التاجر pending يدخل
+    // بوضع محدود بينما استلام الأموال يحرسه MerchantRiskService.
+    // الوكيل يبقى على سياسة الاعتماد الحالية حتى نفصل مستوياته لاحقاً.
     // ══════════════════════════════════════════════════════════════════
+    final bool isCustomer = currentRole.value == 'customer';
     final bool isMerchantSide =
         currentRole.value == 'merchant' || currentRole.value == 'pos';
-    final bool fullyBlocked = isMerchantSide
-        ? verificationState.value == 'rejected'
-        : verificationState.value != 'verified';
+    final bool fullyBlocked = isCustomer
+        ? false
+        : isMerchantSide
+            ? verificationState.value == 'rejected'
+            : verificationState.value != 'verified';
     if (currentRole.value != 'admin' && fullyBlocked) {
       Get.offAll(() => AccountReviewScreen(
             state: verificationState.value,
