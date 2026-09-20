@@ -9,7 +9,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\CustomerCreditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;\nuse Illuminate\Support\Facades\Hash;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
 
@@ -53,9 +53,22 @@ class CustomerCreditSettleTest extends TestCase
             'kyc_tier' => 1,
             'is_phone_verified' => 1,
             'is_kyc_verified' => 0,
+            'residence_governorate' => 'YE-AD',
             'verified_residence_governorate' => 'YE-AD',
             'residence_verified_at' => now(),
             'transaction_pin' => Hash::make('1234'),
+        ]);
+        DB::table('residence_verifications')->insert([
+            'user_id' => $this->customer->id,
+            'kyc_document_id' => null,
+            'declared_governorate' => 'YE-AD',
+            'evidence_type' => 'government_residence_document',
+            'evidence_strength' => 'strong',
+            'status' => 'verified',
+            'submitted_at' => now()->subMinute(),
+            'reviewed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
         EMoney::create([
             'user_id' => $this->customer->id, 'current_balance' => '10000.0000',
