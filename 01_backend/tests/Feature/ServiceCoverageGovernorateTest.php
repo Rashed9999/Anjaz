@@ -80,8 +80,8 @@ class ServiceCoverageGovernorateTest extends TestCase
         $this->assertStringNotContainsString('_coverageBanner', $homeSrc);
         $this->assertStringNotContainsString('Geolocator.requestPermission()', $homeSrc);
         $this->assertStringContainsString('ServiceCoverageCard', $withdrawSrc);
-        $this->assertStringContainsString('استخدام موقعي الحالي', $cardSrc);
-        $this->assertStringContainsString('ولم نغيّر عنوان السكن', $cardSrc);
+        $this->assertStringContainsString('coverage_use_current', $cardSrc);
+        $this->assertStringContainsString('coverage_current_only_notice', $cardSrc);
     }
 
     public function test_setting_it_the_first_time_works_and_clears_the_notice(): void
