@@ -19,9 +19,12 @@ class ApiChecker {
       if (direct != null && direct.isNotEmpty) return direct;
 
       final errors = body['errors'];
-      if (errors is List && errors.isNotEmpty && errors.first is Map) {
-        final m = errors.first['message']?.toString().trim();
-        if (m != null && m.isNotEmpty) return m;
+      if (errors is List && errors.isNotEmpty) {
+        final first = errors.first;
+        if (first is Map) {
+          final m = first['message']?.toString().trim();
+          if (m != null && m.isNotEmpty) return m;
+        }
       }
     }
     return response.statusText?.trim() ?? '';
