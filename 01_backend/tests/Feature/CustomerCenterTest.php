@@ -655,6 +655,14 @@ class CustomerCenterTest extends TestCase
     /** @test */
     public function a_customer_limit_override_does_not_touch_the_tier(): void
     {
+        // هذا اختبار استثناء مالي كبير؛ اجعله على مستوى يسمح بالسقف المطلوب
+        // حتى نختبر الاستثناء نفسه لا منع Tier 0.
+        $this->customer->forceFill([
+            'kyc_tier' => 3,
+            'is_phone_verified' => 1,
+            'is_kyc_verified' => 1,
+        ])->save();
+
         // تعديلُ حدّ الفئة يغيّر حدود كلّ من فيها. ومن أراد استثناء عميلٍ
         // واحد فسيغيّر حدود الآلاف بلا أن ينتبه.
         app(CustomerActionService::class)->run(
@@ -682,19 +690,24 @@ class CustomerCenterTest extends TestCase
     /** @test */
     public function changing_one_limit_keeps_the_customer_other_explicit_limits(): void
     {
-        $this->customer->forceFill(['limit_override' => [
-            'max_daily_total' => '500000',
-            'max_monthly_total' => '3000000',
-        ]])->save();
+        $this->customer->forceFill([
+            'kyc_tier' => 3,
+            'is_phone_verified' => 1,
+            'is_kyc_verified' => 1,
+            'limit_override' => [
+                'max_daily_total' => '500000',
+                'max_monthly_total' => '3000000',
+            ],
+        ])->save();
 
         app(CustomerActionService::class)->run(
             $this->customer->fresh(), $this->staff, 'update_limits',
             'تعديل سقف العملية فقط بعد مراجعة النشاط',
-            ['max_single_transaction' => '900000'],
+            ['max_single_transaction' => '400000'],
         );
 
         $override = $this->customer->fresh()->limit_override;
-        $this->assertSame('900000', $override['max_single_transaction']);
+        $this->assertSame('400000', $override['max_single_transaction']);
         $this->assertSame('500000', $override['max_daily_total']);
         $this->assertSame('3000000', $override['max_monthly_total']);
     }
