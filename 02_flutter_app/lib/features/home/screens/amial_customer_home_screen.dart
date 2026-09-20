@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amial_pay/common/models/contact_model.dart';
 import 'package:amial_pay/data/api/api_client.dart';
-import 'package:amial_pay/features/home/widgets/set_governorate_sheet.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/favorite_number/screens/amial_favorites_screen.dart';
 import 'package:amial_pay/util/app_constants.dart';
@@ -63,44 +60,6 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   /// (القاعدة السادسة.)
   List<Map<String, dynamic>> _serverRecipients = [];
 
-  // AMIAL-COVERAGE-001: تغطية الخدمة في محافظة المستخدم.
-  // رسالة صادقة مشتقّة من وجود وكلاء وتجار فعليين، لا علَم سياسة: العميل
-  // الذي انتقل إلى منطقة بلا تغطية لا يُحجَب — يستقبل ويحوّل كالمعتاد، وما
-  // يتوقّف هو السحب والدفع لانعدام الوكيل والتاجر. قول ذلك صراحةً أصدق من
-  // خطأ غامض عند الضغط، ويصحّح نفسه يوم يُعتمد وكيل هناك.
-  String? _coverageNotice;
-
-  /// AMIAL-COVERAGE-004 — **سطرٌ واحد، وتفصيلٌ عند الطلب، وإغلاقٌ يُحترم.**
-  ///
-  /// ══════════════════════════════════════════════════════════════════
-  /// **العطل الذي وُلد منه هذا:**
-  ///
-  /// كانت اللافتة تعرض النصَّ الكامل — ثلاثةَ أسطرٍ تأكل ثلثَ الشاشة
-  /// **في كلّ فتحة، إلى الأبد**، فوق الرصيد وقبل كلّ شيء. وصاحبُ
-  /// المشروع وصفها: «مزعجة جدّاً… انظر كيف وصلت».
-  ///
-  /// **والخبرُ ثابت**: محافظةٌ بلا وكلاء اليوم هي بلا وكلاء غداً. فإعادةُ
-  /// إخباره كلَّ صباحٍ ليست معلومةً — هي إزعاج. ومن يعتاد تجاوزَ لافتةٍ
-  /// يتجاوز التي بعدها، ولو كانت تحذيرَ احتيال.
-  String? _coverageShort;
-  bool _coverageIsGap = false;
-  bool _coverageExpanded = false;
-
-  /// **والإغلاقُ يُحفظ بحالته لا بيومه.**
-  ///
-  /// فلو حُفظ «أُغلقت» وحدها لما عادت أبداً — ويوم يُعتمد وكيلٌ في
-  /// المحافظة لا يعلم به أحد. والمفتاحُ يحمل المحافظةَ وحالةَ التغطية،
-  /// فيعود الإشعارُ من نفسه متى تغيّر أحدُهما. (القاعدة السابعة: «أُغلق»
-  /// ليس «لم يعد صحيحاً».)
-  String _coverageKey = '';
-  bool _coverageDismissed = false;
-  /// AMIAL-COVERAGE-002: الحساب بلا محافظة — اللافتة تصير زرّاً لا نصّاً.
-  bool _needsGovernorate = false;
-
-  /// AMIAL-COVERAGE-003: حاولنا التحديد التلقائي في هذه الجلسة.
-  /// المحاولة مرّة واحدة: من رفض الإذن لا يُسأل في كل فتح للشاشة.
-  bool _autoLocateTried = false;
-
   @override
   void initState() {
     super.initState();
@@ -129,45 +88,6 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         _phone = (b['phone'] ?? '').toString();
       }
     } catch (_) {/* دفاعي: نُبقي الواجهة نظيفة */}
-
-    try {
-      final cov = await Get.find<ApiClient>()
-          .getData('/api/v1/amial/service-coverage');
-      final d = (cov.body is Map) ? cov.body['data'] : null;
-      if (d is Map) {
-        final agents = (d['agents'] ?? 0) as num;
-        final merchants = (d['merchants'] ?? 0) as num;
-        _needsGovernorate = d['needs_governorate'] == true;
-        _coverageIsGap = agents == 0 && merchants == 0;
-        // لا نُزعج من تغطيته كاملة — الرسالة تظهر عند النقص فقط.
-        final show = _needsGovernorate || agents == 0 || merchants == 0;
-        _coverageNotice = show ? (d['notice'] as String?) : null;
-
-        // **والقصيرُ يرتدّ إلى الطويل** إن كان الخادمُ نسخةً أقدم لا
-        // ترسله — فلافتةٌ فارغةٌ أسوأ من لافتةٍ طويلة.
-        _coverageShort = show
-            ? ((d['notice_short'] as String?) ?? _coverageNotice)
-            : null;
-
-        _coverageKey = 'cov:${d['governorate_code'] ?? '?'}:$agents:$merchants';
-        _coverageDismissed = Get.find<SharedPreferences>().getString('coverage_dismissed') == _coverageKey;
-      }
-    } catch (_) {/* التغطية تحسينية — لا توقف الصفحة */}
-
-    // AMIAL-COVERAGE-003: التطبيق يطلب الإذن بنفسه ويحدّد المحافظة.
-    //
-    // كانت اللافتة تطلب من العميل أن يختار محافظته من قائمة — وهذا عملُ
-    // التطبيق لا عملُه. الهاتف يعرف موقعه، والنظام له طريقة معروفة لطلب
-    // الإذن كما يُطلب إذن الكاميرا والاستديو. أن نُحيل المستخدم إلى قائمة
-    // من اثنتين وعشرين محافظة بدل سؤالٍ واحد يجيب عنه بنقرة هو تحميلٌ له
-    // ما تكفّل به الجهاز.
-    //
-    // القائمة اليدوية تبقى — لكن كمخرجٍ لمن رفض الإذن أو تعذّر تحديده، لا
-    // كطريق أوّل.
-    if (_needsGovernorate && !_autoLocateTried) {
-      _autoLocateTried = true;
-      await _autoDetectGovernorate();
-    }
 
     try {
       final rr = await Get.find<ApiClient>()
@@ -348,14 +268,6 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _walletHero(),
-                  // **واللافتةُ لا تُعرض لمن أغلقها** — إلّا إن تغيّرت
-                  // حالةُ التغطية، فيعود المفتاحُ مختلفاً وتعود معه.
-                  // ونقصُ المحافظة يُستثنى: تلك لافتةٌ لها فعلٌ ينتظره.
-                  if (_coverageNotice != null &&
-                      (_needsGovernorate || !_coverageDismissed)) ...[
-                    const SizedBox(height: 14),
-                    _coverageBanner(),
-                  ],
                   // **لافتةُ الطلبات الواردة** — لا تُعرض إلّا حين يوجد
                   // ما يُفعل، ولا تُغلَق: خلفها مالٌ ينتظر قراراً.
                   _incomingRequestsBanner(),
@@ -388,187 +300,10 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     );
   }
 
-  // ============ AMIAL-COVERAGE-001 — تغطية الخدمة ============
-  //
-  // نبرة الرسالة مقصودة: «لا يوجد وكلاء قريبون» لا «ممنوع في منطقتك».
-  // الأولى حقيقة يفهمها العميل ويتصرّف بناءً عليها، والثانية تُشعره بأنه
-  // مطرود من خدمة يملك فيها رصيداً — وهو غير ممنوع أصلاً: يستقبل ويحوّل.
-  /// **الإغلاقُ يُكتب بحالته، فيعود متى تغيّرت.**
-  ///
-  /// ولا يُخفى الإغلاقُ صامتاً: يُقال للمستعمل أنّ الخبر يبقى في «حسابي»،
-  /// فمن أغلق بالخطأ لا يفقد المعلومةَ إلى الأبد. (نصيحةٌ بلا طريقٍ ليست
-  /// نصيحة — وإخفاءٌ بلا طريقِ رجوعٍ ليس إخفاءً، هو حذف.)
-  Future<void> _dismissCoverage() async {
-    setState(() => _coverageDismissed = true);
+  // AMIAL-COVERAGE-005 — التغطية لا تظهر في الرئيسية.
+  // محافظة السكن من KYC هي المصدر الافتراضي، وGPS لا يُطلب إلا داخل
+  // خدمة تعتمد فعلاً على الحضور المكاني.
 
-    try {
-      await Get.find<SharedPreferences>()
-          .setString('coverage_dismissed', _coverageKey);
-    } catch (_) {
-      // الحفظُ تحسين: من تعذّر حفظُه يراها في الفتحة القادمة، ولا ينكسر شيء.
-    }
-  }
-
-  Widget _coverageBanner() {
-    final color = _coverageIsGap
-        ? const Color(0xFFCFA300)
-        : const Color(0xFF5F6B7C);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _coverageIsGap ? AmialColors.warningSurface : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.45)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          Icon(
-              _needsGovernorate
-                  ? Icons.place_outlined
-                  : _coverageIsGap
-                      ? Icons.storefront_outlined
-                      : Icons.info_outline,
-              size: 18,
-              color: color),
-          const SizedBox(width: 10),
-
-          // **السطرُ الواحد يُضغط فيتوسّع.** فالتفصيلُ متاحٌ لمن أراده،
-          // ولا يُفرَض على من قرأه أمس. (وكلُّ ما يُعرض يعمل.)
-          Expanded(
-            child: InkWell(
-              onTap: () => setState(() => _coverageExpanded = !_coverageExpanded),
-              child: Row(children: [
-                Expanded(
-                  child: Text(
-                    _coverageExpanded
-                        ? _coverageNotice!
-                        : (_coverageShort ?? _coverageNotice!),
-                    maxLines: _coverageExpanded ? null : 1,
-                    overflow: _coverageExpanded
-                        ? TextOverflow.visible
-                        : TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 12.5, height: 1.6, color: Color(0xFF1A2433)),
-                  ),
-                ),
-                Icon(
-                    _coverageExpanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    size: 18,
-                    color: color),
-              ]),
-            ),
-          ),
-
-          // **والإغلاقُ حقٌّ لمن قرأ** — إلّا حين تنتظر اللافتةُ فعلاً منه.
-          if (!_needsGovernorate)
-            InkWell(
-              onTap: _dismissCoverage,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 6, left: 2),
-                child: Icon(Icons.close, size: 16, color: color),
-              ),
-            ),
-        ]),
-
-        // نصيحة بلا طريق ليست نصيحة. الزرّ هو الطريق.
-        if (_needsGovernorate) ...[
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            height: 40,
-            child: ElevatedButton.icon(
-              onPressed: _openGovernorateSheet,
-              icon: const Icon(Icons.my_location_rounded, size: 18),
-              label: const Text('اختيار المحافظة يدوياً'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF053391),
-                foregroundColor: Colors.white,
-                textStyle: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ],
-      ]),
-    );
-  }
-
-  /// يطلب إذن الموقع ويحدّد المحافظة بلا تدخّل من المستخدم.
-  ///
-  /// يفشل صامتاً: من رفض الإذن أو تعذّر تحديد موقعه يرى اللافتة والزرّ
-  /// اليدوي — لا رسالة خطأ على شاشة فتحها ليرى رصيده.
-  Future<void> _autoDetectGovernorate() async {
-    try {
-      var permission = await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission != LocationPermission.always &&
-          permission != LocationPermission.whileInUse) {
-        return;
-      }
-
-      if (!await Geolocator.isLocationServiceEnabled()) return;
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 15),
-        ),
-      );
-
-      final api = Get.find<ApiClient>();
-      final resolved = await api.postData('/api/v1/amial/geo/resolve-zone', {
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-      });
-
-      final data = (resolved.body is Map) ? resolved.body['data'] : null;
-      final code = (data is Map) ? data['governorate_code'] : null;
-      if (code is! String || code.isEmpty) return;
-
-      final saved = await api.postData(
-          '/api/v1/amial/me/governorate', {'governorate_code': code});
-
-      final ok = saved.statusCode == 200 &&
-          saved.body is Map &&
-          saved.body['success'] == true;
-      if (!ok || !mounted) return;
-
-      // نُعيد قراءة التغطية وحدها: إعادة _load كاملةً تُعيد استدعاء هذه
-      // الدالّة نفسها وتُطيل الانتظار بلا فائدة.
-      final cov = await api.getData('/api/v1/amial/service-coverage');
-      final d = (cov.body is Map) ? cov.body['data'] : null;
-      if (d is! Map || !mounted) return;
-
-      final agents = (d['agents'] ?? 0) as num;
-      final merchants = (d['merchants'] ?? 0) as num;
-      setState(() {
-        _needsGovernorate = false;
-        _coverageIsGap = agents == 0 && merchants == 0;
-        _coverageNotice = (agents == 0 || merchants == 0)
-            ? (d['notice'] as String?)
-            : null;
-      });
-    } catch (_) {
-      // الفشل يترك اللافتة والزرّ اليدوي — وهو المخرج المقصود.
-    }
-  }
-
-  Future<void> _openGovernorateSheet() async {
-    final saved = await SetGovernorateSheet.open(context);
-    if (!saved || !mounted) return;
-    // إعادة التحميل تُبدّل الرسالة فوراً إلى عدد الوكلاء والتجّار — الأثر
-    // المرئيّ هو ما يُثبت للمستخدم أن ما فعله وقع.
-    await _load();
-  }
-
-  // ============ Header — أزرار دائرية بيضاء + عنوان مركزي ============
   Widget _header() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 54, 16, 14),
