@@ -52,6 +52,7 @@
                 // الرابط هو ما يُريه المدير العنوان ليمرّره لها.
                 ['🏦 بوّابة الوكيل (شركات الصرافة)', route('agent.login'), null, '_blank'],
                 ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), null],
+                ['✅ توثيق التجّار', route('admin.amial.merchants.verification.page'), 'platform.merchants.compliance'],
                 ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.move'],
                 ['🪪 لوحة التحقق (الحسابات الجديدة)', route('admin.amial.hub.verification'), null],
                 // AMIAL-OTP-CENTER-001 — القاعدة ١٢: يُوصل إليه من هنا.
@@ -80,12 +81,14 @@
         [
             'title' => 'الامتثال والرقابة',
             'icon' => '🛡️',
-            'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*'],
+            'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*', 'admin/amial/saher*'],
             'links' => [
                 ['🪪 مراجعة مستندات الهوية', route('admin.amial.kyc.page'), 'platform.customers.freeze'],
+                ['📝 طلبات تحديث بيانات العملاء', route('admin.amial.kyc.changes.page'), 'platform.customers.kyc.view'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), null],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), null],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],
+                ['🛰️ ساهر — رادار الجودة والأمان', route('admin.amial.saher.index'), 'saher.view'],
             ],
         ],
         [
