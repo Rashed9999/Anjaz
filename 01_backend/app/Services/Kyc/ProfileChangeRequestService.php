@@ -313,7 +313,7 @@ class ProfileChangeRequestService
             ->orderBy('r.created_at')
             ->limit($limit)
             ->get([
-                'r.id', 'r.field', 'r.old_value', 'r.new_value', 'r.reason',
+                'r.id', 'r.user_id', 'r.field', 'r.old_value', 'r.new_value', 'r.reason',
                 'r.created_at', 'r.opened_by', 'r.supporting_document_id',
                 'u.f_name', 'u.l_name', 'u.phone',
             ])->map(fn ($r) => (array) $r)->all();
