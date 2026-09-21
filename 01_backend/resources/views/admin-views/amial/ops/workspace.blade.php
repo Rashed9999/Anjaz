@@ -39,6 +39,8 @@
         ]],
         ['id'=>'compliance','title'=>'الامتثال والمخاطر','icon'=>'🛡️','desc'=>'المراقبة، فحص المعاملات، تقييم المخاطر والضوابط.','items'=>[
             // KYC العميل وأرشيف فتح الحسابات أصبحا جزءاً من مركز العملاء.
+            // هذا الطابور وحده عابر للأدوار، لذلك يبقى هنا.
+            ['اعتماد الحسابات الجديدة (عميل/وكيل/تاجر)', route('admin.amial.hub.verification'), 'platform.approvals.decide'],
             ['مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.audit.view'], ['سجل التدقيق', route('admin.amial.audit.index'), 'platform.audit.view'], ['الإشراف والأمن', route('admin.amial.supervision.index'), 'platform.audit.view'], ['أحداث الأمان', route('admin.amial.security-events.index'), 'platform.audit.view'], ['حارس الأمان', route('admin.amial.sentinel.index'), 'platform.audit.view'], ['صحة النظام', route('admin.amial.system.health'), 'platform.audit.view'], ['ساهر — رادار النظام', route('admin.amial.saher.index'), 'saher.view'],
         ]],
         ['id'=>'services','title'=>'خدمات المنصّة','icon'=>'🧩','desc'=>'إدارة الخدمات، التكاملات، وواجهات البرمجة.','items'=>[
