@@ -449,6 +449,9 @@ Route::prefix('catalog')->name('catalog.')->middleware('platform:platform.settin
         Route::get('/export', [$cc, 'export'])->name('export');
         Route::post('/', [$cc, 'store'])->name('store');
         Route::post('/import', [$cc, 'import'])->name('import');
+        // AMIAL-CATALOG-IMAGE-001 — القالب ينادي هذا الاسم عند رفع صورة المنتج.
+        // غيابه يُسقط صفحة الكتالوج عند التصيير قبل أن يضغط المستخدم شيئاً.
+        Route::post('/images', [$cc, 'uploadImage'])->name('images');
         Route::get('/{id}', [$cc, 'show'])->where('id', '[0-9]+')->name('show');
         Route::post('/{id}/review', [$cc, 'review'])->where('id', '[0-9]+')->name('review');
     });
