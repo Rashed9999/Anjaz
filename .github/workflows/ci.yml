@@ -161,6 +161,11 @@ jobs:
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/CustomerFactoryContractTest.php tests/Feature/CustomerGoldenJourneyGuardTest.php tests/Feature/CustomerKycUpgradeJourneyGuardTest.php
 
+      - name: وصلات الإدارة الحرجة — المسار والصلاحية والمدخل
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Feature/AdminCriticalRouteContractTest.php tests/Feature/MerchantVerificationAdminGuardTest.php
+
+
       - name: تحقق دورة البريد قبل الاختبارات الشاملة
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/EmailOtpLifecycleTest.php tests/Feature/EmailIdentityGuardTest.php tests/Feature/AmialOtpEmailTemplateTest.php tests/Feature/EmailVerificationCenterGuardTest.php tests/Feature/AgentLifecycleChainTest.php tests/Feature/InsiderDefenseTest.php tests/Feature/ArabicUserMessagesGuardTest.php tests/Feature/OpsAlertResendGuardTest.php tests/Feature/DemoOtpTest.php tests/Feature/DemoMoneyGuardTest.php tests/Feature/KycRegulatoryFieldsTest.php tests/Feature/PortalHostSeparationTest.php
