@@ -17,7 +17,7 @@ import 'package:amial_pay/features/requested_money/screens/incoming_requests_scr
 import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
 import 'package:amial_pay/features/kyc_verification/screens/my_profile_changes_screen.dart';
-import 'package:amial_pay/features/kyc_verification/screens/complete_my_account_screen.dart';
+import 'package:amial_pay/features/kyc_verification/screens/customer_verification_center_screen.dart';
 import 'package:amial_pay/features/me/screens/customer_services_hub_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
 import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
@@ -235,14 +235,12 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
       // التوثيق، لا نجبر العميل على اكتشافه من نافذة خدمة مقفلة.
       _serviceCard(
         icon: Icons.verified_user_outlined,
-        label: tier >= 3 ? 'ملف التوثيق' : 'التوثيق ورفع المستوى',
+        label: 'التوثيق',
         subtitle: tier >= 3
-            ? 'مراجعة حالة التوثيق'
-            : 'أكمل بياناتك وارفع مستوى الحساب',
+            ? 'حالة التوثيق والحدود والمستندات'
+            : 'حالة التوثيق والحدود ورفع المستوى',
         onTap: () => Get.to(
-          () => CompleteMyAccountScreen(
-            targetTier: tier >= 3 ? 3 : tier + 1,
-          ),
+          () => const CustomerVerificationCenterScreen(),
         ),
       ),
 
