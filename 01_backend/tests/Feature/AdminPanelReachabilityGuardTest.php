@@ -156,20 +156,30 @@ class AdminPanelReachabilityGuardTest extends TestCase
     }
 
     /** @test */
-    public function every_compliance_panel_is_linked_from_the_sidebar(): void
+    public function every_compliance_panel_is_reachable_from_an_admin_navigation_surface(): void
     {
-        // الحلقة التي انقطعت في المرّات الثلاث كلّها.
-        $sidebar = file_get_contents(
-            resource_path('views/admin-views/amial/partials/_sidebar.blade.php'),
-        );
+        // AMIAL-CUSTOMER-CENTER-NAV-003 — بعد توحيد العميل لا نفرض أن كل
+        // أداة متخصصة تعيش في الشريط الجانبي. المطلوب أن يكون لها باب مرئي:
+        // إمّا الشريط العام، أو مساحة العمل، أو شريط أدوات مركز العملاء.
+        $navigation = implode("\n", [
+            (string) file_get_contents(
+                resource_path('views/admin-views/amial/partials/_sidebar.blade.php')
+            ),
+            (string) file_get_contents(
+                resource_path('views/admin-views/amial/ops/workspace.blade.php')
+            ),
+            (string) file_get_contents(
+                resource_path('views/admin-views/amial/customer/index.blade.php')
+            ),
+        ]);
 
-        $this->assertNotEmpty($sidebar, 'تعذّرت قراءة القائمة الجانبية');
+        $this->assertNotEmpty($navigation, 'تعذّرت قراءة أسطح التنقّل الإدارية');
 
         foreach (self::MUST_BE_REACHABLE as $name => $why) {
             $this->assertStringContainsString(
                 "route('{$name}')",
-                $sidebar,
-                "«{$name}» لا رابط لها في القائمة الجانبية — تعمل ولا أحد يصل إليها.\n"
+                $navigation,
+                "«{$name}» تعمل لكن لا باب مرئياً يقود إليها.\n"
                 . "السبب في وجوبها: {$why}",
             );
         }
