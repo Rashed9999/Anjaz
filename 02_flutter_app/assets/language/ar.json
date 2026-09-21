@@ -970,5 +970,9 @@
   "coverage_basis_current_notice": "التحقق مبني على موقعك الحالي. إذا كنت في محافظة أخرى يمكنك فحص الموقع من جديد.",
   "coverage_basis_residence_notice": "التحقق مبني على محافظة السكن المسجّلة. إذا كنت في محافظة أخرى يمكنك فحص موقعك الحالي.",
   "coverage_locating": "جارٍ تحديد الموقع...",
-  "coverage_use_current": "استخدام موقعي الحالي"
+  "coverage_use_current": "استخدام موقعي الحالي",
+  "customer_verification_title": "التوثيق",
+  "customer_verification_profile_subtitle": "حالة التوثيق، الحدود، المستويات ورفع المستوى",
+  "customer_verification_complete_subtitle": "حالة التوثيق والحدود والمستندات",
+  "customer_verification_upgrade_subtitle": "حالة التوثيق والحدود ورفع المستوى"
 }

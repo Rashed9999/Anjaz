@@ -970,5 +970,9 @@
   "coverage_basis_current_notice": "Coverage is based on your current location. You can check again if you move to another governorate.",
   "coverage_basis_residence_notice": "Coverage is based on your registered residence governorate. If you are elsewhere, you can check your current location.",
   "coverage_locating": "Determining location…",
-  "coverage_use_current": "Use my current location"
+  "coverage_use_current": "Use my current location",
+  "customer_verification_title": "Verification",
+  "customer_verification_profile_subtitle": "Verification status, limits, levels, and account upgrade",
+  "customer_verification_complete_subtitle": "Verification status, limits, and documents",
+  "customer_verification_upgrade_subtitle": "Verification status, limits, and account upgrade"
 }

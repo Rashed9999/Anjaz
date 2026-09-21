@@ -173,13 +173,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: Color(0xFF16874C),
                         ),
                       ),
-                      title: const Text(
-                        'التوثيق',
-                        style: TextStyle(fontWeight: FontWeight.w600),
+                      title: Text(
+                        'customer_verification_title'.tr,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      subtitle: const Text(
-                        'حالة التوثيق، الحدود، المستويات ورفع المستوى',
-                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      subtitle: Text(
+                        'customer_verification_profile_subtitle'.tr,
+                        style: const TextStyle(fontSize: 11, color: Colors.grey),
                       ),
                       trailing: const Icon(Icons.chevron_left, color: Colors.grey),
                       onTap: () => Get.to(

@@ -235,10 +235,10 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
       // التوثيق، لا نجبر العميل على اكتشافه من نافذة خدمة مقفلة.
       _serviceCard(
         icon: Icons.verified_user_outlined,
-        label: 'التوثيق',
+        label: 'customer_verification_title'.tr,
         subtitle: tier >= 3
-            ? 'حالة التوثيق والحدود والمستندات'
-            : 'حالة التوثيق والحدود ورفع المستوى',
+            ? 'customer_verification_complete_subtitle'.tr
+            : 'customer_verification_upgrade_subtitle'.tr,
         onTap: () => Get.to(
           () => const CustomerVerificationCenterScreen(),
         ),

@@ -56,10 +56,10 @@ class CustomerKycUpgradeJourneyGuardTest extends TestCase
         // AMIAL-KYC-CENTER-001 — لم يعد المدخل يقفز مباشرةً إلى خطوة
         // «إكمال الحساب». كل رحلة التوثيق صارت خلف باب واحد، ومنه يختار
         // العميل رفع المستوى أو مراجعة الحدود والمستندات.
-        $this->assertStringContainsString("label: 'التوثيق'", $servicesSrc);
+        $this->assertStringContainsString("'customer_verification_title'.tr", $servicesSrc);
         $this->assertStringContainsString('CustomerVerificationCenterScreen', $servicesSrc);
         $this->assertStringNotContainsString('CompleteMyAccountScreen', $servicesSrc);
-        $this->assertStringContainsString("AmialScreenHeader(title: 'التوثيق')", $centerSrc);
+        $this->assertStringContainsString("AmialScreenHeader(title: 'customer_verification_title'.tr)", $centerSrc);
         $this->assertStringContainsString('CustomerVerificationPanel()', $centerSrc);
 
         // مدخل الخدمة المقفلة يبقى قادراً على إرشاد العميل إلى الرفع،

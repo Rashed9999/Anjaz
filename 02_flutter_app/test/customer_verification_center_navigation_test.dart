@@ -33,7 +33,7 @@ void main() {
     final services = read('lib/features/me/screens/my_services_screen.dart');
 
     expect(
-      services.contains("label: 'التوثيق'"),
+      services.contains("'customer_verification_title'.tr"),
       isTrue,
     );
     expect(
@@ -53,7 +53,7 @@ void main() {
       'lib/features/kyc_verification/screens/customer_verification_center_screen.dart',
     );
 
-    expect(center.contains("AmialScreenHeader(title: 'التوثيق')"), isTrue);
+    expect(center.contains("AmialScreenHeader(title: 'customer_verification_title'.tr)"), isTrue);
     expect(center.contains('CustomerVerificationPanel()'), isTrue);
   });
 }

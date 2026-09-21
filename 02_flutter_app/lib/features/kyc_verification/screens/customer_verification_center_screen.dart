@@ -2,6 +2,7 @@ import 'package:amial_pay/common/widgets/amial_form.dart';
 import 'package:amial_pay/features/kyc_verification/widgets/customer_verification_panel.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 /// AMIAL-KYC-CENTER-001
 ///
@@ -26,7 +27,7 @@ class CustomerVerificationCenterScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const AmialScreenHeader(title: 'التوثيق'),
+            AmialScreenHeader(title: 'customer_verification_title'.tr),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
