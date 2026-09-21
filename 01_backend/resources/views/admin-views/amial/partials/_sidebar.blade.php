@@ -80,7 +80,9 @@
             'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*', 'admin/amial/saher*'],
             'links' => [
                 // طوابير KYC وتحديث بيانات العميل أصبحت داخل «مركز العملاء».
-                // تبقى المسارات نفسها عاملة كأدوات متخصصة، لكن بلا مدخل مكرر.
+                // أمّا هذا الطابور فعابر للأدوار (عميل/وكيل/تاجر)، لذلك يبقى
+                // في الامتثال باسم يوضح أنه ليس ملف العميل.
+                ['✅ اعتماد الحسابات الجديدة (عميل/وكيل/تاجر)', route('admin.amial.hub.verification'), 'platform.approvals.decide'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), null],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), null],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],
