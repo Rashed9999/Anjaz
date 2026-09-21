@@ -252,6 +252,15 @@ Route::prefix('customer')->name('customer.')->middleware('platform:platform.cust
 
         Route::get('/', [$cc, 'page'])->name('page');
         Route::get('/search', [$cc, 'search'])->name('search');
+
+        // AMIAL-CUSTOMER-CENTER-OPS-001 — الطوابير العامة داخل المركز نفسه.
+        Route::get('/ops/kyc', [$cc, 'operationsKyc'])
+            ->middleware('platform:platform.customers.kyc.view')->name('ops.kyc');
+        Route::get('/ops/changes', [$cc, 'operationsChanges'])
+            ->middleware('platform:platform.customers.kyc.view')->name('ops.changes');
+        Route::get('/ops/systems', [$cc, 'operationsSystems'])
+            ->middleware('platform:platform.audit.view')->name('ops.systems');
+
         Route::get('/{id}/tab/{tab}', [$cc, 'tab'])
             ->where(['id' => '[0-9]+', 'tab' => '[a-z]+'])->name('tab');
         Route::post('/{id}/action', [$cc, 'act'])->where('id', '[0-9]+')->name('action');
