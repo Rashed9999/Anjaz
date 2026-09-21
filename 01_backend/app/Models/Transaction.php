@@ -98,7 +98,7 @@ class Transaction extends Model
             }
 
             $dispatch = static function () use ($transaction): void {
-                \\App\\Jobs\\SendTransactionEmailJob::dispatch((int) $transaction->id);
+                \App\Jobs\SendTransactionEmailJob::dispatch((int) $transaction->id);
             };
 
             if (DB::transactionLevel() > 0) {
