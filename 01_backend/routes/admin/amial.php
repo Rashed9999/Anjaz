@@ -756,6 +756,21 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     Route::get('/users/{id}/detail.json', [$hc, 'accountDetailJson'])
         ->where('id', '[0-9]+')->name('users.detail');
 
+    // AMIAL-ADMIN-EDIT-001 — حالة الحساب + رفع الوثائق + تعديل بياناته.
+    // هذه الثلاثة هي مصدر نافذة «تعديل». حذفها يترك الواجهة موجودة لكن
+    // loadEditInner يتوقف عند readiness.json بـ404 فتختفي كل الأقسام.
+    Route::get('/users/{id}/readiness.json', [$hc, 'accountReadinessJson'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.customers.view')->name('users.readiness');
+
+    Route::post('/users/{id}/documents', [$hc, 'uploadDocument'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.customers.kyc.request')->name('users.documents.upload');
+
+    Route::post('/users/{id}/profile', [$hc, 'updateProfile'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.customers.lifecycle.manage')->name('users.profile.update');
+
     // إجراءات
     Route::post('/{slug}/users', [$hc, 'storeUser'])
         ->where('slug', 'customers|agents|merchants')->name('users.store');
