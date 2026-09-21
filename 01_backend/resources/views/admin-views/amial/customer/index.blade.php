@@ -48,6 +48,11 @@
         <div class="d-flex flex-wrap gap-2" role="tablist" aria-label="أقسام مركز العملاء">
             <button type="button" class="btn btn-primary btn-sm js-cc-op active"
                     data-op="customers" data-testid="cc-op-customers">👤 ملف العميل</button>
+            @if(auth('user')->user()?->hasPlatformPermission('platform.customers.view'))
+                <a class="btn btn-outline-dark btn-sm"
+                   href="{{ route('admin.support-center.index') }}"
+                   data-testid="cc-support-diagnostics">🎧 تشخيص وحل المشكلة</a>
+            @endif
             @if(auth('user')->user()?->hasPlatformPermission('platform.customers.kyc.view'))
                 <button type="button" class="btn btn-outline-primary btn-sm js-cc-op"
                         data-op="kyc" data-testid="cc-kyc-queue">🪪 طابور التوثيق</button>
@@ -63,10 +68,10 @@
                    href="{{ route('admin.amial.registration-dossiers.page') }}"
                    data-testid="cc-registration-archive">🗂️ الأرشيف</a>
             @endif
-            @if(auth('user')->user()?->hasPlatformPermission('platform.approvals.decide'))
+            @if(auth('user')->user()?->hasPlatformPermission('platform.recovery.view'))
                 <a class="btn btn-outline-danger btn-sm"
                    href="{{ route('admin.amial.recovery.index') }}"
-                   data-testid="cc-recovery">🔑 الاستعادة</a>
+                   data-testid="cc-recovery">🔑 متابعة الاستعادة</a>
             @endif
         </div>
     </div>
