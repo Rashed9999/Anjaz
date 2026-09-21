@@ -34,11 +34,12 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'is_phone_verified' => 1,
             'is_email_verified' => 1,
+            'is_kyc_verified' => 1,
             'type' => 2,                 // 0=admin, 1=agent, 2=customer, 3=merchant
             'role' => 'customer',
             'verification_level' => 'basic',
-            // الاختبارات المالية تنشئ عميلاً صالحاً افتراضياً؛ الاختبارات
-            // التي تريد رفض KYC تصرّح بالمستوى الأقل صراحةً.
+            // المصنع الافتراضي = عميل مالي صالح فعلاً، لا نصف حالة.
+            // اختبارات Tier 0 / pending / rejected تستخدم الحالات الصريحة أدناه.
             'kyc_tier' => 2,
             'is_active' => true,
             'zone_code' => 'SOUTH',
@@ -52,6 +53,30 @@ class UserFactory extends Factory
             'unique_id' => (string) Str::uuid(),
             'remember_token' => Str::random(10),
         ];
+    }
+
+
+    /** عميل جديد حقيقي: يدخل التطبيق لكن قدرته المالية = صفر. */
+    public function tierZero(): static
+    {
+        return $this->state(fn () => [
+            'is_kyc_verified' => 0,
+            'kyc_tier' => 0,
+            'is_phone_verified' => 0,
+            'residence_governorate' => null,
+            'verified_residence_governorate' => null,
+            'residence_verified_at' => null,
+            'zone_code' => 'UNKNOWN',
+        ]);
+    }
+
+    /** عميل بلا إقامة موثقة — لاختبارات KYC/Zone التي تختبر الغياب نفسه. */
+    public function withoutVerifiedResidence(): static
+    {
+        return $this->state(fn () => [
+            'verified_residence_governorate' => null,
+            'residence_verified_at' => null,
+        ]);
     }
 
     /** مستخدم أدمن (type=0). */
