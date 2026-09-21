@@ -159,13 +159,21 @@ class OperatorWorkspaceGuardTest extends TestCase
         // ⑥ هذه الصفحةُ مدخلُ اللوحة الوحيد بعد نقل التفاصيل من الشريط
         // الجانبيّ — فطيُّ خدمةٍ منها يقطع بابَها.
         foreach ([
-            'admin.amial.kyc.page', 'admin.amial.ledger.page', 'admin.amial.aml.page',
+            'admin.amial.ledger.page', 'admin.amial.aml.page',
             'admin.amial.hub.merchants', 'admin.amial.hub.agents', 'admin.amial.audit.index',
             'admin.amial.ops.roles.index', 'admin.amial.system.health',
         ] as $route) {
             $this->assertStringContainsString($route, $src,
-                "بابُ «{$route}» سقط من مساحة العمل — وهي مدخلُ اللوحة الوحيد");
+                "بابُ «{$route}» سقط من مساحة العمل");
         }
+
+        // KYC العميل انتقل عمداً إلى مركز العملاء حتى لا يبقى باباً مكرراً.
+        $customerCenter = (string) file_get_contents(
+            resource_path('views/admin-views/amial/customer/index.blade.php')
+        );
+        $this->assertStringContainsString('admin.amial.kyc.page', $customerCenter);
+        $this->assertStringContainsString('admin.amial.kyc.changes.page', $customerCenter);
+        $this->assertStringContainsString('admin.amial.customer-systems.index', $customerCenter);
 
         // ① ولا رقمٌ مكتوبٌ في القالب: كلُّها من الخدمة.
         $this->assertStringContainsString('$wsCards', $src);
