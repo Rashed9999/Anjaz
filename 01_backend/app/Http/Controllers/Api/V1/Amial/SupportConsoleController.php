@@ -52,8 +52,7 @@ class SupportConsoleController extends Controller
         $actor = $request->user();
         $capabilities = [
             'customers' => $actor->hasPlatformPermission('platform.customers.view'),
-            'playbooks' => $actor->hasPlatformPermission('platform.customers.view')
-                || $actor->hasPlatformPermission('platform.tickets.view'),
+            'playbooks' => $actor->hasPlatformPermission('platform.customers.view'),
             'transactions' => $actor->hasPlatformPermission('platform.transactions.view'),
             'tickets' => $actor->hasPlatformPermission('platform.tickets.manage'),
             'approvals' => $actor->hasPlatformPermission('platform.approvals.decide'),
