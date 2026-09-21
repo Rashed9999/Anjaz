@@ -191,6 +191,50 @@ class CustomerCenterController extends Controller
         return $this->ok($data);
     }
 
+    /**
+     * AMIAL-CUSTOMER-CENTER-OPS-001 — الطوابير العامة داخل مركز العملاء.
+     *
+     * لا ننسخ منطق KYC أو التحديثات أو مراقبة الأنظمة إلى Controller جديد؛
+     * نقرأ الخدمات الأصلية نفسها ثم نعرضها في تبويبات تشغيلية داخل المركز.
+     */
+    public function operationsKyc(Request $request): JsonResponse
+    {
+        /** @var \App\Services\KycDocumentService $kyc */
+        $kyc = app(\App\Services\KycDocumentService::class);
+
+        $data = [
+            'pending' => $kyc->pendingQueue(),
+            'activation' => $kyc->activationQueue(),
+            'restricted_pending' => [],
+            'restricted_activation' => [],
+            'restricted_visible' => false,
+        ];
+
+        if ($kyc instanceof \App\Services\Kyc\GuardedKycDocumentService
+            && $request->user()->hasPlatformPermission('platform.customers.kyc.restricted.view')) {
+            $data['restricted_pending'] = $kyc->restrictedPendingQueue($request->user());
+            $data['restricted_activation'] = $kyc->restrictedActivationQueue($request->user());
+            $data['restricted_visible'] = true;
+        }
+
+        return $this->ok($data);
+    }
+
+    public function operationsChanges(Request $request): JsonResponse
+    {
+        return $this->ok([
+            'items' => app(\App\Services\Kyc\ProfileChangeRequestService::class)
+                ->pendingQueue(),
+        ]);
+    }
+
+    public function operationsSystems(Request $request): JsonResponse
+    {
+        return $this->ok(
+            app(\App\Services\Admin\CustomerSystemsCenterService::class)->snapshot()
+        );
+    }
+
     public function act(Request $request, int $id): JsonResponse
     {
         $customer = User::where('type', CUSTOMER_TYPE)->find($id);
