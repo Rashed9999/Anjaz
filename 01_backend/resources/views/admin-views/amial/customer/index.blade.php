@@ -377,36 +377,224 @@
 
     function renderOpsSystems(m, target) {
         const summary = m.summary || {};
-        const systems = m.systems || [];
+        const sections = [
+            ['systems', 'حالة الأنظمة'],
+            ['policy', 'الحركات المرفوضة'],
+            ['credits', 'الأجل والديون'],
+            ['receipts', 'الإيصالات'],
+            ['bill', 'السداد والمزود'],
+            ['requests', 'طلبات الأموال'],
+            ['notifications', 'الإشعارات والتسليم'],
+        ];
+
         target.innerHTML = `
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                <div><h5 class="mb-1">صحة أنظمة العميل</h5><div class="small text-muted">مراقبة الأنظمة التي تؤثر على رحلة العميل دون لوحة منفصلة.</div></div>
+                <div>
+                    <h5 class="mb-1">صحة أنظمة العميل</h5>
+                    <div class="small text-muted">
+                        المصدر التشغيلي نفسه الذي كان في «مركز أنظمة العميل»،
+                        لكن داخل مركز العملاء وبدون صفحة ثانية.
+                    </div>
+                </div>
                 <button class="btn btn-sm btn-outline-secondary js-ops-refresh" data-op="systems">↻ تحديث</button>
             </div>
+
             <div class="row g-2 mb-3">
                 ${card('العملاء', summary.customers ?? '—')}
                 ${card('KYC معلّق', summary.kyc_pending ?? '—')}
                 ${card('حجب سياسة / 24س', summary.policy_blocks_24h ?? '—')}
+                ${card('استثناءات حدود', summary.limit_overrides ?? '—')}
+                ${card('أجل مستحق', summary.outstanding_credit_accounts ?? '—')}
                 ${card('طلبات أموال معلقة', summary.pending_payment_requests ?? '—')}
-                ${card('فواتير معلقة', summary.pending_bill_orders ?? '—')}
+                ${card('سداد معلّق', summary.pending_bill_orders ?? '—')}
                 ${card('فشل PDF', summary.receipt_pdf_failures ?? '—')}
             </div>
-            <div class="row g-3">
+
+            <div class="d-flex flex-wrap gap-2 mb-3" data-testid="cc-systems-subtabs">
+                ${sections.map((section, index) => `
+                    <button type="button"
+                            class="btn btn-sm ${index === 0 ? 'btn-primary' : 'btn-outline-secondary'} js-systems-subtab"
+                            data-section="${section[0]}">${section[1]}</button>
+                `).join('')}
+            </div>
+            <div id="cc-systems-detail"></div>`;
+
+        renderSystemsDetail('systems', m);
+    }
+
+    function renderSystemsDetail(section, m) {
+        const target = document.getElementById('cc-systems-detail');
+        if (!target) return;
+
+        const openCustomerButton = id => id
+            ? `<button class="btn btn-sm btn-link p-0 js-ops-open-customer" data-id="${esc(id)}">#${esc(id)}</button>`
+            : '—';
+
+        if (section === 'systems') {
+            const systems = m.systems || [];
+            target.innerHTML = `<div class="row g-3">
                 ${systems.map(system => `
-                    <div class="col-xl-4 col-md-6"><div class="card h-100 p-3">
+                    <div class="col-xl-6"><div class="card h-100 p-3">
                         <div class="d-flex justify-content-between gap-2">
                             <strong>${esc(system.title)}</strong>
                             <span class="badge bg-${system.state === 'complete' ? 'success' : (system.state === 'partial' ? 'warning text-dark' : 'secondary')}">${esc(system.state_label)}</span>
                         </div>
                         <div class="small text-muted mt-2">${esc(system.description)}</div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-md-4"><div class="border rounded p-2 h-100">
+                                <div class="small text-muted">الرؤية</div><div class="small fw-semibold">${esc(system.visibility || '—')}</div>
+                            </div></div>
+                            <div class="col-md-4"><div class="border rounded p-2 h-100">
+                                <div class="small text-muted">الأوامر</div><div class="small fw-semibold">${esc(system.controls || '—')}</div>
+                            </div></div>
+                            <div class="col-md-4"><div class="border rounded p-2 h-100">
+                                <div class="small text-muted">الأثر</div><div class="small fw-semibold">${esc(system.audit || '—')}</div>
+                            </div></div>
+                        </div>
                         <div class="mt-2">${(system.metrics || []).map(metric =>
-                            `<span class="badge badge-soft-secondary me-1 mb-1">${esc(metric.label)}: ${esc(metric.value)}</span>`).join('')}</div>
-                        ${system.gap ? `<div class="alert alert-warning py-2 small mt-2 mb-0">${esc(system.gap)}</div>` : ''}
-                    </div></div>`).join('')}
+                            `<span class="badge badge-soft-secondary me-1 mb-1">${esc(metric.label)}: ${metric.money ? money(metric.value) + ' ر.ي' : esc(metric.value)}</span>`).join('')}</div>
+                        ${system.gap ? `<div class="alert alert-warning py-2 small mt-2 mb-0"><strong>فجوة معلنة:</strong> ${esc(system.gap)}</div>` : ''}
+                        ${(system.actions || []).length ? `<div class="d-flex flex-wrap gap-2 mt-2">
+                            ${system.actions.map(action => `<a class="btn btn-sm btn-outline-primary" href="${esc(action.url)}">${esc(action.label)}</a>`).join('')}
+                        </div>` : ''}
+                    </div></div>
+                `).join('')}
             </div>`;
+            return;
+        }
+
+        if (section === 'policy') {
+            const rows = (m.policy_blocks || []).map(row => `<tr>
+                <td class="small text-nowrap">${dt(row.at)}</td>
+                <td>${openCustomerButton(row.customer_id)}</td>
+                <td><code>${esc(row.feature)}</code></td>
+                <td>${esc(row.tier ?? '—')}</td>
+                <td>${row.amount == null ? '—' : money(row.amount) + ' ر.ي'}</td>
+                <td class="small">${esc(row.reason || row.code || '—')}</td>
+                <td class="font-monospace small">${esc(row.transaction_id || row.decision_id || '—')}</td>
+            </tr>`).join('');
+            target.innerHTML = `
+                <div class="alert alert-info py-2 small">قراءة فقط — لا يوجد زر لتعطيل حارس السياسة من مركز العملاء.</div>
+                ${table(['الوقت','العميل','الميزة','المستوى','المبلغ','السبب','المرجع'], rows, 'لا توجد حالات منع مسجلة', 'cc-systems-policy')}`;
+            return;
+        }
+
+        if (section === 'credits') {
+            const rows = (m.credits || []).map(row => `<tr>
+                <td>#${esc(row.id)}</td>
+                <td>${esc(row.customer_name)} ${row.customer_user_id ? openCustomerButton(row.customer_user_id) : ''}</td>
+                <td>#${esc(row.merchant_user_id)}</td>
+                <td class="fw-bold">${money(row.balance)} ر.ي</td>
+                <td>${String(row.limit || '0') === '0' ? 'بلا حد' : money(row.limit) + ' ر.ي'}</td>
+                <td>${esc(row.classification)}</td>
+                <td class="small">${dt(row.last_payment_at)}</td>
+            </tr>`).join('');
+            target.innerHTML = table(
+                ['الحساب','العميل','التاجر','الرصيد','الحد','التصنيف','آخر سداد'],
+                rows, 'لا توجد أرصدة أجل مستحقة', 'cc-systems-credits');
+            return;
+        }
+
+        if (section === 'receipts') {
+            const rows = (m.receipts || []).map(row => `<tr>
+                <td class="font-monospace small">${esc(row.receipt_number)}</td>
+                <td>${openCustomerButton(row.user_id)}</td>
+                <td>${esc(row.receipt_type)}</td>
+                <td>${money(row.amount)} ر.ي</td>
+                <td>${money(row.fee)} ر.ي</td>
+                <td><span class="badge bg-${row.status === 'pdf_generated' ? 'success' : (row.status === 'pdf_failed' ? 'danger' : 'warning text-dark')}">${esc(row.status)}</span></td>
+                <td class="font-monospace small">${esc(row.reference_transaction_id)}</td>
+                <td class="small">${dt(row.issued_at)}</td>
+            </tr>`).join('');
+            target.innerHTML = table(
+                ['السند','العميل','النوع','المبلغ','الرسوم','PDF','مرجع العملية','الإصدار'],
+                rows, 'لا توجد إيصالات', 'cc-systems-receipts');
+            return;
+        }
+
+        if (section === 'bill') {
+            const orders = (m.bill_pay || []).map(row => `<tr>
+                <td class="font-monospace small">${esc(row.order_ulid)}</td>
+                <td>${openCustomerButton(row.user_id)}</td>
+                <td>${money(row.amount)} ر.ي</td>
+                <td>${money(row.fee)} ر.ي</td>
+                <td><span class="badge bg-${row.status === 'failed' ? 'danger' : 'warning text-dark'}">${esc(row.status)}</span></td>
+                <td class="font-monospace small">${esc(row.provider_reference || '—')}</td>
+                <td class="small">${esc(row.provider_message || '—')}</td>
+                <td class="small">${dt(row.updated_at)}</td>
+            </tr>`).join('');
+            const provider = (m.bill_provider_requests || []).map(row => `<tr>
+                <td class="font-monospace small">${esc(row.order_ulid || '—')}</td>
+                <td>${esc(row.request_type)}</td>
+                <td>${esc(row.http_status ?? '—')}</td>
+                <td>${row.latency_ms == null ? '—' : esc(row.latency_ms) + ' ms'}</td>
+                <td><span class="badge bg-${row.was_successful ? 'success' : 'danger'}">${row.was_successful ? 'نجح' : 'فشل'}</span></td>
+                <td class="small">${esc(row.error_message || '—')}</td>
+                <td class="small">${dt(row.created_at)}</td>
+            </tr>`).join('');
+            target.innerHTML = `
+                <h6>عمليات السداد التي تحتاج متابعة</h6>
+                ${table(['مرجع أميال','العميل','المبلغ','الرسوم','الحالة','مرجع المزود','الرسالة','تحديث'], orders, 'لا توجد عمليات معلقة', 'cc-systems-bill')}
+                <h6 class="mt-3">اتصال مزودي السداد</h6>
+                ${table(['مرجع أميال','الطلب','HTTP','الزمن','النتيجة','الخطأ','الوقت'], provider, 'لا توجد اتصالات مزود مسجلة', 'cc-systems-provider')}`;
+            return;
+        }
+
+        if (section === 'requests') {
+            const rows = (m.payment_requests || []).map(row => `<tr>
+                <td class="font-monospace small">${esc(row.request_ulid)}</td>
+                <td>${openCustomerButton(row.requester_user_id)}</td>
+                <td>${row.recipient_user_id ? openCustomerButton(row.recipient_user_id) : 'عام/رقم هاتف'}</td>
+                <td>${money(row.amount)} ر.ي</td>
+                <td>${esc(row.status)}</td>
+                <td class="font-monospace small">${esc(row.paid_transaction_id || '—')}</td>
+                <td class="small">${dt(row.created_at)}</td>
+            </tr>`).join('');
+            target.innerHTML = table(
+                ['المرجع','الطالب','المستلم','المبلغ','الحالة','عملية الدفع','الإنشاء'],
+                rows, 'لا توجد طلبات أموال', 'cc-systems-requests');
+            return;
+        }
+
+        if (section === 'notifications') {
+            const notices = (m.notifications || []).map(row => `<tr>
+                <td>${openCustomerButton(row.user_id)}</td>
+                <td><code>${esc(row.type)}</code></td>
+                <td>${esc(row.title)}</td>
+                <td>${row.read_at ? '<span class="badge bg-success">مقروء</span>' : '<span class="badge bg-secondary">غير مقروء</span>'}</td>
+                <td class="small">${dt(row.created_at)}</td>
+            </tr>`).join('');
+            const deliveries = (m.notification_deliveries || []).map(row => `<tr>
+                <td class="small">${dt(row.created_at)}</td>
+                <td>${openCustomerButton(row.user_id)}</td>
+                <td><code>${esc(row.channel || 'fcm')}</code></td>
+                <td><code>${esc(row.notification_type || '—')}</code></td>
+                <td>${esc(row.status || '—')}</td>
+                <td>${esc(row.attempt ?? '—')}</td>
+                <td>${esc(row.http_status ?? '—')}</td>
+                <td class="font-monospace small">${esc(row.provider_message_id || '—')}</td>
+                <td class="small">${esc(row.error_message || row.error_code || '—')}</td>
+            </tr>`).join('');
+            target.innerHTML = `
+                <h6>آخر إشعارات العملاء</h6>
+                ${table(['العميل','النوع','العنوان','القراءة','الإنشاء'], notices, 'لا توجد إشعارات', 'cc-systems-notifications')}
+                <h6 class="mt-3">تسليم Push والبريد</h6>
+                <div class="small text-muted mb-2">قبول المزود لا يعني أن العميل قرأ الرسالة؛ نعرض حالة التسليم كما سجلها المزود فقط.</div>
+                ${table(['الوقت','العميل','القناة','النوع','الحالة','المحاولة','HTTP','مرجع المزود','الخطأ'], deliveries, 'لا توجد سجلات تسليم', 'cc-systems-deliveries')}`;
+        }
     }
 
     document.addEventListener('click', async event => {
+        const systemsTab = event.target.closest('.js-systems-subtab');
+        if (systemsTab) {
+            document.querySelectorAll('.js-systems-subtab').forEach(button => {
+                button.classList.toggle('btn-primary', button === systemsTab);
+                button.classList.toggle('btn-outline-secondary', button !== systemsTab);
+            });
+            renderSystemsDetail(systemsTab.dataset.section, opsLoaded.systems || {});
+            return;
+        }
+
         const open = event.target.closest('.js-ops-open-customer');
         if (open) {
             showOperationPanel('customers');
