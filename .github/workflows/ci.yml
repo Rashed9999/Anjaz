@@ -157,6 +157,10 @@ jobs:
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/FeeCentreScreensGuardTest.php tests/Feature/AuditScreenArabicAndFiltersTest.php
 
+      - name: رحلة العميل الذهبية — من التسجيل إلى Tier 0 ورفع التوثيق
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Feature/CustomerGoldenJourneyGuardTest.php tests/Feature/RegistrationRolesTest.php tests/Feature/CustomerKycUpgradeJourneyGuardTest.php
+
       - name: تحقق دورة البريد قبل الاختبارات الشاملة
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/EmailOtpLifecycleTest.php tests/Feature/EmailIdentityGuardTest.php tests/Feature/AmialOtpEmailTemplateTest.php tests/Feature/EmailVerificationCenterGuardTest.php tests/Feature/AgentLifecycleChainTest.php tests/Feature/InsiderDefenseTest.php tests/Feature/ArabicUserMessagesGuardTest.php tests/Feature/OpsAlertResendGuardTest.php tests/Feature/DemoOtpTest.php tests/Feature/DemoMoneyGuardTest.php tests/Feature/KycRegulatoryFieldsTest.php tests/Feature/PortalHostSeparationTest.php
