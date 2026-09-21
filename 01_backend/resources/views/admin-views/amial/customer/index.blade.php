@@ -24,7 +24,52 @@
     <div class="d-flex align-items-center gap-3 mb-3">
         <i class="tio-user-outlined text-primary" style="font-size:24px"></i>
         <h2 class="page-header-title mb-0">مركز العملاء</h2>
-        <span class="badge badge-soft-secondary ms-auto">شاشة واحدة</span>
+        <span class="badge badge-soft-success ms-auto">المصدر الموحد للعميل</span>
+    </div>
+
+    {{-- AMIAL-CUSTOMER-CENTER-NAV-003
+         الوظائف التي كانت موزعة على الشريط الجانبي أصبحت أدوات تشغيل داخل
+         المركز نفسه. تبقى المسارات المتخصصة موجودة بصلاحياتها، لكن الموظف
+         لا يبحث عنها في خمس مجموعات مختلفة. --}}
+    <div class="card p-3 mb-3" data-testid="cc-operations-bar">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+            <div>
+                <h5 class="mb-1">أدوات العميل</h5>
+                <div class="small text-muted">
+                    البحث والملف والتوثيق والتحديثات وصحة الأنظمة من نقطة واحدة.
+                </div>
+            </div>
+            @if(auth('user')->user()?->hasPlatformPermission('platform.customers.view'))
+                <a class="btn btn-primary btn-sm"
+                   href="{{ route('admin.amial.hub.customers', ['create' => 1]) }}"
+                   data-testid="cc-create-customer">+ إضافة عميل</a>
+            @endif
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            @if(auth('user')->user()?->hasPlatformPermission('platform.customers.kyc.view'))
+                <a class="btn btn-outline-primary btn-sm"
+                   href="{{ route('admin.amial.kyc.page') }}"
+                   data-testid="cc-kyc-queue">🪪 طابور التوثيق</a>
+                <a class="btn btn-outline-primary btn-sm"
+                   href="{{ route('admin.amial.kyc.changes.page') }}"
+                   data-testid="cc-profile-changes">📝 طلبات تحديث البيانات</a>
+            @endif
+            @if(auth('user')->user()?->hasPlatformPermission('platform.audit.view'))
+                <a class="btn btn-outline-secondary btn-sm"
+                   href="{{ route('admin.amial.customer-systems.index') }}"
+                   data-testid="cc-systems-health">🧭 صحة أنظمة العميل</a>
+            @endif
+            @if(auth('user')->user()?->hasPlatformPermission('platform.registrations.view'))
+                <a class="btn btn-outline-secondary btn-sm"
+                   href="{{ route('admin.amial.registration-dossiers.page') }}"
+                   data-testid="cc-registration-archive">🗂️ أرشيف فتح الحسابات</a>
+            @endif
+            @if(auth('user')->user()?->hasPlatformPermission('platform.approvals.decide'))
+                <a class="btn btn-outline-danger btn-sm"
+                   href="{{ route('admin.amial.recovery.index') }}"
+                   data-testid="cc-recovery">🔑 استعادة الحساب</a>
+            @endif
+        </div>
     </div>
 
     {{-- مفاتيح البحث الفعلية فقط؛ كلّ بحث يسجّل بلا حفظ النص الحساس خاماً. --}}
