@@ -119,5 +119,8 @@ class ApkSigningReadinessGuardTest extends TestCase
         $this->assertStringContainsString('Release خفيف بتوقيع مؤقت', $workflow);
         $this->assertStringContainsString('Release مؤقت: التوقيع صالح للتثبيت', $workflow);
         $this->assertStringContainsString('amial-temp', $workflow);
+        $this->assertStringContainsString('--split-per-abi', $workflow);
+        $this->assertStringContainsString('app-arm64-v8a-release.apk', $workflow);
+        $this->assertStringContainsString("native-code: 'arm64-v8a'", $workflow);
     }
 }
