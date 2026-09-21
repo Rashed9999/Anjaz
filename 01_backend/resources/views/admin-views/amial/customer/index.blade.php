@@ -50,7 +50,7 @@
                     data-op="customers" data-testid="cc-op-customers">👤 ملف العميل</button>
             @if(auth('user')->user()?->hasPlatformPermission('platform.customers.view'))
                 <a class="btn btn-outline-dark btn-sm"
-                   href="{{ route('admin.support-center.index') }}"
+                   href="{{ route('admin.support-center.index', ['tab' => 'playbooks']) }}"
                    data-testid="cc-support-diagnostics">🎧 تشخيص وحل المشكلة</a>
             @endif
             @if(auth('user')->user()?->hasPlatformPermission('platform.customers.kyc.view'))
