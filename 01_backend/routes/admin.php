@@ -110,6 +110,8 @@ Route::group(['as' => 'admin.'], function () {
             $sc = \App\Http\Controllers\Api\V1\Amial\SupportConsoleController::class;
             Route::get('/', [$sc, 'page'])->middleware('platform:platform.tickets.view')->name('index');
             Route::get('search', [$sc, 'search'])->middleware('platform:platform.customers.view')->name('search');
+            Route::get('playbooks', [$sc, 'playbooks'])
+                ->middleware('platform:platform.customers.view')->name('playbooks');
             // AMIAL-SUPPORT-REACH-001 — **حالةُ التشغيل لا وحدةُ التشغيل.**
             // ملخّصٌ يقول أالطوابيرُ تسير وكم نُفِّذ اليوم — لا المهامُّ
             // الفاشلةُ بآثار أخطائها. فيكفيه `ops.status.view`.
