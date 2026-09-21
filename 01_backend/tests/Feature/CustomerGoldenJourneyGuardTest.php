@@ -144,9 +144,9 @@ class CustomerGoldenJourneyGuardTest extends TestCase
         $servicesSrc = file_get_contents($services);
         $completeSrc = file_get_contents($complete);
 
-        $this->assertStringContainsString("currentRole.value == 'customer'", $authSrc);
-        $this->assertStringContainsString('final bool fullyBlocked = isCustomer', $authSrc);
-        $this->assertStringContainsString('? false', $authSrc);
+        $this->assertStringContainsString('shouldBlockHome', $authSrc);
+        $this->assertStringContainsString("role == 'admin' || role == 'customer'", $authSrc);
+        $this->assertStringContainsString("role == 'merchant' || role == 'pos'", $authSrc);
         $this->assertStringContainsString('customer-kyc-upgrade-cta', $servicesSrc);
         $this->assertStringContainsString('CompleteMyAccountScreen', $servicesSrc);
         $this->assertStringNotContainsString('profile?.type != 2', $completeSrc);
