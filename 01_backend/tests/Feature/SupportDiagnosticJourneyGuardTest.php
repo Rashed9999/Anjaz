@@ -331,7 +331,7 @@ class SupportDiagnosticJourneyGuardTest extends TestCase
         );
 
         $this->assertStringContainsString('تشخيص وحل المشكلة', $view);
-        $this->assertStringContainsString("route('admin.support-center.index')", $view);
+        $this->assertStringContainsString("route('admin.support-center.index', ['tab' => 'playbooks'])", $view);
         $this->assertStringContainsString(
             "hasPlatformPermission('platform.recovery.view')",
             $view,
