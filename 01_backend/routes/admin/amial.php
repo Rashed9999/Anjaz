@@ -71,16 +71,22 @@ Route::prefix('legal')->name('legal.')->group(function () {
 });
 
 // ============ Account Recovery ============
+// القراءة متاحة للدعم لمتابعة حالة العميل، أمّا اعتماد/رفض استعادة الحساب
+// فيغيّر وسيلة الدخول ويلغي الجلسات؛ لذلك له صلاحيتان حسّاستان مستقلتان.
 Route::prefix('recovery')->name('recovery.')->group(function () {
-    Route::get('/', [AccountRecoveryController::class, 'webIndex'])->name('index');
+    Route::get('/', [AccountRecoveryController::class, 'webIndex'])
+        ->middleware('platform:platform.recovery.view')->name('index');
     Route::get('/{ulid}', [AccountRecoveryController::class, 'webShow'])
         ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.recovery.view')
         ->name('show');
     Route::post('/{ulid}/approve', [AccountRecoveryController::class, 'webApprove'])
         ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.recovery.approve')
         ->name('approve');
     Route::post('/{ulid}/reject', [AccountRecoveryController::class, 'webReject'])
         ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.recovery.reject')
         ->name('reject');
 });
 
