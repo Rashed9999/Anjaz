@@ -108,5 +108,15 @@ class ApkSigningReadinessGuardTest extends TestCase
         $this->assertStringContainsString('AMIAL_ANDROID_KEYSTORE_PASSWORD', $workflow);
         $this->assertStringContainsString('1db2799f07dad246a5163fc5fa9ca813b47dd65b6db55eb296632bed3bbabcc7', strtolower($workflow));
         $this->assertStringContainsString('توقيع APK لا يطابق هوية أميال الثابتة', $workflow);
+
+        // AMIAL-APK-BUILD-MODE-003 — غياب أسرار Release لا يجوز أن يجعل
+        // زرّ «أعطني APK قابلاً للتثبيت» أحمر إلى الأبد. installable
+        // يهبط إلى Debug الموقّع تجريبياً، بينما release_strict وحده يفرض
+        // المفتاح الثابت. وهذا يمنع عودة العطل الذي أسقط Run #2327.
+        $this->assertStringContainsString('default: installable', $workflow);
+        $this->assertStringContainsString('release_strict', $workflow);
+        $this->assertStringContainsString("if: env.APK_BUILD_TYPE == 'release'", $workflow);
+        $this->assertStringContainsString('سيُبنى APK Debug قابل للتثبيت', $workflow);
+        $this->assertStringContainsString('APK Debug: تم التحقق من وجود توقيع صالح', $workflow);
     }
 }
