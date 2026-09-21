@@ -307,7 +307,8 @@
             .concat((m.restricted_activation || []).map(x => ({...x, restricted:true})));
 
         const pendingRows = pending.map(row => {
-            const canDecide = row.restricted ? CAN_RESTRICTED_DECIDE : CAN_KYC_DECIDE;
+            const canDecide = CAN_KYC_DECIDE
+                && (!row.restricted || CAN_RESTRICTED_DECIDE);
             return `<tr>
                 <td><strong>${esc(row.customer_name)}</strong><div class="small text-muted">#${esc(row.user_id)} • ${esc(row.customer_phone)}</div></td>
                 <td>${esc(row.doc_label)} ${row.restricted ? '<span class="badge bg-danger">مقيد</span>' : ''}</td>
