@@ -163,7 +163,7 @@ jobs:
 
       - name: وصلات الإدارة الحرجة — المسار والصلاحية والمدخل
         working-directory: 01_backend
-        run: php artisan test --compact tests/Feature/AdminCriticalRouteContractTest.php tests/Feature/MerchantVerificationAdminGuardTest.php
+        run: php artisan test --compact tests/Feature/AdminCriticalRouteContractTest.php tests/Feature/AdminRouteReferenceGuardTest.php tests/Feature/MerchantVerificationAdminGuardTest.php
 
       - name: رحلة التاجر الذهبية — التسجيل ثم التشغيل ثم الاعتماد
         working-directory: 01_backend
