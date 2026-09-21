@@ -159,7 +159,7 @@ jobs:
 
       - name: رحلة العميل الذهبية — من التسجيل إلى Tier 0 ورفع التوثيق
         working-directory: 01_backend
-        run: php artisan test --compact tests/Feature/CustomerGoldenJourneyGuardTest.php tests/Feature/CustomerKycUpgradeJourneyGuardTest.php
+        run: php artisan test --compact tests/Feature/CustomerFactoryContractTest.php tests/Feature/CustomerGoldenJourneyGuardTest.php tests/Feature/CustomerKycUpgradeJourneyGuardTest.php
 
       - name: تحقق دورة البريد قبل الاختبارات الشاملة
         working-directory: 01_backend
