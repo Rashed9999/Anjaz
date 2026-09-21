@@ -125,7 +125,7 @@ Route::group(['as' => 'admin.'], function () {
             // AMIAL-DEVICE-TRUST-001: أجهزة العميل — تُحظر واحداً واحداً بدل
             // تجميد الحساب كلّه. والصلاحية نفسها المستعملة لإنهاء الجلسات:
             // كلاهما قطعُ وصولٍ لا مسٌّ بالمال.
-            Route::get('customers/{id}/devices', [$sc, 'devices'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.devices');
+            Route::get('customers/{id}/devices', [$sc, 'devices'])->where('id', '[0-9]+')->middleware('platform:platform.customers.devices.view')->name('customers.devices');
             Route::post('devices/{deviceRowId}/block', [$sc, 'blockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.block');
             Route::post('devices/{deviceRowId}/unblock', [$sc, 'unblockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.unblock');
             Route::get('tickets', [$sc, 'tickets'])->middleware('platform:platform.tickets.view')->name('tickets.index');
@@ -156,7 +156,7 @@ Route::group(['as' => 'admin.'], function () {
             Route::group(['prefix' => 'wrong-transfer', 'as' => 'wrong-transfer.',
                 'middleware' => 'amial.idempotency'], function () use ($sc) {
                 Route::post('open', [$sc, 'openWrongTransferClaim'])
-                    ->middleware('platform:platform.customers.freeze')->name('open');
+                    ->middleware('platform:platform.wrong_transfer.claim.open')->name('open');
                 Route::post('{ulid}/resolve', [$sc, 'resolveWrongTransferClaim'])
                     ->middleware('platform:platform.disputes.decide')->name('resolve');
                 Route::post('{ulid}/reject', [$sc, 'rejectWrongTransferClaim'])
