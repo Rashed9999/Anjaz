@@ -324,6 +324,20 @@ class SupportDiagnosticJourneyGuardTest extends TestCase
         );
     }
 
+    public function test_customer_center_has_one_clear_door_to_support_diagnostics(): void
+    {
+        $view = file_get_contents(
+            resource_path('views/admin-views/amial/customer/index.blade.php')
+        );
+
+        $this->assertStringContainsString('تشخيص وحل المشكلة', $view);
+        $this->assertStringContainsString("route('admin.support-center.index')", $view);
+        $this->assertStringContainsString(
+            "hasPlatformPermission('platform.recovery.view')",
+            $view,
+        );
+    }
+
     public function test_flutter_merchant_payment_preserves_a_diagnostic_reference_for_unknown_outcomes(): void
     {
         $api = file_get_contents(base_path('../02_flutter_app/lib/data/api/api_client.dart'));
