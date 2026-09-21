@@ -9,9 +9,10 @@ use Illuminate\Support\Facades\Schema;
 /**
  * AMIAL-NOTIFICATION-DELIVERY-001
  *
- * سجل مستقل لمحاولات Push. لا نخزن FCM token ولا payload ولا مفاتيح مزود.
- * provider_accepted تعني أن FCM قبل الرسالة، وليست ادعاءً بأن النظام
- * التشغيلي عرضها على الجهاز.
+ * سجل مستقل لمحاولات التسليم الخارجي (Push / Email).
+ * لا نخزن FCM token ولا عنوان البريد ولا payload ولا مفاتيح مزود.
+ * provider_accepted تعني أن المزود قبل الرسالة؛ وليست دليلاً نهائياً على
+ * عرض Push على الجهاز أو قراءة البريد من المستلم.
  */
 class NotificationDeliveryLogService
 {
