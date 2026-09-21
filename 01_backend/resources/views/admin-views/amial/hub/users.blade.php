@@ -1036,6 +1036,17 @@
     document.getElementById('kyc-tab-link').addEventListener('shown.bs.tab', loadKyc);
     document.getElementById('kyc-tab-link').addEventListener('click', () => setTimeout(loadKyc, 200));
 
+    // AMIAL-CUSTOMER-CREATE-DOOR-002 — الصفحة القديمة لم تعد باب إدارة عميل.
+    // يبقى نموذج فتح الحساب نفسه مؤقتاً، ويُفتح مباشرةً من مركز العملاء
+    // بواسطة ?create=1 حتى لا يضطر الموظف لرؤية قائمة ثانية مكررة.
+    if (slug === 'customers'
+        && new URLSearchParams(window.location.search).get('create') === '1') {
+        const addModal = document.getElementById('modal-add');
+        if (addModal) {
+            new bootstrap.Modal(addModal).show();
+        }
+    }
+
     loadUsers();
 })();
 </script>
