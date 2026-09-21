@@ -200,7 +200,7 @@ Route::middleware(['auth:api'])->group(function () {
             // AMIAL-DEVICE-TRUST-001 — نفس مسارات الويب بنفس الصلاحية.
             // تحصينُ سطحٍ واحد يترك الآخر باباً مفتوحاً، وقد وقع ذلك في هذا
             // المشروع من قبل: حُصّنت مسارات الويب وبقي توأمها في الـ API.
-            Route::get('/customers/{id}/devices', [$c, 'devices'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.devices');
+            Route::get('/customers/{id}/devices', [$c, 'devices'])->where('id', '[0-9]+')->middleware('platform:platform.customers.devices.view')->name('customers.devices');
             Route::post('/devices/{deviceRowId}/block', [$c, 'blockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.block');
             Route::post('/devices/{deviceRowId}/unblock', [$c, 'unblockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.unblock');
             // تذاكر النزاعات
