@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\FeeService;
 use App\Services\KycTierService;
 use App\Traits\TransactionTrait;
@@ -28,6 +29,7 @@ class MerchantPaymentController extends Controller
     public function __construct(
         private readonly FeeService $fees,
         private readonly KycTierService $kyc,
+        private readonly AuditService $audit,
     ) {}
 
     /** POST /api/v1/amial/merchant/quote — لا يحرّك مالاً */
@@ -80,7 +82,7 @@ class MerchantPaymentController extends Controller
 
         // AMIAL-MERCHANT-PAY-002 — **ورمزُ المعاملات هنا كما هو في التحويل.**
         if (!\App\CentralLogics\Helpers::pin_check($customer->id, (string) $request->input('pin'))) {
-            return $this->error('PIN_INVALID', 'رمز الحماية غير صحيح', 403);
+            return $this->reject($request, 'PIN_INVALID', 'رمز الحماية غير صحيح', 403);
         }
         $channel = $request->input('channel', 'qr');
 
@@ -89,18 +91,18 @@ class MerchantPaymentController extends Controller
             : User::whereIn('phone', \App\Support\Phone::variants((string) $request->input('merchant_phone')))->first();
 
         if (!$merchant) {
-            return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
+            return $this->reject($request, 'MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
         }
         if ($merchant->id === $customer->id) {
-            return $this->error('SELF_PAYMENT', 'لا يمكن الدفع لنفسك', 422);
+            return $this->reject($request, 'SELF_PAYMENT', 'لا يمكن الدفع لنفسك', 422, $merchant->id);
         }
 
         $profile = MerchantProfile::where('user_id', $merchant->id)->first();
         if (!$profile) {
-            return $this->error('NOT_A_MERCHANT', 'الحساب ليس تاجراً', 422);
+            return $this->reject($request, 'NOT_A_MERCHANT', 'الحساب ليس تاجراً', 422, $merchant->id);
         }
         if ($profile->verification_status === 'verification_suspended') {
-            return $this->error('MERCHANT_SUSPENDED', 'توثيق التاجر موقوف', 422);
+            return $this->reject($request, 'MERCHANT_SUSPENDED', 'توثيق التاجر موقوف', 422, $merchant->id);
         }
 
         $posUserId = $request->input('pos_user_id');
@@ -110,7 +112,7 @@ class MerchantPaymentController extends Controller
                 ->where('is_active', true)
                 ->first();
             if (!$pos) {
-                return $this->error('POS_USER_INVALID', 'موظف POS غير صالح لهذا التاجر', 422);
+                return $this->reject($request, 'POS_USER_INVALID', 'موظف POS غير صالح لهذا التاجر', 422, $merchant->id);
             }
         }
 
@@ -124,7 +126,7 @@ class MerchantPaymentController extends Controller
                 'merchant_pay',
             );
         } catch (\RuntimeException $e) {
-            return $this->error('PROGRESSIVE_KYC_POLICY_DENIED', $e->getMessage(), 403);
+            return $this->reject($request, 'PROGRESSIVE_KYC_POLICY_DENIED', $e->getMessage(), 403, $merchant->id);
         }
 
         try {
@@ -138,11 +140,17 @@ class MerchantPaymentController extends Controller
                 idempotencyKey: $request->input('idempotency_key'),
             );
         } catch (\App\Exceptions\InsufficientBalanceException $e) {
+            $this->auditRejection(
+                $request,
+                'INSUFFICIENT_BALANCE',
+                $merchant->id,
+                402,
+            );
             return new JsonResponse($e->toApiArray(), 402);
         } catch (\InvalidArgumentException $e) {
-            return $this->error('INVALID_PAYMENT', $e->getMessage(), 422);
+            return $this->reject($request, 'INVALID_PAYMENT', $e->getMessage(), 422, $merchant->id);
         } catch (\RuntimeException $e) {
-            return $this->error('MERCHANT_PAY_FAILED', $e->getMessage(), 422);
+            return $this->reject($request, 'MERCHANT_PAY_FAILED', $e->getMessage(), 422, $merchant->id);
         }
 
         $code = $channel === 'pos' ? 'MERCHANT_POS' : 'MERCHANT_QR';
@@ -198,6 +206,49 @@ class MerchantPaymentController extends Controller
             'success' => false, 'code' => $code, 'message' => $message,
             'errors' => (object)[], 'meta' => (object)[],
         ], $status);
+    }
+
+    /**
+     * AMIAL-SUPPORT-CORRELATION-002
+     *
+     * كل رفض معروف لدفع التاجر يترك أثراً تحت X-Correlation-Id نفسه الذي
+     * يراه العميل. لا نحفظ PIN ولا نص الطلب ولا رقم الهاتف الخام في context.
+     */
+    private function reject(
+        Request $request,
+        string $code,
+        string $message,
+        int $status,
+        ?int $merchantUserId = null,
+    ): JsonResponse {
+        $this->auditRejection($request, $code, $merchantUserId, $status);
+
+        return $this->error($code, $message, $status);
+    }
+
+    private function auditRejection(
+        Request $request,
+        string $code,
+        ?int $merchantUserId,
+        int $status,
+    ): void {
+        $customer = $request->user();
+
+        $this->audit->record([
+            'actor_type' => 'customer',
+            'actor_user_id' => $customer?->id,
+            'subject_type' => 'transaction',
+            'subject_id' => $customer?->id ? (string) $customer->id : null,
+            'action' => 'MERCHANT_PAYMENT_REJECTED',
+            'decision_code' => $code,
+            'severity' => $status >= 500 ? 'warning' : 'notice',
+            'context' => [
+                'merchant_user_id' => $merchantUserId,
+                'channel' => (string) $request->input('channel', 'qr'),
+                'amount' => (string) $request->input('amount', ''),
+                'http_status' => $status,
+            ],
+        ]);
     }
 
     private function validationError($v): JsonResponse
