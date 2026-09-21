@@ -96,9 +96,17 @@ class DemoOtpTest extends TestCase
 
     public function test_demo_otp_can_be_switched_off_for_real_production(): void
     {
-        // البوابة الحقيقية: AMIAL_DEMO_OTP فارغاً يُعطّل الالتفاف تماماً،
-        // فيعود النظام لاشتراط رمز حقيقي من بوابة SMS.
-        config(['amial.otp.demo_code' => '']);
+        // يوجد الآن بابان ثابتان منفصلان عمداً:
+        // 1) demo_code لأرقام العرض فقط.
+        // 2) pilot_customer_phone_code لإثبات هاتف العميل مؤقتاً.
+        //
+        // اختبار «الإنتاج الحقيقي» يجب أن يطفئ الاثنين؛ إطفاء Demo وحده
+        // لا يطفئ قرار الـPilot ولا ينبغي أن يفعل ذلك ضمنياً.
+        config([
+            'amial.otp.demo_code' => '',
+            'amial.otp.pilot_customer_phone_enabled' => false,
+        ]);
+        \App\Services\Otp\OtpPolicy::forget();
 
         $this->postJson('/api/v1/customer/auth/register', $this->payload($this->phone(), '123456'))
             ->assertJsonFragment(['code' => 'otp']);
