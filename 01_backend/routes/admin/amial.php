@@ -6,6 +6,9 @@ use App\Http\Controllers\Admin\AdminCharityController;
 use App\Http\Controllers\Admin\AdminSafePaymentController;
 use App\Http\Controllers\Admin\AuditDecisionsController;
 use App\Http\Controllers\Admin\LegalTermsController;
+use App\Http\Controllers\Admin\SaherController;
+use App\Http\Controllers\Admin\ProfileChangeRequestController;
+use App\Http\Controllers\Admin\MerchantVerificationAdminController;
 use App\Http\Controllers\Admin\OperatorRolesController;
 use App\Http\Controllers\Admin\OperatorWorkspaceController;
 use App\Http\Controllers\Admin\OpsConsoleController;
@@ -545,6 +548,21 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('approve');
     Route::post('/documents/{id}/reject', [$kyc, 'reject'])
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('reject');
+
+    // AMIAL-PROFILE-CHANGE-003 — الدعم يفتح الطلب، صاحب الحساب يملؤه،
+    // ومراجع آخر يحسمه. لا تعديل مباشر للهوية من لوحة الإدارة.
+    Route::prefix('changes')->name('changes.')->group(function () {
+        Route::get('/', [ProfileChangeRequestController::class, 'page'])
+            ->middleware('platform:platform.customers.kyc.view')->name('page');
+        Route::post('/open', [ProfileChangeRequestController::class, 'open'])
+            ->middleware('platform:platform.customers.kyc.request')->name('open');
+        Route::post('/{id}/decide', [ProfileChangeRequestController::class, 'decide'])
+            ->where('id', '[0-9]+')
+            ->middleware('platform:platform.approvals.decide')->name('decide');
+        Route::get('/users/{userId}/identity-state', [ProfileChangeRequestController::class, 'identityState'])
+            ->where('userId', '[0-9]+')
+            ->middleware('platform:platform.customers.kyc.view')->name('identity-state');
+    });
 });
 
 // ============ AMIAL-2FA-001 (v1.8) ============
@@ -610,6 +628,29 @@ Route::prefix('settlements')->name('settlements.')->middleware(['platform:platfo
 
 // ============ AMIAL-MERCHANT-RISK-001 (v2.10) ============
 Route::prefix('merchants')->name('merchants.')->group(function () {
+    // AMIAL-MERCHANT-VERIFY-ADMIN-001 — طابور توثيق النشاط التجاري.
+    // عرض المستندات = امتثال؛ القرار = صلاحية اعتماد مستقلة.
+    Route::prefix('verification')->name('verification.')->group(function () {
+        Route::get('/', [MerchantVerificationAdminController::class, 'page'])
+            ->middleware('platform:platform.merchants.compliance')->name('page');
+        Route::get('/list.json', [MerchantVerificationAdminController::class, 'listJson'])
+            ->middleware('platform:platform.merchants.compliance')->name('list');
+        Route::get('/{id}/documents/{type}', [MerchantVerificationAdminController::class, 'document'])
+            ->where('id', '[0-9]+')
+            ->middleware('platform:platform.merchants.compliance')->name('document');
+        Route::post('/{id}/approve', [MerchantVerificationAdminController::class, 'approve'])
+            ->where('id', '[0-9]+')
+            ->middleware('platform:platform.approvals.decide')->name('approve');
+        Route::post('/{id}/reject', [MerchantVerificationAdminController::class, 'reject'])
+            ->where('id', '[0-9]+')
+            ->middleware('platform:platform.approvals.decide')->name('reject');
+        Route::post('/{id}/resubmit', [MerchantVerificationAdminController::class, 'requestResubmission'])
+            ->where('id', '[0-9]+')
+            ->middleware('platform:platform.approvals.decide')->name('resubmit');
+        Route::post('/{id}/identity-lookup', [MerchantVerificationAdminController::class, 'lookupIdentity'])
+            ->where('id', '[0-9]+')
+            ->middleware('platform:platform.merchants.compliance')->name('identity-lookup');
+    });
     Route::get('/high-risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'highRisk'])->name('high-risk');
     Route::get('/risk-stats', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskStats'])->name('risk-stats');
     Route::get('/{userId}/risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskDashboard'])->name('risk');
@@ -803,6 +844,21 @@ Route::prefix('ops')->name('ops.')->group(function () {
 
     Route::post('/operators', [OperatorRolesController::class, 'store'])
         ->middleware('platform:platform.staff.manage')->name('operators.store');
+});
+
+// ============ SAHER-FOUNDATION-008 — رادار الجودة والأمان ============
+// القراءة، الدليل، التشغيل والحكم أربع صلاحيات مستقلة.
+Route::prefix('saher')->name('saher.')->group(function () {
+    Route::get('/', [SaherController::class, 'index'])
+        ->middleware('platform:saher.view')->name('index');
+    Route::get('/findings/{id}', [SaherController::class, 'show'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:saher.findings.view')->name('show');
+    Route::post('/scan', [SaherController::class, 'scan'])
+        ->middleware('platform:saher.scan.run')->name('scan');
+    Route::post('/findings/{id}/rule', [SaherController::class, 'rule'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:saher.findings.suppress')->name('rule');
 });
 
 // ============ AMIAL-SUPERVISION-001 — لوحة الإشراف ============
