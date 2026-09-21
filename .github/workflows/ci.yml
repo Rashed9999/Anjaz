@@ -30,13 +30,14 @@ on:
           - full_ci
           - apk_only
       build_type:
-        description: 'نوع APK عند اختيار apk_only'
+        description: 'installable يضمن APK قابلاً للتثبيت؛ release_strict يتطلب مفتاح التوقيع الثابت'
         required: true
-        default: debug
+        default: installable
         type: choice
         options:
+          - installable
           - debug
-          - release
+          - release_strict
 
   push:
     branches: ['**']
@@ -300,7 +301,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'apk_only') ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-apk]'))
     env:
-      APK_BUILD_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type || 'release' }}
+      APK_BUILD_REQUEST: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type || 'installable' }}
     defaults:
       run:
         working-directory: 02_flutter_app
@@ -319,6 +320,63 @@ jobs:
 
       - run: flutter pub get
 
+      # AMIAL-APK-BUILD-MODE-003
+      #
+      # installable = لا يفشل البناء لأن GitHub Secrets لم تُضبط بعد:
+      # إن وُجد المفتاح الثابت نبني Release، وإلا نبني Debug موقّعاً
+      # بمفتاح Android التجريبي ونسمّيه بوضوح Debug. أمّا release_strict
+      # فهو وحده الذي يرفض غياب مفتاح الإنتاج.
+      - name: تحديد نوع APK الفعلي قبل البناء
+        env:
+          KEYSTORE_B64: ${{ secrets.AMIAL_ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.AMIAL_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          REQUEST="${APK_BUILD_REQUEST:-installable}"
+          HAVE_RELEASE_SIGNING=0
+          if [ -n "${KEYSTORE_B64:-}" ] && [ -n "${KEYSTORE_PASSWORD:-}" ]; then
+            HAVE_RELEASE_SIGNING=1
+          fi
+
+          case "$REQUEST" in
+            release_strict)
+              if [ "$HAVE_RELEASE_SIGNING" -ne 1 ]; then
+                echo "::error::طلبت release_strict لكن مفتاح توقيع أميال الثابت غير مضبوط في GitHub Secrets."
+                echo "::error::المطلوب: AMIAL_ANDROID_KEYSTORE_B64 و AMIAL_ANDROID_KEYSTORE_PASSWORD"
+                exit 1
+              fi
+              TYPE=release
+              ;;
+            debug)
+              TYPE=debug
+              ;;
+            installable)
+              if [ "$HAVE_RELEASE_SIGNING" -eq 1 ]; then
+                TYPE=release
+              else
+                TYPE=debug
+                echo "::warning::مفتاح Release غير موجود؛ سيُبنى APK Debug قابل للتثبيت بدلاً من إسقاط التشغيل كله."
+              fi
+              ;;
+            *)
+              echo "::error::نوع بناء غير معروف: $REQUEST"
+              exit 1
+              ;;
+          esac
+
+          echo "APK_BUILD_TYPE=$TYPE" >> "$GITHUB_ENV"
+          echo "APK_RELEASE_SIGNING_AVAILABLE=$HAVE_RELEASE_SIGNING" >> "$GITHUB_ENV"
+
+          {
+            echo "## أميال باي — نوع APK"
+            echo "- المطلوب: `$REQUEST`"
+            echo "- الفعلي: `$TYPE`"
+            if [ "$TYPE" = "debug" ] && [ "$REQUEST" = "installable" ]; then
+              echo "- السبب: أسرار توقيع Release غير مضبوطة؛ تم اختيار Debug قابل للتثبيت تلقائياً."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: بصمة المصدر (فرع + التزام + إصدار)
         run: |
           echo "======== بصمة بناء أميال باي ========"
@@ -328,7 +386,8 @@ jobs:
           echo "الإصدار  : $(grep '^version:' pubspec.yaml)"
           echo "===================================="
 
-      - name: تجهيز مفتاح التوقيع الثابت
+      - name: تجهيز مفتاح التوقيع الثابت (Release فقط)
+        if: env.APK_BUILD_TYPE == 'release'
         env:
           KEYSTORE_B64: ${{ secrets.AMIAL_ANDROID_KEYSTORE_B64 }}
           KEYSTORE_PASSWORD: ${{ secrets.AMIAL_ANDROID_KEYSTORE_PASSWORD }}
@@ -403,12 +462,18 @@ jobs:
             ACTUAL_CERT_SHA256=$(printf '%s\n' "$CERT_OUTPUT" | sed -n 's/^V2 Signer: certificate SHA-256 digest: //p' | head -n 1)
           fi
           test -n "$ACTUAL_CERT_SHA256"
-          EXPECTED_CERT_SHA256="1db2799f07dad246a5163fc5fa9ca813b47dd65b6db55eb296632bed3bbabcc7"
-          if [ "$(printf '%s' "$ACTUAL_CERT_SHA256" | tr '[:upper:]' '[:lower:]')" != "$EXPECTED_CERT_SHA256" ]; then
-            echo "::error::توقيع APK لا يطابق هوية أميال الثابتة"
-            echo "expected=$EXPECTED_CERT_SHA256"
-            echo "actual=$ACTUAL_CERT_SHA256"
-            exit 1
+
+          if [ "$APK_BUILD_TYPE" = "release" ]; then
+            EXPECTED_CERT_SHA256="1db2799f07dad246a5163fc5fa9ca813b47dd65b6db55eb296632bed3bbabcc7"
+            if [ "$(printf '%s' "$ACTUAL_CERT_SHA256" | tr '[:upper:]' '[:lower:]')" != "$EXPECTED_CERT_SHA256" ]; then
+              echo "::error::توقيع APK لا يطابق هوية أميال الثابتة"
+              echo "expected=$EXPECTED_CERT_SHA256"
+              echo "actual=$ACTUAL_CERT_SHA256"
+              exit 1
+            fi
+            echo "✓ توقيع Release يطابق هوية أميال الثابتة"
+          else
+            echo "::notice::APK Debug: تم التحقق من وجود توقيع صالح، ولا تُقارَن بصمته بمفتاح Release."
           fi
 
           echo "== ZIP alignment =="
