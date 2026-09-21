@@ -59,8 +59,13 @@ class SelfRegisteredMerchantIsUsableTest extends TestCase
         Storage::fake('local');
 
         $r = $this->post('/api/v1/customer/auth/register', [
+            // AMIAL-LEGAL-NAME-001 — نفس العقد الحقيقي للتسجيل الحديث:
+            // الاسم والوالد والجد واللقب، لا fixture قديم باسم ثنائي.
             'f_name' => 'صادق',
-            'l_name' => 'علي عبدالله ميطان',
+            'father_name' => 'علي',
+            'grandfather_name' => 'عبدالله',
+            'family_name' => 'ميطان',
+            'l_name' => 'ميطان',
             'gender' => 'male',
             'dial_country_code' => '+967',
             'phone' => '777444999',
