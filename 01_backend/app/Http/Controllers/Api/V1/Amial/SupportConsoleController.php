@@ -52,6 +52,8 @@ class SupportConsoleController extends Controller
         $actor = $request->user();
         $capabilities = [
             'customers' => $actor->hasPlatformPermission('platform.customers.view'),
+            'playbooks' => $actor->hasPlatformPermission('platform.customers.view')
+                || $actor->hasPlatformPermission('platform.tickets.view'),
             'transactions' => $actor->hasPlatformPermission('platform.transactions.view'),
             'tickets' => $actor->hasPlatformPermission('platform.tickets.manage'),
             'approvals' => $actor->hasPlatformPermission('platform.approvals.decide'),
@@ -73,6 +75,36 @@ class SupportConsoleController extends Controller
         abort_unless(in_array(true, $capabilities, true), 403);
 
         return view('admin-views.support.console', compact('capabilities'));
+    }
+
+    /**
+     * GET /admin/support-center/playbooks?q=&category=
+     *
+     * كتالوج التشغيل لا يحتاج صلاحية فعل مالي. موظف الدعم يقرأ الإجراء
+     * الصحيح حتى عندما تكون نتيجة الإجراء «صعّد ولا تنفذ».
+     */
+    public function playbooks(Request $request): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $catalog = app(\App\Services\SupportPlaybookCatalogService::class);
+        $rows = $catalog->search(
+            trim((string) $request->query('q', '')),
+            trim((string) $request->query('category', '')),
+        );
+
+        $categories = collect($catalog->all())
+            ->groupBy('category')
+            ->map->count()
+            ->sortKeys()
+            ->all();
+
+        return $this->ok([
+            'playbooks' => $rows,
+            'categories' => $categories,
+            'total_catalog' => count($catalog->all()),
+            'matched' => count($rows),
+        ], 'SUPPORT_PLAYBOOKS_OK', 'كتالوج الدعم');
     }
 
     // ==================== 1) البحث الموحّد ====================
