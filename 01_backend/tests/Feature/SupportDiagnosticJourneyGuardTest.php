@@ -274,46 +274,7 @@ class SupportDiagnosticJourneyGuardTest extends TestCase
             $controller,
         );
         $this->assertStringContainsString(
-            'RECOVERY_BASE}?status=all&user_id=' . '    {
-        $view = file_get_contents(
-            resource_path('views/admin-views/support/console.blade.php')
-        );
-
-        $this->assertIsString($view);
-        $this->assertStringContainsString('CAN_DEVICES_VIEW', $view);
-        $this->assertStringContainsString('CAN_DEVICE_CONTROL', $view);
-        $this->assertStringContainsString('CAN_WRONG_TRANSFER_OPEN', $view);
-        $this->assertStringContainsString('CAN_WRONG_TRANSFER_DECIDE', $view);
-        $this->assertStringContainsString('بانتظار فريق النزاعات', $view);
-        $this->assertStringContainsString('رقم عملية أو حوالة معلقة', $view);
-        $this->assertStringContainsString('أثر رقم التتبع', $view);
-        $this->assertStringContainsString('أعطال خادم مرتبطة بنفس الرقم', $view);
-        $this->assertStringContainsString('لا تطلب من العميل إعادة الدفع', $view);
-    }
-
-    public function test_flutter_merchant_payment_preserves_a_diagnostic_reference_for_unknown_outcomes(): void
-    {
-        $api = file_get_contents(base_path('../02_flutter_app/lib/data/api/api_client.dart'));
-        $controller = file_get_contents(
-            base_path('../02_flutter_app/lib/features/merchant/controllers/merchant_pay_controller.dart')
-        );
-        $repo = file_get_contents(
-            base_path('../02_flutter_app/lib/features/merchant/domain/repositories/merchant_pay_repo.dart')
-        );
-
-        $this->assertStringContainsString("requestHeaders['X-Correlation-Id'] = traceId", $api);
-        $this->assertStringContainsString("'x-correlation-id': traceId", $api);
-        $this->assertStringContainsString('تعذر تأكيد نتيجة الطلب', $api);
-
-        $this->assertStringContainsString('lastDiagnosticId', $controller);
-        $this->assertStringContainsString('لا تبدأ عملية دفع جديدة قبل التحقق', $controller);
-        $this->assertStringNotContainsString("lastError.value = 'خطأ في الشبكة';", $controller);
-
-        $this->assertStringContainsString('required String correlationId', $repo);
-        $this->assertStringContainsString('correlationId: correlationId', $repo);
-    }
-}
- . '{p.id}',
+            'RECOVERY_BASE}?status=all&user_id=' . '$' . '{p.id}',
             $view,
         );
     }
@@ -332,6 +293,8 @@ class SupportDiagnosticJourneyGuardTest extends TestCase
         $this->assertStringContainsString('بانتظار فريق النزاعات', $view);
         $this->assertStringContainsString('رقم عملية أو حوالة معلقة', $view);
         $this->assertStringContainsString('أثر رقم التتبع', $view);
+        $this->assertStringContainsString('أعطال خادم مرتبطة بنفس الرقم', $view);
+        $this->assertStringContainsString('لا تطلب من العميل إعادة الدفع', $view);
     }
 
     public function test_flutter_merchant_payment_preserves_a_diagnostic_reference_for_unknown_outcomes(): void
