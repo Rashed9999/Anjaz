@@ -58,6 +58,18 @@ class SelfRegisteredMerchantIsUsableTest extends TestCase
     {
         Storage::fake('local');
 
+        // التسجيل الحقيقي في الـPilot يمر عبر إثبات الهاتف 123456.
+        // كان الاختبار يرسل الرمز بينما phone_verification مطفأ، ثم يتوقع
+        // لاحقاً أن KYC يعامل الهاتف كمثبت — حالة لا يمكن أن تحدث منطقياً.
+        config([
+            'amial.otp.pilot_customer_phone_enabled' => true,
+            'amial.otp.pilot_customer_phone_code' => '123456',
+        ]);
+        \Illuminate\Support\Facades\DB::table('business_settings')->updateOrInsert(
+            ['key' => 'phone_verification'],
+            ['value' => '1', 'created_at' => now(), 'updated_at' => now()],
+        );
+
         $r = $this->post('/api/v1/customer/auth/register', [
             // AMIAL-LEGAL-NAME-001 — نفس العقد الحقيقي للتسجيل الحديث:
             // الاسم والوالد والجد واللقب، لا fixture قديم باسم ثنائي.
@@ -95,6 +107,11 @@ class SelfRegisteredMerchantIsUsableTest extends TestCase
 
         $user = User::where('phone', 'like', '%777444999%')->first();
         $this->assertNotNull($user, 'لم يُنشأ الحسابُ أصلاً — الحارسُ يفحص فراغاً');
+        $this->assertSame(
+            1,
+            (int) $user->is_phone_verified,
+            'نجح OTP أثناء التسجيل لكن إثبات ملكية الهاتف لم يُحفظ على الحساب.'
+        );
 
         return $user;
     }
