@@ -22,7 +22,7 @@
             <div class="card p-3 mb-3">
                 <div class="input-group">
                     <input type="text" id="q" class="form-control" data-testid="search-input"
-                           placeholder="هاتف / رقم حساب / رقم عملية / رقم إيصال / اسم…">
+                           placeholder="هاتف / حساب / رقم عملية أو حوالة معلقة / إيصال / رقم تتبع / اسم…">
                     <button class="btn btn-primary" id="btn-search" data-testid="btn-search">بحث</button>
                 </div>
                 <div id="search-results" class="mt-3"></div>
@@ -101,8 +101,17 @@
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const BASE = '{{ url('admin/support-center') }}';
+    const RECOVERY_BASE = '{{ url('admin/amial/recovery') }}';
     const CSRF = '{{ csrf_token() }}';
     const CAN_ACK_INSIDER = @json($capabilities['approvals']);
+    const CAN_DEVICES_VIEW = @json($capabilities['devices_view']);
+    const CAN_DEVICE_CONTROL = @json($capabilities['device_control']);
+    const CAN_WRONG_TRANSFER_OPEN = @json($capabilities['wrong_transfer_open']);
+    const CAN_WRONG_TRANSFER_DECIDE = @json($capabilities['wrong_transfer_decide']);
+    const CAN_RECOVERY_VIEW = @json($capabilities['recovery_view']);
+    const CAN_FREEZE = @json($capabilities['freeze']);
+    const CAN_RESET_PIN = @json($capabilities['reset_pin']);
+    const CAN_KYC_REQUEST = @json($capabilities['kyc_request']);
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     async function get(path) {
@@ -182,7 +191,52 @@
                          <span class="small text-muted">· لا مرجعَ عمليّةٍ مرتبطٌ به</span></div>`)
             ).join('') + '</div>';
         }
-        box.innerHTML = html || '<div class="alert alert-secondary">لا نتائج</div>';
+
+        // رقم الحوالة الظاهر للعميل قبل إنشاء Transaction النهائي.
+        if ((m.pending_transfers || []).length) {
+            html += '<h6>الحوالات المعلّقة / مرحلة التسليم</h6>' + m.pending_transfers.map(p => `
+                <div class="card border-warning mb-3" data-testid="pending-transfer-result">
+                  <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                      <div>
+                        <div class="font-monospace fw-bold">${esc(p.transfer_ulid)}</div>
+                        <span class="badge bg-warning text-dark">${esc(p.status_ar)}</span>
+                      </div>
+                      <div class="fw-bold">${esc(p.amount)} <span class="small text-muted">+ رسم ${esc(p.fee)}</span></div>
+                    </div>
+                    <div class="alert alert-light border mt-3 mb-2">${esc(p.diagnosis)}</div>
+                    <div class="row g-2 small">
+                      <div class="col-md-6">المرسل: ${esc(p.sender.name)} · #${esc(p.sender.user_id)} · ${esc(p.sender.phone)}</div>
+                      <div class="col-md-6">المستلم: ${esc(p.recipient.name)} · #${esc(p.recipient.user_id)} · ${esc(p.recipient.phone)}</div>
+                      <div class="col-md-6">جاهزة للتسليم: ${esc(p.releasable_at)}</div>
+                      <div class="col-md-6">المتبقي في النافذة: ${esc(p.seconds_remaining)} ثانية</div>
+                    </div>
+                    ${p.release_transaction_id ? `
+                      <button type="button" class="btn btn-sm btn-primary mt-3"
+                              data-trace="${esc(p.release_transaction_id)}"
+                              data-testid="pending-transfer-final-trace">
+                        فتح العملية النهائية ←
+                      </button>` : ''}
+                  </div>
+                </div>`).join('');
+        }
+
+        if ((m.diagnostic_events || []).length) {
+            html += '<h6>أثر رقم التتبع</h6><div class="list-group mb-3">' +
+                m.diagnostic_events.map(e => `
+                  <div class="list-group-item" data-testid="diagnostic-event">
+                    <div class="d-flex justify-content-between flex-wrap gap-2">
+                      <div><strong>${esc(e.decision_code)}</strong> · ${esc(e.action)}</div>
+                      <div class="small text-muted">${esc(e.created_at)}</div>
+                    </div>
+                    <div class="small mt-1">الشدّة: ${esc(e.severity)}
+                      ${e.transaction_id ? `· <button type="button" class="btn btn-link btn-sm p-0"
+                          data-trace="${esc(e.transaction_id)}">فتح العملية المرتبطة</button>` : '· لا توجد عملية مالية نهائية مرتبطة بهذا الأثر'}
+                    </div>
+                  </div>`).join('') + '</div>';
+        }
+
+        box.innerHTML = html || '<div class="alert alert-secondary">لا نتائج. إذا كان المدخل رقم تتبع لاتصال منقطع، فغياب الأثر لا يثبت وحده أن الطلب لم يصل.</div>';
     }
 
     // ---------- ملف العميل 360° ----------
@@ -212,21 +266,21 @@
             </div>
 
             <div class="mt-3 d-flex gap-2 flex-wrap">
-                <button class="btn btn-sm btn-outline-danger js-act" data-act="freeze" data-id="${p.id}" data-unfreeze="${m.security.is_temp_blocked ? 1 : ''}" data-testid="btn-freeze">
-                    ${m.security.is_temp_blocked ? 'فك التجميد' : 'تجميد مؤقت'}</button>
-                <button class="btn btn-sm btn-outline-warning js-act" data-act="reset-pin" data-id="${p.id}" data-testid="btn-reset-pin">إعادة تعيين PIN</button>
-                <button class="btn btn-sm btn-outline-secondary js-act" data-act="revoke-sessions" data-id="${p.id}" data-testid="btn-revoke">إلغاء الجلسات المسجّلة</button>
-                <button class="btn btn-sm btn-outline-info js-act" data-act="require-kyc" data-id="${p.id}" data-testid="btn-kyc">طلب رفع الهوية</button>
+                ${CAN_FREEZE ? `<button class="btn btn-sm btn-outline-danger js-act" data-act="freeze" data-id="${p.id}" data-unfreeze="${m.security.is_temp_blocked ? 1 : ''}" data-testid="btn-freeze">
+                    ${m.security.is_temp_blocked ? 'فك التجميد' : 'تجميد مؤقت'}</button>` : ''}
+                ${CAN_RESET_PIN ? `<button class="btn btn-sm btn-outline-warning js-act" data-act="reset-pin" data-id="${p.id}" data-testid="btn-reset-pin">إعادة تعيين PIN</button>` : ''}
+                ${CAN_DEVICE_CONTROL ? `<button class="btn btn-sm btn-outline-secondary js-act" data-act="revoke-sessions" data-id="${p.id}" data-testid="btn-revoke">إلغاء الجلسات المسجّلة</button>` : ''}
+                ${CAN_KYC_REQUEST ? `<button class="btn btn-sm btn-outline-info js-act" data-act="require-kyc" data-id="${p.id}" data-testid="btn-kyc">طلب تحديث الهوية</button>` : ''}
+                ${CAN_RECOVERY_VIEW ? `<a class="btn btn-sm btn-outline-dark" href="${RECOVERY_BASE}?status=all&user_id=${p.id}" data-testid="btn-recovery">متابعة استعادة الحساب</a>` : ''}
                 <button class="btn btn-sm btn-primary js-act" data-act="open-ticket" data-id="${p.id}" data-name="${esc(p.name)}" data-testid="btn-open-ticket">+ فتح تذكرة</button>
             </div>
 
-            {{-- AMIAL-DEVICE-PANEL-001: الأجهزة كانت ثلاثة مسارات تردّ JSON
-                 ولا شاشة تفتحها — فالحظر مبنيٌّ ولا يُستعمل. --}}
+            ${CAN_DEVICES_VIEW ? `
             <div class="d-flex justify-content-between align-items-center mt-4">
                 <h6 class="mb-0">الأجهزة</h6>
                 <button class="btn btn-sm btn-outline-secondary js-devices" data-id="${p.id}" data-testid="btn-devices">عرض الأجهزة</button>
             </div>
-            <div id="devices-box" class="mt-2"></div>
+            <div id="devices-box" class="mt-2"></div>` : ''}
 
             <h6 class="mt-4">آخر العمليات</h6>
             <div class="table-responsive"><table class="table table-sm">
@@ -311,9 +365,11 @@
                     ${d.block_reason ? `<div class="small text-muted mt-1">${esc(d.block_reason)}</div>` : ''}
                 </td>
                 <td class="text-nowrap">
-                    ${d.is_blocked
-                        ? `<button class="btn btn-sm btn-outline-success js-dev" data-do="unblock" data-row="${d.id}" data-user="${userId}">رفع الحظر</button>`
-                        : `<button class="btn btn-sm btn-outline-danger js-dev" data-do="block" data-row="${d.id}" data-user="${userId}">حظر الجهاز</button>`}
+                    ${CAN_DEVICE_CONTROL
+                        ? (d.is_blocked
+                            ? `<button class="btn btn-sm btn-outline-success js-dev" data-do="unblock" data-row="${d.id}" data-user="${userId}">رفع الحظر</button>`
+                            : `<button class="btn btn-sm btn-outline-danger js-dev" data-do="block" data-row="${d.id}" data-user="${userId}">حظر الجهاز</button>`)
+                        : '<span class="small text-muted">عرض فقط</span>'}
                 </td>
             </tr>`).join('');
 
@@ -323,7 +379,9 @@
                 <thead><tr><th>الجهاز</th><th>النظام</th><th>IP</th><th>آخر ظهور</th><th>الحالة</th><th></th></tr></thead>
                 <tbody>${rows || '<tr><td colspan="6" class="text-muted text-center py-3">لا أجهزة مسجَّلة</td></tr>'}</tbody>
             </table></div>
-            <div class="small text-muted">من حظر الجهاز لا يرفع الحظر عنه — يراجعه موظّف آخر.</div>`;
+            <div class="small text-muted">${CAN_DEVICE_CONTROL
+                ? 'من حظر الجهاز لا يرفع الحظر عنه — يراجعه موظّف آخر.'
+                : 'أنت في وضع التشخيص فقط؛ حظر الجهاز أو إنهاء الجلسات يحتاج فريق الأمن.'}</div>`;
     };
 
     document.addEventListener('click', async function (e) {
@@ -443,28 +501,30 @@
                 <td class="money">${esc(c.outstanding)}</td>
                 <td>${esc(c.risk_score)}/100</td>
                 <td class="small">${esc(c.hold_expires_at)}</td>
-                <td class="text-nowrap">${live(c) ? `
+                <td class="text-nowrap">${live(c) && CAN_WRONG_TRANSFER_DECIDE ? `
                     <button class="btn btn-sm btn-success" data-wtc-resolve="${esc(c.ulid)}" data-testid="wtc-resolve">استرداد</button>
                     <button class="btn btn-sm btn-outline-danger" data-wtc-reject="${esc(c.ulid)}" data-testid="wtc-reject">رفض</button>
-                ` : `<span class="text-muted small">${esc(c.resolution_note)}</span>`}</td>
+                ` : (live(c)
+                    ? '<span class="badge bg-secondary">بانتظار فريق النزاعات</span>'
+                    : `<span class="text-muted small">${esc(c.resolution_note)}</span>`)}</td>
             </tr>
             <tr><td colspan="8" class="small text-muted">إشاراتُ التقدير: ${Object.entries(c.risk_signals || {}).map(([k, v]) => `${esc(k)} = ${esc(v)}`).join(' · ') || '—'}</td></tr>`).join('');
 
-        const opener = meta.wrong_transfer_claimable && !claims.some(live) ? `
+        const opener = CAN_WRONG_TRANSFER_OPEN && meta.wrong_transfer_claimable && !claims.some(live) ? `
             <div class="border rounded p-2 mb-3">
-                <div class="small text-muted mb-2">إن قال العميل إنّه أخطأ رقم الهاتف: يُحجَز الموجودُ فوراً، ويُسجَّل ما أُنفق ذمّةً تُقتطَع من الوارد. والحجزُ يُفرَج عنه تلقائيّاً خلال ٧٢ ساعة إن لم يُحسَم.</div>
+                <div class="small text-muted mb-2">يفتح الدعم بلاغاً احترازياً فقط: يُحجز المتاح مؤقتاً ويُسجّل الباقي ذمّة. قرار الاسترداد أو الرفض النهائي يبقى لفريق النزاعات.</div>
                 <div class="input-group input-group-sm">
                     <span class="input-group-text">الرقم الذي قصده</span>
                     <input class="form-control" id="wtc-phone" placeholder="اختياري — وهو أقوى إشارةٍ في التقدير">
-                    <button class="btn btn-warning" id="wtc-open" data-wtc-tx="${esc(t.transaction_id)}" data-testid="wtc-open">فتحُ دعوى تحويلٍ خاطئ</button>
+                    <button class="btn btn-warning" id="wtc-open" data-wtc-tx="${esc(t.transaction_id)}" data-testid="wtc-open">فتح بلاغ تحويل خاطئ</button>
                 </div>
             </div>` : '';
 
         if (!claims.length && !opener) return '';
 
-        return `<h6>دعاوى التحويل إلى رقمٍ خاطئ</h6>${opener}${claims.length ? `
+        return `<h6>بلاغات التحويل إلى مستلم خاطئ</h6>${opener}${claims.length ? `
             <div class="table-responsive mb-3"><table class="table table-sm align-middle">
-            <thead><tr><th>الدعوى</th><th>الحالة</th><th>المبلغ</th><th>المحجوز</th><th>الذمّة</th><th>التقدير</th><th>تنتهي المهلة</th><th></th></tr></thead>
+            <thead><tr><th>الدعوى</th><th>الحالة</th><th>المبلغ</th><th>المحجوز</th><th>الذمّة</th><th>التقدير</th><th>تنتهي المهلة</th><th>الإجراء</th></tr></thead>
             <tbody>${rows}</tbody></table></div>` : ''}`;
     }
 
