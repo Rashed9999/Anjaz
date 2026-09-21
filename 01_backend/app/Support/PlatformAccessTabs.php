@@ -31,6 +31,8 @@ final class PlatformAccessTabs
                     'platform.transactions.view' => 'سجلّ العمليّات',
                     'platform.customers.wallets.view' => 'أرصدة محافظ العميل',
                     'platform.customers.notifications.view' => 'إشعارات العميل المُرسَلة',
+                    'platform.customers.devices.view' => 'أجهزة العميل وحالتها دون قطع الجلسات',
+                    'platform.recovery.view' => 'طلبات استعادة الحساب وحالتها',
                     'platform.tickets.view' => 'تذاكر الدعم',
                     'platform.email.view' => 'مركز البريد والتحقق وسجلّ التسليم',
                 ],
@@ -44,6 +46,7 @@ final class PlatformAccessTabs
                     'platform.customers.unfreeze.request' => 'طلب رفع التجميد',
                     'platform.customers.close.request' => 'طلب إغلاق حساب',
                     'platform.customers.deceased.request' => 'طلب تسجيل وفاة صاحب الحساب',
+                    'platform.wrong_transfer.claim.open' => 'فتح بلاغ تحويل إلى مستلم خاطئ (حجز احترازي)',
                     'platform.email.manage' => 'إبطال تحديات التحقق البريدية النشطة',
                 ]],
 
@@ -112,6 +115,8 @@ final class PlatformAccessTabs
                 'read' => [
                     'platform.audit.view' => 'سجلّ التدقيق',
                     'platform.customers.security.view' => 'أجهزة العميل وجلساتُه',
+                    'platform.customers.devices.view' => 'عرض أجهزة العميل',
+                    'platform.recovery.view' => 'عرض طلبات استعادة الحساب',
                     'platform.ops.status.view' => 'حالة النظام',
                     'saher.view' => 'رادار ساهر — الشاشة',
                     'saher.findings.view' => 'تفاصيل الاكتشافات',
@@ -120,6 +125,8 @@ final class PlatformAccessTabs
                 'write' => [
                     'platform.customers.freeze' => 'تجميد حسابٍ وفكُّه',
                     'platform.customers.sessions' => 'إنهاء جلسات العميل',
+                    'platform.recovery.approve' => 'اعتماد استعادة الحساب',
+                    'platform.recovery.reject' => 'رفض استعادة الحساب',
                     'platform.security.act' => 'إجراءاتُ الأمن',
                     'platform.aml.investigate' => 'تحقيقُ غسل الأموال',
                     'platform.aml.decide' => 'حسمُ بلاغ غسل الأموال',
