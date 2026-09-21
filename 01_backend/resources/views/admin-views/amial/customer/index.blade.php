@@ -342,41 +342,208 @@
         },
 
         kyc(m, body) {
-            const c = m.completeness;
-            const r = m.reconciliation;
+            const c = m.completeness || {};
+            const r = m.reconciliation || {};
+            const contact = m.contact_verification || {};
+            const regulatory = m.regulatory_profile || {fields: [], missing: []};
+            const residence = m.residence || {};
+            const expiry = m.identity_expiry || {};
+            const ownership = m.ownership || {};
+            const privacy = m.privacy || {};
+            const reuse = m.reuse_findings || {blockers: [], warnings: [], matches: []};
+            const changes = m.profile_change_requests || [];
+            const policies = m.tier_policies || [];
+
+            const yesNo = value => value
+                ? '<span class="badge bg-success">موثّق</span>'
+                : '<span class="badge bg-danger">غير موثّق</span>';
+            const stateBadge = (value, positive = []) => {
+                const good = positive.includes(value);
+                const cls = good ? 'success'
+                    : (['expired','rejected','mismatch','failed','blocked'].includes(value) ? 'danger'
+                    : (['pending','collecting','due','needs_more_evidence','not_submitted'].includes(value)
+                        ? 'warning text-dark' : 'secondary'));
+                return `<span class="badge bg-${cls}">${esc(value || '—')}</span>`;
+            };
+            const blockerList = rows => rows?.length
+                ? '<ul class="mb-0 ps-3">' + rows.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>'
+                : '<span class="text-success">لا عوائق مسجلة</span>';
+            const tierName = tier => ({
+                0:'عميل غير موثق', 1:'عميل موثق جزئياً',
+                2:'عميل موثق بهوية', 3:'عميل موثق',
+            })[Number(tier)] || ('المستوى ' + esc(tier));
+
             body.innerHTML = `
-                <div class="alert alert-${esc(r.severity)} py-2" data-testid="cc-kyc-reconciliation">
-                    <strong>${esc(r.label)}</strong>
-                    <div class="small mt-1">${esc(r.description)}</div>
+                <div class="alert alert-${esc(r.severity || 'secondary')} py-2" data-testid="cc-kyc-reconciliation">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <strong>${esc(r.label || 'حالة التوثيق')}</strong>
+                        <span class="badge bg-dark">${tierName(m.tier)}</span>
+                    </div>
+                    <div class="small mt-1">${esc(r.description || '')}</div>
                     <div class="small mt-2">
-                        فئة الحساب: ${esc(m.tier)} • فئة ملف المستندات: ${esc(m.document_target_tier)}<br>
+                        فئة ملف المستندات: ${esc(m.document_target_tier)} •
                         ${c.complete ? 'مستندات الفئة ' + esc(c.tier) + ' مكتملة'
                             : 'المطلوب للاستكمال: ' + (c.missing || []).map(esc).join('، ')}
                     </div>
                 </div>
-                ${table(['المستند', 'الحالة', 'القراءة الآلية', 'ينتهي', 'المراجع', 'رُفع'],
-                    m.documents.map(d => `<tr>
-                        <td>${esc(d.doc_label)}</td>
-                        <td><span class="badge bg-${d.status === 'approved' ? 'success' : (d.status === 'rejected' ? 'danger' : 'warning text-dark')}">${esc(d.status)}</span>
-                            ${d.rejection_reason ? `<div class="small text-muted">${esc(d.rejection_reason)}</div>` : ''}</td>
-                        <td class="small">${esc(d.ocr_status)}</td>
-                        <td class="small">${esc(d.expires_at || '—')}</td>
-                        <td class="small">${esc(d.reviewer || '—')}</td>
-                        <td class="small">${dt(d.uploaded_at)}</td></tr>`).join(''),
-                    'لا مستندات', 'cc-kyc')}
+
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-4"><div class="card h-100 p-3">
+                        <h6>📞 التحقق من وسائل الاتصال</h6>
+                        <div class="d-flex justify-content-between border-bottom py-2">
+                            <span>رقم الهاتف</span>${yesNo(contact.phone_verified)}
+                        </div>
+                        <div class="d-flex justify-content-between py-2">
+                            <span>البريد الإلكتروني</span>${yesNo(contact.email_verified)}
+                        </div>
+                        ${contact.email_verified_at ? `<div class="small text-muted">آخر إثبات بريد: ${dt(contact.email_verified_at)}</div>` : ''}
+                    </div></div>
+
+                    <div class="col-lg-4"><div class="card h-100 p-3">
+                        <h6>🏠 إثبات الإقامة</h6>
+                        <div class="mb-2">الحالة: ${stateBadge(residence.status, ['verified'])}</div>
+                        <div class="small">الميلاد: <strong>${esc(residence.birth_governorate_name || '—')}</strong></div>
+                        <div class="small">السكن المعلن: <strong>${esc(residence.declared_governorate_name || '—')}</strong></div>
+                        <div class="small">السكن المعتمد: <strong>${esc(residence.verified_governorate_name || '—')}</strong></div>
+                        <div class="small">المديرية: ${esc(residence.residence_district || '—')} • الحي: ${esc(residence.residence_area || '—')}</div>
+                        <div class="mt-2">${residence.operational
+                            ? '<span class="badge bg-success">داخل نطاق التشغيل</span>'
+                            : '<span class="badge bg-secondary">خارج نطاق التشغيل/غير محسوم</span>'}</div>
+                    </div></div>
+
+                    <div class="col-lg-4"><div class="card h-100 p-3">
+                        <h6>🪪 صلاحية الهوية</h6>
+                        <div class="mb-2">الحالة: ${stateBadge(expiry.state, ['valid'])}</div>
+                        <div class="small">تاريخ الانتهاء: <strong>${esc(expiry.expires_at || 'غير مسجل')}</strong></div>
+                        <div class="small">الأيام: <strong>${expiry.days === null || expiry.days === undefined ? '—' : esc(expiry.days)}</strong></div>
+                        <div class="small text-muted">المصدر: ${esc(expiry.source || '—')}</div>
+                        ${m.update_required ? '<div class="alert alert-danger py-2 mt-2 mb-0 small">إعادة التوثيق مطلوبة لهذا الحساب.</div>' : ''}
+                    </div></div>
+                </div>
+
+                <div class="card p-3 mb-3">
+                    <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                        <h6 class="mb-0">📋 ملف «اعرف عميلك» الرقابي</h6>
+                        <span class="badge bg-${(regulatory.missing || []).length ? 'warning text-dark' : 'success'}">
+                            ${(regulatory.missing || []).length ? (regulatory.missing.length + ' حقول ناقصة') : 'مكتمل رقابياً'}
+                        </span>
+                    </div>
+                    ${(regulatory.missing || []).length
+                        ? `<div class="alert alert-warning py-2 small"><strong>ما ينقص:</strong> ${regulatory.missing.map(esc).join(' • ')}</div>`
+                        : ''}
+                    <div class="row g-2">
+                        ${(regulatory.fields || []).map(f => `
+                            <div class="col-md-4">
+                                <div class="border rounded p-2 h-100">
+                                    <div class="small text-muted">${esc(f.label)}</div>
+                                    <div class="fw-bold">${esc(f.value || 'غير مدخل')}</div>
+                                </div>
+                            </div>`).join('')}
+                    </div>
+                    ${regulatory.updated_at ? `<div class="small text-muted mt-2">آخر تحديث لحقول KYC: ${dt(regulatory.updated_at)}</div>` : ''}
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-6"><div class="card h-100 p-3">
+                        <h6>🔐 إثبات ملكية الهوية</h6>
+                        ${ownership.hidden
+                            ? '<div class="alert alert-danger small mb-0">تفاصيل الملكية محجوبة لأن الملف في مراجعة خصوصية مقيدة.</div>'
+                            : `
+                                <div class="mb-2"><strong>جاهزية المستوى 2:</strong>
+                                    ${ownership.tier_2?.ready ? '<span class="badge bg-success">جاهز</span>' : '<span class="badge bg-warning text-dark">غير مكتمل</span>'}
+                                </div>
+                                <div class="small mb-3">${blockerList(ownership.tier_2?.blockers || [])}</div>
+                                <div class="mb-2"><strong>جاهزية المستوى 3:</strong>
+                                    ${ownership.tier_3?.ready ? '<span class="badge bg-success">جاهز</span>' : '<span class="badge bg-warning text-dark">غير مكتمل</span>'}
+                                </div>
+                                <div class="small">${blockerList(ownership.tier_3?.blockers || [])}</div>
+                            `}
+                    </div></div>
+
+                    <div class="col-lg-6"><div class="card h-100 p-3">
+                        <h6>🛡️ الخصوصية والتحقق الحيوي</h6>
+                        <div class="mb-2">نمط المراجعة: <strong>${esc(privacy.review_mode_label || privacy.review_mode || '—')}</strong></div>
+                        <div class="mb-2">طريقة إثبات الملكية: <strong>${esc(privacy.ownership_method_label || privacy.ownership_method || '—')}</strong></div>
+                        <div class="mb-2">الحالة: ${stateBadge(privacy.status, ['verified'])}</div>
+                        ${privacy.restricted_review ? '<span class="badge bg-danger">مراجعة مقيدة</span>' : '<span class="badge bg-secondary">مراجعة عادية</span>'}
+                        ${privacy.hidden ? '<div class="alert alert-warning small mt-2 mb-0">التفاصيل الحساسة محجوبة عن صلاحيتك.</div>' : `
+                            <div class="small mt-2">Liveness: ${esc(privacy.liveness?.status || 'not_configured')}</div>
+                            <div class="small">Face Match: ${esc(privacy.face_match?.status || 'not_configured')}</div>
+                            <div class="small">المزود الحيوي: ${privacy.biometric_available ? 'متاح' : 'غير مضبوط'}</div>
+                        `}
+                    </div></div>
+                </div>
+
+                <div class="card p-3 mb-3">
+                    <h6>♻️ كشف تكرار الهوية والمستندات</h6>
+                    ${reuse.hidden
+                        ? '<div class="alert alert-warning small mb-0">نتائج فحص التكرار محجوبة بسبب المراجعة المقيدة.</div>'
+                        : `
+                            ${(reuse.blockers || []).length ? `<div class="alert alert-danger small"><strong>عوائق:</strong>${blockerList(reuse.blockers)}</div>` : ''}
+                            ${(reuse.warnings || []).length ? `<div class="alert alert-warning small"><strong>تنبيهات:</strong>${blockerList(reuse.warnings)}</div>` : ''}
+                            ${!(reuse.blockers || []).length && !(reuse.warnings || []).length ? '<div class="text-success small">لا توجد نتائج تكرار مسجلة.</div>' : ''}
+                        `}
+                </div>
+
+                ${m.documents_hidden
+                    ? '<div class="alert alert-danger mb-3"><strong>المستندات محجوبة:</strong> هذا الحساب في طابور مراجعة مقيد، ولا تملك صلاحية عرضه.</div>'
+                    : table(['المستند', 'الحالة', 'القراءة الآلية', 'ينتهي', 'المراجع', 'رُفع'],
+                        (m.documents || []).map(d => `<tr>
+                            <td>${esc(d.doc_label)}
+                                <div><a target="_blank" rel="noopener" class="small" href="{{ url('admin/amial/kyc/documents') }}/${encodeURIComponent(d.id)}/file">عرض آمن</a></div>
+                            </td>
+                            <td><span class="badge bg-${d.status === 'approved' ? 'success' : (d.status === 'rejected' ? 'danger' : 'warning text-dark')}">${esc(d.status)}</span>
+                                ${d.rejection_reason ? `<div class="small text-muted">${esc(d.rejection_reason)}</div>` : ''}</td>
+                            <td class="small">${esc(d.ocr_status)}</td>
+                            <td class="small">${esc(d.expires_at || '—')}</td>
+                            <td class="small">${esc(d.reviewer || '—')}</td>
+                            <td class="small">${dt(d.uploaded_at)}</td></tr>`).join(''),
+                        'لا مستندات', 'cc-kyc')}
+
+                <div class="card p-3 mb-3">
+                    <h6>🔄 طلبات تحديث بيانات هذا العميل</h6>
+                    ${table(['الحقل', 'الحالة', 'السبب', 'وثيقة داعمة', 'فُتح', 'حُسم'],
+                        changes.map(x => `<tr>
+                            <td class="font-monospace small">${esc(x.field)}</td>
+                            <td>${stateBadge(x.status, ['APPROVED'])}</td>
+                            <td class="small">${esc(x.reason || '—')}</td>
+                            <td>${x.supporting_document_id ? '#' + esc(x.supporting_document_id) : '—'}</td>
+                            <td class="small">${dt(x.created_at)}</td>
+                            <td class="small">${dt(x.decided_at)}</td>
+                        </tr>`).join(''), 'لا طلبات تحديث لهذا العميل', 'cc-profile-changes')}
+                </div>
+
+                <div class="card p-3 mb-3">
+                    <h6>📊 مستويات KYC وحدودها الحالية</h6>
+                    ${table(['المستوى', 'الاسم', 'الرصيد', 'العملية', 'اليومي', 'الشهري', 'السنوي'],
+                        policies.map(p => `<tr class="${Number(p.tier) === Number(m.tier) ? 'table-primary' : ''}">
+                            <td>${esc(p.tier)}</td><td>${esc(p.name_ar || tierName(p.tier))}</td>
+                            <td>${money(p.max_balance)}</td><td>${money(p.max_single_transaction)}</td>
+                            <td>${money(p.max_daily_total)}</td><td>${money(p.max_monthly_total)}</td>
+                            <td>${money(p.max_annual_total)}</td>
+                        </tr>`).join(''), 'لا سياسات مستويات')}
+                </div>
+
                 ${card('ملفات التسجيل المؤرشفة',
                     table(['المرجع', 'المصدر', 'الحالة', 'ورقي', 'أنشئ'],
                         (m.registration_dossiers || []).map(d => `<tr><td class="font-monospace">${esc(d.reference)}</td><td>${esc(d.source)}</td><td>${esc(d.state)}</td><td>${d.has_paper_form ? 'نعم' : '—'}</td><td>${dt(d.created_at)}</td></tr>`),
                         'لا ملف تسجيل مرتبط بهذا العميل', 'cc-registration-dossiers'),
                     '')}
-                <div class="mt-2">
-                    <a class="btn btn-sm btn-outline-primary" id="cc-print-dossier" target="_blank" rel="noopener"
-                       href="{{ url('admin/amial/hub/account') }}/${encodeURIComponent(current)}/print">
-                       🖨 طباعة ملفّ الحساب — البيانات وصور الوثائق
-                    </a>
-                    <div class="small text-muted mt-1">
-                        ورقةٌ واحدةٌ فيها هويّةُ الحساب ولقطةُ التسجيل وصورُ الوثائق مضمَّنةً.
-                        وفتحُها مسجَّلٌ في سجلّ الوصول إلى البيانات الشخصيّة.
+
+                <div class="card p-3 mt-3">
+                    <h6>أدوات KYC المتخصصة</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.page') }}">لجنة التحقق والهوية</a>
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.residence.page') }}">إثبات الإقامة</a>
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.changes.page') }}">طلبات تحديث البيانات</a>
+                        <a class="btn btn-sm btn-outline-danger" href="{{ route('admin.amial.kyc.privacy.page') }}">الخصوصية والتتبّع</a>
+                        <a class="btn btn-sm btn-outline-dark" id="cc-print-dossier" target="_blank" rel="noopener"
+                           href="{{ url('admin/amial/hub/account') }}/${encodeURIComponent(current)}/print">
+                           🖨 طباعة ملف العميل
+                        </a>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        هذه الأدوات باقية كمسارات تشغيل متخصصة، لكن الحقيقة الخاصة بالعميل أصبحت ظاهرة هنا دون الحاجة للبحث عنه مرة أخرى.
                     </div>
                 </div>`;
         },
