@@ -8,6 +8,7 @@ import 'package:amial_pay/features/favorite_number/screens/amial_favorites_scree
 import 'package:amial_pay/features/merchant/screens/merchant_account_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_pos_home_screen.dart';
 import 'package:amial_pay/features/me/screens/my_services_screen.dart';
+import 'package:amial_pay/features/kyc_verification/screens/customer_verification_center_screen.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amial_pay/features/setting/domain/models/profile_model.dart';
@@ -155,6 +156,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     trailing: const Icon(Icons.chevron_left, color: Colors.grey),
                     onTap: () => Get.to(() => const MyServicesScreen()),
                   ),
+
+                  // AMIAL-CUSTOMER-KYC-ENTRY-002 — كل تفاصيل KYC في باب واحد.
+                  // لا نعرض البطاقات الطويلة داخل رأس «حسابي» بعد الآن.
+                  if (userInfo?.type == 2)
+                    ListTile(
+                      leading: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16874C).withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.verified_user_outlined,
+                          color: Color(0xFF16874C),
+                        ),
+                      ),
+                      title: const Text(
+                        'التوثيق',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: const Text(
+                        'حالة التوثيق، الحدود، المستويات ورفع المستوى',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                      trailing: const Icon(Icons.chevron_left, color: Colors.grey),
+                      onTap: () => Get.to(
+                        () => const CustomerVerificationCenterScreen(),
+                      ),
+                    ),
+
 
                   CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.withdrawProfile,title: 'withdraw_history'.tr),
