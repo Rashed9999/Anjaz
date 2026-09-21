@@ -370,14 +370,14 @@
         </div>
     </div>
 
-    <div id="push-delivery" class="card border-0 shadow-sm mb-4" style="border-radius:16px">
+    <div id="external-delivery" class="card border-0 shadow-sm mb-4" style="border-radius:16px">
         <div class="card-header bg-white">
-            <h5 class="mb-1">سجل إرسال Push الخارجي</h5>
-            <small class="text-muted">يسجل نتيجة إرسال FCM دون حفظ token أو payload. حالة provider_accepted تعني أن FCM قبل الرسالة، لا أنها عُرضت حتماً على الجهاز.</small>
+            <h5 class="mb-1">سجل تسليم الإشعارات الخارجية</h5>
+            <small class="text-muted">يعرض Push والبريد حسب القناة. لا يُحفظ token أو عنوان البريد أو محتوى الرسالة. provider_accepted يعني أن المزود قبل الإرسال، وليس دليلاً على القراءة.</small>
         </div>
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">
-                <thead><tr><th>الوقت</th><th>العميل</th><th>القناة</th><th>النوع</th><th>المرجع</th><th>الحالة</th><th>المحاولة</th><th>HTTP</th><th>مرجع FCM</th><th>الخطأ</th></tr></thead>
+                <thead><tr><th>الوقت</th><th>العميل</th><th>القناة</th><th>النوع</th><th>المرجع</th><th>الحالة</th><th>المحاولة</th><th>HTTP</th><th>مرجع المزود</th><th>الخطأ</th></tr></thead>
                 <tbody>
                 @forelse($snapshot['notification_deliveries'] ?? [] as $row)
                     <tr>
@@ -401,7 +401,7 @@
                         <td class="small">{{ $row['error_code'] ?: '—' }}{{ $row['error_message'] ? ' — '.IlluminateSupportStr::limit((string)$row['error_message'], 90) : '' }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="10" class="text-center text-muted py-4">لا توجد نتائج إرسال Push مسجلة بعد.</td></tr>
+                    <tr><td colspan="10" class="text-center text-muted py-4">لا توجد نتائج تسليم خارجي مسجلة بعد.</td></tr>
                 @endforelse
                 </tbody>
             </table>
