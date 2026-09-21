@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import 'package:amial_pay/features/merchant/domain/repositories/merchant_pay_repo.dart';
 import 'package:amial_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/data/api/diagnostic_trace_id.dart';
 
 /// AMIAL-MERCHANT-PAY-001 — متحكّم دفع العميل للتاجر.
 class MerchantPayController extends GetxController implements GetxService {
@@ -25,7 +26,7 @@ class MerchantPayController extends GetxController implements GetxService {
   /// يُستدعى قبل كل عملية دفع جديدة — مفتاح idempotency جديد + تصفير الحالة.
   void prepareNewPayment() {
     _idempotencyKey = IdempotencyKeyGenerator.forFinancialAction('merchant_pay');
-    _correlationId = IdempotencyKeyGenerator.generate();
+    _correlationId = DiagnosticTraceId.generate();
     lastDiagnosticId.value = _correlationId;
     lastError.value = '';
     lastResult.value = null;
@@ -103,7 +104,7 @@ class MerchantPayController extends GetxController implements GetxService {
       // قد يكون الخادم نفّذ العملية ثم تعثرت معالجة الرد داخل التطبيق؛
       // لذلك لا نصفها بأنها «مشكلة إنترنت» ولا نطلب دفعاً جديداً.
       final trace = _correlationId.isEmpty
-          ? IdempotencyKeyGenerator.generate()
+          ? DiagnosticTraceId.generate()
           : _correlationId;
       lastDiagnosticId.value = trace;
       lastError.value =
