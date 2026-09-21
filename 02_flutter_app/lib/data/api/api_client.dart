@@ -252,10 +252,20 @@ class ApiClient extends GetxService {
   }
 
   Future<Response> postData(
-      String uri, dynamic body, {Map<String, String>? headers, String? idempotencyKey}) async {
+      String uri, dynamic body, {
+      Map<String, String>? headers,
+      String? idempotencyKey,
+      String? correlationId,
+    }) async {
     if(await ApiChecker.isVpnActive()) {
       return const Response(statusCode: -1, statusText: 'you are using vpn');
     }{
+      // AMIAL-SUPPORT-CORRELATION-002 — نولد المرجع قبل الشبكة لا بعدها.
+      // لذلك يبقى في يد العميل حتى إن انتهى الطلب بـ timeout ولم يصل رد.
+      final String traceId = (correlationId != null && correlationId.trim().isNotEmpty)
+          ? correlationId.trim()
+          : IdempotencyKeyGenerator.generate();
+
       try {
         // AMIAL-SECURITY-002 (v0.7-C): debug logs آمنة
         if (kDebugMode) {
@@ -283,6 +293,9 @@ class ApiClient extends GetxService {
             : _inFlightKeys.putIfAbsent(
                 autoAction, () => IdempotencyKeyGenerator.forFinancialAction('auto'));
         requestHeaders['Idempotency-Key'] = effectiveKey;
+        // الخادم يعيده في الاستجابة ويسجله مع قرارات AuditService.
+        // لا يحتوي هاتفاً أو PIN أو أي PII، وهو آمن ليُقرأ للدعم.
+        requestHeaders['X-Correlation-Id'] = traceId;
 
         requestHeaders['X-Amial-Zone'] = 'SOUTH';
         requestHeaders['X-Amial-Client-Version'] = '0.7.0';
@@ -303,7 +316,14 @@ class ApiClient extends GetxService {
       } catch (e) {
         // **ولم يصل جواب: يبقى المفتاح.** لا نعلم أوصل الطلبُ أم لا،
         // فتكون الإعادةُ إعادةً لا عمليّةً ثانية. و«لا نعلم» ليست صفراً.
-        return Response(statusCode: 1, statusText: noInternetMessage);
+        //
+        // ولا نفقد خيط التشخيص: ربما وصل الطلب ونُفّذ ثم انقطع الرد.
+        // لهذا لا نقول «الإنترنت ضعيف» كحقيقة، بل «تعذر تأكيد النتيجة».
+        return Response(
+          statusCode: 1,
+          statusText: 'تعذر تأكيد نتيجة الطلب. رقم التتبع: $traceId',
+          headers: {'x-correlation-id': traceId},
+        );
       }
 
     }
