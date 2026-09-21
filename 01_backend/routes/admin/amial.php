@@ -257,6 +257,19 @@ Route::prefix('customer')->name('customer.')->middleware('platform:platform.cust
         Route::post('/{id}/action', [$cc, 'act'])->where('id', '[0-9]+')->name('action');
     });
 
+
+// ملفات تسجيل الموظف والنماذج الورقية: بوابتان منفصلتان للقراءة والكتابة؛
+// ولا توجد هنا صلاحية اعتماد KYC أو فتح محفظة.
+Route::prefix('registration-dossiers')->name('registration-dossiers.')->group(function () {
+    $rd = App\Http\Controllers\Admin\RegistrationDossierController::class;
+    Route::get('/', [$rd, 'page'])->middleware('platform:platform.registrations.view')->name('page');
+    Route::get('/index', [$rd, 'index'])->middleware('platform:platform.registrations.view')->name('index');
+    Route::post('/', [$rd, 'store'])->middleware('platform:platform.registrations.create')->name('store');
+    Route::get('/{reference}', [$rd, 'show'])->middleware('platform:platform.registrations.view')->name('show');
+    Route::get('/{reference}/pdf', [$rd, 'pdf'])->middleware('platform:platform.registrations.view')->name('pdf');
+    Route::get('/{reference}/paper', [$rd, 'paper'])->middleware('platform:platform.registrations.view')->name('paper');
+});
+
 // ============ AMIAL-FUEL-VERTICAL-001 — مركز محطات الوقود (المرحلة ٩) ============
 //
 // **رقابةٌ لا إدارة**: تُرى المحطّاتُ وخزّاناتُها وفروقاتُها، ولا يُدار
@@ -466,6 +479,18 @@ Route::prefix('whatsapp')->name('whatsapp.')->middleware('platform:platform.mone
         Route::get('/limits/show', [$wl, 'show'])->name('limits.show');
         Route::post('/limits', [$wl, 'save'])->name('limits.save');
     });
+
+
+// ============ AMIAL-MULTI-CURRENCY-002 — أسعار الصرف ============
+Route::prefix('fx')->name('fx.')->group(function () {
+    $fx = App\Http\Controllers\Admin\FxRateController::class;
+    Route::middleware('platform:platform.money.view')->group(function () use ($fx) {
+        Route::get('/rates', [$fx, 'page'])->name('rates.page');
+        Route::get('/rates/show', [$fx, 'show'])->name('rates.show');
+    });
+    Route::middleware('platform:platform.money.move')
+        ->post('/rates', [$fx, 'save'])->name('rates.save');
+});
 
 // AMIAL-MERCHANT-PAY-002 — مركز فواتير التجّار.
 // يُقرأ من `payment_requests` نفسِه الذي يكتب فيه التطبيق — جذرٌ واحدٌ
@@ -682,6 +707,15 @@ Route::prefix('fees')->name('fees.')->group(function () {
         Route::post('/{id}/deactivate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webDeactivate'])->name('deactivate');
     });
 });
+
+
+// ============ AMIAL-OBSERVABILITY-001 — صحّة النظام ومركز الأخطاء ============
+Route::get('/system/health', [\App\Http\Controllers\Admin\SystemHealthController::class, 'index'])
+    ->middleware('platform:platform.audit.view')->name('system.health');
+
+Route::post('/system/errors/{id}', [\App\Http\Controllers\Admin\SystemHealthController::class, 'updateError'])
+    ->where('id', '[0-9]+')
+    ->middleware('platform:platform.audit.view')->name('system.errors.update');
 
 // ============ AMIAL-SENTINEL-001 — Security Sentinel Dashboard ============
 Route::prefix('sentinel')->name('sentinel.')->group(function () {
