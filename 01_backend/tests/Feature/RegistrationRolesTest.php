@@ -233,42 +233,46 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
-    public function check_phone_returns_demo_otp_hint_when_not_live(): void
+    public function check_phone_obeys_the_explicit_pilot_otp_policy(): void
     {
-        // في بيئة الاختبار APP_MODE != live → الرمز يُفصح عنه ليُعبّأ تلقائياً
         \Illuminate\Support\Facades\DB::table('business_settings')->updateOrInsert(
-            ['key' => 'phone_verification'], ['value' => '1', 'created_at' => now(), 'updated_at' => now()]);
+            ['key' => 'phone_verification'],
+            ['value' => '1', 'created_at' => now(), 'updated_at' => now()],
+        );
 
-        // AMIAL-OTP-SPLIT-001: الإفصاح لأرقام العرض وحدها.
-        $resp = $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => '967777100001'])
-            ->assertOk()->json();
+        // AMIAL-PILOT-PHONE-OTP-001 — في الإنتاج التجريبي الحالي اتُخذ قرار
+        // صريح: كل هاتف عميل يستخدم 123456 مؤقتاً حتى ربط المزود الحقيقي.
+        config([
+            'amial.otp.pilot_customer_phone_enabled' => true,
+            'amial.otp.pilot_customer_phone_code' => '123456',
+        ]);
 
-        $this->assertSame('active', $resp['otp']);
-        $this->assertNotEmpty($resp['demo_otp']);
+        $pilot = $this->postJson('/api/v1/customer/auth/check-phone', [
+            'phone' => '967771500006',
+        ])->assertOk()->json();
 
-        // ══════════════════════════════════════════════════════════════
-        // **والنفي الحاسم:** رقمٌ حقيقيٌّ لا يُفصح عن رمزه.
-        //
-        // وكان يُطالَب هنا بـ٢٠٠ — **وذاك هو السلوكُ الذي أُصلح**: لا
-        // قناةَ إيصالٍ مفعّلةً في بيئة الاختبار، فرقمٌ حقيقيٌّ كان يُقال
-        // له «أُرسل الرمز» ولا يصله شيء. (AMIAL-OTP-DELIVERY-001)
-        //
-        // فصار ٥٠٣ برسالةٍ تقول ما وقع. **والعقدُ المحروسُ هنا لم يتغيّر
-        // بل اشتدّ**: لا إفصاحَ عن رمزِ رقمٍ حقيقيّ — ولا رمزَ يُولَّد له
-        // أصلاً حين لا سبيلَ إلى إيصاله.
-        // ══════════════════════════════════════════════════════════════
-        $real = $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => '967771500006'])
-            ->assertStatus(503)->json();
+        $this->assertSame('active', $pilot['otp']);
+        $this->assertTrue((bool) ($pilot['pilot_mode'] ?? false));
+        $this->assertSame('123456', $pilot['demo_otp']);
 
-        $this->assertNull($real['demo_otp'] ?? null,
-            'أُفصح عن رمزِ رقمٍ حقيقيّ — فبطل التحقّق من أصله');
+        // وعند إطفاء السياسة المرحلية يعود العقد الأمني الحقيقي:
+        // رقم غير Demo بلا قناة إيصال لا يُقال له كذباً «أرسلنا».
+        config(['amial.otp.pilot_customer_phone_enabled' => false]);
+        \App\Services\Otp\OtpPolicy::forget();
+        \Illuminate\Support\Facades\DB::table('phone_verifications')
+            ->where('phone', '967771500007')->delete();
 
-        $this->assertStringContainsString('غير مهيّأة', (string) ($real['message'] ?? ''),
-            'صمتٌ في وجه رقمٍ حقيقيّ — ينتظر رسالةً لا تصل ولا يعرف لماذا');
+        $real = $this->postJson('/api/v1/customer/auth/check-phone', [
+            'phone' => '967771500007',
+        ])->assertStatus(503)->json();
 
-        // **ولا يُخزَّن رمزٌ لا سبيلَ إلى إيصاله** — فصفٌّ في
-        // `phone_verifications` يجعل نافذةَ إعادة الإرسال تعمل على رمزٍ
-        // لم يُرسَل، فيُقفَل الرقمُ دقيقةً على لا شيء.
-        $this->assertDatabaseMissing('phone_verifications', ['phone' => '967771500006']);
+        $this->assertNull($real['demo_otp'] ?? null);
+        $this->assertStringContainsString(
+            'غير مهيّأة',
+            (string) ($real['message'] ?? ''),
+        );
+        $this->assertDatabaseMissing('phone_verifications', [
+            'phone' => '967771500007',
+        ]);
     }
 }
