@@ -297,6 +297,33 @@ class SupportDiagnosticJourneyGuardTest extends TestCase
         $this->assertStringContainsString('لا تطلب من العميل إعادة الدفع', $view);
     }
 
+    public function test_recovery_screen_is_read_only_for_support_without_decision_permissions(): void
+    {
+        $view = file_get_contents(
+            resource_path('views/admin-views/amial/recovery/show.blade.php')
+        );
+        $index = file_get_contents(
+            resource_path('views/admin-views/amial/recovery/index.blade.php')
+        );
+
+        $this->assertStringContainsString(
+            "hasPlatformPermission('platform.recovery.approve')",
+            $view,
+        );
+        $this->assertStringContainsString(
+            "hasPlatformPermission('platform.recovery.reject')",
+            $view,
+        );
+        $this->assertStringContainsString(
+            'أنت في وضع المتابعة فقط',
+            $view,
+        );
+        $this->assertStringContainsString(
+            "'user_id' => \$filteredUserId ?? null",
+            $index,
+        );
+    }
+
     public function test_flutter_merchant_payment_preserves_a_diagnostic_reference_for_unknown_outcomes(): void
     {
         $api = file_get_contents(base_path('../02_flutter_app/lib/data/api/api_client.dart'));
