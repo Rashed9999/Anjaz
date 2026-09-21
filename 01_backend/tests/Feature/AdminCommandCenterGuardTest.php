@@ -279,7 +279,6 @@ class AdminCommandCenterGuardTest extends TestCase
         'admin.amial.catalog.page',
         'admin.amial.charity.page',
         'admin.amial.customer.page',
-        'admin.amial.customer-systems.index',
         'admin.amial.entitlements.page',
         'admin.amial.executive.index',
         'admin.amial.fees.index',
@@ -370,7 +369,6 @@ class AdminCommandCenterGuardTest extends TestCase
         );
 
         foreach ([
-            'admin.amial.customer-systems.index',
             'admin.amial.hub.customers',
             'admin.amial.kyc.page',
             'admin.amial.kyc.changes.page',
@@ -387,6 +385,15 @@ class AdminCommandCenterGuardTest extends TestCase
                 "الأداة {$specialized} اختفت بدلاً من أن تنتقل إلى مركز العملاء"
             );
         }
+
+        // «مركز أنظمة العميل» القديم دُمج فعلياً داخل الشاشة، فلا نطلب
+        // رابطاً يعيدنا إلى صفحة ثانية. الحارس الجديد يقيس التبويب نفسه.
+        $this->assertStringNotContainsString(
+            "route('admin.amial.customer-systems.index'",
+            $sidebar
+        );
+        $this->assertStringContainsString('data-op="systems"', $center);
+        $this->assertStringContainsString("get('/ops/' + name)", $center);
     }
 
     public function test_sidebar_itself_has_no_duplicate_named_route(): void
