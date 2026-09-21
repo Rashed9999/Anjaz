@@ -25,8 +25,15 @@ class CorrelationContext
 
         $request->attributes->set('amial.correlation_id', $correlationId);
 
+        // AMIAL-SUPPORT-CORRELATION-003 — ErrorTrackingService يستخدم
+        // request_id تاريخياً. نجعل الرقم التشخيصي الموحّد هو نفسه هناك،
+        // حتى يجد الدعم أخطاء 500 بالرقم الذي يظهر للعميل، لا برقم ثانٍ
+        // لم يصل أصلاً إلى التطبيق.
+        $request->attributes->set('request_id', $correlationId);
+
         $response = $next($request);
         $response->headers->set('X-Correlation-Id', $correlationId);
+        $response->headers->set('X-Request-Id', $correlationId);
 
         return $response;
     }
