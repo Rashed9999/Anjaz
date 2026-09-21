@@ -211,4 +211,44 @@ class PilotCustomerPhoneOtpTest extends TestCase
         app(KycTierService::class)->assertFeatureAllowed($fresh, 'send_money');
     }
 
+    /** @test */
+    public function registration_persists_phone_ownership_when_pilot_otp_is_accepted(): void
+    {
+        DB::table('business_settings')->updateOrInsert(
+            ['key' => 'phone_verification'],
+            ['value' => '1', 'created_at' => now(), 'updated_at' => now()],
+        );
+
+        $response = $this->postJson('/api/v1/customer/auth/register', [
+            'f_name' => 'أحمد',
+            'father_name' => 'محمد',
+            'grandfather_name' => 'علي',
+            'family_name' => 'التجريبي',
+            'l_name' => 'التجريبي',
+            'gender' => 'male',
+            'dial_country_code' => '+967',
+            'phone' => '777654321',
+            'email' => 'pilot-phone-owner@example.test',
+            'password' => '1234',
+            'otp' => '123456',
+            'declaration_accepted' => '1',
+        ]);
+
+        $response->assertOk();
+
+        $user = User::where('phone', '967777654321')->firstOrFail();
+        $this->assertSame(1, (int) $user->is_phone_verified);
+        $this->assertSame(
+            0,
+            app(KycTierService::class)->effectiveTier($user),
+            'إثبات الهاتف وحده لا يجب أن يتجاوز شرط السكن.'
+        );
+
+        $this->assertDatabaseHas('audit_decisions', [
+            'subject_id' => (string) $user->id,
+            'action' => 'PHONE_OWNERSHIP_VERIFIED',
+            'decision_code' => 'PHONE_OTP_VERIFIED_AT_REGISTRATION',
+        ]);
+    }
+
 }
