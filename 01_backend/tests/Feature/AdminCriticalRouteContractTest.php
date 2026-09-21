@@ -48,22 +48,31 @@ class AdminCriticalRouteContractTest extends TestCase
     }
 
     /** @test */
-    public function every_restored_center_is_reachable_from_the_sidebar(): void
+    public function every_restored_center_is_reachable_from_the_correct_admin_surface(): void
     {
-        $sidebar = file_get_contents(
+        $general = (string) file_get_contents(
             resource_path('views/admin-views/amial/partials/_sidebar.blade.php')
+        );
+        $customer = (string) file_get_contents(
+            resource_path('views/admin-views/amial/customer/index.blade.php')
         );
 
         foreach ([
             'admin.amial.saher.index',
             'admin.amial.merchants.verification.page',
-            'admin.amial.kyc.changes.page',
         ] as $name) {
             $this->assertStringContainsString(
                 "route('{$name}')",
-                $sidebar,
-                "المركز {$name} مبني لكن لا مدخل له في لوحة الإدارة"
+                $general,
+                "المركز {$name} مبني لكن لا مدخل عام له في لوحة الإدارة"
             );
         }
+
+        // تحديث بيانات العميل أداة داخل مركز العملاء، لا مدخل عميل ثانٍ.
+        $this->assertStringContainsString(
+            "route('admin.amial.kyc.changes.page')",
+            $customer,
+            'طلبات تحديث بيانات العميل انفصلت عن مركز العملاء الموحد'
+        );
     }
 }
