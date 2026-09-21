@@ -320,12 +320,12 @@ jobs:
 
       - run: flutter pub get
 
-      # AMIAL-APK-BUILD-MODE-003
+      # AMIAL-APK-BUILD-MODE-004
       #
-      # installable = لا يفشل البناء لأن GitHub Secrets لم تُضبط بعد:
-      # إن وُجد المفتاح الثابت نبني Release، وإلا نبني Debug موقّعاً
-      # بمفتاح Android التجريبي ونسمّيه بوضوح Debug. أمّا release_strict
-      # فهو وحده الذي يرفض غياب مفتاح الإنتاج.
+      # installable = Release فعلي دائماً. إن وُجد مفتاح أميال الثابت
+      # نستخدمه، وإلا نولّد مفتاحاً مؤقتاً داخل Runner للتثبيت والتجربة فقط.
+      # بذلك لا يتحول البناء إلى Debug كبير الحجم، ولا ندّعي في الوقت نفسه
+      # أن النسخة المؤقتة صالحة كتوقيع إنتاج دائم.
       - name: تحديد نوع APK الفعلي قبل البناء
         env:
           KEYSTORE_B64: ${{ secrets.AMIAL_ANDROID_KEYSTORE_B64 }}
@@ -334,29 +334,32 @@ jobs:
           set -euo pipefail
 
           REQUEST="${APK_BUILD_REQUEST:-installable}"
-          HAVE_RELEASE_SIGNING=0
+          HAVE_OFFICIAL_SIGNING=0
           if [ -n "${KEYSTORE_B64:-}" ] && [ -n "${KEYSTORE_PASSWORD:-}" ]; then
-            HAVE_RELEASE_SIGNING=1
+            HAVE_OFFICIAL_SIGNING=1
           fi
 
           case "$REQUEST" in
             release_strict)
-              if [ "$HAVE_RELEASE_SIGNING" -ne 1 ]; then
+              if [ "$HAVE_OFFICIAL_SIGNING" -ne 1 ]; then
                 echo "::error::طلبت release_strict لكن مفتاح توقيع أميال الثابت غير مضبوط في GitHub Secrets."
                 echo "::error::المطلوب: AMIAL_ANDROID_KEYSTORE_B64 و AMIAL_ANDROID_KEYSTORE_PASSWORD"
                 exit 1
               fi
               TYPE=release
+              SIGNING=official
               ;;
             debug)
               TYPE=debug
+              SIGNING=debug
               ;;
             installable)
-              if [ "$HAVE_RELEASE_SIGNING" -eq 1 ]; then
-                TYPE=release
+              TYPE=release
+              if [ "$HAVE_OFFICIAL_SIGNING" -eq 1 ]; then
+                SIGNING=official
               else
-                TYPE=debug
-                echo "::warning::مفتاح Release غير موجود؛ سيُبنى APK Debug قابل للتثبيت بدلاً من إسقاط التشغيل كله."
+                SIGNING=temporary
+                echo "::warning::مفتاح أميال الرسمي غير موجود؛ سيُبنى Release خفيف بتوقيع مؤقت للتثبيت والتجربة فقط."
               fi
               ;;
             *)
@@ -366,14 +369,15 @@ jobs:
           esac
 
           echo "APK_BUILD_TYPE=$TYPE" >> "$GITHUB_ENV"
-          echo "APK_RELEASE_SIGNING_AVAILABLE=$HAVE_RELEASE_SIGNING" >> "$GITHUB_ENV"
+          echo "APK_SIGNING_MODE=$SIGNING" >> "$GITHUB_ENV"
 
           {
             echo "## أميال باي — نوع APK"
             echo "- المطلوب: `$REQUEST`"
             echo "- الفعلي: `$TYPE`"
-            if [ "$TYPE" = "debug" ] && [ "$REQUEST" = "installable" ]; then
-              echo "- السبب: أسرار توقيع Release غير مضبوطة؛ تم اختيار Debug قابل للتثبيت تلقائياً."
+            echo "- التوقيع: `$SIGNING`"
+            if [ "$SIGNING" = "temporary" ]; then
+              echo "- ملاحظة: Release قابل للتثبيت، لكن مفتاحه مؤقت لهذه النسخة وليس مفتاح الإنتاج الرسمي."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -386,26 +390,30 @@ jobs:
           echo "الإصدار  : $(grep '^version:' pubspec.yaml)"
           echo "===================================="
 
-      - name: تجهيز مفتاح التوقيع الثابت (Release فقط)
+      - name: تجهيز توقيع Release
         if: env.APK_BUILD_TYPE == 'release'
         env:
           KEYSTORE_B64: ${{ secrets.AMIAL_ANDROID_KEYSTORE_B64 }}
           KEYSTORE_PASSWORD: ${{ secrets.AMIAL_ANDROID_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
-          for v in KEYSTORE_B64 KEYSTORE_PASSWORD; do
-            if [ -z "${!v:-}" ]; then
-              echo "::error::مفتاح توقيع Android الثابت غير مضبوط في GitHub Secrets: $v"
-              exit 1
-            fi
-          done
 
-          printf '%s' "$KEYSTORE_B64" | base64 --decode > android/amial-release.jks
-          chmod 600 android/amial-release.jks
+          if [ "$APK_SIGNING_MODE" = "official" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > android/amial-release.jks
+            chmod 600 android/amial-release.jks
+            PASSWORD="$KEYSTORE_PASSWORD"
+            ALIAS="amial"
+          else
+            PASSWORD="AmialTemp-${GITHUB_RUN_ID}"
+            ALIAS="amial-temp"
+            keytool -genkeypair -noprompt               -keystore android/amial-release.jks               -storepass "$PASSWORD"               -keypass "$PASSWORD"               -alias "$ALIAS"               -keyalg RSA -keysize 2048 -validity 30               -dname "CN=Amial Pay Temporary Build,O=Amial Pay,C=YE"
+            chmod 600 android/amial-release.jks
+          fi
+
           cat > android/key.properties <<EOF
-          storePassword=$KEYSTORE_PASSWORD
-          keyPassword=$KEYSTORE_PASSWORD
-          keyAlias=amial
+          storePassword=$PASSWORD
+          keyPassword=$PASSWORD
+          keyAlias=$ALIAS
           storeFile=amial-release.jks
           EOF
 
@@ -429,7 +437,11 @@ jobs:
           }
 
           mkdir -p build/installable
-          OUT="build/installable/AmialPay-${APK_BUILD_TYPE}-${GITHUB_SHA::7}.apk"
+          LABEL="$APK_BUILD_TYPE"
+          if [ "$APK_BUILD_TYPE" = "release" ]; then
+            LABEL="release-${APK_SIGNING_MODE}"
+          fi
+          OUT="build/installable/AmialPay-${LABEL}-${GITHUB_SHA::7}.apk"
           cp "$SRC" "$OUT"
           echo "APK_PATH=$OUT" >> "$GITHUB_ENV"
 
@@ -463,7 +475,7 @@ jobs:
           fi
           test -n "$ACTUAL_CERT_SHA256"
 
-          if [ "$APK_BUILD_TYPE" = "release" ]; then
+          if [ "$APK_BUILD_TYPE" = "release" ] && [ "$APK_SIGNING_MODE" = "official" ]; then
             EXPECTED_CERT_SHA256="1db2799f07dad246a5163fc5fa9ca813b47dd65b6db55eb296632bed3bbabcc7"
             if [ "$(printf '%s' "$ACTUAL_CERT_SHA256" | tr '[:upper:]' '[:lower:]')" != "$EXPECTED_CERT_SHA256" ]; then
               echo "::error::توقيع APK لا يطابق هوية أميال الثابتة"
@@ -472,8 +484,10 @@ jobs:
               exit 1
             fi
             echo "✓ توقيع Release يطابق هوية أميال الثابتة"
+          elif [ "$APK_BUILD_TYPE" = "release" ]; then
+            echo "::notice::Release مؤقت: التوقيع صالح للتثبيت لكنه ليس هوية أميال الإنتاجية الثابتة."
           else
-            echo "::notice::APK Debug: تم التحقق من وجود توقيع صالح، ولا تُقارَن بصمته بمفتاح Release."
+            echo "::notice::APK Debug: تم التحقق من وجود توقيع صالح."
           fi
 
           echo "== ZIP alignment =="
@@ -488,7 +502,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: amial-${{ env.APK_BUILD_TYPE }}-installable-${{ github.sha }}
+          name: amial-${{ env.APK_BUILD_TYPE }}-${{ env.APK_SIGNING_MODE }}-installable-${{ github.sha }}
           path: |
             02_flutter_app/build/installable/*.apk
             02_flutter_app/build/installable/SHA256SUMS.txt
