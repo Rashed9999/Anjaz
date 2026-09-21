@@ -342,7 +342,7 @@ class AdminCommandCenterGuardTest extends TestCase
             ),
         ]);
 
-        preg_match_all('/route\(.([a-z0-9._-]+).\)/i', $src, $m);
+        preg_match_all('/route\(\s*[\'\"]([a-z0-9._-]+)[\'\"]/i', $src, $m);
 
         return array_values(array_unique($m[1]));
     }
@@ -375,13 +375,14 @@ class AdminCommandCenterGuardTest extends TestCase
             'admin.amial.kyc.page',
             'admin.amial.kyc.changes.page',
         ] as $specialized) {
+            $needle = "route('{$specialized}'";
             $this->assertStringNotContainsString(
-                "route('{$specialized}')",
+                $needle,
                 $sidebar,
                 "الأداة {$specialized} عادت كمدخل عميل مستقل في الشريط"
             );
             $this->assertStringContainsString(
-                "route('{$specialized}')",
+                $needle,
                 $center,
                 "الأداة {$specialized} اختفت بدلاً من أن تنتقل إلى مركز العملاء"
             );
@@ -391,7 +392,7 @@ class AdminCommandCenterGuardTest extends TestCase
     public function test_sidebar_itself_has_no_duplicate_named_route(): void
     {
         $src = (string) file_get_contents(self::SIDEBAR);
-        preg_match_all('/route\(.([a-z0-9._-]+).\)/i', $src, $m);
+        preg_match_all('/route\(\s*[\'\"]([a-z0-9._-]+)[\'\"]/i', $src, $m);
 
         $counts = array_count_values($m[1]);
         $dupes = array_keys(array_filter($counts, static fn (int $count): bool => $count > 1));
