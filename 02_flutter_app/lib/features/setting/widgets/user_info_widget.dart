@@ -3,7 +3,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amial_pay/features/kyc_verification/widgets/customer_verification_panel.dart';
 import 'package:amial_pay/util/dimensions.dart';
 import 'package:amial_pay/util/images.dart';
 import 'package:amial_pay/util/styles.dart';
@@ -125,12 +124,6 @@ class UserInfoWidget extends StatelessWidget {
               ],
             ),
             const SizedBox(height: Dimensions.paddingSizeExtraSmall),
-
-            // AMIAL-CUSTOMER-KYC-SCOPE-APP-001 — هذا القسم لا يُنشأ أصلاً
-            // إلا لحساب العميل الفرد (type=2). لا تاجر، لا وكيل، لا موظف POS
-            // ولا موظف إدارة يرى شريط الحدود أو جدول توثيق الأفراد.
-            if (profileController.userInfo?.type == 2)
-              const CustomerVerificationPanel(),
           ],
         ),
       ),
