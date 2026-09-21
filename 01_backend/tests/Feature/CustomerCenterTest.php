@@ -205,11 +205,14 @@ class CustomerCenterTest extends TestCase
      */
     public function the_verified_badge_matches_what_the_money_code_enforces(): void
     {
-        // القيمة الافتراضية — لم تُلمَس.
-        $fresh = User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => '770003310']);
+        // لا نعتمد على default المصنع: المصنع الافتراضي يمثل عميلاً مالياً
+        // صالحاً، بينما هذا الاختبار يقيس تحديداً حساباً جديداً غير موثق.
+        $fresh = User::factory()->tierZero()->create([
+            'type' => CUSTOMER_TYPE,
+            'phone' => '770003310',
+        ]);
 
-        $this->assertNotSame(1, (int) $fresh->is_kyc_verified,
-            'تغيّرت القيمة الافتراضية — راجع هذا الاختبار');
+        $this->assertNotSame(1, (int) $fresh->is_kyc_verified);
 
         // الحالة تقول «معلّقة» لا «نشط».
         $out = app(CustomerStatusResolver::class)->resolve($fresh);
