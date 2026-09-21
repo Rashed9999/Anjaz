@@ -156,33 +156,50 @@ class RegisterController extends Controller
         }
 
         $verify = null;
+        $phoneOwnershipVerified = false;
         $emailAuthorized = $verifiedEmail !== null
             && hash_equals($verifiedEmail, (string) $request->input('email'));
+
         if (! $emailAuthorized && Helpers::get_business_settings('phone_verification') == 1) {
-            if($request->has('otp')) {
-                // AMIAL-OTP-SPLIT-001: الرمزُ الثابت **لأرقام العرض وحدها**.
-                //
-                // كان هذا الشرطُ يقبل `123456` من أيّ رقم ما دام المتغيّر
-                // مضبوطاً — فمن يعرف العنوان يسجّل باسم رقمٍ لا يملكه،
-                // ويصير صاحبَ محفظته. صار الرقمُ هو من يحدّد الطريق.
-                $policy = app(\App\Services\Otp\OtpPolicy::class);
-                $demoOtp = $policy->isDemo($phone) ? $policy->demoCode() : null;
-
-                if ($demoOtp !== null && hash_equals($demoOtp, (string) $request["otp"])) {
-                    $verify = null; // مقبول تجريبياً — لا صفّ للحذف
-                } else {
-                $verify = $this->phoneVerification->where(["phone" => $phone, "otp" => $request["otp"]])->first();
-                if (!isset($verify)) {
-                    return response()->json(['errors' => [
-                        ["code" => "otp", "message" => "OTP is not found!"]
-                    ]], 404);
-
-                }
-                }
-            }else{
+            if (!$request->has('otp')) {
                 return response()->json(['errors' => [
                     ['code' => 'otp', 'message' => 'OTP is required.']
                 ]], 403);
+            }
+
+            $policy = app(\App\Services\Otp\OtpPolicy::class);
+            $submittedOtp = (string) $request->input('otp');
+
+            // AMIAL-PHONE-OWNERSHIP-REG-001
+            //
+            // مسار التسجيل القديم كان يتحقق من الرمز ثم يرمي الدليل:
+            // يحذف phone_verifications وينشئ الحساب مع is_phone_verified=0.
+            // النتيجة أن KYC يرفض الحساب لاحقاً رغم أن صاحبه أثبت الرقم.
+            //
+            // في Pilot الحالي كل هاتف عميل يستخدم الرمز المرحلي 123456
+            // عبر OtpPolicy::pilotCustomerPhoneCode(). أرقام العرض تبقى على
+            // demoCode، وما عدا ذلك عند إطفاء Pilot يجب أن يطابق تحدياً
+            // مخزناً وصل عبر المزود الحقيقي.
+            $pilotOtp = $policy->pilotCustomerPhoneCode();
+            $demoOtp = $policy->isDemo($phone) ? $policy->demoCode() : null;
+
+            if ($pilotOtp !== null && hash_equals($pilotOtp, $submittedOtp)) {
+                $phoneOwnershipVerified = true;
+            } elseif ($demoOtp !== null && hash_equals($demoOtp, $submittedOtp)) {
+                $phoneOwnershipVerified = true;
+            } else {
+                $verify = $this->phoneVerification
+                    ->whereIn('phone', \App\Support\Phone::variants($phone))
+                    ->where('otp', $submittedOtp)
+                    ->first();
+
+                if (!isset($verify)) {
+                    return response()->json(['errors' => [
+                        ['code' => 'otp', 'message' => 'OTP is not found!']
+                    ]], 404);
+                }
+
+                $phoneOwnershipVerified = true;
             }
         }
 
@@ -203,7 +220,7 @@ class RegisterController extends Controller
         }
 
         $loginNumbers = ['agent_number' => null, 'merchant_number' => null];
-        DB::transaction(function () use ($request, $verify, $phone, $signaturePath, $accountType, &$loginNumbers) {
+        DB::transaction(function () use ($request, $verify, $phone, $phoneOwnershipVerified, $signaturePath, $accountType, &$loginNumbers) {
             $verify?->delete();
 
             // A reused controller must never mutate the previous registrant.
@@ -317,7 +334,35 @@ class RegisterController extends Controller
             }
             $user->is_kyc_verified = 0; // بانتظار مراجعة الإدارة (لوحة التحقق)
 
+            // نجاح OTP في هذه المعاملة هو إثبات ملكية الهاتف، وليس مجرد
+            // شرط مرور مؤقت. نحفظ الحقيقة على الحساب قبل أن يختفي التحدي.
+            if ($phoneOwnershipVerified) {
+                $user->is_phone_verified = 1;
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
+                    $user->kyc_tier = max(1, (int) ($user->kyc_tier ?? 0));
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier_updated_at')) {
+                    $user->kyc_tier_updated_at = now();
+                }
+            }
+
             $user->save();
+
+            if ($phoneOwnershipVerified) {
+                app(\App\Services\AuditService::class)->record([
+                    'actor_type' => 'customer',
+                    'actor_user_id' => (int) $user->id,
+                    'subject_type' => 'user',
+                    'subject_id' => (string) $user->id,
+                    'action' => 'PHONE_OWNERSHIP_VERIFIED',
+                    'decision_code' => 'PHONE_OTP_VERIFIED_AT_REGISTRATION',
+                    'severity' => 'info',
+                    'context' => [
+                        'phone_verified' => true,
+                        'source' => 'registration',
+                    ],
+                ]);
+            }
 
             if (\Illuminate\Support\Facades\Schema::hasTable('legal_name_events')) {
                 \Illuminate\Support\Facades\DB::table('legal_name_events')->insert([
