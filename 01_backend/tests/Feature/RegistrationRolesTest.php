@@ -189,10 +189,15 @@ class RegistrationRolesTest extends TestCase
         app(\App\Services\PlatformRoleService::class)
             ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
         $admin->refresh();
-        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
-        $this->establishKycEvidence($pending);
+        // العميل لا يقفز 0 → 2. نبني Tier 1 الحقيقي أولاً:
+        // هاتف مثبت + إقامة معتمدة، ثم هوية Tier 2.
+        $pending = $this->establishTierOnePrerequisite($pending);
+        $this->establishKycEvidence($pending, 2, $admin);
         $this->actingAs($admin, 'user')
-            ->postJson("/admin/amial/hub/users/{$pending->id}/kyc", ['status' => 1])
+            ->postJson("/admin/amial/hub/users/{$pending->id}/kyc", [
+                'status' => 1,
+                'target_tier' => 2,
+            ])
             ->assertOk();
 
         $this->postJson('/api/v1/auth/login', [
@@ -211,10 +216,14 @@ class RegistrationRolesTest extends TestCase
         app(\App\Services\PlatformRoleService::class)
             ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
         $admin->refresh();
-        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
-        $this->establishKycEvidence($user);
+        // نفس المسار المتسلسل: Tier 0 → Tier 1 → Tier 2.
+        $user = $this->establishTierOnePrerequisite($user);
+        $this->establishKycEvidence($user, 2, $admin);
         $this->actingAs($admin, 'user')
-            ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 1])
+            ->postJson("/admin/amial/hub/users/{$user->id}/kyc", [
+                'status' => 1,
+                'target_tier' => 2,
+            ])
             ->assertOk();
 
         $this->assertDatabaseHas('amial_notifications', [
