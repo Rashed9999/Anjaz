@@ -19,6 +19,40 @@ use App\Models\User;
 trait EstablishesKycEvidence
 {
     /**
+     * يبني المتطلب السابق الحقيقي لترقية العميل 1 → 2:
+     * إثبات الهاتف + إقامة مراجَعة + tier=1.
+     *
+     * لا نستعمله للتاجر/الوكيل؛ مستويات العميل الفردي وحدها متسلسلة.
+     */
+    protected function establishTierOnePrerequisite(User $customer): User
+    {
+        $customer->forceFill([
+            'is_phone_verified' => 1,
+            'kyc_tier' => 1,
+            'residence_governorate' => 'YE-AD',
+            'verified_residence_governorate' => 'YE-AD',
+            'residence_verified_at' => now(),
+        ])->save();
+
+        \Illuminate\Support\Facades\DB::table('residence_verifications')->updateOrInsert(
+            ['user_id' => $customer->id],
+            [
+                'kyc_document_id' => null,
+                'declared_governorate' => 'YE-AD',
+                'evidence_type' => 'government_residence_document',
+                'evidence_strength' => 'strong',
+                'status' => 'verified',
+                'submitted_at' => now()->subMinute(),
+                'reviewed_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        );
+
+        return $customer->fresh();
+    }
+
+    /**
      * يبني مستندات الفئة المطلوبة ويثبت ملكية الهوية بالطريق الحقيقي.
      *
      * @param  int  $tier  ٢ = هوية وجهاً وظهراً وصورة حيّة · ٣ = ومعها إثبات عنوان
