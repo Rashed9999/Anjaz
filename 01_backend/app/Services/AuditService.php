@@ -22,6 +22,29 @@ use Illuminate\Support\Str;
  */
 class AuditService
 {
+    /**
+     * AMIAL-AUDIT-KEYS-001 — عقد الحمولة العام لخدمة التدقيق.
+     *
+     * الحارس الساكن يقارن كل record([...]) بهذه القائمة حتى لا تُسقط
+     * مفاتيح جديدة بصمت. metadata اسم تاريخي للسياق ونقرأه كمرادف context.
+     */
+    public const KNOWN_KEYS = [
+        'actor_type',
+        'actor_user_id',
+        'subject_type',
+        'subject_id',
+        'action',
+        'decision_code',
+        'reason',
+        'severity',
+        'context',
+        'metadata',
+        'transaction_id',
+        'idempotency_key',
+        'correlation_id',
+        'zone_code',
+    ];
+
     /** قائمة المفاتيح الممنوع لها الدخول للـ context (PII حساس) */
     private const FORBIDDEN_KEYS = [
         'password', 'pin', 'old_pin', 'new_pin', 'transaction_pin',
