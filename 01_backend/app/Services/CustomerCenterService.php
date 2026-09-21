@@ -573,8 +573,22 @@ class CustomerCenterService
     {
         $this->logAccess($actorId, $customer->id, 'kyc');
 
-        return array_merge($this->kycReconciliation($customer), [
-            'documents' => KycDocument::with('reviewer:id,f_name,l_name')
+        $actor = User::find($actorId);
+        $privacy = app(\App\Services\Kyc\KycPrivacyService::class);
+        $privacyState = $privacy->forUser($customer);
+        $restricted = (bool) ($privacyState['restricted_review'] ?? false);
+        $canRestricted = !$restricted
+            || ($actor?->hasPlatformPermission('platform.customers.kyc.restricted.view') ?? false);
+        $canBiometric = $actor?->hasPlatformPermission('platform.customers.kyc.biometric.view') ?? false;
+
+        // AMIAL-CUSTOMER-KYC-HUB-001
+        //
+        // «مركز العملاء» هو الباب الموحد. لذلك لا يكفي عرض مستندات الهوية
+        // وحدها بينما تبقى بقية KYC في خدمات لا تراها الشاشة: الإقامة،
+        // الملكية، الخصوصية، انتهاء الوثيقة، إعادة استخدام المستند، والحقول
+        // الرقابية. لكن دمجها لا يجوز أن يتجاوز باب الخصوصية المقيدة.
+        $documents = $canRestricted
+            ? KycDocument::with('reviewer:id,f_name,l_name')
                 ->where('user_id', $customer->id)
                 ->orderByDesc('created_at')->get()
                 ->map(fn (KycDocument $d) => [
@@ -589,7 +603,153 @@ class CustomerCenterService
                         ? trim((string) ($d->reviewer->f_name . ' ' . $d->reviewer->l_name)) : null,
                     'reviewed_at' => $d->reviewed_at?->toIso8601String(),
                     'uploaded_at' => $d->created_at?->toIso8601String(),
-                ])->all(),
+                ])->all()
+            : [];
+
+        $residence = app(\App\Services\Kyc\ResidenceVerificationService::class)
+            ->forUser($customer);
+        $expiry = app(\App\Services\Kyc\IdentityExpiryService::class)
+            ->stateOf($customer);
+
+        $ownership = $canRestricted
+            ? [
+                'tier_2' => app(\App\Services\Kyc\KycOwnershipGuardService::class)
+                    ->assess($customer, 2),
+                'tier_3' => app(\App\Services\Kyc\KycOwnershipGuardService::class)
+                    ->assess($customer, 3),
+            ]
+            : [
+                'hidden' => true,
+                'reason' => 'حالة مراجعة مقيدة — تفاصيل إثبات الملكية محجوبة عن هذه الصلاحية.',
+            ];
+
+        $reuse = $canRestricted
+            ? app(\App\Services\Kyc\DocumentReuseService::class)->findingsFor($customer)
+            : [
+                'hidden' => true,
+                'blockers' => [],
+                'warnings' => [],
+                'matches' => [],
+            ];
+
+        $privacySummary = [
+            'review_mode' => $privacyState['review_mode'] ?? 'standard',
+            'review_mode_label' => $privacyState['review_mode_label'] ?? 'مراجعة عادية',
+            'ownership_method' => $privacyState['ownership_method'] ?? null,
+            'ownership_method_label' => $privacyState['ownership_method_label'] ?? null,
+            'status' => $privacyState['status'] ?? 'collecting',
+            'restricted_review' => $restricted,
+            'hidden' => !$canRestricted,
+            'biometric_available' => (bool) ($privacyState['biometric_available'] ?? false),
+        ];
+
+        if ($canRestricted) {
+            $privacySummary['requested_at'] = $privacyState['requested_at'] ?? null;
+            $privacySummary['reviewed_at'] = $privacyState['reviewed_at'] ?? null;
+            $privacySummary['decision_reason'] = $privacyState['decision_reason'] ?? null;
+
+            if ($canBiometric) {
+                $privacySummary['biometric_provider'] = $privacyState['biometric_provider'] ?? null;
+                $privacySummary['provider_reference'] = $privacyState['provider_reference'] ?? null;
+                $privacySummary['liveness'] = $privacyState['liveness'] ?? ['status' => 'not_configured', 'score' => null];
+                $privacySummary['face_match'] = $privacyState['face_match'] ?? ['status' => 'not_configured', 'score' => null];
+            } else {
+                $privacySummary['liveness'] = [
+                    'status' => $privacyState['liveness']['status'] ?? 'not_configured',
+                    'score' => null,
+                ];
+                $privacySummary['face_match'] = [
+                    'status' => $privacyState['face_match']['status'] ?? 'not_configured',
+                    'score' => null,
+                ];
+            }
+        }
+
+        $regulatory = [];
+        $regulatoryLabels = [
+            'name_en' => 'الاسم بالإنجليزية',
+            'father_name' => 'اسم الأب',
+            'grandfather_name' => 'اسم الجد',
+            'country_of_birth' => 'بلد الميلاد',
+            'dual_nationality' => 'الجنسية المزدوجة',
+            'id_place_of_issue' => 'مكان إصدار الهوية',
+            'marital_status' => 'الحالة الاجتماعية',
+            'housing_type' => 'نوع السكن',
+            'employer_name' => 'جهة العمل',
+            'job_title' => 'المسمى الوظيفي',
+            'work_address' => 'عنوان العمل',
+            'income_source' => 'مصدر الدخل',
+            'account_purpose' => 'الغرض من فتح الحساب',
+            'monthly_income' => 'الدخل الشهري',
+            'monthly_income_currency' => 'عملة الدخل',
+            'is_pep' => 'الإفصاح عن الشخص المعرض سياسياً',
+            'pep_position' => 'المنصب السياسي المصرح به',
+        ];
+
+        foreach ($regulatoryLabels as $field => $label) {
+            if (!Schema::hasColumn('users', $field)) continue;
+
+            $value = $customer->{$field};
+            if ($field === 'is_pep') {
+                $value = $value === null ? 'لم يُسأل بعد' : ((bool) $value ? 'نعم' : 'لا');
+            }
+
+            $regulatory[] = [
+                'field' => $field,
+                'label' => $label,
+                'value' => $value === null || $value === '' ? null : (string) $value,
+            ];
+        }
+
+        $changes = Schema::hasTable('profile_change_requests')
+            ? DB::table('profile_change_requests')
+                ->where('user_id', $customer->id)
+                ->orderByDesc('id')
+                ->limit(20)
+                ->get([
+                    'id', 'field', 'reason', 'status',
+                    'supporting_document_id', 'created_at', 'decided_at',
+                ])->map(fn ($row) => [
+                    'id' => (int) $row->id,
+                    'field' => (string) $row->field,
+                    'reason' => (string) ($row->reason ?? ''),
+                    'status' => (string) $row->status,
+                    'supporting_document_id' => $row->supporting_document_id
+                        ? (int) $row->supporting_document_id : null,
+                    'created_at' => (string) $row->created_at,
+                    'decided_at' => $row->decided_at ? (string) $row->decided_at : null,
+                ])->all()
+            : [];
+
+        $tierService = app(KycTierService::class);
+        $tierPolicies = collect(range(0, 3))->map(
+            fn (int $tier) => $tierService->getLimits($tier)
+        )->all();
+
+        return array_merge($this->kycReconciliation($customer), [
+            'documents' => $documents,
+            'documents_hidden' => !$canRestricted,
+            'contact_verification' => [
+                'phone_verified' => (bool) ($customer->is_phone_verified ?? false),
+                'email_verified' => (bool) ($customer->is_email_verified ?? false),
+                'email_verified_at' => Schema::hasColumn('users', 'email_verified_at')
+                    ? $customer->email_verified_at?->toIso8601String()
+                    : null,
+            ],
+            'regulatory_profile' => [
+                'fields' => $regulatory,
+                'missing' => \App\Support\Kyc\KycProfileFields::missingFor($customer),
+                'updated_at' => Schema::hasColumn('users', 'kyc_fields_updated_at')
+                    ? $customer->kyc_fields_updated_at?->toIso8601String()
+                    : null,
+            ],
+            'residence' => $residence,
+            'identity_expiry' => $expiry,
+            'ownership' => $ownership,
+            'privacy' => $privacySummary,
+            'reuse_findings' => $reuse,
+            'profile_change_requests' => $changes,
+            'tier_policies' => $tierPolicies,
             // لا نكشف payload هنا؛ التبويب يثبت وجود ملفه ويقود إلى شاشة
             // الأرشيف المحروسة التي تسجّل فتح البيانات الحساسة.
             'registration_dossiers' => RegistrationDossier::query()
