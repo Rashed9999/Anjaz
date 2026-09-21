@@ -45,44 +45,62 @@
                    data-testid="cc-create-customer">+ إضافة عميل</a>
             @endif
         </div>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="d-flex flex-wrap gap-2" role="tablist" aria-label="أقسام مركز العملاء">
+            <button type="button" class="btn btn-primary btn-sm js-cc-op active"
+                    data-op="customers" data-testid="cc-op-customers">👤 ملف العميل</button>
             @if(auth('user')->user()?->hasPlatformPermission('platform.customers.kyc.view'))
-                <a class="btn btn-outline-primary btn-sm"
-                   href="{{ route('admin.amial.kyc.page') }}"
-                   data-testid="cc-kyc-queue">🪪 طابور التوثيق</a>
-                <a class="btn btn-outline-primary btn-sm"
-                   href="{{ route('admin.amial.kyc.changes.page') }}"
-                   data-testid="cc-profile-changes">📝 طلبات تحديث البيانات</a>
+                <button type="button" class="btn btn-outline-primary btn-sm js-cc-op"
+                        data-op="kyc" data-testid="cc-kyc-queue">🪪 طابور التوثيق</button>
+                <button type="button" class="btn btn-outline-primary btn-sm js-cc-op"
+                        data-op="changes" data-testid="cc-profile-changes">📝 طلبات تحديث البيانات</button>
             @endif
             @if(auth('user')->user()?->hasPlatformPermission('platform.audit.view'))
-                <a class="btn btn-outline-secondary btn-sm"
-                   href="{{ route('admin.amial.customer-systems.index') }}"
-                   data-testid="cc-systems-health">🧭 صحة أنظمة العميل</a>
+                <button type="button" class="btn btn-outline-secondary btn-sm js-cc-op"
+                        data-op="systems" data-testid="cc-systems-health">🧭 صحة أنظمة العميل</button>
             @endif
             @if(auth('user')->user()?->hasPlatformPermission('platform.registrations.view'))
                 <a class="btn btn-outline-secondary btn-sm"
                    href="{{ route('admin.amial.registration-dossiers.page') }}"
-                   data-testid="cc-registration-archive">🗂️ أرشيف فتح الحسابات</a>
+                   data-testid="cc-registration-archive">🗂️ الأرشيف</a>
             @endif
             @if(auth('user')->user()?->hasPlatformPermission('platform.approvals.decide'))
                 <a class="btn btn-outline-danger btn-sm"
                    href="{{ route('admin.amial.recovery.index') }}"
-                   data-testid="cc-recovery">🔑 استعادة الحساب</a>
+                   data-testid="cc-recovery">🔑 الاستعادة</a>
             @endif
         </div>
     </div>
 
-    {{-- مفاتيح البحث الفعلية فقط؛ كلّ بحث يسجّل بلا حفظ النص الحساس خاماً. --}}
-    <div class="card p-3 mb-3">
-        <div class="input-group">
-            <input type="text" id="cc-q" class="form-control form-control-lg"
-                   placeholder="هاتف / اسم / بريد / رقم حساب / معرّف محفظة / رقم عملية…" data-testid="cc-search">
-            <button class="btn btn-primary" id="cc-btn-search">بحث</button>
+    <div id="cc-op-panel-customers" class="js-cc-op-panel">
+        {{-- مفاتيح البحث الفعلية فقط؛ كلّ بحث يسجّل بلا حفظ النص الحساس خاماً. --}}
+        <div class="card p-3 mb-3">
+            <div class="input-group">
+                <input type="text" id="cc-q" class="form-control form-control-lg"
+                       placeholder="هاتف / اسم / بريد / رقم حساب / معرّف محفظة / رقم عملية…" data-testid="cc-search">
+                <button class="btn btn-primary" id="cc-btn-search">بحث</button>
+            </div>
+            <div id="cc-results" class="mt-2"></div>
         </div>
-        <div id="cc-results" class="mt-2"></div>
+        <div id="cc-profile" data-testid="cc-profile"></div>
     </div>
 
-    <div id="cc-profile" data-testid="cc-profile"></div>
+    <div id="cc-op-panel-kyc" class="js-cc-op-panel d-none">
+        <div id="cc-ops-kyc-content" class="card p-3 mb-3">
+            <div class="text-muted">اضغط «طابور التوثيق» لتحميل الطلبات.</div>
+        </div>
+    </div>
+
+    <div id="cc-op-panel-changes" class="js-cc-op-panel d-none">
+        <div id="cc-ops-changes-content" class="card p-3 mb-3">
+            <div class="text-muted">اضغط «طلبات تحديث البيانات» لتحميل الطابور.</div>
+        </div>
+    </div>
+
+    <div id="cc-op-panel-systems" class="js-cc-op-panel d-none">
+        <div id="cc-ops-systems-content" class="card p-3 mb-3">
+            <div class="text-muted">اضغط «صحة أنظمة العميل» لتحميل الحالة.</div>
+        </div>
+    </div>
 </div>
 
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
