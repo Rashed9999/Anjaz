@@ -417,18 +417,21 @@ jobs:
           storeFile=amial-release.jks
           EOF
 
-      # AMIAL-APK-INSTALL-001 — ملف واحد Universal.
-      # كانت النشرة تنتج ثلاثة APK حسب المعالج، وفي الهاتف ظهر واحد 0 بايت
-      # وآخر مبتوراً؛ ثم أعطى Android «مشكلة أثناء تحليل الحزمة».
-      # ملف Universal يزيل اختيار المعمارية من يد المستخدم ويُفحص قبل الرفع.
+      # AMIAL-APK-INSTALL-002 — Release ARM64 خفيف ومفحوص.
+      # Universal يضم مكتبات ARM32 + ARM64 + x86_64 فرفع الحجم إلى ~67MB.
+      # هواتف Android الحديثة المستهدفة بالتجربة تستخدم ARM64؛ نبني splits
+      # ونرفع arm64-v8a وحده بعد فحص ZIP والتوقيع والـManifest. Debug يبقى
+      # Universal لأنه للتطوير فقط.
       - name: بناء APK واحد قابل للتثبيت
         run: |
           if [ "$APK_BUILD_TYPE" = "release" ]; then
-            flutter build apk --release
-            SRC="build/app/outputs/flutter-apk/app-release.apk"
+            flutter build apk --release --split-per-abi
+            SRC="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
+            ABI="arm64-v8a"
           else
             flutter build apk --debug
             SRC="build/app/outputs/flutter-apk/app-debug.apk"
+            ABI="universal"
           fi
 
           test -s "$SRC" || {
@@ -439,11 +442,12 @@ jobs:
           mkdir -p build/installable
           LABEL="$APK_BUILD_TYPE"
           if [ "$APK_BUILD_TYPE" = "release" ]; then
-            LABEL="release-${APK_SIGNING_MODE}"
+            LABEL="release-${APK_SIGNING_MODE}-${ABI}"
           fi
           OUT="build/installable/AmialPay-${LABEL}-${GITHUB_SHA::7}.apk"
           cp "$SRC" "$OUT"
           echo "APK_PATH=$OUT" >> "$GITHUB_ENV"
+          echo "APK_ABI=$ABI" >> "$GITHUB_ENV"
 
       - name: فحص سلامة الحزمة والتوقيع قبل الرفع
         run: |
@@ -496,6 +500,14 @@ jobs:
           echo "== Manifest parse =="
           "$AAPT2" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='amialpay.com'" /tmp/apk-badging.txt
+          if [ "$APK_BUILD_TYPE" = "release" ]; then
+            grep -q "native-code: 'arm64-v8a'" /tmp/apk-badging.txt
+            if grep -qE "'armeabi-v7a'|'x86_64'|'x86'" /tmp/apk-badging.txt; then
+              echo "::error::نسخة Release المطلوبة ليست ARM64 خالصة"
+              exit 1
+            fi
+            echo "✓ ABI = arm64-v8a فقط"
+          fi
 
           echo "== SHA256 =="
           sha256sum "$APK" | tee "build/installable/SHA256SUMS.txt"
