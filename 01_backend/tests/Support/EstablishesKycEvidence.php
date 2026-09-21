@@ -26,8 +26,9 @@ trait EstablishesKycEvidence
      */
     protected function establishTierOnePrerequisite(User $customer): User
     {
+        $this->establishPhoneOwnership($customer);
+
         $customer->forceFill([
-            'is_phone_verified' => 1,
             'kyc_tier' => 1,
             'residence_governorate' => 'YE-AD',
             'verified_residence_governorate' => 'YE-AD',
@@ -95,7 +96,38 @@ trait EstablishesKycEvidence
             );
         }
 
-        $this->establishKycOwnership($customer, $reviewer);
+        // KYC Tier 2 لا يثبت الهوية فقط؛ الحارس يشترط أيضاً أن يكون
+        // رقم الهاتف مملوكاً لصاحب الحساب. هذا المساعد يعدّ نفسه دليلاً
+        // كاملاً، لذلك يبني إثبات الهاتف صراحةً بدل ترك fixture ناقص.
+        $this->establishPhoneOwnership($customer);
+        $this->establishKycOwnership($customer->fresh(), $reviewer);
+    }
+
+    /**
+     * يثبت ملكية الهاتف في fixture الاختبار مع أثر تدقيق مماثل للإنتاج.
+     *
+     * لا يضعف حارس KYC ولا يُستعمل في كود الإنتاج؛ هو فقط يبني الحالة
+     * السابقة التي كان الاختبار يدّعي وجودها أصلاً.
+     */
+    protected function establishPhoneOwnership(User $customer): void
+    {
+        if ((int) ($customer->is_phone_verified ?? 0) !== 1) {
+            $customer->forceFill(['is_phone_verified' => 1])->save();
+
+            app(\App\Services\AuditService::class)->record([
+                'actor_type' => 'customer',
+                'actor_user_id' => (int) $customer->id,
+                'subject_type' => 'user',
+                'subject_id' => (string) $customer->id,
+                'action' => 'PHONE_OWNERSHIP_VERIFIED',
+                'decision_code' => 'PHONE_OTP_VERIFIED_TEST_FIXTURE',
+                'severity' => 'info',
+                'context' => [
+                    'phone_verified' => true,
+                    'source' => 'test_fixture',
+                ],
+            ]);
+        }
     }
 
     /**
