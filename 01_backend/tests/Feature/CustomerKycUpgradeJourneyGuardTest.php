@@ -39,21 +39,33 @@ class CustomerKycUpgradeJourneyGuardTest extends TestCase
     {
         $services = base_path('../02_flutter_app/lib/features/me/screens/my_services_screen.dart');
         $hub = base_path('../02_flutter_app/lib/features/me/screens/customer_services_hub_screen.dart');
+        $center = base_path('../02_flutter_app/lib/features/kyc_verification/screens/customer_verification_center_screen.dart');
         $complete = base_path('../02_flutter_app/lib/features/kyc_verification/screens/complete_my_account_screen.dart');
         $repo = base_path('../02_flutter_app/lib/features/kyc_verification/domain/reposotories/verification_center_repo.dart');
 
-        if (!is_file($services) || !is_file($hub) || !is_file($complete) || !is_file($repo)) {
+        if (!is_file($services) || !is_file($hub) || !is_file($center)
+            || !is_file($complete) || !is_file($repo)) {
             $this->markTestSkipped('مصادر Flutter غير موجودة في هذه البيئة');
         }
 
         $servicesSrc = file_get_contents($services);
         $hubSrc = file_get_contents($hub);
+        $centerSrc = file_get_contents($center);
         $completeSrc = file_get_contents($complete);
 
-        $this->assertStringContainsString('التوثيق ورفع المستوى', $servicesSrc);
+        // AMIAL-KYC-CENTER-001 — لم يعد المدخل يقفز مباشرةً إلى خطوة
+        // «إكمال الحساب». كل رحلة التوثيق صارت خلف باب واحد، ومنه يختار
+        // العميل رفع المستوى أو مراجعة الحدود والمستندات.
+        $this->assertStringContainsString("label: 'التوثيق'", $servicesSrc);
+        $this->assertStringContainsString('CustomerVerificationCenterScreen', $servicesSrc);
+        $this->assertStringNotContainsString('CompleteMyAccountScreen', $servicesSrc);
+        $this->assertStringContainsString("AmialScreenHeader(title: 'التوثيق')", $centerSrc);
+        $this->assertStringContainsString('CustomerVerificationPanel()', $centerSrc);
+
+        // مدخل الخدمة المقفلة يبقى قادراً على إرشاد العميل إلى الرفع،
+        // لكن لا يكون هو الباب الوحيد أو الباب الرئيسي.
         $this->assertStringContainsString('customer-kyc-upgrade-cta', $hubSrc);
         $this->assertStringContainsString('إكمال البيانات ورفع المستوى', $hubSrc);
-        $this->assertStringContainsString('CompleteMyAccountScreen', $servicesSrc);
         $this->assertStringNotContainsString('profile?.type != 2', $completeSrc);
         $this->assertStringContainsString('/me/verification-status', file_get_contents($repo));
     }
