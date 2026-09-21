@@ -106,7 +106,10 @@
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const BASE = '{{ url('admin/amial/customer') }}';
+    const KYC_REVIEW_BASE = '{{ url('admin/amial/kyc/documents') }}';
     const CSRF = '{{ csrf_token() }}';
+    const CAN_KYC_DECIDE = @json((bool) auth('user')->user()?->hasPlatformPermission('platform.customers.freeze'));
+    const CAN_RESTRICTED_DECIDE = @json((bool) auth('user')->user()?->hasPlatformPermission('platform.customers.kyc.restricted.decide'));
     const ALLOWED_TABS = @json($tabs);
     const ALLOWED_ACTIONS = @json($actions);
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -152,6 +155,17 @@
         return body;
     }
 
+    async function postUrl(url, body) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':CSRF},
+            body: JSON.stringify(body || {}),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.message || ('خطأ ' + response.status));
+        return payload;
+    }
+
     // ---------- البحث ----------
     document.getElementById('cc-btn-search').onclick = doSearch;
     document.getElementById('cc-q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
@@ -195,20 +209,24 @@
     ];
     const TABS = ALL_TABS.filter(([code]) => ALLOWED_TABS.includes(code));
 
-    async function openCustomer(id) {
+    async function openCustomer(id, targetTab = null) {
         current = id;
         const sequence = ++customerSequence;
         for (const k in loaded) delete loaded[k];
 
+        const selected = TABS.some(t => t[0] === targetTab)
+            ? targetTab
+            : (TABS[0]?.[0] || null);
+
         document.getElementById('cc-profile').innerHTML = `
             <div id="cc-head" class="card p-3 mb-3"><div class="text-muted">جارٍ التحميل…</div></div>
-            <ul class="nav nav-tabs mb-3">${TABS.map((t, i) => `
-                <li class="nav-item"><button class="nav-link ${i === 0 ? 'active' : ''} js-cc-tab"
+            <ul class="nav nav-tabs mb-3">${TABS.map(t => `
+                <li class="nav-item"><button class="nav-link ${t[0] === selected ? 'active' : ''} js-cc-tab"
                     data-tab="${t[0]}" data-testid="cc-tab-${t[0]}">${t[1]}</button></li>`).join('')}
             </ul>
             <div id="cc-tab-body"></div>`;
 
-        if (TABS.length) loadTab(TABS[0][0], sequence);
+        if (selected) loadTab(selected, sequence);
     }
 
     document.addEventListener('click', e => {
@@ -243,6 +261,196 @@
             <thead class="thead-light"><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead>
             <tbody>${rows || `<tr><td colspan="${head.length}" class="text-muted text-center py-3">${empty}</td></tr>`}</tbody>
         </table></div>`;
+
+    // ---------- الطوابير التشغيلية داخل نفس الشاشة ----------
+    const opsLoaded = {};
+
+    function showOperationPanel(name) {
+        document.querySelectorAll('.js-cc-op-panel').forEach(panel =>
+            panel.classList.toggle('d-none', panel.id !== 'cc-op-panel-' + name));
+        document.querySelectorAll('.js-cc-op').forEach(button =>
+            button.classList.toggle('active', button.dataset.op === name));
+
+        if (name !== 'customers' && !opsLoaded[name]) {
+            loadOperationPanel(name);
+        }
+    }
+
+    document.querySelectorAll('.js-cc-op').forEach(button => {
+        button.addEventListener('click', () => showOperationPanel(button.dataset.op));
+    });
+
+    async function loadOperationPanel(name, force = false) {
+        if (!force && opsLoaded[name]) return;
+        const target = document.getElementById('cc-ops-' + name + '-content');
+        if (!target) return;
+
+        target.innerHTML = '<div class="text-muted">جارٍ التحميل…</div>';
+        try {
+            const j = await get('/ops/' + name);
+            if (!j.success) throw new Error(j.message || 'تعذر التحميل');
+            opsLoaded[name] = j.meta;
+            if (name === 'kyc') renderOpsKyc(j.meta, target);
+            if (name === 'changes') renderOpsChanges(j.meta, target);
+            if (name === 'systems') renderOpsSystems(j.meta, target);
+        } catch (error) {
+            target.innerHTML = `<div class="alert alert-warning mb-0">${esc(error.message || 'تعذّر التحميل')}</div>`;
+        }
+    }
+
+    function renderOpsKyc(m, target) {
+        const normal = (m.pending || []).map(x => ({...x, restricted:false}));
+        const restricted = (m.restricted_pending || []).map(x => ({...x, restricted:true}));
+        const pending = normal.concat(restricted);
+        const activation = (m.activation || [])
+            .map(x => ({...x, restricted:false}))
+            .concat((m.restricted_activation || []).map(x => ({...x, restricted:true})));
+
+        const pendingRows = pending.map(row => {
+            const canDecide = row.restricted ? CAN_RESTRICTED_DECIDE : CAN_KYC_DECIDE;
+            return `<tr>
+                <td><strong>${esc(row.customer_name)}</strong><div class="small text-muted">#${esc(row.user_id)} • ${esc(row.customer_phone)}</div></td>
+                <td>${esc(row.doc_label)} ${row.restricted ? '<span class="badge bg-danger">مقيد</span>' : ''}</td>
+                <td class="small">${esc(row.waiting_hours)} ساعة</td>
+                <td class="text-nowrap">
+                    <button class="btn btn-sm btn-outline-primary js-ops-open-customer" data-id="${row.user_id}" data-tab="kyc">فتح الملف</button>
+                    ${canDecide ? `
+                        <button class="btn btn-sm btn-success js-ops-doc-decision" data-id="${row.id}" data-action="approve">اعتماد</button>
+                        <button class="btn btn-sm btn-outline-danger js-ops-doc-decision" data-id="${row.id}" data-action="reject">رفض</button>
+                    ` : ''}
+                </td>
+            </tr>`;
+        }).join('');
+
+        const activationRows = activation.map(row => {
+            const blockers = row.ownership?.blockers || [];
+            return `<tr>
+                <td><strong>${esc(row.customer_name)}</strong><div class="small text-muted">#${esc(row.user_id)} • ${esc(row.customer_phone)}</div></td>
+                <td>${row.restricted ? '<span class="badge bg-danger">مقيد</span>' : '<span class="badge bg-secondary">عادي</span>'}</td>
+                <td>${row.ownership?.ready
+                    ? '<span class="badge bg-success">ملكية الهوية جاهزة</span>'
+                    : '<span class="badge bg-warning text-dark">تحتاج استكمال</span>'}
+                    ${blockers.length ? `<div class="small text-muted mt-1">${blockers.map(esc).join(' • ')}</div>` : ''}
+                </td>
+                <td><button class="btn btn-sm btn-primary js-ops-open-customer" data-id="${row.user_id}" data-tab="kyc">فتح KYC للعميل</button></td>
+            </tr>`;
+        }).join('');
+
+        target.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div><h5 class="mb-1">طابور التوثيق</h5><div class="small text-muted">المستندات والملفات الجاهزة للقرار من المصدر نفسه.</div></div>
+                <button class="btn btn-sm btn-outline-secondary js-ops-refresh" data-op="kyc">↻ تحديث</button>
+            </div>
+            <div class="row g-2 mb-3">
+                ${card('مستندات تنتظر', pending.length)}
+                ${card('حسابات جاهزة للقرار', activation.length)}
+                ${card('مراجعة مقيدة', restricted.length + (m.restricted_activation || []).length,
+                    m.restricted_visible ? 'مرئية لصلاحيتك' : 'غير مرئية لصلاحيتك')}
+            </div>
+            <h6>المستندات بانتظار المراجعة</h6>
+            ${table(['العميل','المستند','الانتظار','الإجراء'], pendingRows, 'لا مستندات معلقة', 'cc-ops-kyc-pending')}
+            <h6 class="mt-3">حسابات جاهزة للقرار النهائي</h6>
+            ${table(['العميل','النوع','إثبات الملكية','الإجراء'], activationRows, 'لا حسابات جاهزة للقرار', 'cc-ops-kyc-activation')}`;
+    }
+
+    function renderOpsChanges(m, target) {
+        const rows = (m.items || []).map(row => `<tr>
+            <td><strong>${esc(row.customer_name)}</strong><div class="small text-muted">#${esc(row.user_id)} • ${esc(row.customer_phone)}</div></td>
+            <td class="font-monospace small">${esc(row.field)}</td>
+            <td class="small">${esc(row.reason || '—')}</td>
+            <td>${row.supporting_document_id ? '#' + esc(row.supporting_document_id) : '—'}</td>
+            <td class="small">${dt(row.created_at)}</td>
+            <td><button class="btn btn-sm btn-primary js-ops-open-customer" data-id="${row.user_id}" data-tab="kyc">فتح العميل</button></td>
+        </tr>`).join('');
+
+        target.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div><h5 class="mb-1">طلبات تحديث بيانات العملاء</h5><div class="small text-muted">الطلبات التي ملأها أصحاب الحسابات وتنتظر مراجعاً.</div></div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary js-ops-refresh" data-op="changes">↻ تحديث</button>
+                    <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.changes.page') }}">أداة القرار المتخصصة</a>
+                </div>
+            </div>
+            ${table(['العميل','الحقل','السبب','المستند','فُتح','الملف'], rows, 'لا طلبات بانتظار المراجعة', 'cc-ops-changes')}`;
+    }
+
+    function renderOpsSystems(m, target) {
+        const summary = m.summary || {};
+        const systems = m.systems || [];
+        target.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div><h5 class="mb-1">صحة أنظمة العميل</h5><div class="small text-muted">مراقبة الأنظمة التي تؤثر على رحلة العميل دون لوحة منفصلة.</div></div>
+                <button class="btn btn-sm btn-outline-secondary js-ops-refresh" data-op="systems">↻ تحديث</button>
+            </div>
+            <div class="row g-2 mb-3">
+                ${card('العملاء', summary.customers ?? '—')}
+                ${card('KYC معلّق', summary.kyc_pending ?? '—')}
+                ${card('حجب سياسة / 24س', summary.policy_blocks_24h ?? '—')}
+                ${card('طلبات أموال معلقة', summary.pending_payment_requests ?? '—')}
+                ${card('فواتير معلقة', summary.pending_bill_orders ?? '—')}
+                ${card('فشل PDF', summary.receipt_pdf_failures ?? '—')}
+            </div>
+            <div class="row g-3">
+                ${systems.map(system => `
+                    <div class="col-xl-4 col-md-6"><div class="card h-100 p-3">
+                        <div class="d-flex justify-content-between gap-2">
+                            <strong>${esc(system.title)}</strong>
+                            <span class="badge bg-${system.state === 'complete' ? 'success' : (system.state === 'partial' ? 'warning text-dark' : 'secondary')}">${esc(system.state_label)}</span>
+                        </div>
+                        <div class="small text-muted mt-2">${esc(system.description)}</div>
+                        <div class="mt-2">${(system.metrics || []).map(metric =>
+                            `<span class="badge badge-soft-secondary me-1 mb-1">${esc(metric.label)}: ${esc(metric.value)}</span>`).join('')}</div>
+                        ${system.gap ? `<div class="alert alert-warning py-2 small mt-2 mb-0">${esc(system.gap)}</div>` : ''}
+                    </div></div>`).join('')}
+            </div>`;
+    }
+
+    document.addEventListener('click', async event => {
+        const open = event.target.closest('.js-ops-open-customer');
+        if (open) {
+            showOperationPanel('customers');
+            await openCustomer(Number(open.dataset.id), open.dataset.tab || null);
+            document.getElementById('cc-profile')?.scrollIntoView({behavior:'smooth', block:'start'});
+            return;
+        }
+
+        const refresh = event.target.closest('.js-ops-refresh');
+        if (refresh) {
+            opsLoaded[refresh.dataset.op] = null;
+            await loadOperationPanel(refresh.dataset.op, true);
+            return;
+        }
+
+        const decision = event.target.closest('.js-ops-doc-decision');
+        if (!decision) return;
+
+        const action = decision.dataset.action;
+        let payload = {};
+        if (action === 'approve') {
+            const expires = prompt('تاريخ انتهاء الوثيقة YYYY-MM-DD — اتركه فارغاً إن لم تكن تنتهي:') || '';
+            if (expires.trim()) payload.expires_at = expires.trim();
+            if (!confirm('اعتماد هذا المستند؟ اعتماد المستند لا يعني اعتماد الحساب النهائي.')) return;
+        } else {
+            const reason = prompt('سبب الرفض — سيظهر للعميل:') || '';
+            if (reason.trim().length < 3) {
+                alert('سبب الرفض مطلوب (3 أحرف على الأقل).');
+                return;
+            }
+            payload.reason = reason.trim();
+        }
+
+        try {
+            const result = await postUrl(
+                KYC_REVIEW_BASE + '/' + encodeURIComponent(decision.dataset.id) + '/' + action,
+                payload,
+            );
+            alert(result.message || 'تم');
+            opsLoaded.kyc = null;
+            await loadOperationPanel('kyc', true);
+        } catch (error) {
+            alert(error.message || 'تعذر تنفيذ القرار');
+        }
+    });
 
     const RENDER = {
         overview(m, body) {
