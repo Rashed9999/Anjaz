@@ -8,6 +8,7 @@
 
     <ul class="nav nav-tabs mb-3" role="tablist">
         @if($capabilities['customers'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'customers' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-search" data-testid="tab-search">🔍 خدمة العملاء</button></li>@endif
+        @if($capabilities['playbooks'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'playbooks' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-playbooks" data-testid="tab-playbooks">📚 دليل الدعم</button></li>@endif
         @if($capabilities['transactions'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'transactions' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-tx" data-testid="tab-tx">💳 فحص عملية</button></li>@endif
         @if($capabilities['tickets'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'tickets' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-tickets" data-testid="tab-tickets">🎫 التذاكر</button></li>@endif
         @if($capabilities['approvals'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'approvals' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-approvals" data-testid="tab-approvals">✅ الموافقات</button></li>@endif
@@ -29,6 +30,39 @@
             </div>
             <div id="customer-360"></div>
         </div>
+
+        {{-- ============ دليل الدعم التشغيلي ============ --}}
+        @if($capabilities['playbooks'])
+        <div class="tab-pane fade {{ $firstSupportTab === 'playbooks' ? 'show active' : '' }}" id="tab-playbooks">
+            <div class="card p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                    <div>
+                        <h5 class="mb-1">دليل الدعم التشغيلي</h5>
+                        <div class="small text-muted">
+                            49 حالة تشغيلية: اكتب كلام العميل كما قاله، ثم اتبع التشخيص والخطوات والتصعيد.
+                        </div>
+                    </div>
+                    <span class="badge bg-dark" id="pb-count" data-testid="playbook-count">49 حالة</span>
+                </div>
+                <div class="row g-2">
+                    <div class="col-lg-8">
+                        <input type="text" id="pb-q" class="form-control"
+                               placeholder="مثال: الحوالة ما وصلت / جهاز جديد / الرمز ما وصل / دفعت للتاجر ويقول إنترنت"
+                               data-testid="playbook-search-input">
+                    </div>
+                    <div class="col-lg-3">
+                        <select id="pb-category" class="form-select" data-testid="playbook-category">
+                            <option value="">كل الأقسام</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-1 d-grid">
+                        <button class="btn btn-primary" id="btn-playbooks" data-testid="btn-playbooks">بحث</button>
+                    </div>
+                </div>
+            </div>
+            <div id="playbook-results" data-testid="playbook-results"></div>
+        </div>
+        @endif
 
         {{-- ============ 2) فحص عملية ============ --}}
         <div class="tab-pane fade {{ $firstSupportTab === 'transactions' ? 'show active' : '' }}" id="tab-tx">
@@ -126,6 +160,169 @@
         });
         return r.json();
     }
+
+    // ---------- دليل الدعم التشغيلي ----------
+    const pbSearch = document.getElementById('pb-q');
+    const pbCategory = document.getElementById('pb-category');
+    const pbButton = document.getElementById('btn-playbooks');
+    const pbResults = document.getElementById('playbook-results');
+    const pbCount = document.getElementById('pb-count');
+
+    const PB_CATEGORY_LABELS = {
+        transactions:'المعاملات', transfers:'التحويلات', fees:'الرسوم',
+        security:'الأمن', risk:'المخاطر', access:'الدخول/PIN', otp:'OTP',
+        recovery:'استعادة الحساب', account:'الحساب', kyc:'اعرف عميلك',
+        compliance:'الامتثال', limits:'الحدود', agents:'الوكلاء',
+        merchant:'التجار', services:'الخدمات', disputes:'النزاعات',
+        bills:'الفواتير', requests:'طلبات المال', wallet:'المحفظة',
+        receipts:'الإيصالات', system:'الأعطال والتشغيل',
+        complaints:'الشكاوى', privacy:'الخصوصية', tickets:'التذاكر',
+        sla:'المدد', operations:'التشغيل'
+    };
+    const PB_STATUS = {
+        ready:['success','قابل للحل/التشخيص الآن'],
+        partial:['warning text-dark','جزئي'],
+        escalate:['danger','تصعيد إلزامي'],
+        missing:['secondary','ينقصه بناء/سياسة']
+    };
+
+    async function loadPlaybooks() {
+        if (!pbResults) return;
+        const q = (pbSearch?.value || '').trim();
+        const category = pbCategory?.value || '';
+        pbResults.innerHTML = '<div class="text-muted">جارٍ تحميل دليل الدعم…</div>';
+
+        const params = new URLSearchParams();
+        if (q) params.set('q', q);
+        if (category) params.set('category', category);
+
+        const j = await get('/playbooks?' + params.toString());
+        if (!j.success) {
+            pbResults.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`;
+            return;
+        }
+
+        const m = j.meta || {};
+        if (pbCount) pbCount.textContent = `${m.matched ?? 0} من ${m.total_catalog ?? 49} حالة`;
+
+        if (pbCategory && pbCategory.options.length === 1) {
+            Object.entries(m.categories || {}).forEach(([code, count]) => {
+                const option = document.createElement('option');
+                option.value = code;
+                option.textContent = `${PB_CATEGORY_LABELS[code] || code} (${count})`;
+                pbCategory.appendChild(option);
+            });
+        }
+
+        const rows = m.playbooks || [];
+        if (!rows.length) {
+            pbResults.innerHTML = '<div class="alert alert-secondary">لا توجد حالة مطابقة. افتح تذكرة بعنوان واضح ولا تخمّن الحل.</div>';
+            return;
+        }
+
+        const txCategories = new Set(['transactions','transfers','fees','merchant','agents','services','bills','requests','wallet','receipts']);
+        const ticketCategories = new Set(['tickets','complaints','disputes','sla']);
+        const startTarget = p => p.category === 'recovery'
+            ? 'recovery'
+            : (txCategories.has(p.category) ? 'tx'
+            : (ticketCategories.has(p.category) ? 'tickets' : 'search'));
+
+        pbResults.innerHTML = rows.map(p => {
+            const status = PB_STATUS[p.readiness] || ['secondary', esc(p.readiness)];
+            const steps = (p.steps || []).map((s, i) =>
+                `<li class="mb-1"><strong>${i + 1}.</strong> ${esc(s)}</li>`).join('');
+            return `
+              <div class="card mb-3" data-testid="playbook-case-${esc(p.id)}">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <div>
+                    <span class="badge bg-light text-dark border">#${esc(p.id)}</span>
+                    <strong class="ms-1">${esc(p.question)}</strong>
+                  </div>
+                  <span class="badge bg-${status[0]}">${status[1]}</span>
+                </div>
+                <div class="card-body">
+                  <div class="row g-3">
+                    <div class="col-lg-5">
+                      <div class="small text-muted mb-1">أين يبدأ الموظف؟</div>
+                      <div class="fw-semibold mb-3">${esc(p.diagnosis)}</div>
+                      <div class="small text-muted mb-1">الكلمات التي قد يقولها العميل</div>
+                      <div>${(p.keywords || []).map(k => `<span class="badge bg-light text-dark border me-1 mb-1">${esc(k)}</span>`).join('')}</div>
+                    </div>
+                    <div class="col-lg-7">
+                      <div class="small text-muted mb-1">خطوات التشخيص</div>
+                      <ol class="ps-3 mb-3">${steps}</ol>
+                      <div class="alert alert-${p.readiness === 'escalate' ? 'danger' : 'light'} border py-2 mb-2">
+                        <strong>حدود الصلاحية/التصعيد:</strong> ${esc(p.escalation)}
+                      </div>
+                      <div class="border rounded p-2 bg-light">
+                        <div class="small text-muted">رد مقترح للعميل</div>
+                        <div data-pb-reply="${esc(p.id)}">${esc(p.customer_reply)}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-wrap gap-2 mt-3">
+                    <button type="button" class="btn btn-sm btn-primary js-pb-start"
+                            data-pb-target="${startTarget(p)}" data-pb-question="${esc(p.question)}">
+                      ابدأ التشخيص
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary js-pb-copy"
+                            data-pb-id="${esc(p.id)}">نسخ الرد للعميل</button>
+                    ${p.required_permission ? `<span class="small text-muted align-self-center">الصلاحية: <code>${esc(p.required_permission)}</code></span>` : ''}
+                  </div>
+                </div>
+              </div>`;
+        }).join('');
+    }
+
+    if (pbButton) pbButton.onclick = loadPlaybooks;
+    if (pbSearch) pbSearch.addEventListener('keydown', e => { if (e.key === 'Enter') loadPlaybooks(); });
+    if (pbCategory) pbCategory.addEventListener('change', loadPlaybooks);
+    document.querySelector('[data-bs-target="#tab-playbooks"]')?.addEventListener('shown.bs.tab', loadPlaybooks);
+
+    document.addEventListener('click', async function (e) {
+        const copy = e.target.closest('.js-pb-copy');
+        if (copy) {
+            const node = document.querySelector(`[data-pb-reply="${copy.dataset.pbId}"]`);
+            if (node?.textContent && navigator.clipboard) {
+                await navigator.clipboard.writeText(node.textContent.trim());
+                copy.textContent = 'تم النسخ ✓';
+                setTimeout(() => copy.textContent = 'نسخ الرد للعميل', 1200);
+            }
+            return;
+        }
+
+        const start = e.target.closest('.js-pb-start');
+        if (!start) return;
+        const target = start.dataset.pbTarget;
+
+        if (target === 'recovery' && CAN_RECOVERY_VIEW) {
+            window.location.href = RECOVERY_BASE;
+            return;
+        }
+
+        if (target === 'tx') {
+            const tab = document.querySelector('[data-bs-target="#tab-tx"]');
+            if (tab && window.bootstrap?.Tab) {
+                window.bootstrap.Tab.getOrCreateInstance(tab).show();
+                setTimeout(() => document.getElementById('tx-ref')?.focus(), 120);
+                return;
+            }
+        }
+
+        if (target === 'tickets') {
+            const tab = document.querySelector('[data-bs-target="#tab-tickets"]');
+            if (tab && window.bootstrap?.Tab) {
+                window.bootstrap.Tab.getOrCreateInstance(tab).show();
+                return;
+            }
+        }
+
+        const searchTab = document.querySelector('[data-bs-target="#tab-search"]');
+        if (searchTab && window.bootstrap?.Tab) {
+            window.bootstrap.Tab.getOrCreateInstance(searchTab).show();
+            setTimeout(() => document.getElementById('q')?.focus(), 120);
+        }
+    });
 
     // ---------- بحث ----------
     document.getElementById('btn-search').onclick = doSearch;
@@ -725,7 +922,7 @@
     // روابط لوحة التحكم تقود إلى الطابور نفسه لا إلى أول تبويب عشوائياً.
     // لا نقبل إلا تبويبات الشاشة الفعلية، ثم نحمل بيانات الطابور عند فتحه.
     const requestedTab = new URLSearchParams(window.location.search).get('tab');
-    const tabLoaders = {tickets: loadTickets, approvals: loadApprovals, insider: loadInsider, ops: loadOps};
+    const tabLoaders = {playbooks: loadPlaybooks, tickets: loadTickets, approvals: loadApprovals, insider: loadInsider, ops: loadOps};
     if (requestedTab && tabLoaders[requestedTab]) {
         const trigger = document.querySelector(`[data-bs-target="#tab-${requestedTab}"]`);
         if (trigger && window.bootstrap?.Tab) {
