@@ -22,8 +22,11 @@
         ['id'=>'overview','title'=>'نظرة عامة','icon'=>'📊','desc'=>'لوحة القيادة والمؤشّرات التنفيذيّة.','items'=>[
             ['لوحة القيادة التنفيذية', route('admin.amial.executive.index'), 'platform.audit.view'],
         ]],
-        ['id'=>'customers','title'=>'العملاء والحسابات','icon'=>'👥','desc'=>'إدارة العملاء والحسابات والدعم والاستعادة.','items'=>[
-            ['مركز العملاء', route('admin.amial.customer.page'), 'platform.customers.view'], ['إنشاء العملاء', route('admin.amial.hub.customers'), 'platform.customers.view'], ['مركز الدعم', route('admin.support-center.index'), 'platform.tickets.view'], ['لوحة التحقق: الحسابات الجديدة', route('admin.amial.hub.verification'), 'platform.approvals.decide'], ['استعادة الحسابات', route('admin.amial.recovery.index'), 'platform.approvals.decide'], ['بوابات OTP', route('admin.amial.otp.page'), 'platform.settings.update'],
+        ['id'=>'customers','title'=>'العملاء والحسابات','icon'=>'👥','desc'=>'ملف العميل الموحد، الدعم والاستعادة.','items'=>[
+            // AMIAL-CUSTOMER-CENTER-NAV-003 — إنشاء العميل وKYC وتحديثاته
+            // وصحة أنظمته تُفتح من شريط التشغيل داخل مركز العملاء نفسه.
+            ['مركز العملاء', route('admin.amial.customer.page'), 'platform.customers.view'],
+            ['استعادة الحسابات', route('admin.amial.recovery.index'), 'platform.approvals.decide'],
         ]],
         ['id'=>'merchants','title'=>'التجّار','icon'=>'🏪','desc'=>'إدارة التجار، العقود، نقاط البيع، والتسويات.','items'=>[
             ['مركز التجّار', route('admin.amial.hub.merchants'), 'platform.merchants.compliance'], ['توثيق التجّار', route('admin.amial.merchants.verification.page'), 'platform.merchants.compliance'], ['الاشتراكات والباقات', route('admin.amial.hub.subscriptions'), 'platform.settings.manage'], ['القدرات والاستحقاقات', route('admin.amial.entitlements.page'), 'platform.settings.manage'], ['فواتير التجار', route('admin.amial.invoices.page'), 'platform.money.view'], ['كتالوج المنتجات', route('admin.amial.catalog.page'), 'platform.settings.update'], ['موظفو التجّار ونقاط البيع', route('admin.amial.hub.staff'), 'platform.merchants.compliance'], ['رقابة محطات الوقود', route('admin.amial.fuel.page'), 'platform.audit.view'], ['رقابة التجزئة', route('admin.amial.retail.page'), 'platform.audit.view'],
@@ -35,17 +38,17 @@
             ['المركز المالي', route('admin.amial.hub.finance'), 'platform.money.view'], ['مركز الدفتر', route('admin.amial.ledger.page'), 'platform.audit.view'], ['كشف المعاملات', route('admin.transaction.index'), 'platform.transactions.view'], ['تسويات الشركاء', route('admin.amial.partner-settlements.page'), 'platform.money.view'], ['رصيد المنصّة', route('admin.emoney.index'), 'platform.money.view'], ['مصاريف المنصّة', route('admin.expense.index'), 'platform.money.view'], ['الرسوم والأرباح', route('admin.amial.fees.index'), 'platform.fees.view'], ['طلبات السحب', route('admin.withdraw.index'), 'platform.audit.view'],
         ]],
         ['id'=>'compliance','title'=>'الامتثال والمخاطر','icon'=>'🛡️','desc'=>'المراقبة، فحص المعاملات، تقييم المخاطر والضوابط.','items'=>[
-            ['مراجعة الهوية', route('admin.amial.kyc.page'), 'platform.customers.kyc.view'], ['طلبات تحديث بيانات العملاء', route('admin.amial.kyc.changes.page'), 'platform.customers.freeze'], ['ملفات فتح الحسابات', route('admin.amial.registration-dossiers.page'), 'platform.registrations.view'], ['مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.audit.view'], ['سجل التدقيق', route('admin.amial.audit.index'), 'platform.audit.view'], ['الإشراف والأمن', route('admin.amial.supervision.index'), 'platform.audit.view'], ['أحداث الأمان', route('admin.amial.security-events.index'), 'platform.audit.view'], ['حارس الأمان', route('admin.amial.sentinel.index'), 'platform.audit.view'], ['صحة النظام', route('admin.amial.system.health'), 'platform.audit.view'], ['ساهر — رادار النظام', route('admin.amial.saher.index'), 'saher.view'],
+            // KYC العميل وأرشيف فتح الحسابات أصبحا جزءاً من مركز العملاء.
+            ['مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.audit.view'], ['سجل التدقيق', route('admin.amial.audit.index'), 'platform.audit.view'], ['الإشراف والأمن', route('admin.amial.supervision.index'), 'platform.audit.view'], ['أحداث الأمان', route('admin.amial.security-events.index'), 'platform.audit.view'], ['حارس الأمان', route('admin.amial.sentinel.index'), 'platform.audit.view'], ['صحة النظام', route('admin.amial.system.health'), 'platform.audit.view'], ['ساهر — رادار النظام', route('admin.amial.saher.index'), 'saher.view'],
         ]],
         ['id'=>'services','title'=>'خدمات المنصّة','icon'=>'🧩','desc'=>'إدارة الخدمات، التكاملات، وواجهات البرمجة.','items'=>[
-            ['مركز أنظمة العميل', route('admin.amial.customer-systems.index'), 'platform.audit.view'],
             ['النزاعات والدفع الآمن', route('admin.amial.hub.disputes'), 'platform.transactions.view'], ['الجمعيات والتبرعات', route('admin.amial.charity.page'), 'platform.transactions.view'], ['مزوّدو الفواتير', route('admin.amial.surface.bill-providers'), 'platform.settings.update'], ['صناديق العائلة', route('admin.amial.surface.funds'), 'platform.transactions.view'], ['طلبات الأموال', route('admin.amial.surface.payment-requests'), 'platform.transactions.view'],
         ]],
         ['id'=>'content','title'=>'المحتوى والتواصل','icon'=>'📣','desc'=>'البانرات، الإشعارات، الأسئلة الشائعة، واللغات.','items'=>[
             ['البانرات', route('admin.banner.index'), 'platform.settings.update'], ['إشعارات الدفع', route('admin.notification.add-new'), 'platform.settings.update'], ['الأسئلة الشائعة', route('admin.faq.index'), 'platform.settings.update'], ['اللغات', route('admin.business-settings.language.index'), 'platform.settings.update'],
         ]],
         ['id'=>'operations','title'=>'التشغيل والإعدادات','icon'=>'⚙️','desc'=>'إعدادات النظام، القوالب، والعمليات التشغيلية.','items'=>[
-            ['إعدادات الأعمال', route('admin.business-settings.business-setup'), 'platform.settings.update'], ['مفاتيح التشغيل', route('admin.amial.hub.settings'), 'platform.settings.update'], ['مركز الحدود المالية', route('admin.amial.hub.limits.index'), 'platform.customers.view'], ['حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.settings.update'], ['نطاق التشغيل', route('admin.amial.hub.zones.index'), 'platform.zones.view'], ['إعداد Firebase', route('admin.business-settings.fcm-index'), 'platform.settings.update'], ['الشروط القانونية', route('admin.amial.legal.index'), 'platform.ops.view'], ['حالة التشغيل', route('admin.amial.ops.index'), 'platform.ops.view'],
+            ['إعدادات الأعمال', route('admin.business-settings.business-setup'), 'platform.settings.update'], ['مفاتيح التشغيل', route('admin.amial.hub.settings'), 'platform.settings.update'], ['مركز الحدود المالية', route('admin.amial.hub.limits.index'), 'platform.customers.view'], ['التحقق والرسائل OTP', route('admin.amial.otp.page'), 'platform.settings.update'], ['حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.settings.update'], ['نطاق التشغيل', route('admin.amial.hub.zones.index'), 'platform.zones.view'], ['إعداد Firebase', route('admin.business-settings.fcm-index'), 'platform.settings.update'], ['الشروط القانونية', route('admin.amial.legal.index'), 'platform.ops.view'], ['حالة التشغيل', route('admin.amial.ops.index'), 'platform.ops.view'],
         ]],
         ['id'=>'staff','title'=>'الموظفون والصلاحيات','icon'=>'🔐','desc'=>'إدارة المستخدمين، المجموعات، والصلاحيات.','items'=>[
             ['موظفو المنصة وتبويباتهم', route('admin.amial.ops.roles.index'), 'platform.staff.view'], ['مصفوفة RBAC', route('admin.amial.surface.rbac'), 'platform.settings.update'], ['المصادقة الثنائية لحسابي', route('admin.amial.2fa.page'), null],
@@ -57,9 +60,8 @@
     // وجهاتٌ ثالثة. واختصارٌ يقود إلى ما لا يفتحه الموظّف يَعِد ويُخلف،
     // فيُرشَّح بالصلاحيّة كغيره.
     $frequent = array_values(array_filter([
-        ['إنشاء عميل جديد', route('admin.amial.hub.customers'), 'platform.customers.view', 'tio-user-add'],
+        ['مركز العملاء', route('admin.amial.customer.page'), 'platform.customers.view', 'tio-user'],
         ['بحث عن معاملة', route('admin.transaction.index'), 'platform.transactions.view', 'tio-search'],
-        ['أنظمة العميل', route('admin.amial.customer-systems.index'), 'platform.audit.view', 'tio-dashboard-vs-outlined'],
         ['تقارير الامتثال', route('admin.amial.aml.page'), 'platform.audit.view', 'tio-shield-outlined'],
         ['الموافقات المعلّقة', route('admin.amial.ops.index'), 'platform.ops.view', 'tio-checkmark-square'],
         ['تنبيهات النظام', route('admin.amial.system.health'), 'platform.audit.view', 'tio-notifications'],
