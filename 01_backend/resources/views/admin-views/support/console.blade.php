@@ -236,6 +236,25 @@
                   </div>`).join('') + '</div>';
         }
 
+        if ((m.diagnostic_errors || []).length) {
+            html += '<h6>أعطال خادم مرتبطة بنفس الرقم</h6>' +
+                '<div class="alert alert-danger" data-testid="diagnostic-server-error">' +
+                m.diagnostic_errors.map(e => `
+                  <div class="border-bottom py-2">
+                    <div><strong>${esc(e.diagnosis)}</strong></div>
+                    <div class="small mt-1">
+                      HTTP: ${esc(e.http_status || '500')} ·
+                      المسار: <span class="font-monospace">${esc(e.path || '—')}</span> ·
+                      التكرار: ${esc(e.occurrences)} ·
+                      آخر ظهور: ${esc(e.last_seen_at)}
+                    </div>
+                    <div class="small text-muted mt-1">
+                      لا تطلب من العميل إعادة الدفع قبل التأكد من عدم وجود عملية مالية نهائية أو أثر Idempotency.
+                    </div>
+                  </div>`).join('') +
+                '</div>';
+        }
+
         box.innerHTML = html || '<div class="alert alert-secondary">لا نتائج. إذا كان المدخل رقم تتبع لاتصال منقطع، فغياب الأثر لا يثبت وحده أن الطلب لم يصل.</div>';
     }
 
