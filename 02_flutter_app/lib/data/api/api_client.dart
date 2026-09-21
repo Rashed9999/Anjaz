@@ -12,6 +12,7 @@ import 'package:amial_pay/data/api/api_checker.dart';
 import 'package:amial_pay/common/models/error_model.dart';
 import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/data/api/diagnostic_trace_id.dart';
 
 class ApiClient extends GetxService {
    String appBaseUrl = AppConstants.baseUrl ;
@@ -262,9 +263,10 @@ class ApiClient extends GetxService {
     }{
       // AMIAL-SUPPORT-CORRELATION-002 — نولد المرجع قبل الشبكة لا بعدها.
       // لذلك يبقى في يد العميل حتى إن انتهى الطلب بـ timeout ولم يصل رد.
-      final String traceId = (correlationId != null && correlationId.trim().isNotEmpty)
-          ? correlationId.trim()
-          : IdempotencyKeyGenerator.generate();
+      final String traceId =
+          (correlationId != null && DiagnosticTraceId.isValid(correlationId.trim()))
+              ? correlationId.trim()
+              : DiagnosticTraceId.generate();
 
       try {
         // AMIAL-SECURITY-002 (v0.7-C): debug logs آمنة
