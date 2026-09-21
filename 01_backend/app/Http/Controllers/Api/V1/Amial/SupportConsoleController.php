@@ -57,6 +57,17 @@ class SupportConsoleController extends Controller
             'approvals' => $actor->hasPlatformPermission('platform.approvals.decide'),
             'insider' => $actor->hasPlatformPermission('platform.audit.view'),
             'ops' => $actor->hasPlatformPermission('platform.ops.view'),
+
+            // AMIAL-SUPPORT-DIAGNOSTICS-001 — الواجهة تعكس قرار الخادم:
+            // القراءة لا تُظهر أزرار فعلٍ غير مسموح بها.
+            'devices_view' => $actor->hasPlatformPermission('platform.customers.devices.view'),
+            'device_control' => $actor->hasPlatformPermission('platform.customers.sessions'),
+            'wrong_transfer_open' => $actor->hasPlatformPermission('platform.wrong_transfer.claim.open'),
+            'wrong_transfer_decide' => $actor->hasPlatformPermission('platform.disputes.decide'),
+            'recovery_view' => $actor->hasPlatformPermission('platform.recovery.view'),
+            'freeze' => $actor->hasPlatformPermission('platform.customers.freeze'),
+            'reset_pin' => $actor->hasPlatformPermission('platform.customers.reset_pin'),
+            'kyc_request' => $actor->hasPlatformPermission('platform.customers.kyc.request'),
         ];
 
         abort_unless(in_array(true, $capabilities, true), 403);
@@ -83,6 +94,8 @@ class SupportConsoleController extends Controller
         $canTraceTransactions = $request->user()->hasPlatformPermission('platform.transactions.view');
         $transactions = collect();
         $receipts = collect();
+        $pendingTransfers = collect();
+        $correlationEvents = collect();
 
         // — رقم عملية (ULID/ref) أو رقم إيصال أو كود تحقّق
         //
@@ -102,6 +115,35 @@ class SupportConsoleController extends Controller
                 ->orWhere('verification_code', $normalized)
                 ->orWhere('verification_code', strtoupper($q))
                 ->limit(5)->get();
+
+            // AMIAL-SUPPORT-PENDING-TRACE-001 — الرقم الذي يراه العميل
+            // أثناء نافذة التراجع هو transfer_ulid، وليس رقم Transaction
+            // النهائي الذي لا يُولد إلا عند التسليم. لذلك البحث في
+            // transactions وحده كان يقول «لا نتائج» بالضبط عندما تكون
+            // الحوالة عالقةً وتحتاج الدعم.
+            if (Schema::hasTable('pending_transfers')) {
+                $pendingTransfers = \App\Models\PendingTransfer::query()
+                    ->where('transfer_ulid', $normalized)
+                    ->orWhere('hold_transaction_id', $normalized)
+                    ->orWhere('release_transaction_id', $normalized)
+                    ->limit(5)
+                    ->get();
+            }
+        }
+
+        // AMIAL-SUPPORT-CORRELATION-001 — معرّف التشخيص الذي يحمله
+        // التطبيق عند تعذّر معرفة نتيجة طلب مالي. لا نكشف context/reason
+        // الخام لموظف الدعم؛ نعيد إسقاطاً آمناً فقط، ثم يفتح المعاملة إن
+        // كان للأثر رقم معاملة.
+        if ($canTraceTransactions
+            && preg_match('/^[A-Za-z0-9][A-Za-z0-9._:\\-]{7,63}$/', $q)
+            && Schema::hasColumn('audit_decisions', 'correlation_id')) {
+            $correlationEvents = AuditDecision::query()
+                ->where('correlation_id', $q)
+                ->orderByDesc('id')
+                ->limit(20)
+                ->get(['decision_id', 'action', 'decision_code', 'severity',
+                       'transaction_id', 'created_at']);
         }
 
         // — هاتف بكل الصيغ المكافئة
@@ -116,14 +158,26 @@ class SupportConsoleController extends Controller
         }
 
         // — اسم (جزئي)
-        if ($users->isEmpty() && $transactions->isEmpty() && $receipts->isEmpty()) {
+        if ($users->isEmpty()
+            && $transactions->isEmpty()
+            && $receipts->isEmpty()
+            && $pendingTransfers->isEmpty()
+            && $correlationEvents->isEmpty()) {
             $users = User::where('f_name', 'like', "%{$q}%")
                 ->orWhere('l_name', 'like', "%{$q}%")
                 ->limit(10)->get();
         }
 
         // AMIAL-INSIDER-001: كل بحث مسجَّل باسم الموظف + تقييم شذوذ
-        $this->watch->logSearch($request->user()->id, $q, $users->count() + $transactions->count() + $receipts->count());
+        $this->watch->logSearch(
+            $request->user()->id,
+            $q,
+            $users->count()
+                + $transactions->count()
+                + $receipts->count()
+                + $pendingTransfers->count()
+                + $correlationEvents->count(),
+        );
 
         return $this->ok([
             'query' => $q,
@@ -141,6 +195,19 @@ class SupportConsoleController extends Controller
                 // وبه يفتح صفُّ الإيصال التتبّعَ الكامل. وبلا هذا الحقل
                 // يبقى الصفُّ سطراً ميّتاً كما كان.
                 'reference_transaction_id' => $r->reference_transaction_id,
+            ])->values(),
+            'pending_transfers' => $pendingTransfers
+                ->map(fn ($p) => $this->pendingTransferSummary(
+                    $p,
+                    $request->user()->hasPlatformPermission('platform.customers.pii.reveal'),
+                ))->values(),
+            'diagnostic_events' => $correlationEvents->map(fn ($a) => [
+                'decision_id' => $a->decision_id,
+                'action' => $a->action,
+                'decision_code' => $a->decision_code,
+                'severity' => $a->severity,
+                'transaction_id' => $a->transaction_id,
+                'created_at' => $a->created_at,
             ])->values(),
         ]);
     }
@@ -1026,6 +1093,70 @@ class SupportConsoleController extends Controller
             'is_active' => (bool) $u->is_active,
             'is_temp_blocked' => (bool) ($u->is_temp_blocked ?? false),
             'is_kyc_verified' => (int) $u->is_kyc_verified === 1,   // AMIAL-KYC-FLAG-001
+        ];
+    }
+
+    /** ملخصٌ تشخيصي للحوالة قبل ولادة Transaction النهائي. */
+    private function pendingTransferSummary(
+        \App\Models\PendingTransfer $p,
+        bool $canRevealPii,
+    ): array {
+        $people = User::whereIn('id', [$p->sender_user_id, $p->recipient_user_id])
+            ->get()->keyBy('id');
+        $sender = $people->get($p->sender_user_id);
+        $recipient = $people->get($p->recipient_user_id);
+
+        $diagnosis = match ((string) $p->status) {
+            'holding' => $p->releasable_at && $p->releasable_at->isFuture()
+                ? 'الحوالة محجوزة داخل نافذة التراجع ولم تُسلَّم للمستلم بعد.'
+                : 'انتهت نافذة التراجع وما زالت الحوالة معلّقة. افحص طابور التسليم قبل أن تطلب من العميل إعادة التحويل.',
+            'completed' => 'تم تسليم الحوالة للمستلم. افتح رقم العملية النهائية لرؤية القيد والإيصال.',
+            'cancelled' => 'أُلغي التحويل وأُعيد المبلغ المحجوز إلى المرسل.',
+            'failed' => 'فشل تسليم الحوالة وأعاد النظام المبلغ المحجوز إلى المرسل.'
+                . ($p->cancellation_reason ? ' السبب: ' . $p->cancellation_reason : ''),
+            default => 'حالة الحوالة تحتاج مراجعة تشغيلية: ' . (string) $p->status,
+        };
+
+        return [
+            'transfer_ulid' => $p->transfer_ulid,
+            'status' => $p->status,
+            'status_ar' => [
+                'holding' => 'معلّقة / محجوزة',
+                'completed' => 'تم التسليم',
+                'cancelled' => 'ملغاة',
+                'failed' => 'فشل التسليم وردّ المبلغ',
+            ][$p->status] ?? $p->status,
+            'diagnosis' => $diagnosis,
+            'amount' => (string) $p->amount,
+            'fee' => (string) $p->fee,
+            'total_debited' => (string) $p->total_debited,
+            'sender' => [
+                'user_id' => (int) $p->sender_user_id,
+                'name' => $sender
+                    ? ($canRevealPii ? trim((string) ($sender->f_name . ' ' . $sender->l_name)) : 'محمي بالصلاحيات')
+                    : 'حساب غير موجود',
+                'phone' => $sender
+                    ? ($canRevealPii ? (string) $sender->phone : $this->maskTransactionPhone($sender->phone))
+                    : '—',
+            ],
+            'recipient' => [
+                'user_id' => (int) $p->recipient_user_id,
+                'name' => $recipient
+                    ? ($canRevealPii ? trim((string) ($recipient->f_name . ' ' . $recipient->l_name)) : 'محمي بالصلاحيات')
+                    : 'حساب غير موجود',
+                'phone' => $recipient
+                    ? ($canRevealPii ? (string) $recipient->phone : $this->maskTransactionPhone($recipient->phone))
+                    : '—',
+            ],
+            'releasable_at' => $p->releasable_at,
+            'seconds_remaining' => $p->isHolding() && $p->releasable_at
+                ? max(0, now()->diffInSeconds($p->releasable_at, false))
+                : 0,
+            'release_transaction_id' => $p->release_transaction_id,
+            'completed_at' => $p->completed_at,
+            'cancelled_at' => $p->cancelled_at,
+            'cancellation_reason' => $p->cancellation_reason,
+            'created_at' => $p->created_at,
         ];
     }
 
