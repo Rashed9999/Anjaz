@@ -39,13 +39,12 @@
         [
             'title' => 'المراكز الرئيسية',
             'icon' => '🏢',
-            'match' => ['admin/amial/hub/*', 'admin/amial/customer*', 'admin/amial/customer-systems*'],
+            'match' => ['admin/amial/hub/*', 'admin/amial/customer*'],
             'links' => [
-                // AMIAL-CUSTOMER-CENTER-001: الشاشة الموحَّدة أوّلاً — هي ما
-                // يُدار منه العميل. والقديمة تبقى للقائمة والإنشاء بالجملة.
-                ['🔎 ملفّ العميل الموحَّد (١٠ تبويبات)', route('admin.amial.customer.page'), 'platform.customers.view'],
-                ['🧭 مركز أنظمة العميل', route('admin.amial.customer-systems.index'), 'platform.audit.view'],
-                ['👥 قائمة العملاء وإنشاء الحسابات', route('admin.amial.hub.customers'), null],
+                // AMIAL-CUSTOMER-CENTER-NAV-003 — باب عميل واحد فقط.
+                // الطوابير والـKYC وصحة الأنظمة وإنشاء الحساب تُفتح من داخل
+                // مركز العملاء نفسه، ولا تعود خمس شاشات متجاورة في الشريط.
+                ['👥 مركز العملاء', route('admin.amial.customer.page'), 'platform.customers.view'],
                 ['🤝 مركز الوكلاء (الفروع والخزائن)', route('admin.amial.hub.agents'), null],
                 // البوّابة مبنيّة منذ الالتزام السابق ولم يكن إليها بابٌ من هنا:
                 // شركة الصرافة تدخل من كمبيوترها بهاتف الحساب وكلمة سرّه، وهذا
@@ -54,9 +53,6 @@
                 ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), null],
                 ['✅ توثيق التجّار', route('admin.amial.merchants.verification.page'), 'platform.merchants.compliance'],
                 ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.move'],
-                ['🪪 لوحة التحقق (الحسابات الجديدة)', route('admin.amial.hub.verification'), null],
-                // AMIAL-OTP-CENTER-001 — القاعدة ١٢: يُوصل إليه من هنا.
-                ['🔐 مركز التحقّق (OTP وبوّابات الإرسال)', route('admin.amial.otp.page'), 'platform.settings.update'],
             ],
         ],
         [
@@ -83,8 +79,8 @@
             'icon' => '🛡️',
             'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*', 'admin/amial/saher*'],
             'links' => [
-                ['🪪 مراجعة مستندات الهوية', route('admin.amial.kyc.page'), 'platform.customers.freeze'],
-                ['📝 طلبات تحديث بيانات العملاء', route('admin.amial.kyc.changes.page'), 'platform.customers.kyc.view'],
+                // طوابير KYC وتحديث بيانات العميل أصبحت داخل «مركز العملاء».
+                // تبقى المسارات نفسها عاملة كأدوات متخصصة، لكن بلا مدخل مكرر.
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), null],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), null],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],
@@ -151,6 +147,8 @@
                 ['🔥 إعداد Firebase', route('admin.business-settings.fcm-index'), null],
                 ['📜 الشروط القانونية', route('admin.amial.legal.index'), null],
                 ['🩺 حالة التشغيل (الطوابير والمستندات)', route('admin.amial.ops.index'), 'platform.ops.view'],
+                // OTP إعداد نظام عام، وليس ملف عميل؛ مكانه الطبيعي التشغيل.
+                ['🔐 التحقق والرسائل (OTP وبوابات الإرسال)', route('admin.amial.otp.page'), 'platform.settings.update'],
                 ['🛠️ وضع الصيانة', url('admin/maintenance'), null],
                 // AMIAL-2FA-DOOR-001 — الميزةُ مبنيّةٌ منذ v1.8 بلا مدخل.
                 // **ولا صلاحيّةَ عليها**: كلُّ مديرٍ يؤمّن حسابَه هو.
