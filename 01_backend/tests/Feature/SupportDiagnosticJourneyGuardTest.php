@@ -134,7 +134,7 @@ class SupportDiagnosticJourneyGuardTest extends TestCase
 
         Passport::actingAs($support, [], 'api');
 
-        $this->getJson('/api/v1/amial/admin/support/search?q=' . $ulid)
+        $response = $this->getJson('/api/v1/amial/admin/support/search?q=' . $ulid)
             ->assertOk()
             ->assertJsonPath('meta.pending_transfers.0.transfer_ulid', $ulid)
             ->assertJsonPath('meta.pending_transfers.0.status', 'holding')
@@ -143,8 +143,7 @@ class SupportDiagnosticJourneyGuardTest extends TestCase
 
         $this->assertStringContainsString(
             'لم تُسلَّم للمستلم بعد',
-            (string) $this->getJson('/api/v1/amial/admin/support/search?q=' . $ulid)
-                ->json('meta.pending_transfers.0.diagnosis'),
+            (string) $response->json('meta.pending_transfers.0.diagnosis'),
         );
     }
 
@@ -192,6 +191,131 @@ class SupportDiagnosticJourneyGuardTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.diagnostic_events.0.decision_code', 'PIN_INVALID')
             ->assertJsonPath('meta.diagnostic_events.0.action', 'MERCHANT_PAYMENT_REJECTED');
+    }
+
+    public function test_same_trace_can_find_a_server_error_without_exposing_stack_or_message(): void
+    {
+        $trace = 'merchant-pay-server-500-001';
+
+        DB::table('system_errors')->insert([
+            'fingerprint' => hash('sha256', 'support-diagnostic-server-error'),
+            'exception' => 'RuntimeException',
+            'message' => 'internal database detail that support must not receive',
+            'file' => '/var/www/private/Secret.php',
+            'line' => 55,
+            'method' => 'POST',
+            'path' => 'api/v1/amial/merchant/pay',
+            'request_id' => $trace,
+            'status' => 500,
+            'user_id' => null,
+            'actor_type' => '2',
+            'occurrences' => 1,
+            'first_seen_at' => now(),
+            'last_seen_at' => now(),
+            'status_flag' => 'open',
+            'trace_head' => 'private stack trace',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $support = $this->operator('platform_support');
+        Passport::actingAs($support, [], 'api');
+
+        $response = $this->getJson('/api/v1/amial/admin/support/search?q=' . $trace)
+            ->assertOk()
+            ->assertJsonPath('meta.diagnostic_errors.0.http_status', 500)
+            ->assertJsonPath('meta.diagnostic_errors.0.path', 'api/v1/amial/merchant/pay')
+            ->assertJsonPath(
+                'meta.diagnostic_errors.0.diagnosis',
+                'الطلب وصل إلى الخادم وحدث خطأ تقني قبل اكتمال الاستجابة.',
+            );
+
+        $body = $response->getContent();
+        $this->assertStringNotContainsString('internal database detail', $body);
+        $this->assertStringNotContainsString('/var/www/private', $body);
+        $this->assertStringNotContainsString('private stack trace', $body);
+    }
+
+    public function test_correlation_context_uses_one_reference_for_audit_and_system_error_tracking(): void
+    {
+        $middleware = file_get_contents(
+            app_path('Http/Middleware/CorrelationContext.php')
+        );
+
+        $this->assertStringContainsString(
+            "attributes->set('amial.correlation_id', \$correlationId)",
+            $middleware,
+        );
+        $this->assertStringContainsString(
+            "attributes->set('request_id', \$correlationId)",
+            $middleware,
+        );
+        $this->assertStringContainsString(
+            "headers->set('X-Request-Id', \$correlationId)",
+            $middleware,
+        );
+    }
+
+    public function test_recovery_link_from_support_is_filtered_to_the_selected_customer(): void
+    {
+        $controller = file_get_contents(
+            app_path('Http/Controllers/Admin/AccountRecoveryController.php')
+        );
+        $view = file_get_contents(
+            resource_path('views/admin-views/support/console.blade.php')
+        );
+
+        $this->assertStringContainsString(
+            "\$request->query('user_id', 0)",
+            $controller,
+        );
+        $this->assertStringContainsString(
+            "\$query->where('user_id', \$userId)",
+            $controller,
+        );
+        $this->assertStringContainsString(
+            'RECOVERY_BASE}?status=all&user_id=' . '    {
+        $view = file_get_contents(
+            resource_path('views/admin-views/support/console.blade.php')
+        );
+
+        $this->assertIsString($view);
+        $this->assertStringContainsString('CAN_DEVICES_VIEW', $view);
+        $this->assertStringContainsString('CAN_DEVICE_CONTROL', $view);
+        $this->assertStringContainsString('CAN_WRONG_TRANSFER_OPEN', $view);
+        $this->assertStringContainsString('CAN_WRONG_TRANSFER_DECIDE', $view);
+        $this->assertStringContainsString('بانتظار فريق النزاعات', $view);
+        $this->assertStringContainsString('رقم عملية أو حوالة معلقة', $view);
+        $this->assertStringContainsString('أثر رقم التتبع', $view);
+        $this->assertStringContainsString('أعطال خادم مرتبطة بنفس الرقم', $view);
+        $this->assertStringContainsString('لا تطلب من العميل إعادة الدفع', $view);
+    }
+
+    public function test_flutter_merchant_payment_preserves_a_diagnostic_reference_for_unknown_outcomes(): void
+    {
+        $api = file_get_contents(base_path('../02_flutter_app/lib/data/api/api_client.dart'));
+        $controller = file_get_contents(
+            base_path('../02_flutter_app/lib/features/merchant/controllers/merchant_pay_controller.dart')
+        );
+        $repo = file_get_contents(
+            base_path('../02_flutter_app/lib/features/merchant/domain/repositories/merchant_pay_repo.dart')
+        );
+
+        $this->assertStringContainsString("requestHeaders['X-Correlation-Id'] = traceId", $api);
+        $this->assertStringContainsString("'x-correlation-id': traceId", $api);
+        $this->assertStringContainsString('تعذر تأكيد نتيجة الطلب', $api);
+
+        $this->assertStringContainsString('lastDiagnosticId', $controller);
+        $this->assertStringContainsString('لا تبدأ عملية دفع جديدة قبل التحقق', $controller);
+        $this->assertStringNotContainsString("lastError.value = 'خطأ في الشبكة';", $controller);
+
+        $this->assertStringContainsString('required String correlationId', $repo);
+        $this->assertStringContainsString('correlationId: correlationId', $repo);
+    }
+}
+ . '{p.id}',
+            $view,
+        );
     }
 
     public function test_support_ui_does_not_render_sensitive_buttons_without_their_permissions(): void
