@@ -318,6 +318,23 @@ class UnifiedAuthController extends GetxController implements GetxService {
     }
   }
 
+  /// AMIAL-PROGRESSIVE-KYC-LOGIN-002 — قرار توجيه نقي قابل للاختبار.
+  ///
+  /// العميل الفردي لا يُحبس بسبب KYC؛ مستواه يحدد المال لا حق الدخول.
+  /// التاجر/POS يُحجب بالكامل فقط عند الرفض. بقية الأدوار المؤسسية
+  /// تحتفظ بسياسة الاعتماد الصريحة الخاصة بها.
+  @visibleForTesting
+  static bool shouldBlockHome({
+    required String role,
+    required String verificationState,
+  }) {
+    if (role == 'admin' || role == 'customer') return false;
+    if (role == 'merchant' || role == 'pos') {
+      return verificationState == 'rejected';
+    }
+    return verificationState != 'verified';
+  }
+
   /// توجيه للشاشة الرئيسية حسب الدور الحالي.
   /// AMIAL-PIN-GATE-001: بعد الدخول تظهر بوّابة رمز PIN قبل فتح الرئيسية.
   Future<void> navigateToHomeForRole() async {
@@ -334,15 +351,11 @@ class UnifiedAuthController extends GetxController implements GetxService {
     // بوضع محدود بينما استلام الأموال يحرسه MerchantRiskService.
     // الوكيل يبقى على سياسة الاعتماد الحالية حتى نفصل مستوياته لاحقاً.
     // ══════════════════════════════════════════════════════════════════
-    final bool isCustomer = currentRole.value == 'customer';
-    final bool isMerchantSide =
-        currentRole.value == 'merchant' || currentRole.value == 'pos';
-    final bool fullyBlocked = isCustomer
-        ? false
-        : isMerchantSide
-            ? verificationState.value == 'rejected'
-            : verificationState.value != 'verified';
-    if (currentRole.value != 'admin' && fullyBlocked) {
+    final fullyBlocked = shouldBlockHome(
+      role: currentRole.value,
+      verificationState: verificationState.value,
+    );
+    if (fullyBlocked) {
       Get.offAll(() => AccountReviewScreen(
             state: verificationState.value,
             userName: _displayName,
