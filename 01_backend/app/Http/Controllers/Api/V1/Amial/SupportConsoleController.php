@@ -96,6 +96,7 @@ class SupportConsoleController extends Controller
         $receipts = collect();
         $pendingTransfers = collect();
         $correlationEvents = collect();
+        $diagnosticErrors = collect();
 
         // — رقم عملية (ULID/ref) أو رقم إيصال أو كود تحقّق
         //
@@ -136,14 +137,30 @@ class SupportConsoleController extends Controller
         // الخام لموظف الدعم؛ نعيد إسقاطاً آمناً فقط، ثم يفتح المعاملة إن
         // كان للأثر رقم معاملة.
         if ($canTraceTransactions
-            && preg_match('/^[A-Za-z0-9][A-Za-z0-9._:\\-]{7,63}$/', $q)
-            && Schema::hasColumn('audit_decisions', 'correlation_id')) {
-            $correlationEvents = AuditDecision::query()
-                ->where('correlation_id', $q)
-                ->orderByDesc('id')
-                ->limit(20)
-                ->get(['decision_id', 'action', 'decision_code', 'severity',
-                       'transaction_id', 'created_at']);
+            && preg_match('/^[A-Za-z0-9][A-Za-z0-9._:\\-]{7,63}$/', $q)) {
+            if (Schema::hasColumn('audit_decisions', 'correlation_id')) {
+                $correlationEvents = AuditDecision::query()
+                    ->where('correlation_id', $q)
+                    ->orderByDesc('id')
+                    ->limit(20)
+                    ->get(['decision_id', 'action', 'decision_code', 'severity',
+                           'transaction_id', 'created_at']);
+            }
+
+            // أخطاء 5xx لا تمر دائماً عبر AuditService، لكنها تُسجل في
+            // system_errors. ومنذ CorrelationContext صار request_id هو
+            // المرجع نفسه الذي يحمله العميل.
+            if (Schema::hasTable('system_errors')
+                && Schema::hasColumn('system_errors', 'request_id')) {
+                $diagnosticErrors = DB::table('system_errors')
+                    ->where('request_id', $q)
+                    ->orderByDesc('last_seen_at')
+                    ->limit(10)
+                    ->get([
+                        'id', 'status', 'path', 'occurrences',
+                        'status_flag', 'first_seen_at', 'last_seen_at',
+                    ]);
+            }
         }
 
         // — هاتف بكل الصيغ المكافئة
@@ -162,7 +179,8 @@ class SupportConsoleController extends Controller
             && $transactions->isEmpty()
             && $receipts->isEmpty()
             && $pendingTransfers->isEmpty()
-            && $correlationEvents->isEmpty()) {
+            && $correlationEvents->isEmpty()
+            && $diagnosticErrors->isEmpty()) {
             $users = User::where('f_name', 'like', "%{$q}%")
                 ->orWhere('l_name', 'like', "%{$q}%")
                 ->limit(10)->get();
@@ -176,7 +194,8 @@ class SupportConsoleController extends Controller
                 + $transactions->count()
                 + $receipts->count()
                 + $pendingTransfers->count()
-                + $correlationEvents->count(),
+                + $correlationEvents->count()
+                + $diagnosticErrors->count(),
         );
 
         return $this->ok([
@@ -208,6 +227,18 @@ class SupportConsoleController extends Controller
                 'severity' => $a->severity,
                 'transaction_id' => $a->transaction_id,
                 'created_at' => $a->created_at,
+            ])->values(),
+            // لا نعيد message/file/trace_head إلى الدعم. يكفي أن نثبت أن
+            // الطلب وصل للخادم ووقع عطل تقني، ثم يتولى التشغيل التفاصيل.
+            'diagnostic_errors' => $diagnosticErrors->map(fn ($e) => [
+                'id' => (int) $e->id,
+                'http_status' => $e->status,
+                'path' => $e->path,
+                'occurrences' => (int) $e->occurrences,
+                'state' => $e->status_flag,
+                'first_seen_at' => $e->first_seen_at,
+                'last_seen_at' => $e->last_seen_at,
+                'diagnosis' => 'الطلب وصل إلى الخادم وحدث خطأ تقني قبل اكتمال الاستجابة.',
             ])->values(),
         ]);
     }
