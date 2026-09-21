@@ -3,7 +3,8 @@
 @section('title', translate('Operations Console'))
 
 @section('content')
-@php($firstSupportTab = collect($capabilities)->filter()->keys()->first())
+@php($mainSupportTabs = ['customers','playbooks','transactions','tickets','approvals','insider','ops'])
+@php($firstSupportTab = collect($mainSupportTabs)->first(fn($tab) => $capabilities[$tab] ?? false))
 <div class="content container-fluid" id="ops-console" data-testid="ops-console">
 
     <ul class="nav nav-tabs mb-3" role="tablist">
