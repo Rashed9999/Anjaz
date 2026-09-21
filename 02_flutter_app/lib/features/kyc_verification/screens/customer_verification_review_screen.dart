@@ -54,6 +54,13 @@ class _CustomerVerificationReviewScreenState
   bool _busy = false;
   bool _declarationAccepted = false;
 
+  List<VerificationReviewRow> get _visibleRows => widget.rows
+      .where((row) => row.value.trim().isNotEmpty)
+      .toList(growable: false);
+
+  bool get _reviewPayloadReady =>
+      _visibleRows.isNotEmpty && widget.documents.isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
     final state = CustomerVerificationLevel.fromTier(widget.targetTier);
@@ -139,48 +146,27 @@ class _CustomerVerificationReviewScreenState
                     const SizedBox(height: 14),
                     _sectionTitle('بيانات الطلب', Icons.fact_check_outlined),
                     const SizedBox(height: 8),
-                    _dataTable(),
+                    if (_visibleRows.isEmpty)
+                      _missingReviewDataCard(
+                        'تعذر تجهيز بيانات الطلب للمراجعة. ارجع إلى «تعديل البيانات» ثم افتح المراجعة مرة أخرى.',
+                      )
+                    else
+                      _dataTable(),
                     const SizedBox(height: 16),
                     _sectionTitle(
                       'المستندات المطلوبة لهذه الحالة',
                       Icons.folder_copy_outlined,
                     ),
                     const SizedBox(height: 8),
-                    ...widget.documents.map(_documentCard),
                     if (widget.documents.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFE1E6ED)),
-                        ),
-                        child: const Text(
-                          'لا يوجد مستند جديد مطلوب في هذه الخطوة.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Color(0xFF667386)),
-                        ),
-                      ),
-                    const SizedBox(height: 10),
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: _declarationAccepted,
-                      onChanged: _busy
-                          ? null
-                          : (value) => setState(
-                                () => _declarationAccepted = value == true,
-                              ),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      title: const Text(
-                        'أقر بأن البيانات المعروضة صحيحة، وأن المستندات المرفقة تخصني، وأوافق على إرسالها للمراجعة والتوثيق.',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          height: 1.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
+                      _missingReviewDataCard(
+                        'لم يصل المستند المطلوب إلى شاشة المراجعة. لن نسمح بإرسال طلب ناقص.',
+                      )
+                    else
+                      ...widget.documents.map(_documentCard),
+                    const SizedBox(height: 14),
+                    _declarationCard(),
+                    const SizedBox(height: 8),
                     const Text(
                       'لن نطلب منك إعادة رفع مستند سبق اعتماده في حالة توثيق أدنى.',
                       style: TextStyle(
@@ -216,8 +202,11 @@ class _CustomerVerificationReviewScreenState
                   Expanded(
                     flex: 2,
                     child: FilledButton(
-                      onPressed:
-                          _busy || !_declarationAccepted ? null : _confirm,
+                      onPressed: _busy ||
+                              !_declarationAccepted ||
+                              !_reviewPayloadReady
+                          ? null
+                          : _confirm,
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(52),
                       ),
@@ -272,9 +261,7 @@ class _CustomerVerificationReviewScreenState
       );
 
   Widget _dataTable() {
-    final rows = widget.rows
-        .where((row) => row.value.trim().isNotEmpty)
-        .toList();
+    final rows = _visibleRows;
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -284,53 +271,149 @@ class _CustomerVerificationReviewScreenState
         border: Border.all(color: const Color(0xFFDCE3EA)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: List.generate(rows.length, (index) {
           final row = rows[index];
-          return Container(
-            decoration: BoxDecoration(
-              border: index == rows.length - 1
-                  ? null
-                  : const Border(
-                      bottom: BorderSide(color: Color(0xFFE4E8ED)),
-                    ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: 132,
-                  padding: const EdgeInsets.all(12),
-                  color: const Color(0xFF2D6F73),
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    row.label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      row.value,
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        color: Color(0xFF24303D),
+
+          // AMIAL-KYC-REVIEW-LAYOUT-002
+          //
+          // لا نستخدم CrossAxisAlignment.stretch مباشرة داخل ScrollView:
+          // المحور الرأسي غير محدود هناك، وفي Release كان الصف يأخذ ارتفاعاً
+          // غير منتهٍ فتختفي البيانات والمستندات وينزاح Checkbox أعلى الشاشة.
+          // IntrinsicHeight يمنح الصف ارتفاع محتواه الحقيقي ثم يسمح للعمود
+          // الملوّن أن يملأ هذا الارتفاع فقط.
+          return IntrinsicHeight(
+            child: Container(
+              decoration: BoxDecoration(
+                border: index == rows.length - 1
+                    ? null
+                    : const Border(
+                        bottom: BorderSide(color: Color(0xFFE4E8ED)),
+                      ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: 132,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      color: const Color(0xFF2D6F73),
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        row.label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        row.value,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          height: 1.4,
+                          color: Color(0xFF24303D),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         }),
       ),
     );
   }
+
+  Widget _missingReviewDataCard(String message) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF3E8),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFF0C99F)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFB35C00),
+              size: 22,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  height: 1.55,
+                  color: Color(0xFF7A3D00),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _declarationCard() => Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: _busy || !_reviewPayloadReady
+              ? null
+              : () => setState(
+                    () => _declarationAccepted = !_declarationAccepted,
+                  ),
+          child: Container(
+            padding: const EdgeInsetsDirectional.fromSTEB(12, 12, 12, 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: _declarationAccepted
+                    ? const Color(0xFF2D6F73)
+                    : const Color(0xFFDCE3EA),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Checkbox(
+                  value: _declarationAccepted,
+                  onChanged: _busy || !_reviewPayloadReady
+                      ? null
+                      : (value) => setState(
+                            () => _declarationAccepted = value == true,
+                          ),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'أقر بأن البيانات المعروضة صحيحة، وأن المستندات المرفقة تخصني، وأوافق على إرسالها للمراجعة والتوثيق.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 
   Widget _documentCard(VerificationReviewDocument document) {
     final file = File(document.path);
