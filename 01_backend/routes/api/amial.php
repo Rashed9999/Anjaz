@@ -76,6 +76,11 @@ Route::get('/geo/governorates', [\App\Http\Controllers\Api\V1\Amial\GeoZoneContr
 Route::get('/business-types', [\App\Http\Controllers\Api\V1\Amial\AccessController::class, 'businessTypeCatalog'])
     ->name('amial.business-types');
 
+// AMIAL-POS-DEVICES-004 — التفعيل يتم من جهاز الكاشير قبل امتلاكه جلسة.
+Route::post('/pos-devices/activate', [\App\Http\Controllers\Api\V1\Amial\PosDeviceController::class, 'activate'])
+    ->middleware('amial.rate-limit:pos_device_activate,10,1')
+    ->name('amial.pos-devices.activate');
+
 // P0-LEGAL — Markdown docs للموقع العام (بدون auth)
 Route::prefix('legal-docs')->name('amial.legal-docs.')->group(function () {
     Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PublicLegalController::class, 'index'])->name('index');
@@ -232,6 +237,20 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/approvals/{id}/reject', [$c, 'rejectRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.reject');
             Route::get('/insider/overview', [$c, 'insiderOverview'])->middleware('platform:platform.audit.view')->name('insider.overview');
             Route::post('/insider/alerts/{id}/ack', [$c, 'acknowledgeAlert'])->where('id', '[0-9]+')->middleware('platform:platform.audit.view')->name('insider.alerts.ack');
+
+            // AMIAL-WRONG-TRANSFER-001 — لتطبيقات الدعم بابٌ مماثل للويب؛
+            // الفتح قابل للرجوع، أمّا القرار فيحرّك مالاً ويحتاج صلاحية أعلى.
+            Route::prefix('wrong-transfer')->name('wrong-transfer.')
+                ->middleware('amial.idempotency')->group(function () use ($c) {
+                    Route::post('/open', [$c, 'openWrongTransferClaim'])
+                        ->middleware('platform:platform.wrong_transfer.claim.open')->name('open');
+                    Route::post('/{ulid}/resolve', [$c, 'resolveWrongTransferClaim'])
+                        ->where('ulid', '[0-9A-Z]{26}')
+                        ->middleware('platform:platform.disputes.decide')->name('resolve');
+                    Route::post('/{ulid}/reject', [$c, 'rejectWrongTransferClaim'])
+                        ->where('ulid', '[0-9A-Z]{26}')
+                        ->middleware('platform:platform.disputes.decide')->name('reject');
+                });
         });
 
         // AMIAL-MAINT-001 — لوحة «الصيانة الأولية» (تشغيل/إيقاف الميزات)
@@ -572,6 +591,18 @@ Route::middleware(['auth:api'])->group(function () {
         });
 
     Route::prefix('merchant')->name('amial.merchant.')->middleware('amial.idempotency')->group(function () {
+        // AMIAL-POS-DEVICES-004 — إدارة المقاعد. الحارس يقرأ الباقة؛
+        // المتحكّم يفرض ملكية التاجر ويفصل صلاحية القراءة عن الكتابة.
+        Route::prefix('pos-devices')->name('pos-devices.')->middleware('capability:multi_pos')->group(function () {
+            $pd = \App\Http\Controllers\Api\V1\Amial\PosDeviceController::class;
+            Route::get('/', [$pd, 'index'])->name('index');
+            Route::post('/', [$pd, 'store'])->name('store');
+            Route::post('/pair', [$pd, 'pair'])->name('pair');
+            Route::post('/activation-codes', [$pd, 'createActivationCode'])->name('activation-codes.store');
+            Route::patch('/{id}', [$pd, 'update'])->where('id', '[0-9]+')->name('update');
+            Route::delete('/{id}', [$pd, 'destroy'])->where('id', '[0-9]+')->name('destroy');
+        });
+
         // P1-BRANCHES — إدارة الفروع
         Route::prefix('branches')->name('branches.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Api\V1\Amial\BranchController::class, 'index'])->name('index');
@@ -646,6 +677,8 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'report'])->name('report');
             // AMIAL-PROFIT-001 — تقرير الربحية (إيراد/تكلفة/ربح/هامش + اتجاه + منتجات)
             Route::get('/profit-report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'profitReport'])->name('profit-report');
+            Route::get('/sales-breakdown', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'salesBreakdown'])
+                ->name('sales-breakdown');
         });
 
         // AMIAL-SUPPLIERS-001 — الموردون وأوامر الشراء (تصاميم 53/57/67/68)
@@ -669,6 +702,14 @@ Route::middleware(['auth:api'])->group(function () {
                 ->where('id', '[0-9]+')
                 ->middleware('amial.rate-limit:po_receive,30,1')->name('receive');
             Route::post('/{id}/cancel', [$sc, 'poCancel'])->where('id', '[0-9]+')->name('cancel');
+        });
+        Route::prefix('purchase-returns')->name('purchase-returns.')->middleware('capability:purchases')->group(function () {
+            $sc = \App\Http\Controllers\Api\V1\Amial\SupplierController::class;
+            Route::get('/', [$sc, 'prIndex'])->name('index');
+            Route::post('/', [$sc, 'prStore'])->name('store');
+            Route::get('/{id}', [$sc, 'prShow'])->where('id', '[0-9]+')->name('show');
+            Route::post('/{id}/approve', [$sc, 'prApprove'])->where('id', '[0-9]+')->name('approve');
+            Route::post('/{id}/reject', [$sc, 'prReject'])->where('id', '[0-9]+')->name('reject');
         });
 
         // AMIAL-CUSTOMER-CREDIT-001 — نظام ديون العملاء
@@ -948,11 +989,14 @@ Route::middleware(['auth:api'])->group(function () {
                 ->where('id', '[0-9]+')->name('batches.add');
 
             // Customers
-            Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listCustomers'])->name('customers.index');
-            Route::get('/customers/by-phone', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'findCustomerByPhone'])->name('customers.by-phone');
-            Route::post('/customers', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'addCustomer'])->name('customers.add');
+            Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listCustomers'])
+                ->middleware('capability:pharmacy_customers')->name('customers.index');
+            Route::get('/customers/by-phone', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'findCustomerByPhone'])
+                ->middleware('capability:pharmacy_customers')->name('customers.by-phone');
+            Route::post('/customers', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'addCustomer'])
+                ->middleware('capability:pharmacy_customers')->name('customers.add');
             Route::put('/customers/{id}', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'updateCustomer'])
-                ->where('id', '[0-9]+')->name('customers.update');
+                ->where('id', '[0-9]+')->middleware('capability:pharmacy_customers')->name('customers.update');
 
             // Sales
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'recordSale'])
