@@ -139,7 +139,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             SubstituteBindings::class,
         ]);
         $middleware->group('api', [
-            'throttle:60,1',
+            'throttle:api',
             SubstituteBindings::class,
         ]);
 
