@@ -993,6 +993,10 @@ Route::middleware(['auth:api'])->group(function () {
                 ->where('id', '[0-9]+')->name('batches.index');
             Route::post('/products/{id}/batches', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'addBatch'])
                 ->where('id', '[0-9]+')->name('batches.add');
+            Route::post('/batches/{id}/dispose', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'disposeBatch'])
+                ->where('id', '[0-9]+')->name('batches.dispose');
+            Route::get('/products/{id}/alternatives', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'alternatives'])
+                ->where('id', '[0-9]+')->name('products.alternatives');
 
             // Customers
             Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listCustomers'])
@@ -1017,6 +1021,17 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/alerts/scan', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'scanExpiringBatches'])->name('alerts.scan');
             Route::post('/alerts/{id}/dismiss', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'dismissAlert'])
                 ->where('id', '[0-9]+')->name('alerts.dismiss');
+        });
+
+        // AMIAL-MULTI-CURRENCY-002 — الحراسة الدقيقة (الدور والباقة) في
+        // المتحكّم: لا يُحوَّل عميل أو وكيل إلى رفض «قطاع غير منطبق» قبل
+        // أن يتلقى جواب «متاح للتجّار فقط» الصحيح.
+        Route::prefix('wallets')->name('wallets.')->group(function () {
+            $wc = \App\Http\Controllers\Api\V1\Amial\MerchantWalletsController::class;
+            Route::get('/', [$wc, 'index'])->name('index');
+            Route::post('/quote', [$wc, 'quote'])->name('quote');
+            Route::post('/convert', [$wc, 'convert'])->middleware('amial.idempotency')->name('convert');
+            Route::post('/accept', [$wc, 'setAccepted'])->name('accept');
         });
 
         // AMIAL-WHOLESALE-001 — قطاع تجارة الجملة
