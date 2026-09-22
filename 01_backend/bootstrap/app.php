@@ -353,6 +353,14 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping()
             ->onOneServer();
 
+        // AMIAL-OBSERVABILITY-001 — نبضٌ محفوظٌ، لا نتيجةُ فحصٍ عابرة
+        // عند فتح الصفحة. خمس دقائق تكشف الانقطاع سريعاً بلا ضغطٍ زائد.
+        $schedule->command('amial:health-check')
+            ->everyFiveMinutes()
+            ->name('amial-health-check')
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // AMIAL-WA-AGENT-002 — تذكير الوكلاء قبل إغلاق نافذة التسوية.
         //
         // النافذة ٢٢:٠٠–٢٤:٠٠، والتذكير ٢٣:٠٠ — ساعةٌ تكفي لجمع أرقام

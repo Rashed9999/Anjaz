@@ -134,7 +134,7 @@
         [
             'title' => 'الإعدادات والتشغيل',
             'icon' => '⚙️',
-            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*', 'admin/amial/hub/limits*', 'admin/amial/2fa*', 'admin/withdraw*'],
+            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*', 'admin/amial/hub/limits*', 'admin/amial/2fa*', 'admin/amial/system/*', 'admin/withdraw*'],
             'links' => [
                 ['🏢 إعدادات الأعمال (عام/رسوم/حدود)', route('admin.business-settings.business-setup'), null],
                 ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), null],
@@ -148,6 +148,7 @@
                 ['🔥 إعداد Firebase', route('admin.business-settings.fcm-index'), null],
                 ['📜 الشروط القانونية', route('admin.amial.legal.index'), null],
                 ['🩺 حالة التشغيل (الطوابير والمستندات)', route('admin.amial.ops.index'), 'platform.ops.view'],
+                ['🩺 صحّة النظام وسجلّ الأخطاء', route('admin.amial.system.health'), 'platform.audit.view'],
                 // OTP إعداد نظام عام، وليس ملف عميل؛ مكانه الطبيعي التشغيل.
                 ['🔐 التحقق والرسائل (OTP وبوابات الإرسال)', route('admin.amial.otp.page'), 'platform.settings.update'],
                 ['🛠️ وضع الصيانة', url('admin/maintenance'), null],
