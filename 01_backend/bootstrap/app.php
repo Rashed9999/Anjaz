@@ -260,6 +260,16 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // والمتصفّح يحتفظ بالنسخة ويستعملها حين يتعذّر التحقّق. والثانية
         // تمنع الاحتفاظ أصلاً — وهي المطلوبة لصفحةٍ قياسُها مطبوعٌ فيها.
         $exceptions->respond(function ($response, \Throwable $e, $request) {
+            // AMIAL-API-ERROR-SHIELD-001 — هذه آخر نقطة يمرّ بها الرد قبل
+            // خروجه. قد تأتي HttpResponseException بردٍ JSON مصنوعٍ في
+            // middleware، فلا يكفي تعقيم الاستثناءات غير المعالجة وحده.
+            // الحاجز يميّز JSON نفسه حتى في AJAX الإداري الذي لا يرسل Accept.
+            $response = \App\Support\ApiErrorResponse::sanitizeRenderedResponse(
+                $response,
+                $e,
+                $request,
+            );
+
             if ($response->getStatusCode() === 419) {
                 $response->headers->set('Cache-Control',
                     'no-store, no-cache, must-revalidate, max-age=0');
@@ -294,10 +304,9 @@ $app = Application::configure(basePath: dirname(__DIR__))
             }
         });
 
-        // AMIAL-FIX(VISIBILITY): كل خطأ على مسار API يُصيَّر JSON صريحاً — حتى لو
-        // لم يرسل التطبيق ترويسة Accept. بدون هذا يُرجع Laravel صفحة HTML على
-        // أخطاء 500 فيفشل jsonDecode ويُظهر التطبيق «Server Error» عامّة تُخفي
-        // السبب. الآن يظهر السبب الحقيقي (وفي وضع debug: الصنف والملفّ/السطر).
+        // AMIAL-API-ERROR-SHIELD-001 — كل خطأ على مسار API يُصيَّر JSON
+        // صريحاً، لكن لا تُنقل رسالة الاستثناء إلى العميل؛ قد تحمل SQL أو
+        // مضيف قاعدة البيانات. رقم الطلب وحده هو ما يحتاجه الدعم للتتبّع.
         $exceptions->render(function (\Throwable $e, $request) {
             if (!($request->expectsJson() || $request->is('api/*'))) {
                 return null; // غير API — دع Laravel يعرض صفحته المعتادة
@@ -306,11 +315,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
             if (method_exists($e, 'render')) {
                 return null;
             }
-            // AMIAL-FIX(VISIBILITY-2): HttpResponseException يحمل استجابة
+            // HttpResponseException يحمل استجابة
             // جاهزة — وهو الآلية التي يردّ بها الوسيط عبر abort(response(...)).
-            // لا render() فيه ولا HttpExceptionInterface، فكان يسقط في فرع
-            // 500 أدناه: يردّ الوسيط «رقم الجهاز غير مطابق» فيرى المستخدم
-            // «حدث خطأ في الخادم». نُخرج استجابته كما هي.
+            // تُمرَّر كما هي هنا؛ حاجز respond أعلاه يعقّمها عند احتوائها
+            // على تفاصيل تقنية من دون كسر الردود التطبيقية السليمة.
             if ($e instanceof \Illuminate\Http\Exceptions\HttpResponseException) {
                 return $e->getResponse();
             }
@@ -328,21 +336,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
                     'errors' => (object)[], 'meta' => (object)[],
                 ], 401);
             }
-            $status = ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
-                ? $e->getStatusCode() : 500;
-            $payload = [
-                'success' => false,
-                'code' => $status >= 500 ? 'SERVER_ERROR' : 'REQUEST_ERROR',
-                'message' => $e->getMessage() !== '' ? $e->getMessage() : 'حدث خطأ في الخادم',
-                'errors' => (object)[], 'meta' => (object)[],
-            ];
-            if (config('app.debug')) {
-                $payload['debug'] = [
-                    'exception' => get_class($e),
-                    'at' => $e->getFile() . ':' . $e->getLine(),
-                ];
-            }
-            return new \Illuminate\Http\JsonResponse($payload, $status);
+            return \App\Support\ApiErrorResponse::from($e, $request);
         });
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
