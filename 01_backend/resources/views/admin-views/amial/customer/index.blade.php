@@ -53,7 +53,14 @@
                    href="{{ route('admin.support-center.index', ['tab' => 'playbooks']) }}"
                    data-testid="cc-support-diagnostics">🎧 تشخيص وحل المشكلة</a>
             @endif
+            {{-- AMIAL-KYC-VISIBLE-DOORS-001 — روابط مراجعة صريحة حسب الصلاحيات، لا تبويب مخفي وحده. --}}
+            @if(auth('user')->user()?->hasPlatformPermission('platform.customers.freeze'))
+                <a class="btn btn-outline-primary btn-sm" href="{{ route('admin.amial.kyc.page') }}"
+                   data-testid="cc-kyc-review-direct">🪪 لجنة التحقق والهوية</a>
+            @endif
             @if(auth('user')->user()?->hasPlatformPermission('platform.customers.kyc.view'))
+                <a class="btn btn-outline-primary btn-sm" href="{{ route('admin.amial.kyc.residence.page') }}"
+                   data-testid="cc-residence-review-direct">🏠 مراجعة إثبات السكن</a>
                 <button type="button" class="btn btn-outline-primary btn-sm js-cc-op"
                         data-op="kyc" data-testid="cc-kyc-queue">🪪 طابور التوثيق</button>
                 <button type="button" class="btn btn-outline-primary btn-sm js-cc-op"

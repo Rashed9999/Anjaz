@@ -80,9 +80,10 @@
             'icon' => '🛡️',
             'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*', 'admin/amial/saher*'],
             'links' => [
-                // طوابير KYC وتحديث بيانات العميل أصبحت داخل «مركز العملاء».
-                // أمّا هذا الطابور فعابر للأدوار (عميل/وكيل/تاجر)، لذلك يبقى
-                // في الامتثال باسم يوضح أنه ليس ملف العميل.
+                // AMIAL-KYC-VISIBLE-DOORS-001 — المراجع لا يبحث عن الطابور داخل تبويب ملف العميل.
+                // كل باب ظاهر بصلاحيته الفعلية؛ العرض لا يمنح حق اتخاذ القرار.
+                ['🪪 لجنة التحقق والهوية — مراجعة المستندات', route('admin.amial.kyc.page'), 'platform.customers.freeze'],
+                ['🏠 إثبات الإقامة — طلبات السكن', route('admin.amial.kyc.residence.page'), 'platform.customers.kyc.view'],
                 ['✅ اعتماد الحسابات الجديدة (عميل/وكيل/تاجر)', route('admin.amial.hub.verification'), 'platform.approvals.decide'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), null],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), null],
