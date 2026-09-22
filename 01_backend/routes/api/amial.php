@@ -615,7 +615,10 @@ Route::middleware(['auth:api'])->group(function () {
         Route::prefix('cashier')->name('cashier.')->group(function () {
             Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'products'])->name('products');
             Route::get('/products/lookup', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'lookupBarcode'])->name('products.lookup');
-            Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'addProduct'])->name('products.add');
+            Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'addProduct'])
+                ->middleware('capability:products')->name('products.add');
+            Route::post('/products/adopt', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'adoptFromCatalog'])
+                ->middleware('capability:products')->name('products.adopt');
             Route::put('/products/{id}', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'updateProduct'])->name('products.update');
 
             // AMIAL-HELD-SALE-001 — تعليق السلة لا يطلب ورديةً مفتوحة:
@@ -846,8 +849,12 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/scan', [$RV, 'scan'])->middleware('capability:barcode')->name('scan');
             Route::post('/products/{id}/barcodes', [$RV, 'addBarcode'])
                 ->where('id', '[0-9]+')->name('products.barcodes.add');
+            Route::get('/products/{id}/variants', [$RV, 'productVariants'])->middleware('capability:retail.variants')
+                ->where('id', '[0-9]+')->name('products.variants.index');
             Route::post('/products/{id}/variants', [$RV, 'generateVariants'])->middleware('capability:retail.variants')
                 ->where('id', '[0-9]+')->name('products.variants');
+            Route::post('/variants/{id}', [$RV, 'updateVariant'])->middleware('capability:retail.variants')
+                ->where('id', '[0-9]+')->name('variants.update');
 
             // المخزون والمواقع
             Route::get('/locations', [$RV, 'locations'])->middleware('capability:retail.locations')->name('locations.index');
