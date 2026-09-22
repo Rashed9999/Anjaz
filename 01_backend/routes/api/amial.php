@@ -617,6 +617,19 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/products/lookup', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'lookupBarcode'])->name('products.lookup');
             Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'addProduct'])->name('products.add');
             Route::put('/products/{id}', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'updateProduct'])->name('products.update');
+
+            // AMIAL-HELD-SALE-001 — تعليق السلة لا يطلب ورديةً مفتوحة:
+            // لا مال ولا مخزون يتحركان هنا. الحارسُ يقع عند البيع فقط.
+            Route::get('/held', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'heldIndex'])->name('held.index');
+            Route::post('/held', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'heldStore'])
+                ->middleware('amial.rate-limit:cashier_hold,60,1')->name('held.store');
+            Route::post('/held/{ulid}/resume', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'heldResume'])
+                ->where('ulid', '[0-9A-Z]{26}')->name('held.resume');
+            Route::post('/held/{ulid}/reopen', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'heldReopen'])
+                ->where('ulid', '[0-9A-Z]{26}')->name('held.reopen');
+            Route::post('/held/{ulid}/void', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'heldVoid'])
+                ->where('ulid', '[0-9A-Z]{26}')->name('held.void');
+
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'recordSale'])
                 ->middleware(['amial.rate-limit:cashier_sale,120,1', 'amial.shift'])->name('sales');
             Route::post('/sales/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'settleCredit'])->name('sales.settle');
