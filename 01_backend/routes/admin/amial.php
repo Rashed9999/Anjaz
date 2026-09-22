@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\OperatorWorkspaceController;
 use App\Http\Controllers\Admin\OpsConsoleController;
 use App\Http\Controllers\Admin\SecurityEventsController;
 use App\Http\Controllers\Admin\SupervisionController;
+use App\Http\Controllers\Admin\VerticalCenterController;
 use App\Http\Controllers\Admin\ZoneManagementController;
 use Illuminate\Support\Facades\Route;
 
@@ -422,6 +423,25 @@ Route::prefix('entitlements')->name('entitlements.')
             ->where('id', '[0-9]+')->name('merchant.override');
         Route::delete('/merchants/{id}/override/{overrideId}', [$ec, 'removeOverride'])
             ->where(['id' => '[0-9]+', 'overrideId' => '[0-9]+'])->name('merchant.override.remove');
+    });
+
+// ============ AMIAL-VERTICAL-COMPOSE-001 — مركز قطاعات التجار ============
+// إنشاء قطاع أو تعديل ما تفتحه باقاته يغيّر عرض المنتج، لذلك يبقى مع
+// إدارة الباقات خلف صلاحية إدارة الإعدادات نفسها.
+Route::prefix('verticals')->name('verticals.')
+    ->middleware('platform:platform.settings.manage')
+    ->group(function () {
+        $vc = VerticalCenterController::class;
+
+        Route::get('/', [$vc, 'page'])->name('page');
+        Route::get('/list', [$vc, 'index'])->name('list');
+        Route::post('/', [$vc, 'store'])->name('store');
+        Route::post('/{code}', [$vc, 'update'])
+            ->where('code', '[a-z][a-z0-9_]{2,39}')->name('update');
+        Route::post('/{code}/toggle', [$vc, 'toggle'])
+            ->where('code', '[a-z][a-z0-9_]{2,39}')->name('toggle');
+        Route::delete('/{code}', [$vc, 'destroy'])
+            ->where('code', '[a-z][a-z0-9_]{2,39}')->name('destroy');
     });
 
 // ============ AMIAL-RETAIL-VERTICAL-001 · المرحلة ١١ — مركز التجزئة ============

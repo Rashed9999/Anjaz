@@ -71,6 +71,11 @@ Route::post('/geo/resolve-zone', [\App\Http\Controllers\Api\V1\Amial\GeoZoneCont
 Route::get('/geo/governorates', [\App\Http\Controllers\Api\V1\Amial\GeoZoneController::class, 'governorates'])
     ->name('amial.geo.governorates');
 
+// AMIAL-VERTICAL-COMPOSE-001 — قائمة قطاعات التاجر تُقرأ قبل تسجيل الدخول
+// وأثناءه. لا تحمل بيانات حساب، لكنها مصدر الاختيارات التي يعرضها التطبيق.
+Route::get('/business-types', [\App\Http\Controllers\Api\V1\Amial\AccessController::class, 'businessTypeCatalog'])
+    ->name('amial.business-types');
+
 // P0-LEGAL — Markdown docs للموقع العام (بدون auth)
 Route::prefix('legal-docs')->name('amial.legal-docs.')->group(function () {
     Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PublicLegalController::class, 'index'])->name('index');

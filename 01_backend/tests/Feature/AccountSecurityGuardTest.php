@@ -76,12 +76,12 @@ class AccountSecurityGuardTest extends TestCase
 
         $r = $this->actingAs($u, 'api')->postJson(self::BASE.'/password', [
             'current_password' => 'aa1234',
-            'new_password' => 'zz9876',
-            'new_password_confirmation' => 'zz9876',
+            'new_password' => 'NewPass9',
+            'new_password_confirmation' => 'NewPass9',
         ]);
 
         $r->assertOk();
-        $this->assertTrue(Hash::check('zz9876', $u->fresh()->password),
+        $this->assertTrue(Hash::check('NewPass9', $u->fresh()->password),
             'مرّ الطلبُ ولم تتغيّر كلمةُ المرور فعلاً في القاعدة');
     }
 
@@ -92,8 +92,8 @@ class AccountSecurityGuardTest extends TestCase
 
         $this->actingAs($u, 'api')->postJson(self::BASE.'/password', [
             'current_password' => 'خطأ',
-            'new_password' => 'zz9876',
-            'new_password_confirmation' => 'zz9876',
+            'new_password' => 'NewPass9',
+            'new_password_confirmation' => 'NewPass9',
         ])->assertStatus(422);
 
         $this->assertTrue(Hash::check('aa1234', $u->fresh()->password),
@@ -110,8 +110,8 @@ class AccountSecurityGuardTest extends TestCase
 
         $r = $this->actingAs($u, 'api')->postJson(self::BASE.'/password', [
             'current_password' => 'aa1234',
-            'new_password' => 'zz9876',
-            'new_password_confirmation' => 'zz9876',
+            'new_password' => 'NewPass9',
+            'new_password_confirmation' => 'NewPass9',
         ]);
 
         $r->assertOk();
@@ -202,7 +202,7 @@ class AccountSecurityGuardTest extends TestCase
             'التسجيل القديم أعاد ربط PIN بكلمة الدخول'
         );
         $this->assertStringNotContainsString(
-            "$user->transaction_pin = (string) $request->input('password')",
+            '$user->transaction_pin = (string) $request->input(\'password\')',
             $quick,
             'التسجيل السريع أعاد ربط PIN بكلمة الدخول'
         );
