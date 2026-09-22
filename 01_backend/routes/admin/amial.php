@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AccountRecoveryController;
+use App\Http\Controllers\Admin\AccountDossierPrintController;
 use App\Http\Controllers\Admin\AdminAmlController;
 use App\Http\Controllers\Admin\AdminCharityController;
 use App\Http\Controllers\Admin\AdminSafePaymentController;
@@ -790,6 +791,13 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     Route::get('/account/{id}', [$hc, 'account'])->where('id', '[0-9]+')->name('account');
     Route::get('/users/{id}/detail.json', [$hc, 'accountDetailJson'])
         ->where('id', '[0-9]+')->name('users.detail');
+
+    // ورقة الحساب تحمل صور الوثائق المفكوكة، لذلك لا تكفي صلاحية رؤية
+    // الحساب العامة: يلزم الباب نفسه الذي يجيز مراجعة مستندات KYC.
+    Route::get('/account/{user}/print', [AccountDossierPrintController::class, 'show'])
+        ->where('user', '[0-9]+')
+        ->middleware('platform:platform.customers.kyc.view')
+        ->name('account.print');
 
     // AMIAL-ADMIN-EDIT-001 — حالة الحساب + رفع الوثائق + تعديل بياناته.
     // هذه الثلاثة هي مصدر نافذة «تعديل». حذفها يترك الواجهة موجودة لكن

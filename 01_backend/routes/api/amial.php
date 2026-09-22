@@ -714,6 +714,11 @@ Route::middleware(['auth:api'])->group(function () {
 
         // AMIAL-CUSTOMER-CREDIT-001 — نظام ديون العملاء
         Route::prefix('credit')->name('credit.')->group(function () {
+            // قراءةُ الرصيد قبل البيع الآجل جزءٌ من قدرة الديون المجانية،
+            // لا من إدارة العملاء المدفوعة. يمرّ الحارس أيضاً بسياق موظف
+            // نقطة البيع، فيرث قطاع التاجر بدل أن يعامل كحساب مستقل.
+            Route::get('/lookup', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'lookup'])
+                ->middleware('capability:debts')->name('lookup');
             Route::get('/dashboard', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'dashboard'])->name('dashboard');
             Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'listCustomers'])->name('customers');
             Route::post('/customers', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'upsertCustomer'])->name('customers.upsert');
