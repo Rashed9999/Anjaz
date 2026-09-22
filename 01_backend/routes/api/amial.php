@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AdminCharityController;
 use App\Http\Controllers\Admin\AdminSafePaymentController;
 use App\Http\Controllers\Admin\LegalTermsController as AdminLegalController;
 use App\Http\Controllers\Api\V1\Amial\AccountRecoveryController;
+use App\Http\Controllers\Api\V1\Amial\AccountSecurityController;
 use App\Http\Controllers\Api\V1\Amial\AgentNetworkController;
 use App\Http\Controllers\Api\V1\Amial\AgentStatsController;
 use App\Http\Controllers\Api\V1\Amial\BillPayController;
@@ -114,6 +115,17 @@ Route::middleware(['auth:api'])->group(function () {
     Route::prefix('me')->name('amial.me.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\MeController::class, 'show'])->name('show');
         Route::get('/account-number', [\App\Http\Controllers\Api\V1\Amial\MeController::class, 'accountNumber'])->name('account-number');
+
+        // AMIAL-ACCOUNT-SECURITY-001 — شاشةُ فصل كلمة الدخول عن رمز المال.
+        // هذه المسارات تخصّ صاحب الجلسة وحده؛ لا تحتاج رقم جهاز أو دوراً،
+        // لكنها محدودة المعدل لأنّها تتحقق من أسرار حساسة.
+        Route::prefix('security')->name('security.')->group(function () {
+            Route::get('/', [AccountSecurityController::class, 'show'])->name('show');
+            Route::post('/password', [AccountSecurityController::class, 'changePassword'])
+                ->middleware('amial.rate-limit:account_password_change,6,1')->name('password');
+            Route::post('/pin', [AccountSecurityController::class, 'changePin'])
+                ->middleware('amial.rate-limit:account_pin_change,6,1')->name('pin');
+        });
 
         // CRITICAL-001 — Access endpoint (يقرأه AccessController في Flutter عند الدخول)
         Route::get('/access', [\App\Http\Controllers\Api\V1\Amial\AccessController::class, 'me'])->name('access');
