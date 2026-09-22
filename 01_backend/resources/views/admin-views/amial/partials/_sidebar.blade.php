@@ -80,11 +80,8 @@
             'icon' => '🛡️',
             'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*', 'admin/amial/saher*'],
             'links' => [
-                // AMIAL-KYC-VISIBLE-DOORS-001 — المراجع لا يبحث عن الطابور داخل تبويب ملف العميل.
-                // كل باب ظاهر بصلاحيته الفعلية؛ العرض لا يمنح حق اتخاذ القرار.
-                ['🪪 لجنة التحقق والهوية — مراجعة المستندات', route('admin.amial.kyc.page'), 'platform.customers.freeze'],
-                ['🏠 إثبات الإقامة — طلبات السكن', route('admin.amial.kyc.residence.page'), 'platform.customers.kyc.view'],
-                ['✅ اعتماد الحسابات الجديدة (عميل/وكيل/تاجر)', route('admin.amial.hub.verification'), 'platform.approvals.decide'],
+                // نقطة دخول واحدة: القائمة والملف والقرار داخل نفس المركز.
+                ['🛡️ مركز التحقق والهوية', route('admin.amial.kyc.page'), 'platform.customers.kyc.view'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), null],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), null],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],

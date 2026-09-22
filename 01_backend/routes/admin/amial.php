@@ -585,7 +585,14 @@ Route::prefix('partner-settlements')->name('partner-settlements.')->middleware('
 Route::prefix('kyc')->name('kyc.')->group(function () {
     $kyc = App\Http\Controllers\Api\V1\Amial\KycDocumentController::class;
 
-    Route::get('/', [$kyc, 'page'])->middleware('platform:platform.customers.freeze')->name('page');
+    // AMIAL-KYC-ONE-CENTER-001 — كل مراجعة تبدأ من ملف واحد؛ الأفعال القديمة محفوظة ومحروسة.
+    $center = App\Http\Controllers\Admin\UnifiedVerificationCenterController::class;
+    Route::get('/', [$center, 'page'])->middleware('platform:platform.customers.kyc.view')->name('page');
+    Route::get('/center/queue', [$center, 'queue'])->middleware('platform:platform.customers.kyc.view')->name('center.queue');
+    Route::get('/center/accounts/{id}', [$center, 'account'])->where('id', '[0-9]+')
+        ->middleware('platform:platform.customers.kyc.view')->name('center.account');
+    // باب قديم للتوافق فقط، لا يظهر ضمن التنقّل اليومي.
+    Route::get('/classic', [$kyc, 'page'])->middleware('platform:platform.customers.freeze')->name('classic');
     Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.customers.freeze')->name('queue');
 
     // القرار النهائي منفصل عن اعتماد المستند المفرد. كانت الشاشة تنادي

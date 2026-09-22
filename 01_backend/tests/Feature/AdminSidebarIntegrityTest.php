@@ -179,21 +179,20 @@ class AdminSidebarIntegrityTest extends TestCase
      * `AdminPanelReachabilityGuardTest`.
      */
     /** @test */
-    public function kyc_reviewer_has_direct_sidebar_links_for_identity_residence_and_final_decision(): void
+    public function kyc_reviewer_has_one_unified_center_not_three_scattered_doors(): void
     {
-        // يُختبر الرابطُ بعد تصيير القائمة لصاحب صلاحية؛ وجود route() في ملف آخر لا يكفي.
         $paths = array_map(
             static fn (string $url): string => rtrim((string) parse_url($url, PHP_URL_PATH), '/'),
             $this->sidebarLinks($this->admin()),
         );
-
-        foreach ([
-            '/admin/amial/kyc' => 'لجنة التحقق والهوية',
-            '/admin/amial/kyc/residence' => 'إثبات السكن',
-            '/admin/amial/hub/verification' => 'قرار الحساب النهائي',
-        ] as $path => $label) {
-            $this->assertContains($path, $paths, "باب «{$label}» غير ظاهر للمراجع في القائمة الجانبية");
-        }
+        $this->assertSame(1, count(array_filter(
+            $paths, static fn (string $path): bool => $path === '/admin/amial/kyc'
+        )), 'مركز التحقق يجب أن يظهر مرة واحدة فقط');
+        $this->assertNotContains('/admin/amial/kyc/residence', $paths);
+        $this->assertNotContains('/admin/amial/hub/verification', $paths);
+        $this->actingAs($this->admin(), 'user')
+            ->get('/admin/amial/kyc')->assertOk()
+            ->assertSee('unified-verification-center');
     }
 
     public function reorganising_did_not_drop_a_critical_panel(): void

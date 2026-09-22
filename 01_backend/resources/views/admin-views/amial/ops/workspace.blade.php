@@ -38,9 +38,8 @@
             ['المركز المالي', route('admin.amial.hub.finance'), 'platform.money.view'], ['مركز الدفتر', route('admin.amial.ledger.page'), 'platform.audit.view'], ['كشف المعاملات', route('admin.transaction.index'), 'platform.transactions.view'], ['تسويات الشركاء', route('admin.amial.partner-settlements.page'), 'platform.money.view'], ['رصيد المنصّة', route('admin.emoney.index'), 'platform.money.view'], ['مصاريف المنصّة', route('admin.expense.index'), 'platform.money.view'], ['الرسوم والأرباح', route('admin.amial.fees.index'), 'platform.fees.view'], ['طلبات السحب', route('admin.withdraw.index'), 'platform.audit.view'],
         ]],
         ['id'=>'compliance','title'=>'الامتثال والمخاطر','icon'=>'🛡️','desc'=>'المراقبة، فحص المعاملات، تقييم المخاطر والضوابط.','items'=>[
-            // KYC العميل وأرشيف فتح الحسابات أصبحا جزءاً من مركز العملاء.
-            // هذا الطابور وحده عابر للأدوار، لذلك يبقى هنا.
-            ['اعتماد الحسابات الجديدة (عميل/وكيل/تاجر)', route('admin.amial.hub.verification'), 'platform.approvals.decide'],
+            // كل طلبات العملاء والوكلاء والتجار والسكن والهوية داخل شاشة واحدة.
+            ['مركز التحقق والهوية', route('admin.amial.kyc.page'), 'platform.customers.kyc.view'],
             ['مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.audit.view'], ['سجل التدقيق', route('admin.amial.audit.index'), 'platform.audit.view'], ['الإشراف والأمن', route('admin.amial.supervision.index'), 'platform.audit.view'], ['أحداث الأمان', route('admin.amial.security-events.index'), 'platform.audit.view'], ['حارس الأمان', route('admin.amial.sentinel.index'), 'platform.audit.view'], ['صحة النظام', route('admin.amial.system.health'), 'platform.audit.view'], ['ساهر — رادار النظام', route('admin.amial.saher.index'), 'saher.view'],
         ]],
         ['id'=>'services','title'=>'خدمات المنصّة','icon'=>'🧩','desc'=>'إدارة الخدمات، التكاملات، وواجهات البرمجة.','items'=>[
