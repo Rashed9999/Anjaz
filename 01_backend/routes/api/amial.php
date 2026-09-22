@@ -774,7 +774,8 @@ Route::middleware(['auth:api'])->group(function () {
 
             // Products + Prices
             Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listProducts'])->name('products.index');
-            Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addProduct'])->name('products.add');
+            Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addProduct'])
+                ->middleware('amial.usage:add_product')->name('products.add');
             Route::get('/price-history', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'priceHistory'])->name('price-history');
             Route::put('/products/{id}/price', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'updateProductPrice'])
                 ->where('id', '[0-9]+')->name('products.price');
@@ -1008,6 +1009,8 @@ Route::middleware(['auth:api'])->group(function () {
                 ->middleware(['amial.rate-limit:pharmacy_sale,300,1', 'amial.usage:sale_operation', 'amial.shift'])
                 ->name('sales.record');
             Route::get('/sales', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listSales'])->name('sales.index');
+            Route::get('/sales/{ulid}', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'showSale'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('sales.show');
 
             // Alerts
             Route::get('/alerts', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listAlerts'])->name('alerts.index');

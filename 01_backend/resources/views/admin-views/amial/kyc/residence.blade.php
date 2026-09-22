@@ -53,7 +53,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (() => {
     const queueUrl = @json(route('admin.amial.kyc.residence.queue'));
     const decisionBase = @json(url('/admin/amial/kyc/residence'));

@@ -1005,7 +1005,7 @@
                         <a class="btn btn-sm btn-outline-danger" href="{{ route('admin.amial.kyc.privacy.page') }}">الخصوصية والتتبّع</a>
                         <a class="btn btn-sm btn-outline-dark" id="cc-print-dossier" target="_blank" rel="noopener"
                            href="{{ url('admin/amial/hub/account') }}/${encodeURIComponent(current)}/print">
-                           🖨 طباعة ملف العميل
+                           🖨 طباعة ملفّ الحساب
                         </a>
                     </div>
                     <div class="small text-muted mt-2">
