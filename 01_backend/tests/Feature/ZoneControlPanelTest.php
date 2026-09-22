@@ -80,6 +80,7 @@ class ZoneControlPanelTest extends TestCase
         $stranded = User::factory()->create([
             'type' => 2, 'is_kyc_verified' => 1,
             'zone_code' => 'UNKNOWN', 'residence_governorate' => 'YE-AD',
+            'verified_residence_governorate' => 'YE-AD', 'residence_verified_at' => now(),
         ]);
         User::factory()->create(['type' => 2, 'is_kyc_verified' => 1, 'zone_code' => 'SOUTH']);
 
@@ -94,7 +95,10 @@ class ZoneControlPanelTest extends TestCase
     public function test_stranded_account_without_a_governorate_is_marked_unfixable(): void
     {
         // لا نعرض زر إصلاح لا يعمل — نطلب تسجيل المحافظة أولاً.
-        User::factory()->create(['type' => 2, 'is_kyc_verified' => 1, 'zone_code' => 'UNKNOWN']);
+        User::factory()->withoutVerifiedResidence()->create([
+            'type' => 2, 'is_kyc_verified' => 1, 'zone_code' => 'UNKNOWN',
+            'residence_governorate' => null,
+        ]);
 
         $j = $this->panel('/summary.json')->assertOk()->json();
 
@@ -106,6 +110,7 @@ class ZoneControlPanelTest extends TestCase
         $user = User::factory()->create([
             'type' => 2, 'is_kyc_verified' => 1,
             'zone_code' => 'UNKNOWN', 'residence_governorate' => 'YE-AD',
+            'verified_residence_governorate' => 'YE-AD', 'residence_verified_at' => now(),
         ]);
 
         $this->actingAs($this->admin(), 'user')
@@ -118,7 +123,9 @@ class ZoneControlPanelTest extends TestCase
 
     public function test_reassign_refuses_when_there_is_nothing_to_read(): void
     {
-        $user = User::factory()->create(['type' => 2, 'zone_code' => 'UNKNOWN']);
+        $user = User::factory()->withoutVerifiedResidence()->create([
+            'type' => 2, 'zone_code' => 'UNKNOWN', 'residence_governorate' => null,
+        ]);
 
         $this->actingAs($this->admin(), 'user')
             ->postJson("/admin/amial/hub/zones/users/{$user->id}/reassign")
@@ -131,12 +138,30 @@ class ZoneControlPanelTest extends TestCase
     {
         $user = User::factory()->create([
             'type' => 2, 'zone_code' => 'UNKNOWN', 'residence_governorate' => 'YE-SN',
+            'verified_residence_governorate' => 'YE-SN', 'residence_verified_at' => now(),
         ]);
 
         $this->actingAs($this->admin(), 'user')
             ->postJson("/admin/amial/hub/zones/users/{$user->id}/reassign")->assertOk();
 
         $this->assertNotSame('SOUTH', $user->fresh()->zone_code);
+    }
+
+    public function test_reassign_never_uses_declared_or_origin_without_verified_residence(): void
+    {
+        $user = User::factory()->withoutVerifiedResidence()->create([
+            'type' => 2,
+            'zone_code' => 'UNKNOWN',
+            'residence_governorate' => 'YE-AD',
+            'origin_governorate' => 'YE-SN',
+        ]);
+
+        $this->actingAs($this->admin(), 'user')
+            ->postJson("/admin/amial/hub/zones/users/{$user->id}/reassign", ['governorate' => 'YE-SN'])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'RESIDENCE_NOT_VERIFIED_FOR_ZONE');
+
+        $this->assertSame('UNKNOWN', $user->fresh()->zone_code);
     }
 
     public function test_agent_location_violations_are_visible(): void

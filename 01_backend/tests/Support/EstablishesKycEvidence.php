@@ -24,14 +24,17 @@ trait EstablishesKycEvidence
      *
      * لا نستعمله للتاجر/الوكيل؛ مستويات العميل الفردي وحدها متسلسلة.
      */
-    protected function establishTierOnePrerequisite(User $customer): User
+    protected function establishTierOnePrerequisite(User $customer, string $governorate = 'YE-AD'): User
     {
+        $governorate = \App\Support\YemenGovernorates::codeFromName($governorate)
+            ?? throw new \InvalidArgumentException('محافظة اختبار المستوى الأول غير معروفة.');
+
         $this->establishPhoneOwnership($customer);
 
         $customer->forceFill([
             'kyc_tier' => 1,
-            'residence_governorate' => 'YE-AD',
-            'verified_residence_governorate' => 'YE-AD',
+            'residence_governorate' => $governorate,
+            'verified_residence_governorate' => $governorate,
             'residence_verified_at' => now(),
         ])->save();
 
@@ -39,7 +42,7 @@ trait EstablishesKycEvidence
             ['user_id' => $customer->id],
             [
                 'kyc_document_id' => null,
-                'declared_governorate' => 'YE-AD',
+                'declared_governorate' => $governorate,
                 'evidence_type' => 'government_residence_document',
                 'evidence_strength' => 'strong',
                 'status' => 'verified',

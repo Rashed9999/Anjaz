@@ -235,7 +235,7 @@
                     <td>${u.governorate ? esc(u.governorate) : '<span class="text-danger">غير مسجّلة</span>'}</td>
                     <td>${u.fixable
                         ? `<button class="btn btn-sm btn-success" data-fix="${u.id}">إسناد المنطقة</button>`
-                        : '<span class="text-muted small">سجّل محافظة السكن أولاً</span>'}</td>
+                        : '<span class="text-muted small">راجِع إثبات السكن أولاً</span>'}</td>
                 </tr>`).join('');
         }
     }

@@ -186,15 +186,28 @@ class ZoneControlController extends Controller
             'stranded' => [
                 'count' => $strandedQuery->count(),
                 'sample' => $strandedQuery->clone()->latest('id')->limit(20)
-                    ->get(['id', 'f_name', 'l_name', 'phone', 'type', 'residence_governorate'])
-                    ->map(fn (User $u) => [
-                        'id' => $u->id,
-                        'name' => trim(($u->f_name ?? '') . ' ' . ($u->l_name ?? '')) ?: '—',
-                        'phone' => $u->phone,
-                        'role' => $this->roleName((int) $u->type),
-                        'governorate' => YemenGovernorates::name($u->residence_governorate),
-                        'fixable' => YemenGovernorates::codeFromName((string) $u->residence_governorate) !== null,
-                    ])->values(),
+                    ->get([
+                        'id', 'f_name', 'l_name', 'phone', 'type', 'residence_governorate',
+                        'verified_residence_governorate', 'residence_verified_at',
+                    ])
+                    ->map(function (User $u) {
+                        $verified = YemenGovernorates::codeFromName(
+                            (string) $u->verified_residence_governorate
+                        );
+                        $hasVerifiedResidence = $verified !== null && !empty($u->residence_verified_at);
+
+                        return [
+                            'id' => $u->id,
+                            'name' => trim(($u->f_name ?? '') . ' ' . ($u->l_name ?? '')) ?: '—',
+                            'phone' => $u->phone,
+                            'role' => $this->roleName((int) $u->type),
+                            // نُظهر تصريح العميل كما هو، ولا نخلط بينه وبين الوثيقة.
+                            'governorate' => YemenGovernorates::name($u->residence_governorate),
+                            'verified_governorate' => YemenGovernorates::name($verified),
+                            // زر الإصلاح لا يُعرض إلا حين يملك مساراً آمناً فعلاً.
+                            'fixable' => $hasVerifiedResidence,
+                        ];
+                    })->values(),
             ],
             'blocked_30d' => (int) DB::table('audit_decisions')
                 ->whereIn('decision_code', ['TX_ZONE_BLOCKED', 'ACCOUNT_ZONE_UNKNOWN'])
@@ -315,7 +328,7 @@ class ZoneControlController extends Controller
     }
 
     /**
-     * POST zones/users/{id}/reassign — إسناد المنطقة من محافظة السكن.
+     * POST zones/users/{id}/reassign — إسناد المنطقة من إقامة موثّقة.
      *
      * يفكّ عقدة الحسابات التي اعتُمدت قبل إصلاح مسار الاعتماد وبقيت
      * UNKNOWN: معتمدة ولا تستطيع عملية واحدة. إصلاحها بلا هذا الزر يعني
@@ -324,14 +337,28 @@ class ZoneControlController extends Controller
     public function reassign(Request $request, int $id): JsonResponse
     {
         $user = User::findOrFail($id);
-        $source = $request->input('governorate')
-            ?: $user->residence_governorate
-            ?: $user->origin_governorate;
-
-        $code = YemenGovernorates::codeFromName((string) $source);
-        if ($code === null) {
+        $verified = YemenGovernorates::codeFromName((string) $user->verified_residence_governorate);
+        if ($verified === null || empty($user->residence_verified_at)) {
             return response()->json([
-                'message' => 'لا توجد محافظة سكن مسجّلة لهذا الحساب — حدّدها أولاً.',
+                'message' => 'لا توجد محافظة سكن موثّقة لهذا الحساب — راجع إثبات الإقامة أولاً.',
+                'code' => 'RESIDENCE_NOT_VERIFIED_FOR_ZONE',
+            ], 422);
+        }
+
+        // لا نسمح لطلبٍ يدوي أن يستبدل الدليل الموثّق بتصريح أو بمحافظة الأصل.
+        $requested = $request->filled('governorate')
+            ? YemenGovernorates::codeFromName((string) $request->input('governorate'))
+            : null;
+        if ($request->filled('governorate') && $requested === null) {
+            return response()->json([
+                'message' => 'المحافظة المطلوبة غير معروفة.',
+                'code' => 'RESIDENCE_GOVERNORATE_INVALID',
+            ], 422);
+        }
+        if ($requested !== null && !hash_equals($verified, $requested)) {
+            return response()->json([
+                'message' => 'المحافظة المطلوبة لا تطابق إثبات الإقامة الموثّق.',
+                'code' => 'RESIDENCE_ZONE_SOURCE_MISMATCH',
             ], 422);
         }
 
@@ -340,7 +367,7 @@ class ZoneControlController extends Controller
 
         $zone = app(ZoneAssignmentService::class)->assignFromKyc(
             $user,
-            YemenGovernorates::name($code) ?? '',
+            YemenGovernorates::name($verified) ?? '',
             $actor->id,
         );
 
@@ -360,7 +387,7 @@ class ZoneControlController extends Controller
         return response()->json([
             'message' => 'أُسندت المنطقة: ' . ZonePolicyService::zoneNameAr($zone),
             'zone' => $zone,
-            'governorate' => YemenGovernorates::name($code),
+            'governorate' => YemenGovernorates::name($verified),
         ]);
     }
 

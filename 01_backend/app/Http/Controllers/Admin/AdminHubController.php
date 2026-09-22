@@ -470,22 +470,6 @@ class AdminHubController extends Controller
             ], 422);
         }
 
-        if ($status === 1 && (int) $user->type === CUSTOMER_TYPE) {
-            try {
-                // الحارس قبل أي تعديل جانبي (حتى محافظة السكن): محاولة قفز
-                // مرفوضة يجب ألا تغيّر شيئاً في ملف العميل.
-                app(\App\Services\KycTierService::class)
-                    ->assertSequentialVerificationDecision($user, $targetTier);
-            } catch (\DomainException $e) {
-                return response()->json([
-                    'message' => $e->getMessage(),
-                    'code' => str_contains($e->getMessage(), 'KYC_TIER_SEQUENCE_VIOLATION')
-                        ? 'KYC_TIER_SEQUENCE_VIOLATION'
-                        : 'KYC_TIER_DECISION_REJECTED',
-                ], 409);
-            }
-        }
-
         if ($status === 1) {
             // هذه واجهة توافقية قديمة؛ لا نسمح لها بعد اليوم بإنتاج حساب
             // "مقبول" ومنطقته UNKNOWN. إن لم يكن في الملف اختيار محفوظ،
@@ -501,6 +485,27 @@ class AdminHubController extends Controller
                     'code' => 'MISSING_RESIDENCE_GOVERNORATE',
                 ], 422);
             }
+        }
+
+        if ($status === 1 && (int) $user->type === CUSTOMER_TYPE) {
+            try {
+                // المحافظة شرط رسالةٍ مستقلة قابلة للعلاج؛ بعدها فقط نفحص
+                // تسلسل المستويات، ولا نُغيّر شيئاً من حالة الاعتماد نفسها.
+                app(\App\Services\KycTierService::class)
+                    ->assertSequentialVerificationDecision($user, $targetTier);
+            } catch (\DomainException $e) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'code' => str_contains($e->getMessage(), 'KYC_TIER_SEQUENCE_VIOLATION')
+                        ? 'KYC_TIER_SEQUENCE_VIOLATION'
+                        : 'KYC_TIER_DECISION_REJECTED',
+                ], 409);
+            }
+        }
+
+        if ($status === 1) {
+            // لا نحفظ البيان قبل اجتياز حارس التسلسل؛ فطلب القفز المرفوض
+            // لا يغيّر ملف العميل من جانبه.
             $user->residence_governorate = $governorate;
             $user->save();
         }

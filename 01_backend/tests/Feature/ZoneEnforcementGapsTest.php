@@ -67,6 +67,7 @@ class ZoneEnforcementGapsTest extends TestCase
         $user = $this->createViaHub(['residence_governorate' => 'YE-AD']);
         $this->assertSame('UNKNOWN', $user->zone_code);
 
+        $user = $this->establishTierOnePrerequisite($user, 'YE-AD');
         // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
         $this->establishKycEvidence($user);
         $this->actingAs($this->admin(), 'user')
@@ -80,6 +81,7 @@ class ZoneEnforcementGapsTest extends TestCase
     {
         $user = $this->createViaHub(['residence_governorate' => 'YE-SN']); // صنعاء
 
+        $user = $this->establishTierOnePrerequisite($user, 'YE-SN');
         // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
         $this->establishKycEvidence($user);
         $this->actingAs($this->admin(), 'user')
