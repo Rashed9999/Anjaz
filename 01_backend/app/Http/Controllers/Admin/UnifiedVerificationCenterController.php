@@ -67,10 +67,13 @@ class UnifiedVerificationCenterController extends Controller
         ))));
 
         $usersQuery = User::query()
-            ->whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE])
-            ->whereIn('id', $ids);
+            ->whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE]);
 
-        if ($q !== '') {
+        // البحث لا يتقيّد بآخر 150 تسجيلًا: يستطيع المراجع فتح طلبٍ أقدم
+        // برقم الحساب أو الهاتف، ولو خرج من نافذة الطابور السريع.
+        if ($q === '') {
+            $usersQuery->whereIn('id', $ids);
+        } else {
             $usersQuery->where(function ($builder) use ($q) {
                 if (ctype_digit($q)) {
                     $builder->orWhere('id', (int) $q);
