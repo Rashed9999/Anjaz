@@ -733,14 +733,14 @@ class CustomerCenterService
                 'phone_verified' => (bool) ($customer->is_phone_verified ?? false),
                 'email_verified' => (bool) ($customer->is_email_verified ?? false),
                 'email_verified_at' => Schema::hasColumn('users', 'email_verified_at')
-                    ? $customer->email_verified_at?->toIso8601String()
+                    ? $this->isoDate($customer->email_verified_at)
                     : null,
             ],
             'regulatory_profile' => [
                 'fields' => $regulatory,
                 'missing' => \App\Support\Kyc\KycProfileFields::missingFor($customer),
                 'updated_at' => Schema::hasColumn('users', 'kyc_fields_updated_at')
-                    ? $customer->kyc_fields_updated_at?->toIso8601String()
+                    ? $this->isoDate($customer->kyc_fields_updated_at)
                     : null,
             ],
             'residence' => $residence,
@@ -974,5 +974,19 @@ class CustomerCenterService
         usort($rows, fn ($a, $b) => strcmp((string) $b['at'], (string) $a['at']));
 
         return ['items' => array_slice($rows, 0, 150)];
+    }
+
+    /** يقبل الأعمدة القديمة النصية والـcasts الحديثة بلا أن يكسر ملف KYC. */
+    private function isoDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format(DATE_ATOM);
+        }
+
+        return \Illuminate\Support\Carbon::parse((string) $value)->toIso8601String();
     }
 }
