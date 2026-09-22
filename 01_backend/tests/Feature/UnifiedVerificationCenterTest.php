@@ -50,6 +50,12 @@ class UnifiedVerificationCenterTest extends TestCase
         $this->assertFalse($case->json('data.permissions.decide_account'));
         $this->assertArrayHasKey('residence', $case->json('data'));
         $this->assertArrayHasKey('evidence', $case->json('data'));
+        $this->assertDatabaseHas('pii_access_logs', [
+            'actor_user_id' => $staff->id,
+            'subject_type' => 'user',
+            'subject_id' => $customer->id,
+            'field_name' => 'kyc_verification_dossier',
+        ]);
     }
 
     public function test_restricted_account_is_not_leaked_in_general_queue_or_detail(): void

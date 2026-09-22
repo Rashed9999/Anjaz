@@ -9,6 +9,7 @@ use App\Services\Admin\KycEvidenceService;
 use App\Services\Kyc\KycPrivacyService;
 use App\Services\Kyc\ResidenceVerificationService;
 use App\Services\KycTierService;
+use App\Services\PiiAccessAuditService;
 use App\Support\YemenGovernorates;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -187,6 +188,7 @@ class UnifiedVerificationCenterController extends Controller
         ResidenceVerificationService $residence,
         KycPrivacyService $privacy,
         KycTierService $tiers,
+        PiiAccessAuditService $pii,
     ): JsonResponse {
         $user = User::query()->whereIn(
             'type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE]
@@ -198,6 +200,11 @@ class UnifiedVerificationCenterController extends Controller
         } catch (DomainException) {
             abort(403, 'هذه الحالة مخصّصة لفريق المراجعة المقيدة.');
         }
+
+        // فتح ملفّ هوية شخصية حدث حسّاس، ولو لم يفتح الموظّف صورة المستند.
+        // لا يُسجّل وصولٌ إلى حالة مقيدة رُفض عرضها أعلاه.
+        $pii->logAccess((int) $reviewer->id, 'user', (int) $user->id,
+            'kyc_verification_dossier', 'view', 'فتح ملف التحقق والهوية الموحد');
 
         $restricted = $privacy->isRestricted($user);
         $updateRequired = (int) ($user->kyc_update_required ?? 0) === 1;
