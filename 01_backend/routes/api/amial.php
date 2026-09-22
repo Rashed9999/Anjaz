@@ -236,7 +236,7 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/approvals/{id}/approve', [$c, 'approveRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.approve');
             Route::post('/approvals/{id}/reject', [$c, 'rejectRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.reject');
             Route::get('/insider/overview', [$c, 'insiderOverview'])->middleware('platform:platform.audit.view')->name('insider.overview');
-            Route::post('/insider/alerts/{id}/ack', [$c, 'acknowledgeAlert'])->where('id', '[0-9]+')->middleware('platform:platform.audit.view')->name('insider.alerts.ack');
+            Route::post('/insider/alerts/{id}/ack', [$c, 'acknowledgeAlert'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('insider.alerts.ack');
 
             // AMIAL-WRONG-TRANSFER-001 — لتطبيقات الدعم بابٌ مماثل للويب؛
             // الفتح قابل للرجوع، أمّا القرار فيحرّك مالاً ويحتاج صلاحية أعلى.

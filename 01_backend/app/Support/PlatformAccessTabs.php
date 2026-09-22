@@ -137,6 +137,7 @@ final class PlatformAccessTabs
             'platform_services' => ['label' => 'خدمات المنصّة والنزاعات', 'icon' => '🧩',
                 'read' => [
                     'platform.transactions.view' => 'سجلّ العمليّات',
+                    'platform.receipts.view' => 'التحقق من الإيصالات ومراجعتها',
                 ],
                 'write' => [
                     'platform.disputes.decide' => 'حسمُ النزاعات',

@@ -758,7 +758,7 @@ Route::get('/system/health', [\App\Http\Controllers\Admin\SystemHealthController
 
 Route::post('/system/errors/{id}', [\App\Http\Controllers\Admin\SystemHealthController::class, 'updateError'])
     ->where('id', '[0-9]+')
-    ->middleware('platform:platform.audit.view')->name('system.errors.update');
+    ->middleware('platform:platform.ops.retry')->name('system.errors.update');
 
 // ============ AMIAL-SENTINEL-001 — Security Sentinel Dashboard ============
 Route::prefix('sentinel')->name('sentinel.')->group(function () {
