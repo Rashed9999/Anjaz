@@ -103,7 +103,7 @@ class ZoneOverrideProvenanceTest extends TestCase
         // **ومخالفةُ «لا أعرف» ليست مخالفة.** حسابٌ بلا محافظةِ سكنٍ
         // موثّقةٍ لا وثيقةَ له تُخالَف — ووسمُه تجاوزاً يُغرق اللوحةَ
         // بإنذاراتٍ لا معنى لها، فيُعتاد تجاهلُها.
-        $u = User::factory()->create([
+        $u = User::factory()->withoutVerifiedResidence()->create([
             'type' => 2, 'zone_code' => 'UNKNOWN', 'residence_governorate' => null,
         ]);
 
@@ -120,7 +120,7 @@ class ZoneOverrideProvenanceTest extends TestCase
     {
         // مدينةٌ لا تُقرأ تُخرج `UNKNOWN` من `cityToZone` — **وهي عجزٌ عن
         // قراءة الوثيقة لا رأيٌ لها**. فلا يُوسَم الإسنادُ مخالفاً لها.
-        $u = User::factory()->create([
+        $u = User::factory()->withoutVerifiedResidence()->create([
             'type' => 2, 'zone_code' => 'UNKNOWN',
             'residence_governorate' => 'زنجبار٩',
         ]);

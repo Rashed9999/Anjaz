@@ -82,6 +82,10 @@ class ZoneAssignmentService
     public function assignFromKyc(User $user, string $declaredCity, ?int $adminId = null): string
     {
         $zone = $this->cityToZone($declaredCity);
+        $declaredGovernorateCode = \App\Support\YemenGovernorates::codeFromName($declaredCity);
+        $declaredGovernorateName = $declaredGovernorateCode === null
+            ? $declaredCity
+            : (\App\Support\YemenGovernorates::name($declaredGovernorateCode) ?? $declaredCity);
 
         $user->zone_code = $zone;
         $user->save();
@@ -89,7 +93,10 @@ class ZoneAssignmentService
         // والنطاقُ ها هنا **مشتقٌّ من الوثيقة نفسِها**، فهو يساويها ولا
         // يخالفها أبداً — ويُمرَّر ليُكتب `kyc_zone` صراحةً لا ليُستنتَج.
         $this->logAssignment($user->id, $zone, 'kyc_verification', [
-            'declared_city' => $declaredCity,
+            // الرمز قانوني ودقيق، والاسم ما يقرأه المدقق في الأرشيف؛
+            // نحتفظ بكليهما ولا نستبدل أحدهما بالآخر.
+            'declared_city' => $declaredGovernorateName,
+            'declared_governorate_code' => $declaredGovernorateCode,
             'admin_id' => $adminId,
         ], kycZone: $zone);
 

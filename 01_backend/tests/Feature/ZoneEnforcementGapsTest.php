@@ -290,7 +290,10 @@ class ZoneEnforcementGapsTest extends TestCase
 
     public function test_missing_residence_blocks_rather_than_guessing(): void
     {
-        $user = User::factory()->create(['type' => 2]);
+        $user = User::factory()->withoutVerifiedResidence()->create([
+            'type' => 2,
+            'residence_governorate' => null,
+        ]);
 
         $result = app(KycGeoConsistencyService::class)->evaluate($user);
 

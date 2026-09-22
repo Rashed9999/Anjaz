@@ -92,4 +92,54 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'فشل الإرسال يبقي المراجعة قابلة لإعادة المحاولة ولا يغلقها كنجاح',
+    (tester) async {
+      var confirmCalls = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: CustomerVerificationReviewScreen(
+              targetTier: 1,
+              rows: const [
+                VerificationReviewRow('محافظة السكن', 'عدن'),
+              ],
+              documents: const [
+                VerificationReviewDocument(
+                  label: 'إثبات محل السكن',
+                  path: '/tmp/amial-review-missing-image.jpg',
+                ),
+              ],
+              onConfirm: () async {
+                confirmCalls += 1;
+                return false;
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.scrollUntilVisible(
+        find.textContaining('أقر بأن البيانات'),
+        250,
+      );
+      await tester.tap(find.byType(Checkbox));
+      await tester.pump();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'تأكيد وإرسال للتوثيق'),
+      );
+      await tester.pump();
+
+      expect(confirmCalls, 1);
+      expect(find.text('مراجعة طلب التوثيق'), findsOneWidget);
+      final retryButton = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'تأكيد وإرسال للتوثيق'),
+      );
+      expect(retryButton.onPressed, isNotNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

@@ -20,8 +20,10 @@ void main() {
     );
 
     expect(
-      profile.contains("title: const Text(\n                        'التوثيق'"),
+      profile.contains("title: Text(\n                        'customer_verification_title'.tr,"),
       isTrue,
+      reason:
+          'مدخل التوثيق في حسابي يجب أن يستخدم المفتاح المترجم نفسه، لا نصاً عربياً ثابتاً.',
     );
     expect(
       profile.contains('CustomerVerificationCenterScreen()'),

@@ -103,8 +103,18 @@ class ResidenceVerificationService
             (string) ($user->verified_residence_governorate ?? '')
         );
 
+        // AMIAL-RESIDENCE-LEGACY-001: الحسابات التي اعتمد سكنها قبل جدول
+        // residence_verifications تحمل القرار على الحساب نفسه. لا نتجاوز
+        // سجلاً أحدث كي لا تتحول قيمة قديمة إلى موافقة صامتة على طلب جديد.
+        $legacyVerified = $latest === null
+            && $verified !== null
+            && !empty($user->residence_verified_at);
+
+        $status = $latest?->status
+            ?? ($legacyVerified ? self::STATUS_VERIFIED : 'not_submitted');
+
         return [
-            'status' => $latest?->status ?? 'not_submitted',
+            'status' => $status,
             'birth_governorate' => $user->birth_governorate ?? null,
             'birth_governorate_name' => YemenGovernorates::name($user->birth_governorate ?? null),
             'declared_governorate' => $latest?->declared_governorate ?? $user->residence_governorate,
