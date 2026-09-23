@@ -103,7 +103,8 @@ Route::middleware('platform:platform.audit.view')->group(function () {
 });
 
 // ============ Security Events ============
-Route::get('/security-events', [SecurityEventsController::class, 'index'])->name('security-events.index');
+Route::get('/security-events', [SecurityEventsController::class, 'index'])
+    ->middleware('platform:platform.security.act')->name('security-events.index');
 
 // ============ AMIAL-SAFE-PAYMENT-001 (v1.1) — Disputes resolution ============
 Route::prefix('safe-payments')->name('safe-payments.')->middleware('amial.idempotency')->group(function () {
@@ -190,64 +191,57 @@ Route::prefix('charity')->name('charity.')
 
 // ============ AMIAL-AML-001 (v1.4) ============
 Route::prefix('aml')->name('aml.')->group(function () {
-    // AMIAL-AML-PANEL-001 — الصفحة. كلّ ما تحتها كان JSON بلا مُشغِّل.
-    Route::get('/', [AdminAmlController::class, 'page'])->name('page');
+    // AMIAL-AML-DOORS-002 — المحقّق يرى الملفات ويصنع مسودات التقرير،
+    // أمّا تغيير قاعدة الرصد أو حالة حساب أو إرسال البلاغ التنظيمي فقرار
+    // امتثال مستقلّ. لا يكفي audit.view لأيٍّ منهما.
+    Route::middleware('platform:platform.aml.investigate')->group(function () {
+        Route::get('/', [AdminAmlController::class, 'page'])->name('page');
+        Route::get('/rules', [AdminAmlController::class, 'indexRules'])->name('rules.index');
+        Route::get('/rules/{id}', [AdminAmlController::class, 'showRule'])->name('rules.show');
+        Route::get('/flagged', [AdminAmlController::class, 'indexFlagged'])->name('flagged.index');
+        Route::get('/flagged/{ulid}', [AdminAmlController::class, 'showFlagged'])
+            ->where('ulid', '[A-Z0-9]{26}')->name('flagged.show');
+        Route::get('/alerts', [AdminAmlController::class, 'indexAlerts'])->name('alerts.index');
+        Route::post('/alerts/{ulid}/resolve', [AdminAmlController::class, 'resolveAlert'])
+            ->where('ulid', '[A-Z0-9]{26}')->name('alerts.resolve');
+        Route::get('/dashboard', [AdminAmlController::class, 'dashboard'])->name('dashboard');
+        Route::get('/large-transactions', [AdminAmlController::class, 'largeTransactions'])->name('large.index');
+        Route::get('/structuring', [AdminAmlController::class, 'structuring'])->name('structuring.index');
+        Route::get('/sanctions', [AdminAmlController::class, 'sanctions'])->name('sanctions.index');
+        Route::get('/investigations', [AdminAmlController::class, 'indexInvestigations'])->name('investigations.index');
+        Route::post('/investigations', [AdminAmlController::class, 'openInvestigation'])->name('investigations.open');
+        Route::get('/investigations/{id}', [AdminAmlController::class, 'showInvestigation'])
+            ->where('id', '[0-9]+')->name('investigations.show');
+        Route::post('/investigations/{id}/evidence', [AdminAmlController::class, 'investigationEvidence'])
+            ->where('id', '[0-9]+')->name('investigations.evidence');
+        Route::post('/investigations/{id}/str', [AdminAmlController::class, 'generateStr'])
+            ->where('id', '[0-9]+')->name('investigations.str');
+        Route::get('/reports', [AdminAmlController::class, 'indexReports'])->name('reports.index');
+        Route::post('/reports/ctr', [AdminAmlController::class, 'generateCtr'])->name('reports.ctr');
+        Route::get('/users/{userId}/profile', [AdminAmlController::class, 'showUserProfile'])
+            ->where('userId', '[0-9]+')->name('users.profile');
+    });
 
-    // Rules
-    Route::get('/rules', [AdminAmlController::class, 'indexRules'])->name('rules.index');
-    Route::get('/rules/{id}', [AdminAmlController::class, 'showRule'])->name('rules.show');
-    Route::post('/rules/{id}/toggle', [AdminAmlController::class, 'toggleRule'])->name('rules.toggle');
-    Route::patch('/rules/{id}', [AdminAmlController::class, 'updateRule'])->name('rules.update');
-
-    // Flagged transactions
-    Route::get('/flagged', [AdminAmlController::class, 'indexFlagged'])->name('flagged.index');
-    Route::get('/flagged/{ulid}', [AdminAmlController::class, 'showFlagged'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('flagged.show');
-    Route::post('/flagged/{ulid}/approve', [AdminAmlController::class, 'approveFlagged'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('flagged.approve');
-    Route::post('/flagged/{ulid}/reject', [AdminAmlController::class, 'rejectFlagged'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('flagged.reject');
-
-    // Alerts
-    Route::get('/alerts', [AdminAmlController::class, 'indexAlerts'])->name('alerts.index');
-    Route::post('/alerts/{ulid}/resolve', [AdminAmlController::class, 'resolveAlert'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('alerts.resolve');
-
-    // AMIAL-AML-DASHBOARD-001 — المؤشّرات والتبويبات ٢ و٣ و٦
-    Route::get('/dashboard', [AdminAmlController::class, 'dashboard'])->name('dashboard');
-    Route::get('/large-transactions', [AdminAmlController::class, 'largeTransactions'])->name('large.index');
-    Route::get('/structuring', [AdminAmlController::class, 'structuring'])->name('structuring.index');
-    Route::get('/sanctions', [AdminAmlController::class, 'sanctions'])->name('sanctions.index');
-    Route::post('/sanctions/{id}/review', [AdminAmlController::class, 'reviewSanction'])
-        ->where('id', '[0-9]+')->name('sanctions.review');
-
-    // AMIAL-AML-INVESTIGATION-001 — مركز التحقيقات (الفصل ١٠، التبويب ٧)
-    Route::get('/investigations', [AdminAmlController::class, 'indexInvestigations'])->name('investigations.index');
-    Route::post('/investigations', [AdminAmlController::class, 'openInvestigation'])->name('investigations.open');
-    Route::get('/investigations/{id}', [AdminAmlController::class, 'showInvestigation'])
-        ->where('id', '[0-9]+')->name('investigations.show');
-    Route::post('/investigations/{id}/evidence', [AdminAmlController::class, 'investigationEvidence'])
-        ->where('id', '[0-9]+')->name('investigations.evidence');
-    Route::post('/investigations/{id}/action', [AdminAmlController::class, 'investigationAction'])
-        ->where('id', '[0-9]+')->name('investigations.action');
-    Route::post('/investigations/{id}/close', [AdminAmlController::class, 'closeInvestigation'])
-        ->where('id', '[0-9]+')->name('investigations.close');
-    Route::post('/investigations/{id}/reopen', [AdminAmlController::class, 'reopenInvestigation'])
-        ->where('id', '[0-9]+')->name('investigations.reopen');
-    Route::post('/investigations/{id}/str', [AdminAmlController::class, 'generateStr'])
-        ->where('id', '[0-9]+')->name('investigations.str');
-
-    // AMIAL-AML-REGREPORT-001 — التقارير التنظيمية (الفصل ١٠، التبويب ٨)
-    Route::get('/reports', [AdminAmlController::class, 'indexReports'])->name('reports.index');
-    Route::post('/reports/ctr', [AdminAmlController::class, 'generateCtr'])->name('reports.ctr');
-    Route::post('/reports/{id}/submit', [AdminAmlController::class, 'submitReport'])
-        ->where('id', '[0-9]+')->name('reports.submit');
-
-    // User risk profiles
-    Route::get('/users/{userId}/profile', [AdminAmlController::class, 'showUserProfile'])
-        ->where('userId', '[0-9]+')->name('users.profile');
-    Route::post('/users/{userId}/override', [AdminAmlController::class, 'setUserOverride'])
-        ->where('userId', '[0-9]+')->name('users.override');
+    Route::middleware('platform:platform.aml.decide')->group(function () {
+        Route::post('/rules/{id}/toggle', [AdminAmlController::class, 'toggleRule'])->name('rules.toggle');
+        Route::patch('/rules/{id}', [AdminAmlController::class, 'updateRule'])->name('rules.update');
+        Route::post('/flagged/{ulid}/approve', [AdminAmlController::class, 'approveFlagged'])
+            ->where('ulid', '[A-Z0-9]{26}')->name('flagged.approve');
+        Route::post('/flagged/{ulid}/reject', [AdminAmlController::class, 'rejectFlagged'])
+            ->where('ulid', '[A-Z0-9]{26}')->name('flagged.reject');
+        Route::post('/sanctions/{id}/review', [AdminAmlController::class, 'reviewSanction'])
+            ->where('id', '[0-9]+')->name('sanctions.review');
+        Route::post('/investigations/{id}/action', [AdminAmlController::class, 'investigationAction'])
+            ->where('id', '[0-9]+')->name('investigations.action');
+        Route::post('/investigations/{id}/close', [AdminAmlController::class, 'closeInvestigation'])
+            ->where('id', '[0-9]+')->name('investigations.close');
+        Route::post('/investigations/{id}/reopen', [AdminAmlController::class, 'reopenInvestigation'])
+            ->where('id', '[0-9]+')->name('investigations.reopen');
+        Route::post('/reports/{id}/submit', [AdminAmlController::class, 'submitReport'])
+            ->where('id', '[0-9]+')->name('reports.submit');
+        Route::post('/users/{userId}/override', [AdminAmlController::class, 'setUserOverride'])
+            ->where('userId', '[0-9]+')->name('users.override');
+    });
 });
 
 // ============ AMIAL-CUSTOMER-CENTER-001 — مركز العملاء (الفصل ٠٢) ============
@@ -508,7 +502,7 @@ Route::prefix('catalog')->name('catalog.')->middleware('platform:platform.settin
 // AMIAL-WA-LIMIT-001 — سقفُ المال عبر بوت واتساب.
 // الصلاحيّة `platform.money.move`: رفعُ السقف يُحرّك مالاً بالوكالة —
 // لا يُحرّكه بنفسه، لكنّه يسمح بحركةٍ كانت ممنوعة.
-Route::prefix('whatsapp')->name('whatsapp.')->middleware('platform:platform.money.move')
+Route::prefix('whatsapp')->name('whatsapp.')->middleware('platform:platform.settings.update')
     ->group(function () {
         $wl = App\Http\Controllers\Admin\WhatsappLimitController::class;
         Route::get('/limits', [$wl, 'page'])->name('limits.page');
@@ -531,15 +525,17 @@ Route::prefix('fx')->name('fx.')->group(function () {
 // AMIAL-MERCHANT-PAY-002 — مركز فواتير التجّار.
 // يُقرأ من `payment_requests` نفسِه الذي يكتب فيه التطبيق — جذرٌ واحدٌ
 // يُقرأ من زاويتين، لا حقيقتان تفترقان.
-Route::prefix('invoices')->name('invoices.')->middleware('platform:platform.money.move')
-    ->group(function () {
+Route::prefix('invoices')->name('invoices.')->group(function () {
         $ic = App\Http\Controllers\Admin\MerchantInvoiceCenterController::class;
-        Route::get('/', [$ic, 'page'])->name('page');
-        Route::get('/stats', [$ic, 'stats'])->name('stats');
-        Route::get('/rows', [$ic, 'rows'])->name('rows');
-        Route::get('/export', [$ic, 'export'])->name('export');
-        Route::get('/{id}', [$ic, 'show'])->where('id', '[0-9]+')->name('show');
-        Route::post('/{id}/cancel', [$ic, 'cancel'])->where('id', '[0-9]+')->name('cancel');
+        Route::middleware('platform:platform.money.view')->group(function () use ($ic) {
+            Route::get('/', [$ic, 'page'])->name('page');
+            Route::get('/stats', [$ic, 'stats'])->name('stats');
+            Route::get('/rows', [$ic, 'rows'])->name('rows');
+            Route::get('/export', [$ic, 'export'])->name('export');
+            Route::get('/{id}', [$ic, 'show'])->where('id', '[0-9]+')->name('show');
+        });
+        Route::post('/{id}/cancel', [$ic, 'cancel'])->where('id', '[0-9]+')
+            ->middleware('platform:platform.money.move')->name('cancel');
     });
 
 Route::prefix('otp')->name('otp.')->middleware('platform:platform.settings.update')
@@ -565,16 +561,20 @@ Route::prefix('otp')->name('otp.')->middleware('platform:platform.settings.updat
 Route::prefix('partner-settlements')->name('partner-settlements.')->middleware('amial.idempotency')->group(function () {
     $st = App\Http\Controllers\Api\V1\Amial\SettlementController::class;
 
-    Route::get('/', [$st, 'page'])->name('page');
-    Route::get('/list', [$st, 'index'])->name('list');
-    Route::get('/dashboard', [$st, 'dashboard'])->name('dashboard');
-    Route::get('/{id}', [$st, 'show'])->where('id', '[0-9]+')->name('show');
-    Route::post('/{id}/submit', [$st, 'submit'])->where('id', '[0-9]+')->name('submit');
-    Route::post('/{id}/approve', [$st, 'approve'])->where('id', '[0-9]+')->name('approve');
-    Route::post('/{id}/reject', [$st, 'reject'])->where('id', '[0-9]+')->name('reject');
-    Route::post('/{id}/process', [$st, 'process'])->where('id', '[0-9]+')->name('process');
-    Route::post('/{id}/complete', [$st, 'complete'])->where('id', '[0-9]+')->name('complete');
-    Route::post('/{id}/cancel', [$st, 'cancel'])->where('id', '[0-9]+')->name('cancel');
+    Route::middleware('platform:platform.money.view')->group(function () use ($st) {
+        Route::get('/', [$st, 'page'])->name('page');
+        Route::get('/list', [$st, 'index'])->name('list');
+        Route::get('/dashboard', [$st, 'dashboard'])->name('dashboard');
+        Route::get('/{id}', [$st, 'show'])->where('id', '[0-9]+')->name('show');
+    });
+    Route::middleware('platform:platform.settlements.decide')->group(function () use ($st) {
+        Route::post('/{id}/submit', [$st, 'submit'])->where('id', '[0-9]+')->name('submit');
+        Route::post('/{id}/approve', [$st, 'approve'])->where('id', '[0-9]+')->name('approve');
+        Route::post('/{id}/reject', [$st, 'reject'])->where('id', '[0-9]+')->name('reject');
+        Route::post('/{id}/process', [$st, 'process'])->where('id', '[0-9]+')->name('process');
+        Route::post('/{id}/complete', [$st, 'complete'])->where('id', '[0-9]+')->name('complete');
+        Route::post('/{id}/cancel', [$st, 'cancel'])->where('id', '[0-9]+')->name('cancel');
+    });
 });
 
 // ============ AMIAL-KYC-PANEL-001 — مراجعة مستندات الهوية ============
@@ -690,11 +690,13 @@ Route::prefix('agents')->name('agents.')->group(function () {
     Route::middleware('platform:platform.money.move')
         ->put('/{userId}/limits', [$anc, 'updateLimits'])->name('limits');
 });
-// AMIAL-OPERATOR-RBAC-003: اعتمادُ تسويةٍ تحريكُ مالٍ حقيقيّ.
-Route::prefix('settlements')->name('settlements.')->middleware(['platform:platform.money.move', 'amial.idempotency'])
+// AMIAL-MONEY-KEY-SPLIT-001: القراءة المالية لا تفتح اعتماد التسوية.
+Route::prefix('settlements')->name('settlements.')->middleware('amial.idempotency')
     ->group(function () {
-    Route::get('/pending', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'pendingSettlements'])->name('pending');
-    Route::post('/{ulid}/approve', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'approveSettlement'])->name('approve');
+    Route::get('/pending', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'pendingSettlements'])
+        ->middleware('platform:platform.money.view')->name('pending');
+    Route::post('/{ulid}/approve', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'approveSettlement'])
+        ->middleware('platform:platform.settlements.decide')->name('approve');
 });
 
 // ============ AMIAL-MERCHANT-RISK-001 (v2.10) ============
@@ -762,9 +764,12 @@ Route::post('/system/errors/{id}', [\App\Http\Controllers\Admin\SystemHealthCont
 
 // ============ AMIAL-SENTINEL-001 — Security Sentinel Dashboard ============
 Route::prefix('sentinel')->name('sentinel.')->group(function () {
-    Route::get('/', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'index'])->name('index');
-    Route::post('/block', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'block'])->name('block');
-    Route::post('/unblock', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'unblock'])->name('unblock');
+    Route::get('/', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'index'])
+        ->middleware('platform:platform.security.act')->name('index');
+    Route::post('/block', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'block'])
+        ->middleware('platform:platform.security.act')->name('block');
+    Route::post('/unblock', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'unblock'])
+        ->middleware('platform:platform.security.act')->name('unblock');
 });
 
 // ============ AMIAL-EXEC-DASHBOARD-001 — Executive Dashboard ============
@@ -784,7 +789,7 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     // AMIAL-OPERATOR-RBAC-003: الصفحة لا الفعلَ وحده — صفحةٌ تعرض أرصدة
     // المنصّة وحركتها تُسرّب ما لا يجوز، وإن كان زرُّها محروساً.
     Route::get('/finance', [$hc, 'finance'])
-        ->middleware('platform:platform.money.move')->name('finance');
+        ->middleware('platform:platform.money.view')->name('finance');
 
     // JSON قوائم
     Route::get('/{slug}/users.json', [$hc, 'usersJson'])
@@ -830,9 +835,11 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->where('id', '[0-9]+')
         ->middleware('platform:platform.approvals.decide')
         ->name('users.kyc');
-    Route::post('/transfer', [$hc, 'transfer'])->name('transfer');
+    Route::post('/transfer', [$hc, 'transfer'])
+        ->middleware('platform:platform.treasury.issue')->name('transfer');
     Route::post('/agents/{id}/credit', [$hc, 'agentCredit'])
-        ->where('id', '[0-9]+')->name('agents.credit');
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.treasury.issue')->name('agents.credit');
 
     // AMIAL-AGENT-SUPERVISION-001 — إشراف الإدارة على شبكة شركات الصرافة
     $asc = App\Http\Controllers\Admin\AgentSupervisionController::class;
@@ -848,18 +855,21 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     // AMIAL-DAILY-SETTLEMENT-001 — إقفال يوم الشبكة والتحوّل ورقاً/رصيداً
     Route::get('/agents/daily.json', [$asc, 'dailyBoard'])->name('agents.daily');
     Route::get('/agents/daily/{ulid}.json', [$asc, 'dailyOne'])->name('agents.daily.one');
-    Route::post('/agents/daily/{ulid}/accept', [$asc, 'dailyAccept'])->name('agents.daily.accept');
-    Route::post('/agents/daily/{ulid}/reject', [$asc, 'dailyReject'])->name('agents.daily.reject');
-    Route::post('/agents/daily/unlock', [$asc, 'dailyUnlock'])->name('agents.daily.unlock');
+    Route::post('/agents/daily/{ulid}/accept', [$asc, 'dailyAccept'])
+        ->middleware('platform:platform.settlements.decide')->name('agents.daily.accept');
+    Route::post('/agents/daily/{ulid}/reject', [$asc, 'dailyReject'])
+        ->middleware('platform:platform.settlements.decide')->name('agents.daily.reject');
+    Route::post('/agents/daily/unlock', [$asc, 'dailyUnlock'])
+        ->middleware('platform:platform.settlements.decide')->name('agents.daily.unlock');
 
     // المالية
     // AMIAL-OPERATOR-RBAC-003: شحنُ محفظة وكيلٍ من المنصّة.
     Route::post('/finance/topup', [$hc, 'adminTopup'])
-        ->middleware('platform:platform.money.move')->name('finance.topup');
+        ->middleware('platform:platform.treasury.issue')->name('finance.topup');
     Route::get('/finance/stats.json', [$hc, 'financeStats'])
-        ->middleware('platform:platform.money.move')->name('finance.stats');
+        ->middleware('platform:platform.money.view')->name('finance.stats');
     Route::get('/finance/feed.json', [$hc, 'financeFeed'])
-        ->middleware('platform:platform.money.move')->name('finance.feed');
+        ->middleware('platform:platform.money.view')->name('finance.feed');
 
     // لوحة الاشتراكات (الباقات) — حقيقية عبر SubscriptionService
     Route::get('/subscriptions', [$hc, 'subscriptions'])->name('subscriptions');
@@ -898,17 +908,17 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
 
     // لوحة التسويات — تسويات الوكلاء (اعتماد/رفض مع دفتر القيود)
     Route::get('/settlements', [$hc, 'settlements'])
-        ->middleware('platform:platform.money.move')->name('settlements');
+        ->middleware('platform:platform.money.view')->name('settlements');
     // والـJSON كذلك: حراسةُ الصفحة وحدها تترك البيانات مفتوحةً لمن يعرف
     // عنوانها — وهو أوّل ما يُجرَّب.
     Route::get('/settlements/list.json', [$hc, 'settlementsJson'])
-        ->middleware('platform:platform.money.move')->name('settlements.list');
+        ->middleware('platform:platform.money.view')->name('settlements.list');
     Route::post('/settlements/{ulid}/approve', [$hc, 'settlementApprove'])
         ->where('ulid', '[A-Z0-9]{26}')
-        ->middleware('platform:platform.money.move')->name('settlements.approve');
+        ->middleware('platform:platform.settlements.decide')->name('settlements.approve');
     Route::post('/settlements/{ulid}/reject', [$hc, 'settlementReject'])
         ->where('ulid', '[A-Z0-9]{26}')
-        ->middleware('platform:platform.money.move')->name('settlements.reject');
+        ->middleware('platform:platform.settlements.decide')->name('settlements.reject');
 
     // لوحة الموظفين — طاقم نقاط بيع التجّار (تفعيل/تعطيل)
     Route::get('/staff', [$hc, 'staff'])->name('staff');
