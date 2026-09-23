@@ -73,6 +73,19 @@ class UnifiedVerificationCenterTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_tier_three_cannot_look_ready_without_verified_residence(): void
+    {
+        // الحارس المرئي يجب أن يتطابق مع حارس القرار الفعلي.
+        $source = (string) file_get_contents(
+            app_path('Services/Admin/KycEvidenceService.php')
+        );
+        $this->assertStringContainsString(
+            'app(ResidenceVerificationService::class)->assertVerified($user)',
+            $source,
+            'المراجع يجب أن يرى نقص إثبات السكن قبل اعتماد المستوى الثالث'
+        );
+    }
+
     public function test_reviewing_documents_still_requires_the_existing_write_permission(): void
     {
         $staff = $this->reviewer(['platform.customers.kyc.view']);

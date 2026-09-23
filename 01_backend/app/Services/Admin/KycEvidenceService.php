@@ -6,6 +6,7 @@ use App\Models\KycDocument;
 use App\Models\User;
 use App\Services\Kyc\KycOwnershipGuardService;
 use App\Services\Kyc\KycPrivacyService;
+use App\Services\Kyc\ResidenceVerificationService;
 use App\Services\Kyc\LegalNameService;
 use App\Services\KycDocumentService;
 use App\Support\YemenGovernorates;
@@ -146,6 +147,16 @@ class KycEvidenceService
 
         if ($governorate === null) {
             $out[] = 'محافظة السكن غير محدَّدة — اخترها من البطاقة أوّلاً.';
+        }
+
+        // المركز يعرض شرط الإقامة الذي يتحقق منه قرار Tier 3 نفسه.
+        // لا نترك زر الاعتماد مضاءً ثم نرفضه خفيّاً في طبقة الخدمة.
+        if ($tier >= 3) {
+            try {
+                app(ResidenceVerificationService::class)->assertVerified($user);
+            } catch (\DomainException $e) {
+                $out[] = 'إثبات محل الإقامة الحالي لم يُعتمد بعد — اعتمد السكن قبل ترقية المستوى الثالث.';
+            }
         }
 
         if ($tier >= 3 && ($completeness['missing_fields'] ?? []) !== []) {

@@ -73,8 +73,8 @@ class CustomerUnifiedOperationsCenterGuardTest extends TestCase
         foreach ([
             'admin.amial.hub.customers',
             'admin.amial.customer-systems.index',
-            'admin.amial.kyc.page',
             'admin.amial.kyc.changes.page',
+            'admin.amial.hub.verification',
         ] as $route) {
             $this->assertStringNotContainsString(
                 "route('{$route}'",
@@ -90,14 +90,19 @@ class CustomerUnifiedOperationsCenterGuardTest extends TestCase
             resource_path('views/admin-views/amial/partials/_sidebar.blade.php')
         );
 
-        $this->assertStringContainsString(
-            "route('admin.amial.hub.verification')",
-            $sidebar,
-            'طابور اعتماد عميل/وكيل/تاجر اختفى أثناء دمج شاشات العميل'
+        // بعد دمج العميل والتاجر والوكيل، لم يعد قرارهم في صفحة قديمة ثانية.
+        $this->assertSame(
+            1,
+            substr_count($sidebar, "route('admin.amial.kyc.page')"),
+            'مركز التحقق والهوية يجب أن يكون باب المراجعة الوحيد في الشريط'
+        );
+        $center = (string) file_get_contents(
+            app_path('Http/Controllers/Admin/UnifiedVerificationCenterController.php')
         );
         $this->assertStringContainsString(
-            'اعتماد الحسابات الجديدة (عميل/وكيل/تاجر)',
-            $sidebar
+            '[CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE]',
+            $center,
+            'ملف التحقق الموحّد يجب أن يشمل العملاء والوكلاء والتجار'
         );
     }
 }
