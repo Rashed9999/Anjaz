@@ -309,7 +309,11 @@
                 '<div class="alert alert-secondary">لم يرفع العميل مستندات في سجل التوثيق الحديث.</div>') +
             '<div id="vc-document-view" class="mt-3"></div>' +
             blockers((ev.ownership || {}).blockers, 'إثبات ملكية الهوية', 'warning') +
-            '</section>' + decisionCard(data);
+            '</section>' +
+            '<section class="vc-section" id="vc-ai"><h5>✨ المساعد الذكي للفحص</h5>' +
+            '<div class="small text-muted mb-2">تحليل استشاري مشفر؛ لا يعتمد الهوية ولا يرفضها.</div>' +
+            '<div id="vc-ai-panel" class="small">تحميل أحدث تقرير...</div></section>' +
+            decisionCard(data);
     }
 
     async function openCase(id) {
@@ -321,6 +325,11 @@
             const response = await req(ROUTES.account + '/' + encodeURIComponent(id));
             if (version !== loadVersion) return;
             renderCase(response.data);
+            if (response.data.permissions && response.data.permissions.view_documents && !response.data.account.restricted) {
+                await loadAi(response.data.account.id, version);
+            } else if (el('vc-ai-panel')) {
+                el('vc-ai-panel').textContent = 'هذه الحالة محمية؛ لا تُرسل وثائقها لمزود خارجي.';
+            }
         } catch (error) {
             if (version !== loadVersion) return;
             el('vc-detail').innerHTML = '<div class="alert alert-danger">' + esc(error.message) + '</div>';
@@ -380,6 +389,66 @@
         }
     }
 
+
+    function aiReportCard(state) {
+        const last = state.latest || null;
+        const canRun = !!state.can_run && current && current.permissions.review_documents;
+        let out = '';
+        if (!state.configured) {
+            out += '<div class="alert alert-secondary py-2">المساعد الخارجي غير مفعل بعد. ضبط المفتاح والنموذج والتفعيل يتم من الخادم فقط.</div>';
+        } else {
+            out += '<div class="alert alert-info py-2">الاستدعاء يدوي ومحدود يومياً، ونتائج التكرار المحلية لا تعتمد على المزود الخارجي. '
+                + (state.image_analysis ? 'فحص صور المستندات مفعل.' : 'إرسال صور المستندات غير مفعل؛ يُحلل المساعد بيانات القراءة فقط.') + '</div>';
+        }
+        if (canRun) {
+            out += '<button type="button" class="btn btn-primary btn-sm mb-3" data-action="ai-run">✨ فحص الحالة الآن</button>';
+        }
+        if (!last) {
+            out += '<div class="vc-sub">لم يُنشأ تقرير ذكاء اصطناعي لهذه الحالة بعد.</div>';
+            return out;
+        }
+        const report = last.report || {};
+        out += '<div class="vc-doc"><div class="d-flex justify-content-between flex-wrap gap-1 mb-2">'
+            + '<strong>آخر تقرير استشاري</strong><span class="vc-badge">' + esc(last.created_at || '—') + '</span></div>'
+            + '<p>' + esc(report.overview || 'لا يوجد ملخص') + '</p>'
+            + blockers((report.findings || []).map(f => (f.document_id ? 'المستند #' + f.document_id + ': ' : '') + f.text),
+                'ملاحظات تحتاج فحص الموظف', 'warning')
+            + blockers(report.human_review || [], 'إجراءات المراجع المقترحة', 'info')
+            + '<p class="vc-sub mb-0">النموذج: ' + esc(last.model) + ' · '
+            + esc(report.disclaimer || 'تقرير مساعد لا يُصدر قرارات.') + '</p></div>';
+        return out;
+    }
+
+    async function loadAi(id, version) {
+        try {
+            const response = await req(ROUTES.account + '/' + encodeURIComponent(id) + '/ai');
+            if (version !== loadVersion || !current || Number(current.account.id) !== Number(id)) return;
+            const panel = el('vc-ai-panel');
+            if (panel) panel.innerHTML = aiReportCard(response.data || {});
+        } catch (error) {
+            if (version === loadVersion && el('vc-ai-panel')) {
+                el('vc-ai-panel').innerHTML = '<div class="alert alert-warning py-2">' + esc(error.message) + '</div>';
+            }
+        }
+    }
+
+    async function runAi(button) {
+        if (!current || !current.permissions.review_documents || current.account.restricted) return;
+        const accountId = current.account.id;
+        if (!window.confirm('هل تريد إرسال بيانات هذا الطلب إلى مزود الذكاء الاصطناعي المحمي وإعداد تقرير استشاري؟ القرار النهائي للموظف فقط.')) return;
+        button.disabled = true;
+        notice('يجري الفحص الاستشاري؛ لا تغادر ملف الحساب...', 'info');
+        try {
+            const response = await req(ROUTES.account + '/' + accountId + '/ai', {});
+            notice(response.message || 'تقرير المساعد جاهز للمراجعة.', 'success');
+            await loadAi(accountId, loadVersion);
+        } catch (error) {
+            notice(error.message, 'warning');
+        } finally {
+            button.disabled = false;
+        }
+    }
+
     async function act(button) {
         if (!current) return;
         const action = button.dataset.action;
@@ -387,6 +456,7 @@
         if (button.disabled) return;
         let url = null, body = null;
         if (action === 'doc-view') return viewDocument(id);
+        if (action === 'ai-run') return runAi(button);
         if (action === 'doc-approve') {
             if (!current.permissions.review_documents || !window.confirm('هل راجعت المستند وتريد اعتماده؟ هذا لا يعتمد الحساب النهائي.')) return;
             const expiry = window.prompt('تاريخ انتهاء الوثيقة YYYY-MM-DD — اتركه فارغًا إن لم ينطبق', '');

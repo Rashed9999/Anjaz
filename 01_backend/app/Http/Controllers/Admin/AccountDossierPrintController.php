@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Kyc\KycPrivacyService;
+use DomainException;
 use App\Services\Admin\AccountDossierPrintService;
 use App\Services\PiiAccessAuditService;
 use Illuminate\Http\Request;
@@ -41,6 +43,13 @@ class AccountDossierPrintController extends Controller
     public function show(Request $request, int $user)
     {
         $subject = User::findOrFail($user);
+        $reviewer = $request->user();
+        abort_unless($reviewer->hasPlatformPermission('platform.customers.freeze'), 403);
+        try {
+            app(KycPrivacyService::class)->assertReviewerAccess($subject, $reviewer, false);
+        } catch (DomainException) {
+            abort(403, 'هذه الحالة تتطلب تصريح مراجعة مقيدة.');
+        }
 
         $this->pii->logAccess(
             $request->user()->id, 'user', $subject->id,

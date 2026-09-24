@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\RegistrationDossier;
+use App\Services\Kyc\KycPrivacyService;
+use App\Models\User;
+use DomainException;
 use App\Services\EncryptedFileStorage;
 use App\Services\PiiAccessAuditService;
 use App\Services\RegistrationDossierPdfService;
@@ -41,6 +44,7 @@ class RegistrationDossierController extends Controller
     public function show(Request $request, string $reference): JsonResponse
     {
         $dossier = RegistrationDossier::where('reference', $reference)->firstOrFail();
+        $this->assertDossierAccess($dossier, $request->user());
         $this->pii->logAccess($request->user()->id, 'registration_dossier', $dossier->id, 'registration_payload', 'view', 'فتح ملف تسجيل');
         return response()->json(['success' => true, 'data' => $this->summary($dossier) + ['payload' => $dossier->payload_encrypted]]);
     }
@@ -48,12 +52,13 @@ class RegistrationDossierController extends Controller
     public function pdf(Request $request, string $reference)
     {
         $dossier = RegistrationDossier::where('reference', $reference)->firstOrFail();
+        $this->assertDossierAccess($dossier, $request->user(), true);
         $this->pii->logAccess($request->user()->id, 'registration_dossier', $dossier->id, 'registration_pdf', 'export', 'طباعة ملف تسجيل');
         // **والطولُ يُحسب من البايتات المُرسَلة نفسِها** — لا بنداءٍ ثانٍ
         // إلى المُصيِّر. فبلا `Content-Length` لا يميّز المتصفّحُ ملفّاً
         // اكتمل من ملفٍّ انقطع في منتصفه: يُحفَظ نصفُ ملفٍّ ويُفتح فيُرى
         // تالفاً بلا سببٍ ظاهر. ومعلَنٌ يفترق عن المُرسَل هو العطلُ نفسُه.
-        $bytes = $this->pdf->render($dossier);
+        $bytes = $this->pdf->render($dossier, $request->user());
 
         return response($bytes, 200, [
             'Content-Type' => 'application/pdf',
@@ -65,9 +70,27 @@ class RegistrationDossierController extends Controller
     public function paper(Request $request, string $reference)
     {
         $dossier = RegistrationDossier::where('reference', $reference)->firstOrFail();
+        $this->assertDossierAccess($dossier, $request->user());
         abort_unless($dossier->paper_form_encrypted_path, 404);
         $this->pii->logAccess($request->user()->id, 'registration_dossier', $dossier->id, 'signed_paper_form', 'view', 'فتح نموذج ورقي مؤرشف');
         return response(app(EncryptedFileStorage::class)->decryptToBinary($dossier->paper_form_encrypted_path), 200, ['Content-Type' => $dossier->paper_form_mime, 'Content-Disposition' => 'inline; filename="signed-registration-'.$dossier->reference.'"']);
+    }
+
+
+    /** أرشيف الهوية يحتوي بيانات حساسة؛ لا يُفتح من قائمة التسجيل وحدها. */
+    private function assertDossierAccess(RegistrationDossier $dossier, User $viewer, bool $images = false): void
+    {
+        if (!$dossier->subject_user_id) return;
+        $subject = User::find($dossier->subject_user_id);
+        if (!$subject) return;
+        try {
+            app(KycPrivacyService::class)->assertReviewerAccess($subject, $viewer, false);
+        } catch (DomainException) {
+            abort(403, 'ملف العميل ضمن المراجعة المقيدة.');
+        }
+        if ($images && in_array($dossier->source, RegistrationDossier::VERIFICATION_SOURCES, true)) {
+            abort_unless($viewer->hasPlatformPermission('platform.customers.freeze'), 403);
+        }
     }
 
     private function summary(RegistrationDossier $d): array

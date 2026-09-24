@@ -3,11 +3,14 @@
 namespace App\Services\Admin;
 
 use App\Models\KycDocument;
+use App\Models\KycAiReview;
 use App\Models\RegistrationDossier;
 use App\Models\User;
 use App\Services\KycDocumentService;
 use App\Support\ArabicPdf;
 use App\Support\YemenGovernorates;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * AMIAL-ACCOUNT-PRINT-001 — **الأرشيفُ مبنيٌّ، ولا زرَّ يطبعه من الحساب.**
@@ -94,6 +97,15 @@ class AccountDossierPrintService
             ->values()
             ->all();
 
+        $aiReview = Schema::hasTable('kyc_ai_reviews')
+            ? KycAiReview::where('user_id', $user->id)->where('status', 'complete')->latest('id')->first()
+            : null;
+        $reviewCase = Schema::hasTable('kyc_verification_cases')
+            ? DB::table('kyc_verification_cases')->where('user_id', $user->id)->first()
+            : null;
+        $committeeReviewer = $reviewCase && $reviewCase->reviewed_by
+            ? User::find((int) $reviewCase->reviewed_by) : null;
+
         return [
             'user' => $user,
             'identity' => $this->identity($user),
@@ -101,7 +113,19 @@ class AccountDossierPrintService
             'payload' => $dossier ? (array) $dossier->payload_encrypted : [],
             'verification_dossiers' => $verificationDossiers,
             'evidence' => $this->evidence->for($user, 2, $reviewer),
-            'images' => $this->images($user),
+            'images' => $this->images($user, $reviewer),
+            'ai_review' => $aiReview ? [
+                'model' => $aiReview->model,
+                'created_at' => $aiReview->created_at?->format('Y-m-d H:i'),
+                'report' => (array) $aiReview->report_encrypted,
+            ] : null,
+            'committee' => $reviewCase ? [
+                'status' => (string) ($reviewCase->status ?? ''),
+                'reviewer' => $committeeReviewer
+                    ? trim((string) ($committeeReviewer->f_name.' '.$committeeReviewer->l_name)) : '—',
+                'reviewed_at' => (string) ($reviewCase->reviewed_at ?? ''),
+                'reason' => (string) ($reviewCase->decision_reason ?? ''),
+            ] : null,
             'printed_at' => now()->format('Y-m-d H:i'),
             'printed_by' => $reviewer
                 ? (trim((string) ($reviewer->f_name.' '.$reviewer->l_name)) ?: (string) $reviewer->phone)
@@ -167,7 +191,7 @@ class AccountDossierPrintService
      *
      * @return array<int,array<string,mixed>>
      */
-    private function images(User $user): array
+    private function images(User $user, ?User $reviewer = null): array
     {
         $out = [];
 
@@ -184,6 +208,13 @@ class AccountDossierPrintService
                 'data_uri' => null,
                 'note' => null,
             ];
+
+            if ($doc->doc_type === KycDocument::TYPE_SELFIE
+                && (!$reviewer || !$reviewer->hasPlatformPermission('platform.customers.kyc.biometric.view'))) {
+                $row['note'] = 'الصورة الشخصية محجوبة؛ تحتاج صلاحية البيانات البيومترية المستقلة.';
+                $out[] = $row;
+                continue;
+            }
 
             $mime = (string) ($doc->original_mime ?: 'image/jpeg');
 

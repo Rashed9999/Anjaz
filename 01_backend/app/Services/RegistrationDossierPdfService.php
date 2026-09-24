@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\KycDocument;
 use App\Models\RegistrationDossier;
+use App\Models\User;
 use App\Support\ArabicPdf;
 
 class RegistrationDossierPdfService
@@ -14,19 +15,19 @@ class RegistrationDossierPdfService
         private readonly KycDocumentService $documents,
     ) {}
 
-    public function render(RegistrationDossier $dossier): string
+    public function render(RegistrationDossier $dossier, ?User $reviewer = null): string
     {
         $payload = (array) $dossier->payload_encrypted;
 
         return ArabicPdf::render(view('admin-views.amial.registration-dossiers.pdf', [
             'dossier' => $dossier,
             'payload' => $payload,
-            'verification_images' => $this->verificationImages($dossier, $payload),
+            'verification_images' => $this->verificationImages($dossier, $payload, $reviewer),
         ])->render(), ['format' => 'A4', 'margin' => 12]);
     }
 
     /** @return array<int,array<string,mixed>> */
-    private function verificationImages(RegistrationDossier $dossier, array $payload): array
+    private function verificationImages(RegistrationDossier $dossier, array $payload, ?User $reviewer): array
     {
         if (! in_array($dossier->source, RegistrationDossier::VERIFICATION_SOURCES, true)) {
             return [];
@@ -41,6 +42,12 @@ class RegistrationDossierPdfService
 
         $out = [];
         foreach ($definitions as $field => $label) {
+            if ($field === 'selfie_document_id'
+                && (!$reviewer || !$reviewer->hasPlatformPermission('platform.customers.kyc.biometric.view'))) {
+                $out[] = ['label' => $label, 'data_uri' => null,
+                    'note' => 'الصورة الشخصية محجوبة بصلاحية مستقلة.'];
+                continue;
+            }
             $id = (int) ($payload[$field] ?? 0);
             if ($id <= 0) {
                 continue;

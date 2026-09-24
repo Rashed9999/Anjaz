@@ -142,6 +142,39 @@ td,th{border:1px solid #cbd5e1;padding:5px;text-align:right;width:25%}
   </tr>
 </tbody></table>
 
+<h3>تقرير المساعد الذكي — استشاري فقط</h3>
+@if($ai_review)
+  <p class="muted">تاريخ التحليل: {{ $ai_review['created_at'] }} · النموذج: {{ $ai_review['model'] }}</p>
+  <p>{{ $ai_review['report']['overview'] ?? 'لم يقدم ملخصاً.' }}</p>
+  @if(count($ai_review['report']['findings'] ?? []))
+    <table><tbody>
+      @foreach($ai_review['report']['findings'] as $item)
+        <tr><th>{{ !empty($item['document_id']) ? 'مستند #'.$item['document_id'] : 'ملاحظة عامة' }}</th><td>{{ $item['text'] ?? '' }}</td></tr>
+      @endforeach
+    </tbody></table>
+  @endif
+  @if(count($ai_review['report']['human_review'] ?? []))
+    <h3>خطوات المراجعة البشرية المقترحة</h3>
+    @foreach($ai_review['report']['human_review'] as $step)<p>• {{ $step }}</p>@endforeach
+  @endif
+  <p class="muted">التحليل الآلي لا يثبت أصالة الوثيقة ولا يصدر قرار اعتماد أو رفض؛ تظل الأدلة الأصلية وقرار اللجنة المرجع المعتمد.</p>
+@else
+  <p class="muted">لا يوجد تقرير ذكاء اصطناعي لهذا الحساب. الفحص الآلي ليس شرطاً لإصدار قرار المراجع البشري.</p>
+@endif
+
+<h3>محضر لجنة التحقق والهوية</h3>
+@if($committee)
+  <table><tbody>
+    <tr><th>آخر حالة للملف</th><td>{{ $committee['status'] === 'verified' ? 'معتمد بقرار بشري' : ($committee['status'] === 'rejected' ? 'مرفوض بقرار بشري' : 'قيد الفحص') }}</td>
+        <th>المراجع</th><td>{{ $committee['reviewer'] }}</td></tr>
+    <tr><th>تاريخ القرار</th><td>{{ $committee['reviewed_at'] ?: 'لا قرار مسجل' }}</td>
+        <th>ملاحظة القرار</th><td>{{ $committee['reason'] ?: '—' }}</td></tr>
+  </tbody></table>
+@else
+  <p class="muted">لم يصدر محضر قرار نهائي في سجل لجنة التحقق لهذا الحساب.</p>
+@endif
+<p class="muted">نسخة إدارية وقت الطباعة وليست وثيقة اعتماد مستقلة أو أرشيفاً مختوماً غير قابل للتغيير.</p>
+
 <h3>صور الوثائق</h3>
 @if(count($images) === 0)
   <div class="warn">

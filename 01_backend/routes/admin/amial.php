@@ -816,7 +816,7 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     // الحساب العامة: يلزم الباب نفسه الذي يجيز مراجعة مستندات KYC.
     Route::get('/account/{user}/print', [AccountDossierPrintController::class, 'show'])
         ->where('user', '[0-9]+')
-        ->middleware('platform:platform.customers.kyc.view')
+        ->middleware(['platform:platform.customers.kyc.view', 'platform:platform.customers.freeze'])
         ->name('account.print');
 
     // AMIAL-ADMIN-EDIT-001 — حالة الحساب + رفع الوثائق + تعديل بياناته.
