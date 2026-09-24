@@ -355,6 +355,14 @@ return [
     // AMIAL-KYC-OCR-001 — استخراج بيانات وثائق الهوية
     // ============================================================
     'kyc' => [
+        // تشغيل المساعد اختياري ومغلق افتراضياً لحماية بيانات الهوية.
+        'ai' => [
+            'enabled' => env('AMIAL_KYC_AI_ENABLED', false),
+            'key' => env('OPENROUTER_API_KEY', ''),
+            'model' => env('AMIAL_KYC_AI_MODEL', ''),
+            'send_images' => env('AMIAL_KYC_AI_SEND_IMAGES', false),
+            'daily_limit' => (int) env('AMIAL_KYC_AI_DAILY_LIMIT', 30),
+        ],
         'ocr' => [
             'enabled' => env('AMIAL_KYC_OCR_ENABLED', true),
 

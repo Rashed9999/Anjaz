@@ -591,6 +591,14 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
     Route::get('/center/queue', [$center, 'queue'])->middleware('platform:platform.customers.kyc.view')->name('center.queue');
     Route::get('/center/accounts/{id}', [$center, 'account'])->where('id', '[0-9]+')
         ->middleware('platform:platform.customers.kyc.view')->name('center.account');
+    // المساعد الذكي استشاري: يُشغّله المراجع المخوّل يدوياً فقط.
+    $ai = App\Http\Controllers\Admin\KycAiReviewController::class;
+    Route::get('/center/accounts/{id}/ai', [$ai, 'latest'])->where('id', '[0-9]+')
+        ->middleware(['platform:platform.customers.kyc.view', 'platform:platform.customers.freeze'])
+        ->name('center.ai.latest');
+    Route::post('/center/accounts/{id}/ai', [$ai, 'run'])->where('id', '[0-9]+')
+        ->middleware(['platform:platform.customers.kyc.view', 'platform:platform.customers.freeze', 'throttle:3,1'])
+        ->name('center.ai.run');
     // باب قديم للتوافق فقط، لا يظهر ضمن التنقّل اليومي.
     Route::get('/classic', [$kyc, 'page'])->middleware('platform:platform.customers.freeze')->name('classic');
     Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.customers.freeze')->name('queue');
