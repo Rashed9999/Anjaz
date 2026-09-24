@@ -64,7 +64,8 @@ class KycAiAdvisoryTest extends TestCase
             'amial.kyc.ai.send_images' => false,
             'amial.kyc.ai.daily_limit' => 10000,
         ]);
-        Http::fake(['openrouter.ai/*' => Http::response([
+        Http::preventStrayRequests();
+        Http::fake(['https://openrouter.ai/*' => Http::response([
             'choices' => [['message' => ['content' => json_encode([
                 'overview' => 'راجع جودة الصورة مع الموظف',
                 'findings' => [['document_id' => 1, 'severity' => 'review',

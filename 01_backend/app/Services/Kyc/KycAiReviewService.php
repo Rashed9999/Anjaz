@@ -52,12 +52,35 @@ class KycAiReviewService
                 ->where('status', 'complete')->latest('id')->first()
             : null;
 
+        $todayKey = 'amial:kyc-ai:daily:'.now()->format('Y-m-d');
+        $currentDigest = null;
+        if ($last) {
+            $latestDocs = KycDocument::where('user_id', $subject->id)
+                ->whereIn('doc_type', [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK,
+                    KycDocument::TYPE_PASSPORT, KycDocument::TYPE_ADDRESS_PROOF])
+                ->where('status', '!=', KycDocument::STATUS_SUPERSEDED)
+                ->orderByDesc('id')->get()->unique('doc_type')->take(4)->values();
+            $currentDigest = hash('sha256', json_encode([
+                'model' => $last->model,
+                'user_revision' => (string) $subject->updated_at,
+                'send_images' => (bool) config('amial.kyc.ai.send_images', false),
+                'prompt_version' => 1,
+                'documents' => $latestDocs->map(fn (KycDocument $d) => [
+                    $d->id, $d->content_sha256, $d->status, (string) $d->updated_at,
+                ])->all(),
+            ], JSON_UNESCAPED_UNICODE));
+        }
+
         return [
             'configured' => $this->configured(),
+            'daily_used' => RateLimiter::attempts($todayKey),
+            'daily_limit' => max(1, (int) config('amial.kyc.ai.daily_limit', 30)),
             'can_run' => $this->configured() && !$this->privacy->isRestricted($subject),
             'image_analysis' => (bool) config('amial.kyc.ai.send_images', false),
             'status' => $last ? 'complete' : 'not_run',
-            'latest' => $last ? $this->serialize($last) : null,
+            'latest' => $last ? ($this->serialize($last) + [
+                'stale' => !hash_equals((string) $last->input_digest, (string) $currentDigest),
+            ]) : null,
         ];
     }
 
@@ -100,6 +123,8 @@ class KycAiReviewService
             $digest = hash('sha256', json_encode([
                 'model' => $model,
                 'user_revision' => (string) $subject->updated_at,
+                'send_images' => (bool) config('amial.kyc.ai.send_images', false),
+                'prompt_version' => 1,
                 'documents' => $docs->map(fn (KycDocument $d) => [
                     $d->id, $d->content_sha256, $d->status, (string) $d->updated_at,
                 ])->all(),

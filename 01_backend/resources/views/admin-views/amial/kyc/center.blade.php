@@ -394,6 +394,9 @@
         const last = state.latest || null;
         const canRun = !!state.can_run && current && current.permissions.review_documents;
         let out = '';
+        if (state.configured) {
+            out += '<div class="vc-sub mb-2">استخدام اليوم: ' + esc(state.daily_used || 0) + ' / ' + esc(state.daily_limit || '—') + ' طلب</div>';
+        }
         if (!state.configured) {
             out += '<div class="alert alert-secondary py-2">المساعد الخارجي غير مفعل بعد. ضبط المفتاح والنموذج والتفعيل يتم من الخادم فقط.</div>';
         } else {
@@ -408,6 +411,7 @@
             return out;
         }
         const report = last.report || {};
+        if (last.stale) out += '<div class="alert alert-warning py-2">تغيّرت بيانات الحساب أو مستنداته بعد آخر تحليل؛ أعِد الفحص قبل الاستفادة من التقرير.</div>';
         out += '<div class="vc-doc"><div class="d-flex justify-content-between flex-wrap gap-1 mb-2">'
             + '<strong>آخر تقرير استشاري</strong><span class="vc-badge">' + esc(last.created_at || '—') + '</span></div>'
             + '<p>' + esc(report.overview || 'لا يوجد ملخص') + '</p>'
