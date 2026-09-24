@@ -23,7 +23,13 @@ class AppServiceProvider extends ServiceProvider
         // التطبيق الحديث يعرض وجه/ظهر الهوية فقط.
         $this->app->bind(
             \App\Services\KycDocumentService::class,
-            \App\Services\ProgressiveKycDocumentService::class,
+            \App\Services\Kyc\GuardedKycDocumentService::class,
+        );
+
+        // بيانات OCR في حالات المراجعة المقيدة محمية مثل الصور نفسها.
+        $this->app->bind(
+            \App\Services\KycOcrService::class,
+            \App\Services\Kyc\GuardedKycOcrService::class,
         );
 
         // AMIAL-KYC-OCR-001 — محرّك قراءة الوثائق.

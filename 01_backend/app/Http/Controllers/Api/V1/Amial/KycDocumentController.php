@@ -162,15 +162,16 @@ class KycDocumentController extends Controller
             // لا تُخمن المحافظة من الاسم أو رقم الهاتف. هذا اختيار مراجع
             // ظاهر ومراجَع في ملف الهوية، ثم ZoneAssignmentService يحوّله
             // إلى المنطقة التشغيلية ويسجل الأثر.
-            $account->residence_governorate = $governorate;
-            $account->save();
-
-            $account = $this->kyc->decideAccountVerification(
-                user: $account,
-                reviewer: $request->user(),
-                approve: true,
-                targetTier: (int) $request->input('target_tier'),
-            );
+            $account = \Illuminate\Support\Facades\DB::transaction(function () use ($account, $governorate, $request) {
+                $account->residence_governorate = $governorate;
+                $account->save();
+                return $this->kyc->decideAccountVerification(
+                    user: $account,
+                    reviewer: $request->user(),
+                    approve: true,
+                    targetTier: (int) $request->input('target_tier'),
+                );
+            });
         } catch (DomainException $e) {
             return response()->json([
                 'success' => false,

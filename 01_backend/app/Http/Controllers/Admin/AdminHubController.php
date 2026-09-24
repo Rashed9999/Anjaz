@@ -503,20 +503,24 @@ class AdminHubController extends Controller
             }
         }
 
-        if ($status === 1) {
-            // لا نحفظ البيان قبل اجتياز حارس التسلسل؛ فطلب القفز المرفوض
-            // لا يغيّر ملف العميل من جانبه.
-            $user->residence_governorate = $governorate;
-            $user->save();
-        }
         try {
-            $user = app(KycDocumentService::class)->decideAccountVerification(
-                user: $user,
-                reviewer: $request->user(),
-                approve: $status === 1,
-                targetTier: $targetTier,
-                reason: $request->input('reason'),
-            );
+            // المحافظة وقرار التوثيق معاملة واحدة: فشل الحارس لا يترك
+            // بيانات سكن معدلة ولا حالة اعتماد جزئية.
+            $user = \Illuminate\Support\Facades\DB::transaction(function () use (
+                $user, $request, $status, $targetTier, $governorate
+            ) {
+                if ($status === 1) {
+                    $user->residence_governorate = $governorate;
+                    $user->save();
+                }
+                return app(KycDocumentService::class)->decideAccountVerification(
+                    user: $user,
+                    reviewer: $request->user(),
+                    approve: $status === 1,
+                    targetTier: $targetTier,
+                    reason: $request->input('reason'),
+                );
+            });
         } catch (\DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

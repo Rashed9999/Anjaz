@@ -115,18 +115,25 @@ class GuardedKycDocumentService extends KycDocumentService
         $this->privacy->assertReviewerAccess($user, $reviewer, true);
 
         return DB::transaction(function () use ($user, $reviewer, $approve, $targetTier, $reason) {
+            // فحوص الملكية والسكن قبل تعديل الحساب، وبداخل المعاملة نفسها.
+            // طلب تحديث Tier 3 لا يُخفف متطلباته بتمرير targetTier=2.
+            $requiredTier = $targetTier;
+            if ($approve && Schema::hasColumn('users', 'kyc_update_required')
+                && (int) ($user->kyc_update_required ?? 0) === 1
+                && Schema::hasColumn('users', 'kyc_update_previous_tier')) {
+                $requiredTier = max($requiredTier, (int) ($user->kyc_update_previous_tier ?? 0));
+            }
+            $ownership = null;
+            if ($approve) {
+                $ownership = $this->ownership->assertReady($user, $requiredTier);
+                if ($requiredTier >= 3) {
+                    $this->residence->assertVerified($user);
+                }
+            }
+
             $account = parent::decideAccountVerification(
                 $user, $reviewer, $approve, $targetTier, $reason,
             );
-
-            $ownership = null;
-            if ($approve) {
-                $ownership = $this->ownership->assertReady($account, $targetTier);
-
-                if ($targetTier >= 3) {
-                    $this->residence->assertVerified($account);
-                }
-            }
 
             $this->privacy->markAccountDecision(
                 $account,
