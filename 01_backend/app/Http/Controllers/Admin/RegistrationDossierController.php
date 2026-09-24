@@ -26,11 +26,16 @@ class RegistrationDossierController extends Controller
 
     public function page() { return view('admin-views.amial.registration-dossiers.index'); }
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $viewer = $request->user();
+        $privacy = app(KycPrivacyService::class);
+        $canRestricted = $viewer->hasPlatformPermission('platform.customers.kyc.restricted.view');
         return response()->json(['success' => true, 'data' => RegistrationDossier::query()
             ->with('creator:id,f_name,l_name')->latest()->limit(100)->get()
-            ->map(fn (RegistrationDossier $d) => $this->summary($d))->all()]);
+            ->filter(fn (RegistrationDossier $d) => !$d->subject_user_id
+                || $canRestricted || !$privacy->isRestricted((int) $d->subject_user_id))
+            ->map(fn (RegistrationDossier $d) => $this->summary($d))->values()->all()]);
     }
 
     public function store(Request $request): JsonResponse

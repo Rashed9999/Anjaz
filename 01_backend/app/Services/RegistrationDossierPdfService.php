@@ -42,17 +42,14 @@ class RegistrationDossierPdfService
 
         $out = [];
         foreach ($definitions as $field => $label) {
+            $id = (int) ($payload[$field] ?? 0);
+            if ($id <= 0) continue;
             if ($field === 'selfie_document_id'
                 && (!$reviewer || !$reviewer->hasPlatformPermission('platform.customers.kyc.biometric.view'))) {
                 $out[] = ['label' => $label, 'data_uri' => null,
                     'note' => 'الصورة الشخصية محجوبة بصلاحية مستقلة.'];
                 continue;
             }
-            $id = (int) ($payload[$field] ?? 0);
-            if ($id <= 0) {
-                continue;
-            }
-
             $doc = KycDocument::query()
                 ->whereKey($id)
                 ->where('user_id', $dossier->subject_user_id)

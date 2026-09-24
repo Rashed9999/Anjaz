@@ -134,6 +134,14 @@ class GuardedKycDocumentService extends KycDocumentService
             $account = parent::decideAccountVerification(
                 $user, $reviewer, $approve, $targetTier, $reason,
             );
+            // إعادة الفحص بعد قرار الأب وداخل المعاملة: إن تبدّل الدليل
+            // فلا تتبقى حالة «معتمد» من دون ملكية هوية أو إثبات سكن.
+            if ($approve) {
+                $ownership = $this->ownership->assertReady($account, $requiredTier);
+                if ($requiredTier >= 3) {
+                    $this->residence->assertVerified($account);
+                }
+            }
 
             $this->privacy->markAccountDecision(
                 $account,

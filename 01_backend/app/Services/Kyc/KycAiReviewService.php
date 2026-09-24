@@ -172,6 +172,8 @@ class KycAiReviewService
 
             // يحجز الطلب قبل إرساله حتى لا تنفق الطلبات المتزامنة السقف اليومي.
             RateLimiter::hit($rateKey, 86400);
+            $this->pii->logAccess((int) $reviewer->id, 'user', (int) $subject->id,
+                'kyc_ai_external_processing', 'export', 'إرسال الأدلة المصرّح بها إلى مزود ZDR للتحليل الاستشاري');
             try {
                 $response = Http::withToken((string) config('amial.kyc.ai.key'))
                     ->acceptJson()->timeout(45)->connectTimeout(10)
