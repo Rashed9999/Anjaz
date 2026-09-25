@@ -93,7 +93,7 @@ class TransferController extends Controller
                 Toastr::info(translate('This transfer request was already processed.'));
                 return back();
             }
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             report($e);
             Toastr::error(translate('Failed!'));
             return back();
@@ -111,7 +111,7 @@ class TransferController extends Controller
                     'type' => CASH_IN,
                 ]);
             }
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             report($e);
             Toastr::warning(translate('Push notification failed for Customer!'));
         }
