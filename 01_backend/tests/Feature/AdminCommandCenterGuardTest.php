@@ -368,9 +368,10 @@ class AdminCommandCenterGuardTest extends TestCase
             'مركز العملاء يجب أن يظهر مرة واحدة فقط في الشريط'
         );
 
+        // التحقق الموحّد يخص العميل والتاجر والوكيل، ويظل مدخل رقابة عامّاً
+        // في الشريط. أدوات العميل البحتة وحدها تبقى داخل مركز العملاء.
         foreach ([
             'admin.amial.hub.customers',
-            'admin.amial.kyc.page',
             'admin.amial.kyc.changes.page',
         ] as $specialized) {
             $needle = "route('{$specialized}'";

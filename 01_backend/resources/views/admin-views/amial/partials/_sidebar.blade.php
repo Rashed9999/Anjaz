@@ -88,7 +88,8 @@
             'icon' => '🛡️',
             'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*', 'admin/amial/saher*'],
             'links' => [
-                // نقطة دخول واحدة: القائمة والملف والقرار داخل نفس المركز.
+                // قرار التحقق الموحّد يشمل العملاء والتجار والوكلاء؛ ليس قائمة عميل مكررة.
+                ['🛡️ مركز التحقق والهوية', route('admin.amial.kyc.page'), 'platform.customers.kyc.view'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.aml.investigate'],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), 'platform.audit.view'],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],

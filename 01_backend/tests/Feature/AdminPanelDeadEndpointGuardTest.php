@@ -51,6 +51,8 @@ class AdminPanelDeadEndpointGuardTest extends TestCase
         // شاشة طابور الوثائق الأولى.
         'admin/amial/kyc' => [
             'admin-views/amial/kyc/index.blade.php',
+            // المركز الموحد يحمل طلبات حساب الهوية ومراجعة AI داخل القالب الخاص به.
+            'admin-views/amial/kyc/center.blade.php',
             'admin-views/amial/kyc/change-requests.blade.php',
             'admin-views/amial/kyc/forensics.blade.php',
         ],
@@ -73,7 +75,10 @@ class AdminPanelDeadEndpointGuardTest extends TestCase
      *
      * @var array<string, string>
      */
-    private const EXEMPT = [];
+    private const EXEMPT = [
+        // باب 6cash للتوافق مع روابط قديمة؛ لا يظهر في قائمة الملاحة الجديدة.
+        'admin/amial/kyc/classic' => 'Legacy compatibility for saved links to old KYC page',
+    ];
 
     /**
      * تُنزع التعليقات قبل المطابقة — والسببُ عطلٌ وقع في هذا الحارس نفسه.

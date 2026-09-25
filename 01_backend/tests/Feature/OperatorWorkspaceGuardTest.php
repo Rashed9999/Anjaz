@@ -173,7 +173,9 @@ class OperatorWorkspaceGuardTest extends TestCase
         );
         $this->assertStringContainsString('admin.amial.kyc.page', $customerCenter);
         $this->assertStringContainsString('admin.amial.kyc.changes.page', $customerCenter);
-        $this->assertStringContainsString('admin.amial.customer-systems.index', $customerCenter);
+        // مركز أنظمة العميل اندمج تبويباً يحمل البيانات دون فتح صفحة ثانية.
+        $this->assertStringContainsString('data-op="systems"', $customerCenter);
+        $this->assertStringContainsString('renderOpsSystems', $customerCenter);
 
         // ① ولا رقمٌ مكتوبٌ في القالب: كلُّها من الخدمة.
         $this->assertStringContainsString('$wsCards', $src);
