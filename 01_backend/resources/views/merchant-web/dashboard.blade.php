@@ -183,6 +183,8 @@
     else hint(previewBox,'المميزات أدناه محسوبة لقطاع منشأتك من نفس السجل الذي يقرّر السماح أو المنع عند الاستخدام.');
     if(comparison.vertical_note)previewBox.append(node('p',comparison.vertical_note.replaceAll('**',''),'muted'));
     const cards=node('div',null,'grid');
+    let previousCodes=new Set();
+    const liveByCode=new Map((data.live_plans||[]).map(plan=>[plan.code,plan]));
     (comparison.plans||[]).forEach(plan=>{
       const card=node('div',null,'metric');
       card.style.border=plan.code===current.code?'2px solid #238a66':'1px solid #dceae5';
@@ -190,9 +192,23 @@
       card.append(node('p','السنوي: '+(plan.price_annual??0)+' ر.س','muted'));
       if(plan.pitch?.headline)card.append(node('p',plan.pitch.headline,'muted'));
       const limits=node('div',null,'muted');(plan.limits||[]).forEach(row=>limits.append(node('p',row.label+': '+row.text)));card.append(limits);
-      const added=node('div',null,'muted');added.append(node('strong','ما تضيفه هذه الباقة'));
-      (plan.adds||[]).forEach(item=>{const txt=node('p',(item.name||item.code)+(item.description?' — '+item.description:''));added.append(txt)});
-      if(!plan.adds?.length)added.append(node('p','قدرات التشغيل الأساسية حسب القطاع.'));card.append(added);cards.append(card);
+      const catalog=liveByCode.get(plan.code);
+      const liveCapabilities=(catalog?.capabilities||[]).filter(x=>x.status!=='coming_soon');
+      const newlyAdded=liveCapabilities.filter(x=>!previousCodes.has(x.code));
+      previousCodes=new Set(liveCapabilities.map(x=>x.code));
+      const added=node('div',null,'muted');
+      added.append(node('strong','مميزات هذه الباقة ('+liveCapabilities.length+')'));
+      const summary= node('p','ما تضيفه مقارنة بالباقة السابقة: '+newlyAdded.length+' ميزة');
+      added.append(summary);
+      const details=node('details'),show=node('summary','عرض الميزات المشمولة بالتفصيل');
+      show.style.cssText='cursor:pointer;font-weight:700;color:#146c50;padding:9px 0';
+      details.append(show);
+      liveCapabilities.forEach(item=>details.append(node('p','✓ '+item.name)));
+      if(!liveCapabilities.length)details.append(node('p','لا تتوفر بيانات كتالوج الباقة حالياً.'));
+      added.append(details);
+      const planned=(catalog?.capabilities||[]).filter(x=>x.status==='coming_soon');
+      if(planned.length)added.append(node('p',planned.length+' ميزة قيد التطوير؛ لا تُحسب ضمن المتاح حالياً.'));
+      card.append(added);cards.append(card);
     });
     previewBox.append(cards);
     hint(previewBox,'الأسعار بالريال السعودي. التفعيل والتجديد يتمّان حالياً عبر خدمة العملاء، ولا تُنفَّذ خصومات من المحفظة بمجرد اختيار باقة.');
