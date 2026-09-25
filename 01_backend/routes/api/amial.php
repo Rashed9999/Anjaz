@@ -92,7 +92,8 @@ Route::prefix('legal-docs')->name('amial.legal-docs.')->group(function () {
 // AUTHENTICATED USER
 // ============================================================
 
-Route::middleware(['auth:api'])->group(function () {
+// Every authenticated AMIAL door refreshes activity and enforces POS device binding.
+Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(function () {
 
     // -------- AMIAL-PIN-GATE-001: تحقّق رمز المعاملات (بوّابة بعد الدخول
     // وقبل العمليات المالية في التطبيق) --------

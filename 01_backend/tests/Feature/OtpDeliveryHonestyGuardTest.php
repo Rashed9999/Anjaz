@@ -167,13 +167,16 @@ class OtpDeliveryHonestyGuardTest extends TestCase
         $s = preg_replace('~/\*.*?\*/~s', '', $s) ?? '';
         $s = preg_replace('~^[ \t]*//[^\n]*$~m', '', $s) ?? '';
 
-        $at = strpos($s, 'needsDelivery');
-        $gen = strpos($s, 'codeFor(');
-
-        $this->assertNotFalse($at, 'البابُ لا يسأل أثمّة قناةٌ تُوصل الرمز');
-        $this->assertNotFalse($gen);
-
-        $this->assertLessThan($gen, $at,
-            'السؤالُ بعد توليد الرمز — فيُخزَّن ما لا يُرسَل، ويُقفَل الرقمُ على لا شيء');
+        foreach (['checkPhone', 'resendOTP'] as $method) {
+            $start = strpos($s, 'function '.$method.'(');
+            $this->assertNotFalse($start);
+            $next = strpos($s, 'public function ', $start + 15);
+            $body = $next === false ? substr($s, $start) : substr($s, $start, $next - $start);
+            $at = strpos($body, 'customerPhoneOwnershipNeedsDelivery');
+            $gen = strpos($body, 'customerPhoneOwnershipCode(');
+            $this->assertNotFalse($at, "{$method}: البابُ لا يسأل عن قناة الإيصال");
+            $this->assertNotFalse($gen);
+            $this->assertLessThan($gen, $at, "{$method}: فُوّت فحص القناة حتى بعد توليد الرمز");
+        }
     }
 }

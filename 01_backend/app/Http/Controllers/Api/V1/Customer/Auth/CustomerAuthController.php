@@ -55,7 +55,7 @@ class CustomerAuthController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $customer = $this->user->where(['phone' => $request['phone']])->first();
+        $customer = $this->user->whereIn('phone', \App\Support\Phone::variants((string) $request['phone']))->first();
 
         if (isset($customer) && $customer->type == 2){
             return response()->json([
@@ -189,7 +189,14 @@ class CustomerAuthController extends Controller
         $phone = $request['phone'];
         try {
             // AMIAL-OTP-SPLIT-001: الرقمُ يحدّد الرمز، لا مفتاحٌ عامّ.
-            $otp = app(\App\Services\Otp\OtpPolicy::class)->codeFor($phone);
+            $policy = app(\App\Services\Otp\OtpPolicy::class);
+            if ($policy->customerPhoneOwnershipNeedsDelivery((string) $phone) && ! $policy->deliveryReady()) {
+                return response()->json([
+                    'code' => 'OTP_DELIVERY_UNAVAILABLE',
+                    'message' => $policy->unavailableMessage(),
+                ], 503);
+            }
+            $otp = $policy->customerPhoneOwnershipCode((string) $phone);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $phone], [
                 'otp' => $otp,
@@ -207,15 +214,22 @@ class CustomerAuthController extends Controller
                 $response = 'success';
             }
 
+            if (!in_array($response, ['success', true, 1], true)) {
+                DB::table('phone_verifications')
+                    ->whereIn('phone', \App\Support\Phone::variants((string) $phone))
+                    ->delete();
+                return response()->json(['message' => 'تعذّر إيصال رمز التحقق', 'otp' => 'inactive'], 502);
+            }
             return response()->json([
                 'message' => 'OTP sent successfully',
-                'otp' => 'active'
+                'otp' => 'active',
+                'demo_otp' => $policy->mayDiscloseCustomerPhoneOwnership((string) $phone) ? (string) $otp : null,
             ], 200);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json([
                 'message' => 'OTP sent failed',
                 'otp' => 'inactive'
-            ], 200);
+            ], 503);
         }
     }
 
@@ -354,11 +368,17 @@ class CustomerAuthController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
-        if(Helpers::pin_check($request->user()->id, $request->pin)) {
+        $user = $request->user();
+        $pinService = app(\App\Services\TransactionPinService::class);
+        if ($pinService->verify($user, (string) $request->pin)) {
             return response()->json(['message' => 'PIN is correct'], 200);
-        }else{
-            return response()->json(['message' => 'PIN is incorrect'], 403);
         }
+        $user->refresh();
+        if ($user->pin_locked_until !== null && $user->pin_locked_until->isFuture()) {
+            $minutes = max(1, (int) ceil(now()->diffInMinutes($user->pin_locked_until, false)));
+            return response()->json(['message' => "رمز المعاملات مقفول. حاول بعد {$minutes} دقيقة"], 429);
+        }
+        return response()->json(['message' => 'PIN is incorrect'], 403);
     }
 
     public function changePin(Request $request): JsonResponse

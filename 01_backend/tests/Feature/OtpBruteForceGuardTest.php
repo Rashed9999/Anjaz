@@ -188,7 +188,7 @@ class OtpBruteForceGuardTest extends TestCase
 
     public function test_a_fresh_code_inside_its_lifetime_still_works(): void
     {
-        $this->seedOtp('4321', now()->subSeconds(30)->toDateTimeString());
+        $this->seedOtp('654321', now()->subSeconds(30)->toDateTimeString());
 
         $this->try('654321')->assertOk();
     }
