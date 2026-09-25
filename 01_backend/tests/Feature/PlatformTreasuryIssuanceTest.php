@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\EMoney;
 use App\Models\Ledger\LedgerEntryLine;
 use App\Models\Ledger\LedgerJournalEntry;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\PlatformTreasuryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,6 +36,13 @@ class PlatformTreasuryIssuanceTest extends TestCase
         $this->assertSame('TREASURY-TEST-001', $issued['entry']->metadata['reference']);
         $this->assertSame('1250.5000', (string) EMoney::where('user_id', $this->admin->id)
             ->value('current_balance'));
+
+        // سجل التوافق يجب أن يشير إلى نفس القيد، لا أن يخلق حركةً موازية.
+        $compatibility = Transaction::where('transaction_id', $issued['transaction_id'])->first();
+        $this->assertNotNull($compatibility);
+        $this->assertSame($issued['transaction_id'], (string) $issued['entry']->source_id);
+        $this->assertSame('1250.5000', (string) $compatibility->credit);
+        $this->assertSame('1250.5000', (string) $compatibility->balance);
 
         $lines = LedgerEntryLine::where('journal_entry_id', $issued['entry']->id)->get();
         $this->assertCount(2, $lines);
