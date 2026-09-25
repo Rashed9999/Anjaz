@@ -84,7 +84,7 @@ class PlatformTreasuryIssuanceTest extends TestCase
         $this->assertSame(
             0,
             Transaction::where('user_id', $this->admin->id)
-                ->where('transaction_type', Transaction::CASH_IN)
+                ->where('transaction_type', CASH_IN)
                 ->count(),
         );
         $this->assertSame(
