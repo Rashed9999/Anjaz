@@ -52,9 +52,9 @@ class CoverageBannerGuardTest extends TestCase
         ));
 
         $this->assertStringContainsString("residence_governorate", $ctl);
-        $this->assertStringContainsString("$source = 'residence_profile'", $ctl);
-        $this->assertStringContainsString("$source = 'current_location'", $ctl);
-        $this->assertStringContainsString("'source' => $source", $ctl);
+        $this->assertStringContainsString("\$source = 'residence_profile'", $ctl);
+        $this->assertStringContainsString("\$source = 'current_location'", $ctl);
+        $this->assertStringContainsString("'source' => \$source", $ctl);
     }
 
     /** @test */
