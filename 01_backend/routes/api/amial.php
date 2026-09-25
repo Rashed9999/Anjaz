@@ -686,7 +686,7 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
         });
 
         // AMIAL-SUPPLIERS-001 — الموردون وأوامر الشراء (تصاميم 53/57/67/68)
-        Route::prefix('suppliers')->name('suppliers.')->group(function () {
+        Route::prefix('suppliers')->name('suppliers.')->middleware('capability:suppliers')->group(function () {
             $sc = \App\Http\Controllers\Api\V1\Amial\SupplierController::class;
             Route::get('/', [$sc, 'index'])->name('index');
             Route::post('/', [$sc, 'store'])->name('store');

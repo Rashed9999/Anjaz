@@ -68,6 +68,15 @@ Schedule::call(function () {
 // ============================================================
 Schedule::command('amial:reconcile-fees')->everyMinute()->withoutOverlapping();
 
+// فكّ حجوز المخزون خلال خمس دقائق؛ الأمر نفسه ينذر عند فشل الجولة.
+Schedule::command('amial:release-expired-reservations')
+    ->everyFiveMinutes()->withoutOverlapping()
+    ->description('AMIAL-STOCK: تحرير حجوز المنتجات المنتهية');
+
+// تقرير الاستعداد لا يبقى أمراً يدوياً؛ يُحفظ قياسٌ يومي بعد ساهر.
+Schedule::command('amial:readiness')->dailyAt('05:00')->withoutOverlapping()
+    ->description('AMIAL-OPS: قياس الجاهزية اليومية');
+
 // ══════════════════════════════════════════════════════════════════════
 // AMIAL-RECOVERY-APPLY-001 — **استعادةٌ معتمَدةٌ لا تُطبَّق نفسَها.**
 //

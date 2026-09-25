@@ -2,7 +2,7 @@
 @section('title', translate('مركز مزوّدي الفواتير'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <div class="d-flex justify-content-between align-items-center mb-2"><div><h4 class="fw-bold mb-1" style="color:#053391">⚡ {{ translate('مركز مزوّدي دفع الفواتير') }}</h4><small class="text-muted">{{ translate('طلبات اليوم') }}: {{ $ordersToday }} — {{ translate('الأرصدة المعروضة هي آخر قراءة مؤكدة فقط') }}</small></div></div>
+    <div class="d-flex justify-content-between align-items-center mb-2"><div><h4 class="fw-bold mb-1" style="color:var(--amial-primary)">⚡ {{ translate('مركز مزوّدي دفع الفواتير') }}</h4><small class="text-muted">{{ translate('طلبات اليوم') }}: {{ $ordersToday }} — {{ translate('الأرصدة المعروضة هي آخر قراءة مؤكدة فقط') }}</small></div></div>
     @if(session('success'))<div class="alert alert-success mt-2">{{ session('success') }}</div>@endif
     @if(session('error'))<div class="alert alert-danger mt-2">{{ session('error') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger mt-2">{{ $errors->first() }}</div>@endif

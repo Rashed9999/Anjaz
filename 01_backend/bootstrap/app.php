@@ -145,6 +145,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
         // AMIAL-SENTINEL-001 — الحارس المخفي يراقب كل طلب web/api (وضع monitor افتراضياً)
         $middleware->prependToGroup('web', SecuritySentinel::class);
+        // منع التخزين يأتي خارج StartSession حتى لا تستبدل ترويسةُ الجلسة no-store.
+        $middleware->prependToGroup('web', \App\Http\Middleware\NoStoreCsrfPages::class);
         $middleware->prependToGroup('api', SecuritySentinel::class);
 
         // AMIAL-OPS-001 — وضع الصيانة المُدار من لوحة الأدمن (يمرّ الأدمن/الدخول/ping)
