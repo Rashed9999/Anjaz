@@ -70,7 +70,7 @@ Route::prefix('zones')->name('zones.')->group(function () {
 });
 
 // ============ Legal Terms ============
-Route::prefix('legal')->name('legal.')->group(function () {
+Route::prefix('legal')->name('legal.')->middleware('platform:platform.settings.manage')->group(function () {
     Route::get('/', [LegalTermsController::class, 'webIndex'])->name('index');
     Route::get('/create', [LegalTermsController::class, 'webCreate'])->name('create');
     Route::post('/', [LegalTermsController::class, 'webStore'])->name('store');
@@ -144,11 +144,11 @@ Route::prefix('surface')->name('surface.')->group(function () {
     Route::post('/bill-providers/{id}/services/{serviceId?}', [$sc, 'saveBillServiceRouting'])
         ->where(['id' => '[0-9]+', 'serviceId' => '[0-9]+'])
         ->middleware('platform:platform.settings.update')->name('bill-providers.services.save');
-    Route::get('/funds', [$sc, 'funds'])->name('funds');
+    Route::get('/funds', [$sc, 'funds'])->middleware('platform:platform.transactions.view')->name('funds');
     Route::get('/funds/{id}', [$sc, 'fundDetail'])->where('id', '[0-9]+')
         ->middleware('platform:platform.audit.view')->name('funds.detail');
-    Route::get('/payment-requests', [$sc, 'paymentRequests'])->name('payment-requests');
-    Route::get('/rbac', [$sc, 'rbac'])->name('rbac');
+    Route::get('/payment-requests', [$sc, 'paymentRequests'])->middleware('platform:platform.transactions.view')->name('payment-requests');
+    Route::get('/rbac', [$sc, 'rbac'])->middleware('platform:platform.settings.update')->name('rbac');
 });
 
 Route::prefix('charity')->name('charity.')
@@ -745,8 +745,8 @@ Route::prefix('merchants')->name('merchants.')->group(function () {
     Route::get('/high-risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'highRisk'])->name('high-risk');
     Route::get('/risk-stats', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskStats'])->name('risk-stats');
     Route::get('/{userId}/risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskDashboard'])->name('risk');
-    Route::put('/{userId}/tier', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'setTier'])->name('tier');
-    Route::post('/{userId}/verify', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'verify'])->name('verify');
+    Route::put('/{userId}/tier', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'setTier'])->middleware('platform:platform.merchants.risk')->name('tier');
+    Route::post('/{userId}/verify', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'verify'])->middleware('platform:platform.merchants.compliance')->name('verify');
 });
 
 // ============ AMIAL-FEE-ENGINE-001 (v2.12) ============
@@ -791,7 +791,7 @@ Route::prefix('sentinel')->name('sentinel.')->group(function () {
 });
 
 // ============ AMIAL-EXEC-DASHBOARD-001 — Executive Dashboard ============
-Route::prefix('executive')->name('executive.')->group(function () {
+Route::prefix('executive')->name('executive.')->middleware('platform:platform.analytics.view')->group(function () {
     Route::get('/', [App\Http\Controllers\Admin\ExecutiveDashboardController::class, 'index'])->name('index');
     Route::get('/summary', [App\Http\Controllers\Admin\ExecutiveDashboardController::class, 'summary'])->name('summary');
 });
@@ -801,9 +801,9 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     $hc = App\Http\Controllers\Admin\AdminHubController::class;
 
     // الصفحات
-    Route::get('/customers', [$hc, 'customers'])->name('customers');
-    Route::get('/agents', [$hc, 'agents'])->name('agents');
-    Route::get('/merchants', [$hc, 'merchants'])->name('merchants');
+    Route::get('/customers', [$hc, 'customers'])->middleware('platform:platform.customers.view')->name('customers');
+    Route::get('/agents', [$hc, 'agents'])->middleware('platform:platform.customers.view')->name('agents');
+    Route::get('/merchants', [$hc, 'merchants'])->middleware('platform:platform.customers.view')->name('merchants');
     // AMIAL-OPERATOR-RBAC-003: الصفحة لا الفعلَ وحده — صفحةٌ تعرض أرصدة
     // المنصّة وحركتها تُسرّب ما لا يجوز، وإن كان زرُّها محروساً.
     Route::get('/finance', [$hc, 'finance'])
@@ -846,9 +846,9 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
 
     // إجراءات
     Route::post('/{slug}/users', [$hc, 'storeUser'])
-        ->where('slug', 'customers|agents|merchants')->name('users.store');
+        ->where('slug', 'customers|agents|merchants')->middleware('platform:platform.customers.lifecycle.manage')->name('users.store');
     Route::post('/users/{id}/toggle-active', [$hc, 'toggleActive'])
-        ->where('id', '[0-9]+')->name('users.toggle-active');
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('users.toggle-active');
     Route::post('/users/{id}/kyc', [$hc, 'kycStatus'])
         ->where('id', '[0-9]+')
         ->middleware('platform:platform.approvals.decide')
@@ -890,15 +890,15 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->middleware('platform:platform.money.view')->name('finance.feed');
 
     // لوحة الاشتراكات (الباقات) — حقيقية عبر SubscriptionService
-    Route::get('/subscriptions', [$hc, 'subscriptions'])->name('subscriptions');
-    Route::get('/subscriptions/list.json', [$hc, 'subsList'])->name('subscriptions.list');
+    Route::get('/subscriptions', [$hc, 'subscriptions'])->middleware('platform:platform.settings.manage')->name('subscriptions');
+    Route::get('/subscriptions/list.json', [$hc, 'subsList'])->middleware('platform:platform.settings.manage')->name('subscriptions.list');
     Route::post('/subscriptions/{merchantId}/plan', [$hc, 'subsChangePlan'])
-        ->where('merchantId', '[0-9]+')->name('subscriptions.plan');
+        ->where('merchantId', '[0-9]+')->middleware('platform:platform.settings.manage')->name('subscriptions.plan');
     Route::post('/subscriptions/{merchantId}/extend', [$hc, 'subsExtend'])
-        ->where('merchantId', '[0-9]+')->name('subscriptions.extend');
+        ->where('merchantId', '[0-9]+')->middleware('platform:platform.settings.manage')->name('subscriptions.extend');
 
     // لوحة النزاعات — واجهة فوق مسارات safe-payments الموجودة (JSON)
-    Route::get('/disputes', [$hc, 'disputes'])->name('disputes');
+    Route::get('/disputes', [$hc, 'disputes'])->middleware('platform:platform.transactions.view')->name('disputes');
 
     // لوحة التحقق — اعتماد/رفض/حظر الحسابات المسجَّلة ذاتياً (كل الأدوار)
     // AMIAL-ZONE-PANEL-001 — لوحة المناطق (نطاق التشغيل، العالقون، المخالفات)
@@ -921,8 +921,8 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
             ->where('id', '[0-9]+')->name('reassign');
     });
 
-    Route::get('/verification', [$hc, 'verification'])->name('verification');
-    Route::get('/verification/list.json', [$hc, 'verificationJson'])->name('verification.list');
+    Route::get('/verification', [$hc, 'verification'])->middleware('platform:platform.customers.kyc.view')->name('verification');
+    Route::get('/verification/list.json', [$hc, 'verificationJson'])->middleware('platform:platform.customers.kyc.view')->name('verification.list');
 
     // لوحة التسويات — تسويات الوكلاء (اعتماد/رفض مع دفتر القيود)
     Route::get('/settlements', [$hc, 'settlements'])
@@ -939,14 +939,14 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->middleware('platform:platform.settlements.decide')->name('settlements.reject');
 
     // لوحة الموظفين — طاقم نقاط بيع التجّار (تفعيل/تعطيل)
-    Route::get('/staff', [$hc, 'staff'])->name('staff');
-    Route::get('/staff/list.json', [$hc, 'staffJson'])->name('staff.list');
+    Route::get('/staff', [$hc, 'staff'])->middleware('platform:platform.staff.view')->name('staff');
+    Route::get('/staff/list.json', [$hc, 'staffJson'])->middleware('platform:platform.staff.view')->name('staff.list');
     Route::post('/staff/{id}/toggle-active', [$hc, 'staffToggle'])
-        ->where('id', '[0-9]+')->name('staff.toggle');
+        ->where('id', '[0-9]+')->middleware('platform:platform.staff.manage')->name('staff.toggle');
 
     // لوحة الإعدادات — تحكّم بضغطة زر (بلا كود)
-    Route::get('/settings', [$hc, 'settings'])->name('settings');
-    Route::post('/settings/flag', [$hc, 'settingsToggle'])->name('settings.flag');
+    Route::get('/settings', [$hc, 'settings'])->middleware('platform:platform.settings.manage')->name('settings');
+    Route::post('/settings/flag', [$hc, 'settingsToggle'])->middleware('platform:platform.settings.update')->name('settings.flag');
 });
 
 // ============ AMIAL-OPS-CONSOLE-001 — حالة التشغيل (فريق الصيانة) ============

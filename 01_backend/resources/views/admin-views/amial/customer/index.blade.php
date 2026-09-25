@@ -1005,6 +1005,7 @@
                         <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.page') }}">لجنة التحقق والهوية</a>
                         <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.residence.page') }}">إثبات الإقامة</a>
                         <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.changes.page') }}">طلبات تحديث البيانات</a>
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.hub.verification') }}">طابور التحقق العام</a>
                         <a class="btn btn-sm btn-outline-danger" href="{{ route('admin.amial.kyc.privacy.page') }}">الخصوصية والتتبّع</a>
                         <a class="btn btn-sm btn-outline-dark" id="cc-print-dossier" target="_blank" rel="noopener"
                            href="{{ url('admin/amial/hub/account') }}/${encodeURIComponent(current)}/print">
