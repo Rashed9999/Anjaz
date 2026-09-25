@@ -98,6 +98,15 @@ class MerchantWebPortalTest extends TestCase
         }
     }
 
+    public function test_bearer_token_cannot_change_the_merchant_web_entitlement_identity(): void
+    {
+        $owner = $this->owner();
+        $this->actingAs($owner, 'merchant_web')
+            ->withHeader('Authorization', 'Bearer unrelated-pos-token')
+            ->getJson('/merchant/data/wallet')->assertForbidden()
+            ->assertJsonPath('code', 'WEB_SESSION_ONLY');
+    }
+
     public function test_optional_merchant_host_redirects_get_and_rejects_post_without_losing_payload(): void
     {
         config(['amial.hosts.merchant' => 'merchant.amialpay.com']);

@@ -41,6 +41,15 @@ class MerchantWebMiddleware
                 ]);
         }
 
+        // الويب يعتمد كوكي merchant_web حصراً. حامل رمز API مختلف قد
+        // يجعل EnsureCapability يقرأ هويته بدل جلسة المالك؛ امنع خلطهما.
+        if ($request->headers->has('Authorization')) {
+            return response()->json([
+                'success' => false, 'code' => 'WEB_SESSION_ONLY',
+                'message' => 'بوابة التاجر تقبل الجلسة الآمنة فقط، لا رموز API.',
+            ], 403);
+        }
+
         // يجعل Request::user() داخل الخدمات الأصلية يرى المالك نفسه،
         // لا admin أو customer قد يسجّل دخولهما بجلسة حارس مختلف.
         Auth::shouldUse('merchant_web');
