@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Merchant\WebAuthController as Login;
 use App\Http\Controllers\Merchant\WebPortalController as Portal;
+use App\Http\Controllers\Merchant\WebPlansController as Plans;
+use App\Http\Controllers\Merchant\WebSectorController as Sector;
 use App\Http\Controllers\Api\V1\Amial\BranchController;
 use App\Http\Controllers\Api\V1\Amial\CashierController;
 use App\Http\Controllers\Api\V1\Amial\MerchantController;
@@ -22,6 +24,12 @@ Route::middleware('merchant.web')->group(function () {
     // يُطبّق فحص ملكية المنشأة أولاً في merchant.web، ثم فحص الباقة في كل باب.
     Route::prefix('data')->name('data.')->group(function () {
         Route::get('/overview', [Operations::class, 'summary'])->name('overview');
+        Route::get('/plans', [Plans::class, 'show'])->name('plans');
+        Route::get('/sector', [Sector::class, 'overview'])->name('sector');
+        Route::get('/sector/products', [Sector::class, 'products'])->name('sector.products');
+        Route::post('/sector/products', [Sector::class, 'createProduct'])
+            ->middleware(['amial.usage:add_product', 'throttle:30,1'])->name('sector.products.create');
+        Route::get('/sector/operations', [Sector::class, 'operations'])->name('sector.operations');
         Route::get('/roles', [Operations::class, 'roles'])->name('roles');
         Route::post('/roles', [Operations::class, 'createRole'])
             ->middleware(['capability:employees', 'throttle:20,1'])->name('roles.create');
