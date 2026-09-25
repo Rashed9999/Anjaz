@@ -105,13 +105,33 @@ class AdminWalletTransferService
             $transfer->unique_id = $transfer->id . random_int(100000, 999999999);
             $transfer->save();
 
-            // سجل التوافق مع شاشات الحركات القديمة. لا يحرّك رصيداً؛ الرصيد
-            // لا يغيّره إلا FinancialGuardService بعد نجاح قيد الدفتر.
             $creditId = (string) Str::ulid();
             $debitId = (string) Str::ulid();
             $balanceAfterRecipient = MoneyService::add((string) $recipientWallet->current_balance, $amount);
             $balanceAfterSender = MoneyService::sub((string) $senderWallet->current_balance, $amount);
 
+            // دفتر الأستاذ هو مصدر الحركة أولًا؛ سجلات التوافق لا تُكتب
+            // إلا بعد نجاح القيد، ولا تغيّر الرصيد بنفسها.
+            $entry = $this->ledger->post(
+                sourceType: $sourceType,
+                sourceId: (string) $transfer->id,
+                description: 'تحويل من محفظة الإدارة إلى مستخدم',
+                lines: [
+                    ['account' => $senderLedger->account_code, 'direction' => 'debit', 'amount' => $amount],
+                    ['account' => $recipientLedger->account_code, 'direction' => 'credit', 'amount' => $amount],
+                ],
+                idempotencyKey: $ledgerKey,
+                createdByUserId: $actor?->id,
+                metadata: [
+                    'legacy_transaction_id' => $creditId,
+                    'transfer_id' => $transfer->id,
+                    'reason' => trim($reason) ?: null,
+                ],
+                zoneCode: (string) $senderWallet->zone_code,
+            );
+
+            // سجل التوافق مع شاشات الحركات القديمة. لا يحرّك رصيداً؛ الرصيد
+            // لا يغيّره إلا FinancialGuardService بعد نجاح قيد الدفتر.
             Transaction::create([
                 'user_id' => $recipient->id,
                 'transaction_id' => $creditId,
@@ -135,24 +155,6 @@ class AdminWalletTransferService
                 'idempotency_key' => $ledgerKey,
                 'decision_code' => 'POSTED', 'zone_code' => (string) $senderWallet->zone_code,
             ]);
-
-            $entry = $this->ledger->post(
-                sourceType: $sourceType,
-                sourceId: (string) $transfer->id,
-                description: 'تحويل من محفظة الإدارة إلى مستخدم',
-                lines: [
-                    ['account' => $senderLedger->account_code, 'direction' => 'debit', 'amount' => $amount],
-                    ['account' => $recipientLedger->account_code, 'direction' => 'credit', 'amount' => $amount],
-                ],
-                idempotencyKey: $ledgerKey,
-                createdByUserId: $actor?->id,
-                metadata: [
-                    'legacy_transaction_id' => $creditId,
-                    'transfer_id' => $transfer->id,
-                    'reason' => trim($reason) ?: null,
-                ],
-                zoneCode: (string) $senderWallet->zone_code,
-            );
 
             $senderAfter = $this->wallets->debit($sender->id, $amount, 'admin_wallet_transfer');
             $recipientAfter = $this->wallets->credit($recipient->id, $amount, 'admin_wallet_transfer');
