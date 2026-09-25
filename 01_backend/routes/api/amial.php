@@ -347,6 +347,9 @@ Route::middleware(['auth:api'])->group(function () {
     Route::prefix('payment-requests')->name('amial.payment-requests.')->middleware('amial.idempotency')->group(function () {
         Route::post('/', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'create'])
             ->middleware(['amial.terms', 'amial.rate-limit:payment_request_create,30,1'])->name('create');
+        // طلب المال المباشر: المستلم مؤكَّد برمز تحقق أحادي الاستخدام؛ لا إنشاء رابط احتياطي.
+        Route::post('/direct', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'createDirect'])
+            ->middleware(['amial.terms', 'amial.rate-limit:payment_request_create,30,1'])->name('create-direct');
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'list'])->name('list');
         // AMIAL-REQUEST-DIRECT-002 — «أهذا الرقم مشترك؟» تُنادى أثناء
         // الكتابة، فتقول الشاشةُ قبل الإرسال أيصل الطلبُ أم يبقى رابطاً.
