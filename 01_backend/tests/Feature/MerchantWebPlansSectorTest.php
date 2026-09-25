@@ -56,6 +56,7 @@ class MerchantWebPlansSectorTest extends TestCase
             ->assertJsonPath('meta.upgrade.automated', false);
 
         $this->assertCount(3, $res->json('meta.comparison.plans'));
+        $this->assertCount(3, $res->json('meta.live_plans'));
         $this->assertNotEmpty($res->json('meta.manifest.capabilities'));
     }
 

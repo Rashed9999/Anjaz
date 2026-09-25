@@ -18,12 +18,19 @@ class WebPortalController extends Controller
         $profile = MerchantProfile::where('user_id', $owner->id)->firstOrFail();
         $merchant = Merchant::where('user_id', $owner->id)->first();
 
+        $effectivePlan = A::canonicalPlan($profile->subscription_plan);
+        $expired = $effectivePlan !== A::PLAN_FREE
+            && $profile->subscription_expires_at !== null
+            && $profile->subscription_expires_at->isPast();
+        if ($expired) $effectivePlan = A::PLAN_FREE;
+
         return view('merchant-web.dashboard', [
             'storeName' => $merchant?->store_name
                 ?: trim((string) $owner->f_name . ' ' . (string) $owner->l_name),
             'businessType' => A::BUSINESS_TYPE_LABELS[$profile->business_type] ?? 'نشاط تجاري',
             'businessTypeCode' => (string) $profile->business_type,
-            'plan' => A::PLAN_LABELS[A::canonicalPlan($profile->subscription_plan)] ?? 'مجاني',
+            'plan' => (A::PLAN_LABELS[$effectivePlan] ?? 'مجاني')
+                . ($expired ? ' (انتهى الاشتراك المدفوع)' : ''),
         ]);
     }
 }

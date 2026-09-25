@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Merchant;
 
 use App\Domain\Verticals\VerticalRegistry;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\V1\Amial\EntitlementController;
 use App\Models\MerchantProfile;
 use App\Services\Access\EntitlementService;
 use App\Services\Access\PlanComparisonService;
@@ -23,6 +24,7 @@ class WebPlansController extends Controller
         EntitlementService $entitlements,
         PlanComparisonService $comparison,
         UsageLimitService $usage,
+        EntitlementController $catalogue,
     ): JsonResponse {
         $owner = $request->user('merchant_web');
         $profile = MerchantProfile::where('user_id', $owner->id)->firstOrFail();
@@ -47,6 +49,11 @@ class WebPlansController extends Controller
             && $profile->subscription_expires_at !== null
             && $profile->subscription_expires_at->isPast();
 
+        // قرارات المنصة الحية (plan_capabilities) لا تُستنتج من قائمة
+        // التسويق الافتراضية. واجهة التطبيق والويب تقرآن المصدر نفسه.
+        $catalogueRequest = $request->duplicate(['business_type' => $previewSector]);
+        $live = $catalogue->plans($catalogueRequest)->getData(true)['data'] ?? [];
+
         return response()->json([
             'success' => true, 'code' => 'OK', 'message' => '',
             'meta' => [
@@ -64,6 +71,7 @@ class WebPlansController extends Controller
                     'code' => $code, 'label' => $label, 'is_my_sector' => $code === $actualSector,
                 ])->values()->all(),
                 'comparison' => $comparison->catalogue($previewSector),
+                'live_plans' => $live['plans'] ?? [],
                 'manifest' => $manifest,
                 'usage' => $usage->usageSnapshot($owner),
                 // خطط المشروع الحالية لا تخصم ذاتياً. لا نعرض زر تفعيل وهمياً.
