@@ -18,10 +18,10 @@ use Tests\TestCase;
  *      وأصلُها `KycTierLimitsSeeder`، واحتياطُها `DEFAULT_LIMITS` في
  *      `KycTierService`.
  *
- *   ② **وهي لا تحكم البيع.** `assertTransactionAllowed` تُنادى في موضعين
- *      اثنين لا غير — التبرّعات والدفع الآمن — و`enforceFinancialPolicy`
- *      **بصفر نداء** رغم أنّ ثلاثَ خدماتٍ تستورد سِمتَها. فبيعُ التاجر
- *      وبيعُ الوقود والكاشير خارجَها تماماً.
+ *   ② **نطاقُها في الخدمات يُقاس لا يُفترَض.** تفرض حدودَ الحركة
+ *      في تحويلات العميل والسحب وتسديد طلب المال، والدفع من محفظة العميل
+ *      للتاجر، والمساهمة في الصندوق العائلي، والتبرعات والدفع الآمن.
+ *      ولا يثبت ذلك أن مبيعات التاجر أو الوقود أو الكاشير نفسها محدودة بها.
  *
  *   ③ **واللوحةُ تعرضها «الحدود» بلا نطاق.** فيقرؤها المراجعُ سقفاً
  *      للبيع فلا يبحث عن سقفٍ حقيقيّ — ورقمٌ يُعرَض حدّاً ولا يحدّ ما
@@ -89,8 +89,11 @@ class LimitScopeTruthGuardTest extends TestCase
     {
         $sites = $this->enforcementSites();
 
-        // **المقيسُ اليوم**: التبرّعاتُ والدفعُ الآمن، ولا ثالثَ.
+        // خمسة مواقع تنفيذ مباشرة، منها مسارات متعددة في ProgressiveCustomerMoneyController.
         $this->assertSame([
+            'app/Http/Controllers/Api/V1/Amial/FamilyFundController.php',
+            'app/Http/Controllers/Api/V1/Amial/MerchantPaymentController.php',
+            'app/Http/Controllers/Api/V1/Amial/ProgressiveCustomerMoneyController.php',
             'app/Http/Controllers/Api/V1/Amial/SafePaymentController.php',
             'app/Services/DonationsService.php',
         ], $sites,
