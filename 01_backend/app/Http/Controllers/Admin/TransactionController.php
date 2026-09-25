@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\Helpers;
-use App\Exceptions\TransactionFailedException;
 use App\Http\Controllers\Controller;
 use App\Models\EMoney;
 use App\Models\RequestMoney;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WithdrawalMethod;
+use App\Services\AdminWalletTransferService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Contracts\View\View;
@@ -33,7 +33,8 @@ class TransactionController extends Controller
         private RequestMoney $requestMoney,
         private Transaction $transaction,
         private User $user,
-        private WithdrawalMethod $withdrawalMethod
+        private WithdrawalMethod $withdrawalMethod,
+        private AdminWalletTransferService $walletTransfers,
     ) {}
 
     public function index(Request $request): View
@@ -346,54 +347,44 @@ class TransactionController extends Controller
             Toastr::success(translate('Successfully changed the status'));
             return back();
         } elseif (strtolower($slug) == 'approve') {
-            DB::beginTransaction();
-            $data = [];
-            $data['from_user_id'] = $requestMoney->to_user_id;
-            $data['to_user_id'] = $requestMoney->from_user_id;
-
             try {
-                $sendmoney_charge = 0;   //since agent transaction has no change
-                $data['user_id'] = $data['from_user_id'];
-                $data['type'] = 'debit';
-                $data['transaction_type'] = SEND_MONEY;
-                $data['ref_trans_id'] = null;
-                $data['amount'] = $requestMoney->amount + $sendmoney_charge;
+                $sender = $this->user->findOrFail((int) $requestMoney->to_user_id);
+                $recipient = $this->user->findOrFail((int) $requestMoney->from_user_id);
 
-                if (strtolower($data['type']) == 'debit' && $this->eMoney->where('user_id', $data['from_user_id'])->first()->current_balance < $data['amount']) {
-                    Toastr::error(translate('Insufficient Balance'));
-                    return back();
-                }
+                // اعتماد الطلب والمعاملة المالية في نفس المعاملة الخارجية؛
+                // ففشل حفظ الحالة يعيد الرصيد والقيد معاً.
+                $result = DB::transaction(function () use ($requestMoney, $request, $sender, $recipient): array {
+                    $result = $this->walletTransfers->transfer(
+                        sender: $sender,
+                        recipient: $recipient,
+                        amount: (string) $requestMoney->amount,
+                        reason: trim((string) ($requestMoney->note ?? '')) ?: 'اعتماد طلب مال',
+                        requestIdempotencyKey: 'request-money:' . $requestMoney->id,
+                        actor: $request->user(),
+                        sourceType: 'request_money_approval',
+                        debitTransactionType: SEND_MONEY,
+                        creditTransactionType: RECEIVED_MONEY,
+                    );
 
-                $customer_transaction = Helpers::make_transaction($data);
+                    $requestMoney->type = 'approved';
+                    $requestMoney->save();
 
-                Helpers::send_transaction_notification($data['user_id'], $data['amount'], $data['transaction_type']);
-
-                if ($customer_transaction == null) {
-                    throw new TransactionFailedException('Transaction from sender is failed');
-                }
-
-                //customer(receiver) transaction
-                $data['user_id'] = $data['to_user_id'];
-                $data['type'] = 'credit';
-                $data['transaction_type'] = RECEIVED_MONEY;
-                $data['ref_trans_id'] = $customer_transaction;
-                $data['amount'] = $requestMoney->amount;
-                $agent_transaction = Helpers::make_transaction($data);
-
-                Helpers::send_transaction_notification($data['user_id'], $data['amount'], $data['transaction_type']);
-
-                if ($agent_transaction == null) {
-                    throw new TransactionFailedException('Transaction to receiver is failed');
-                }
-
-                $requestMoney->type = 'approved';
-                $requestMoney->save();
-
-                DB::commit();
-            } catch (TransactionFailedException $e) {
-                DB::rollBack();
+                    return $result;
+                }, 3);
+            } catch (\\Throwable $e) {
+                report($e);
                 Toastr::error(translate('Status change failed'));
                 return back();
+            }
+
+            if (! $result['duplicate']) {
+                try {
+                    Helpers::send_transaction_notification($sender->id, $requestMoney->amount, SEND_MONEY);
+                    Helpers::send_transaction_notification($recipient->id, $requestMoney->amount, RECEIVED_MONEY);
+                } catch (\\Throwable $e) {
+                    report($e);
+                    Toastr::warning(translate('Notification failed'));
+                }
             }
 
             Toastr::success(translate('Successfully changed the status'));
