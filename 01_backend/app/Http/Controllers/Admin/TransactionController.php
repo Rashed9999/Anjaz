@@ -371,7 +371,7 @@ class TransactionController extends Controller
 
                     return $result;
                 }, 3);
-            } catch (\\Throwable $e) {
+            } catch (\Throwable $e) {
                 report($e);
                 Toastr::error(translate('Status change failed'));
                 return back();
@@ -381,7 +381,7 @@ class TransactionController extends Controller
                 try {
                     Helpers::send_transaction_notification($sender->id, $requestMoney->amount, SEND_MONEY);
                     Helpers::send_transaction_notification($recipient->id, $requestMoney->amount, RECEIVED_MONEY);
-                } catch (\\Throwable $e) {
+                } catch (\Throwable $e) {
                     report($e);
                     Toastr::warning(translate('Notification failed'));
                 }
