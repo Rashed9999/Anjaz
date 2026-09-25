@@ -37,11 +37,18 @@ use Illuminate\Support\Facades\Route;
 // ============ Admin locale ============
 // تفضيل واجهة خاص بجلسة الموظف؛ لا يغيّر بيانات أعمال ولا يحتاج صلاحية RBAC إضافية.
 Route::post('/locale', function (\Illuminate\Http\Request $request) {
-    $validated = $request->validate([
+    $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
         'locale' => ['required', 'in:ar,en'],
     ]);
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'code' => 'LOCALE_INVALID',
+            'message' => 'اللغة المطلوبة غير مدعومة.',
+        ], 422);
+    }
 
-    $locale = (string) $validated['locale'];
+    $locale = (string) $validator->validated()['locale'];
     session(['local' => $locale]);
     \Illuminate\Support\Facades\App::setLocale($locale);
 
