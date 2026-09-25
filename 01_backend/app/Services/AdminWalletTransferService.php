@@ -36,7 +36,13 @@ class AdminWalletTransferService
         string $reason = '',
         ?string $requestIdempotencyKey = null,
         ?User $actor = null,
+        string $sourceType = 'admin_wallet_transfer',
+        ?string $debitTransactionType = null,
+        ?string $creditTransactionType = null,
     ): array {
+        $debitTransactionType ??= CASH_OUT;
+        $creditTransactionType ??= CASH_IN;
+
         if ($sender->id === $recipient->id) {
             throw new RuntimeException('لا يمكن التحويل من المحفظة إلى نفسها');
         }
@@ -51,7 +57,7 @@ class AdminWalletTransferService
             ? 'hub-xfer:' . hash('sha256', $requestIdempotencyKey)
             : null;
 
-        return DB::transaction(function () use ($sender, $recipient, $amount, $reason, $ledgerKey, $actor): array {
+        return DB::transaction(function () use ($sender, $recipient, $amount, $reason, $ledgerKey, $actor, $sourceType, $debitTransactionType, $creditTransactionType): array {
             if ($ledgerKey) {
                 $existing = \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', $ledgerKey)
                     ->lockForUpdate()
@@ -109,7 +115,7 @@ class AdminWalletTransferService
             Transaction::create([
                 'user_id' => $recipient->id,
                 'transaction_id' => $creditId,
-                'transaction_type' => CASH_IN,
+                'transaction_type' => $creditTransactionType,
                 'debit' => '0.0000', 'credit' => $amount, 'amount' => $amount,
                 'balance' => $balanceAfterRecipient,
                 'from_user_id' => $sender->id, 'to_user_id' => $recipient->id,
@@ -121,7 +127,7 @@ class AdminWalletTransferService
                 'user_id' => $sender->id,
                 'transaction_id' => $debitId,
                 'ref_trans_id' => $creditId,
-                'transaction_type' => CASH_OUT,
+                'transaction_type' => $debitTransactionType,
                 'debit' => $amount, 'credit' => '0.0000', 'amount' => $amount,
                 'balance' => $balanceAfterSender,
                 'from_user_id' => $sender->id, 'to_user_id' => $recipient->id,
@@ -131,7 +137,7 @@ class AdminWalletTransferService
             ]);
 
             $entry = $this->ledger->post(
-                sourceType: 'admin_wallet_transfer',
+                sourceType: $sourceType,
                 sourceId: (string) $transfer->id,
                 description: 'تحويل من محفظة الإدارة إلى مستخدم',
                 lines: [
