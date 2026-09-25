@@ -49,10 +49,16 @@ class PortalHost
         return self::clean(config('amial.hosts.agent'));
     }
 
+    /** مضيف بوابة صاحب المنشأة، أو null قبل إعداد DNS وTLS. */
+    public static function merchant(): ?string
+    {
+        return self::clean(config('amial.hosts.merchant'));
+    }
+
     /** أفُعِّل الفصل أصلاً؟ */
     public static function enabled(): bool
     {
-        return self::admin() !== null || self::agent() !== null;
+        return self::admin() !== null || self::agent() !== null || self::merchant() !== null;
     }
 
     /**
@@ -71,6 +77,10 @@ class PortalHost
 
         if ($path === 'agent' || str_starts_with($path, 'agent/')) {
             return self::agent();
+        }
+
+        if ($path === 'merchant' || str_starts_with($path, 'merchant/')) {
+            return self::merchant();
         }
 
         return null;

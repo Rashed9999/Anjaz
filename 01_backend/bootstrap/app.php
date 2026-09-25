@@ -81,6 +81,12 @@ $app = Application::configure(basePath: dirname(__DIR__))
                 ->name('agent.')
                 ->group(base_path('routes/agent.php'));
 
+            // AMIAL-MERCHANT-WEB-001: بوابة منشأة مستقلّة بجلسة وصلاحيات مالكها.
+            \Illuminate\Support\Facades\Route::middleware('web')
+                ->prefix('merchant')
+                ->name('merchant.web.')
+                ->group(base_path('routes/merchant-web.php'));
+
             // AMIAL-HEALTH-001 (v1.0-C): public health checks
             \Illuminate\Support\Facades\Route::middleware('api')
                 ->group(base_path('routes/api/health.php'));
@@ -183,6 +189,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'deviceVerify' => DeviceVerifyMiddleware::class,
             'checkDeviceId' => CheckDeviceId::class,
             'merchant' => MerchantMiddleware::class,
+            'merchant.web' => \App\Http\Middleware\MerchantWebMiddleware::class,
 
             // Amial Pay v0.6
             'amial.idempotency' => EnforceIdempotency::class,

@@ -491,6 +491,8 @@ return [
     'hosts' => [
         'admin' => env('AMIAL_ADMIN_HOST', ''),
         'agent' => env('AMIAL_AGENT_HOST', ''),
+        // يفعّل بعد ضبط DNS وTLS؛ حتى ذلك الوقت يبقى /merchant على النطاق الحالي.
+        'merchant' => env('AMIAL_MERCHANT_HOST', ''),
     ],
 
     /*
