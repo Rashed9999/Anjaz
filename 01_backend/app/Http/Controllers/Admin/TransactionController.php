@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\Helpers;
+use App\Exceptions\InsufficientBalanceException;
 use App\Http\Controllers\Controller;
 use App\Models\EMoney;
 use App\Models\RequestMoney;
@@ -371,6 +372,9 @@ class TransactionController extends Controller
 
                     return $result;
                 }, 3);
+            } catch (InsufficientBalanceException $e) {
+                Toastr::error(translate('Insufficient Balance'));
+                return back();
             } catch (\Throwable $e) {
                 report($e);
                 Toastr::error(translate('Status change failed'));
