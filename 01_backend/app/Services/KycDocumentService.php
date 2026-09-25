@@ -223,10 +223,8 @@ class KycDocumentService
                 // AMIAL-KYC-SEQUENCE-001 — القرار النهائي نفسه يفرض التسلسل.
                 // لا نعتمد على Flutter أو Controller؛ أي مدخل قديم أو استدعاء
                 // خدمة مباشر يمر من هنا قبل توسيع الحدود المالية.
-                app(KycTierService::class)
-                    ->assertSequentialVerificationDecision($account, $requiredTier);
-
-
+                // أولاً سمِّ الوثائق الناقصة؛ بعد اكتمالها يطبق الحارس
+                // ترتيب المراحل وإثبات ملكية صاحب الوثيقة قبل أي اعتماد.
                 $completeness = $this->completenessFor($account, $requiredTier);
                 if (!$completeness['complete']) {
                     throw new DomainException($this->sayMissing(
@@ -237,6 +235,9 @@ class KycDocumentService
                         'ارفعها من نافذة «✏️ تعديل» ← قسمُ المستندات، ثمّ أعِد الاعتماد.'
                     ));
                 }
+
+                app(KycTierService::class)
+                    ->assertSequentialVerificationDecision($account, $requiredTier);
 
                 // AMIAL-LEGAL-NAME-001 — Tier 2 لا يعتمد صور هوية بلا
                 // اسم أقره المراجع ومقارنته بالاسم الرباعي المصرّح به.

@@ -136,6 +136,14 @@ class PilotCustomerPhoneOtpTest extends TestCase
             'is_active' => 1,
         ]);
 
+        // لا يقبل الإنتاج إثبات السكن بلا مطابقة اسم الوثيقة؛
+        // ابنِ نفس الخطوة في تجربة النجاح بدلاً من تعطيل الحارس.
+        $names = app(\App\Services\Kyc\LegalNameService::class);
+        $names->confirmResidenceDocumentName(
+            (int) $submitted['verification_id'],
+            $reviewer,
+            $names->declared($user->fresh()),
+        );
         $service->decide(
             (int) $submitted['verification_id'],
             $reviewer,
@@ -192,6 +200,14 @@ class PilotCustomerPhoneOtpTest extends TestCase
             'is_active' => 1,
         ]);
 
+        // لا يقبل الإنتاج إثبات السكن بلا مطابقة اسم الوثيقة؛
+        // ابنِ نفس الخطوة في تجربة النجاح بدلاً من تعطيل الحارس.
+        $names = app(\App\Services\Kyc\LegalNameService::class);
+        $names->confirmResidenceDocumentName(
+            (int) $submitted['verification_id'],
+            $reviewer,
+            $names->declared($user->fresh()),
+        );
         $service->decide(
             (int) $submitted['verification_id'],
             $reviewer,

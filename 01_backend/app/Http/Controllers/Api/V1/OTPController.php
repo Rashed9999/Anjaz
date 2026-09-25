@@ -136,12 +136,8 @@ class OTPController extends Controller
             DB::transaction(function () use ($row, $user) {
                 $account = \App\Models\User::query()->lockForUpdate()->findOrFail($user->id);
                 $account->is_phone_verified = 1;
-                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
-                    $account->kyc_tier = max(1, (int) ($account->kyc_tier ?? 0));
-                }
-                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier_updated_at')) {
-                    $account->kyc_tier_updated_at = now();
-                }
+                // إثبات ملكية الهاتف خطوة مستقلة؛ لا يمنح الفئة الأولى
+                // حتى يعتمد المراجع إثبات السكن التشغيلي.
                 $account->save();
                 $row->delete();
 
