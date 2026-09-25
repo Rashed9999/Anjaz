@@ -471,6 +471,9 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
         Route::get('/accounts/{id}/statement', [$lc, 'statement'])
             ->where('id', '[0-9]+')->name('statement');
         Route::get('/reconciliation', [$lc, 'reconciliation'])->name('reconciliation');
+        // تبويبا حالات المطابقة وتغطية التدفقات يستدعيهما قالب مركز الدفتر بالفعل.
+        Route::get('/reconciliation-cases', [$lc, 'reconciliationCases'])->name('reconciliation-cases');
+        Route::get('/flow-coverage', [$lc, 'flowCoverage'])->name('flow-coverage');
         Route::get('/entries', [$lc, 'entries'])->name('entries');
         // AMIAL-RECON-NIGHTLY-001: تاريخُ المصالحات — القاعدة ١٢.
         Route::get('/reconciliation-runs', [$lc, 'reconciliationRuns'])->name('reconciliation-runs');
