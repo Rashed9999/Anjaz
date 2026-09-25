@@ -470,6 +470,7 @@ class AdminHubController extends Controller
             ], 422);
         }
 
+        $governorate = null;
         if ($status === 1) {
             // هذه واجهة توافقية قديمة؛ لا نسمح لها بعد اليوم بإنتاج حساب
             // "مقبول" ومنطقته UNKNOWN. إن لم يكن في الملف اختيار محفوظ،
