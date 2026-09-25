@@ -22,6 +22,7 @@ class WebPortalController extends Controller
             'storeName' => $merchant?->store_name
                 ?: trim((string) $owner->f_name . ' ' . (string) $owner->l_name),
             'businessType' => A::BUSINESS_TYPE_LABELS[$profile->business_type] ?? 'نشاط تجاري',
+            'businessTypeCode' => (string) $profile->business_type,
             'plan' => A::PLAN_LABELS[A::canonicalPlan($profile->subscription_plan)] ?? 'مجاني',
         ]);
     }
