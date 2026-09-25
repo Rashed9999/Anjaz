@@ -52,7 +52,9 @@ class OTPController extends Controller
                 // مزود موجود لكنه فشل ليس نجاحاً. نحذف الرمز الذي لم يصل
                 // حتى لا يبقى تحدٍ صالح لا يعرفه صاحبه.
                 if (!in_array($result, ['success', true, 1], true)) {
-                    DB::table('phone_verifications')->where('phone', $phone)->delete();
+                    DB::table('phone_verifications')
+                        ->whereIn('phone', \App\Support\Phone::variants($phone))
+                        ->delete();
 
                     return response()->json([
                         'success' => false,
