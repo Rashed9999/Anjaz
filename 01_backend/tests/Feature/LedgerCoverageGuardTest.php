@@ -171,6 +171,26 @@ class LedgerCoverageGuardTest extends TestCase
         // ── أرصدة فرعية لا تمسّ محفظة المنصّة ──
         'CustomerCreditService' => 'رصيد آجل بين التاجر وعميله — دَينٌ خارج المنصّة لا مالٌ فيها',
 
+        // AMIAL-CREDIT-COLLECTION-LEDGER-001 — تحصيلان، ولكن قيد محفظة واحد كحد أقصى.
+        //
+        // النقد في صندوق المنشأة مالٌ ورقيّ بين التاجر وعميله، لا رصيد
+        // إلكترونيّ تُصدره أميال. CreditCollectionService تسجّل قيدَ سداد
+        // في customer_credit_movements، وتربطه بورديّة الكاشير، وتُصدر
+        // سنداً قابلاً للتحقّق metadata.wallet_affected=false. لا تودع
+        // شيئاً في e_money، ولذلك إنشاء قيد في دفتر محفظة المنصّة هنا
+        // سيُظهِر التزاماً إلكترونياً مقابل ورقٍ لم تستلمه أميال.
+        'CreditCollectionService' => 'تحصيل نقد ورقيّ بدفتر ذمم التاجر ووردية الكاشير وسند موثّق؛ لا يغيّر محفظة المنصّة ولا يُنشئ التزاماً إلكترونياً',
+
+        // طلب أميال يسدّده العميل بنفسه عبر PaymentRequestService التي
+        // هي في MUST_POST وتُرحّل دفع المحفظة في لحظة الدفع. التأكيد
+        // هنا يتحقّق من معاملة مدفوعة تخصّ المنشأة ومن عدم استهلاكها،
+        // ثم يُخفّض ذمّة العميل ويُصدر سنداً دون تحريك المحفظة مرّةً
+        // ثانية. إعادة الترحيل هنا خصمٌ مزدوج للدفع نفسه.
+        //
+        // لا تمدّ هذه الرخصة إلى خدمةٍ جديدة تخصم e_money مباشرةً:
+        // الاختبار المرفق يرفض أن يكتسب أيّ من المحصّلين كتابةً للمحفظة.
+        'CreditWalletCollectionService' => 'طلب أميال يُرحَّل عند دفع العميل في PaymentRequestService؛ التأكيد يوثّق الدفع ويخفض ذمة العميل ويصدر سنداً بلا خصم محفظة ثانٍ',
+
         // ── وابنتُها: توزيعُ ما رُحِّل، لا ترحيلٌ ثانٍ ──
         //
         // أمسكها الحارسُ لأنّها تكتب في أربعة مواضع — وهو إمساكٌ صحيح.
@@ -379,6 +399,36 @@ class LedgerCoverageGuardTest extends TestCase
             . "تُدرَج في LedgerCoverageGuardTest::EXEMPT مع سببٍ مكتوب يقرؤه "
             . "من يأتي بعدك. والدفتر اليوم يرى أقلّ من ثلث الحركة المالية "
             . "لأن هذا السؤال لم يُطرح من قبل.");
+    }
+
+    /**
+     * The two collection orchestrators must not become a second wallet writer.
+     * The only e-money transfer in Amial collections happens when the customer
+     * pays the PaymentRequest; confirmation applies receivables, not money.
+     */
+    public function test_credit_collection_exemptions_cannot_start_writing_wallets(): void
+    {
+        $paths = $this->locateServices();
+        foreach (['CreditCollectionService', 'CreditWalletCollectionService'] as $name) {
+            $this->assertArrayHasKey($name, self::EXEMPT);
+            $this->assertArrayHasKey($name, $paths);
+            $src = file_get_contents($paths[$name]);
+
+            // Nothing in these orchestrators may write e_money, directly
+            // debit/credit a wallet, or call the platform ledger's post method.
+            $this->assertDoesNotMatchRegularExpression(
+                '/\\b(?:EMoney|E_Money)::|->(?:debit|credit|hold|releaseHold|postBalanced)\\s*\\(/',
+                $src, "$name has become a direct wallet writer — remove its EXEMPT entry and post it explicitly"
+            );
+        }
+        $wallet = file_get_contents($paths['CreditWalletCollectionService']);
+        $this->assertContains('PaymentRequestService', self::MUST_POST);
+        $this->assertStringContainsString('PaymentRequestService $requests', $wallet);
+        $this->assertStringContainsString('assertPaidForMerchant(', $wallet);
+        $this->assertStringContainsString('issueDualForTransfer(', $wallet);
+        $cash = file_get_contents($paths['CreditCollectionService']);
+        $this->assertStringContainsString("'wallet_affected'=>false", $cash);
+        $this->assertStringContainsString('cashier_shift_id', $cash);
     }
 
     public function test_services_that_post_have_not_quietly_stopped(): void
