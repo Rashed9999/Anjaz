@@ -12,6 +12,7 @@ use App\Services\CashierShiftService;
 use App\Services\CreditCollectionService;
 use App\Services\CreditWalletCollectionService;
 use App\Services\CustomerCreditService;
+use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
 use Tests\TestCase;
@@ -26,7 +27,7 @@ class CreditCollectionFlowTest extends TestCase
         $user=User::factory()->create(['type'=>3,'role'=>'merchant','zone_code'=>'SOUTH']);
         MerchantProfile::create([
             'user_id'=>$user->id,'verification_status'=>'verified',
-            'business_type'=>'retail','subscription_plan'=>'business',
+            'business_type'=>A::BIZ_RETAIL,'subscription_plan'=>A::PLAN_BUSINESS,
         ]);
         EMoney::create([
             'user_id'=>$user->id,'current_balance'=>'500.0000',
