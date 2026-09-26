@@ -87,12 +87,45 @@ class MerchantWebPortalTest extends TestCase
             ->assertJsonStructure(['meta' => ['customers', 'pagination']]);
     }
 
+    public function test_web_and_pos_read_same_credit_account_and_guard_other_merchants(): void
+    {
+        $owner = $this->owner();
+        $account = app(\App\Services\CustomerCreditService::class)->findOrCreateAccount(
+            $owner->id, '967771889900', 'عميل التجربة', '5000'
+        );
+        app(\App\Services\CustomerCreditService::class)->recordSale(
+            $account, '1500', referenceNumber: 'WEB-INV-1'
+        );
+
+        $this->actingAs($owner, 'merchant_web')
+            ->getJson('/merchant/data/debts')->assertOk()
+            ->assertJsonPath('meta.total_due', '1500.0000');
+        $this->getJson('/merchant/data/debts/customers')->assertOk()
+            ->assertJsonPath('meta.customers.0.customer_name', 'عميل التجربة');
+        $this->getJson('/merchant/data/debts/customers/'.$account->id.'/invoices')->assertOk()
+            ->assertJsonPath('meta.invoices_total', '1500.0000')
+            ->assertJsonPath('meta.invoices.0.reference_number', 'WEB-INV-1');
+        $this->getJson('/merchant/data/debts/customers/'.$account->id.'/statement')->assertOk()
+            ->assertJsonPath('meta.movements.0.amount', '1500.0000');
+
+        $other = User::factory()->create([
+            'role' => A::ROLE_MERCHANT, 'type' => MERCHANT_TYPE, 'is_active' => 1,
+        ]);
+        MerchantProfile::create([
+            'user_id' => $other->id, 'business_type' => A::BIZ_RETAIL,
+            'subscription_plan' => A::PLAN_ENTERPRISE,
+        ]);
+        $this->actingAs($other, 'merchant_web')
+            ->getJson('/merchant/data/debts/customers/'.$account->id.'/invoices')
+            ->assertNotFound();
+    }
+
     public function test_customer_and_pos_cannot_read_merchant_credit_book_or_wallet_truth(): void
     {
         $this->owner();
         foreach ([
-            ['type' => CUSTOMER_TYPE, 'role' => A::ROLE_CUSTOMER],
-            ['type' => POS_TYPE, 'role' => A::ROLE_POS],
+            ['type' => 2, 'role' => 'user'],
+            ['type' => 4, 'role' => 'pos'],
         ] as $identity) {
             $user = User::factory()->create($identity);
             $this->actingAs($user, 'merchant_web')
