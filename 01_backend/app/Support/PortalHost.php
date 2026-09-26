@@ -55,6 +55,19 @@ class PortalHost
         return self::clean(config('amial.hosts.merchant'));
     }
 
+    /**
+     * Direct HTTPS merchant sign-in for navigation only.
+     * Keep the legacy route before merchant DNS/TLS is configured.
+     */
+    public static function merchantLoginUrl(): string
+    {
+        $host = self::merchant();
+
+        return $host !== null
+            ? 'https://' . $host . '/merchant/login'
+            : route('merchant.web.login');
+    }
+
     /** أفُعِّل الفصل أصلاً؟ */
     public static function enabled(): bool
     {

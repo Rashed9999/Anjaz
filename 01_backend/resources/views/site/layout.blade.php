@@ -46,11 +46,12 @@
                 <a href="{{ route($name) }}"
                    @if($current === $name) aria-current="page" @endif>{{ $label }}</a>
             @endforeach
-            {{-- بابان في الترويسة لا واحد.
+            {{-- بوابات الإدارة والتاجر والدخول العام واضحة في الترويسة. التطوير يحتفظ بروابطه. --}}
 
                  كان فيها زرٌّ واحد يقود إلى `/login`، ومنه لا سبيلَ ظاهرٌ
                  إلى لوحة الإدارة. فمن أراد الإدارة وجب أن يكتب العنوان
                  بيده — وهو ما لا يفعله أحد، ولا يعرفه أصلاً. --}}
+            <a class="nav-admin" href="{{ \App\Support\PortalHost::merchantLoginUrl() }}">بوابة التاجر</a>
             <a class="nav-admin" href="{{ route('admin.auth.login') }}">بوابة الإدارة</a>
             <a class="btn btn-primary" href="{{ route('login') }}">تسجيل الدخول</a>
         </nav>
@@ -91,6 +92,7 @@
             <div>
                 <h4>الدخول</h4>
                 <a href="{{ route('login') }}">تسجيل الدخول</a>
+                <a href="{{ \App\Support\PortalHost::merchantLoginUrl() }}">بوابة التاجر</a>
                 <a href="{{ route('agent.login') }}">بوّابة شركات الصرافة</a>
                 <a href="{{ route('admin.auth.login') }}">لوحة الإدارة</a>
             </div>

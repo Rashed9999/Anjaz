@@ -18,6 +18,7 @@
                 <div class="cta">
                     <a class="btn btn-gold btn-lg" href="{{ route('site.personal') }}">اكتشف خدمات الأفراد</a>
                     <a class="btn btn-hero-secondary btn-lg" href="{{ route('site.business') }}">حلول الأعمال</a>
+                    <a class="btn btn-hero-secondary btn-lg" href="{{ \App\Support\PortalHost::merchantLoginUrl() }}">دخول التاجر</a>
                 </div>
                 <div class="hero-trust" aria-label="مرتكزات المنصّة">
                     <span>دفتر قيود متوازن</span>

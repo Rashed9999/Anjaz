@@ -60,6 +60,7 @@
             <p>سجّل نشاطك من التطبيق، ووثّقه، وابدأ القبض في اليوم نفسه.</p>
             <div class="cta">
                 <a class="btn btn-gold btn-lg" href="{{ route('site.contact') }}">تواصل معنا</a>
+                <a class="btn btn-primary btn-lg" href="{{ \App\Support\PortalHost::merchantLoginUrl() }}">الدخول إلى لوحة التاجر</a>
             </div>
         </div>
     </div>
