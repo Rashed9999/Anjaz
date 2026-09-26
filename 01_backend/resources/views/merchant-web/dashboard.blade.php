@@ -157,6 +157,74 @@
     }
   }
   function debtUrl(key,id){return routes[key].replace('__ID__',encodeURIComponent(String(id)))}
+  function collectionVoucher(panel,result){
+    if(!result.receipt_number){panel.append(node('p','تم التسجيل؛ تعذّر إظهار رقم السند. راجع سجل التحصيلات.','note warning-note'));return}
+    const done=node('div',null,'note');done.append(node('p','تم التحصيل برقم سند '+result.receipt_number+' — المتبقي '+money(result.new_balance)));
+    const a=node('a','عرض السند / طباعة PDF','link-action');
+    a.href=debtUrl('debtCollectionReceipt',result.collection_id);a.target='_blank';a.rel='noopener noreferrer';
+    done.append(a);panel.append(done);
+  }
+  function pendingWalletBox(panel,result){
+    const info=node('div',null,'note');info.append(node('p','طلب أميال رقم '+result.payment_code+' — ينتظر موافقة العميل ودفعه من تطبيق أميال.'));
+    if(result.payment_url){
+      const link=node('a','فتح رابط دفع العميل','link-action');link.href=result.payment_url;link.target='_blank';link.rel='noopener noreferrer';info.append(link);
+      const copy=node('button','نسخ رابط الدفع','action secondary');copy.type='button';
+      copy.onclick=()=>navigator.clipboard.writeText(result.payment_url).then(()=>message('تم نسخ الرابط')).catch(()=>message('تعذّر النسخ'));
+      info.append(copy);
+    }
+    const confirm=node('button','التحقق من وصول الدفع وإصدار سند','action');
+    confirm.type='button';confirm.onclick=async()=>{
+      confirm.disabled=true;
+      try{
+        const done=await api('debtConfirmWallet',{},debtUrl('debtConfirmWallet',result.collection_id));
+        info.remove();collectionVoucher(panel,done);message('تم التحقق من أميال وتخفيض الدين');
+      }catch(e){message(e.message);confirm.disabled=false}
+    };
+    info.append(confirm);panel.append(info);
+  }
+  function collectionForm(id,account,invoices){
+    const p=node('section',null,'panel');p.append(node('h2','تحصيل دين من العميل'));
+    p.append(node('p','اختر نقداً أو أميال. النقد لا يودع في المحفظة؛ أميال لا يُحصل إلا بعد دفع العميل بنفسه.','note'));
+    const f=node('form',null,'editor'),balance=Number(account.current_balance||0);
+    const amountLabel=node('label','المبلغ بالريال اليمني','field'),amount=node('input');amount.name='amount';amount.type='number';amount.step='0.01';amount.min='0.01';amount.max=String(balance);amount.required=true;amountLabel.append(amount);
+    const methodLabel=node('label','طريقة السداد','field'),method=node('select');
+    for(const [v,title] of [['cash','تحصيل نقدي'],['amial_pay','دفع بمحفظة أميال']]){const o=node('option',title);o.value=v;method.append(o)}
+    method.name='payment_method';methodLabel.append(method);
+    const invoiceLabel=node('label','تخصيص السداد لفاتورة (اختياري)','field'),invoice=node('select');
+    invoice.name='sale_movement_ulid';const any=node('option','توزيع على أقدم الديون');any.value='';invoice.append(any);
+    (invoices||[]).forEach(x=>{const option=node('option',(x.reference_number||x.movement_ulid)+' — '+money(x.remaining));option.value=x.movement_ulid;invoice.append(option)});
+    invoiceLabel.append(invoice);
+    const noteLabel=node('label','ملاحظة التحصيل','field'),note=node('input');note.name='note';note.maxLength=255;noteLabel.append(note);
+    const button=node('button','متابعة التحصيل','action');button.type='submit';
+    const resultPanel=node('div');resultPanel.setAttribute('aria-live','polite');
+    f.append(amountLabel,methodLabel,invoiceLabel,noteLabel,button);
+    const key='mw-credit-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+    f.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const value=Number(amount.value);
+      const selected=(invoices||[]).find(x=>x.movement_ulid===invoice.value);
+      if(!Number.isFinite(value)||value<=0||value>balance||(selected&&value>Number(selected.remaining))){
+        message('المبلغ يتجاوز الدين أو المتبقي من الفاتورة');return
+      }
+      const label=method.value==='cash'?'نقداً في صندوق المنشأة':'بطلب دفع ينتظر موافقة العميل';
+      if(!window.confirm('تأكيد تحصيل '+money(value)+' '+label+'؟'))return;
+      button.disabled=true;
+      try{
+        const data={amount:amount.value,idempotency_key:key};
+        if(invoice.value)data.sale_movement_ulid=invoice.value;
+        if(note.value.trim())data.note=note.value.trim();
+        const isCash=method.value==='cash';
+        const response=await api(isCash?'debtCollectCash':'debtRequestWallet',data,
+          debtUrl(isCash?'debtCollectCash':'debtRequestWallet',id));
+        resultPanel.replaceChildren();
+        if(isCash){collectionVoucher(resultPanel,response);message('تم التحصيل النقدي وإصدار السند')}
+        else pendingWalletBox(resultPanel,response);
+        f.querySelectorAll('input,select').forEach(x=>x.disabled=true);
+        button.textContent='تم إنشاء التحصيل';button.disabled=true;
+      }catch(err){message(err.message);button.disabled=false}
+    });
+    p.append(f,resultPanel);return p;
+  }
   async function debtDetails(id){
     const detail=box('كشف حساب العميل');
     detail.id='debt-customer-detail';
@@ -178,6 +246,9 @@
       const back=node('button','العودة لقائمة العملاء','action secondary');
       back.type='button';back.onclick=()=>{detail.remove();document.getElementById('debt-customers-panel')?.scrollIntoView({behavior:'smooth'})};
       actions.append(back);detail.append(actions);
+      if(Number(statement.account?.current_balance||0)>0){
+        detail.append(collectionForm(id,statement.account,breakdown.invoices||[]));
+      }
       detail.append(node('h3','الفواتير غير المسددة'));
       table(detail,[['الفاتورة',x=>x.reference_number||x.movement_ulid],['تاريخ الإصدار',x=>x.issued_at||'—'],['الاستحقاق',x=>x.due_date||'غير محدد'],['القيمة',x=>money(x.original_amount)],['المتبقي',x=>money(x.remaining)]],breakdown.invoices||[]);
       detail.append(node('h3','جميع الحركات المسجلة'));
@@ -196,6 +267,20 @@
       })()
     ]);
     grid([['إجمالي الديون المستحقة',money(summary.total_due)],['العملاء المدينون',summary.debtors_count],['المتجاوزون للحد',summary.over_limit_count]]);
+    try{
+      const pending=await api('debtPending');
+      if((pending.collections||[]).length){
+        const q=box('طلبات أميال المعلقة والتحصيلات التي تحتاج مراجعة');
+        hint(q,'حتى بعد إعادة تحميل الصفحة، يمكنك الرجوع إلى الطلب والتحقق من دفع العميل دون إنشاء طلب جديد.');
+        (pending.collections||[]).forEach(item=>{
+          const boxItem=node('div',null,'panel');
+          boxItem.append(node('strong',item.collection_ref+' — '+money(item.paid)));
+          if(item.needs_review){boxItem.append(node('p','وصل المال لكن الدين تغير؛ اتصل بالإدارة قبل اتخاذ إجراء آخر.','note danger-note'))}
+          else pendingWalletBox(boxItem,item);
+          q.append(boxItem);
+        });
+      }
+    }catch(e){message('تعذّر تحميل طلبات التحصيل المعلقة: '+e.message)}
     const p=box('حسابات العملاء الآجلة');p.id='debt-customers-panel';
     hint(p,'هذه بيانات دفتر الآجل نفسه في تطبيق العميل ونقاط البيع. البيع بالآجل لا يزيد رصيد المحفظة حتى السداد.');
     const controls=node('form',null,'filters');
