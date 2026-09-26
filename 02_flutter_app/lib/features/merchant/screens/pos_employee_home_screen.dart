@@ -8,7 +8,7 @@ import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_shift_screen.dart';
-import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
+import 'package:amial_pay/features/merchant/screens/pos_credit_lookup_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
 import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
@@ -163,7 +163,7 @@ class PosEmployeeHomeScreen extends StatelessWidget {
                   icon: Icons.account_balance_wallet_outlined,
                   label: 'البيع الآجل والديون',
                   subtitle: 'من عليه دَينٌ وكم — وسدادٌ جزئيّ أو كامل',
-                  onTap: () => Get.to(() => const CreditDashboardScreen()),
+                  onTap: () => Get.to(() => const PosCreditLookupScreen()),
                   granted: true,
                 ),
 

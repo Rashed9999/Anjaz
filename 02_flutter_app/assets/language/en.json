@@ -1007,5 +1007,15 @@
   "credit_collect_download_failed_body": "The receipt file was not received from the server.",
   "credit_collect_pending_heading": "Pending collections for this customer",
   "credit_collect_pending_amount": "Pending collection: @amount",
-  "credit_collect_resume": "Resume payment and issue receipt"
+  "credit_collect_resume": "Resume payment and issue receipt",
+  "credit_collect_pos_title": "Debt collection",
+  "credit_collect_pos_hint": "Enter the customer's phone number to find their outstanding debt. Other customer accounts remain private.",
+  "credit_collect_pos_phone": "Customer phone number",
+  "credit_collect_pos_lookup": "Find outstanding debt",
+  "credit_collect_pos_no_account": "No credit account exists for this phone number at your business.",
+  "credit_collect_pos_no_debt": "This customer has no outstanding debt.",
+  "credit_collect_pos_inactive": "This account is inactive. Contact the business owner.",
+  "credit_collect_pos_network": "Could not reach the server. Check your connection and try again.",
+  "credit_collect_pos_failed": "Could not look up the credit account.",
+  "credit_collect_pos_balance": "Outstanding debt: @amount"
 }

@@ -24,6 +24,9 @@ class CustomerCreditRepo extends GetxService {
   Future<Response> showCustomer(int id) =>
       apiClient.getData('$_base/customers/$id');
 
+  Future<Response> lookupByPhone(String phone) =>
+      apiClient.getData('$_base/lookup', query: {'phone': phone});
+
   Future<Response> statement(int id, {String? from, String? to}) {
     final q = <String, dynamic>{};
     if (from != null) q['from'] = from;

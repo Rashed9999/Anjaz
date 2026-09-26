@@ -14,7 +14,10 @@ import 'package:amial_pay/features/merchant/controllers/customer_credit_controll
 /// AMIAL-CUSTOMER-CREDIT-001 — كشف حساب عميل + تسجيل سداد/مرتجع.
 class CreditCustomerStatementScreen extends StatefulWidget {
   final Map<String, dynamic> customer;
-  const CreditCustomerStatementScreen({super.key, required this.customer});
+  final bool collectionOnly;
+  const CreditCustomerStatementScreen({
+    super.key, required this.customer, this.collectionOnly = false,
+  });
 
   @override
   State<CreditCustomerStatementScreen> createState() => _CreditCustomerStatementScreenState();
@@ -25,6 +28,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
   DateTime? _from;
   DateTime? _to;
   bool _busyPdf = false;
+  double? _remainingBalance;
 
   @override
   void initState() {
@@ -35,6 +39,22 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
 
   Future<void> _refresh() async {
     final id = widget.customer['id'] as int;
+    if (widget.collectionOnly) {
+      // POS sees only the requested debtor, never the full owner ledger.
+      try {
+        final phone = widget.customer['customer_phone']?.toString() ?? '';
+        final r = await c.repo.lookupByPhone(phone);
+        if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+          final account = Map<String, dynamic>.from(r.body['meta'] as Map);
+          if (account['found'] == true && account['account_id'] == id && mounted) {
+            setState(() => _remainingBalance =
+                double.tryParse('${account['current_balance']}'));
+          }
+        }
+      } catch (_) { /* Retain last known amount; the server rechecks it. */ }
+      await c.loadPendingCollections(accountId: id);
+      return;
+    }
     await Future.wait([
       c.loadStatement(
         id,
@@ -47,6 +67,38 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
 
   @override
   Widget build(BuildContext context) {
+    if (widget.collectionOnly) {
+      return Scaffold(
+        backgroundColor: AmialColors.background,
+        appBar: AppBar(title: Text(widget.customer['customer_name']?.toString()
+            ?? 'credit_collect_pos_title'.tr)),
+        body: Obx(() {
+          final balance = _remainingBalance ??
+              (double.tryParse('${widget.customer['current_balance'] ?? 0}') ?? 0);
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(color: AmialColors.primary,
+                      borderRadius: BorderRadius.circular(16)),
+                  child: Text('credit_collect_pos_balance'.trParams({
+                    'amount': Money.format(balance),
+                  }), style: const TextStyle(color: Colors.white,
+                      fontSize: 20, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 16),
+                if (balance > 0) _actionsRow(widget.customer),
+                if (balance <= 0) Text('credit_collect_pos_no_debt'.tr),
+                _pendingCollectionPanel(),
+              ],
+            ),
+          );
+        }),
+      );
+    }
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
@@ -205,6 +257,17 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
   }
 
   Widget _actionsRow(Map account) {
+    if (widget.collectionOnly) {
+      return SizedBox(width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: _collectionDialog,
+          icon: const Icon(Icons.payments),
+          label: Text('credit_collect_action'.tr),
+          style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700,
+              minimumSize: const Size.fromHeight(52)),
+        ),
+      );
+    }
     return Column(children: [
       Row(children: [
         Expanded(child: FilledButton.icon(
@@ -464,8 +527,9 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
                 return;
               }
               // Use the live statement rather than a stale customer list card.
-              final account = c.statement.value?['account'] as Map?;
-              final debt = double.tryParse(
+              final account = widget.collectionOnly
+                  ? null : c.statement.value?['account'] as Map?;
+              final debt = _remainingBalance ?? double.tryParse(
                   '${account?['current_balance'] ?? widget.customer['current_balance'] ?? 0}') ?? 0;
               if (debt > 0 && amount > debt) {
                 Get.snackbar('credit_collect_amount_exceeds_title'.tr, 'credit_collect_amount_exceeds'.tr);
@@ -503,6 +567,10 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
 
   Future<void> _collectionResult(Map<String, dynamic> collection) async {
     if (collection['status'] == 'completed') {
+      final current = double.tryParse('${collection['new_balance']}');
+      if (widget.collectionOnly && current != null && mounted) {
+        setState(() => _remainingBalance = current);
+      }
       await Get.dialog<void>(AlertDialog(
         title: Text('credit_collect_success_title'.tr),
         content: Text('credit_collect_success_details'.trParams({

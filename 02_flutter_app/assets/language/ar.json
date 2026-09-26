@@ -1007,5 +1007,15 @@
   "credit_collect_download_failed_body": "لم يصل ملف السند من الخادم.",
   "credit_collect_pending_heading": "طلبات التحصيل المعلقة لهذا العميل",
   "credit_collect_pending_amount": "طلب تحصيل بمبلغ @amount",
-  "credit_collect_resume": "استئناف الدفع وإصدار السند"
+  "credit_collect_resume": "استئناف الدفع وإصدار السند",
+  "credit_collect_pos_title": "تحصيل الديون",
+  "credit_collect_pos_hint": "أدخل رقم هاتف العميل المسجل في دفتر الآجل. لن تظهر لك دفاتر العملاء الآخرين.",
+  "credit_collect_pos_phone": "رقم هاتف العميل",
+  "credit_collect_pos_lookup": "البحث عن دين العميل",
+  "credit_collect_pos_no_account": "لا يوجد حساب آجل لهذا الرقم لدى منشأتك.",
+  "credit_collect_pos_no_debt": "لا توجد مستحقات حالياً لهذا العميل.",
+  "credit_collect_pos_inactive": "هذا الحساب غير نشط. تواصل مع مالك المنشأة.",
+  "credit_collect_pos_network": "تعذّر الوصول إلى الخادم. تحقق من الاتصال وأعد المحاولة.",
+  "credit_collect_pos_failed": "تعذّر البحث في حساب الآجل.",
+  "credit_collect_pos_balance": "الدين المستحق: @amount"
 }
