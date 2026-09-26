@@ -181,4 +181,29 @@ class CreditCollectionFlowTest extends TestCase
         $this->getJson('/api/v1/amial/merchant/credit/collections/pending')
             ->assertOk()->assertJsonPath('meta.collections.0.collection_id',$pending->id);
     }
+
+    public function test_reviewed_wallet_collection_cannot_be_self_settled_again(): void
+    {
+        $owner=$this->owner();
+        $payer=User::factory()->create([
+            'type'=>2,'phone'=>'+967771009997','is_active'=>1,'zone_code'=>'SOUTH',
+        ]);
+        $credit=app(CustomerCreditService::class);
+        $account=$credit->findOrCreateAccount($owner->id,$payer->phone,'عميل قيد المراجعة');
+        $credit->recordSale($account,'900');
+        $service=app(CreditWalletCollectionService::class);
+        $request=$service->request($owner,$owner,null,$account,'400','review-blocking-2026');
+        $request->update(['status'=>'review']);
+        try {
+            $service->confirm($owner,$owner,$request);
+            $this->fail('Review-state payment must not be settled a second time');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('مراجعة', $e->getMessage());
+        }
+        $this->assertSame('900.0000',(string)$account->fresh()->current_balance);
+        $this->assertSame('review',$request->fresh()->status);
+        $this->assertDatabaseMissing('customer_credit_movements',[
+            'account_id'=>$account->id,'type'=>'payment',
+        ]);
+    }
 }

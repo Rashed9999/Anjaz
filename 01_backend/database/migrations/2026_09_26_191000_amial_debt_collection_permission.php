@@ -38,8 +38,10 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (Schema::hasTable('merchant_role_permissions')) {
-            DB::table('merchant_role_permissions')
+        if (Schema::hasTable('merchant_role_permissions') && Schema::hasTable('merchant_roles')) {
+            $ids=DB::table('merchant_roles')->where('is_system',true)
+                ->whereIn('code',['cashier','collector'])->pluck('id');
+            DB::table('merchant_role_permissions')->whereIn('merchant_role_id',$ids)
                 ->where('permission_code','debt.collect')->delete();
         }
     }

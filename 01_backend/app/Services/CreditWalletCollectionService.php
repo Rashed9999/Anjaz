@@ -72,6 +72,8 @@ class CreditWalletCollectionService
             $c=CreditCollection::whereKey($item->id)
                 ->where('merchant_user_id',$merchant->id)->lockForUpdate()->firstOrFail();
             if ($c->status==='completed') return $c;
+            if ($c->status==='review')
+                throw new RuntimeException('التحصيل تحت مراجعة الإدارة؛ لا تكرّر تسويته');
             if ($c->payment_method!=='amial_pay' || !$c->payment_request_id)
                 throw new InvalidArgumentException('الطلب ليس تحصيلاً عبر أميال');
             $a=CustomerCreditAccount::whereKey($c->account_id)

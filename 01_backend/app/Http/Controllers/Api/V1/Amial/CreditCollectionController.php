@@ -70,6 +70,9 @@ class CreditCollectionController extends Controller
         [$owner,$actor,$posId]=$this->actor($r);
         $item=$this->scoped($owner,$actor,$posId)->whereKey($collection)->first();
         if (!$item) return $this->error('NOT_FOUND','طلب التحصيل غير موجود',404);
+        if ($item->status==='review')
+            return $this->error('REVIEW_REQUIRED','التحصيل تحت مراجعة الإدارة؛ لا تكرّر تسويته',409,
+                $this->wallet->details($item,$this->cash));
         try {
             $done=$this->wallet->confirm($owner,$actor,$item);
             $data=$this->wallet->details($done,$this->cash);
