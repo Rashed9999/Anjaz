@@ -182,10 +182,16 @@ class CashierShiftService
         // `fuel_shifts` الخاصّ به، فضمُّه هنا يعدّ بيعَه مرّتين.
         // ══════════════════════════════════════════════════════════════
         $vertical = $this->verticalCash($shift);
+        // Paid debts are drawer receipts, NOT new sales or wallet deposits.
+        $collections = (string) \App\Models\CreditCollection::query()
+            ->where('cashier_shift_id', $shift->id)
+            ->where('payment_method', 'cash')->where('status', 'completed')
+            ->sum('amount');
 
         return [
             'cash_sales' => MoneyService::normalize(
                 MoneyService::add($cash, $vertical['cash'])),
+            'cash_collections' => MoneyService::normalize($collections),
             'sales_count' => $count + $vertical['count'],
         ];
     }
@@ -344,10 +350,14 @@ class CashierShiftService
     public function snapshot(CashierShift $shift): array
     {
         $c = $this->computeCash($shift);
-        $expected = MoneyService::add((string) $shift->opening_float, $c['cash_sales']);
+        $expected = MoneyService::add(
+            MoneyService::add((string) $shift->opening_float, $c['cash_sales']),
+            $c['cash_collections']
+        );
         return [
             'opening_float' => (string) $shift->opening_float,
             'cash_sales' => $c['cash_sales'],
+            'cash_collections' => $c['cash_collections'],
             'sales_count' => $c['sales_count'],
             'expected_cash' => MoneyService::normalize($expected),
             'opened_at' => $shift->opened_at?->toIso8601String(),
@@ -367,7 +377,10 @@ class CashierShiftService
                 throw new RuntimeException('الوردية مُقفلة مسبقاً');
             }
             $c = $this->computeCash($locked);
-            $expected = MoneyService::normalize(MoneyService::add((string) $locked->opening_float, $c['cash_sales']));
+            $expected = MoneyService::normalize(MoneyService::add(
+                MoneyService::add((string) $locked->opening_float, $c['cash_sales']),
+                $c['cash_collections']
+            ));
             $counted = MoneyService::normalize($countedCash);
             $variance = MoneyService::normalize(MoneyService::sub($counted, $expected));
 
