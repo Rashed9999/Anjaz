@@ -175,8 +175,19 @@ class FeatureAccessService
         $features = $this->resolveFeatures(
             $inheritRole, $verificationLevel, $businessType, $plan, $extraFeatures);
 
+        // POS debt access comes from the server role, never solely from the
+        // legacy free-form pos_users.permissions list. This makes new cashiers
+        // (whose legacy list is empty) see their legitimately granted action.
+        $posCanCollectDebt = $actor === 'pos' && $posUser !== null
+            && ($this->merchantPermissions->can($user, \App\Support\Merchant\MerchantPermissions::DEBT_COLLECT)
+                || $this->merchantPermissions->can($user, \App\Support\Merchant\MerchantPermissions::CASH_MOVE));
         if ($actor === 'pos') {
-            $features = $this->restrictToPosPermissions($features, $posUser);
+            $features = $this->restrictToPosPermissions($features, $posUser, $posCanCollectDebt);
+        }
+        $posPermissions = $posUser && is_array($posUser->permissions)
+            ? array_values(array_filter($posUser->permissions, static fn ($permission) => $permission !== 'credit')) : [];
+        if ($posCanCollectDebt && in_array(A::F_DEBTS, $features, true)) {
+            $posPermissions[] = 'credit';
         }
 
         if ($actor === 'staff') {
@@ -205,7 +216,7 @@ class FeatureAccessService
                 'id' => $posUser->id,
                 'pos_number' => $posUser->pos_number,
                 'display_name' => $posUser->display_name,
-                'permissions' => is_array($posUser->permissions) ? $posUser->permissions : [],
+                'permissions' => $posPermissions,
             ] : null,
 
             'verification_level' => $verificationLevel,
@@ -255,7 +266,7 @@ class FeatureAccessService
      * @param  array<int,string>  $features
      * @return array<int,string>
      */
-    private function restrictToPosPermissions(array $features, ?PosUser $pos): array
+    private function restrictToPosPermissions(array $features, ?PosUser $pos, bool $canCollectDebt = false): array
     {
         $granted = ($pos && is_array($pos->permissions)) ? $pos->permissions : [];
 
@@ -269,7 +280,7 @@ class FeatureAccessService
         return array_values(array_filter(
             $features,
             static fn (string $f): bool => in_array($f, $always, true)
-                || in_array($f, $granted, true),
+                || ($f === A::F_DEBTS ? $canCollectDebt : in_array($f, $granted, true)),
         ));
     }
 

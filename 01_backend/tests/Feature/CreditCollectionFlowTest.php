@@ -139,6 +139,9 @@ class CreditCollectionFlowTest extends TestCase
             app(CashierShiftService::class)->open($owner,$device->id,'0');
             $this->assertTrue($permissions->can($worker,P::DEBT_COLLECT));
             $this->assertFalse($permissions->can($worker,P::CASH_MOVE));
+            $access=app(\App\Services\FeatureAccessService::class)->accessFor($worker);
+            $this->assertContains('debts',$access['features']);
+            $this->assertContains('credit',$access['pos']['permissions']);
             $pos[]=[$worker,$device];
         }
         $credit=app(CustomerCreditService::class);
