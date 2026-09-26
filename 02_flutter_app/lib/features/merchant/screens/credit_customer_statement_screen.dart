@@ -205,7 +205,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
         Expanded(child: FilledButton.icon(
           onPressed: _collectionDialog,
           icon: const Icon(Icons.payments),
-          label: const Text('تحصيل دين'),
+          label: Text('credit_collect_action'.tr),
           style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700),
         )),
         const SizedBox(width: 8),
@@ -371,24 +371,23 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
     Map<String, dynamic>? collection;
     try {
       final ok = await Get.dialog<bool>(AlertDialog(
-        title: const Text('تحصيل من حساب الآجل'),
+        title: Text('credit_collect_title'.tr),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('اختر طريقة التحصيل. النقد يدخل صندوق الوردية، '
-                'وأميال ينتظر موافقة العميل ولا يُخصم من هاتف البائع.'),
+            Text('credit_collect_explainer'.tr),
             const SizedBox(height: 16),
             TextField(
               controller: amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'المبلغ بالريال اليمني'),
+              decoration: InputDecoration(labelText: 'credit_collect_amount'.tr),
             ),
             const SizedBox(height: 12),
             Obx(() => DropdownButtonFormField<String>(
               value: method.value,
-              decoration: const InputDecoration(labelText: 'طريقة الدفع'),
-              items: const [
-                DropdownMenuItem(value: 'cash', child: Text('نقداً')),
-                DropdownMenuItem(value: 'amial_pay', child: Text('أميال باي')),
+              decoration: InputDecoration(labelText: 'credit_collect_method'.tr),
+              items: [
+                DropdownMenuItem(value: 'cash', child: Text('credit_collect_cash'.tr)),
+                DropdownMenuItem(value: 'amial_pay', child: Text('credit_collect_amial'.tr)),
               ],
               onChanged: c.isSubmitting.value ? null : (v) {
                 if (v != null) method.value = v;
@@ -398,24 +397,24 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
             TextField(
               controller: noteCtrl,
               maxLength: 255,
-              decoration: const InputDecoration(labelText: 'ملاحظة (اختياري)'),
+              decoration: InputDecoration(labelText: 'credit_collect_note'.tr),
             ),
           ]),
         ),
         actions: [
           TextButton(onPressed: () => Get.back(result: false),
-              child: const Text('إلغاء')),
+              child: Text('credit_collect_cancel'.tr)),
           Obx(() => FilledButton(
             onPressed: c.isSubmitting.value ? null : () async {
               final amount = double.tryParse(amountCtrl.text.trim());
               if (amount == null || amount <= 0) {
-                Get.snackbar('تحقق من المبلغ', 'أدخل مبلغ تحصيل موجباً');
+                Get.snackbar('credit_collect_amount_invalid_title'.tr, 'credit_collect_amount_invalid'.tr);
                 return;
               }
               final debt = double.tryParse(
                   '${widget.customer['current_balance'] ?? 0}') ?? 0;
               if (debt > 0 && amount > debt) {
-                Get.snackbar('المبلغ كبير', 'لا يمكن تحصيل أكثر من الدين');
+                Get.snackbar('credit_collect_amount_exceeds_title'.tr, 'credit_collect_amount_exceeds'.tr);
                 return;
               }
               collection = method.value == 'cash'
@@ -426,7 +425,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
               if (collection != null) {
                 Get.back(result: true);
               } else {
-                Get.snackbar('تعذّر التحصيل', c.lastError.value,
+                Get.snackbar('credit_collect_failed'.tr, c.lastError.value,
                     snackPosition: SnackPosition.BOTTOM);
               }
             },
@@ -434,7 +433,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
                 ? const SizedBox(width: 18, height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2,
                         color: Colors.white))
-                : const Text('متابعة التحصيل'),
+                : Text('credit_collect_continue'.tr),
           )),
         ],
       ));
@@ -451,47 +450,48 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
   Future<void> _collectionResult(Map<String, dynamic> collection) async {
     if (collection['status'] == 'completed') {
       await Get.dialog<void>(AlertDialog(
-        title: const Text('تم التحصيل وإصدار السند'),
-        content: Text('رقم السند: ${collection['receipt_number'] ?? 'قيد الإصدار'}'
-            '\nالمتبقي: ${Money.format(double.tryParse('${collection['new_balance']}') ?? 0)}'),
+        title: Text('credit_collect_success_title'.tr),
+        content: Text('credit_collect_success_details'.trParams({
+          'number': collection['receipt_number']?.toString() ?? 'credit_collect_issuing'.tr,
+          'balance': Money.format(double.tryParse('${collection['new_balance']}') ?? 0),
+        })),
         actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('إغلاق')),
+          TextButton(onPressed: () => Get.back(), child: Text('credit_collect_close'.tr)),
           FilledButton.icon(
             onPressed: collection['receipt_id'] == null ? null : () async {
               await _downloadCollectionReceipt(collection['collection_id'] as int);
             },
             icon: const Icon(Icons.picture_as_pdf),
-            label: const Text('طباعة / تحميل السند'),
+            label: Text('credit_collect_print'.tr),
           ),
         ],
       ));
       return;
     }
     if (collection['needs_review'] == true) {
-      Get.snackbar('يحتاج مراجعة', 'وصل الدفع لكن الدين تغيّر؛ راجع الإدارة.');
+      Get.snackbar('credit_collect_review_title'.tr, 'credit_collect_review_body'.tr);
       return;
     }
     final url = collection['payment_url']?.toString() ?? '';
     await Get.dialog<void>(AlertDialog(
-      title: const Text('بانتظار دفع العميل عبر أميال'),
+      title: Text('credit_collect_pending_title'.tr),
       content: SingleChildScrollView(child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('رمز الدفع: ${collection['payment_code'] ?? ''}'),
+          Text('credit_collect_code'.trParams({'code': collection['payment_code']?.toString() ?? ''})),
           const SizedBox(height: 12),
           if (url.isNotEmpty) QrImageView(data: url, size: 210),
           const SizedBox(height: 12),
-          const Text('يعرض العميل رمز QR في تطبيق أميال ويوافق على الدفع. '
-              'لا يُخفض الدين قبل إثبات نجاح العملية.'),
+          Text('credit_collect_scan_explainer'.tr),
         ],
       )),
       actions: [
-        TextButton(onPressed: () => Get.back(), child: const Text('لاحقاً')),
+        TextButton(onPressed: () => Get.back(), child: Text('credit_collect_later'.tr)),
         Obx(() => FilledButton(
           onPressed: c.isSubmitting.value ? null : () async {
             final result = await c.confirmWallet(collection['collection_id'] as int);
             if (result == null) {
-              Get.snackbar('انتظار الدفع', c.lastError.value,
+              Get.snackbar('credit_collect_pending_snackbar'.tr, c.lastError.value,
                   snackPosition: SnackPosition.BOTTOM);
               return;
             }
@@ -503,7 +503,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
               ? const SizedBox(width: 18, height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2,
                       color: Colors.white))
-              : const Text('التحقق وإصدار السند'),
+              : Text('credit_collect_verify'.tr),
         )),
       ],
     ));
@@ -513,11 +513,11 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
     final response = await c.repo.receiptPdf(id);
     final bytes = await _collect(response.bodyBytes);
     if (response.statusCode != 200 || bytes.isEmpty) {
-      Get.snackbar('تعذّر تحميل السند', 'لم يصل ملف السند من الخادم.');
+      Get.snackbar('credit_collect_download_failed'.tr, 'credit_collect_download_failed_body'.tr);
       return;
     }
     await PdfDownloaderHelper.downloadAndOpenPdf(
-      pdfData: bytes, baseFileName: 'سند-تحصيل-$id',
+      pdfData: bytes, baseFileName: 'collection-receipt-$id',
     );
   }
 
