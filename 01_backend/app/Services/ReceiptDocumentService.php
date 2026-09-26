@@ -163,6 +163,9 @@ class ReceiptDocumentService
             'fund_name' => 'الصندوق',
             'provider' => 'مقدم الخدمة',
             'service' => 'الخدمة',
+            'customer_name' => 'اسم العميل',
+            'customer_phone' => 'هاتف العميل',
+            'balance_after' => 'المتبقي على العميل بعد التحصيل',
         ] as $key => $label) {
             $value = $this->safeText($meta[$key] ?? null, 120);
             if ($value !== null) {
@@ -172,13 +175,21 @@ class ReceiptDocumentService
 
         return array_merge($base, [
             'kind' => 'wallet_voucher',
-            'title' => $this->walletTitle($receipt->receipt_type),
-            'subtitle' => $receipt->direction === 'debit'
-                ? 'سند قيد مدين صادر إلكترونياً'
-                : 'سند قيد دائن صادر إلكترونياً',
-            'final_label' => $receipt->direction === 'debit'
-                ? 'إجمالي المخصوم'
-                : 'صافي المضاف',
+            'title' => $receipt->receipt_type === 'debt_payment'
+                ? ($receipt->direction === 'debit' ? 'سند سداد دين عبر أميال باي'
+                    : (($meta['payment_method'] ?? '') === 'cash'
+                        ? 'سند تحصيل دين نقدي' : 'سند تحصيل دين عبر أميال باي'))
+                : $this->walletTitle($receipt->receipt_type),
+            'subtitle' => $receipt->receipt_type === 'debt_payment'
+                ? (($meta['payment_method'] ?? '') === 'cash'
+                    ? 'تحصيل نقدي في صندوق المنشأة — دون تحريك المحفظة'
+                    : 'تحصيل عن طريق محفظة أميال باي')
+                : ($receipt->direction === 'debit'
+                    ? 'سند قيد مدين صادر إلكترونياً'
+                    : 'سند قيد دائن صادر إلكترونياً'),
+            'final_label' => $receipt->receipt_type === 'debt_payment'
+                ? 'المبلغ المحصّل'
+                : ($receipt->direction === 'debit' ? 'إجمالي المخصوم' : 'صافي المضاف'),
             'context_fields' => $context,
             'items' => [],
             'seller' => null,
