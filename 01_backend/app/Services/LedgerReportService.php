@@ -111,6 +111,92 @@ class LedgerReportService
         ];
     }
 
+
+    /**
+     * Read-only provenance of the merchant's electronic-wallet balance.
+     *
+     * Posted journal lines are grouped by their REAL source type. They are
+     * not guessed from POS sales: a payment_request may be a purchase, a
+     * debt settlement, or another customer-approved payment. Cash receipts
+     * and unpaid credit invoices are deliberately absent from wallet flows.
+     */
+    public function walletOrigins(int $userId): array
+    {
+        $truth = $this->walletTruth($userId);
+        if ($truth['account_id'] === null) {
+            return [
+                'available' => false,
+                'verification' => $truth,
+                'sources' => null,
+                'summary' => null,
+                'note_ar' => 'لا يوجد دفتر يمكن تتبّع مصدر الرصيد منه؛ لا تعتبر المبلغ صفراً أو تفترض أنه مبيعات.',
+            ];
+        }
+
+        $labels = [
+            'opening_balance' => 'رصيد افتتاحي مُرحّل',
+            'send_money' => 'تحويلات أميال الواردة والصادرة',
+            'pay_merchant' => 'دفع للتاجر',
+            'pos_payment' => 'مدفوعات نقاط البيع',
+            'qr_payment' => 'مدفوعات QR',
+            'payment_request' => 'طلبات دفع (قد تشمل المبيعات وسداد الآجل)',
+            'refund_merchant' => 'مرتجعات مدفوعات التجار',
+            'reconcile_wallet' => 'تسوية رصيد موثّقة',
+            'unclassified' => 'قيد غير مصنّف — راجع المرجع',
+        ];
+
+        $rows = DB::table('ledger_entry_lines as l')
+            ->join('ledger_journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
+            ->where('l.account_id', $truth['account_id'])
+            ->where('e.status', 'posted')
+            ->groupBy('e.source_type')
+            ->selectRaw("COALESCE(NULLIF(e.source_type, ''), 'unclassified') as source_type")
+            ->selectRaw("SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END) as received")
+            ->selectRaw("SUM(CASE WHEN l.direction = 'debit' THEN l.amount ELSE 0 END) as paid_out")
+            ->selectRaw('COUNT(l.id) as line_count')
+            ->selectRaw('MIN(e.posted_at) as first_posted_at, MAX(e.posted_at) as last_posted_at')
+            ->orderBy('source_type')
+            ->get();
+
+        $received = MoneyService::normalize('0');
+        $paidOut = MoneyService::normalize('0');
+        $sources = [];
+        foreach ($rows as $row) {
+            $type = (string) $row->source_type;
+            $in = MoneyService::normalize((string) $row->received);
+            $out = MoneyService::normalize((string) $row->paid_out);
+            $received = MoneyService::add($received, $in);
+            $paidOut = MoneyService::add($paidOut, $out);
+            $sources[] = [
+                'source_type' => $type,
+                'label_ar' => $labels[$type] ?? ('مصدر دفتر غير مصنّف: ' . $type),
+                'received' => $in,
+                'paid_out' => $out,
+                'net' => MoneyService::sub($in, $out),
+                'line_count' => (int) $row->line_count,
+                'first_posted_at' => $row->first_posted_at,
+                'last_posted_at' => $row->last_posted_at,
+            ];
+        }
+        $net = MoneyService::sub($received, $paidOut);
+        return [
+            'available' => true,
+            'verification' => $truth,
+            'sources' => $sources,
+            'summary' => [
+                'posted_in' => $received,
+                'posted_out' => $paidOut,
+                'posted_net' => $net,
+                'ledger_balance' => $truth['ledger_balance'],
+                'operational_balance' => $truth['operational_balance'],
+                'gap' => $truth['gap'],
+            ],
+            'note_ar' => 'هذه حركة القيود المثبتة منذ بداية الدفتر، لا مبيعات الفترة. '
+                . 'طلبات الدفع قد تشمل بيعاً أو تحصيل دين؛ افتح القيود ومرجع كل معاملة للتحديد. '
+                . 'أي فرق بين الرصيد التشغيلي والدفتر يحتاج مراجعة ولا يُصحَّح تلقائياً.',
+        ];
+    }
+
     /** @return array{state:string,operational_balance:?string,ledger_balance:null,gap:null,account_id:null,account_code:null,first_entry_at:null,last_entry_at:null,last_entry_ulid:null,reason:string} */
     private function walletTruthUnavailable(?string $operational, string $reason): array
     {

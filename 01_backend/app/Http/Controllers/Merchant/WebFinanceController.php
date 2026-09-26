@@ -27,6 +27,17 @@ class WebFinanceController extends Controller
         ]);
     }
 
+    /** Owner-only wallet movement provenance, no balance adjustments. */
+    public function walletOrigins(Request $request, LedgerReportService $ledger): JsonResponse
+    {
+        $owner = $request->user('merchant_web');
+        return response()->json([
+            'success' => true, 'code' => 'WALLET_ORIGINS',
+            'message' => 'مصادر قيود محفظة المنشأة', 'errors' => (object) [],
+            'meta' => $ledger->walletOrigins((int) $owner->id),
+        ]);
+    }
+
     public function debtInvoices(
         Request $request,
         int $id,

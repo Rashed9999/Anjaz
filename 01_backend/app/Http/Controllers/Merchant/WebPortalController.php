@@ -37,6 +37,7 @@ class WebPortalController extends Controller
             'wallet' => route('merchant.web.data.wallet'),
             'ledger' => route('merchant.web.data.ledger'),
             'walletVerification' => route('merchant.web.data.wallet.verification'),
+            'walletOrigins' => route('merchant.web.data.wallet.origins'),
             'debts' => route('merchant.web.data.debts'),
             'debtCustomers' => route('merchant.web.data.debts.customers'),
             'debtCustomersSave' => route('merchant.web.data.debts.customers.save'),

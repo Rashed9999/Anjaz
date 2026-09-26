@@ -72,6 +72,7 @@ class MerchantWebPortalTest extends TestCase
             ->assertOk()
             ->assertSee('data-tab="debts"', false)
             ->assertSee('walletVerification')
+            ->assertSee('walletOrigins')
             ->assertSee('debtInvoices')
             ->assertSee('debtStatementPdf');
 
@@ -80,11 +81,50 @@ class MerchantWebPortalTest extends TestCase
                 'state', 'operational_balance', 'ledger_balance', 'gap',
             ]]]);
 
+        $this->getJson('/merchant/data/wallet-origins')->assertOk()
+            ->assertJsonStructure(['meta' => ['available', 'verification', 'sources', 'summary']]);
+
         $this->getJson('/merchant/data/debts')->assertOk()
             ->assertJsonStructure(['meta' => ['total_due', 'debtors_count']]);
 
         $this->getJson('/merchant/data/debts/customers')->assertOk()
             ->assertJsonStructure(['meta' => ['customers', 'pagination']]);
+    }
+
+
+    /** Group real posted journal lines; other merchants never enter this owner endpoint. */
+    public function test_owner_can_trace_wallet_funds_to_posted_sources_without_guessing_sales(): void
+    {
+        $owner = $this->owner();
+        $sender = User::factory()->create(['type' => 2, 'role' => 'user']);
+        $ledger = app(\App\Services\LedgerService::class);
+        $ledger->getOrCreateUserWallet($owner->id);
+        $ledger->getOrCreateUserWallet($sender->id);
+        foreach (['send_money' => '500', 'payment_request' => '200'] as $source => $amount) {
+            $ledger->post(
+                sourceType: $source,
+                sourceId: 'WALLET-ORIGINS-' . $source,
+                description: 'قيد اختبار مصدر الرصيد',
+                lines: [
+                    ['account' => 'USER_WALLET_' . $sender->id, 'direction' => 'debit', 'amount' => $amount],
+                    ['account' => 'USER_WALLET_' . $owner->id, 'direction' => 'credit', 'amount' => $amount],
+                ],
+                allowNegative: true,
+            );
+        }
+        $this->actingAs($owner, 'merchant_web')
+            ->getJson('/merchant/data/wallet-origins')
+            ->assertOk()
+            ->assertJsonPath('meta.available', true)
+            ->assertJsonPath('meta.summary.posted_in', '700.0000')
+            ->assertJsonPath('meta.summary.posted_out', '0.0000')
+            ->assertJsonCount(2, 'meta.sources');
+        $this->getJson('/merchant/data/ledger?source_type=send_money')
+            ->assertOk()->assertJsonCount(1, 'meta.entries')
+            ->assertJsonPath('meta.entries.0.source_type', 'send_money');
+        $this->getJson('/merchant/data/ledger?source_type=payment_request')
+            ->assertOk()->assertJsonCount(1, 'meta.entries')
+            ->assertJsonPath('meta.entries.0.source_type', 'payment_request');
     }
 
     public function test_web_and_pos_read_same_credit_account_and_guard_other_merchants(): void
@@ -131,6 +171,7 @@ class MerchantWebPortalTest extends TestCase
             $this->actingAs($user, 'merchant_web')
                 ->getJson('/merchant/data/wallet-verification')->assertForbidden();
             $this->getJson('/merchant/data/debts')->assertForbidden();
+            $this->getJson('/merchant/data/wallet-origins')->assertForbidden();
         }
     }
 
@@ -167,7 +208,7 @@ class MerchantWebPortalTest extends TestCase
 
     public function test_all_merchant_data_routes_require_owner_and_writes_keep_plan_gates(): void
     {
-        foreach (['overview', 'stats', 'wallet', 'ledger', 'products',
+        foreach (['overview', 'stats', 'wallet', 'ledger', 'wallet.origins', 'products',
                   'branches', 'roles', 'staff', 'devices', 'receipts'] as $endpoint) {
             $route = Route::getRoutes()->getByName('merchant.web.data.' . $endpoint);
             $this->assertNotNull($route, $endpoint . ' not registered');

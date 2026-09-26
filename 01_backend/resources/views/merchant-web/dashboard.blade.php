@@ -114,8 +114,9 @@
   function form(p,fields,button,submit){const f=node('form',null,'editor');fields.forEach(([key,label,type,options])=>{const l=node('label',label,'field');let inp;if(options){inp=node('select');options.forEach(o=>{const op=node('option',o.label);op.value=o.value;inp.append(op)})}else{inp=node('input');inp.type=type||'text';if(type==='number'){inp.step='any';inp.min='0'}if(type==='password')inp.autocomplete='new-password'}inp.name=key;inp.required=['name','price','trade_name','sale_price','base_price','price_per_liter','display_name','employee_code','password'].includes(key);l.append(inp);f.append(l)});const btn=node('button',button,'action');btn.type='submit';f.append(btn);f.addEventListener('submit',async ev=>{ev.preventDefault();btn.disabled=true;try{const data=Object.fromEntries(new FormData(f).entries());Object.keys(data).forEach(k=>{if(data[k]==='')delete data[k]});const result=await submit(data);if(result.activation_code){f.replaceChildren();const code=node('strong',result.activation_code);code.style.fontSize='29px';code.style.letterSpacing='5px';const secret=node('div',null,'note');secret.append(node('p','رمز التفعيل (صالح لمرة واحدة، حتى '+result.expires_at+')'),code);const copy=node('button','نسخ الرمز','action secondary');copy.type='button';copy.addEventListener('click',()=>navigator.clipboard.writeText(result.activation_code).then(()=>message('تم نسخ الرمز')));secret.append(copy);p.append(secret);message('تم إنشاء رمز التفعيل؛ انسخه قبل مغادرة الصفحة')}else{message(result.message||'تم الحفظ');await load(active)}}catch(e){message(e.message)}finally{btn.disabled=false}});p.append(f)}
   async function overview(){const [o,s]=await Promise.all([api('overview'),api('stats')]);const c=o.counts||{};grid([['مبيعات اليوم',money(s.today_sales)],['رصيد محفظة المنشأة',money(s.current_balance)],['المرتجعات اليوم',money(s.today_refunds)],['الموظفون النشطون',c.active_employees],['أجهزة البيع المتصلة',c.active_device_sessions],['الورديات المفتوحة',c.open_shifts]]);const p=box('حالة التشغيل');hint(p,'تُقيّد مدفوعات أميال لصالح محفظة المنشأة، وتُسجّل العمليات مع الموظف والفرع والجهاز. المبيعات النقدية تبقى في درج النقدية حتى تسويتها.');table(p,[['آخر الورديات',r=>r.opened_by_name||'—'],['الفرع',r=>r.branch_name||'—'],['الفتح',r=>r.opened_at||'—']],o.open_shifts||[])}
   async function wallet(){
-    const [w,l,verification]=await Promise.all([
-      api('wallet'),api('ledger'),api('walletVerification').catch(e=>({unavailable:e.message}))
+    const [w,l,verification,origins]=await Promise.all([
+      api('wallet'),api('ledger'),api('walletVerification').catch(e=>({unavailable:e.message})),
+      api('walletOrigins').catch(e=>({unavailable:e.message}))
     ]);
     const r=w.report||{},v=r.wallet||{};
     grid([['رصيد محفظة المنشأة',money(v.balance)],['وارد المحفظة خلال الفترة',money(v.received)],['صادر المحفظة خلال الفترة',money(v.paid_out)],['حركة المحفظة الصافية',money(v.net_movement)]]);
@@ -133,6 +134,55 @@
       verify.append(values);
       if(truth.last_entry_ulid)hint(verify,'آخر قيد مالي: '+truth.last_entry_ulid);
       if(state==='mismatch')hint(verify,'لا يتم تصحيح الرصيد من هذه الشاشة. راجع الإدارة وكشف القيود للتحقيق في مصدر الفرق.');
+    }
+    const audit=box('من أين جاء رصيد المحفظة؟');
+    hint(audit,'حركة دفتر المحفظة المثبتة منذ بداية السجل. لا تُحسب المبيعات النقدية ولا الفواتير الآجلة أموالاً في المحفظة.');
+    if(origins.unavailable){
+      hint(audit,'تعذّر تحميل مصادر الرصيد: '+origins.unavailable);
+    }else if(origins.available!==true){
+      audit.append(node('div',origins.note_ar||'لا يوجد دفتر متاح للتتبّع.','note warning-note'));
+    }else{
+      const s=origins.summary||{};
+      const totals=node('div',null,'grid');
+      totals.append(metric('كل الوارد المثبت',money(s.posted_in)),metric('كل الصادر المثبت',money(s.posted_out)),
+        metric('صافي القيود',money(s.posted_net)),metric('فرق المحفظة والدفتر',money(s.gap)));
+      audit.append(totals);
+      if(origins.note_ar)hint(audit,origins.note_ar);
+      if((origins.sources||[]).length===0){
+        audit.append(node('p','دفتر المحفظة موجود، لكن لا توجد له قيود مثبتة. لا يُفسّر هذا وحده الرصيد التشغيلي.','note warning-note'));
+      }else{
+        table(audit,[['مصدر القيد',x=>x.label_ar],['الوارد',x=>money(x.received)],
+          ['الصادر',x=>money(x.paid_out)],['الصافي',x=>money(x.net)],
+          ['عدد السطور',x=>x.line_count],['الرمز المحاسبي',x=>x.source_type]],origins.sources);
+        const links=node('div',null,'buttons'),drill=node('div');
+        const openSource=async(source,page)=>{
+          const url=new URL(routes.ledger,window.location.href);
+          url.searchParams.set('source_type',source.source_type);
+          url.searchParams.set('page',String(page));
+          const details=await api('ledger',undefined,url.toString());
+          drill.replaceChildren(node('h3','قيود '+source.label_ar));
+          table(drill,[['التاريخ',x=>x.date],['الوصف',x=>x.description||x.source_type],
+            ['الاتجاه',x=>x.direction==='credit'?'وارد':'صادر'],['المبلغ',x=>money(x.amount)],
+            ['الرصيد بعد',x=>money(x.balance_after)],['مرجع القيد',x=>x.reference]],details.entries||[]);
+          const pg=details.pagination||{},nav=node('div',null,'buttons');
+          if((pg.current_page||1)>1){
+            const back=node('button','السابق','action secondary');
+            back.type='button';back.onclick=()=>openSource(source,pg.current_page-1).catch(e=>message(e.message));nav.append(back);
+          }
+          if((pg.current_page||1)<(pg.last_page||1)){
+            const next=node('button','التالي','action secondary');
+            next.type='button';next.onclick=()=>openSource(source,pg.current_page+1).catch(e=>message(e.message));nav.append(next);
+          }
+          drill.append(nav);
+        };
+        (origins.sources||[]).forEach(source=>{
+          // Deliberately create DOM text nodes rather than HTML from ledger metadata.
+          const button=node('button','تفاصيل: '+source.label_ar,'action secondary');
+          button.type='button';button.onclick=()=>openSource(source,1).catch(e=>message(e.message));
+          links.append(button);
+        });
+        audit.append(links,drill);
+      }
     }
     const p=box('كشف قيود المحفظة الموحدة');
     hint(p,'مصدر هذه العمليات هو الدفتر نفسه الذي تقرؤه الإدارة والتطبيق. التحويلات الشخصية والأرصدة الافتتاحية ليست مبيعات.');

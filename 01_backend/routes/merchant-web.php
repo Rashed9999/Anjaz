@@ -43,6 +43,8 @@ Route::middleware('merchant.web')->group(function () {
         // Shared owner wallet: same financial ledger as the app.
         Route::get('/wallet-verification', [Finance::class, 'walletVerification'])
             ->name('wallet.verification');
+        Route::get('/wallet-origins', [Finance::class, 'walletOrigins'])
+            ->name('wallet.origins');
 
         // One debt account per merchant/customer across web, POS and client app.
         Route::get('/debts', [Credits::class, 'dashboard'])->name('debts');
