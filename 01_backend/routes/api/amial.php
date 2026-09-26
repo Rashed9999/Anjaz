@@ -729,8 +729,21 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             Route::get('/customers/{id}', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'showCustomer'])->name('customers.show');
             Route::get('/customers/{id}/statement', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'statement'])->name('customers.statement');
             Route::get('/customers/{id}/statement/pdf', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'statementPdf'])->name('customers.statement-pdf');
-            Route::post('/customers/{id}/payment', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'recordPayment'])
+            // Cash collections require an explicit idempotency key and issue a receipt.
+            $collector = \App\Http\Controllers\Api\V1\Amial\CreditCollectionController::class;
+            Route::post('/customers/{id}/payment', [$collector, 'collectCash'])
                 ->middleware('amial.rate-limit:credit_payment,60,1')->name('customers.payment');
+            Route::post('/customers/{id}/collect-cash', [$collector, 'collectCash'])
+                ->middleware('amial.rate-limit:credit_payment,60,1')->name('customers.collect.cash');
+            Route::post('/customers/{id}/request-wallet', [$collector, 'requestWallet'])
+                ->middleware('amial.rate-limit:credit_payment,30,1')->name('customers.collect.wallet.request');
+            Route::get('/collections/pending', [$collector, 'list'])->name('collections.pending');
+            Route::post('/collections/{collection}/confirm', [$collector, 'confirmWallet'])
+                ->where('collection', '[0-9]+')->name('collections.confirm');
+            Route::get('/collections/{collection}', [$collector, 'status'])
+                ->where('collection', '[0-9]+')->name('collections.status');
+            Route::get('/collections/{collection}/receipt', [$collector, 'receipt'])
+                ->where('collection', '[0-9]+')->name('collections.receipt');
             Route::post('/customers/{id}/return', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'recordReturn'])->name('customers.return');
             Route::post('/customers/{id}/adjustment', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'recordAdjustment'])->name('customers.adjustment');
         });
