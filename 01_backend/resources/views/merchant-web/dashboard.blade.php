@@ -23,12 +23,46 @@
         .error{border:1px solid #e7af9e;background:#fff0ea;color:#9f3420;padding:14px;border-radius:12px}
         .note{background:#edf6f3;border-right:3px solid #21956e;padding:15px;border-radius:7px;color:#35594a;font-size:13px;line-height:1.9}
         #message{position:fixed;bottom:21px;left:21px;background:#173f32;color:white;border-radius:11px;padding:14px 20px;display:none;max-width:min(90vw,480px);z-index:9}
-        [hidden]{display:none!important}@media(max-width:850px){.shell{display:block}.side{width:100%;padding:13px;display:block}.brand{margin:4px 9px 10px}.store{display:none}.nav{display:inline-block;width:auto;font-size:12px;padding:11px}.logout{display:inline-block}.logout button{padding:10px}main{padding:20px 13px}.top h1{font-size:21px}}
+        [hidden]{display:none!important}
+        .mobile-bar,.nav-backdrop{display:none}.table-help{display:none}
+        .mobile-bar{align-items:center;gap:12px;min-width:0;padding:12px 16px;background:#fff;border-bottom:1px solid #dceae5}
+        .nav-toggle{width:48px;height:48px;flex:none;border:1px solid #cbded7;border-radius:12px;background:#eaf5ef;color:#124332;font-size:24px;cursor:pointer}
+        .mobile-brand{font-size:20px;font-weight:900;white-space:nowrap}.mobile-brand strong{color:#bd8829}.mobile-brand small{font-size:12px;color:#577065}
+        .mobile-store{margin-inline-start:auto;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;color:#547266}
+        @media(max-width:1199px){
+          .shell{display:block}.mobile-bar{display:flex;position:sticky;top:0;z-index:19;box-shadow:0 2px 16px #123c3010}
+          .side{position:fixed;top:0;right:0;bottom:0;width:min(86vw,340px);padding:24px 15px;z-index:22;overflow-y:auto;visibility:hidden;transform:translateX(105%);transition:transform .22s ease,visibility .22s ease;box-shadow:-18px 0 44px #09291f25}
+          .side.open{visibility:visible;transform:translateX(0)}.side .store{display:block}
+          .side .nav{display:block;width:100%;min-height:47px;font-size:14px;padding:13px 15px}
+          .side .logout{display:block;margin-top:17px}.side .logout button{min-height:44px}
+          .nav-backdrop:not([hidden]){display:block;position:fixed;inset:0;background:#09251bc0;z-index:21;width:100%;border:0;cursor:pointer}
+          body.merchant-nav-open{overflow:hidden}
+          main{padding:21px clamp(13px,3.5vw,32px);width:100%;max-width:100%;min-width:0}
+          .top h1{font-size:23px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.plans-grid{grid-template-columns:1fr}
+          .table-wrap{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+          .table-help{display:block;font-size:12px;color:#547568;margin:0 0 9px}
+          .panel{padding:clamp(14px,3vw,22px)}.metric{padding:clamp(14px,3vw,22px)}
+        }
+        @media(max-width:600px){
+          .mobile-bar{padding:9px 12px;gap:9px}.mobile-brand{font-size:18px}
+          .mobile-store{max-width:33vw}main{padding:16px 12px}
+          .top{align-items:flex-start}.top h1{font-size:22px}.grid{gap:10px}
+          .metric strong{font-size:clamp(18px,5vw,24px)}.metric small{font-size:12px}
+          form.editor{grid-template-columns:1fr}.field input,.field select{min-height:48px}
+          button.action{min-height:46px}#message{left:10px;right:10px;bottom:12px;max-width:none}
+        }
+        @media(prefers-reduced-motion:reduce){.side{transition:none}}
     </style>
 </head>
 <body>
 <div class="shell">
-    <aside class="side" aria-label="التنقل داخل لوحة المنشأة">
+    <header class="mobile-bar">
+        <button type="button" class="nav-toggle" id="menu-toggle" aria-controls="merchant-side" aria-expanded="false" aria-label="فتح القائمة">☰</button>
+        <span class="mobile-brand">أميال <strong>باي</strong> <small>الأعمال</small></span>
+        <span class="mobile-store">{{ $storeName }}</span>
+    </header>
+    <button type="button" class="nav-backdrop" id="nav-backdrop" aria-label="إغلاق القائمة" hidden></button>
+    <aside class="side" id="merchant-side" aria-label="التنقل داخل لوحة المنشأة">
         <div class="brand">أميال <span>باي</span> <small style="font-size:12px">الأعمال</small></div>
         <div class="store"><strong>{{ $storeName }}</strong><small>{{ $businessType }} · {{ $plan }}</small></div>
         <button class="nav active" data-tab="overview">◈ نظرة عامة</button>
@@ -69,7 +103,7 @@
   function money(v){if(v===undefined||v===null||v==='')return'غير متاح';const bits=String(v).split('.');return bits[0].replace(/\B(?=(\d{3})+(?!\d))/g,',')+(bits[1]?'.'+bits[1].slice(0,2):'')+' ر.ي'}
   function grid(items){const g=node('div',null,'grid');items.forEach(x=>g.append(metric(x[0],x[1])));content.append(g)}
   function hint(p,msg){p.append(node('p',msg,'note'))}
-  function table(p,cols,rows){const wrap=node('div',null,'table-wrap'),t=node('table'),thead=node('thead'),h=node('tr'),body=node('tbody');cols.forEach(x=>h.append(node('th',x[0])));thead.append(h);t.append(thead);(rows||[]).forEach(row=>{const tr=node('tr');cols.forEach(c=>tr.append(node('td',c[1](row))));body.append(tr)});t.append(body);wrap.append(t);p.append(wrap);if(!rows||rows.length===0)p.append(node('p','لا توجد سجلات لهذه المنشأة حاليًا.','muted'))}
+  function table(p,cols,rows){const wrap=node('div',null,'table-wrap'),t=node('table'),thead=node('thead'),h=node('tr'),body=node('tbody');cols.forEach(x=>h.append(node('th',x[0])));thead.append(h);t.append(thead);(rows||[]).forEach(row=>{const tr=node('tr');cols.forEach(c=>tr.append(node('td',c[1](row))));body.append(tr)});t.append(body);wrap.append(t);wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label','جدول قابل للتمرير أفقياً');p.append(node('p','اسحب الجدول أفقياً لمشاهدة جميع الأعمدة','table-help'),wrap);if(!rows||rows.length===0)p.append(node('p','لا توجد سجلات لهذه المنشأة حاليًا.','muted'))}
   function message(s){notice.textContent=s;notice.style.display='block';setTimeout(()=>notice.style.display='none',4800)}
   async function api(key,body,url){const init={credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-TOKEN':csrf}};if(body!==undefined){init.method='POST';init.headers['Content-Type']='application/json';init.headers['Idempotency-Key']='mw-'+Date.now()+'-'+Math.random().toString(36).slice(2);init.body=JSON.stringify(body)}const res=await fetch(url||routes[key],init);if(res.status===401){window.location.href=routes.login;throw Error('انتهت الجلسة')}const json=await res.json();if(!res.ok||json.success===false)throw Error(json.message||'لم ينجح تحميل البيانات');return json.meta||{}}
   function form(p,fields,button,submit){const f=node('form',null,'editor');fields.forEach(([key,label,type,options])=>{const l=node('label',label,'field');let inp;if(options){inp=node('select');options.forEach(o=>{const op=node('option',o.label);op.value=o.value;inp.append(op)})}else{inp=node('input');inp.type=type||'text';if(type==='number'){inp.step='any';inp.min='0'}if(type==='password')inp.autocomplete='new-password'}inp.name=key;inp.required=['name','price','trade_name','sale_price','base_price','price_per_liter','display_name','employee_code','password'].includes(key);l.append(inp);f.append(l)});const btn=node('button',button,'action');btn.type='submit';f.append(btn);f.addEventListener('submit',async ev=>{ev.preventDefault();btn.disabled=true;try{const data=Object.fromEntries(new FormData(f).entries());Object.keys(data).forEach(k=>{if(data[k]==='')delete data[k]});const result=await submit(data);if(result.activation_code){f.replaceChildren();const code=node('strong',result.activation_code);code.style.fontSize='29px';code.style.letterSpacing='5px';const secret=node('div',null,'note');secret.append(node('p','رمز التفعيل (صالح لمرة واحدة، حتى '+result.expires_at+')'),code);const copy=node('button','نسخ الرمز','action secondary');copy.type='button';copy.addEventListener('click',()=>navigator.clipboard.writeText(result.activation_code).then(()=>message('تم نسخ الرمز')));secret.append(copy);p.append(secret);message('تم إنشاء رمز التفعيل؛ انسخه قبل مغادرة الصفحة')}else{message(result.message||'تم الحفظ');await load(active)}}catch(e){message(e.message)}finally{btn.disabled=false}});p.append(f)}
@@ -159,7 +193,7 @@
     if(data.preview_only)hint(previewBox,'معاينة أسعار ومزايا قطاع آخر فقط؛ لا تُنشئ نشاطاً جديداً ولا تفتح صلاحياته لحسابك.');
     else hint(previewBox,'المميزات أدناه محسوبة لقطاع منشأتك من نفس السجل الذي يقرّر السماح أو المنع عند الاستخدام.');
     if(comparison.vertical_note)previewBox.append(node('p',comparison.vertical_note.replaceAll('**',''),'muted'));
-    const cards=node('div',null,'grid');
+    const cards=node('div',null,'grid plans-grid');
     let previousCodes=new Set();
     const liveByCode=new Map((data.live_plans||[]).map(plan=>[plan.code,plan]));
     (comparison.plans||[]).forEach(plan=>{
@@ -205,7 +239,23 @@
   async function settings(){const data=await api('receipts'),s=data.settings||{};const p=box('هوية فاتورة منشأتك');form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});hint(p,'إعدادات الفاتورة موحدة بين الويب وكل نقاط البيع. صلاحية طباعة السند متاحة بحسب خصائص القطاع.')}
   const pages={overview,sector,wallet,products,branches,staff,devices,reports,settings,plans};
   async function load(tab){active=tab;document.getElementById('page-title').textContent=titles[tab];document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
-  document.querySelectorAll('[data-tab]').forEach(e=>e.addEventListener('click',()=>load(e.dataset.tab)));
+  const sidebar=document.getElementById('merchant-side');
+  const menuToggle=document.getElementById('menu-toggle');
+  const menuBackdrop=document.getElementById('nav-backdrop');
+  const compactLayout=window.matchMedia('(max-width:1199px)');
+  function setMenu(open){
+    const visible=Boolean(open&&compactLayout.matches);
+    sidebar.classList.toggle('open',visible);
+    menuToggle.setAttribute('aria-expanded',String(visible));
+    menuToggle.setAttribute('aria-label',visible?'إغلاق القائمة':'فتح القائمة');
+    menuBackdrop.hidden=!visible;
+    document.body.classList.toggle('merchant-nav-open',visible);
+  }
+  menuToggle.addEventListener('click',()=>setMenu(!sidebar.classList.contains('open')));
+  menuBackdrop.addEventListener('click',()=>{setMenu(false);menuToggle.focus()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&sidebar.classList.contains('open')){setMenu(false);menuToggle.focus()}});
+  compactLayout.addEventListener('change',()=>setMenu(false));
+  document.querySelectorAll('[data-tab]').forEach(e=>e.addEventListener('click',()=>{setMenu(false);load(e.dataset.tab)}));
   load('overview');
 })();
 </script>

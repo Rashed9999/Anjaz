@@ -50,6 +50,20 @@ class MerchantWebPortalTest extends TestCase
             ->assertJsonPath('meta.merchant.business_name', 'متجر التجربة');
     }
 
+    public function test_merchant_dashboard_mobile_navigation_is_accessible_and_tables_scroll(): void
+    {
+        $owner = $this->owner();
+        $this->actingAs($owner, 'merchant_web')
+            ->get('/merchant')
+            ->assertOk()
+            ->assertSee('id="menu-toggle"', false)
+            ->assertSee('aria-controls="merchant-side"', false)
+            ->assertSee('id="nav-backdrop"', false)
+            ->assertSee('@media(max-width:1199px)', false)
+            ->assertSee("e.key==='Escape'", false)
+            ->assertSee('جدول قابل للتمرير أفقياً', false);
+    }
+
     public function test_platform_session_does_not_grant_merchant_session(): void
     {
         $owner = $this->owner();
