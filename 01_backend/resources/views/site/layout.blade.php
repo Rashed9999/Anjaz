@@ -46,11 +46,7 @@
                 <a href="{{ route($name) }}"
                    @if($current === $name) aria-current="page" @endif>{{ $label }}</a>
             @endforeach
-            {{-- بوابات الإدارة والتاجر والدخول العام واضحة في الترويسة. التطوير يحتفظ بروابطه. --}}
-
-                 كان فيها زرٌّ واحد يقود إلى `/login`، ومنه لا سبيلَ ظاهرٌ
-                 إلى لوحة الإدارة. فمن أراد الإدارة وجب أن يكتب العنوان
-                 بيده — وهو ما لا يفعله أحد، ولا يعرفه أصلاً. --}}
+            {{-- بوابة التاجر تفتح مضيفاً مستقلاً؛ الإدارة والدخول العام يبقيان كما هما. --}}
             <a class="nav-admin" href="{{ \App\Support\PortalHost::merchantLoginUrl() }}">بوابة التاجر</a>
             <a class="nav-admin" href="{{ route('admin.auth.login') }}">بوابة الإدارة</a>
             <a class="btn btn-primary" href="{{ route('login') }}">تسجيل الدخول</a>
