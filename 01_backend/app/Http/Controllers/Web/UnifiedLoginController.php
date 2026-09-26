@@ -109,9 +109,7 @@ class UnifiedLoginController extends Controller
             'adminHost'    => PortalHost::admin(),
             'agentHost'    => PortalHost::agent(),
             'merchantHost' => PortalHost::merchant(),
-            'merchantLoginUrl' => PortalHost::merchant() !== null
-                ? $request->getScheme() . '://' . PortalHost::merchant() . '/merchant/login'
-                : route('merchant.web.login'),
+            'merchantLoginUrl' => PortalHost::merchantLoginUrl(),
             'current'      => $current,
         ]);
     }
