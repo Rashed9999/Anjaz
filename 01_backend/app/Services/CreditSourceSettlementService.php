@@ -67,6 +67,32 @@ class CreditSourceSettlementService
     }
 
     /**
+     * Same unpaid invoices, invoice total and non-invoice adjustment balance
+     * for the customer app and merchant owner. No second credit engine.
+     *
+     * @return array{invoices:array,invoices_total:string,unlinked_balance:string,unlinked_note_ar:?string}
+     */
+    public function balanceBreakdown(CustomerCreditAccount $account): array
+    {
+        $invoices = $this->openInvoices($account);
+        $total = MoneyService::normalize('0');
+        foreach ($invoices as $invoice) {
+            $total = MoneyService::add($total, (string) $invoice['remaining']);
+        }
+        $unlinked = MoneyService::sub((string) $account->current_balance, $total);
+
+        return [
+            'invoices' => $invoices,
+            'invoices_total' => $total,
+            'unlinked_balance' => $unlinked,
+            'unlinked_note_ar' => MoneyService::isPositive($unlinked)
+                ? 'مبلغٌ من رصيدك ليس فاتورةً مستقلّة (تعديلٌ يدويٌّ أو '
+                    . 'دَينٌ سابقٌ مُرحَّل). يُسدَّد بـ«سداد الآجل» كاملاً.'
+                : null,
+        ];
+    }
+
+    /**
      * نفس إعادة التشغيل السابقة ولكن لعدة حسابات بقراءة DB واحدة.
      *
      * التقارير المؤسسية لا يجوز أن تنفذ استعلاماً مستقلاً لكل عميل؛ عند

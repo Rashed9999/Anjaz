@@ -4,6 +4,8 @@ use App\Http\Controllers\Merchant\WebAuthController as Login;
 use App\Http\Controllers\Merchant\WebPortalController as Portal;
 use App\Http\Controllers\Merchant\WebPlansController as Plans;
 use App\Http\Controllers\Merchant\WebSectorController as Sector;
+use App\Http\Controllers\Merchant\WebFinanceController as Finance;
+use App\Http\Controllers\Api\V1\Amial\CustomerCreditController as Credits;
 use App\Http\Controllers\Api\V1\Amial\BranchController;
 use App\Http\Controllers\Api\V1\Amial\CashierController;
 use App\Http\Controllers\Api\V1\Amial\MerchantController;
@@ -37,6 +39,23 @@ Route::middleware('merchant.web')->group(function () {
         Route::get('/stats', [MerchantController::class, 'dailyStats'])->name('stats');
         Route::get('/wallet', [MerchantController::class, 'financialReport'])->name('wallet');
         Route::get('/ledger', [MerchantController::class, 'ledger'])->name('ledger');
+        // Shared owner wallet: same financial ledger as the app.
+        Route::get('/wallet-verification', [Finance::class, 'walletVerification'])
+            ->name('wallet.verification');
+
+        // One debt account per merchant/customer across web, POS and client app.
+        Route::get('/debts', [Credits::class, 'dashboard'])->name('debts');
+        Route::get('/debts/customers', [Credits::class, 'listCustomers'])->name('debts.customers');
+        Route::post('/debts/customers', [Credits::class, 'upsertCustomer'])
+            ->middleware('throttle:10,1')->name('debts.customers.save');
+        Route::get('/debts/customers/{id}', [Credits::class, 'showCustomer'])
+            ->whereNumber('id')->name('debts.customers.show');
+        Route::get('/debts/customers/{id}/statement', [Credits::class, 'statement'])
+            ->whereNumber('id')->name('debts.customers.statement');
+        Route::get('/debts/customers/{id}/invoices', [Finance::class, 'debtInvoices'])
+            ->whereNumber('id')->name('debts.customers.invoices');
+        Route::get('/debts/customers/{id}/statement/pdf', [Credits::class, 'statementPdf'])
+            ->whereNumber('id')->middleware('throttle:10,1')->name('debts.customers.statement.pdf');
 
         Route::get('/products', [CashierController::class, 'products'])->name('products');
         Route::post('/products', [CashierController::class, 'addProduct'])
