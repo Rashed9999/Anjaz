@@ -51,6 +51,9 @@ class CustomerCreditRepo extends GetxService {
   Future<Response> confirmWallet(int collectionId) =>
       apiClient.postData('$_base/collections/$collectionId/confirm', {});
 
+  Future<Response> pendingCollections() =>
+      apiClient.getData('$_base/collections/pending');
+
   Future<Response> collectionStatus(int collectionId) =>
       apiClient.getData('$_base/collections/$collectionId');
 

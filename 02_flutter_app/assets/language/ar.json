@@ -1004,5 +1004,8 @@
   "credit_collect_pending_snackbar": "انتظار الدفع",
   "credit_collect_verify": "التحقق وإصدار السند",
   "credit_collect_download_failed": "تعذّر تحميل السند",
-  "credit_collect_download_failed_body": "لم يصل ملف السند من الخادم."
+  "credit_collect_download_failed_body": "لم يصل ملف السند من الخادم.",
+  "credit_collect_pending_heading": "طلبات التحصيل المعلقة لهذا العميل",
+  "credit_collect_pending_amount": "طلب تحصيل بمبلغ @amount",
+  "credit_collect_resume": "استئناف الدفع وإصدار السند"
 }

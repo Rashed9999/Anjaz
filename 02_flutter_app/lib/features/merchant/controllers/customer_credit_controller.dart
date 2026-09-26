@@ -20,6 +20,29 @@ class CustomerCreditController extends GetxController implements GetxService {
   final Rx<Map<String, dynamic>?> statement = Rx<Map<String, dynamic>?>(null);
   final RxBool isLoadingStatement = false.obs;
 
+  // Recover customer-specific pending Amial QR collections after navigation/restart.
+  final RxList<Map<String, dynamic>> pendingCollections = <Map<String, dynamic>>[].obs;
+  final RxBool isLoadingPendingCollections = false.obs;
+
+  Future<void> loadPendingCollections({required int accountId}) async {
+    isLoadingPendingCollections.value = true;
+    pendingCollections.clear();
+    try {
+      final response = await repo.pendingCollections();
+      if (_ok(response)) {
+        final items = (response.body['meta']?['collections'] ?? []) as List;
+        pendingCollections.assignAll(items
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .where((item) => item['account_id'] == accountId)
+            .toList());
+      }
+    } catch (_) {
+      lastError.value = 'تعذّر تحميل طلبات التحصيل المعلّقة';
+    } finally {
+      isLoadingPendingCollections.value = false;
+    }
+  }
+
   // الحالة العامة
   final RxBool isSubmitting = false.obs;
   final RxString lastError = ''.obs;

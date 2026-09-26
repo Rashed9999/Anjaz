@@ -1004,5 +1004,8 @@
   "credit_collect_pending_snackbar": "Waiting for payment",
   "credit_collect_verify": "Verify and issue receipt",
   "credit_collect_download_failed": "Could not download receipt",
-  "credit_collect_download_failed_body": "The receipt file was not received from the server."
+  "credit_collect_download_failed_body": "The receipt file was not received from the server.",
+  "credit_collect_pending_heading": "Pending collections for this customer",
+  "credit_collect_pending_amount": "Pending collection: @amount",
+  "credit_collect_resume": "Resume payment and issue receipt"
 }

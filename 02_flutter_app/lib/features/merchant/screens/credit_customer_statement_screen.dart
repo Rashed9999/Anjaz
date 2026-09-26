@@ -33,12 +33,16 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
-  void _refresh() {
-    c.loadStatement(
-      widget.customer['id'] as int,
-      from: _from != null ? DateFormat('yyyy-MM-dd').format(_from!) : null,
-      to: _to != null ? DateFormat('yyyy-MM-dd').format(_to!) : null,
-    );
+  Future<void> _refresh() async {
+    final id = widget.customer['id'] as int;
+    await Future.wait([
+      c.loadStatement(
+        id,
+        from: _from != null ? DateFormat('yyyy-MM-dd').format(_from!) : null,
+        to: _to != null ? DateFormat('yyyy-MM-dd').format(_to!) : null,
+      ),
+      c.loadPendingCollections(accountId: id),
+    ]);
   }
 
   @override
@@ -73,6 +77,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
               _totalsRow(totals),
               const SizedBox(height: 12),
               _actionsRow(account),
+              _pendingCollectionPanel(),
               const SizedBox(height: 16),
               const Text('الحركات', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
@@ -362,6 +367,53 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
   }
 
   /// POS cash or customer-authorized Amial payment, with one retry key.
+  Widget _pendingCollectionPanel() {
+    if (c.pendingCollections.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AmialColors.cardSurface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AmialColors.primary.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('credit_collect_pending_heading'.tr,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            ...c.pendingCollections.map((item) {
+              final review = item['needs_review'] == true;
+              final amount = Money.format(double.tryParse('${item['paid'] ?? 0}') ?? 0);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('credit_collect_pending_amount'.trParams({'amount': amount}),
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    if (review)
+                      Text('credit_collect_review_body'.tr,
+                          style: const TextStyle(color: AmialColors.danger)),
+                    if (!review)
+                      OutlinedButton.icon(
+                        onPressed: c.isSubmitting.value ? null
+                            : () async => _collectionResult(item),
+                        icon: const Icon(Icons.qr_code),
+                        label: Text('credit_collect_resume'.tr),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _collectionDialog() async {
     final accountId = widget.customer['id'] as int;
     final amountCtrl = TextEditingController();
@@ -411,8 +463,10 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
                 Get.snackbar('credit_collect_amount_invalid_title'.tr, 'credit_collect_amount_invalid'.tr);
                 return;
               }
+              // Use the live statement rather than a stale customer list card.
+              final account = c.statement.value?['account'] as Map?;
               final debt = double.tryParse(
-                  '${widget.customer['current_balance'] ?? 0}') ?? 0;
+                  '${account?['current_balance'] ?? widget.customer['current_balance'] ?? 0}') ?? 0;
               if (debt > 0 && amount > debt) {
                 Get.snackbar('credit_collect_amount_exceeds_title'.tr, 'credit_collect_amount_exceeds'.tr);
                 return;
