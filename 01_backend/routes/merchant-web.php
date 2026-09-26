@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Merchant\WebAuthController as Login;
 use App\Http\Controllers\Merchant\WebPortalController as Portal;
+use App\Http\Controllers\Api\V1\Amial\CreditCollectionController as Collections;
 use App\Http\Controllers\Merchant\WebPlansController as Plans;
 use App\Http\Controllers\Merchant\WebSectorController as Sector;
 use App\Http\Controllers\Merchant\WebFinanceController as Finance;
@@ -56,6 +57,18 @@ Route::middleware('merchant.web')->group(function () {
             ->whereNumber('id')->name('debts.customers.invoices');
         Route::get('/debts/customers/{id}/statement/pdf', [Credits::class, 'statementPdf'])
             ->whereNumber('id')->middleware('throttle:10,1')->name('debts.customers.statement.pdf');
+        Route::post('/debts/customers/{id}/collect-cash', [Collections::class, 'collectCash'])
+            ->whereNumber('id')->middleware('throttle:20,1')->name('debts.collect.cash');
+        Route::post('/debts/customers/{id}/request-wallet', [Collections::class, 'requestWallet'])
+            ->whereNumber('id')->middleware('throttle:20,1')->name('debts.collect.wallet.request');
+        Route::get('/debts/collections/pending', [Collections::class, 'list'])
+            ->name('debts.collect.pending');
+        Route::post('/debts/collections/{collection}/confirm', [Collections::class, 'confirmWallet'])
+            ->whereNumber('collection')->middleware('throttle:30,1')->name('debts.collect.wallet.confirm');
+        Route::get('/debts/collections/{collection}', [Collections::class, 'status'])
+            ->whereNumber('collection')->name('debts.collect.status');
+        Route::get('/debts/collections/{collection}/receipt', [Collections::class, 'receipt'])
+            ->whereNumber('collection')->middleware('throttle:15,1')->name('debts.collect.receipt');
 
         Route::get('/products', [CashierController::class, 'products'])->name('products');
         Route::post('/products', [CashierController::class, 'addProduct'])
