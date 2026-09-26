@@ -189,12 +189,14 @@ class MerchantService
     /**
      * الدفتر المحاسبي للتاجر — من الـ ledger.
      */
-    public function getLedger(User $merchant, int $page = 1, int $perPage = 20): array
+    public function getLedger(User $merchant, int $page = 1, int $perPage = 20, ?string $sourceType = null): array
     {
         $wallet = $this->ledger->getOrCreateUserWallet($merchant->id);
 
         $query = LedgerEntryLine::where('account_id', $wallet->id)
             ->with('journalEntry:id,entry_ulid,source_type,description_ar,posted_at')
+            ->when($sourceType !== null, fn ($q) => $q->whereHas('journalEntry',
+                fn ($journal) => $journal->where('source_type', $sourceType)))
             ->orderByDesc('id');
 
         $total = $query->count();

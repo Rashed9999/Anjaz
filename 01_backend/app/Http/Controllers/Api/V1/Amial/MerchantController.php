@@ -54,8 +54,22 @@ class MerchantController extends AmialApiController // AMIAL-FIX-007
     /** GET /api/v1/amial/merchant/ledger */
     public function ledger(Request $request): JsonResponse
     {
-        $page = max(1, (int) $request->query('page', 1));
-        $data = $this->service->getLedger($this->resolveMerchantPos($request), $page);
+        // The financial journal belongs to the merchant owner, not the
+        // cashier. Daily POS summaries intentionally omit wallet balances;
+        // this API must not accidentally reveal them through pagination.
+        $owner = $request->user();
+        if ($this->resolvePosUserId($request) !== null
+            || !\App\Models\MerchantProfile::where('user_id', $owner->id)->exists()) {
+            return $this->error('OWNER_ONLY', 'كشف محفظة المنشأة متاح لمالكها فقط', 403);
+        }
+        $validated = Validator::make($request->query(), [
+            'page' => 'sometimes|integer|min:1',
+            'source_type' => 'sometimes|string|max:64',
+        ]);
+        if ($validated->fails()) return $this->validationError($validated);
+        $page = (int) $request->query('page', 1);
+        $type = trim((string) $request->query('source_type', ''));
+        $data = $this->service->getLedger($owner, $page, 20, $type !== '' ? $type : null);
         return $this->ok($data);
     }
 

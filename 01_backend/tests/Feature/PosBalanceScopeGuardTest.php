@@ -179,6 +179,25 @@ class PosBalanceScopeGuardTest extends TestCase
      * ويُقاس بأنّ الشاشةَ لا تُسأل أصلاً هنا: الفحصُ على ردّ HTTP.
      * وهذا الاختبارُ يوثّق أنّ الأختَ محروسةٌ أيضاً فلا تُنسى غداً.
      */
+    /**
+     * The legacy merchant ledger route used resolveMerchantPos() and exposed
+     * every owner wallet entry to a cashier who knew the endpoint.
+     */
+    public function a_pos_employee_cannot_read_owner_wallet_journal(): void
+    {
+        $merchant = $this->merchant();
+        $cashier = $this->cashierOf($merchant);
+        $this->actingAs($cashier, 'api')
+            ->getJson('/api/v1/amial/merchant/ledger')
+            ->assertForbidden()
+            ->assertJsonPath('code', 'OWNER_ONLY');
+
+        $this->actingAs($merchant, 'api')
+            ->getJson('/api/v1/amial/merchant/ledger')
+            ->assertOk()->assertJsonStructure(['meta' => ['account', 'entries']]);
+    }
+
+    /** @test */
     public function the_full_financial_report_stays_owner_only(): void
     {
         $cashier = $this->cashierOf($this->merchant());
