@@ -95,6 +95,7 @@ class CreditCollectionService
         $receipt=$c->receipt_id?Receipt::find($c->receipt_id):null;
         return [
             'collection_id'=>$c->id,'collection_ref'=>$c->collection_ulid,
+            'account_id'=>$c->account_id,
             'status'=>$c->status,'payment_method'=>$c->payment_method,
             'paid'=>(string)$c->amount,
             'new_balance'=>(string)CustomerCreditAccount::findOrFail($c->account_id)->current_balance,

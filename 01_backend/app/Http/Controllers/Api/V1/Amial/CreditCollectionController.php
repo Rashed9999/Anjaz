@@ -67,8 +67,8 @@ class CreditCollectionController extends Controller
     public function confirmWallet(Request $r,int $collection): JsonResponse
     {
         if ($error=$this->check($r)) return $error;
-        [$owner,$actor]=$this->actor($r);
-        $item=CreditCollection::whereKey($collection)->where('merchant_user_id',$owner->id)->first();
+        [$owner,$actor,$posId]=$this->actor($r);
+        $item=$this->scoped($owner,$actor,$posId)->whereKey($collection)->first();
         if (!$item) return $this->error('NOT_FOUND','طلب التحصيل غير موجود',404);
         try {
             $done=$this->wallet->confirm($owner,$actor,$item);
@@ -83,8 +83,8 @@ class CreditCollectionController extends Controller
     public function list(Request $r): JsonResponse
     {
         if ($error=$this->check($r)) return $error;
-        [$owner]=$this->actor($r);
-        $items=CreditCollection::where('merchant_user_id',$owner->id)
+        [$owner,$actor,$posId]=$this->actor($r);
+        $items=$this->scoped($owner,$actor,$posId)
             ->whereIn('status',['pending','review'])->latest('id')->limit(50)->get();
         return $this->ok(['collections'=>$items->map(fn($c)=>$this->wallet->details($c,$this->cash))],
             'COLLECTIONS');
@@ -93,8 +93,8 @@ class CreditCollectionController extends Controller
     public function status(Request $r,int $collection): JsonResponse
     {
         if ($error=$this->check($r)) return $error;
-        [$owner]=$this->actor($r);
-        $item=CreditCollection::whereKey($collection)->where('merchant_user_id',$owner->id)->first();
+        [$owner,$actor,$posId]=$this->actor($r);
+        $item=$this->scoped($owner,$actor,$posId)->whereKey($collection)->first();
         return $item?$this->ok($this->wallet->details($item,$this->cash),'COLLECTION_STATUS')
             :$this->error('NOT_FOUND','التحصيل غير موجود',404);
     }
@@ -103,7 +103,7 @@ class CreditCollectionController extends Controller
     {
         if ($error=$this->check($r)) return $error;
         [$owner,$actor,$posId]=$this->actor($r);
-        $item=CreditCollection::whereKey($collection)->where('merchant_user_id',$owner->id)
+        $item=$this->scoped($owner,$actor,$posId)->whereKey($collection)
             ->where('status','completed')->first();
         if (!$item) return $this->error('NOT_FOUND','سند التحصيل غير موجود',404);
         if ($posId!==null && $item->actor_user_id!==$actor->id)
@@ -141,9 +141,24 @@ class CreditCollectionController extends Controller
     {
         [$owner,$actor]=$this->actor($r);
         if (!$owner || !$actor) return $this->error('FORBIDDEN','التحصيل للتاجر ونقطة البيع فقط',403);
-        try { $this->permissions->assert($actor,P::CASH_MOVE,[],$amount); }
+        // A cashier may collect debt without receiving general cash-expense powers.
+        // Older manager roles with CASH_MOVE remain compatible unless they
+        // explicitly have a narrower DEBT_COLLECT grant.
+        $permission=$this->permissions->can($actor,P::DEBT_COLLECT)
+            ? P::DEBT_COLLECT : P::CASH_MOVE;
+        try { $this->permissions->assert($actor,$permission,[],$amount); }
         catch (DomainException $e) { return $this->error('FORBIDDEN',$e->getMessage(),403); }
         return null;
+    }
+
+    /** A POS sees and confirms only its own collections, never a colleague's. */
+    private function scoped(User $owner,User $actor,?int $posId): \Illuminate\Database\Eloquent\Builder
+    {
+        $q=CreditCollection::query()->where('merchant_user_id',$owner->id);
+        if ($posId!==null) {
+            $q->where('pos_user_id',$posId)->where('actor_user_id',$actor->id);
+        }
+        return $q;
     }
 
     private function actor(Request $r): array

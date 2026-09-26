@@ -8,6 +8,9 @@ use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\Receipt;
 use App\Models\User;
+use App\Services\Merchant\MerchantPermissionService;
+use App\Support\Merchant\MerchantPermissions as P;
+use Laravel\Passport\Passport;
 use App\Services\CashierShiftService;
 use App\Services\CreditCollectionService;
 use App\Services\CreditWalletCollectionService;
@@ -115,5 +118,67 @@ class CreditCollectionFlowTest extends TestCase
         ]);
         $this->expectException(RuntimeException::class);
         $svc->confirm($owner,$owner,$item);
+    }
+
+    public function test_cashier_can_collect_debt_without_general_cash_powers_or_colleague_access(): void
+    {
+        $owner=$this->owner();
+        $permissions=app(MerchantPermissionService::class);
+        $roles=$permissions->seedRetailRoles($owner);
+        $cashier=collect($roles)->first(fn($role)=>$role->code==='cashier');
+        $this->assertNotNull($cashier);
+        $pos=[];
+        foreach ([1,2] as $n) {
+            $worker=User::factory()->create(['type'=>4,'role'=>'pos','zone_code'=>'SOUTH']);
+            $device=PosUser::create([
+                'user_id'=>$worker->id,'merchant_user_id'=>$owner->id,
+                'pos_number'=>'DEBT-TEST-POS-'.$n,'display_name'=>'نقطة '.$n,
+                'is_active'=>true,'permissions'=>[],
+            ]);
+            $permissions->assign($owner,$worker,$cashier);
+            app(CashierShiftService::class)->open($owner,$device->id,'0');
+            $this->assertTrue($permissions->can($worker,P::DEBT_COLLECT));
+            $this->assertFalse($permissions->can($worker,P::CASH_MOVE));
+            $pos[]=[$worker,$device];
+        }
+        $credit=app(CustomerCreditService::class);
+        $account=$credit->findOrCreateAccount($owner->id,'+967771008888','عميل الآجل');
+        $credit->recordSale($account,'2000');
+        Passport::actingAs($pos[0][0],[],'api');
+        $url='/api/v1/amial/merchant/credit/customers/'.$account->id;
+        $done=$this->postJson($url.'/payment',[
+            'amount'=>'400','idempotency_key'=>'scope-cash-collection-key',
+        ])->assertOk()->assertJsonPath('code','CASH_COLLECTED');
+        $cashId=$done->json('meta.collection_id');
+        $receiptId=$done->json('meta.receipt_id');
+        $this->assertNotNull($receiptId);
+        $this->postJson($url.'/payment',[
+            'amount'=>'400','idempotency_key'=>'scope-cash-collection-key',
+        ])->assertOk()->assertJsonPath('meta.collection_id',$cashId);
+        $this->assertSame('1600.0000',(string)$account->fresh()->current_balance);
+        $this->postJson($url.'/payment',['amount'=>'100'])->assertStatus(422);
+
+        $payer=User::factory()->create(['type'=>2,'phone'=>'+967771009999','is_active'=>1,'zone_code'=>'SOUTH']);
+        $pendingAccount=$credit->findOrCreateAccount($owner->id,$payer->phone,'عميل أميال');
+        $credit->recordSale($pendingAccount,'500');
+        $pending=app(CreditWalletCollectionService::class)->request(
+            $owner,$pos[0][0],$pos[0][1]->id,$pendingAccount,'200','scope-wallet-collection-key');
+
+        Passport::actingAs($pos[1][0],[],'api');
+        $this->getJson('/api/v1/amial/merchant/credit/collections/pending')
+            ->assertOk()->assertJsonCount(0,'meta.collections');
+        $this->getJson('/api/v1/amial/merchant/credit/collections/'.$pending->id)
+            ->assertNotFound();
+        $this->postJson('/api/v1/amial/merchant/credit/collections/'.$pending->id.'/confirm',[])
+            ->assertNotFound();
+        $this->getJson('/api/v1/amial/merchant/credit/collections/'.$cashId.'/receipt')
+            ->assertNotFound();
+
+        Passport::actingAs($pos[0][0],[],'api');
+        $this->getJson('/api/v1/amial/merchant/credit/collections/pending')
+            ->assertOk()->assertJsonPath('meta.collections.0.account_id',$pendingAccount->id);
+        Passport::actingAs($owner,[],'api');
+        $this->getJson('/api/v1/amial/merchant/credit/collections/pending')
+            ->assertOk()->assertJsonPath('meta.collections.0.collection_id',$pending->id);
     }
 }
