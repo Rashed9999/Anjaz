@@ -48,6 +48,7 @@ class BranchInternalRebalanceTest extends TestCase
         $n++;
 
         return app(\App\Services\AgentBranchService::class)->create($this->agent, [
+            'email' => 'branch-' . bin2hex(random_bytes(8)) . '@example.test',
             'name' => $name,
             'code' => 'BR'.$n.substr(md5($name.microtime()), 0, 4),
             'phone' => '9677715'.str_pad((string) (10000 + $n), 5, '0', STR_PAD_LEFT),

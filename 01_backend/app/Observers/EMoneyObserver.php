@@ -44,29 +44,65 @@ class EMoneyObserver
             return;
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-MULTI-CURRENCY-002 — **الافتتاحُ يقع في حساب عملته.**
+        //
+        // كان هذا المراقبُ ينادي `getOrCreateUserWallet($id, $zone)` بلا
+        // عملة، ومفتاحُ منع التكرار فيه `opening_wallet_{id}` — واحدٌ لكلّ
+        // **مستخدم**. فلمّا صار للمستخدم أكثرُ من محفظةٍ ظهر عطلان
+        // متراكبان، **وكلاهما صامت**:
+        //
+        // ① **محفظةُ دولارٍ مموَّلةٍ تفتح في حساب الريال.** مئةُ دولارٍ
+        //    تُقيَّد مئةَ ريالٍ في الحساب الخطأ — قيدٌ متوازنٌ يمرّ ويُقرأ.
+        //
+        // ② **وإن نجا من الأولى وقع في الثانية**: المفتاحُ نفسُه يجعل قيدَ
+        //    المحفظة الثانية يُقرأ «مسجَّلٌ سلفاً» فيُردّ القيدُ الأوّلُ
+        //    مكانَه ولا يُكتب شيء — **فمحفظةٌ فيها مالٌ بلا قيدٍ إطلاقاً**،
+        //    وفرقُ مصالحةٍ دائمٌ لا يُفسَّر.
+        //
+        // ولا يمسك أيَّهما مُصرِّفٌ ولا مُحلِّل: النداءُ صحيحٌ نحويّاً،
+        // والمعاملُ الغائبُ له افتراضيّ.
+        // ══════════════════════════════════════════════════════════════
+        $currency = \App\Support\Money\Currencies::normalize(
+            $wallet->currency ?: \App\Support\Money\Currencies::BASE
+        );
+        $isBase = \App\Support\Money\Currencies::isBase($currency);
+
         $ledger = app(LedgerService::class);
 
         $account = $ledger->getOrCreateUserWallet(
             (int) $wallet->user_id,
             (string) ($wallet->zone_code ?? 'SOUTH'),
+            $currency,
         );
 
+        // **وحسابُ الافتتاح لكلّ عملةٍ حسابُه** — وإلّا خلط قيدٌ عملتين
+        // فرفضه الدفترُ (وهو محقّ)، أو مرّ فصار في حسابٍ واحدٍ مجموعُ
+        // دولارٍ وريالٍ وهو ليس مبلغاً من شيء.
+        // والأساسُ يحتفظ برمزه `OPENING_BALANCE` — فلا تُنقَل قيودٌ قائمة.
         $opening = $ledger->getOrCreateSystemAccount(
-            'OPENING_BALANCE',
+            $isBase ? 'OPENING_BALANCE' : "OPENING_BALANCE_{$currency}",
             'equity',
-            'أرصدة افتتاحية (محافظ وُلدت مموَّلة)',
+            'أرصدة افتتاحية (محافظ وُلدت مموَّلة)'
+                .($isBase ? '' : ' — '.\App\Support\Money\Currencies::nameAr($currency)),
             'debit',
+            $currency,
         );
 
         $ledger->post(
             sourceType: 'opening_balance',
             sourceId: (string) $wallet->user_id,
-            description: "رصيد افتتاحي لمحفظة المستخدم {$wallet->user_id}",
+            description: "رصيد افتتاحي لمحفظة المستخدم {$wallet->user_id}"
+                .($isBase ? '' : " ({$currency})"),
             lines: [
                 ['account' => $opening->account_code, 'direction' => 'debit', 'amount' => $balance],
                 ['account' => $account->account_code, 'direction' => 'credit', 'amount' => $balance],
             ],
-            idempotencyKey: "opening_wallet_{$wallet->user_id}",
+            // **والمفتاحُ يحمل العملة** — ومفتاحُ الأساس يبقى كما كان فلا
+            // تُعاد كتابةُ قيودٍ قائمة.
+            idempotencyKey: $isBase
+                ? "opening_wallet_{$wallet->user_id}"
+                : "opening_wallet_{$wallet->user_id}_{$currency}",
             // حساب الافتتاح حقوق ملكية ويصير سالباً بالتعريف: هو مصدر المال
             // الذي وُجد قبل الدفتر، لا رصيدٌ يُصان.
             allowNegative: true,

@@ -18,6 +18,27 @@ name: أميال باي — CI
 # الحارس: `tests/Feature/DeploymentGateGuardTest.php`.
 # ══════════════════════════════════════════════════════════════════════
 on:
+  # الفحوصُ تبقى على كلّ دفع؛ **وملفُّ APK لا يُبنى إلّا من زرّ Run workflow.**
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: 'نوع التشغيل'
+        required: true
+        default: full_ci
+        type: choice
+        options:
+          - full_ci
+          - apk_only
+      build_type:
+        description: 'installable يضمن APK قابلاً للتثبيت؛ release_strict يتطلب مفتاح التوقيع الثابت'
+        required: true
+        default: installable
+        type: choice
+        options:
+          - installable
+          - debug
+          - release_strict
+
   push:
     branches: ['**']
   pull_request:
@@ -29,39 +50,32 @@ concurrency:
 
 jobs:
   # ──────────────────────────────────────────────────────────
-  # 1) فحص بنيوي سريع (توازن الأقواس) — لا يحتاج تبعيات
+  # 1) فحص بنيوي سريع — لا يعتمد على عدّ الأقواس النصّي
   # ──────────────────────────────────────────────────────────
   structural:
     name: فحص بنيوي
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: توازن الأقواس (PHP/Dart)
+      # AMIAL-SOURCE-001: reject corrupt text and missing PHP tags before
+      # framework/bootstrap checks can mistake an empty route surface for OK.
+      - name: سلامة ملفات المصدر والترجمات
         run: |
-          node -e '
-          const fs=require("fs"),path=require("path");
-          function strip(s){let o="",i=0,n=s.length;
-           while(i<n){const c=s[i],d=s[i+1];
-           if(c==="/"&&d==="/"){while(i<n&&s[i]!=="\n")i++;continue;}
-           if(c==="#"){while(i<n&&s[i]!=="\n")i++;continue;}
-           if(c==="/"&&d==="*"){i+=2;while(i<n&&!(s[i]==="*"&&s[i+1]==="/"))i++;i+=2;continue;}
-           if(c==="\x27"||c==="\x22"){const q=c;i++;while(i<n&&s[i]!==q){if(s[i]==="\\")i++;i++;}i++;o+="X";continue;}
-           o+=c;i++;}return o;}
-          function bal(f){try{const s=strip(fs.readFileSync(f,"utf8"));const c={};
-           for(const ch of s)if("(){}[]".includes(ch))c[ch]=(c[ch]||0)+1;
-           return(c["("]||0)===(c[")"]||0)&&(c["{"]||0)===(c["}"]||0)&&(c["["]||0)===(c["]"]||0);
-           }catch{return false;}}
-          let ok=0,fail=0;const fails=[];
-          function walk(dir){if(!fs.existsSync(dir))return;
-           for(const e of fs.readdirSync(dir)){const full=path.join(dir,e);
-           if(fs.statSync(full).isDirectory()){walk(full);continue;}
-           if(e.endsWith(".php")||e.endsWith(".dart")){if(bal(full))ok++;else{fail++;fails.push(full);}}}}
-          ["01_backend/app","01_backend/tests","01_backend/routes","01_backend/database"].forEach(walk);
-          walk("02_flutter_app/lib");
-          console.log(ok+" ✓  "+fail+" ✗");
-          fails.forEach(f=>console.log("  ✗ "+f));
-          process.exit(fail===0?0:1);
-          '
+          python3 01_backend/scripts/source-integrity.py
+          python3 -B -m unittest discover -s 01_backend/scripts/tests -p 'test_*.py'
+          bash -n 01_backend/scripts/verify.sh
+      # عدّ الأقواس النصّي لا يفهم heredoc أو regex أو المصفوفات المركبة
+      # في PHP، فيعطي إنذارات كاذبة. php -l هو محلّل اللغة الحقيقي.
+      - name: تثبيت PHP للفحص النحوي
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+      - name: فحص PHP وكشف تعارضات الدمج
+        run: |
+          ! rg -n '^(<<<<<<<|=======|>>>>>>>)' --glob '*.php' --glob '*.dart' .
+          find 01_backend/app 01_backend/tests 01_backend/routes 01_backend/database \
+            -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
   # ──────────────────────────────────────────────────────────
   # 2) اختبارات الباكند الكاملة (PHPUnit) — القلب
@@ -70,6 +84,12 @@ jobs:
     name: اختبارات الباكند (PHPUnit)
     runs-on: ubuntu-latest
     needs: structural
+    # **وبناءُ APK يدويٌّ لا يجرّ معه نشرةً ولا جولةَ اختبارات.**
+    # فالزرُّ الوحيدُ الذي يملكه صاحبُ المشروع لبناء تطبيقه يجب ألّا
+    # يُطلق خطّافَ Coolify — وCoolify عنده على `Source: Manual` عمداً،
+    # وهو ينشر بيده. (وهو ما فعله `fe64f3c` بعنوانه: «isolate manual
+    # APK builds from deploy jobs».)
+    if: github.event_name != 'workflow_dispatch' || inputs.run_mode == 'full_ci'
     services:
       mysql:
         image: mysql:8.0
@@ -134,9 +154,58 @@ jobs:
           echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
           echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
 
-      - name: تشغيل كل الاختبارات (747)
+      - name: تحقق شاشتي الرسوم وسجل التدقيق ضد 500
         working-directory: 01_backend
-        run: php artisan test
+        run: php artisan test --compact tests/Feature/FeeCentreScreensGuardTest.php tests/Feature/AuditScreenArabicAndFiltersTest.php
+
+      - name: رحلة العميل الذهبية — من التسجيل إلى Tier 0 ورفع التوثيق
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Feature/CustomerFactoryContractTest.php tests/Feature/CustomerGoldenJourneyGuardTest.php tests/Feature/CustomerKycUpgradeJourneyGuardTest.php tests/Feature/ResidenceVerificationLegacyStateTest.php
+
+      - name: وصلات الإدارة الحرجة — المسار والصلاحية والمدخل
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Feature/AdminCriticalRouteContractTest.php tests/Feature/AdminRouteReferenceGuardTest.php tests/Feature/MerchantVerificationAdminGuardTest.php
+
+      - name: رحلة التاجر الذهبية — التسجيل ثم التشغيل ثم الاعتماد
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Feature/SelfRegisteredMerchantIsUsableTest.php tests/Feature/RegistrationRolesTest.php
+
+      - name: رحلة الوكيل الذهبية — الشركة فالفرع فالصراف فالعميل
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Feature/AgentLifecycleChainTest.php
+
+
+      - name: تحقق دورة البريد قبل الاختبارات الشاملة
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Feature/EmailOtpLifecycleTest.php tests/Feature/EmailIdentityGuardTest.php tests/Feature/AmialOtpEmailTemplateTest.php tests/Feature/EmailVerificationCenterGuardTest.php tests/Feature/TransactionEmailDeliveryTest.php tests/Feature/AgentLifecycleChainTest.php tests/Feature/InsiderDefenseTest.php tests/Feature/ArabicUserMessagesGuardTest.php tests/Feature/OpsAlertResendGuardTest.php tests/Feature/DemoOtpTest.php tests/Feature/DemoMoneyGuardTest.php tests/Feature/KycRegulatoryFieldsTest.php tests/Feature/PortalHostSeparationTest.php
+
+      - name: تحقق عوائق الخادم السابقة
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Feature/DonationsServiceTest.php tests/Feature/CharityServiceTest.php tests/Feature/CharityPayoutAndFundTraceGuardTest.php tests/Feature/KycSanctionTest.php tests/Feature/CustomerCenterTest.php tests/Feature/MerchantOperationsCenterTest.php tests/Feature/MerchantStaffTest.php tests/Feature/StaffDisableRevokesNowGuardTest.php tests/Feature/CustomerCreditSettleTest.php tests/Feature/CustomerCreditViewTest.php tests/Feature/LedgerCoverageGuardTest.php tests/Feature/NoTillWithoutAShiftGuardTest.php tests/Feature/BillPayServiceTest.php tests/Feature/BillPayCustomerUiGuardTest.php tests/Feature/CustomerSystemsCenterGuardTest.php tests/Feature/CustomerLegalNameLifecycleTest.php tests/Feature/CustomerProfileChangeApiTest.php tests/Feature/CustomerKycUpgradeJourneyGuardTest.php tests/Feature/ServiceCoverageGovernorateTest.php
+
+      - name: تشغيل كل اختبارات الخادم
+        working-directory: 01_backend
+        run: |
+          # الذيل وحده أخفى 40 إخفاقاً؛ JUnit يعرض كل سبب دون تكرار المكدسات.
+          php artisan test --log-junit=phpunit_report.xml > phpunit_report.txt 2>&1 || {
+            python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          report = Path('phpunit_report.xml')
+          if report.exists():
+              for case in ET.parse(report).iter('testcase'):
+                  for problem in case:
+                      if problem.tag in ('failure', 'error'):
+                          print(f"FAILED: {case.get('class')}::{case.get('name')}")
+                          print('\n'.join((problem.text or problem.get('message', '')).splitlines()[:12])[:1800])
+          else:
+              print('JUnit report unavailable; see process output below.')
+          PY
+            echo '::error::فشلت اختبارات PHPUnit — آخر 160 سطراً:'
+            tail -n 160 phpunit_report.txt
+            exit 1
+          }
+          tail -n 20 phpunit_report.txt
 
   # ──────────────────────────────────────────────────────────
   # 3) تحليل واختبار تطبيق Flutter
@@ -205,10 +274,276 @@ jobs:
   # `entrypoint.prod.sh` وحدَه — «وهذا الملفّ هو المُستعمَل فعلاً، فلم
   # يكن يصل» (تعليقٌ في `docker/entrypoint.sh` نفسِه).
   # ──────────────────────────────────────────────────────────
+  # ──────────────────────────────────────────────────────────
+  # AMIAL-CI-APK-002 — **بناءُ APK المجّانيُّ عاد بعد أن حُذف صامتاً.**
+  #
+  # بُني في `10f87a5` («مخرجٌ من رصيد Mac الذي نفد») وعزله `fe64f3c`،
+  # ثمّ **حذفه `19e50e2` وعنوانُه «استبدال فاحصٍ بنيويّ»** — أربعُ
+  # إزالاتٍ وصفرُ إضافة، ولا كلمةَ عنه في الرسالة. (والفاحصُ البديلُ
+  # في ذاك الالتزام **أفضلُ فعلاً** — `php -l` محلِّلُ لغةٍ حقيقيٌّ لا
+  # عدَّ أقواسٍ نصّيّاً؛ فالمأخذُ ما حُذف معه لا ما حلّ محلَّه.)
+  #
+  # **وثمنُه معروفٌ بالرقم**: فاتورةُ مئةِ دولارٍ من Codemagic على
+  # دقائق `mac_mini_m2`، ثمّ نُزع المُطلِقُ كلُّه من `codemagic.yaml`
+  # بقرار صاحب المشروع. **فهذا هو البديلُ الوحيدُ الباقي** — Linux
+  # مجّانيٌّ بضغطة زرّ، ولا دقيقةَ Mac واحدة.
+  #
+  # **ولا يُبنى تلقائيّاً أبداً**: `workflow_dispatch` وحدَه، فلا يعود
+  # ما أنتج الفاتورة.
+  # ──────────────────────────────────────────────────────────
+  apk:
+    name: بناء APK (Linux — بديل Codemagic)
+    runs-on: ubuntu-latest
+    needs: flutter
+    # البناء اليدوي يبقى هو الافتراضي. ولتمكين البناء المباشر من المحادثة
+    # يمكن تشغيله بدفعة مقصودة عنوانها [build-apk] — لا يعمل على أي push عادي.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'apk_only') ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-apk]'))
+    env:
+      APK_BUILD_REQUEST: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type || 'installable' }}
+    defaults:
+      run:
+        working-directory: 02_flutter_app
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 17 — نفسُ ما يطلبه `codemagic.yaml`، فلا يفترق البناءان.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - run: flutter pub get
+
+      # AMIAL-APK-BUILD-MODE-004
+      #
+      # installable = Release فعلي دائماً. إن وُجد مفتاح أميال الثابت
+      # نستخدمه، وإلا نولّد مفتاحاً مؤقتاً داخل Runner للتثبيت والتجربة فقط.
+      # بذلك لا يتحول البناء إلى Debug كبير الحجم، ولا ندّعي في الوقت نفسه
+      # أن النسخة المؤقتة صالحة كتوقيع إنتاج دائم.
+      - name: تحديد نوع APK الفعلي قبل البناء
+        env:
+          KEYSTORE_B64: ${{ secrets.AMIAL_ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.AMIAL_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          REQUEST="${APK_BUILD_REQUEST:-installable}"
+          HAVE_OFFICIAL_SIGNING=0
+          if [ -n "${KEYSTORE_B64:-}" ] && [ -n "${KEYSTORE_PASSWORD:-}" ]; then
+            HAVE_OFFICIAL_SIGNING=1
+          fi
+
+          case "$REQUEST" in
+            release_strict)
+              if [ "$HAVE_OFFICIAL_SIGNING" -ne 1 ]; then
+                echo "::error::طلبت release_strict لكن مفتاح توقيع أميال الثابت غير مضبوط في GitHub Secrets."
+                echo "::error::المطلوب: AMIAL_ANDROID_KEYSTORE_B64 و AMIAL_ANDROID_KEYSTORE_PASSWORD"
+                exit 1
+              fi
+              TYPE=release
+              SIGNING=official
+              ;;
+            debug)
+              TYPE=debug
+              SIGNING=debug
+              ;;
+            installable)
+              TYPE=release
+              if [ "$HAVE_OFFICIAL_SIGNING" -eq 1 ]; then
+                SIGNING=official
+              else
+                SIGNING=temporary
+                echo "::warning::مفتاح أميال الرسمي غير موجود؛ سيُبنى Release خفيف بتوقيع مؤقت للتثبيت والتجربة فقط."
+              fi
+              ;;
+            *)
+              echo "::error::نوع بناء غير معروف: $REQUEST"
+              exit 1
+              ;;
+          esac
+
+          echo "APK_BUILD_TYPE=$TYPE" >> "$GITHUB_ENV"
+          echo "APK_SIGNING_MODE=$SIGNING" >> "$GITHUB_ENV"
+
+          {
+            echo "## أميال باي — نوع APK"
+            echo "- المطلوب: `$REQUEST`"
+            echo "- الفعلي: `$TYPE`"
+            echo "- التوقيع: `$SIGNING`"
+            if [ "$SIGNING" = "temporary" ]; then
+              echo "- ملاحظة: Release قابل للتثبيت، لكن مفتاحه مؤقت لهذه النسخة وليس مفتاح الإنتاج الرسمي."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: بصمة المصدر (فرع + التزام + إصدار)
+        run: |
+          echo "======== بصمة بناء أميال باي ========"
+          echo "الفرع    : ${GITHUB_REF_NAME}"
+          echo "الالتزام : $(git rev-parse --short HEAD)"
+          echo "الرسالة  : $(git log -1 --format=%s)"
+          echo "الإصدار  : $(grep '^version:' pubspec.yaml)"
+          echo "===================================="
+
+      - name: تجهيز توقيع Release
+        if: env.APK_BUILD_TYPE == 'release'
+        env:
+          KEYSTORE_B64: ${{ secrets.AMIAL_ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.AMIAL_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [ "$APK_SIGNING_MODE" = "official" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > android/amial-release.jks
+            chmod 600 android/amial-release.jks
+            PASSWORD="$KEYSTORE_PASSWORD"
+            ALIAS="amial"
+          else
+            PASSWORD="AmialTemp-${GITHUB_RUN_ID}"
+            ALIAS="amial-temp"
+            keytool -genkeypair -noprompt               -keystore android/amial-release.jks               -storepass "$PASSWORD"               -keypass "$PASSWORD"               -alias "$ALIAS"               -keyalg RSA -keysize 2048 -validity 30               -dname "CN=Amial Pay Temporary Build,O=Amial Pay,C=YE"
+            chmod 600 android/amial-release.jks
+          fi
+
+          cat > android/key.properties <<EOF
+          storePassword=$PASSWORD
+          keyPassword=$PASSWORD
+          keyAlias=$ALIAS
+          storeFile=amial-release.jks
+          EOF
+
+      # AMIAL-APK-INSTALL-002 — Release ARM64 خفيف ومفحوص.
+      # Universal يضم مكتبات ARM32 + ARM64 + x86_64 فرفع الحجم إلى ~67MB.
+      # هواتف Android الحديثة المستهدفة بالتجربة تستخدم ARM64؛ نبني splits
+      # ونرفع arm64-v8a وحده بعد فحص ZIP والتوقيع والـManifest. Debug يبقى
+      # Universal لأنه للتطوير فقط.
+      - name: بناء APK واحد قابل للتثبيت
+        run: |
+          if [ "$APK_BUILD_TYPE" = "release" ]; then
+            flutter build apk --release --split-per-abi
+            SRC="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
+            ABI="arm64-v8a"
+          else
+            flutter build apk --debug
+            SRC="build/app/outputs/flutter-apk/app-debug.apk"
+            ABI="universal"
+          fi
+
+          test -s "$SRC" || {
+            echo "::error::لم يُنتَج APK صالح أو خرج بحجم صفر"
+            exit 1
+          }
+
+          mkdir -p build/installable
+          LABEL="$APK_BUILD_TYPE"
+          if [ "$APK_BUILD_TYPE" = "release" ]; then
+            LABEL="release-${APK_SIGNING_MODE}-${ABI}"
+          fi
+          OUT="build/installable/AmialPay-${LABEL}-${GITHUB_SHA::7}.apk"
+          cp "$SRC" "$OUT"
+          echo "APK_PATH=$OUT" >> "$GITHUB_ENV"
+          echo "APK_ABI=$ABI" >> "$GITHUB_ENV"
+
+      - name: فحص سلامة الحزمة والتوقيع قبل الرفع
+        run: |
+          set -euo pipefail
+          APK="$APK_PATH"
+
+          echo "== الملف =="
+          ls -lh "$APK"
+          test "$(stat -c%s "$APK")" -gt 1000000
+
+          echo "== ZIP integrity =="
+          unzip -t "$APK" >/tmp/apk-unzip.txt
+          tail -n 2 /tmp/apk-unzip.txt
+
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)
+          AAPT2=$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -n 1)
+
+          test -n "$APKSIGNER" -a -x "$APKSIGNER"
+          test -n "$ZIPALIGN" -a -x "$ZIPALIGN"
+          test -n "$AAPT2" -a -x "$AAPT2"
+
+          echo "== APK signature =="
+          CERT_OUTPUT=$("$APKSIGNER" verify --verbose --print-certs "$APK")
+          printf '%s\n' "$CERT_OUTPUT"
+          ACTUAL_CERT_SHA256=$(printf '%s\n' "$CERT_OUTPUT" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)
+          if [ -z "$ACTUAL_CERT_SHA256" ]; then
+            ACTUAL_CERT_SHA256=$(printf '%s\n' "$CERT_OUTPUT" | sed -n 's/^V2 Signer: certificate SHA-256 digest: //p' | head -n 1)
+          fi
+          test -n "$ACTUAL_CERT_SHA256"
+
+          if [ "$APK_BUILD_TYPE" = "release" ] && [ "$APK_SIGNING_MODE" = "official" ]; then
+            EXPECTED_CERT_SHA256="1db2799f07dad246a5163fc5fa9ca813b47dd65b6db55eb296632bed3bbabcc7"
+            if [ "$(printf '%s' "$ACTUAL_CERT_SHA256" | tr '[:upper:]' '[:lower:]')" != "$EXPECTED_CERT_SHA256" ]; then
+              echo "::error::توقيع APK لا يطابق هوية أميال الثابتة"
+              echo "expected=$EXPECTED_CERT_SHA256"
+              echo "actual=$ACTUAL_CERT_SHA256"
+              exit 1
+            fi
+            echo "✓ توقيع Release يطابق هوية أميال الثابتة"
+          elif [ "$APK_BUILD_TYPE" = "release" ]; then
+            echo "::notice::Release مؤقت: التوقيع صالح للتثبيت لكنه ليس هوية أميال الإنتاجية الثابتة."
+          else
+            echo "::notice::APK Debug: تم التحقق من وجود توقيع صالح."
+          fi
+
+          echo "== ZIP alignment =="
+          "$ZIPALIGN" -c -P 16 -v 4 "$APK"
+
+          echo "== Manifest parse =="
+          "$AAPT2" dump badging "$APK" | tee /tmp/apk-badging.txt
+          grep -q "package: name='amialpay.com'" /tmp/apk-badging.txt
+          if [ "$APK_BUILD_TYPE" = "release" ]; then
+            grep -q "native-code: 'arm64-v8a'" /tmp/apk-badging.txt
+            if grep -qE "'armeabi-v7a'|'x86_64'|'x86'" /tmp/apk-badging.txt; then
+              echo "::error::نسخة Release المطلوبة ليست ARM64 خالصة"
+              exit 1
+            fi
+            echo "✓ ABI = arm64-v8a فقط"
+          fi
+
+          echo "== SHA256 =="
+          sha256sum "$APK" | tee "build/installable/SHA256SUMS.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: amial-${{ env.APK_BUILD_TYPE }}-${{ env.APK_SIGNING_MODE }}-installable-${{ github.sha }}
+          path: |
+            02_flutter_app/build/installable/*.apk
+            02_flutter_app/build/installable/SHA256SUMS.txt
+          retention-days: 30
+          if-no-files-found: error
+
+  # ──────────────────────────────────────────────────────────
+  # 4) التحقّق من بناء الصورتين (بلا تشغيل)
+  #
+  # AMIAL-PROD-READINESS-001 — **الصورةُ المفحوصةُ هي الصورةُ المشحونة.**
+  #
+  # كانت تُبنى `Dockerfile.prod` وحدَها، و`DEPLOY_COOLIFY.md` يقول
+  # «Build Pack = Dockerfile». فما يُفحَص غيرُ ما يُنشَر.
+  #
+  # وقد كلّف هذا عطلاً بنصّه من قبل: إصلاحُ مجلّدات PDF كُتب في
+  # `entrypoint.prod.sh` وحدَه — «وهذا الملفّ هو المُستعمَل فعلاً، فلم
+  # يكن يصل» (تعليقٌ في `docker/entrypoint.sh` نفسِه).
+  # ──────────────────────────────────────────────────────────
+
   docker:
     name: بناء صورتَي Docker
     runs-on: ubuntu-latest
     needs: structural
+    # **وبناءُ APK يدويٌّ لا يجرّ معه نشرةً ولا جولةَ اختبارات.**
+    # فالزرُّ الوحيدُ الذي يملكه صاحبُ المشروع لبناء تطبيقه يجب ألّا
+    # يُطلق خطّافَ Coolify — وCoolify عنده على `Source: Manual` عمداً،
+    # وهو ينشر بيده. (وهو ما فعله `fe64f3c` بعنوانه: «isolate manual
+    # APK builds from deploy jobs».)
+    if: github.event_name != 'workflow_dispatch' || inputs.run_mode == 'full_ci'
     strategy:
       fail-fast: false
       matrix:
@@ -219,3 +554,79 @@ jobs:
       - name: بناء ${{ matrix.dockerfile }}
         working-directory: 01_backend
         run: docker build -f ${{ matrix.dockerfile }} -t amial-pay:ci-${{ matrix.dockerfile }} .
+
+  # ──────────────────────────────────────────────────────────
+  # AMIAL-CD-TRIGGER-001 — **الدفعُ لا ينشر، وهذا آخرُ بابٍ مغلق.**
+  #
+  # **الثمنُ الذي دُفع، بنصّ صاحب المشروع:** «منذ أيّامٍ وأنا لم أستطع
+  # عملَ بناءٍ للتطبيق أو نشرَ المشروع».
+  #
+  # Coolify على `Source: Manual` في كلّ نشراته — فالدفعُ إلى الفرع
+  # المنشور لا يُطلق شيئاً، وكلُّ ما في المستودع يقف حتّى يفتح إنسانٌ
+  # البابَ بيده. **وبابٌ يُفتَح باليد يُنسى**، فتبقى الشيفرةُ الجديدةُ
+  # في git والقديمةُ تخدم العملاء، ولا سطرَ يقول ذلك.
+  #
+  # **ولا يُضبَط Coolify من مستودع** — هو لوحةٌ خارجيّة. لكنّه يقبل
+  # خطّافَ نشرٍ بعنوانٍ واحد. فيُوضَع العنوانُ سرّاً واحداً، ويصير
+  # النشرُ تلقائيّاً إلى الأبد:
+  #
+  #     Coolify ← المشروع ← Webhooks ← انسخ «Deploy Webhook»
+  #     GitHub  ← Settings ← Secrets ← New secret
+  #                 الاسم : COOLIFY_DEPLOY_HOOK
+  #
+  # ══════════════════════════════════════════════════════════
+  # **وثلاثةُ حدودٍ مقصودةٌ تُقرأ ولا تُخمَّن:**
+  #
+  # ① **بعد البوّابة لا معها** (`needs`) — نشرٌ يسبق الفحصَ يشحن ما
+  #    لم يُفحَص، وهو أسوأ من نشرٍ يدويّ.
+  #
+  # ② **فرعُ النشر وحدَه.** Coolify يستورد
+  #    `claude/project-code-review-yjagv`؛ وخطّافٌ يُطلَق من كلّ فرعٍ
+  #    ينشر شيفرةً ليست هي المقصودة.
+  #
+  # ③ **وغيابُ السرّ ليس فشلاً.** الخطوةُ تُخطَّى وتقول لماذا — فوظيفةٌ
+  #    حمراءُ على إعدادٍ لم يُضبَط بعد تُعوّد القارئَ على تجاهل الأحمر.
+  #    (وهي القاعدةُ السابعة: «غيرُ معروف» ليس فشلاً، ويُقال بسببه.)
+  # ──────────────────────────────────────────────────────────
+  deploy:
+    name: إطلاق نشرة Coolify
+    runs-on: ubuntu-latest
+    # موقع أميال (Laravel/Docker) وتطبيق Flutter منتجان مستقلان. فشل اختبار
+    # واجهة الجوال يبقى أحمر ويمنع بناء APK، لكنه لا يترك موقع الويب متوقفاً
+    # بعدما اجتاز فحصه البنيوي واختبارات الباكند وبناء الصورة المنشورة.
+    needs: [structural, backend, docker]
+    # **ولا نشرَ من زرّ بناء APK** — انظر `AMIAL-CI-APK-002` أعلاه.
+    if: >-
+      (github.event_name != 'workflow_dispatch' || inputs.run_mode == 'full_ci')
+      && github.ref == 'refs/heads/claude/project-code-review-yjagv'
+    steps:
+      - name: نداء خطّاف النشر
+        env:
+          HOOK: ${{ secrets.COOLIFY_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::notice title=النشر التلقائي غير مضبوط::" \
+              "السرُّ COOLIFY_DEPLOY_HOOK غيرُ موجود، فالنشرُ ما زال يدويّاً." \
+              "اضبطه مرّةً واحدةً: Coolify ← Webhooks ← Deploy Webhook،" \
+              "ثمّ GitHub ← Settings ← Secrets ← COOLIFY_DEPLOY_HOOK."
+            exit 0
+          fi
+
+          # `--fail-with-body` لا `--fail` وحدَها: ٤٠٤ على خطّافٍ خاطئ
+          # يجب أن يُظهر نصَّ الردّ، وإلّا صار «فشل» بلا سبب.
+          code=$(curl -sS --fail-with-body -o /tmp/hook.out -w '%{http_code}' \
+                   --max-time 60 -X GET "$HOOK") || {
+            echo "::error title=تعذّر إطلاق النشرة::$(head -c 400 /tmp/hook.out)"
+            exit 1
+          }
+
+          echo "::notice title=أُطلقت النشرة::ردّ Coolify $code على ${GITHUB_SHA::7}"
+          head -c 400 /tmp/hook.out || true
+
+      # **وإطلاقُ النشرة ليس نجاحَها.** Coolify يردّ فورَ القبول، والبناءُ
+      # يجري بعده دقائق. فيُقال ذلك صراحةً لئلّا تُقرأ الخضرةُ «نُشر».
+      - name: ما بعد الإطلاق
+        run: |
+          echo "::notice title=الخطوة التالية::" \
+            "الإطلاقُ ليس اكتمالاً — تابِع Coolify حتّى Running (healthy)،" \
+            "ثمّ شغّل: php artisan amial:readiness --base=https://amialpay.com"

@@ -175,7 +175,7 @@
             </div>
             <div class="d-flex flex-wrap gap-2">
                 @if ($canTransactions)<a href="{{ route('admin.transaction.index') }}">↗ كشف العمليات</a>@endif
-                @if ($canCustomers)<a href="{{ route('admin.amial.hub.customers') }}">👤 إدارة العملاء</a>@endif
+                @if ($canCustomers)<a href="{{ route('admin.amial.customer.page') }}">👤 مركز العملاء</a>@endif
                 @if ($canTickets)<a href="{{ route('admin.support-center.index') }}">🎧 مركز الدعم</a>@endif
                 @if ($canAudit)<a href="{{ route('admin.amial.ledger.page') }}">📚 ميزان المراجعة</a>@endif
             </div>
@@ -337,7 +337,7 @@
                     $kpis[] = ['k' => 'customers', 'lbl' => 'العملاء',
                         'val' => number_format($data['counts']['customers'] ?? 0),
                         'ic' => '👤', 'bg' => '#f0ecff', 'fg' => '#5B2A9E',
-                        'href' => route('admin.amial.hub.customers')];
+                        'href' => route('admin.amial.customer.page')];
 
                     $kpis[] = ['k' => 'agents', 'lbl' => 'الوكلاء',
                         'val' => number_format($data['counts']['agents'] ?? 0),
@@ -431,7 +431,7 @@
                                 @php $uid = $row->user->id ?? null; @endphp
                                 <a class="a-row-link d-flex align-items-center justify-content-between px-3 py-2"
                                    style="border-top:1px solid #f3f5f8"
-                                   @if ($uid) href="{{ route('admin.amial.hub.account', $uid) }}" @else href="{{ route('admin.amial.hub.customers') }}" @endif>
+                                   @if ($uid) href="{{ route('admin.amial.hub.account', $uid) }}" @else href="{{ route('admin.amial.customer.page') }}" @endif>
                                     <span class="d-flex align-items-center gap-2">
                                         <span class="a-rank">{{ $idx + 1 }}</span>
                                         <span>{{ $row->user->f_name ?? '—' }} {{ $row->user->l_name ?? '' }}</span>

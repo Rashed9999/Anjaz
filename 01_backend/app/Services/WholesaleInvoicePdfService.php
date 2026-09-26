@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\WholesaleInvoice;
+use App\Models\Merchant;
+use App\Services\Merchant\MerchantLogoService;
 use App\Support\ArabicPdf;
 
 /**
@@ -23,10 +25,12 @@ class WholesaleInvoicePdfService
     {
         // تحميل العلاقات اللازمة
         $invoice->loadMissing(['business', 'customer', 'salesRep', 'items', 'collections']);
+        $merchant = Merchant::where('user_id', $invoice->business?->merchant_user_id)->first();
 
         $html = view('pdf.wholesale-invoice', [
             'invoice' => $invoice,
             'business' => $invoice->business,
+            'merchantLogoData' => app(MerchantLogoService::class)->dataUri($merchant),
             'customer' => $invoice->customer,
             'salesRep' => $invoice->salesRep,
             'items' => $invoice->items,

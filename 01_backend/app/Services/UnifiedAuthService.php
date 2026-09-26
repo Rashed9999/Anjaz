@@ -116,10 +116,10 @@ class UnifiedAuthService
     // ============================================================
 
     /**
-     * Merchant login: merchant_number + phone + password [+ pos_number].
+     * Merchant login: merchant_number + phone + password [+ employee_code].
      *
-     * إذا pos_number موجود → الـ login يكون لـ POS user تحت هذا التاجر.
-     * بدون pos_number → الـ login لحساب التاجر الرئيسي.
+     * إذا employee_code موجود → دخول حساب موظف تحت هذا التاجر.
+     * بدونه → الدخول لحساب التاجر الرئيسي.
      */
     public function loginMerchant(
         string $merchantNumber,
@@ -146,7 +146,7 @@ class UnifiedAuthService
             throw new \RuntimeException('بيانات الدخول غير صحيحة');
         }
 
-        // إذا pos_number موجود → POS user login
+        // رمز الموظف يحدد حساب الموظف، لا جهاز نقطة البيع.
         if ($posNumber) {
             $posUser = PosUser::active()
                 ->where('merchant_user_id', $merchant->id)
@@ -155,7 +155,7 @@ class UnifiedAuthService
 
             if (!$posUser) {
                 $this->recordFailure('merchant', $merchantNumber, $request, 'POS_NOT_FOUND', $merchant->id);
-                throw new \RuntimeException('نقطة البيع غير موجودة لهذا التاجر');
+                throw new \RuntimeException('رمز الموظف غير موجود أو الحساب غير مفعّل لهذا التاجر');
             }
 
             $user = $posUser->user;
@@ -170,7 +170,7 @@ class UnifiedAuthService
             return $this->issueToken($user, 'pos', $request, [
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUser->id,
-                'pos_number' => $posNumber,
+                'employee_code' => $posNumber,
                 'permissions' => $posUser->permissions ?? [],
             ], $merchantNumber);
         }
@@ -498,7 +498,8 @@ class UnifiedAuthService
         if ($raw === '') {
             if ($enforced) {
                 throw new \RuntimeException(
-                    'لا جهازَ مسجَّلٌ لهذه الجلسة. سجّل الجهازَ من حساب التاجر ثمّ أعد الدخول.');
+                    'حساب الموظف صحيح، لكن جهاز نقطة البيع غير مفعّل. '
+                    . 'يسجّل مالك التاجر هذا الجهاز من «أجهزة نقاط البيع» ثم يعيد الموظف الدخول.');
             }
 
             app(OpsAlertService::class)->note(
@@ -527,7 +528,8 @@ class UnifiedAuthService
 
         if ($device === null) {
             throw new \RuntimeException(
-                'هذا الجهاز غير مسجَّلٍ لدى هذا التاجر. سجّله من حساب التاجر أوّلاً.');
+                'هذا جهاز نقطة البيع غير مفعّل لهذا التاجر. '
+                . 'يسجّله مالك التاجر من «أجهزة نقاط البيع»؛ لا يُنشئ الموظف حساباً جديداً.');
         }
 
         if ($device->revoked_at !== null || ! $device->is_active) {

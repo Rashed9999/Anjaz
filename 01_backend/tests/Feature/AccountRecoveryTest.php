@@ -83,6 +83,24 @@ class AccountRecoveryTest extends TestCase
     }
 
     /** @test */
+    public function recovery_cannot_claim_another_users_phone_written_in_a_different_format(): void
+    {
+        User::factory()->create(['phone' => '+967777999888', 'type' => 2]);
+        $user = User::factory()->create(['phone' => '+967777111222', 'type' => 2]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('already in use');
+
+        // 00967 هي الصيغة نفسها، لكن فحص النص الخام كان يعدّها رقماً جديداً.
+        $this->svc->initiateSelfServicePhoneChange(
+            user: $user,
+            newPhone: '00967777999888',
+            ip: '1.2.3.4',
+            userAgent: 'Test',
+        );
+    }
+
+    /** @test */
     public function verify_otp_success_marks_verified(): void
     {
         $user = User::factory()->create(['type' => 2, 'phone' => '+967777111', 'zone_code' => 'SOUTH']);

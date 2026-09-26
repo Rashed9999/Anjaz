@@ -219,6 +219,7 @@
                 $docTitles = [
                     'send_money'             => ['سند تحويل',        'TRANSFER VOUCHER'],
                     'cash_out'               => ['سند صرف نقدي',     'CASH-OUT VOUCHER'],
+                    'bill_payment'           => ['سند سداد فاتورة',    'BILL PAYMENT VOUCHER'],
                     'fee_charge'             => ['سند رسوم',          'FEE VOUCHER'],
                     'donation'               => ['سند تبرّع',         'DONATION VOUCHER'],
                     'family_fund_contribute' => ['سند مساهمة',        'CONTRIBUTION VOUCHER'],
@@ -315,6 +316,7 @@
                         @case('pay_merchant') دفع لتاجر @break
                         @case('pos_payment') دفع نقطة بيع @break
                         @case('qr_payment') دفع عبر QR @break
+                        @case('bill_payment') سداد فاتورة @break
                         @case('refund') استرجاع مبلغ @break
                         @case('split_bill_payment') تقسيم فاتورة @break
                         @case('bank_settlement') تسوية بنكية @break

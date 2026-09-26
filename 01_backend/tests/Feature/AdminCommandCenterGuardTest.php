@@ -196,7 +196,25 @@ class AdminCommandCenterGuardTest extends TestCase
         $ops = app(MerchantThreeSixtyService::class)->build($m)['operations'];
 
         $this->assertSame(A::BIZ_FUEL, $ops['vertical']);
-        $this->assertSame('محطّة وقود', $ops['label']);
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-VERTICAL-OOP-004 — **يُقاس المصدرُ لا الهجاء.**
+        //
+        // كان هنا `'محطّة وقود'` نصّاً. ولوحةُ ٣٦٠ كانت تكتب أسماءَ
+        // القطاعات بيدها، فافترقت عن قائمة إنشاء الحساب — يُنشئ المديرُ
+        // «محطة وقود» وتعرض لوحتُه «محطّة وقود».
+        //
+        // فلمّا وُصلت اللوحةُ بمصدر الأسماء الواحد سقط هذا الحارسُ **على
+        // إصلاحٍ سليم**، لأنّه يشترط هجاءً بعينه. والمحروسُ أن **تُسمَّى
+        // المحطّةُ باسمها**، لا أن يُكتب بشدّةٍ أو بدونها.
+        // ══════════════════════════════════════════════════════════════
+        $this->assertSame(
+            \App\Domain\Verticals\VerticalRegistry::find(A::BIZ_FUEL)->nameAr(),
+            $ops['label'],
+            'لوحةُ ٣٦٠ تسمّي القطاعَ بغير اسمه في مصدر الأسماء');
+
+        $this->assertNotSame('', trim((string) $ops['label']),
+            'اسمُ القطاع فارغ — والفراغُ يمرّ على مقارنةٍ بمصدرٍ فارغ');
         $this->assertNotEmpty($ops['metrics'],
             'ملفُّ محطّةٍ بلا مؤشّرٍ واحد — لا خزّان ولا مضخّة ولا ورديّة');
 
@@ -247,16 +265,14 @@ class AdminCommandCenterGuardTest extends TestCase
     }
 
     // ══════════════════════════════════════════════════════════════════
-    //  ③ القائمة الجانبيّة
+    //  ③ تنقّل الإدارة بعد توحيد العميل
     // ══════════════════════════════════════════════════════════════════
 
     /**
-     * الوجهاتُ التي كانت في القائمة قبل إعادة الترتيب.
-     *
-     * **قِيست قبل التغيير وبعده فتطابقتا** (٥٢ وجهة)، وتُثبَّت هنا لئلّا
-     * تسقط واحدةٌ في إعادة ترتيبٍ لاحقة.
+     * الوجهة قد تكون في الشريط العام أو مساحة العمل أو مركز العملاء.
+     * المطلوب الوصول، لا تكرار كل باب في كل سطح.
      */
-    private const EXPECTED_DESTINATIONS = [
+    private const EXPECTED_NAV_DESTINATIONS = [
         'admin.amial.2fa.page',
         'admin.amial.aml.page',
         'admin.amial.audit.index',
@@ -280,6 +296,8 @@ class AdminCommandCenterGuardTest extends TestCase
         'admin.amial.hub.zones.index',
         'admin.amial.invoices.page',
         'admin.amial.kyc.page',
+        'admin.amial.kyc.changes.page',
+        'admin.amial.registration-dossiers.page',
         'admin.amial.ledger.page',
         'admin.amial.legal.index',
         'admin.amial.ops.index',
@@ -310,79 +328,95 @@ class AdminCommandCenterGuardTest extends TestCase
         'agent.login',
     ];
 
-    /** الوجهاتُ المقروءةُ من ملفّ القائمة الآن. */
-    private function sidebarDestinations(): array
+    /** @return list<string> */
+    private function navigationDestinations(): array
     {
-        preg_match_all('/route\(.([a-z0-9._-]+).\)/i',
-            (string) file_get_contents(self::SIDEBAR), $m);
+        $src = implode("\n", [
+            (string) file_get_contents(self::SIDEBAR),
+            (string) file_get_contents(
+                resource_path('views/admin-views/amial/ops/workspace.blade.php')
+            ),
+            (string) file_get_contents(
+                resource_path('views/admin-views/amial/customer/index.blade.php')
+            ),
+        ]);
 
-        return $m[1];
+        preg_match_all('/route\(\s*[\'\"]([a-z0-9._-]+)[\'\"]/i', $src, $m);
+
+        return array_values(array_unique($m[1]));
     }
 
-    /**
-     * **إعادةُ الترتيب لا تُسقط رابطاً.**
-     *
-     * وصفحةٌ لا يُوصل إليها ليست مبنيّة — وهو نمطُ العطل الأكثر تكراراً
-     * في هذا المشروع. فإعادةُ ترتيبٍ تحذف رابطاً تُخفي شاشةً كاملةً بلا
-     * أن يسقط اختبارٌ واحد.
-     */
-    public function test_no_sidebar_destination_was_lost_in_the_regrouping(): void
+    public function test_no_admin_destination_was_lost_when_customer_navigation_was_unified(): void
     {
-        $present = array_unique($this->sidebarDestinations());
-
-        $missing = array_values(array_diff(self::EXPECTED_DESTINATIONS, $present));
+        $present = $this->navigationDestinations();
+        $missing = array_values(array_diff(self::EXPECTED_NAV_DESTINATIONS, $present));
 
         $this->assertSame([], $missing,
-            'سقطت وجهاتٌ من القائمة الجانبيّة — والشاشةُ تصير غيرَ '
-            . 'قابلةٍ للوصول بلا أن يسقط شيءٌ آخر: ' . implode('، ', $missing));
+            'واجهات إدارية أصبحت يتيمة بعد توحيد التنقّل: ' . implode('، ', $missing));
     }
 
-    /** **ولا وجهةَ مكرّرة** — مدخلان لشيءٍ واحدٍ هما ما يُقرأ «تكراراً». */
-    public function test_no_destination_appears_twice(): void
+    public function test_customer_has_one_primary_sidebar_door_and_specialized_tools_live_inside_it(): void
     {
-        $all = $this->sidebarDestinations();
+        $sidebar = (string) file_get_contents(self::SIDEBAR);
+        $center = (string) file_get_contents(
+            resource_path('views/admin-views/amial/customer/index.blade.php')
+        );
 
-        $dupes = array_values(array_unique(
-            array_diff_assoc($all, array_unique($all))));
+        $this->assertSame(
+            1,
+            substr_count($sidebar, "route('admin.amial.customer.page')"),
+            'مركز العملاء يجب أن يظهر مرة واحدة فقط في الشريط'
+        );
 
-        $this->assertSame([], $dupes,
-            'وجهةٌ لها مدخلان في القائمة: ' . implode('، ', $dupes));
+        // التحقق الموحّد يخص العميل والتاجر والوكيل، ويظل مدخل رقابة عامّاً
+        // في الشريط. أدوات العميل البحتة وحدها تبقى داخل مركز العملاء.
+        foreach ([
+            'admin.amial.hub.customers',
+            'admin.amial.kyc.changes.page',
+        ] as $specialized) {
+            $needle = "route('{$specialized}'";
+            $this->assertStringNotContainsString(
+                $needle,
+                $sidebar,
+                "الأداة {$specialized} عادت كمدخل عميل مستقل في الشريط"
+            );
+            $this->assertStringContainsString(
+                $needle,
+                $center,
+                "الأداة {$specialized} اختفت بدلاً من أن تنتقل إلى مركز العملاء"
+            );
+        }
+
+        // «مركز أنظمة العميل» القديم دُمج فعلياً داخل الشاشة، فلا نطلب
+        // رابطاً يعيدنا إلى صفحة ثانية. الحارس الجديد يقيس التبويب نفسه.
+        $this->assertStringNotContainsString(
+            "route('admin.amial.customer-systems.index'",
+            $sidebar
+        );
+        $this->assertStringContainsString('data-op="systems"', $center);
+        $this->assertStringContainsString("get('/ops/' + name)", $center);
     }
 
-    /**
-     * **وكلُّ ما يخصّ موضوعاً واحداً في مجموعةٍ واحدة.**
-     *
-     * وهو جوهرُ الشكوى: كان التاجرُ موزّعاً على أربعة مداخلَ في مجموعتين،
-     * فمن أراد شيئاً عنه فتح مجموعتين وخمّن.
-     */
-    public function test_each_subject_lives_in_one_group(): void
+    public function test_sidebar_itself_has_no_duplicate_named_route(): void
     {
         $src = (string) file_get_contents(self::SIDEBAR);
+        preg_match_all('/route\(\s*[\'\"]([a-z0-9._-]+)[\'\"]/i', $src, $m);
 
-        foreach ([
-            // AMIAL-SIDEBAR-SPLIT-001 — **إدارةُ التاجر ≠ رقابةُ عمله.**
-            // فُصلت الثلاثُ إلى مجموعةِ رقابةٍ لأنّها شاشاتٌ عابرةٌ للتجّار
-            // تكشف نمطاً، لا إدارةَ تاجرٍ بعينه. **والقاعدةُ نفسُها محفوظة**:
-            // كلُّ موضوعٍ في مجموعةٍ واحدة — والمواضيعُ صارت اثنين لا واحداً.
-            'التجّار' => ['admin.amial.hub.merchants', 'admin.amial.hub.subscriptions',
-                          'admin.amial.invoices.page', 'admin.amial.catalog.page',
-                          'admin.amial.entitlements.page'],
-            'رقابة عمل التجّار' => ['admin.amial.hub.staff',
-                          'admin.amial.fuel.page', 'admin.amial.retail.page'],
-            'العملاء' => ['admin.amial.customer.page', 'admin.amial.hub.customers',
-                          'admin.support-center.index', 'admin.amial.recovery.index'],
-        ] as $group => $routes) {
-            $start = mb_strpos($src, "'title' => '{$group}'");
+        $counts = array_count_values($m[1]);
+        $dupes = array_keys(array_filter($counts, static fn (int $count): bool => $count > 1));
 
-            $this->assertNotFalse($start, "لا مجموعةَ «{$group}» في القائمة");
+        $this->assertSame([], $dupes,
+            'وجهات مكررة داخل الشريط الجانبي: ' . implode('، ', $dupes));
+    }
 
-            $end = mb_strpos($src, "'title' => '", $start + 20);
-            $block = mb_substr($src, $start, $end ? $end - $start : null);
+    public function test_otp_is_an_operations_setting_not_a_customer_door(): void
+    {
+        $sidebar = (string) file_get_contents(self::SIDEBAR);
 
-            foreach ($routes as $r) {
-                $this->assertStringContainsString($r, $block,
-                    "«{$r}» خارج مجموعة «{$group}» — والموضوعُ يتشتّت مرّةً أخرى");
-            }
-        }
+        $this->assertStringContainsString(
+            "['🔐 التحقق والرسائل (OTP وبوابات الإرسال)', route('admin.amial.otp.page')",
+            $sidebar
+        );
+        $this->assertStringNotContainsString('مركز التحقّق (OTP وبوّابات الإرسال)', $sidebar);
     }
 }

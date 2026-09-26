@@ -10,11 +10,12 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/merchant/controllers/receipt_settings_controller.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amial_pay/features/merchant/widgets/invoice_whatsapp_sheet.dart';
+import 'package:amial_pay/features/merchant/widgets/merchant_invoice_actions.dart';
 import 'package:amial_pay/features/payments/widgets/amial_invoice_card.dart';
 import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
 import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
 import 'package:amial_pay/features/printer/screens/printer_settings_screen.dart';
-import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-POS-003 / AMIAL-RECEIPT-SETTINGS-001 — «تم التحصيل».
@@ -30,16 +31,54 @@ class CashierReceiptScreen extends StatefulWidget {
     this.customerName,
     this.customerPhone,
     this.pendingPayment = false,
+    this.invoicePath,
+    this.invoiceTitle,
+    this.nextSalePage,
+    this.nextSaleRoute,
+    this.currencySymbol,
+    this.baseTotal,
   });
 
   final Map<String, dynamic> sale;
   final double total;
   final String method;
+
+  // ═════════════════════════════════════════════════════════════════
+  // AMIAL-MULTI-CURRENCY-003 — **الإيصالُ يقول عملتَه.**
+  //
+  // كانت كلُّ الأرقام هنا تُنسَّق بـ`AmialMoney.yer` و`totalYer`، فبيعةٌ
+  // بعشرين دولاراً كانت تُطبَع «٢٠ ر.ي». **رقمٌ صحيحٌ بعملةٍ كاذبة** —
+  // وهو العطلُ الذي كلّف هذا المشروعَ في تسعيرة الباقات (٣٥ ر.س عُرضت
+  // «ر.ي»، والفرقُ سبعون ضعفاً).
+  //
+  // و`baseTotal` يبقى بالريال ليصحّ سطرُ المكافئات في أسفل الفاتورة —
+  // فهو محسوبٌ من الإجماليّ بالأساس.
+  // ═════════════════════════════════════════════════════════════════
+
+  /// علامةُ عملة البيعة. `null` = الأساس (ر.ي).
+  final String? currencySymbol;
+
+  /// المكافئُ بالعملة الأساس — لسطر «≈». `null` = `total` نفسُه.
+  final double? baseTotal;
   final String? customerName;
   final String? customerPhone;
 
   /// أميال باي: بانتظار دفع العميل عبر QR.
   final bool pendingPayment;
+
+  /// مسار PDF القطاعي. كاشير الصيدلية يقرأ `pharmacy_sales` لا `merchant_sales`.
+  final String? invoicePath;
+
+  /// عنوان الإيصال المعروض، مثل «فاتورة صيدلية».
+  final String? invoiceTitle;
+
+  /// لا تعُد إلى الكاشير العام بعد بيع قطاعي متخصص.
+  final Widget Function()? nextSalePage;
+
+  /// بديلٌ مسمّى لعملية جديدة في قطاعٍ متخصص. المسار يمنع الحلقة بين
+  /// شاشة الإيصال وشاشات القطاعات (مثل المطعم) ويعيد المستخدم إلى مساحة
+  /// عمله الصحيحة بدلاً من كاشير التجزئة العام.
+  final String? nextSaleRoute;
 
   @override
   State<CashierReceiptScreen> createState() => _CashierReceiptScreenState();
@@ -56,7 +95,11 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     _settings = Get.isRegistered<ReceiptSettingsController>()
         ? Get.find<ReceiptSettingsController>()
         : Get.put(ReceiptSettingsController(), permanent: true);
-    _settings.load();
+    _settings.load().then((_) {
+      if (_settings.effective['auto_print_receipts'] == true && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _print());
+      }
+    });
   }
 
   String get _methodLabel => switch (widget.method) {
@@ -70,16 +113,20 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
 
   String get _ref => '${widget.sale['sale_ulid'] ?? widget.sale['id'] ?? ''}';
 
+  /// AMIAL-MULTI-CURRENCY-003 — علامةُ عملة البيعة، والأساسُ افتراضاً.
+  String get _sym => widget.currencySymbol ?? 'ر.ي';
+
+  /// مبلغٌ **بعملة البيعة** — لا بالريال دائماً.
+  String _money(double v) => '${_fmtNum(v)} $_sym';
+
   String _fmtNum(double v) => v
       .toStringAsFixed(v == v.roundToDouble() ? 0 : 2)
       .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?:\.|$))'), (m) => '${m[1]},');
 
   String _now() {
     final d = DateTime.now();
-    final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
-    final ampm = d.hour < 12 ? 'ص' : 'م';
     return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}  •  '
-        '$h12:${d.minute.toString().padLeft(2, '0')} $ampm';
+        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
 
   List<(String, String)> _rows() {
@@ -87,11 +134,11 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     if (items.isEmpty) return const [];
     return items.take(15).map<(String, String)>((e) {
       final m = e as Map;
-      final name = '${m['name'] ?? ''}';
-      final qty = int.tryParse('${m['qty'] ?? 1}') ?? 1;
-      final price = double.tryParse('${m['price'] ?? 0}') ?? 0;
+      final name = '${m['name'] ?? m['product_trade_name'] ?? ''}';
+      final qty = int.tryParse('${m['qty'] ?? m['quantity'] ?? 1}') ?? 1;
+      final price = double.tryParse('${m['price'] ?? m['unit_price'] ?? 0}') ?? 0;
       final line = (price * qty);
-      return ('$name ×$qty', AmialMoney.yer(line));
+      return ('$name ×$qty', _money(line));
     }).toList();
   }
 
@@ -108,8 +155,9 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     final items = (widget.sale['items'] as List?) ?? const [];
     return items.map<ThermalReceiptLine>((e) {
       final m = e as Map;
-      return ThermalReceiptLine('${m['name'] ?? ''}',
-          int.tryParse('${m['qty'] ?? 1}') ?? 1, double.tryParse('${m['price'] ?? 0}') ?? 0);
+      return ThermalReceiptLine('${m['name'] ?? m['product_trade_name'] ?? ''}',
+          int.tryParse('${m['qty'] ?? m['quantity'] ?? 1}') ?? 1,
+          double.tryParse('${m['price'] ?? m['unit_price'] ?? 0}') ?? 0);
     }).toList();
   }
 
@@ -172,7 +220,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
       captureFile: _capture,
       message: 'فاتورة بيع من $store\n'
           'رقم الفاتورة: $_ref\n'
-          'الإجمالي: ${AmialMoney.yer(widget.total)}\n'
+          'الإجمالي: ${_money(widget.total)}\n'
           'طريقة الدفع: $_methodLabel',
     );
   }
@@ -188,7 +236,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     try {
       String? failure;
       final path = await Get.find<ApiClient>().downloadFile(
-        '/api/v1/amial/merchant/cashier/sales/$ulid/invoice',
+        widget.invoicePath ?? '/api/v1/amial/merchant/cashier/sales/$ulid/invoice',
         fileName: 'amial_invoice_$ulid.pdf',
         onError: (message) => failure = message,
       );
@@ -218,6 +266,17 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
         leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Get.back()),
       ),
       body: ListView(padding: const EdgeInsets.all(20), children: [
+        // AMIAL-NEGATIVE-STOCK-001 — **ما نزل تحت الصفر يُقال هنا.**
+        //
+        // وهذه الشاشةُ هي **الممرُّ الوحيد** الذي تنتهي إليه كلُّ مسارات
+        // البيع (نقدي · آجل · محفظة · مختلط · شركة). فوضعُ التحذير فيها
+        // يغطّي المداخلَ كلَّها بموضعٍ واحد — والقاعدةُ الرابعة تقول إنّ
+        // ميزةً لها مداخلُ تُحرَس من مدخلٍ مشترك.
+        //
+        // **ولا يُوقَف شيء**: البضاعةُ خرجت من الرفّ فعلاً والبيعُ تمّ.
+        // هذه رسالةٌ للكاشير وهو **واقفٌ أمام الرفّ**، يستطيع النظرَ فيه
+        // الآن — لا مالكٌ يفتح شاشةً بعد يومين.
+        _negativeStockNote(),
         // شارة الحالة
         Center(
           child: Container(
@@ -243,14 +302,17 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
             controller: _shot,
             child: Obx(() => AmialInvoiceCard(
                   settings: _settings.effective,
-                  title: widget.method == 'credit' ? 'فاتورة بيع آجل' : 'فاتورة بيع',
+                  title: widget.invoiceTitle ?? (widget.method == 'credit' ? 'فاتورة بيع آجل' : 'فاتورة بيع'),
                   rows: _rows(),
                   total: _fmtNum(widget.total),
+                  currencyLabel: _sym,
                   method: _methodLabel,
                   reference: _ref,
                   dateTime: _now(),
                   customer: widget.customerName ?? widget.customerPhone,
-                  totalYer: widget.total,
+                  // **المكافئُ يُحسب من الأساس** — لا من مبلغٍ بالدولار،
+                  // وإلّا ضُرب سعرُ الصرف مرّتين.
+                  totalYer: widget.baseTotal ?? widget.total,
                   currencies: _settings.currencies,
                 )),
           ),
@@ -258,45 +320,75 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
         const SizedBox(height: 22),
 
         if (!waiting) ...[
-          Row(children: [
-            Expanded(child: OutlinedButton.icon(
-              onPressed: _busy ? null : _print,
-              icon: const Icon(Icons.print_outlined, size: 20),
-              label: const Text('طباعة'),
-              style: OutlinedButton.styleFrom(
-                  foregroundColor: AmialColors.primary,
-                  side: const BorderSide(color: AmialColors.primary),
-                  minimumSize: const Size.fromHeight(50)),
-            )),
-            const SizedBox(width: 10),
-            Expanded(child: OutlinedButton.icon(
-              onPressed: _busy ? null : _downloadPdf,
-              icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
-              label: const Text('PDF'),
-              style: OutlinedButton.styleFrom(
-                  foregroundColor: AmialColors.red,
-                  side: const BorderSide(color: AmialColors.red),
-                  minimumSize: const Size.fromHeight(50)),
-            )),
-          ]),
-          const SizedBox(height: 10),
-          SizedBox(width: double.infinity, child: FilledButton.icon(
-              onPressed: _busy ? null : _whatsapp,
-              icon: const Icon(Icons.chat, size: 20),
-              label: const Text('مشاركة عبر واتساب'),
-              style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF25D366), minimumSize: const Size.fromHeight(50)),
-            )),
+          MerchantInvoiceActions(
+            busy: _busy,
+            onPrint: _print,
+            onWhatsApp: _whatsapp,
+            onPdf: _downloadPdf,
+          ),
           const SizedBox(height: 10),
         ],
         FilledButton.icon(
-          onPressed: () => Get.off(() => const CashierPosScreen()),
+          onPressed: () {
+            final route = widget.nextSaleRoute;
+            if (route != null && route.isNotEmpty) {
+              Get.offAllNamed(route);
+              return;
+            }
+            Get.off(widget.nextSalePage ?? () => const CashierPosScreen());
+          },
           icon: const Icon(Icons.add),
           label: const Text('عملية جديدة',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           style: FilledButton.styleFrom(
               backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(54)),
         ),
+      ]),
+    );
+  }
+
+  /// **تحذيرُ المخزون السالب** — يظهر حين يقع، ويختفي حين لا يقع.
+  ///
+  /// AMIAL-NEGATIVE-STOCK-001. **ولا يُرسَم على بيعةٍ سليمة**: تحذيرٌ
+  /// يظهر بلا سببٍ يُعوّد القارئَ على تجاهله يومَ يصدق — وهو الدرسُ نفسُه
+  /// من لافتة «كُسرت السلسلة» في سجلّ التدقيق.
+  Widget _negativeStockNote() {
+    if (!Get.isRegistered<CashierController>()) return const SizedBox.shrink();
+
+    final lines = Get.find<CashierController>().lastNegativeStock;
+    if (lines.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: AmialColors.warningSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AmialColors.warning.withValues(alpha: 0.4)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.inventory_2_outlined, size: 18, color: AmialColors.warning),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text('المخزون نزل تحت الصفر',
+                style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    color: AmialColors.warning)),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        ...lines.map((l) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Text('• ${l['product']} — ينقص ${l['shortfall']}',
+                  style: const TextStyle(fontSize: 12, height: 1.5)),
+            )),
+        const SizedBox(height: 6),
+        const Text(
+            'البيع تمّ والبضاعة خرجت. لكن الجرد لا يطابق الرفّ — '
+            'راجع الكمية الآن أو سجّل التوريد الناقص.',
+            style: TextStyle(fontSize: 11, color: AmialColors.textSecondary, height: 1.5)),
       ]),
     );
   }

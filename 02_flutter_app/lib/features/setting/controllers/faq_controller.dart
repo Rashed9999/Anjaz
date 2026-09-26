@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:amial_pay/data/api/api_checker.dart';
 import 'package:amial_pay/features/setting/domain/models/faq_category.dart';
 import 'package:amial_pay/features/setting/domain/models/faq_model.dart';
 import 'package:amial_pay/features/setting/domain/reposotories/faq_repo.dart';
@@ -11,6 +10,9 @@ class FaqController extends GetxController implements GetxService {
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
+
+  bool _loadFailed = false;
+  bool get loadFailed => _loadFailed;
 
   List<HelpTopic>? _helpTopics;
   List<HelpTopic>? get helpTopics => _helpTopics;
@@ -33,11 +35,19 @@ class FaqController extends GetxController implements GetxService {
   void onInit(){
     super.onInit();
     scrollController.addListener(() {
-      if(scrollController.position.maxScrollExtent == scrollController.position.pixels) {
-        if((_helpTopics?.length ?? 0) < _pageSize! ) {
-          getFaqList(offset + 1, categoryId: _faqCategoryList?[_selectedFagIndex].id, paginationLoading: true);
-        }
+      if (!scrollController.hasClients ||
+          scrollController.position.maxScrollExtent != scrollController.position.pixels ||
+          _pageSize == null ||
+          (_helpTopics?.length ?? 0) >= _pageSize!) {
+        return;
       }
+      final categories = _faqCategoryList;
+      final categoryId = categories != null &&
+              _selectedFagIndex >= 0 &&
+              _selectedFagIndex < categories.length
+          ? categories[_selectedFagIndex].id
+          : null;
+      getFaqList(offset + 1, categoryId: categoryId, paginationLoading: true);
     });
   }
 
@@ -48,6 +58,9 @@ class FaqController extends GetxController implements GetxService {
     _apiHitCount ++;
     if(reload){
       _helpTopics = null;
+    }
+    if (isFirst || reload) {
+      _loadFailed = false;
     }
     if(paginationLoading){
       _isLoading = true;
@@ -66,6 +79,8 @@ class FaqController extends GetxController implements GetxService {
       _pageSize = FaqModel.fromJson(response.body).totalSize;
     } else{
       _helpTopics = [];
+      _pageSize = 0;
+      _loadFailed = true;
     }
 
     _apiHitCount--;
@@ -93,7 +108,8 @@ class FaqController extends GetxController implements GetxService {
       });
     } else {
       _faqCategoryList = [];
-      ApiChecker.checkApi(response);
+      // شاشة الأسئلة تبقى قابلة للاستخدام حتى إذا تعذر تحميل التصنيفات.
+      // لا نطلق صفحة خطأ عامة فوق المستخدم؛ تعرض الشاشة زر إعادة المحاولة.
     }
     update();
 

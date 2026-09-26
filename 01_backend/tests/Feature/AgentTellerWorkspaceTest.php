@@ -43,6 +43,7 @@ class AgentTellerWorkspaceTest extends TestCase
         parent::setUp();
 
         $this->company = new User();
+        $this->company->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $this->company->forceFill([
             'f_name' => 'البسيري', 'l_name' => 'للصرافة', 'phone' => '967774100001',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
@@ -53,6 +54,7 @@ class AgentTellerWorkspaceTest extends TestCase
         $this->hq = app(AgentStaffService::class)->ensureHeadOfficeAccount($this->company, 'hq123456');
 
         $bu = new User();
+        $bu->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $bu->forceFill([
             'f_name' => 'فرع المكلا', 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '967774100099', 'password' => Hash::make('secret123'),
@@ -87,6 +89,7 @@ class AgentTellerWorkspaceTest extends TestCase
         ]);
 
         $this->customer = new User();
+        $this->customer->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $this->customer->forceFill([
             'f_name' => 'راشد', 'l_name' => 'معرابي', 'phone' => '967783545525',
             'type' => CUSTOMER_TYPE, 'password' => Hash::make('secret123'),
@@ -525,6 +528,7 @@ class AgentTellerWorkspaceTest extends TestCase
     public function a_companys_announcement_never_leaks_to_another_company(): void
     {
         $rival = new User();
+        $rival->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $rival->forceFill([
             'f_name' => 'منافس', 'l_name' => 'للصرافة', 'phone' => '967774100777',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),

@@ -36,8 +36,14 @@ class AmlScreeningWiringTest extends TestCase
             use TransactionTrait;
         };
 
-        $this->sender = User::factory()->create(['type' => 2, 'zone_code' => 'SOUTH', 'phone' => '967771700001']);
-        $this->recipient = User::factory()->create(['type' => 2, 'zone_code' => 'SOUTH', 'phone' => '967771700002']);
+        $this->sender = User::factory()->create([
+            'type' => 2, 'zone_code' => 'SOUTH', 'phone' => '967771700001',
+            'kyc_tier' => 3, 'is_kyc_verified' => 1,
+        ]);
+        $this->recipient = User::factory()->create([
+            'type' => 2, 'zone_code' => 'SOUTH', 'phone' => '967771700002',
+            'kyc_tier' => 3, 'is_kyc_verified' => 1,
+        ]);
 
         foreach ([$this->sender, $this->recipient] as $u) {
             EMoney::create([

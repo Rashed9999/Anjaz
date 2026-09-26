@@ -47,6 +47,10 @@ RUN apk add --no-cache \
     supervisor \
     mysql-client \
     curl \
+    # AMIAL-BACKUP-OFFSITE-001 — أداةُ شحن النسخة خارج الخادم.
+    # انظر `Dockerfile`: بلاها يسقط الشحنُ أوّلَ ما تُضبَط الوجهة،
+    # وتبقى كلُّ النسخ على القرص الذي قد يذهب بالأصل معه.
+    rclone \
     libpng-dev \
     libjpeg-turbo-dev \
     libzip-dev \

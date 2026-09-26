@@ -24,16 +24,38 @@ class RegisterController extends Controller
         private EMoney $eMoney
     ){}
 
-    public function customerRegistration(Request $request): JsonResponse
+    // $verifiedEmail is supplied ONLY by EmailRegistrationController after
+    // atomic proof consumption; request input never authorizes this argument.
+    public function customerRegistration(Request $request, ?string $verifiedEmail = null): JsonResponse
     {
+        // التسجيل بمساعدة موظف لا يفتح محفظة خلف ظهر صاحب الرقم: يُستعاد
+        // ما كتبه الموظف *قبل* التحقق، ثم يبقى OTP وPIN إلزاميين في هذا
+        // المسار نفسه. مدخلات العميل الحالية تتقدّم دائماً على المسودة.
+        if ($request->filled('dial_country_code') && $request->filled('phone')) {
+            $phoneForDossier = \App\Support\Phone::canonical(
+                (string) $request->input('dial_country_code') . (string) $request->input('phone')
+            );
+            $dossierType = $request->input('account_type') === 'merchant' ? 'merchant' : 'customer';
+            $prefill = app(\App\Services\RegistrationDossierService::class)
+                ->prefillForPhone($dossierType, $phoneForDossier);
+            if ($prefill) {
+                $request->merge(array_replace($prefill, $request->all()));
+            }
+        }
+
         $check = $this->validateUploadedFile($request, ['image']);
         if ($check !== true) {
             return $check;
         }
 
         $validator = Validator::make($request->all(), [
-            'f_name' => 'required',
-            'l_name' => 'required',
+            // AMIAL-LEGAL-NAME-001 — التسجيل الذاتي لا يقبل لقب عرض حر.
+            // الأجزاء الأربعة مطلوبة حتى في الباب القديم.
+            'f_name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            'father_name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            'grandfather_name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            'family_name' => ['required', 'string', 'min:2', 'max:80', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            'l_name' => 'sometimes|nullable|string|max:80',
             'image' => 'nullable|image|max:'. $this->maxImageSizeKB .'|mimes:' . implode(',', array_column(IMAGE_EXTENSIONS, 'key')),
             'gender' => 'required',
             'occupation' => 'nullable',
@@ -46,8 +68,21 @@ class RegisterController extends Controller
                 'min:5',
                 'max:20',
             ],
-            'email' => 'nullable|email',
+            'email' => 'required|email|max:255',
             'password' => 'required|min:4|max:4',
+            // P0-CREDENTIAL-SEPARATION — هذا endpoint قديم وتستعمله نسخ
+            // سابقة. لا نكسره، لكن لا نسمح له بعد اليوم بنسخ كلمة الدخول
+            // إلى PIN. النسخة الحديثة ترسل transaction_pin صراحةً؛ القديمة
+            // تُنشئ الحساب مع requires_pin_setup=true ولا تحرّك المال.
+            'transaction_pin' => [
+                'sometimes', 'nullable', 'digits_between:4,6', 'different:password',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $weak = ['0000','1111','2222','3333','4444','5555','6666','7777','8888','9999','1234','4321','0123'];
+                    if ($value !== null && in_array((string) $value, $weak, true)) {
+                        $fail('اختر رمز PIN غير متسلسل وغير مكرر.');
+                    }
+                },
+            ],
             // AMIAL-SIGNATURE-001: التوقيع الإلكتروني (base64 PNG مرسوم على الشاشة) —
             // اختياري للتوافق الخلفي، ويُحفَظ مشفّراً كسجلّ قانوني لفتح الحساب.
             'signature' => 'nullable|string|max:3000000',
@@ -74,8 +109,6 @@ class RegisterController extends Controller
             // موضعُه بوّابةُ الاعتماد لا بوّابةُ الدخول.
             // ══════════════════════════════════════════════════════════
             'name_en' => 'sometimes|nullable|string|max:150|regex:/^[A-Za-z\s.\-\x27]+$/',
-            'father_name' => 'sometimes|nullable|string|max:60',
-            'grandfather_name' => 'sometimes|nullable|string|max:60',
             'country_of_birth' => 'sometimes|nullable|string|max:60',
             'dual_nationality' => 'sometimes|nullable|string|max:60',
             'id_place_of_issue' => 'sometimes|nullable|string|max:80',
@@ -106,7 +139,7 @@ class RegisterController extends Controller
             // الحساب يُنشأ «قيد التحقق» (kyc=0) ويظهر في لوحة التحقق للاعتماد.
             'account_type' => 'sometimes|nullable|in:customer,merchant,agent',
             'store_name' => 'sometimes|nullable|string|max:120',
-            'business_type' => 'sometimes|nullable|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_BUSINESS_TYPES),
+            'business_type' => 'sometimes|nullable|in:' . implode(',', \App\Domain\Verticals\VerticalRegistry::codes()),
         ]);
 
 
@@ -123,31 +156,50 @@ class RegisterController extends Controller
         }
 
         $verify = null;
-        if(Helpers::get_business_settings('phone_verification') == 1) {
-            if($request->has('otp')) {
-                // AMIAL-OTP-SPLIT-001: الرمزُ الثابت **لأرقام العرض وحدها**.
-                //
-                // كان هذا الشرطُ يقبل `123456` من أيّ رقم ما دام المتغيّر
-                // مضبوطاً — فمن يعرف العنوان يسجّل باسم رقمٍ لا يملكه،
-                // ويصير صاحبَ محفظته. صار الرقمُ هو من يحدّد الطريق.
-                $policy = app(\App\Services\Otp\OtpPolicy::class);
-                $demoOtp = $policy->isDemo($phone) ? $policy->demoCode() : null;
+        $phoneOwnershipVerified = false;
+        $emailAuthorized = $verifiedEmail !== null
+            && hash_equals($verifiedEmail, (string) $request->input('email'));
 
-                if ($demoOtp !== null && hash_equals($demoOtp, (string) $request["otp"])) {
-                    $verify = null; // مقبول تجريبياً — لا صفّ للحذف
-                } else {
-                $verify = $this->phoneVerification->where(["phone" => $phone, "otp" => $request["otp"]])->first();
-                if (!isset($verify)) {
-                    return response()->json(['errors' => [
-                        ["code" => "otp", "message" => "OTP is not found!"]
-                    ]], 404);
-
-                }
-                }
-            }else{
+        if (! $emailAuthorized && Helpers::get_business_settings('phone_verification') == 1) {
+            if (!$request->has('otp')) {
                 return response()->json(['errors' => [
                     ['code' => 'otp', 'message' => 'OTP is required.']
                 ]], 403);
+            }
+
+            $policy = app(\App\Services\Otp\OtpPolicy::class);
+            $submittedOtp = (string) $request->input('otp');
+
+            // AMIAL-PHONE-OWNERSHIP-REG-001
+            //
+            // مسار التسجيل القديم كان يتحقق من الرمز ثم يرمي الدليل:
+            // يحذف phone_verifications وينشئ الحساب مع is_phone_verified=0.
+            // النتيجة أن KYC يرفض الحساب لاحقاً رغم أن صاحبه أثبت الرقم.
+            //
+            // في Pilot الحالي كل هاتف عميل يستخدم الرمز المرحلي 123456
+            // عبر OtpPolicy::pilotCustomerPhoneCode(). أرقام العرض تبقى على
+            // demoCode، وما عدا ذلك عند إطفاء Pilot يجب أن يطابق تحدياً
+            // مخزناً وصل عبر المزود الحقيقي.
+            $pilotOtp = $policy->pilotCustomerPhoneCode();
+            $demoOtp = $policy->isDemo($phone) ? $policy->demoCode() : null;
+
+            if ($pilotOtp !== null && hash_equals($pilotOtp, $submittedOtp)) {
+                $phoneOwnershipVerified = true;
+            } elseif ($demoOtp !== null && hash_equals($demoOtp, $submittedOtp)) {
+                $phoneOwnershipVerified = true;
+            } else {
+                $verify = $this->phoneVerification
+                    ->whereIn('phone', \App\Support\Phone::variants($phone))
+                    ->where('otp', $submittedOtp)
+                    ->first();
+
+                if (!isset($verify)) {
+                    return response()->json(['errors' => [
+                        ['code' => 'otp', 'message' => 'OTP is not found!']
+                    ]], 404);
+                }
+
+                $phoneOwnershipVerified = true;
             }
         }
 
@@ -168,12 +220,23 @@ class RegisterController extends Controller
         }
 
         $loginNumbers = ['agent_number' => null, 'merchant_number' => null];
-        DB::transaction(function () use ($request, $verify, $phone, $signaturePath, $accountType, &$loginNumbers) {
+        DB::transaction(function () use ($request, $verify, $phone, $phoneOwnershipVerified, $signaturePath, $accountType, &$loginNumbers) {
             $verify?->delete();
 
-            $user = $this->user;
-            $user->f_name = $request->f_name;
-            $user->l_name = $request->l_name;
+            // A reused controller must never mutate the previous registrant.
+            $user = $this->user->newInstance();
+            $user->f_name = trim((string) $request->f_name);
+            $user->father_name = trim((string) $request->father_name);
+            $user->grandfather_name = trim((string) $request->grandfather_name);
+            $user->family_name = trim((string) $request->family_name);
+            $user->l_name = $user->family_name;
+            $user->declared_legal_name = app(\App\Services\Kyc\LegalNameService::class)->compose([
+                'given_name' => $user->f_name,
+                'father_name' => $user->father_name,
+                'grandfather_name' => $user->grandfather_name,
+                'family_name' => $user->family_name,
+            ]);
+            $user->legal_name_status = 'declared';
             $user->image = $request->has('image') ? Helpers::upload('customer/', APPLICATION_IMAGE_FORMAT, $request->file('image')) : null;
             $user->gender = $request->gender;
             $user->occupation = $request->occupation;
@@ -184,9 +247,19 @@ class RegisterController extends Controller
             $user->password = bcrypt($request->password);
             $user->type = $accountType;
             $user->referral_id = $request->referral_id ?? null;
-            // PIN المعاملات = نفس رمز الدخول المُدخل (يغيّره المستخدم لاحقاً)
+            // لا fallback إلى كلمة المرور. إن كانت نسخة العميل حديثة تضبط
+            // PIN مستقلاً الآن؛ وإلا يبقى الحساب بحاجة إعداد PIN صريح.
             if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'transaction_pin')) {
-                $user->transaction_pin = $request->password;
+                $pin = $request->filled('transaction_pin')
+                    ? (string) $request->input('transaction_pin')
+                    : null;
+                $user->transaction_pin = $pin;
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'transaction_pin_set_at')) {
+                    $user->transaction_pin_set_at = $pin !== null ? now() : null;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'requires_pin_setup')) {
+                    $user->requires_pin_setup = $pin === null;
+                }
             }
             if ($accountType === AGENT_TYPE && \Illuminate\Support\Facades\Schema::hasColumn('users', 'agent_number')) {
                 $user->agent_number = sprintf('AG-%03d', User::where('type', AGENT_TYPE)->count() + 1);
@@ -261,11 +334,60 @@ class RegisterController extends Controller
             }
             $user->is_kyc_verified = 0; // بانتظار مراجعة الإدارة (لوحة التحقق)
 
+            // نجاح OTP في هذه المعاملة هو إثبات ملكية الهاتف، وليس مجرد
+            // شرط مرور مؤقت. نحفظ الحقيقة على الحساب قبل أن يختفي التحدي.
+            if ($phoneOwnershipVerified) {
+                $user->is_phone_verified = 1;
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
+                    $user->kyc_tier = max(1, (int) ($user->kyc_tier ?? 0));
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier_updated_at')) {
+                    $user->kyc_tier_updated_at = now();
+                }
+            }
+
             $user->save();
+
+            if ($phoneOwnershipVerified) {
+                app(\App\Services\AuditService::class)->record([
+                    'actor_type' => 'customer',
+                    'actor_user_id' => (int) $user->id,
+                    'subject_type' => 'user',
+                    'subject_id' => (string) $user->id,
+                    'action' => 'PHONE_OWNERSHIP_VERIFIED',
+                    'decision_code' => 'PHONE_OTP_VERIFIED_AT_REGISTRATION',
+                    'severity' => 'info',
+                    'context' => [
+                        'phone_verified' => true,
+                        'source' => 'registration',
+                    ],
+                ]);
+            }
+
+            if (\Illuminate\Support\Facades\Schema::hasTable('legal_name_events')) {
+                \Illuminate\Support\Facades\DB::table('legal_name_events')->insert([
+                    'user_id' => $user->id,
+                    'event_type' => 'DECLARED_AT_REGISTRATION',
+                    'source' => 'legacy_self_registration',
+                    'old_name_encrypted' => null,
+                    'new_name_encrypted' => \Illuminate\Support\Facades\Crypt::encryptString(
+                        (string) $user->declared_legal_name
+                    ),
+                    'document_id' => null,
+                    'reviewer_id' => null,
+                    'match_status' => null,
+                    'match_score' => null,
+                    'reason' => null,
+                    'created_at' => now(),
+                ]);
+            }
 
             $user->find($user->id);
             $user->unique_id = $user->id . mt_rand(1111, 99999);
             $user->save();
+
+            // AMIAL-SELFREG-KYCDOCS-001 — انظر `ingestKycDocuments` أسفله.
+            $this->ingestKycDocuments($user, $request);
 
             // ══════════════════════════════════════════════════════════
             // AMIAL-ZONE-REG-001 — **إسنادُ المنطقة عند التسجيل.**
@@ -291,7 +413,7 @@ class RegisterController extends Controller
                 ]);
             }
 
-            $emoney = $this->eMoney;
+            $emoney = $this->eMoney->newInstance();
             $emoney->user_id = $user->id;
             $emoney->save();
 
@@ -300,9 +422,15 @@ class RegisterController extends Controller
                 $mr = new \App\Models\Merchant();
                 $mr->user_id = $user->id;
                 $mr->store_name = trim((string) $request->input('store_name'));
-                $mr->merchant_number = sprintf('M-%05d', $user->id);
                 $mr->address = trim((string) $request->input('address', '')) ?: '—';
-                $mr->save();
+
+                // AMIAL-MERCHANT-NUMBER-001 — **ستّةُ أرقامٍ عشوائيّةٍ بلا
+                // صفر.** وكان `sprintf('M-%05d', $user->id)` — مشتقّاً من
+                // رقم المستخدم، فيُفشي عدَّ التجّار ويُخمَّن جارُه.
+                // و`assignTo` تحفظ الصفَّ وتعيد المحاولةَ على تصادم
+                // القيد الفريد.
+                app(\App\Services\Merchant\MerchantNumberService::class)->assignTo($mr);
+
                 $loginNumbers['merchant_number'] = $mr->merchant_number;
 
                 \App\Models\MerchantProfile::firstOrCreate(['user_id' => $user->id], [
@@ -325,6 +453,41 @@ class RegisterController extends Controller
             if ($accountType === AGENT_TYPE) {
                 $loginNumbers['agent_number'] = $user->agent_number;
             }
+
+            $dossierType = $accountType === MERCHANT_TYPE ? 'merchant' : 'customer';
+            $dossierService = app(\App\Services\RegistrationDossierService::class);
+            $claimed = $dossierService->claimForConfirmedRegistration($dossierType, $phone, $user);
+            // التسجيل الذاتي يستحق أرشفة قابلة للطباعة هو أيضاً. أما إن بدأ
+            // الملف لدى موظف فلا ننشئ نسخة ثانية؛ يبقى مرجع الموظف هو الأصل.
+            if (!$claimed && $accountType !== AGENT_TYPE) {
+                // نفس مخطط الملف الذي تستعمله لوحة الموظف؛ لا نطبع نسخة
+                // مبتورة للتسجيل الإلكتروني ثم ندّعي أن الأرشيف موحّد.
+                $dossierPayload = $request->only([
+                    'dial_country_code', 'phone', 'gender', 'email', 'name_en', 'father_name', 'grandfather_name', 'family_name',
+                    'date_of_birth', 'country_of_birth', 'dual_nationality', 'marital_status',
+                    'identification_type', 'identification_number', 'identification_issue_date',
+                    'identification_expiry_date', 'id_place_of_issue', 'address', 'origin_governorate',
+                    'residence_governorate', 'residence_district', 'residence_area', 'residence_landmark',
+                    'housing_type', 'occupation', 'employer_name', 'job_title', 'work_address',
+                    'income_source', 'monthly_income', 'monthly_income_currency', 'account_purpose',
+                    'is_pep', 'pep_position', 'kin_name', 'kin_phone', 'kin_relation', 'kin2_name',
+                    'kin2_phone', 'kin2_relation', 'store_name', 'business_type', 'declaration_accepted',
+                ]);
+                $dossierPayload += [
+                    'full_name' => (string) ($user->declared_legal_name
+                        ?: trim((string) ($user->f_name . ' ' . $user->l_name))),
+                    'gender' => $user->gender, 'phone' => $phone,
+                    'identification_number' => $user->identification_number,
+                    'identification_type' => $user->identification_type,
+                    'address' => $user->address ?? null,
+                    'business_name' => $accountType === MERCHANT_TYPE ? $request->input('store_name') : null,
+                    'business_type' => $accountType === MERCHANT_TYPE ? $request->input('business_type') : null,
+                    'phone_canonical' => $phone,
+                    'subject_type' => $dossierType,
+                    'schema_version' => 'opening-dossier-v1',
+                ];
+                $dossierService->archiveSelfRegistration($dossierType, $phone, $user, $dossierPayload);
+            }
         });
 
         if($request->has('referral_id')) {
@@ -339,7 +502,13 @@ class RegisterController extends Controller
             // أرقام الدخول للتاجر/الوكيل — يعرضها التطبيق في شاشة النجاح
             'agent_number' => $loginNumbers['agent_number'],
             'merchant_number' => $loginNumbers['merchant_number'],
-            'verification_status' => 'pending_review',
+            // AMIAL-PROGRESSIVE-KYC-LOGIN-001 — العميل يبدأ نشطاً Tier 0،
+            // لا نسمّيه «قيد المراجعة» قبل أن يرسل أصلاً طلب ترقية.
+            'verification_status' => $accountType === CUSTOMER_TYPE
+                ? 'active_unverified'
+                : 'pending_review',
+            'kyc_tier' => 0,
+            'requires_pin_setup' => !$request->filled('transaction_pin'),
         ], 200);
     }
 
@@ -407,7 +576,7 @@ class RegisterController extends Controller
                 'min:5',
                 'max:20',
             ],
-            'email' => 'nullable|email',
+            'email' => 'required|email|max:255',
             'password' => 'required|min:4|max:4'
         ]);
 
@@ -455,7 +624,7 @@ class RegisterController extends Controller
         DB::transaction(function () use ($request, $verify, $phone) {
             $verify?->delete();
 
-            $user = $this->user;
+            $user = $this->user->newInstance();
             $user->f_name = $request->f_name;
             $user->l_name = $request->l_name;
             $user->image = $request->has('image') ? Helpers::upload('agent/', APPLICATION_IMAGE_FORMAT, $request->file('image')) : null;
@@ -474,7 +643,10 @@ class RegisterController extends Controller
             $user->unique_id = $user->id . mt_rand(1111, 99999);
             $user->save();
 
-            $emoney = $this->eMoney;
+            // AMIAL-SELFREG-KYCDOCS-001 — انظر `ingestKycDocuments` أسفله.
+            $this->ingestKycDocuments($user, $request);
+
+            $emoney = $this->eMoney->newInstance();
             $emoney->user_id = $user->id;
             $emoney->save();
         });
@@ -487,5 +659,61 @@ class RegisterController extends Controller
         }
 
         return response()->json(['message' => 'Registration Successful'], 200);
+    }
+
+    /**
+     * AMIAL-SELFREG-KYCDOCS-001 — **نظامان لا يلتقيان، وزرُّ الاعتماد بينهما.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ما قِيس:** التسجيلُ الذاتيُّ يحفظ صورَ الوثائق في
+     * `users.identification_image` (‏JSON من مسارات)، و
+     * `KycDocumentService::decideAccountVerification` — التي يمرّ بها
+     * **زرُّ الاعتماد في لوحة التحقّق** — تشترط صفوفاً في `kyc_documents`
+     * من ثلاثة أنواع: وجهُ الهوية · ظهرُها · صورةٌ شخصيّة.
+     *
+     * فالزرُّ يردّ ٤٢٢ «لا يُعتمد الحسابُ قبل رفع هذه المستندات» على حسابٍ
+     * **رفع وثائقَه فعلاً**، ولا سبيلَ في تلك الشاشة إلى رفعها. أي أنّ
+     * **كلَّ حسابٍ سجّل ذاتيّاً — عميلاً أو تاجراً أو وكيلاً — لا يمكن
+     * اعتمادُه أبداً.** (قِيس بالتشغيل: `SelfRegisteredMerchantIsUsableTest`.)
+     *
+     * **ولمَ لم يمسكه اختبار:** كلُّ اختبارات الاعتماد ترفع المستنداتِ
+     * بيدها عبر `upload()` ثمّ تعتمد — فتفحص المنطقَ وتتخطّى الفجوة.
+     * والفجوةُ ليست في طرفٍ منهما بل **في الوصلة بينهما**.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **والوصلُ يحتاج نوعاً، والنوعُ لا يُخمَّن.** فمستندٌ يُسجَّل «وجهَ
+     * هويّة» وهو ظهرُها يُفسد ملفَّ امتثالٍ بصمت، وهو أسوأُ من غيابه.
+     * فتُقبل الحقولُ **مسمّاةً** (`kyc_id_front` …)، والتطبيقُ يرسلها في
+     * خاناتٍ معنونة. وما لا نوعَ له يبقى حيث هو ولا يُخترَع له نوع
+     * (القاعدة السابعة: «غير معروف» ليس قيمةً تُملأ).
+     *
+     * **ولا يُسقِط فشلُ مستندٍ تسجيلاً**: الحسابُ أُنشئ، وفقدُ مستندٍ
+     * يُعالَج برفعه ثانيةً — لا بإلغاء الحساب. فيُلتقط كلُّ استثناءٍ
+     * ويُسجَّل، ويمضي التسجيل.
+     */
+    private function ingestKycDocuments(\App\Models\User $user, Request $request): void
+    {
+        $map = [
+            'kyc_id_front' => \App\Models\KycDocument::TYPE_ID_FRONT,
+            'kyc_id_back' => \App\Models\KycDocument::TYPE_ID_BACK,
+            'kyc_selfie' => \App\Models\KycDocument::TYPE_SELFIE,
+            'kyc_address_proof' => \App\Models\KycDocument::TYPE_ADDRESS_PROOF,
+        ];
+
+        $svc = app(\App\Services\KycDocumentService::class);
+
+        foreach ($map as $field => $docType) {
+            if (!$request->hasFile($field)) {
+                continue;
+            }
+            try {
+                $svc->upload($user, $docType, $request->file($field));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'AMIAL-SELFREG-KYCDOCS-001: تعذّر إدراج مستند التسجيل',
+                    ['user_id' => $user->id, 'doc_type' => $docType, 'error' => $e->getMessage()],
+                );
+            }
+        }
     }
 }

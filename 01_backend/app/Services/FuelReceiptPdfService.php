@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\FuelSale;
+use App\Models\Merchant;
+use App\Services\Merchant\MerchantLogoService;
 use App\Support\ArabicPdf;
 
 /**
@@ -13,6 +15,7 @@ class FuelReceiptPdfService
     public function generate(FuelSale $sale): string
     {
         $sale->loadMissing(['pump.station', 'product', 'companyAccount']);
+        $merchant = Merchant::where('user_id', $sale->merchant_user_id)->first();
 
         $html = view('pdf.fuel-sale-receipt', [
             'sale' => $sale,
@@ -20,6 +23,7 @@ class FuelReceiptPdfService
             'product' => $sale->product,
             'station' => $sale->pump->station,
             'company' => $sale->companyAccount,
+            'merchantLogoData' => app(MerchantLogoService::class)->dataUri($merchant),
         ])->render();
 
         // DomPDF يعكس العربية ويفصل حروفها؛ محرك المشروع العربي هو مصدر
@@ -29,8 +33,9 @@ class FuelReceiptPdfService
 
     public function suggestedFilename(FuelSale $sale): string
     {
-        $short = strtoupper(substr($sale->sale_ulid, -8));
+        $number = $sale->invoice_number ?: $sale->sale_ulid;
+        $safeNumber = trim((string) preg_replace('/[^A-Za-z0-9_-]/', '-', (string) $number), '-');
         $date = $sale->created_at->format('Y-m-d');
-        return "fuel_receipt_{$short}_{$date}.pdf";
+        return "fuel_receipt_{$safeNumber}_{$date}.pdf";
     }
 }

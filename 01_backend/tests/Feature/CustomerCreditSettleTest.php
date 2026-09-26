@@ -5,9 +5,11 @@ namespace Tests\Feature;
 use App\Models\EMoney;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\CustomerCreditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
@@ -15,6 +17,9 @@ use Tests\TestCase;
 /**
  * AMIAL-CUSTOMER-CREDIT-SETTLE-001 — العميل يسدّد دَينه الآجل من محفظته:
  * ينتقل المال للتاجر ويُخفَّض رصيد الآجل. سداد حقيقي بقيود مزدوجة.
+ *
+ * AMIAL-CREDIT-SETTLE-TRACE-001 — الحارس يمنع رجوع العطل الذي كان يحرّك
+ * المحفظة ودفتر الديون بلا Transaction ولا رقم عملية ولا سند سداد.
  */
 class CustomerCreditSettleTest extends TestCase
 {
@@ -27,6 +32,7 @@ class CustomerCreditSettleTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['amial.operational_governorates' => ['YE-AD']]);
         $this->svc = app(CustomerCreditService::class);
 
         $this->merchant = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
@@ -45,7 +51,25 @@ class CustomerCreditSettleTest extends TestCase
 
         $this->customer = User::factory()->create([
             'type' => 2, 'zone_code' => 'SOUTH', 'phone' => '+967771700066',
+            'kyc_tier' => 1,
+            'is_phone_verified' => 1,
+            'is_kyc_verified' => 0,
+            'residence_governorate' => 'YE-AD',
+            'verified_residence_governorate' => 'YE-AD',
+            'residence_verified_at' => now(),
             'transaction_pin' => Hash::make('1234'),
+        ]);
+        DB::table('residence_verifications')->insert([
+            'user_id' => $this->customer->id,
+            'kyc_document_id' => null,
+            'declared_governorate' => 'YE-AD',
+            'evidence_type' => 'government_residence_document',
+            'evidence_strength' => 'strong',
+            'status' => 'verified',
+            'submitted_at' => now()->subMinute(),
+            'reviewed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
         EMoney::create([
             'user_id' => $this->customer->id, 'current_balance' => '10000.0000',
@@ -62,17 +86,97 @@ class CustomerCreditSettleTest extends TestCase
         $this->assertSame('3000.0000', (string) $account->fresh()->current_balance);
 
         Passport::actingAs($this->customer->fresh(), [], 'api');
-        $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+        $response = $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
             'amount' => '2000', 'pin' => '1234',
         ])->assertOk()
           ->assertJsonPath('meta.paid', '2000.0000')
-          ->assertJsonPath('meta.new_balance', '1000.0000');
+          ->assertJsonPath('meta.new_balance', '1000.0000')
+          ->assertJsonPath('meta.receipt_type', 'debt_payment');
 
         // المال تحرّك
         $this->assertSame('8000.0000',
             (string) EMoney::where('user_id', $this->customer->id)->value('current_balance'));
         $this->assertSame('2000.0000',
             (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'));
+
+        // والأهم: لم يعد السداد «حركة محفظة بلا رقم». له صفّان يشتركان في
+        // رقم عملية رسمي واحد قابل للبحث من سجل العميل والتاجر.
+        $txId = (string) $response->json('meta.transaction_id');
+        $txNo = (string) $response->json('meta.transaction_no');
+        $this->assertNotSame('', $txId);
+        $this->assertMatchesRegularExpression('/^20\d{13}$/', $txNo);
+
+        $customerTx = Transaction::where('transaction_id', $txId)->firstOrFail();
+        $this->assertSame('debt_payment', $customerTx->transaction_type);
+        $this->assertSame($txNo, $customerTx->transaction_no);
+        $this->assertSame($this->customer->id, (int) $customerTx->user_id);
+        $this->assertSame($this->merchant->id, (int) $customerTx->to_user_id);
+
+        $merchantTx = Transaction::where('ref_trans_id', $txId)
+            ->where('transaction_type', 'debt_payment_received')
+            ->firstOrFail();
+        $this->assertSame($txNo, $merchantTx->transaction_no);
+        $this->assertSame($this->merchant->id, (int) $merchantTx->user_id);
+
+        // دفتر الديون نفسه يشير إلى العملية الرسمية بدل مرجعٍ مستقل.
+        $this->assertDatabaseHas('customer_credit_movements', [
+            'account_id' => $account->id,
+            'type' => 'payment',
+            'reference_type' => 'debt_payment',
+            'reference_id' => $txId,
+            'reference_number' => $txNo,
+        ]);
+
+        // القيد المزدوج جزء من نفس العملية المالية.
+        $this->assertDatabaseHas('ledger_journal_entries', [
+            'source_type' => 'debt_payment',
+            'source_id' => $txId,
+            'status' => 'posted',
+        ]);
+
+        // سند سداد للعميل وسند تحصيل مقابل للتاجر، كلاهما مربوطان بالعملية.
+        $this->assertDatabaseHas('receipts', [
+            'receipt_type' => 'debt_payment',
+            'user_id' => $this->customer->id,
+            'counterparty_user_id' => $this->merchant->id,
+            'reference_transaction_id' => $txId,
+            'direction' => 'debit',
+        ]);
+        $this->assertDatabaseHas('receipts', [
+            'receipt_type' => 'debt_payment',
+            'user_id' => $this->merchant->id,
+            'counterparty_user_id' => $this->customer->id,
+            'reference_transaction_id' => $txId,
+            'direction' => 'credit',
+        ]);
+        $this->assertNotEmpty($response->json('meta.receipt_number'));
+    }
+
+    /** @test Tier 0 cannot settle a debt or create financial records. */
+    public function tier_zero_customer_cannot_settle_debt_or_create_financial_records(): void
+    {
+        $account = $this->svc->findOrCreateAccount($this->merchant->id, '+967771700066', 'علي');
+        $this->svc->recordSale($account, '3000', createdBy: $this->merchant->id);
+
+        $this->customer->forceFill([
+            'kyc_tier' => 0,
+            'is_phone_verified' => 0,
+        ])->save();
+
+        Passport::actingAs($this->customer->fresh(), [], 'api');
+        $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+            'amount' => '1000', 'pin' => '1234',
+        ])->assertStatus(422)->assertJsonPath('code', 'SETTLE_FAILED');
+
+        $this->assertSame('10000.0000',
+            (string) EMoney::where('user_id', $this->customer->id)->value('current_balance'));
+        $this->assertSame('0.0000',
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'));
+        $this->assertSame('3000.0000', (string) $account->fresh()->current_balance);
+        $this->assertDatabaseMissing('transactions', [
+            'user_id' => $this->customer->id,
+            'transaction_type' => 'debt_payment',
+        ]);
     }
 
     /** @test رمز خاطئ يرفض السداد. */
@@ -97,5 +201,77 @@ class CustomerCreditSettleTest extends TestCase
         $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
             'amount' => '5000', 'pin' => '1234',
         ])->assertStatus(422);
+    }
+
+    /** @test يحق للعميل سداد فاتورة مؤجلة محددة جزئياً، لا أقدم دين بالضرورة. */
+    public function customer_can_partially_settle_the_selected_deferred_invoice(): void
+    {
+        $account = $this->svc->findOrCreateAccount($this->merchant->id, '+967771700066', 'علي');
+        $older = $this->svc->recordSale($account, '1000', referenceNumber: 'OLD-1');
+        $selected = $this->svc->recordSale($account, '900', referenceNumber: 'NEW-1');
+
+        Passport::actingAs($this->customer->fresh(), [], 'api');
+        $response = $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+            'amount' => '400',
+            'pin' => '1234',
+            'sale_movement_ulid' => $selected->movement_ulid,
+        ])->assertOk()
+          ->assertJsonPath('meta.new_balance', '1500.0000')
+          ->assertJsonPath('meta.allocations.0.sale_movement_ulid', $selected->movement_ulid)
+          ->assertJsonPath('meta.allocations.0.amount', '400.0000');
+
+        $open = app(\App\Services\CreditSourceSettlementService::class)
+            ->openInvoices($account->fresh());
+        $byReference = collect($open)->keyBy('reference_number');
+        $this->assertSame('1000.0000', $byReference['OLD-1']['remaining']);
+        $this->assertSame('500.0000', $byReference['NEW-1']['remaining']);
+        $this->assertNotSame($older->movement_ulid, $selected->movement_ulid);
+
+        $this->assertDatabaseHas('customer_credit_movements', [
+            'account_id' => $account->id,
+            'type' => 'payment',
+            'reference_type' => 'debt_payment',
+            'reference_id' => $response->json('meta.transaction_id'),
+            'sale_movement_ulid' => $selected->movement_ulid,
+        ]);
+
+        // إعادة القراءة والسداد يجب أن يحترما المتبقي نفسه، لا أن يخصما
+        // من الفاتورة الأقدم في الجولة التالية.
+        $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+            'amount' => '500', 'pin' => '1234',
+            'sale_movement_ulid' => $selected->movement_ulid,
+        ])->assertOk()->assertJsonPath('meta.new_balance', '1000.0000');
+
+        $remaining = app(\App\Services\CreditSourceSettlementService::class)
+            ->openInvoices($account->fresh());
+        $this->assertCount(1, $remaining);
+        $this->assertSame('OLD-1', $remaining[0]['reference_number']);
+        $this->assertSame('1000.0000', $remaining[0]['remaining']);
+        $this->assertSame('9100.0000',
+            (string) EMoney::where('user_id', $this->customer->id)->value('current_balance'));
+        $this->assertSame('900.0000',
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'));
+    }
+
+    public function test_a_sale_from_another_account_cannot_receive_the_payment(): void
+    {
+        $account = $this->svc->findOrCreateAccount($this->merchant->id, '+967771700066', 'علي');
+        $this->svc->recordSale($account, '1000');
+        $other = $this->svc->findOrCreateAccount($this->merchant->id, '+967771700077', 'عميل آخر');
+        $sale = $this->svc->recordSale($other, '900');
+
+        Passport::actingAs($this->customer->fresh(), [], 'api');
+        $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+            'amount' => '400', 'pin' => '1234',
+            'sale_movement_ulid' => $sale->movement_ulid,
+        ])->assertStatus(422);
+
+        $this->assertSame('1000.0000', (string) $account->fresh()->current_balance);
+        $this->assertSame('900.0000', (string) $other->fresh()->current_balance);
+        $this->assertSame('10000.0000',
+            (string) EMoney::where('user_id', $this->customer->id)->value('current_balance'));
+        $this->assertSame('0.0000',
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'));
+        $this->assertDatabaseMissing('transactions', ['transaction_type' => 'debt_payment']);
     }
 }

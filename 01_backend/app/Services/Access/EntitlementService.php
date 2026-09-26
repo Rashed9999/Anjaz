@@ -59,6 +59,7 @@ class EntitlementService
     public const LOCKED_BY_ROLE = 'locked_by_role';
     public const LIMIT_REACHED = 'limit_reached';
     public const NOT_APPLICABLE = 'not_applicable';
+    public const COMING_SOON = 'coming_soon';
 
     public function allows(User $user, string $code): bool
     {
@@ -112,7 +113,7 @@ class EntitlementService
     }
 
     /** أفي الظلّ هي؟ — قائمةٌ لا مفتاحٌ عامّ (والسببُ في `config/amial.php`). */
-    public function isShadowed(string $code): bool
+    private function isShadowed(string $code): bool
     {
         return in_array($code, (array) config('amial.entitlements.shadow', []), true);
     }
@@ -238,6 +239,11 @@ class EntitlementService
             return $row(self::NOT_APPLICABLE);
         }
 
+        // لا تُباع القدرة المعلنة قبل اكتمال مسارها الفعلي.
+        if ($cap->isComingSoon()) {
+            return $row(self::COMING_SOON);
+        }
+
         // ── ①) الأساسيّة لا تُقفَل بباقةٍ ولا بأمرٍ من اللوحة ─────────
         //
         // وتبقى محكومةً بالدور: «سجلّ التدقيق» أساسيٌّ ويُكتب للجميع،
@@ -303,7 +309,7 @@ class EntitlementService
     /** **أرخصُ باقةٍ تفتحها** — ولا يُعرض الأغلى إن كفى الأرخص. */
     private function unlockInfo(Capability $cap, array $ctx): array
     {
-        $needed = $cap->minimumPlan() ?? A::PLAN_STARTER;
+        $needed = $cap->minimumPlan() ?? A::PLAN_BUSINESS;
 
         // إن أغلقتها اللوحةُ في باقةٍ تفوق الافتراضيّ، تُبحث أوّلُ باقةٍ
         // تفتحها فعلاً — **فالوعدُ يطابق ما ينفّذه النظام**.
@@ -452,7 +458,7 @@ class EntitlementService
         // `accessFor` يردّ `subscription_plan` و`merchant_user_id`، لا
         // `plan` و`owner_id`. والافتراضُ كان يُرجع الجميعَ إلى المجّاني
         // صامتاً: كلُّ قدرةٍ مقفلةٌ، ولا خطأ في أيّ سجلّ.
-        $plan = $access['subscription_plan'] ?? A::PLAN_FREE;
+        $plan = A::canonicalPlan($access['subscription_plan'] ?? null);
         $ownerId = $access['merchant_user_id'] ?? null;
 
         // **مالكٌ أم موظّف** — والفرقُ يقرّر أيُفحص الدورُ أصلاً.

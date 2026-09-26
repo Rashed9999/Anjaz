@@ -39,6 +39,10 @@ class ReconcilePendingBillOrdersJob implements ShouldQueue
     {
         $pendingOrders = BillPaymentOrder::where('status', 'pending_provider_confirmation')
             ->where('created_at', '<', now()->subSeconds(30))
+            ->where(function ($query) {
+                $query->whereNull('next_reconciliation_at')
+                    ->orWhere('next_reconciliation_at', '<=', now());
+            })
             ->where('created_at', '>', now()->subDay())
             ->orderBy('id')
             ->limit(50)

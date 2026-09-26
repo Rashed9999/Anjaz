@@ -24,7 +24,7 @@ class _FakeApiClient implements ApiClient {
 
   @override
   Future<Response> postData(String uri, dynamic body,
-      {Map<String, String>? headers, String? idempotencyKey}) async {
+      {Map<String, String>? headers, String? idempotencyKey, String? correlationId}) async {
     calls.add('POST $uri');
     if (uri.contains('/auth/login')) {
       return Response(statusCode: 200, body: {

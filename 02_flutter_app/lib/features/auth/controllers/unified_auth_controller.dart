@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/helper/amial_crash_reporter.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/amial/controllers/amial_controller.dart';
+import 'package:amial_pay/features/amial/screens/terms_acceptance_screen.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/auth/screens/role_router.dart';
@@ -37,9 +39,9 @@ class UnifiedAuthController extends GetxController implements GetxService {
   final RxString currentRole = ''.obs;
   String? _pendingOtpToken;
 
-  // AMIAL-VERIFY-GATE: حالة توثيق آخر دخول ناجح (يقرؤها التوجيه لفتح شاشة
-  // «قيد المراجعة»/«مرفوض» بدل الرئيسية للحساب غير المعتمد).
-  // pending_review | verified | rejected
+  // AMIAL-PROGRESSIVE-KYC-LOGIN-001
+  // customer: active_unverified | verified
+  // merchant/agent: pending_review | verified | rejected
   final RxString verificationState = 'verified'.obs;
   String _displayName = '';
   String get displayName => _displayName;
@@ -63,14 +65,14 @@ class UnifiedAuthController extends GetxController implements GetxService {
     required String merchantNumber,
     required String phone,
     required String password,
-    String? posNumber,
+    String? employeeCode,
   }) async {
     return _execute({
       'role': 'merchant',
       'merchant_number': merchantNumber,
       'phone': phone,
       'password': password,
-      if (posNumber != null && posNumber.isNotEmpty) 'pos_number': posNumber,
+      if (employeeCode != null && employeeCode.isNotEmpty) 'employee_code': employeeCode,
     });
   }
 
@@ -164,6 +166,29 @@ class UnifiedAuthController extends GetxController implements GetxService {
         verificationState.value =
             (user['verification_state'] ?? 'verified').toString();
         _displayName = (user['name'] ?? '').toString();
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-QUICK-RECEIVE-002 — **المخرجُ الواحد يتذكّر، لا كلُّ شاشة.**
+        //
+        // كانت `rememberLastUser` تُنادى من `_submit` في شاشة الدخول
+        // وحدَها. والدخولُ بالبصمة ينجح ويذهب إلى الرئيسيّة **بلا أن
+        // يتذكّر** — فبطاقةُ «استلام سريع» في شاشة الدخول تبقى ميّتةً
+        // أبداً لمن يدخل ببصمته، وهو المسارُ المتكرّر لا الاستثناء.
+        //
+        // **وهي القاعدةُ الرابعة بنصّها**: ميزةٌ لها مدخلان تُختبَر من
+        // مدخليها. فجُرّب المدخلُ الأوّل ونجح، والمستعمِلُ يسلك الآخر.
+        //
+        // فنُقل التذكُّرُ إلى **المخرج الواحد** الذي يمرّ به كلُّ دخولٍ
+        // ناجحٍ لكلّ دور. ومدخلٌ ثالثٌ يُضاف غداً يرثه بلا أن يتذكّره
+        // أحد — وهذا هو المقصود.
+        // ══════════════════════════════════════════════════════════════
+        final rememberedPhone = (body['phone'] ?? '').toString().trim();
+        if (rememberedPhone.isNotEmpty) {
+          await rememberLastUser(
+            name: _displayName,
+            phone: rememberedPhone,
+            kind: (body['role'] ?? meta['role'] ?? '').toString(),
+          );
+        }
         // CRITICAL-001 — حمّل access بعد تسجيل الدخول الناجح
         try { await Get.find<AccessController>().load(); } catch (_) {}
         return true;
@@ -293,21 +318,68 @@ class UnifiedAuthController extends GetxController implements GetxService {
     }
   }
 
+  /// AMIAL-PROGRESSIVE-KYC-LOGIN-002 — قرار توجيه نقي قابل للاختبار.
+  ///
+  /// العميل الفردي لا يُحبس بسبب KYC؛ مستواه يحدد المال لا حق الدخول.
+  /// التاجر/POS يُحجب بالكامل فقط عند الرفض. بقية الأدوار المؤسسية
+  /// تحتفظ بسياسة الاعتماد الصريحة الخاصة بها.
+  @visibleForTesting
+  static bool shouldBlockHome({
+    required String role,
+    required String verificationState,
+  }) {
+    if (role == 'admin' || role == 'customer') return false;
+    if (role == 'merchant' || role == 'pos') {
+      return verificationState == 'rejected';
+    }
+    return verificationState != 'verified';
+  }
+
   /// توجيه للشاشة الرئيسية حسب الدور الحالي.
   /// AMIAL-PIN-GATE-001: بعد الدخول تظهر بوّابة رمز PIN قبل فتح الرئيسية.
   Future<void> navigateToHomeForRole() async {
     if (currentRole.value.isEmpty) return;
 
-    // AMIAL-VERIFY-GATE: الحساب غير المعتمد (قيد المراجعة/مرفوض) لا يفتح
-    // الرئيسية — يذهب لشاشة الحالة الصريحة بدل تجربة ناقصة صامتة. الأدمن
-    // مستثنى (لا يخضع لتوثيق KYC).
-    if (currentRole.value != 'admin' &&
-        verificationState.value != 'verified') {
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-PROGRESSIVE-KYC-LOGIN-001
+    //
+    // العميل Tier 0 حسابٌ صالح للدخول، لكن قدرته المالية = صفر حسب حراس
+    // الخادم. لا نحبسه في شاشة «قيد المراجعة» لأنه لم يرسل طلب ترقية أصلاً.
+    // رفض وثيقة ترقية يعيده لمركز التوثيق ولا يلغي الحساب.
+    //
+    // التاجر/POS المرفوض فقط يبقى محجوباً بالكامل؛ التاجر pending يدخل
+    // بوضع محدود بينما استلام الأموال يحرسه MerchantRiskService.
+    // الوكيل يبقى على سياسة الاعتماد الحالية حتى نفصل مستوياته لاحقاً.
+    // ══════════════════════════════════════════════════════════════════
+    final fullyBlocked = shouldBlockHome(
+      role: currentRole.value,
+      verificationState: verificationState.value,
+    );
+    if (fullyBlocked) {
       Get.offAll(() => AccountReviewScreen(
             state: verificationState.value,
             userName: _displayName,
           ));
       return;
+    }
+
+    // AMIAL-LEGAL-LOGIN-001 — إذا كان الإصدار القانوني الحالي جديداً،
+    // نغلق الحلقة هنا قبل بوابة PIN. فشل قراءة الحالة لا يحبس الحساب:
+    // الخادم نفسه يحرس كل فعل مالي بـ amial.terms وسيعيد الشاشة عبر ApiChecker.
+    if (currentRole.value != 'admin') {
+      try {
+        final legal = Get.find<AmialController>();
+        final loaded = await legal.refreshLegalStatus();
+        if (loaded && legal.legalStatus.value?.needsAcceptance == true) {
+          await Get.to(() => TermsAcceptanceScreen(
+                mandatory: true,
+                onAccepted: () => Get.back(result: true),
+              ));
+          if (legal.legalStatus.value?.needsAcceptance == true) return;
+        }
+      } catch (_) {
+        // Fail closed for money happens on the server; login itself remains usable.
+      }
     }
 
     // AMIAL-ADMIN: مدير النظام يدخل بالبريد وكلمة المرور فقط — بوابة PIN

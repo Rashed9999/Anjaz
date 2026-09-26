@@ -42,6 +42,11 @@ class LedgerCoverageGuardTest extends TestCase
         // **تقارير**: ميزان المراجعة وكشف الحساب ومطابقة المحافظ. ولو كتبت
         // في الدفتر لصار التقرير يغيّر ما يقيسه.
         'LedgerReportService' => 'تقارير الدفتر — تقرأ وتحسب ولا تكتب سطراً واحداً؛ وكتابتُها تجعل التقرير يغيّر ما يقيسه',
+        'FinancialStatementsService' => 'قوائم مالية تقرأ قيود الدفتر وتفصل العملات؛ لا تنشئ قيوداً أو تعدل أرصدة',
+        'CashLiquidityReportService' => 'تقارير التدفق والسيولة تقرأ الدفتر والمحافظ ولا تنفذ حركة مالية',
+        'CustomerLedgerReportService' => 'ملخص العميل يقرأ كامل دفتره والأرصدة التشغيلية للعرض فقط بلا كتابة',
+        'P1ControlReportService' => 'تقارير رقابية تقرأ محافظ الوكلاء وملفات الامتثال والتدقيق بلا تحريك مال',
+        'P1MerchantOperationsReportService' => 'تقارير مخزون وذمم تقرأ أرصدة المصادر ولا تسجل بيعاً أو تحصيلاً',
 
         // الحارس أمسكها لأنّها تقرأ `EMoney` — وهو إمساكٌ صحيح: صنفٌ يلمس
         // المحافظ يستحقّ سؤالاً. والجواب أنّها **عرضٌ محض**: تُجمّع تبويبات
@@ -49,6 +54,10 @@ class LedgerCoverageGuardTest extends TestCase
         // `CustomerActionService` — والإجراءات هناك ليست مالية أصلاً (تجميد،
         // وإنهاء جلسات، وتصعيد)، فلا قيد لها.
         'CustomerCenterService' => 'عرضُ ملفّ العميل — تقرأ المحفظة لتُظهرها ولا تُحرّك رصيداً واحداً',
+        // مركز الأنظمة الشامل للإدارة هو الآخر شاشة قراءة فقط. الماسح يلتقط
+        // أسماء الحقول مثل current_balance في استعلامات sum/get، لكن الملف
+        // لا ينفّذ debit/credit/hold ولا insert/update على المحافظ.
+        'CustomerSystemsCenterService' => 'مركز مراقبة أنظمة العميل — يجمع count/sum/get من المصادر الأصلية للعرض فقط؛ لا يكتب محفظة ولا يحرّك مالاً',
 
         // أمسكها الحارس لأنّها تقرأ `EMoney` — وهو إمساكٌ صحيح. والجواب
         // أنّها **عكسُ التحريك**: `preflight` تشترط أن يكون كلُّ رصيدٍ
@@ -161,7 +170,41 @@ class LedgerCoverageGuardTest extends TestCase
 
         // ── أرصدة فرعية لا تمسّ محفظة المنصّة ──
         'CustomerCreditService' => 'رصيد آجل بين التاجر وعميله — دَينٌ خارج المنصّة لا مالٌ فيها',
-        'CustomerCreditSettleService' => 'تسوية الآجل تُحرّك المحفظة عبر MerchantService المُرحِّل',
+
+        // AMIAL-CREDIT-COLLECTION-LEDGER-001 — تحصيلان، ولكن قيد محفظة واحد كحد أقصى.
+        //
+        // النقد في صندوق المنشأة مالٌ ورقيّ بين التاجر وعميله، لا رصيد
+        // إلكترونيّ تُصدره أميال. CreditCollectionService تسجّل قيدَ سداد
+        // في customer_credit_movements، وتربطه بورديّة الكاشير، وتُصدر
+        // سنداً قابلاً للتحقّق metadata.wallet_affected=false. لا تودع
+        // شيئاً في e_money، ولذلك إنشاء قيد في دفتر محفظة المنصّة هنا
+        // سيُظهِر التزاماً إلكترونياً مقابل ورقٍ لم تستلمه أميال.
+        'CreditCollectionService' => 'تحصيل نقد ورقيّ بدفتر ذمم التاجر ووردية الكاشير وسند موثّق؛ لا يغيّر محفظة المنصّة ولا يُنشئ التزاماً إلكترونياً',
+
+        // طلب أميال يسدّده العميل بنفسه عبر PaymentRequestService التي
+        // هي في MUST_POST وتُرحّل دفع المحفظة في لحظة الدفع. التأكيد
+        // هنا يتحقّق من معاملة مدفوعة تخصّ المنشأة ومن عدم استهلاكها،
+        // ثم يُخفّض ذمّة العميل ويُصدر سنداً دون تحريك المحفظة مرّةً
+        // ثانية. إعادة الترحيل هنا خصمٌ مزدوج للدفع نفسه.
+        //
+        // لا تمدّ هذه الرخصة إلى خدمةٍ جديدة تخصم e_money مباشرةً:
+        // الاختبار المرفق يرفض أن يكتسب أيّ من المحصّلين كتابةً للمحفظة.
+        'CreditWalletCollectionService' => 'طلب أميال يُرحَّل عند دفع العميل في PaymentRequestService؛ التأكيد يوثّق الدفع ويخفض ذمة العميل ويصدر سنداً بلا خصم محفظة ثانٍ',
+
+        // ── وابنتُها: توزيعُ ما رُحِّل، لا ترحيلٌ ثانٍ ──
+        //
+        // أمسكها الحارسُ لأنّها تكتب في أربعة مواضع — وهو إمساكٌ صحيح.
+        // والجواب أنّ **المالَ تحرّك في الأمّ** (`CustomerCreditSettleService`
+        // التي تُرحّل مباشرةً إلى الدفتر)، وهذه تُوزّع ذلك المبلغَ
+        // على أقدم الفواتير المفتوحة: تُنقص `balance_due` ورصيدَ عميل
+        // الجملة، وتُنشئ سطرَ تحصيل.
+        //
+        // **وكلُّها ذممٌ لا محفظةَ منصّة** — دَينُ تاجرٍ على عميله. وترحيلُها
+        // هنا **يُقيّد الريالَ مرّتين**: مرّةً في الأمّ ومرّةً في التوزيع.
+        //
+        // ولو صارت يوماً تمسّ `EMoney` مباشرةً فذلك ترحيلٌ واجبٌ ويُرفَع
+        // اسمُها من هنا.
+        'CreditSourceSettlementService' => 'توزيعُ سدادٍ رُحِّل في الأمّ على أقدم الفواتير — ذممٌ لا محفظة، وترحيلُه هنا يُقيّد الريال مرّتين',
         'GiftCardService' => 'رصيد مخزَّن على البطاقة — يُرحَّل عند الاستهلاك في الكاشير',
         'LoyaltyService' => 'نقاط ولاء لا عملة — لا قيمة نقدية حتى الاستبدال',
         'CorporateAccountService' => 'حدّ ائتماني للشركة — التزامٌ لا نقد',
@@ -174,6 +217,25 @@ class LedgerCoverageGuardTest extends TestCase
         'RestaurantService' => 'يسجّل طلب المطعم؛ الدفع يمرّ بمسار الدفع المُرحِّل',
         'WholesaleService' => 'يسجّل فاتورة الجملة؛ التحصيل منفصل',
         'WholesaleInvoiceService' => 'إنشاء الفاتورة لا تحصيلها',
+
+        // ── مرتجعُ الجملة: يُنقص دفترَ التاجر، ولا يمسّ مالَ أميال ──
+        //
+        // أمسكها الحارسُ بعد دمج عمل كودكس — **وهو إمساكٌ صحيح**: الخدمةُ
+        // تُنقص `invoice.balance_due` و`customer.current_balance`، وذاك
+        // تحريكُ رقمٍ ماليّ.
+        //
+        // والجوابُ سابقةُ الفاتورة نفسُها: `current_balance` **ائتمانُ
+        // التاجر لزبونه** مقابل `credit_limit` — دفترُه هو، لا محفظةَ
+        // أميال. وقِيس: **صفرُ نداءٍ** لمحفظةٍ أو دفترٍ أو تحويلٍ في
+        // الملفّ كلِّه. والمالُ الحقيقيُّ يتحرّك في التحصيل وحدَه، وهو
+        // مُرحِّلٌ ومستثنىً بسببه أعلاه.
+        //
+        // **وثغرةٌ تُقال ولا تُكتَم:** حين يفوق المرتجعُ المستحقَّ يُوسَم
+        // `settlement_type = refund_pending` ويُكتب `refund_due_amount`
+        // — **ولا قارئَ لهما في المشروع كلِّه**. أي أنّ زبوناً له مالٌ
+        // مُستردٌّ يُسجَّل ولا يُصرَف. وهي «مبنيٌّ ولا يُوصَل إليه» على
+        // مالٍ مستحقٍّ لإنسان، وتُصلَح بمسار صرفٍ يمرّ بالتحصيل المُرحِّل.
+        'WholesaleReturnService' => 'مرتجعُ جملة — يُنقص ائتمانَ التاجر لزبونه ولا يمسّ محفظةَ أميال؛ والصرفُ (إن وجب) يمرّ بمسار التحصيل المُرحِّل',
 
         // ── ديونٌ معلومة، لها بند في خطة التدقيق ──
         //
@@ -230,6 +292,7 @@ class LedgerCoverageGuardTest extends TestCase
         'DonationsService',
         'PendingTransferService',
         'UniversalSettlementService',
+        'CustomerCreditSettleService',
         // AMIAL-LEDGER-REQUEST-001: كانت مُعفاة بسببٍ مكتوبٍ خطأً — «التنفيذ
         // يمرّ بمسار الدفع المُرحِّل» — وهي تُحرّك المال بيدها في pay().
         // واكتُشف بقراءة الدالّة لا بالحارس: الحارس يقبل السبب المكتوب ولا
@@ -336,6 +399,36 @@ class LedgerCoverageGuardTest extends TestCase
             . "تُدرَج في LedgerCoverageGuardTest::EXEMPT مع سببٍ مكتوب يقرؤه "
             . "من يأتي بعدك. والدفتر اليوم يرى أقلّ من ثلث الحركة المالية "
             . "لأن هذا السؤال لم يُطرح من قبل.");
+    }
+
+    /**
+     * The two collection orchestrators must not become a second wallet writer.
+     * The only e-money transfer in Amial collections happens when the customer
+     * pays the PaymentRequest; confirmation applies receivables, not money.
+     */
+    public function test_credit_collection_exemptions_cannot_start_writing_wallets(): void
+    {
+        $paths = $this->locateServices();
+        foreach (['CreditCollectionService', 'CreditWalletCollectionService'] as $name) {
+            $this->assertArrayHasKey($name, self::EXEMPT);
+            $this->assertArrayHasKey($name, $paths);
+            $src = file_get_contents($paths[$name]);
+
+            // Nothing in these orchestrators may write e_money, directly
+            // debit/credit a wallet, or call the platform ledger's post method.
+            $this->assertDoesNotMatchRegularExpression(
+                '/\\b(?:EMoney|E_Money)::|->(?:debit|credit|hold|releaseHold|postBalanced)\\s*\\(/',
+                $src, "$name has become a direct wallet writer — remove its EXEMPT entry and post it explicitly"
+            );
+        }
+        $wallet = file_get_contents($paths['CreditWalletCollectionService']);
+        $this->assertContains('PaymentRequestService', self::MUST_POST);
+        $this->assertStringContainsString('PaymentRequestService $requests', $wallet);
+        $this->assertStringContainsString('assertPaidForMerchant(', $wallet);
+        $this->assertStringContainsString('issueDualForTransfer(', $wallet);
+        $cash = file_get_contents($paths['CreditCollectionService']);
+        $this->assertStringContainsString("'wallet_affected'=>false", $cash);
+        $this->assertStringContainsString('cashier_shift_id', $cash);
     }
 
     public function test_services_that_post_have_not_quietly_stopped(): void

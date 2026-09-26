@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\EMoney;
 use App\Models\Ledger\LedgerEntryLine;
 use App\Models\Ledger\LedgerJournalEntry;
+use App\Models\Transaction;
 use App\Models\User;
+use App\Services\FinancialGuardService;
 use App\Services\PlatformTreasuryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -36,6 +38,13 @@ class PlatformTreasuryIssuanceTest extends TestCase
         $this->assertSame('1250.5000', (string) EMoney::where('user_id', $this->admin->id)
             ->value('current_balance'));
 
+        // سجل التوافق يجب أن يشير إلى نفس القيد، لا أن يخلق حركةً موازية.
+        $compatibility = Transaction::where('transaction_id', $issued['transaction_id'])->first();
+        $this->assertNotNull($compatibility);
+        $this->assertSame($issued['transaction_id'], (string) $issued['entry']->source_id);
+        $this->assertSame('1250.5000', (string) $compatibility->credit);
+        $this->assertSame('1250.5000', (string) $compatibility->balance);
+
         $lines = LedgerEntryLine::where('journal_entry_id', $issued['entry']->id)->get();
         $this->assertCount(2, $lines);
         // `Collection::sum` تجمع **بالعائم** ثمّ تُنصَّص، فتُخرج `'1250.5'`
@@ -52,6 +61,36 @@ class PlatformTreasuryIssuanceTest extends TestCase
         $this->assertSame(0, bccomp('1250.5000', $sum('credit'), 4));
         $this->assertTrue($lines->contains(fn ($l) => $l->account->account_code === 'TREASURY_CASH_RESERVE'));
         $this->assertTrue($lines->contains(fn ($l) => $l->account->account_code === "USER_WALLET_{$this->admin->id}"));
+    }
+
+    public function test_a_wallet_failure_rolls_back_ledger_and_compatibility_record(): void
+    {
+        $guard = \Mockery::mock(FinancialGuardService::class);
+        $guard->shouldReceive('credit')
+            ->once()
+            ->andThrow(new \RuntimeException('wallet guard failed'));
+        $this->app->instance(FinancialGuardService::class, $guard);
+
+        try {
+            app(PlatformTreasuryService::class)->issueAdminFloat(
+                '80', $this->admin, 'TREASURY-TEST-ROLLBACK', 'اختبار التراجع الذري',
+            );
+            $this->fail('Expected treasury issuance to fail when wallet credit fails.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('wallet guard failed', $exception->getMessage());
+        }
+
+        $this->assertSame(0, LedgerJournalEntry::where('source_type', 'treasury_issuance')->count());
+        $this->assertSame(
+            0,
+            Transaction::where('user_id', $this->admin->id)
+                ->where('transaction_type', CASH_IN)
+                ->count(),
+        );
+        $this->assertSame(
+            0,
+            bccomp('0', (string) EMoney::where('user_id', $this->admin->id)->value('current_balance'), 4),
+        );
     }
 
     public function test_a_retried_reference_cannot_issue_the_same_float_twice(): void

@@ -36,7 +36,17 @@ class CashierShiftController extends Controller
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant, $posId] = $ctx;
         $shift = $this->svc->current($merchant, $posId);
-        return $this->ok(['shift' => $shift ? $this->arr($shift) : null]);
+
+        // AMIAL-SHIFT-GATE-001 — **والشاشةُ تُخبَر أنّ الحدَّ مطلوبٌ أصلاً.**
+        //
+        // تاجرٌ أطفأ الإلزام من لوحته يجب ألّا تحبسه شاشةُ «ابدأ وردية»
+        // على قرارٍ لم يعد قائماً — **وإلّا صار الحدُّ في الواجهة أشدَّ
+        // منه في الخادم**، وهو مصدرُ حقيقةٍ ثانٍ يفترق عن الأوّل.
+        return $this->ok([
+            'shift' => $shift ? $this->arr($shift) : null,
+            'required' => (bool) (\App\Models\MerchantProfile::where('user_id', $merchant->id)
+                ->value('require_shift_to_sell') ?? true),
+        ]);
     }
 
     public function open(Request $request): JsonResponse
@@ -49,7 +59,16 @@ class CashierShiftController extends Controller
         if ($v->fails()) return $this->err('VALIDATION', $v->errors()->first(), 422);
 
         try {
-            $shift = $this->svc->open($merchant, $posId, (string) $request->input('opening_float', '0'));
+            // AMIAL-SHIFT-DEVICE-001 — **الصندوقُ الذي فُتحت عليه.**
+            // ويُؤخذ من البوّابة لا من الطلب: معرّفٌ يأتي من الجهاز
+            // يمكن تغييرُه، والبوّابةُ وحدَها أثبتت أنّه غيرُ ملغىً
+            // ومطابقٌ للجلسة. (القاعدة الثامنة.)
+            $shift = $this->svc->open(
+                $merchant,
+                $posId,
+                (string) $request->input('opening_float', '0'),
+                \App\Http\Middleware\EnsurePosDevice::deviceOf($request)?->id,
+            );
         } catch (\RuntimeException $e) {
             return $this->err('OPEN_FAILED', $e->getMessage(), 422);
         }
@@ -82,7 +101,8 @@ class CashierShiftController extends Controller
         if (!$shift) return $this->err('NO_SHIFT', 'لا توجد وردية مفتوحة', 404);
 
         try {
-            $shift = $this->svc->close($shift, (string) $request->input('counted_cash'), $request->input('notes'));
+            $shift = $this->svc->close($shift, (string) $request->input('counted_cash'),
+                $request->input('notes'), $request->user());
         } catch (\RuntimeException $e) {
             return $this->err('CLOSE_FAILED', $e->getMessage(), 422);
         }
@@ -98,6 +118,37 @@ class CashierShiftController extends Controller
             ->where('status', 'closed')->orderByDesc('id')->limit(60)->get()
             ->map(fn ($s) => $this->arr($s));
         return $this->ok(['shifts' => $list, 'count' => $list->count()]);
+    }
+
+    /**
+     * AMIAL-SHIFT-GATE-001 — **ساعاتُ العمل: اليومَ وهذا الشهر.**
+     *
+     * `GET /cashier/shift/work-time?month=YYYY-MM`
+     *
+     * **وهو للمالك وحدَه** (القاعدة الثامنة: الهويّة تحدّد النطاق):
+     * ساعاتُ الزملاء وفروقُ درجهم ليست شغلَ كاشيرٍ على الشبّاك، وعرضُها
+     * له يكشف أداءَ غيره ويفتح بابَ خصامٍ لا يملك أحدٌ حسمَه من الشاشة.
+     */
+    public function workTime(Request $request): JsonResponse
+    {
+        $ctx = $this->resolve($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posId] = $ctx;
+
+        if ($posId !== null) {
+            return $this->err('OWNER_ONLY',
+                'تقرير ساعات العمل لصاحب المتجر — وورديتك تظهر لك في شاشة الوردية', 403);
+        }
+
+        $month = (string) $request->query('month', '');
+        if ($month !== '' && ! preg_match('~^\d{4}-\d{2}$~', $month)) {
+            return $this->err('VALIDATION', 'صيغة الشهر يجب أن تكون YYYY-MM', 422);
+        }
+
+        return $this->ok([
+            'month' => $month !== '' ? $month : now()->format('Y-m'),
+            'people' => $this->svc->workTime($merchant, $month !== '' ? $month : null),
+        ]);
     }
 
     private function resolve(Request $request): array|JsonResponse
@@ -133,6 +184,16 @@ class CashierShiftController extends Controller
             'notes' => $s->notes,
             'opened_at' => $s->opened_at?->toIso8601String(),
             'closed_at' => $s->closed_at?->toIso8601String(),
+            // AMIAL-SHIFT-GATE-001 — **من فتحها ومن أقفلها.**
+            // ولا يُقرأ الاسمُ اليومَ من جدول المستخدمين: هو لقطةٌ وقتَ
+            // الفتح، فورديّةُ الشهر الماضي لا تُعاد كتابتُها بتغيير اسم.
+            'opened_by_name' => $s->opened_by_name,
+            'opened_by_role' => $s->opened_by_role,
+            'closed_by_name' => $s->closed_by_name,
+            // **والفرقُ يُسمّى فائضاً أو عجزاً ولا يُترَك رقماً بإشارة.**
+            'variance_kind' => $s->variance === null ? null
+                : (bccomp((string) $s->variance, '0', 4) > 0 ? 'surplus'
+                    : (bccomp((string) $s->variance, '0', 4) < 0 ? 'shortage' : 'balanced')),
         ];
     }
 

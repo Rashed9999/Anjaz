@@ -24,10 +24,14 @@ class RegistrationRolesTest extends TestCase
     {
         return array_merge([
             'f_name' => 'مسجّل',
-            'l_name' => 'ذاتياً من التطبيق',
+            'father_name' => 'محمد',
+            'grandfather_name' => 'علي',
+            'family_name' => 'التجريبي',
+            'l_name' => 'التجريبي',
             'gender' => 'male',
             'dial_country_code' => '+967',
             'phone' => $phone,
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'password' => '1234',
             'identification_number' => '01-01-01-12345',
             'identification_type' => 'nid',
@@ -37,11 +41,12 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
-    public function customer_self_registration_creates_pending_account(): void
+    public function customer_self_registration_creates_active_tier_zero_account(): void
     {
         $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500001'))
             ->assertOk()
-            ->assertJsonPath('verification_status', 'pending_review');
+            ->assertJsonPath('verification_status', 'active_unverified')
+            ->assertJsonPath('kyc_tier', 0);
 
         $user = User::where('phone', '967771500001')->first();
         $this->assertNotNull($user);
@@ -143,7 +148,24 @@ class RegistrationRolesTest extends TestCase
         ])->assertOk();
 
         \Laravel\Passport\Passport::actingAs($merchant->fresh(), [], 'api');
-        $this->getJson('/api/v1/amial/merchant/cashier/products')->assertOk();
+
+        // ══════════════════════════════════════════════════════════════
+        // **والتاجرُ الموثَّقُ يفتح بابَ قطاعه — لا بابَ غيره.**
+        //
+        // كان هذا السطرُ يشترط أن يفتح **تاجرُ صيدليّةٍ كاشيرَ البقالة**
+        // (`/merchant/cashier/products`)، وهو ما يمنعه عزلُ القطاعات
+        // عمداً بـ`PHARMACY_CASHIER_ONLY`: «استخدم كاشير الصيدلية لتبقى
+        // الوصفات والتشغيلات والصلاحية في الفاتورة».
+        //
+        // **والمقصودُ من الفحص باقٍ**: أنّ الحسابَ بعد الاعتماد يعمل
+        // فعلاً. فيُقاس على بابه هو — **ويُشترط معه أنّ البابَ الآخرَ
+        // مغلق**، فيصير السطرُ الذي كان يناقض العزلَ حارساً له.
+        // ══════════════════════════════════════════════════════════════
+        $this->getJson('/api/v1/amial/merchant/pharmacy')->assertOk();
+
+        $this->getJson('/api/v1/amial/merchant/cashier/products')
+            ->assertForbidden()
+            ->assertJsonPath('code', 'PHARMACY_CASHIER_ONLY');
     }
 
     /** @test AMIAL-VERIFY-GATE — استجابة الدخول تحمل حالة التوثيق لتوجيه التطبيق. */
@@ -151,25 +173,31 @@ class RegistrationRolesTest extends TestCase
     {
         Artisan::call('passport:install', ['--no-interaction' => true]);
 
-        // عميل مسجَّل ذاتياً = قيد المراجعة
+        // عميل مسجَّل ذاتياً = نشط Tier 0 وليس حساباً محبوساً في المراجعة
         $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500007'))
             ->assertOk();
         $pending = User::where('phone', '967771500007')->first();
 
         $this->postJson('/api/v1/auth/login', [
             'role' => 'customer', 'phone' => '967771500007', 'password' => '1234',
-        ])->assertOk()->assertJsonPath('meta.user.verification_state', 'pending_review')
-          ->assertJsonPath('meta.user.is_kyc_verified', 0);
+        ])->assertOk()->assertJsonPath('meta.user.verification_state', 'active_unverified')
+          ->assertJsonPath('meta.user.is_kyc_verified', 0)
+          ->assertJsonPath('meta.user.kyc_tier', 0);
 
         // بعد اعتماده من الأدمن = موثّق
         $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009200']);
         app(\App\Services\PlatformRoleService::class)
             ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
         $admin->refresh();
-        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
-        $this->establishKycEvidence($pending);
+        // العميل لا يقفز 0 → 2. نبني Tier 1 الحقيقي أولاً:
+        // هاتف مثبت + إقامة معتمدة، ثم هوية Tier 2.
+        $pending = $this->establishTierOnePrerequisite($pending);
+        $this->establishKycEvidence($pending, 2, $admin);
         $this->actingAs($admin, 'user')
-            ->postJson("/admin/amial/hub/users/{$pending->id}/kyc", ['status' => 1])
+            ->postJson("/admin/amial/hub/users/{$pending->id}/kyc", [
+                'status' => 1,
+                'target_tier' => 2,
+            ])
             ->assertOk();
 
         $this->postJson('/api/v1/auth/login', [
@@ -188,10 +216,14 @@ class RegistrationRolesTest extends TestCase
         app(\App\Services\PlatformRoleService::class)
             ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
         $admin->refresh();
-        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
-        $this->establishKycEvidence($user);
+        // نفس المسار المتسلسل: Tier 0 → Tier 1 → Tier 2.
+        $user = $this->establishTierOnePrerequisite($user);
+        $this->establishKycEvidence($user, 2, $admin);
         $this->actingAs($admin, 'user')
-            ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 1])
+            ->postJson("/admin/amial/hub/users/{$user->id}/kyc", [
+                'status' => 1,
+                'target_tier' => 2,
+            ])
             ->assertOk();
 
         $this->assertDatabaseHas('amial_notifications', [
@@ -201,24 +233,46 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
-    public function check_phone_returns_demo_otp_hint_when_not_live(): void
+    public function check_phone_obeys_the_explicit_pilot_otp_policy(): void
     {
-        // في بيئة الاختبار APP_MODE != live → الرمز يُفصح عنه ليُعبّأ تلقائياً
         \Illuminate\Support\Facades\DB::table('business_settings')->updateOrInsert(
-            ['key' => 'phone_verification'], ['value' => '1', 'created_at' => now(), 'updated_at' => now()]);
+            ['key' => 'phone_verification'],
+            ['value' => '1', 'created_at' => now(), 'updated_at' => now()],
+        );
 
-        // AMIAL-OTP-SPLIT-001: الإفصاح لأرقام العرض وحدها.
-        $resp = $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => '967777100001'])
-            ->assertOk()->json();
+        // AMIAL-PILOT-PHONE-OTP-001 — في الإنتاج التجريبي الحالي اتُخذ قرار
+        // صريح: كل هاتف عميل يستخدم 123456 مؤقتاً حتى ربط المزود الحقيقي.
+        config([
+            'amial.otp.pilot_customer_phone_enabled' => true,
+            'amial.otp.pilot_customer_phone_code' => '123456',
+        ]);
 
-        $this->assertSame('active', $resp['otp']);
-        $this->assertNotEmpty($resp['demo_otp']);
+        $pilot = $this->postJson('/api/v1/customer/auth/check-phone', [
+            'phone' => '967771500006',
+        ])->assertOk()->json();
 
-        // **والنفي الحاسم:** رقمٌ حقيقيٌّ لا يُفصح عن رمزه.
-        $real = $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => '967771500006'])
-            ->assertOk()->json();
+        $this->assertSame('active', $pilot['otp']);
+        $this->assertTrue((bool) ($pilot['pilot_mode'] ?? false));
+        $this->assertSame('123456', $pilot['demo_otp']);
 
-        $this->assertNull($real['demo_otp'] ?? null,
-            'أُفصح عن رمزِ رقمٍ حقيقيّ — فبطل التحقّق من أصله');
+        // وعند إطفاء السياسة المرحلية يعود العقد الأمني الحقيقي:
+        // رقم غير Demo بلا قناة إيصال لا يُقال له كذباً «أرسلنا».
+        config(['amial.otp.pilot_customer_phone_enabled' => false]);
+        \App\Services\Otp\OtpPolicy::forget();
+        \Illuminate\Support\Facades\DB::table('phone_verifications')
+            ->where('phone', '967771500007')->delete();
+
+        $real = $this->postJson('/api/v1/customer/auth/check-phone', [
+            'phone' => '967771500007',
+        ])->assertStatus(503)->json();
+
+        $this->assertNull($real['demo_otp'] ?? null);
+        $this->assertStringContainsString(
+            'غير مهيّأة',
+            (string) ($real['message'] ?? ''),
+        );
+        $this->assertDatabaseMissing('phone_verifications', [
+            'phone' => '967771500007',
+        ]);
     }
 }

@@ -157,29 +157,45 @@
                 </div>
             @endif
 
-            {{-- Action buttons (only if pending_review) --}}
+            {{-- القرار المالي/الأمني لا يظهر لمن يملك العرض فقط. --}}
             @if($req->status == 'pending_review')
-                <div class="card border-warning">
-                    <div class="card-header bg-warning text-white">
-                        <h5 class="card-header-title text-white">{{ translate('Action required') }}</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex gap-3">
-                            <button type="button" class="btn btn-success flex-fill"
-                                    data-bs-toggle="modal" data-bs-target="#approveModal">
-                                <i class="tio-checkmark"></i> {{ translate('Approve') }}
-                            </button>
-                            <button type="button" class="btn btn-danger flex-fill"
-                                    data-bs-toggle="modal" data-bs-target="#rejectModal">
-                                <i class="tio-clear"></i> {{ translate('Reject') }}
-                            </button>
+                @php
+                    $operator = auth('user')->user();
+                    $canApproveRecovery = $operator?->hasPlatformPermission('platform.recovery.approve') ?? false;
+                    $canRejectRecovery = $operator?->hasPlatformPermission('platform.recovery.reject') ?? false;
+                @endphp
+
+                @if($canApproveRecovery || $canRejectRecovery)
+                    <div class="card border-warning">
+                        <div class="card-header bg-warning text-white">
+                            <h5 class="card-header-title text-white">{{ translate('Action required') }}</h5>
                         </div>
-                        <small class="text-muted d-block mt-2">
-                            <i class="tio-info-outined"></i>
-                            {{ translate('Approval applies a 7-day security hold. The phone is changed automatically after the hold expires.') }}
-                        </small>
+                        <div class="card-body">
+                            <div class="d-flex gap-3">
+                                @if($canApproveRecovery)
+                                    <button type="button" class="btn btn-success flex-fill"
+                                            data-bs-toggle="modal" data-bs-target="#approveModal">
+                                        <i class="tio-checkmark"></i> {{ translate('Approve') }}
+                                    </button>
+                                @endif
+                                @if($canRejectRecovery)
+                                    <button type="button" class="btn btn-danger flex-fill"
+                                            data-bs-toggle="modal" data-bs-target="#rejectModal">
+                                        <i class="tio-clear"></i> {{ translate('Reject') }}
+                                    </button>
+                                @endif
+                            </div>
+                            <small class="text-muted d-block mt-2">
+                                <i class="tio-info-outined"></i>
+                                {{ translate('Approval applies a 7-day security hold. The phone is changed automatically after the hold expires.') }}
+                            </small>
+                        </div>
                     </div>
-                </div>
+                @else
+                    <div class="alert alert-secondary">
+                        أنت في وضع المتابعة فقط. اعتماد أو رفض استعادة الحساب يحتاج صلاحية فريق المراجعة/الأمن.
+                    </div>
+                @endif
             @endif
         </div>
 
@@ -264,8 +280,8 @@
         </div>
     </div>
 
-    {{-- Approve modal --}}
-    @if($req->status == 'pending_review')
+    {{-- نُصيّر النوافذ الحساسة فقط لمن يملك الإجراء نفسه. --}}
+    @if($req->status == 'pending_review' && ($canApproveRecovery ?? false))
         <div class="modal fade text-start" id="approveModal" tabindex="-1">
             <div class="modal-dialog">
                 <form action="{{ route('admin.amial.recovery.approve', $req->request_ulid) }}" method="POST">
@@ -302,6 +318,9 @@
             </div>
         </div>
 
+    @endif
+
+    @if($req->status == 'pending_review' && ($canRejectRecovery ?? false))
         <div class="modal fade text-start" id="rejectModal" tabindex="-1">
             <div class="modal-dialog">
                 <form action="{{ route('admin.amial.recovery.reject', $req->request_ulid) }}" method="POST">

@@ -11,6 +11,16 @@
         <span class="badge badge-soft-info ms-auto">AMIAL-RECOVERY-001</span>
     </div>
 
+    @if(!empty($filteredUserId))
+        <div class="alert alert-info py-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <span>عرض طلبات الاستعادة الخاصة بالعميل #{{ $filteredUserId }} فقط.</span>
+            <a class="btn btn-sm btn-outline-secondary"
+               href="{{ route('admin.amial.recovery.index', ['status' => request('status', 'pending_review')]) }}">
+                عرض كل الطلبات
+            </a>
+        </div>
+    @endif
+
     @if(session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
@@ -20,7 +30,7 @@
         @foreach(['pending_review' => 'Pending review', 'pending_otp' => 'Pending OTP', 'approved' => 'Approved', 'rejected' => 'Rejected', 'all' => 'All'] as $key => $label)
             <li class="nav-item">
                 <a class="nav-link {{ request('status', 'pending_review') == $key ? 'active' : '' }}"
-                   href="{{ url()->current() }}?status={{ $key }}">
+                   href="{{ url()->current() }}?{{ http_build_query(array_filter(['status' => $key, 'user_id' => $filteredUserId ?? null])) }}">
                     {{ translate($label) }}
                 </a>
             </li>

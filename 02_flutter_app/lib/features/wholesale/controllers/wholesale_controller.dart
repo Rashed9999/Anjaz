@@ -6,6 +6,9 @@ import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/helper/pdf_downloader_helper.dart';
 import 'package:amial_pay/features/wholesale/domain/repositories/wholesale_repo.dart';
 import 'package:amial_pay/features/plans/screens/my_usage_screen.dart';
+import 'package:amial_pay/features/merchant/controllers/receipt_settings_controller.dart';
+import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
+import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
 
 /// AMIAL-WHOLESALE-001 — متحكّم الجملة.
 ///
@@ -24,10 +27,12 @@ class WholesaleController extends GetxController implements GetxService {
   final RxList<Map<String, dynamic>> customers = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> invoices = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> collections = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> returns = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> salesReps = <Map<String, dynamic>>[].obs;
   final Rx<Map<String, dynamic>?> currentInvoice = Rx<Map<String, dynamic>?>(null);
   final Rx<Map<String, dynamic>?> agingReport = Rx<Map<String, dynamic>?>(null);
   final Rx<Map<String, dynamic>?> currentStatement = Rx<Map<String, dynamic>?>(null);
+  final Rx<Map<String, dynamic>?> salesRepsReport = Rx<Map<String, dynamic>?>(null);
 
   // سلّة فاتورة جديدة
   final RxList<Map<String, dynamic>> cart = <Map<String, dynamic>>[].obs;
@@ -52,6 +57,50 @@ class WholesaleController extends GetxController implements GetxService {
       }
     } catch (_) {
       // ملف النشاط مساعد للعنوان، فلا يغيّر حالة الشاشة الرئيسية وحده.
+    }
+  }
+
+  /// إعدادات المنشأة وشرائح العملاء حقائق خادمية؛ لا نحفظها محلياً كي لا
+  /// يختلف سعر العميل بين جهاز وآخر.
+  Future<bool> saveBusiness(Map<String, dynamic> data) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.upsertBusiness(data);
+      if (_ok(r)) {
+        business.value = Map<String, dynamic>.from(
+            (r.body['meta']?['business'] ?? {}) as Map);
+        final tiers = (business.value?['price_tiers'] ?? []) as List;
+        priceTiers.assignAll(
+            tiers.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذر حفظ إعدادات المنشأة';
+      return false;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  Future<bool> addPriceTier(Map<String, dynamic> data) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.addPriceTier(data);
+      if (_ok(r)) {
+        await loadBusiness();
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذر إضافة شريحة السعر';
+      return false;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isSubmitting.value = false;
     }
   }
 
@@ -104,6 +153,45 @@ class WholesaleController extends GetxController implements GetxService {
       _doAndReload(
           () => repo.adjustStock(id, newStock, reason), () => loadProducts());
 
+  Future<Map<String, dynamic>?> loadProductPrices(int productId) async {
+    try {
+      final r = await repo.listProductPrices(productId);
+      if (_ok(r)) return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      lastError.value = _msg(r) ?? 'تعذر تحميل أسعار المنتج';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    }
+    return null;
+  }
+
+  Future<bool> setProductPrice(int productId, int tierId, double price, double minQty) async =>
+      _doAndReload(() => repo.setProductPrice(productId, tierId, price, minQty),
+          () => loadProducts());
+
+  Future<Map<String, dynamic>?> loadProductUnits(int productId) async {
+    try {
+      final r = await repo.listProductUnits(productId);
+      if (_ok(r)) return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      lastError.value = _msg(r) ?? 'تعذر تحميل وحدات المنتج';
+    } catch (_) { lastError.value = 'خطأ في الشبكة'; }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> loadProductLots(int productId) async {
+    try {
+      final r = await repo.listProductLots(productId);
+      if (_ok(r)) return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      lastError.value = _msg(r) ?? 'تعذر تحميل دفعات المنتج';
+    } catch (_) { lastError.value = 'خطأ في الشبكة'; }
+    return null;
+  }
+
+  Future<bool> saveProductUnit(int productId, Map<String, dynamic> data) async =>
+      _doAndReload(() => repo.saveProductUnit(productId, data), () => loadProducts());
+
+  Future<bool> receiveProductLot(int productId, Map<String, dynamic> data) async =>
+      _doAndReload(() => repo.receiveProductLot(productId, data), () => loadProducts());
+
   // ============ Customers ============
 
   Future<void> loadCustomers({String? search, bool withBalanceOnly = false}) async {
@@ -132,25 +220,69 @@ class WholesaleController extends GetxController implements GetxService {
   Future<bool> updateCustomer(int id, Map<String, dynamic> data) async =>
       _doAndReload(() => repo.updateCustomer(id, data), () => loadCustomers());
 
+  Future<void> loadSalesReps() async {
+    try {
+      final r = await repo.listSalesReps();
+      if (_ok(r)) {
+        final list = (r.body['meta']?['sales_reps'] ?? []) as List;
+        salesReps.assignAll(
+            list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+      }
+    } catch (_) {
+      // المندوب اختياري في الفاتورة؛ لا نمنع البيع إذا تعذر تحميل قائمته.
+    }
+  }
+
+  Future<bool> addSalesRep(Map<String, dynamic> data) async =>
+      _doAndReload(() => repo.addSalesRep(data), loadSalesReps);
+
   // ============ Cart ============
 
-  void addToCart(Map<String, dynamic> product, double qty) {
-    final idx = cart.indexWhere((c) => c['product_id'] == product['id']);
+  Future<bool> addToCart(Map<String, dynamic> product, double qty,
+      {Map<String, dynamic>? unit}) async {
+    if (selectedCustomer.value == null) {
+      lastError.value = 'اختر العميل أولاً لتطبيق شريحة السعر الصحيحة';
+      return false;
+    }
+    Map<String, dynamic> quote = {};
+    try {
+      final r = await repo.quoteProduct(
+        (product['id'] as num).toInt(),
+        (selectedCustomer.value!['id'] as num).toInt(),
+        qty,
+        unitId: unit?['id'] is num ? (unit!['id'] as num).toInt() : null,
+      );
+      if (_ok(r)) {
+        quote = Map<String, dynamic>.from((r.body['meta']?['quote'] ?? {}) as Map);
+      } else {
+        lastError.value = _msg(r) ?? 'تعذر تسعير الصنف للعميل';
+        return false;
+      }
+    } catch (_) {
+      lastError.value = 'تعذر الاتصال لتسعير الصنف';
+      return false;
+    }
+    final unitId = quote['unit_id'] ?? unit?['id'];
+    final idx = cart.indexWhere((c) => c['product_id'] == product['id'] && c['unit_id'] == unitId);
+    final pricedProduct = {...product, 'quoted_unit_price': quote['unit_price'],
+      'quoted_unit': quote['unit'] ?? unit?['name'] ?? product['unit']};
     if (idx >= 0) {
-      cart[idx] = {...cart[idx], 'quantity': qty};
+      cart[idx] = {...cart[idx], 'quantity': qty, 'product': pricedProduct};
     } else {
       cart.add({
         'product_id': product['id'],
-        'product': product,
+        'product': pricedProduct,
+        if (unitId != null) 'unit_id': unitId,
         'quantity': qty,
         'discount_per_unit': 0.0,
       });
     }
     cart.refresh();
+    return true;
   }
 
-  void removeFromCart(int productId) {
-    cart.removeWhere((c) => c['product_id'] == productId);
+  void removeFromCart(int productId, {dynamic unitId}) {
+    cart.removeWhere((c) => c['product_id'] == productId && c['unit_id'] == unitId);
   }
 
   void clearCart() {
@@ -161,9 +293,10 @@ class WholesaleController extends GetxController implements GetxService {
   double get cartSubtotal {
     double total = 0;
     for (final item in cart) {
-      final price = double.tryParse('${item['product']?['base_price']}') ?? 0;
+      final price = double.tryParse('${item['product']?['quoted_unit_price'] ?? item['product']?['base_price']}') ?? 0;
       final qty = double.tryParse('${item['quantity']}') ?? 0;
-      total += price * qty;
+      final discount = double.tryParse('${item['discount_per_unit']}') ?? 0;
+      total += (price - discount).clamp(0, double.infinity).toDouble() * qty;
     }
     return total;
   }
@@ -172,6 +305,7 @@ class WholesaleController extends GetxController implements GetxService {
 
   Future<bool> createInvoice({
     required String paymentType,
+    String? paidTransactionId,
     String? dueDate,
     String? discountAmount,
     String? taxRate,
@@ -187,6 +321,7 @@ class WholesaleController extends GetxController implements GetxService {
         .map((c) => {
               'product_id': c['product_id'],
               'quantity': c['quantity'],
+              if (c['unit_id'] != null) 'unit_id': c['unit_id'],
               if ((c['discount_per_unit'] ?? 0) > 0)
                 'discount_per_unit': c['discount_per_unit'],
             })
@@ -196,11 +331,13 @@ class WholesaleController extends GetxController implements GetxService {
       'items': items,
       'customer_id': selectedCustomer.value!['id'],
       'payment_type': paymentType,
-      'due_date': ?dueDate,
+      if (paidTransactionId != null && paidTransactionId.isNotEmpty)
+        'paid_transaction_id': paidTransactionId,
+      if (dueDate != null && dueDate.isNotEmpty) 'due_date': dueDate,
       if (discountAmount != null && discountAmount.isNotEmpty)
         'discount_amount': discountAmount,
       if (taxRate != null && taxRate.isNotEmpty) 'tax_rate': taxRate,
-      'sales_rep_id': ?salesRepId,
+      if (salesRepId != null) 'sales_rep_id': salesRepId,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     };
 
@@ -223,6 +360,39 @@ class WholesaleController extends GetxController implements GetxService {
       return false;
     } finally {
       isSubmitting.value = false;
+    }
+  }
+
+  /// طلب تحصيل QR خاص بالجملة: الخادم ينشئه باسم مالك التاجر حتى عند
+  /// تشغيل الشاشة من حساب نقطة البيع.
+  Future<Map<String, dynamic>?> createInvoicePaymentRequest(
+      double amount, String? note) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.createInvoicePaymentRequest(amount, note: note);
+      if (_ok(r)) {
+        return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      }
+      lastError.value = _msg(r) ?? 'تعذّر إنشاء طلب تحصيل أميال باي';
+      return null;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return null;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  Future<bool> cancelWholesalePaymentRequest(int requestId) async {
+    try {
+      final r = await repo.cancelWholesalePaymentRequest(requestId);
+      if (_ok(r)) return true;
+      lastError.value = _msg(r) ?? 'تعذّر إلغاء طلب التحصيل';
+      return false;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
     }
   }
 
@@ -269,6 +439,30 @@ class WholesaleController extends GetxController implements GetxService {
   Future<bool> voidInvoice(int id, String reason) async =>
       _doAndReload(() => repo.voidInvoice(id, reason), () => loadInvoices());
 
+  Future<void> loadReturns({String? status}) async {
+    _startLoad();
+    try {
+      final r = await repo.listReturns(status: status);
+      if (_ok(r)) {
+        final list = (r.body['meta']?['returns'] ?? []) as List;
+        returns.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        loadState.value = returns.isEmpty ? 'empty' : 'ready';
+      } else {
+        _classifyFailure(r);
+      }
+    } catch (_) {
+      _offline();
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<bool> requestReturn(int invoiceId, Map<String, dynamic> data) async =>
+      _doAndReload(() => repo.requestReturn(invoiceId, data), () => loadReturns());
+
+  Future<bool> resolveReturn(int returnId, bool approve, {String? note}) async =>
+      _doAndReload(() => repo.resolveReturn(returnId, approve, note: note), () => loadReturns());
+
   // ============ Collections ============
 
   Future<bool> recordCollection(int invoiceId, Map<String, dynamic> data) async {
@@ -285,6 +479,24 @@ class WholesaleController extends GetxController implements GetxService {
     } catch (_) {
       lastError.value = 'خطأ في الشبكة';
       return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> createCollectionPaymentRequest(
+      int invoiceId, double amount, String? note) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.createCollectionPaymentRequest(invoiceId, amount,
+          note: note);
+      if (_ok(r)) return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      lastError.value = _msg(r) ?? 'تعذّر إنشاء طلب تحصيل أميال باي';
+      return null;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return null;
     } finally {
       isSubmitting.value = false;
     }
@@ -326,6 +538,55 @@ class WholesaleController extends GetxController implements GetxService {
     }
   }
 
+  /// يطبع فاتورة الجملة على الطابعة الحرارية التي اختارها جهاز الـ POS.
+  /// لا يفتح PDF باسم «طباعة»؛ الـ PDF يبقى خيار تنزيل مستقل.
+  Future<PrintResult> printInvoiceThermal(Map<String, dynamic> invoice) async {
+    final printer = Get.isRegistered<ThermalPrintService>()
+        ? Get.find<ThermalPrintService>()
+        : null;
+    if (printer == null || printer.config.value == null) {
+      return const PrintResult(false, 'لم يتم اختيار طابعة — افتح إعدادات الطابعة');
+    }
+
+    final receiptSettings = Get.isRegistered<ReceiptSettingsController>()
+        ? Get.find<ReceiptSettingsController>()
+        : Get.put(ReceiptSettingsController(), permanent: true);
+    await receiptSettings.load();
+
+    num number(dynamic value) => num.tryParse('${value ?? 0}') ?? 0;
+    final rawItems = invoice['items'] is List ? invoice['items'] as List : const [];
+    final lines = rawItems.map<ThermalReceiptLine>((raw) {
+      final row = raw is Map ? raw : const <String, dynamic>{};
+      return ThermalReceiptLine(
+        '${row['product_name'] ?? row['name'] ?? 'صنف'}',
+        number(row['quantity'] ?? row['qty'] ?? 1),
+        number(row['unit_price'] ?? row['price']),
+        lineTotal: number(row['line_total']),
+      );
+    }).toList();
+    final customer = invoice['customer'] is Map ? invoice['customer'] as Map : const {};
+    final total = number(invoice['total_amount']);
+    final paid = number(invoice['paid_amount']);
+    final due = number(invoice['balance_due']);
+
+    return printer.printSale(
+      settings: receiptSettings.effective,
+      lines: lines,
+      total: total,
+      subtotal: number(invoice['subtotal'] ?? invoice['total_amount']),
+      discount: number(invoice['discount_amount']),
+      paid: paid,
+      balanceDue: due > 0 ? due : null,
+      invoiceNo: '${invoice['invoice_number'] ?? invoice['id'] ?? ''}',
+      contextLines: [
+        'فاتورة جملة',
+        if ((customer['full_name'] ?? '').toString().isNotEmpty)
+          'العميل: ${customer['full_name']}',
+        'الحالة: ${invoice['status'] ?? ''}',
+      ],
+    );
+  }
+
   // ============ Reports ============
 
   Future<void> loadAgingReport() async {
@@ -355,6 +616,25 @@ class WholesaleController extends GetxController implements GetxService {
       if (_ok(r)) {
         currentStatement.value = Map<String, dynamic>.from(
             (r.body['meta']?['statement'] ?? {}) as Map);
+        loadState.value = 'ready';
+      } else {
+        _classifyFailure(r);
+      }
+    } catch (_) {
+      _offline();
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> loadSalesRepsReport({String? from, String? to}) async {
+    _startLoad();
+    salesRepsReport.value = null;
+    try {
+      final r = await repo.salesRepsReport(from: from, to: to);
+      if (_ok(r)) {
+        salesRepsReport.value = Map<String, dynamic>.from(
+            (r.body['meta']?['report'] ?? {}) as Map);
         loadState.value = 'ready';
       } else {
         _classifyFailure(r);

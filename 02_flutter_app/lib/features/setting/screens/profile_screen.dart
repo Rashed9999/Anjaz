@@ -3,8 +3,12 @@ import 'package:get/get.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
 import 'package:amial_pay/common/widgets/custom_switch_button.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/favorite_number/screens/amial_favorites_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_account_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_pos_home_screen.dart';
 import 'package:amial_pay/features/me/screens/my_services_screen.dart';
+import 'package:amial_pay/features/kyc_verification/screens/customer_verification_center_screen.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amial_pay/features/setting/domain/models/profile_model.dart';
@@ -24,8 +28,11 @@ import 'package:amial_pay/features/requested_money/screens/requested_money_list_
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/setting/screens/transaction_limit_screen.dart';
+import 'package:amial_pay/features/setting/screens/account_security_screen.dart';
 import 'package:amial_pay/features/language/widgets/amial_language_switch.dart';
 import 'package:amial_pay/common/widgets/amial_build_stamp.dart';
+import 'package:amial_pay/features/setting/screens/about_amial_screen.dart';
+import 'package:amial_pay/features/setting/screens/public_legal_document_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({ super.key });
@@ -37,6 +44,14 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
+    // «حسابي» خاص بالمحفظة الشخصية. لا نستخدمه لإعدادات منشأة التاجر.
+    final access = Get.find<AccessController>();
+    if (access.isPos) {
+      return const MerchantPosHomeScreen();
+    }
+    if (access.isMerchantSession) {
+      return const MerchantAccountScreen();
+    }
     final splashController = Get.find<SplashController>();
     List<TransactionTableModel> transactionTableModelList = [];
     ProfileModel? userInfo = Get.find<ProfileController>().userInfo;
@@ -142,29 +157,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () => Get.to(() => const MyServicesScreen()),
                   ),
 
+                  // AMIAL-CUSTOMER-KYC-ENTRY-002 — كل تفاصيل KYC في باب واحد.
+                  // لا نعرض البطاقات الطويلة داخل رأس «حسابي» بعد الآن.
+                  if (userInfo?.type == 2)
+                    ListTile(
+                      leading: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16874C).withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.verified_user_outlined,
+                          color: Color(0xFF16874C),
+                        ),
+                      ),
+                      title: Text(
+                        'customer_verification_title'.tr,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        'customer_verification_profile_subtitle'.tr,
+                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                      trailing: const Icon(Icons.chevron_left, color: Colors.grey),
+                      onTap: () => Get.to(
+                        () => const CustomerVerificationCenterScreen(),
+                      ),
+                    ),
+
+
                   CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.withdrawProfile,title: 'withdraw_history'.tr),
                     onTap: () => Get.to(()=> const RequestedMoneyListScreen(requestType: RequestType.withdraw)),
                   ),
 
-                  // AMIAL-FAVORITES-001: المفضّلة صارت تشمل الحسابات والتجّار
-                  // والعمليات لا الأرقام وحدها، فلم تعد مشروطة بعلَم «الأرقام
-                  // المفضّلة» — إطفاؤه كان يُخفي المفضّلة كلها.
-                  CustomInkWellWidget(
-                    child: widget.MenuItem(image: Images.favoriteNumberIcon, title: 'المفضّلة'),
-                    onTap: () => Get.to(() => const AmialFavoritesScreen()),
-                  ),
+                  // ══════════════════════════════════════════════════════
+                  // **البابُ الواحدُ حكمُه واحدٌ في الشاشتين.**
+                  //
+                  // هذه الأبوابُ الثلاثة محروسةٌ بالقدرة في «خدماتي»
+                  // (`my_services_screen.dart`) ومكشوفةٌ هنا — **الشاشتان
+                  // نفسُهما والقدرةُ نفسُها وحكمان متناقضان**. فيراه
+                  // صاحبُ الحساب مغلقاً في موضعٍ ومفتوحاً في موضع، ولا
+                  // يقول ذلك مُصرِّفٌ ولا محلِّل.
+                  //
+                  // والخادمُ يمنع `favorite_numbers` و`payment_requests`
+                  // عن التاجر أصلاً — فزرٌّ يُرسم له وعدٌ يُخلَف عند أوّل
+                  // ضغطة. (القاعدة التاسعة.)
+                  // ══════════════════════════════════════════════════════
+                  if (access.has('favorite_numbers'))
+                    CustomInkWellWidget(
+                      child: widget.MenuItem(image: Images.favoriteNumberIcon, title: 'المفضّلة'),
+                      onTap: () => Get.to(() => const AmialFavoritesScreen()),
+                    ),
 
+                  if (access.has('payment_requests'))
+                    CustomInkWellWidget(
+                      child: widget.MenuItem(image: Images.requestProfile,title: 'requests'.tr),
+                      onTap: () => Get.to(()=> const IncomingRequestsScreen()),
+                    ),
 
-                  CustomInkWellWidget(
-                    child: widget.MenuItem(image: Images.requestProfile,title: 'requests'.tr),
-                    onTap: () => Get.to(()=> const IncomingRequestsScreen()),
-                  ),
-
-                  CustomInkWellWidget(
-                    child: widget.MenuItem(image: Images.sendMoneyProfile,title: 'send_requests'.tr),
-                    onTap: () => Get.to(()=> const OutgoingRequestsScreen()),
-                  ),
+                  if (access.has('payment_requests'))
+                    CustomInkWellWidget(
+                      child: widget.MenuItem(image: Images.sendMoneyProfile,title: 'send_requests'.tr),
+                      onTap: () => Get.to(()=> const OutgoingRequestsScreen()),
+                    ),
 
                   if(transactionTableModelList.isNotEmpty) CustomInkWellWidget(
                     child: widget.MenuItem(
@@ -176,9 +234,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     )),
                   ),
 
+                  // AMIAL-ACCOUNT-SECURITY-001 — **كلمةُ المرور لم يكن لها
+                  // بابٌ إطلاقاً**، ورمزُ التحويل هو كلمةُ المرور نفسُها
+                  // لكلّ من سجّل من التطبيق. فبابٌ واحدٌ للاثنين، يقول
+                  // أوّلاً أيّهما ما زال مربوطاً بالآخر.
                   CustomInkWellWidget(
-                    child: widget.MenuItem(image: Images.pinChangeLogo,title: 'change_pin'.tr),
-                    onTap:()=> Get.toNamed(RouteHelper.getChangePinRoute()),
+                    child: widget.MenuItem(
+                        image: Images.pinChangeLogo, title: 'أمان الحساب — كلمة المرور والرمز'),
+                    onTap: () => Get.to(() => const AccountSecurityScreen()),
                   ),
 
                  if(AppConstants.languages.length > 1) CustomInkWellWidget(
@@ -262,16 +325,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ProfileHeader(title: 'support'.tr),
 
                 Column(children: [
-                  if(((splashController.configModel?.companyEmail != null) || (splashController.configModel?.companyPhone != null)))
-                    CustomInkWellWidget(
-                      child: widget.MenuItem(image: Images.supportLogo,title: '24_support'.tr),
-                      onTap: () => Get.toNamed(RouteHelper.getSupportRoute()),
-                    ),
+                  CustomInkWellWidget(
+                    child: widget.MenuItem(image: Images.supportLogo,title: '24_support'.tr),
+                    onTap: () => Get.toNamed(RouteHelper.getSupportRoute()),
+                  ),
 
-                 if(splashController.configModel?.systemFeature?.faqStatus ?? false) CustomInkWellWidget(
+                 CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.questionLogo, title: 'faq'.tr),
                     onTap:()=> Get.toNamed(RouteHelper.faq),
-                  )
+                  ),
                 ],),
 
                 ProfileHeader(title: 'policies'.tr),
@@ -280,17 +342,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.aboutUs,title: 'about_us'.tr),
-                    onTap:()=> Get.toNamed(RouteHelper.aboutUs),
+                    onTap:()=> Get.to(() => const AboutAmialScreen()),
                   ),
 
                   CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.terms,title: 'terms'.tr),
-                    onTap:()=> Get.toNamed(RouteHelper.terms),
+                    onTap:()=> Get.to(() => const PublicLegalDocumentScreen(
+                      title: 'شروط الاستخدام',
+                      slug: 'terms',
+                    )),
                   ),
 
                   CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.privacy, title: 'privacy_policy'.tr),
-                    onTap:()=> Get.toNamed(RouteHelper.privacy),
+                    onTap:()=> Get.to(() => const PublicLegalDocumentScreen(
+                      title: 'سياسة الخصوصية',
+                      slug: 'privacy',
+                    )),
                   ),
                 ],),
 
@@ -339,7 +407,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
-
-
-
 
