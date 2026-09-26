@@ -153,6 +153,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->prependToGroup('web', SecuritySentinel::class);
         // منع التخزين يأتي خارج StartSession حتى لا تستبدل ترويسةُ الجلسة no-store.
         $middleware->prependToGroup('web', \App\Http\Middleware\NoStoreCsrfPages::class);
+        // Apply before EncryptCookies and StartSession: a host-only merchant cookie.
+        $middleware->prependToGroup('web', \App\Http\Middleware\MerchantPortalSession::class);
         $middleware->prependToGroup('api', SecuritySentinel::class);
 
         // AMIAL-OPS-001 — وضع الصيانة المُدار من لوحة الأدمن (يمرّ الأدمن/الدخول/ping)
