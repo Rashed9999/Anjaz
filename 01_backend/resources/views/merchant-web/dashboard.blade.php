@@ -57,30 +57,7 @@
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function(){
   'use strict';
-  const routes = @json([
-      'overview' => route('merchant.web.data.overview'),
-      'sector' => route('merchant.web.data.sector'),
-      'sectorProducts' => route('merchant.web.data.sector.products'),
-      'sectorProductsCreate' => route('merchant.web.data.sector.products.create'),
-      'sectorOperations' => route('merchant.web.data.sector.operations'),
-      'plans' => route('merchant.web.data.plans'),
-      'stats' => route('merchant.web.data.stats'),
-      'wallet' => route('merchant.web.data.wallet'),
-      'ledger' => route('merchant.web.data.ledger'),
-      'products' => route('merchant.web.data.products'),
-      'productsCreate' => route('merchant.web.data.products.create'),
-      'branches' => route('merchant.web.data.branches'),
-      'branchesCreate' => route('merchant.web.data.branches.create'),
-      'roles' => route('merchant.web.data.roles'),
-      'rolesCreate' => route('merchant.web.data.roles.create'),
-      'staff' => route('merchant.web.data.staff'),
-      'staffCreate' => route('merchant.web.data.staff.create'),
-      'devices' => route('merchant.web.data.devices'),
-      'deviceActivation' => route('merchant.web.data.devices.activate'),
-      'receipts' => route('merchant.web.data.receipts'),
-      'receiptsSave' => route('merchant.web.data.receipts.save'),
-      'login' => route('merchant.web.login')
-  ]);
+  const routes = {{ \Illuminate\Support\Js::from($merchantRoutes) }};
   const csrf = @json(csrf_token());
   const actualSector = @json($businessTypeCode);
   const actualSectorName = @json($businessType);

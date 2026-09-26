@@ -24,7 +24,35 @@ class WebPortalController extends Controller
             && $profile->subscription_expires_at->isPast();
         if ($expired) $effectivePlan = A::PLAN_FREE;
 
+        // Generate the route map in PHP rather than nesting route() calls inside Blade @json,
+        // whose parser can close on the first nested function call and cause a 500.
+        $merchantRoutes = [
+            'overview' => route('merchant.web.data.overview'),
+            'sector' => route('merchant.web.data.sector'),
+            'sectorProducts' => route('merchant.web.data.sector.products'),
+            'sectorProductsCreate' => route('merchant.web.data.sector.products.create'),
+            'sectorOperations' => route('merchant.web.data.sector.operations'),
+            'plans' => route('merchant.web.data.plans'),
+            'stats' => route('merchant.web.data.stats'),
+            'wallet' => route('merchant.web.data.wallet'),
+            'ledger' => route('merchant.web.data.ledger'),
+            'products' => route('merchant.web.data.products'),
+            'productsCreate' => route('merchant.web.data.products.create'),
+            'branches' => route('merchant.web.data.branches'),
+            'branchesCreate' => route('merchant.web.data.branches.create'),
+            'roles' => route('merchant.web.data.roles'),
+            'rolesCreate' => route('merchant.web.data.roles.create'),
+            'staff' => route('merchant.web.data.staff'),
+            'staffCreate' => route('merchant.web.data.staff.create'),
+            'devices' => route('merchant.web.data.devices'),
+            'deviceActivation' => route('merchant.web.data.devices.activate'),
+            'receipts' => route('merchant.web.data.receipts'),
+            'receiptsSave' => route('merchant.web.data.receipts.save'),
+            'login' => route('merchant.web.login')
+        ];
+
         return view('merchant-web.dashboard', [
+            'merchantRoutes' => $merchantRoutes,
             'storeName' => $merchant?->store_name
                 ?: trim((string) $owner->f_name . ' ' . (string) $owner->l_name),
             'businessType' => A::BUSINESS_TYPE_LABELS[$profile->business_type] ?? 'نشاط تجاري',

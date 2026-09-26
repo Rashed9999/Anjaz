@@ -92,7 +92,9 @@ class MerchantWebPlansSectorTest extends TestCase
         $customer = User::factory()->create(['role' => A::ROLE_USER, 'type' => 2]);
         $this->actingAs($customer, 'merchant_web')
             ->getJson('/merchant/data/plans')->assertForbidden();
-        $this->getJson('/merchant/data/sector')->assertForbidden();
+        // Denying the first request logs the invalid merchant guard out;
+        // the next request is unauthenticated, which must be 401 rather than 403.
+        $this->getJson('/merchant/data/sector')->assertUnauthorized();
     }
 
     public function test_all_built_in_sectors_get_their_own_portal_header(): void
