@@ -206,4 +206,22 @@ class CreditCollectionFlowTest extends TestCase
             'account_id'=>$account->id,'type'=>'payment',
         ]);
     }
+
+    public function test_credit_lookup_returns_only_merchant_owned_account_id_for_pos_collection(): void
+    {
+        $owner=$this->owner();
+        $other=$this->owner();
+        $credit=app(CustomerCreditService::class);
+        $account=$credit->findOrCreateAccount($owner->id,'+967771004411','عميل نقطة البيع');
+        $otherAccount=$credit->findOrCreateAccount($other->id,'+967771004422','عميل تاجر آخر');
+        $credit->recordSale($account,'1100');
+        Passport::actingAs($owner,[],'api');
+        $this->getJson('/api/v1/amial/merchant/credit/lookup?phone='.rawurlencode($account->customer_phone))
+            ->assertOk()->assertJsonPath('meta.found',true)
+            ->assertJsonPath('meta.account_id',$account->id)
+            ->assertJsonPath('meta.current_balance','1100.0000');
+        $this->getJson('/api/v1/amial/merchant/credit/lookup?phone='.rawurlencode($otherAccount->customer_phone))
+            ->assertOk()->assertJsonPath('meta.found',false)
+            ->assertJsonPath('meta.account_id',null);
+    }
 }

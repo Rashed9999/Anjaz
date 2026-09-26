@@ -75,6 +75,7 @@ class CustomerCreditController extends Controller
         if (! $account) {
             return $this->ok([
                 'found' => false,
+                'account_id' => null,
                 'customer_name' => null,
                 'current_balance' => null,
                 'credit_limit' => null,
@@ -89,6 +90,7 @@ class CustomerCreditController extends Controller
 
         return $this->ok([
             'found' => true,
+            'account_id' => $account->id,
             'customer_name' => $account->customer_name,
             'current_balance' => $balance,
             // **وحدٌّ صفرٌ يعني «غير مضبوط» لا «ممنوعٌ من الآجل»** —
