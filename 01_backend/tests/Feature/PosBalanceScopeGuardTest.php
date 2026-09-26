@@ -183,7 +183,7 @@ class PosBalanceScopeGuardTest extends TestCase
      * The legacy merchant ledger route used resolveMerchantPos() and exposed
      * every owner wallet entry to a cashier who knew the endpoint.
      */
-    public function a_pos_employee_cannot_read_owner_wallet_journal(): void
+    public function test_pos_employee_cannot_read_owner_wallet_journal(): void
     {
         $merchant = $this->merchant();
         $cashier = $this->cashierOf($merchant);

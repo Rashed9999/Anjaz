@@ -196,7 +196,8 @@ class MerchantService
         $query = LedgerEntryLine::where('account_id', $wallet->id)
             ->with('journalEntry:id,entry_ulid,source_type,description_ar,posted_at')
             ->when($sourceType !== null, fn ($q) => $q->whereHas('journalEntry',
-                fn ($journal) => $journal->where('source_type', $sourceType)))
+                fn ($journal) => $journal->where('source_type', $sourceType)
+                    ->where('status', 'posted')))
             ->orderByDesc('id');
 
         $total = $query->count();
