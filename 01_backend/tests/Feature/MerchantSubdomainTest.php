@@ -62,6 +62,12 @@ class MerchantSubdomainTest extends TestCase
         $this->get('http://' . self::HOST . '/agent/login')->assertNotFound();
     }
 
+    public function test_public_login_links_directly_to_the_merchant_host(): void
+    {
+        $this->get('http://amialpay.com/login')->assertOk()
+            ->assertSee('http://' . self::HOST . '/merchant/login', false);
+    }
+
     public function test_merchant_host_can_be_disabled_without_changing_legacy_routes(): void
     {
         config(['amial.hosts.merchant' => '']);

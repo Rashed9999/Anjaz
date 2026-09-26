@@ -34,7 +34,7 @@
             <label class="check"><input type="checkbox" name="remember" value="1"> تذكّر تسجيل الدخول على هذا الجهاز</label>
             <button type="submit">الدخول إلى لوحة التاجر ←</button>
         </form>
-        <div class="foot">موظف نقطة البيع؟ استخدم تطبيق أميال باي بحسابك المستقل. <a href="{{ route('site.home') }}">العودة إلى الموقع</a></div>
+        <div class="foot">موظف نقطة البيع؟ استخدم تطبيق أميال باي بحسابك المستقل. <a href="{{ rtrim(config('app.url'), '/') }}">العودة إلى الموقع الرئيسي</a></div>
     </main>
 </body>
 </html>
