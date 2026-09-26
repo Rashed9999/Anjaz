@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/helper/pdf_downloader_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -201,9 +203,9 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
     return Column(children: [
       Row(children: [
         Expanded(child: FilledButton.icon(
-          onPressed: () => _movementDialog('سداد', 'payment'),
+          onPressed: _collectionDialog,
           icon: const Icon(Icons.payments),
-          label: const Text('سداد'),
+          label: const Text('تحصيل دين'),
           style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700),
         )),
         const SizedBox(width: 8),
@@ -356,6 +358,166 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
         const SizedBox(width: 8),
         Icon(icon, color: color, size: 28),
       ]),
+    );
+  }
+
+  /// POS cash or customer-authorized Amial payment, with one retry key.
+  Future<void> _collectionDialog() async {
+    final accountId = widget.customer['id'] as int;
+    final amountCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    final method = 'cash'.obs;
+    final requestKey = const Uuid().v4();
+    Map<String, dynamic>? collection;
+    try {
+      final ok = await Get.dialog<bool>(AlertDialog(
+        title: const Text('تحصيل من حساب الآجل'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('اختر طريقة التحصيل. النقد يدخل صندوق الوردية، '
+                'وأميال ينتظر موافقة العميل ولا يُخصم من هاتف البائع.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: amountCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'المبلغ بالريال اليمني'),
+            ),
+            const SizedBox(height: 12),
+            Obx(() => DropdownButtonFormField<String>(
+              value: method.value,
+              decoration: const InputDecoration(labelText: 'طريقة الدفع'),
+              items: const [
+                DropdownMenuItem(value: 'cash', child: Text('نقداً')),
+                DropdownMenuItem(value: 'amial_pay', child: Text('أميال باي')),
+              ],
+              onChanged: c.isSubmitting.value ? null : (v) {
+                if (v != null) method.value = v;
+              },
+            )),
+            const SizedBox(height: 12),
+            TextField(
+              controller: noteCtrl,
+              maxLength: 255,
+              decoration: const InputDecoration(labelText: 'ملاحظة (اختياري)'),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(result: false),
+              child: const Text('إلغاء')),
+          Obx(() => FilledButton(
+            onPressed: c.isSubmitting.value ? null : () async {
+              final amount = double.tryParse(amountCtrl.text.trim());
+              if (amount == null || amount <= 0) {
+                Get.snackbar('تحقق من المبلغ', 'أدخل مبلغ تحصيل موجباً');
+                return;
+              }
+              final debt = double.tryParse(
+                  '${widget.customer['current_balance'] ?? 0}') ?? 0;
+              if (debt > 0 && amount > debt) {
+                Get.snackbar('المبلغ كبير', 'لا يمكن تحصيل أكثر من الدين');
+                return;
+              }
+              collection = method.value == 'cash'
+                  ? await c.collectCash(accountId, amountCtrl.text.trim(),
+                      requestKey, note: noteCtrl.text.trim())
+                  : await c.requestWallet(accountId, amountCtrl.text.trim(),
+                      requestKey);
+              if (collection != null) {
+                Get.back(result: true);
+              } else {
+                Get.snackbar('تعذّر التحصيل', c.lastError.value,
+                    snackPosition: SnackPosition.BOTTOM);
+              }
+            },
+            child: c.isSubmitting.value
+                ? const SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2,
+                        color: Colors.white))
+                : const Text('متابعة التحصيل'),
+          )),
+        ],
+      ));
+      if (ok == true && collection != null) {
+        _refresh();
+        await _collectionResult(collection!);
+      }
+    } finally {
+      amountCtrl.dispose();
+      noteCtrl.dispose();
+    }
+  }
+
+  Future<void> _collectionResult(Map<String, dynamic> collection) async {
+    if (collection['status'] == 'completed') {
+      await Get.dialog<void>(AlertDialog(
+        title: const Text('تم التحصيل وإصدار السند'),
+        content: Text('رقم السند: ${collection['receipt_number'] ?? 'قيد الإصدار'}'
+            '\nالمتبقي: ${Money.format(double.tryParse('${collection['new_balance']}') ?? 0)}'),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('إغلاق')),
+          FilledButton.icon(
+            onPressed: collection['receipt_id'] == null ? null : () async {
+              await _downloadCollectionReceipt(collection['collection_id'] as int);
+            },
+            icon: const Icon(Icons.picture_as_pdf),
+            label: const Text('طباعة / تحميل السند'),
+          ),
+        ],
+      ));
+      return;
+    }
+    if (collection['needs_review'] == true) {
+      Get.snackbar('يحتاج مراجعة', 'وصل الدفع لكن الدين تغيّر؛ راجع الإدارة.');
+      return;
+    }
+    final url = collection['payment_url']?.toString() ?? '';
+    await Get.dialog<void>(AlertDialog(
+      title: const Text('بانتظار دفع العميل عبر أميال'),
+      content: SingleChildScrollView(child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('رمز الدفع: ${collection['payment_code'] ?? ''}'),
+          const SizedBox(height: 12),
+          if (url.isNotEmpty) QrImageView(data: url, size: 210),
+          const SizedBox(height: 12),
+          const Text('يعرض العميل رمز QR في تطبيق أميال ويوافق على الدفع. '
+              'لا يُخفض الدين قبل إثبات نجاح العملية.'),
+        ],
+      )),
+      actions: [
+        TextButton(onPressed: () => Get.back(), child: const Text('لاحقاً')),
+        Obx(() => FilledButton(
+          onPressed: c.isSubmitting.value ? null : () async {
+            final result = await c.confirmWallet(collection['collection_id'] as int);
+            if (result == null) {
+              Get.snackbar('انتظار الدفع', c.lastError.value,
+                  snackPosition: SnackPosition.BOTTOM);
+              return;
+            }
+            Get.back();
+            _refresh();
+            await _collectionResult(result);
+          },
+          child: c.isSubmitting.value
+              ? const SizedBox(width: 18, height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2,
+                      color: Colors.white))
+              : const Text('التحقق وإصدار السند'),
+        )),
+      ],
+    ));
+  }
+
+  Future<void> _downloadCollectionReceipt(int id) async {
+    final response = await c.repo.receiptPdf(id);
+    final bytes = await _collect(response.bodyBytes);
+    if (response.statusCode != 200 || bytes.isEmpty) {
+      Get.snackbar('تعذّر تحميل السند', 'لم يصل ملف السند من الخادم.');
+      return;
+    }
+    await PdfDownloaderHelper.downloadAndOpenPdf(
+      pdfData: bytes, baseFileName: 'سند-تحصيل-$id',
     );
   }
 
