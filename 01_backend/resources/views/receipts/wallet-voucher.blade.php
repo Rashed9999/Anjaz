@@ -5,9 +5,7 @@
         // AMIAL-CREDIT-SETTLE-TRACE-001 — لا يظهر سداد الآجل بعنوان عام.
         // ReceiptDocumentService يبقيه wallet_voucher (وليس فاتورة بيع جديدة)،
         // والقالب يطبع الاسم القانوني/الوظيفي الدقيق للسند.
-        $documentTitle = ($document['operation_type'] ?? null) === 'debt_payment'
-            ? 'سند سداد دين'
-            : $document['title'];
+        $documentTitle = $document['title'];
     @endphp
     <meta charset="utf-8">
     <title>{{ $documentTitle }} {{ $document['document_number'] }}</title>
