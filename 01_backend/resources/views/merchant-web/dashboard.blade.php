@@ -16,7 +16,11 @@
         .metric,.panel{background:white;border:1px solid #dceae5;border-radius:17px;padding:22px;box-shadow:0 9px 35px #15362e08}.metric small{display:block;color:#60776c}.metric strong{display:block;font-size:24px;margin-top:11px;word-break:break-word}
         .panel{margin-bottom:15px}.panel h2{margin:0 0 15px;font-size:18px}.buttons{display:flex;flex-wrap:wrap;gap:10px}
         button.action{background:#167550;color:white;border:0;border-radius:10px;padding:12px 18px;cursor:pointer;font-weight:700}
-        button.secondary{background:#eaf4ef;color:#136447}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;text-align:right;min-width:570px}th,td{padding:13px;border-bottom:1px solid #e7eeeb;font-size:13px}th{color:#5c7367;background:#f7faf9}tr:last-child td{border:0}
+        button.secondary{background:#eaf4ef;color:#136447}
+        .link-action{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;background:#167550;color:white;border:0;border-radius:10px;padding:12px 18px;min-height:44px;font-weight:700}
+        .warning-note{background:#fff7e8;border-right-color:#ce922b;color:#81520c}.danger-note{background:#fff0ed;border-right-color:#bb4c35;color:#832f23}
+        .filters{display:flex;align-items:end;flex-wrap:wrap;gap:12px}.filters label{flex:1 1 180px}.buttons{margin-top:12px}
+        .table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;text-align:right;min-width:570px}th,td{padding:13px;border-bottom:1px solid #e7eeeb;font-size:13px}th{color:#5c7367;background:#f7faf9}tr:last-child td{border:0}
         form.editor{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end}
         label.field{font-size:12px;color:#3a6254;display:flex;flex-direction:column;gap:7px}
         .field input,.field select{padding:12px;border:1px solid #cbdcd5;border-radius:9px;min-height:44px;font:14px Tahoma;width:100%}
@@ -67,6 +71,7 @@
         <div class="store"><strong>{{ $storeName }}</strong><small>{{ $businessType }} · {{ $plan }}</small></div>
         <button class="nav active" data-tab="overview">◈ نظرة عامة</button>
         <button class="nav" data-tab="wallet">◉ المحفظة وكشف الحساب</button>
+        <button class="nav" data-tab="debts">◫ الديون والدفع بالآجل</button>
         <button class="nav" data-tab="sector">⌁ تشغيل قطاع {{ $businessType }}</button>
         <button class="nav" data-tab="products">▤ المنتجات والمخزون</button>
         <button class="nav" data-tab="branches">⌂ الفروع</button>
@@ -95,7 +100,7 @@
   const csrf = @json(csrf_token());
   const actualSector = @json($businessTypeCode);
   const actualSectorName = @json($businessType);
-  const titles={overview:'نظرة عامة',sector:'تشغيل قطاع '+actualSectorName,wallet:'المحفظة وكشف الحساب',products:'المنتجات والمخزون',branches:'الفروع',staff:'الموظفون والصلاحيات',devices:'أجهزة نقاط البيع',reports:'التقارير',settings:'الهوية والفواتير',plans:'باقتي ومميزاتي'};
+  const titles={overview:'نظرة عامة',sector:'تشغيل قطاع '+actualSectorName,wallet:'المحفظة وكشف الحساب',debts:'الديون والدفع بالآجل',products:'المنتجات والمخزون',branches:'الفروع',staff:'الموظفون والصلاحيات',devices:'أجهزة نقاط البيع',reports:'التقارير',settings:'الهوية والفواتير',plans:'باقتي ومميزاتي'};
   let active='overview';const content=document.getElementById('content'),notice=document.getElementById('message');
   function node(tag,text,className){const e=document.createElement(tag);if(text!==undefined&&text!==null)e.textContent=String(text);if(className)e.className=className;return e}
   function box(title){const p=node('div',null,'panel');p.append(node('h2',title));content.append(p);return p}
@@ -106,9 +111,129 @@
   function table(p,cols,rows){const wrap=node('div',null,'table-wrap'),t=node('table'),thead=node('thead'),h=node('tr'),body=node('tbody');cols.forEach(x=>h.append(node('th',x[0])));thead.append(h);t.append(thead);(rows||[]).forEach(row=>{const tr=node('tr');cols.forEach(c=>tr.append(node('td',c[1](row))));body.append(tr)});t.append(body);wrap.append(t);wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label','جدول قابل للتمرير أفقياً');p.append(node('p','اسحب الجدول أفقياً لمشاهدة جميع الأعمدة','table-help'),wrap);if(!rows||rows.length===0)p.append(node('p','لا توجد سجلات لهذه المنشأة حاليًا.','muted'))}
   function message(s){notice.textContent=s;notice.style.display='block';setTimeout(()=>notice.style.display='none',4800)}
   async function api(key,body,url){const init={credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-TOKEN':csrf}};if(body!==undefined){init.method='POST';init.headers['Content-Type']='application/json';init.headers['Idempotency-Key']='mw-'+Date.now()+'-'+Math.random().toString(36).slice(2);init.body=JSON.stringify(body)}const res=await fetch(url||routes[key],init);if(res.status===401){window.location.href=routes.login;throw Error('انتهت الجلسة')}const json=await res.json();if(!res.ok||json.success===false)throw Error(json.message||'لم ينجح تحميل البيانات');return json.meta||{}}
-  function form(p,fields,button,submit){const f=node('form',null,'editor');fields.forEach(([key,label,type,options])=>{const l=node('label',label,'field');let inp;if(options){inp=node('select');options.forEach(o=>{const op=node('option',o.label);op.value=o.value;inp.append(op)})}else{inp=node('input');inp.type=type||'text';if(type==='number'){inp.step='any';inp.min='0'}if(type==='password')inp.autocomplete='new-password'}inp.name=key;inp.required=['name','price','trade_name','sale_price','base_price','price_per_liter','display_name','employee_code','password'].includes(key);l.append(inp);f.append(l)});const btn=node('button',button,'action');btn.type='submit';f.append(btn);f.addEventListener('submit',async ev=>{ev.preventDefault();btn.disabled=true;try{const data=Object.fromEntries(new FormData(f).entries());Object.keys(data).forEach(k=>{if(data[k]==='')delete data[k]});const result=await submit(data);if(result.activation_code){f.replaceChildren();const code=node('strong',result.activation_code);code.style.fontSize='29px';code.style.letterSpacing='5px';const secret=node('div',null,'note');secret.append(node('p','رمز التفعيل (صالح لمرة واحدة، حتى '+result.expires_at+')'),code);const copy=node('button','نسخ الرمز','action secondary');copy.type='button';copy.addEventListener('click',()=>navigator.clipboard.writeText(result.activation_code).then(()=>message('تم نسخ الرمز')));secret.append(copy);p.append(secret);message('تم إنشاء رمز التفعيل؛ انسخه قبل مغادرة الصفحة')}else{message(result.message||'تم الحفظ');await load(active)}}catch(e){message(e.message)}finally{btn.disabled=false}});p.append(f)}
+  function form(p,fields,button,submit){const f=node('form',null,'editor');fields.forEach(([key,label,type,options])=>{const l=node('label',label,'field');let inp;if(options){inp=node('select');options.forEach(o=>{const op=node('option',o.label);op.value=o.value;inp.append(op)})}else{inp=node('input');inp.type=type||'text';if(type==='number'){inp.step='any';inp.min='0'}if(type==='password')inp.autocomplete='new-password'}inp.name=key;inp.required=['phone','name','price','trade_name','sale_price','base_price','price_per_liter','display_name','employee_code','password'].includes(key);l.append(inp);f.append(l)});const btn=node('button',button,'action');btn.type='submit';f.append(btn);f.addEventListener('submit',async ev=>{ev.preventDefault();btn.disabled=true;try{const data=Object.fromEntries(new FormData(f).entries());Object.keys(data).forEach(k=>{if(data[k]==='')delete data[k]});const result=await submit(data);if(result.activation_code){f.replaceChildren();const code=node('strong',result.activation_code);code.style.fontSize='29px';code.style.letterSpacing='5px';const secret=node('div',null,'note');secret.append(node('p','رمز التفعيل (صالح لمرة واحدة، حتى '+result.expires_at+')'),code);const copy=node('button','نسخ الرمز','action secondary');copy.type='button';copy.addEventListener('click',()=>navigator.clipboard.writeText(result.activation_code).then(()=>message('تم نسخ الرمز')));secret.append(copy);p.append(secret);message('تم إنشاء رمز التفعيل؛ انسخه قبل مغادرة الصفحة')}else{message(result.message||'تم الحفظ');await load(active)}}catch(e){message(e.message)}finally{btn.disabled=false}});p.append(f)}
   async function overview(){const [o,s]=await Promise.all([api('overview'),api('stats')]);const c=o.counts||{};grid([['مبيعات اليوم',money(s.today_sales)],['رصيد محفظة المنشأة',money(s.current_balance)],['المرتجعات اليوم',money(s.today_refunds)],['الموظفون النشطون',c.active_employees],['أجهزة البيع المتصلة',c.active_device_sessions],['الورديات المفتوحة',c.open_shifts]]);const p=box('حالة التشغيل');hint(p,'تُقيّد مدفوعات أميال لصالح محفظة المنشأة، وتُسجّل العمليات مع الموظف والفرع والجهاز. المبيعات النقدية تبقى في درج النقدية حتى تسويتها.');table(p,[['آخر الورديات',r=>r.opened_by_name||'—'],['الفرع',r=>r.branch_name||'—'],['الفتح',r=>r.opened_at||'—']],o.open_shifts||[])}
-  async function wallet(){const [w,l]=await Promise.all([api('wallet'),api('ledger')]);const r=w.report||{},v=r.wallet||{};grid([['رصيد المحفظة',money(v.balance)],['وارد المحفظة خلال الفترة',money(v.received)],['صادر المحفظة خلال الفترة',money(v.paid_out)],['حركة المحفظة الصافية',money(v.net_movement)]]);const p=box('كشف قيود المحفظة');hint(p,'مصدر الأرقام هو الدفتر المالي، وليس مجموع المبيعات النقدية أو ديون العملاء.');table(p,[['التاريخ',x=>x.date],['البيان',x=>x.description||x.source_type],['الاتجاه',x=>x.direction==='credit'?'وارد':'صادر'],['المبلغ',x=>money(x.amount)],['المرجع',x=>x.reference]],l.entries||[])}
+  async function wallet(){
+    const [w,l,verification]=await Promise.all([
+      api('wallet'),api('ledger'),api('walletVerification').catch(e=>({unavailable:e.message}))
+    ]);
+    const r=w.report||{},v=r.wallet||{};
+    grid([['رصيد محفظة المنشأة',money(v.balance)],['وارد المحفظة خلال الفترة',money(v.received)],['صادر المحفظة خلال الفترة',money(v.paid_out)],['حركة المحفظة الصافية',money(v.net_movement)]]);
+    const verify=box('مطابقة المحفظة مع الدفتر المالي');
+    hint(verify,'محفظة واحدة باسم مالك المنشأة لجميع مدفوعات أميال. مبيعات النقد تبقى في الدرج، ومبيعات الآجل في الذمم حتى التحصيل.');
+    if(verification.unavailable){
+      const notice=node('div','تعذّر التحقق من مطابقة الرصيد: '+verification.unavailable,'note warning-note');verify.append(notice);
+    }else{
+      const truth=verification.verification||{},state=truth.state;
+      const label=state==='reconciled'?'الرصيدان متطابقان':state==='mismatch'?'فرق مالي يحتاج مراجعة الإدارة':'المطابقة غير متاحة';
+      const notice=node('div',label+(truth.reason?' — '+truth.reason:''),'note'+(state==='mismatch'?' danger-note':state==='reconciled'?'':' warning-note'));
+      notice.setAttribute('role','status');verify.append(notice);
+      const values=node('div',null,'grid');
+      values.append(metric('الرصيد التشغيلي',money(truth.operational_balance)),metric('الرصيد في الدفتر',money(truth.ledger_balance)),metric('الفرق',money(truth.gap)));
+      verify.append(values);
+      if(truth.last_entry_ulid)hint(verify,'آخر قيد مالي: '+truth.last_entry_ulid);
+      if(state==='mismatch')hint(verify,'لا يتم تصحيح الرصيد من هذه الشاشة. راجع الإدارة وكشف القيود للتحقيق في مصدر الفرق.');
+    }
+    const p=box('كشف قيود المحفظة الموحدة');
+    hint(p,'مصدر هذه العمليات هو الدفتر نفسه الذي تقرؤه الإدارة والتطبيق. التحويلات الشخصية والأرصدة الافتتاحية ليست مبيعات.');
+    table(p,[['التاريخ',x=>x.date],['البيان',x=>x.description||x.source_type],['النوع',x=>x.source_type||'—'],['الاتجاه',x=>x.direction==='credit'?'وارد':'صادر'],['المبلغ',x=>money(x.amount)],['الرصيد بعد',x=>money(x.balance_after)],['المرجع',x=>x.reference]],l.entries||[]);
+    const pagination=l.pagination||{};
+    if(pagination.last_page>1){
+      const controls=node('div',null,'buttons');
+      const back=node('button','السابق','action secondary'),forward=node('button','التالي','action secondary');
+      back.disabled=(pagination.current_page||1)<=1;forward.disabled=(pagination.current_page||1)>=pagination.last_page;
+      const loadLedger=async page=>{
+        const url=new URL(routes.ledger,window.location.href);url.searchParams.set('page',String(page));
+        const next=await api('ledger',undefined,url.toString());
+        p.replaceChildren(node('h2','كشف قيود المحفظة الموحدة'));
+        table(p,[['التاريخ',x=>x.date],['البيان',x=>x.description||x.source_type],['النوع',x=>x.source_type||'—'],['الاتجاه',x=>x.direction==='credit'?'وارد':'صادر'],['المبلغ',x=>money(x.amount)],['الرصيد بعد',x=>money(x.balance_after)],['المرجع',x=>x.reference]],next.entries||[]);
+        const info=node('p','الصفحة '+next.pagination.current_page+' من '+next.pagination.last_page,'muted');p.append(info);
+        if(next.pagination.current_page>1){const b=node('button','السابق','action secondary');b.onclick=()=>loadLedger(next.pagination.current_page-1).catch(e=>message(e.message));p.append(b)}
+        if(next.pagination.current_page<next.pagination.last_page){const b=node('button','التالي','action secondary');b.onclick=()=>loadLedger(next.pagination.current_page+1).catch(e=>message(e.message));p.append(b)}
+      };
+      back.onclick=()=>loadLedger(pagination.current_page-1).catch(e=>message(e.message));
+      forward.onclick=()=>loadLedger(pagination.current_page+1).catch(e=>message(e.message));
+      controls.append(back,node('span','الصفحة '+pagination.current_page+' من '+pagination.last_page,'muted'),forward);p.append(controls);
+    }
+  }
+  function debtUrl(key,id){return routes[key].replace('__ID__',encodeURIComponent(String(id)))}
+  async function debtDetails(id){
+    const detail=box('كشف حساب العميل');
+    detail.id='debt-customer-detail';
+    hint(detail,'جارٍ تحميل سجل العميل والفواتير المفتوحة…');
+    try{
+      const [statement,breakdown]=await Promise.all([
+        api('debtStatement',undefined,debtUrl('debtStatement',id)),
+        api('debtInvoices',undefined,debtUrl('debtInvoices',id))
+      ]);
+      detail.replaceChildren(node('h2','كشف حساب: '+(statement.account?.customer_name||'العميل')));
+      const figures=node('div',null,'grid');
+      figures.append(metric('الدين الحالي',money(statement.account?.current_balance)),metric('المتبقي في الفواتير',money(breakdown.invoices_total)),metric('رصيد خارج الفواتير',money(breakdown.unlinked_balance)));
+      detail.append(figures);
+      if(breakdown.unlinked_note_ar){detail.append(node('p',breakdown.unlinked_note_ar,'note warning-note'))}
+      const actions=node('div',null,'buttons');
+      const pdf=node('a','تنزيل كشف الحساب PDF','link-action');
+      pdf.href=debtUrl('debtStatementPdf',id);pdf.target='_blank';pdf.rel='noopener noreferrer';
+      actions.append(pdf);
+      const back=node('button','العودة لقائمة العملاء','action secondary');
+      back.type='button';back.onclick=()=>{detail.remove();document.getElementById('debt-customers-panel')?.scrollIntoView({behavior:'smooth'})};
+      actions.append(back);detail.append(actions);
+      detail.append(node('h3','الفواتير غير المسددة'));
+      table(detail,[['الفاتورة',x=>x.reference_number||x.movement_ulid],['تاريخ الإصدار',x=>x.issued_at||'—'],['الاستحقاق',x=>x.due_date||'غير محدد'],['القيمة',x=>money(x.original_amount)],['المتبقي',x=>money(x.remaining)]],breakdown.invoices||[]);
+      detail.append(node('h3','جميع الحركات المسجلة'));
+      table(detail,[['التاريخ',x=>x.created_at],['النوع',x=>x.type==='sale'?'بيع آجل':x.type==='payment'?'سداد':x.type==='return'?'مرتجع':'تعديل'],['المبلغ',x=>money(x.amount)],['الرصيد بعد',x=>money(x.balance_after)],['المرجع',x=>x.reference_number||x.reference_id||'—']],statement.movements||[]);
+      detail.scrollIntoView({behavior:'smooth',block:'start'});
+    }catch(e){detail.replaceChildren(node('div','تعذّر تحميل كشف العميل: '+e.message,'error'))}
+  }
+  async function debts(search='',filter='',page=1){
+    const [summary,customers]=await Promise.all([
+      api('debts'),(async()=>{
+        const url=new URL(routes.debtCustomers,window.location.href);
+        if(search)url.searchParams.set('search',search);
+        if(filter)url.searchParams.set('filter',filter);
+        url.searchParams.set('page',String(page));
+        return api('debtCustomers',undefined,url.toString());
+      })()
+    ]);
+    grid([['إجمالي الديون المستحقة',money(summary.total_due)],['العملاء المدينون',summary.debtors_count],['المتجاوزون للحد',summary.over_limit_count]]);
+    const p=box('حسابات العملاء الآجلة');p.id='debt-customers-panel';
+    hint(p,'هذه بيانات دفتر الآجل نفسه في تطبيق العميل ونقاط البيع. البيع بالآجل لا يزيد رصيد المحفظة حتى السداد.');
+    const controls=node('form',null,'filters');
+    const searchLabel=node('label','بحث بالاسم أو الهاتف','field'),searchInput=node('input');
+    searchInput.name='search';searchInput.type='search';searchInput.value=search;searchInput.placeholder='اسم العميل أو رقم الهاتف';searchLabel.append(searchInput);
+    const filterLabel=node('label','الحالة','field'),select=node('select');
+    for(const [value,label] of [['','جميع العملاء'],['debtors','لديهم ديون'],['over_limit','تجاوزوا الحد'],['paid_up','مسدد بالكامل']]){
+      const option=node('option',label);option.value=value;select.append(option);
+    }
+    select.value=filter;filterLabel.append(select);
+    const submit=node('button','بحث / تصفية','action');submit.type='submit';
+    controls.append(searchLabel,filterLabel,submit);
+    controls.addEventListener('submit',async e=>{e.preventDefault();content.replaceChildren();try{await debts(searchInput.value.trim(),select.value,1)}catch(err){content.replaceChildren(node('div',err.message,'error'))}});
+    p.append(controls);
+    const rows=customers.customers||[];
+    table(p,[['العميل',x=>x.customer_name],['رقم الهاتف',x=>x.customer_phone],['الدين المستحق',x=>money(x.current_balance)],['حد الآجل',x=>money(x.credit_limit)],['الحالة',x=>x.is_active?'نشط':'موقوف']],rows);
+    const buttons=node('div',null,'buttons');
+    rows.forEach(customer=>{
+      const button=node('button','كشف حساب '+customer.customer_name,'action secondary');
+      button.type='button';
+      button.onclick=()=>{document.getElementById('debt-customer-detail')?.remove();debtDetails(customer.id)};
+      buttons.append(button);
+    });
+    p.append(buttons);
+    const pg=customers.pagination||{};
+    if(pg.last_page>1){
+      const pager=node('div',null,'buttons');
+      for(const [label,n,enabled] of [['السابق',pg.current_page-1,pg.current_page>1],['التالي',pg.current_page+1,pg.current_page<pg.last_page]]){
+        const button=node('button',label,'action secondary');button.disabled=!enabled;
+        button.type='button';button.onclick=()=>{content.replaceChildren();debts(search,filter,n).catch(e=>content.replaceChildren(node('div',e.message,'error')))};
+        pager.append(button);
+      }
+      pager.append(node('span','الصفحة '+pg.current_page+' من '+pg.last_page,'muted'));p.append(pager);
+    }
+    const create=box('تسجيل عميل في دفتر الآجل');
+    hint(create,'هذه العملية تنشئ حساب العميل أو تعدّل حدّه؛ لا تضيف ديناً ولا تحرك المحفظة. يسجل موظف نقطة البيع البيعة الآجلة من التطبيق.');
+    form(create,[['phone','رقم هاتف العميل','tel'],['name','اسم العميل'],['credit_limit','الحد الائتماني (اختياري)','number']],'حفظ حساب العميل',d=>api('debtCustomersSave',d));
+  }
   async function products(){
     const data=(await api('sectorProducts')).result||{};
     const p=box('أصناف '+actualSectorName);
@@ -237,7 +362,7 @@
   async function devices(){const data=await api('devices');const p=box('الأجهزة المرخصة');table(p,[['الجهاز',x=>x.display_name],['الفرع',x=>x.branch_name||'—'],['الحالة',x=>x.is_active?'نشط':'غير نشط'],['الجلسات',x=>x.live_sessions??0]],data.devices||[]);const create=box('تفعيل جهاز بيع جديد');hint(create,'ينشئ مالك المنشأة رمزًا مؤقتًا صالحًا لمرة واحدة. أدخله في تطبيق نقطة البيع على الجهاز الجديد.');form(create,[['display_name','اسم الجهاز']], 'إنشاء رمز التفعيل',async d=>{return api('deviceActivation',d)})}
   async function reports(){const r=(await api('wallet')).report||{};const sales=r.sales||{},methods=sales.by_payment_method||{};grid([['إجمالي المبيعات',money(sales.gross)],['عدد المبيعات',sales.count],['نقدًا',money(methods.cash)],['عبر أميال',money(methods.amial_pay)],['آجل',money(methods.credit)]]);const p=box('الحركة اليومية');hint(p,'التقرير يفصل المبيعات عن التحصيلات وعن حركة المحفظة؛ لا تُحسب التحويلات الشخصية مبيعات.');table(p,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[])}
   async function settings(){const data=await api('receipts'),s=data.settings||{};const p=box('هوية فاتورة منشأتك');form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});hint(p,'إعدادات الفاتورة موحدة بين الويب وكل نقاط البيع. صلاحية طباعة السند متاحة بحسب خصائص القطاع.')}
-  const pages={overview,sector,wallet,products,branches,staff,devices,reports,settings,plans};
+  const pages={overview,sector,wallet,debts,products,branches,staff,devices,reports,settings,plans};
   async function load(tab){active=tab;document.getElementById('page-title').textContent=titles[tab];document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
   const sidebar=document.getElementById('merchant-side');
   const menuToggle=document.getElementById('menu-toggle');

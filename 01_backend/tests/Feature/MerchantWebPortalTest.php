@@ -64,6 +64,43 @@ class MerchantWebPortalTest extends TestCase
             ->assertSee('جدول قابل للتمرير أفقياً', false);
     }
 
+    public function test_wallet_and_credit_pages_use_owner_only_shared_data_routes(): void
+    {
+        $owner = $this->owner();
+        $this->actingAs($owner, 'merchant_web')
+            ->get('/merchant')
+            ->assertOk()
+            ->assertSee('data-tab="debts"', false)
+            ->assertSee('walletVerification')
+            ->assertSee('debtInvoices')
+            ->assertSee('debtStatementPdf');
+
+        $this->getJson('/merchant/data/wallet-verification')
+            ->assertOk()->assertJsonStructure(['meta' => ['verification' => [
+                'state', 'operational_balance', 'ledger_balance', 'gap',
+            ]]]);
+
+        $this->getJson('/merchant/data/debts')->assertOk()
+            ->assertJsonStructure(['meta' => ['total_due', 'debtors_count']]);
+
+        $this->getJson('/merchant/data/debts/customers')->assertOk()
+            ->assertJsonStructure(['meta' => ['customers', 'pagination']]);
+    }
+
+    public function test_customer_and_pos_cannot_read_merchant_credit_book_or_wallet_truth(): void
+    {
+        $this->owner();
+        foreach ([
+            ['type' => CUSTOMER_TYPE, 'role' => A::ROLE_CUSTOMER],
+            ['type' => POS_TYPE, 'role' => A::ROLE_POS],
+        ] as $identity) {
+            $user = User::factory()->create($identity);
+            $this->actingAs($user, 'merchant_web')
+                ->getJson('/merchant/data/wallet-verification')->assertForbidden();
+            $this->getJson('/merchant/data/debts')->assertForbidden();
+        }
+    }
+
     public function test_platform_session_does_not_grant_merchant_session(): void
     {
         $owner = $this->owner();
