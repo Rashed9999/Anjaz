@@ -83,6 +83,40 @@ class CustomerCreditController extends GetxController implements GetxService {
   }
 
   // ---- العمليات ----
+  final Rx<Map<String, dynamic>?> lastCollection = Rx<Map<String, dynamic>?>(null);
+
+  /// Caller supplies the SAME key on retries; the server never collects twice.
+  Future<Map<String, dynamic>?> collectCash(
+      int id, String amount, String key, {String? note}) =>
+      _collect(() => repo.collectCash(id, amount, key, note: note));
+
+  Future<Map<String, dynamic>?> requestWallet(
+      int id, String amount, String key) =>
+      _collect(() => repo.requestWallet(id, amount, key));
+
+  Future<Map<String, dynamic>?> confirmWallet(int collectionId) =>
+      _collect(() => repo.confirmWallet(collectionId));
+
+  Future<Map<String, dynamic>?> _collect(Future<Response> Function() action) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final result = await action();
+      if (_ok(result)) {
+        final data = Map<String, dynamic>.from((result.body['meta'] ?? {}) as Map);
+        lastCollection.value = data;
+        return data;
+      }
+      lastError.value = _msg(result) ?? 'تعذّر تنفيذ التحصيل';
+      return null;
+    } catch (_) {
+      lastError.value = 'خطأ في الاتصال؛ أعد المحاولة بنفس الطلب لتجنب التحصيل المكرر';
+      return null;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
   Future<bool> recordPayment(int customerId, String amount, {String? note}) async {
     return _runMovement(() => repo.recordPayment(customerId, amount, note: note));
   }
