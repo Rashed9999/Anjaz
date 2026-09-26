@@ -65,6 +65,8 @@ class MerchantPaymentReferenceService
             || PharmacySale::where('paid_transaction_id', $transactionId)->exists()
             || WholesaleInvoice::where('paid_transaction_id', $transactionId)->exists()
             || WholesaleCollection::where('paid_transaction_id', $transactionId)->exists()
-            || SplitBillParticipant::where('paid_transaction_id', $transactionId)->exists();
+            || SplitBillParticipant::where('paid_transaction_id', $transactionId)->exists()
+            || \App\Models\CreditCollection::where('paid_transaction_id', $transactionId)
+                ->where('status', 'completed')->exists();
     }
 }
