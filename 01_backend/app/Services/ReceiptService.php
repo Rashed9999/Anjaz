@@ -210,7 +210,7 @@ class ReceiptService
 
         // Dispatch PDF generation async — لا يبطئ الاستجابة
         GeneratePdfReceiptJob::dispatch($receipt->id)
-            ->onQueue('receipts');
+            ->onQueue('receipts')->afterCommit();
 
         return $receipt;
     }
@@ -348,6 +348,7 @@ class ReceiptService
             'pos_payment' => 'دفع نقطة بيع',
             'qr_payment' => 'دفع عبر رمز QR',
             'refund' => 'استرجاع',
+            'debt_payment' => 'تحصيل أو سداد دين آجل',
             default => 'عملية مالية',
         };
     }
