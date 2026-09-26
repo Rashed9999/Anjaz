@@ -7,6 +7,7 @@ use App\Models\EMoney;
 use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\Receipt;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use App\Services\Merchant\MerchantPermissionService;
 use App\Support\Merchant\MerchantPermissions as P;
@@ -226,5 +227,33 @@ class CreditCollectionFlowTest extends TestCase
         $this->getJson('/api/v1/amial/merchant/credit/lookup?phone='.rawurlencode($otherAccount->customer_phone))
             ->assertOk()->assertJsonPath('meta.found',false)
             ->assertJsonPath('meta.account_id',null);
+    }
+
+    public function test_second_live_qr_request_is_blocked_until_first_expires(): void
+    {
+        $owner=$this->owner();
+        $payer=User::factory()->create([
+            'type'=>2,'phone'=>'+967771009912','is_active'=>1,'zone_code'=>'SOUTH',
+        ]);
+        $credit=app(CustomerCreditService::class);
+        $account=$credit->findOrCreateAccount($owner->id,$payer->phone,'عميل طلبين');
+        $credit->recordSale($account,'1200');
+        $svc=app(CreditWalletCollectionService::class);
+        $first=$svc->request($owner,$owner,null,$account,'400','duplicate-qr-first-key');
+        try {
+            $svc->request($owner,$owner,null,$account,'400','duplicate-qr-second-key');
+            $this->fail('A second active QR could double-charge the same customer');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('معلّق',$e->getMessage());
+        }
+        $this->assertSame(1,CreditCollection::where('account_id',$account->id)->count());
+        $this->assertSame('1200.0000',(string)$account->fresh()->current_balance);
+        PaymentRequest::whereKey($first->payment_request_id)
+            ->update(['expires_at'=>now()->subMinute()]);
+        $next=$svc->request($owner,$owner,null,$account,'300','duplicate-qr-after-expiry');
+        $this->assertNotSame($first->id,$next->id);
+        $this->assertSame('expired',$first->fresh()->status);
+        $this->assertSame('pending',$next->status);
+        $this->assertSame('1200.0000',(string)$account->fresh()->current_balance);
     }
 }

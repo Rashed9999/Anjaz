@@ -42,6 +42,25 @@ class CreditWalletCollectionService
                     throw new InvalidArgumentException('مفتاح المحاولة مستخدم لتحصيل آخر');
                 return $old;
             }
+            // Account row is locked: two cashiers cannot issue overlapping
+            // active QR requests for the same debt while a payer may pay both.
+            // A paid request must be settled/reviewed before a second QR.
+            $outstanding=CreditCollection::where('merchant_user_id',$merchant->id)
+                ->where('account_id',$a->id)->where('payment_method','amial_pay')
+                ->where('status','pending')->lockForUpdate()->get();
+            foreach ($outstanding as $previous) {
+                $previousRequest=$previous->payment_request_id
+                    ? PaymentRequest::find($previous->payment_request_id) : null;
+                if (!$previousRequest || $previousRequest->status==='paid') {
+                    throw new RuntimeException('يوجد تحصيل أميال مؤكد أو غير محسوم؛ أتمّ تسويته قبل إصدار طلب آخر');
+                }
+                if ($previousRequest->isActive()) {
+                    throw new RuntimeException('يوجد طلب أميال معلّق لهذا الدين؛ استأنف الطلب الحالي بدلاً من تكراره');
+                }
+                // Cancelled, declined or time-expired requests cannot move
+                // money; retire only their collection shell, not the ledger.
+                $previous->update(['status'=>'expired']);
+            }
             if (MoneyService::compare($amount,(string)$a->current_balance)>0)
                 throw new RuntimeException('المبلغ أكبر من الدين الحالي');
             $payer=$a->customer_user_id?User::find($a->customer_user_id):null;
