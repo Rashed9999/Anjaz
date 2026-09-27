@@ -3,6 +3,10 @@
 namespace App\Services;
 
 use App\Models\MerchantProduct;
+use App\Models\Retail\MerchantCategory;
+use App\Models\Retail\MerchantBrand;
+use App\Models\Retail\MerchantUnit;
+use DomainException;
 use App\Services\MerchantProductBarcodeService;
 use App\Models\MerchantSale;
 use App\Models\User;
@@ -31,6 +35,7 @@ class CashierService
     public function addProduct(User $merchant, array $data): MerchantProduct
     {
         return DB::transaction(function () use ($merchant, $data) {
+            $this->assertMerchantProductFields($merchant, $data);
             $barcode = trim((string) ($data['barcode'] ?? ''));
             $product = MerchantProduct::create([
                 'merchant_user_id' => $merchant->id,
@@ -42,13 +47,21 @@ class CashierService
                 'quantity' => (string) ($data['quantity'] ?? 0),
                 'production_date' => $data['production_date'] ?? null,
                 'expiry_date' => $data['expiry_date'] ?? null,
-                'category' => $data['category'] ?? null,
+                'category' => !empty($data['category_id'])
+                    ? MerchantCategory::find($data['category_id'])->name : ($data['category'] ?? null),
+                'category_id' => $data['category_id'] ?? null,
+                'brand_id' => $data['brand_id'] ?? null,
+                'unit_id' => $data['unit_id'] ?? null,
+                'sku' => $data['sku'] ?? null,
+                'reorder_level' => $data['reorder_level'] ?? 0,
+                'track_stock' => $data['track_stock'] ?? true,
                 'barcode' => null,
                 'is_active' => true,
             ]);
             if ($barcode !== '') {
                 app(MerchantProductBarcodeService::class)->ensurePrimary($merchant, $product, $barcode);
             }
+            app(\App\Services\Retail\ProductCatalogService::class)->ensureSku($product);
             return $product->fresh()->load('barcodes');
         }, 3);
     }
@@ -58,6 +71,7 @@ class CashierService
         return DB::transaction(function () use ($merchant, $productId, $data) {
             $product = MerchantProduct::where('id', $productId)
                 ->where('merchant_user_id', $merchant->id)->lockForUpdate()->firstOrFail();
+            $this->assertMerchantProductFields($merchant, $data, $productId);
             $product->fill([
                 'name' => $data['name'] ?? $product->name,
                 'price' => isset($data['price']) ? MoneyService::normalize((string) $data['price']) : $product->price,
@@ -68,7 +82,15 @@ class CashierService
                 'quantity' => $data['quantity'] ?? $product->quantity,
                 'production_date' => $data['production_date'] ?? $product->production_date,
                 'expiry_date' => $data['expiry_date'] ?? $product->expiry_date,
-                'category' => $data['category'] ?? $product->category,
+                'category' => !empty($data['category_id'])
+                    ? MerchantCategory::find($data['category_id'])->name
+                    : ($data['category'] ?? $product->category),
+                'category_id' => $data['category_id'] ?? $product->category_id,
+                'brand_id' => $data['brand_id'] ?? $product->brand_id,
+                'unit_id' => $data['unit_id'] ?? $product->unit_id,
+                'sku' => $data['sku'] ?? $product->sku,
+                'reorder_level' => $data['reorder_level'] ?? $product->reorder_level,
+                'track_stock' => $data['track_stock'] ?? $product->track_stock,
                 'is_active' => $data['is_active'] ?? $product->is_active,
             ]);
             $product->save();
@@ -77,6 +99,24 @@ class CashierService
             }
             return $product->fresh()->load('barcodes');
         }, 3);
+    }
+
+    /** Validate ownership in the service, so app, web and catalogue adoption agree. */
+    private function assertMerchantProductFields(User $owner, array $data, ?int $exceptId = null): void
+    {
+        foreach (['category_id' => MerchantCategory::class, 'brand_id' => MerchantBrand::class,
+                  'unit_id' => MerchantUnit::class] as $key => $model) {
+            if (empty($data[$key])) continue;
+            if (!$model::where('merchant_user_id', $owner->id)->whereKey((int) $data[$key])->exists()) {
+                throw new DomainException('التصنيف أو العلامة أو الوحدة لا يتبع منشأتك');
+            }
+        }
+        $sku = trim((string) ($data['sku'] ?? ''));
+        if ($sku !== '') {
+            $query = MerchantProduct::where('merchant_user_id', $owner->id)->where('sku', $sku);
+            if ($exceptId !== null) $query->where('id', '!=', $exceptId);
+            if ($query->exists()) throw new DomainException('رمز SKU مستخدم بالفعل في منشأتك');
+        }
     }
 
     /**

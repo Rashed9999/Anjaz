@@ -30,6 +30,17 @@ Route::middleware('merchant.web')->group(function () {
         Route::get('/plans', [Plans::class, 'show'])->name('plans');
         Route::get('/sector', [Sector::class, 'overview'])->name('sector');
         Route::get('/sector/products', [Sector::class, 'products'])->name('sector.products');
+        Route::get('/sector/products/lookup', [Sector::class, 'lookupBarcode'])
+            ->middleware('throttle:120,1')->name('sector.products.lookup');
+        Route::get('/sector/catalog/lookup', [Sector::class, 'catalogueLookup'])
+            ->middleware('throttle:60,1')->name('sector.catalog.lookup');
+        Route::get('/sector/catalog/options', [Sector::class, 'catalogueOptions'])->name('sector.catalog.options');
+        Route::post('/sector/catalog/{kind}', [Sector::class, 'addCatalogueOption'])
+            ->where('kind', 'categories|brands|units')->middleware('throttle:30,1')->name('sector.catalog.add');
+        Route::put('/sector/products/{id}', [Sector::class, 'updateProduct'])
+            ->whereNumber('id')->middleware('throttle:30,1')->name('sector.products.update');
+        Route::post('/sector/products/{id}/barcodes', [Sector::class, 'addProductBarcode'])
+            ->whereNumber('id')->middleware('throttle:30,1')->name('sector.products.barcodes.add');
         Route::post('/sector/products', [Sector::class, 'createProduct'])
             ->middleware(['amial.usage:add_product', 'throttle:30,1'])->name('sector.products.create');
         Route::get('/sector/operations', [Sector::class, 'operations'])->name('sector.operations');

@@ -95,6 +95,12 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'expiry_date' => 'sometimes|nullable|date',
             'category' => 'sometimes|nullable|string|max:80',
             'barcode' => 'sometimes|nullable|string|max:64',
+            'sku' => 'sometimes|nullable|string|max:64',
+            'category_id' => 'sometimes|nullable|integer|min:1',
+            'brand_id' => 'sometimes|nullable|integer|min:1',
+            'unit_id' => 'sometimes|nullable|integer|min:1',
+            'reorder_level' => 'sometimes|nullable|numeric|min:0',
+            'track_stock' => 'sometimes|boolean',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -191,6 +197,12 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'category' => 'sometimes|nullable|string|max:80',
             'barcode' => 'sometimes|nullable|string|max:64',
             'is_active' => 'sometimes|boolean',
+            'sku' => 'sometimes|nullable|string|max:64',
+            'category_id' => 'sometimes|nullable|integer|min:1',
+            'brand_id' => 'sometimes|nullable|integer|min:1',
+            'unit_id' => 'sometimes|nullable|integer|min:1',
+            'reorder_level' => 'sometimes|nullable|numeric|min:0',
+            'track_stock' => 'sometimes|boolean',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
