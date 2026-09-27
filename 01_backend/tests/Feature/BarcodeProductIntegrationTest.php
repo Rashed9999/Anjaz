@@ -6,6 +6,7 @@ use App\Models\MerchantProfile;
 use App\Models\MerchantProduct;
 use App\Models\User;
 use App\Models\Retail\ProductBarcode;
+use App\Models\Retail\StockMovement;
 use App\Services\CashierService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Passport\Passport;
@@ -86,5 +87,24 @@ class BarcodeProductIntegrationTest extends TestCase
         $this->assertNull($svc->findByBarcode($owner, '1234999911'));
         $p->refresh()->update(['is_active' => true, 'is_variant_parent' => true]);
         $this->assertNull($svc->findByBarcode($owner, '1234999911'));
+    }
+
+    public function test_editing_stock_records_a_count_adjustment_and_disabling_stock_tracking_skips_deductions(): void
+    {
+        $owner = $this->owner();
+        $svc = app(CashierService::class);
+        $p = $svc->addProduct($owner, ['name' => 'خدمة تركيب',
+            'price' => '100', 'quantity' => '8']);
+        $svc->updateProduct($owner, $p->id, ['quantity' => '13']);
+        $this->assertSame('13.000', (string) $p->fresh()->quantity);
+        $this->assertDatabaseHas('stock_movements', [
+            'merchant_user_id' => $owner->id, 'product_id' => $p->id,
+            'reason' => 'count_adjustment', 'quantity_delta' => '5.000',
+        ]);
+        $svc->updateProduct($owner, $p->id, ['track_stock' => false]);
+        $svc->recordSale($owner, '200', 'cash', [[
+            'product_id' => $p->id, 'name' => 'خدمة تركيب', 'qty' => 2, 'price' => 100,
+        ]]);
+        $this->assertSame('13.000', (string) $p->fresh()->quantity);
     }
 }

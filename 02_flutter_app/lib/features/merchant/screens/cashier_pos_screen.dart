@@ -718,7 +718,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     final qty = double.tryParse('${p['quantity'] ?? 0}') ?? 0;
     final hasOffer = (double.tryParse('${p['offer_price'] ?? ''}') ?? 0) > 0;
     final price = hasOffer ? p['offer_price'] : p['price'];
-    final out = qty <= 0;
+    final out = p['track_stock'] != false && p['track_stock'] != 0 && qty <= 0;
 
     return Opacity(
       opacity: out ? 0.55 : 1,

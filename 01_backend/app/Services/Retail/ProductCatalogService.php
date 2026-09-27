@@ -194,7 +194,7 @@ class ProductCatalogService
         if ($clash) {
             $other = MerchantProduct::find($clash->product_id);
             if ((int) $clash->product_id === (int) $product->id
-                && (string) $clash->pack_size === (string) ($data['pack_size'] ?? $clash->pack_size)
+                && bccomp((string) $clash->pack_size, (string) ($data['pack_size'] ?? $clash->pack_size), 3) === 0
                 && (!(bool) ($data['is_primary'] ?? false) || $clash->is_primary)) {
                 return $clash; // Repeated barcode scan/add is idempotent.
             }

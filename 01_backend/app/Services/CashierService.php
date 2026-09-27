@@ -72,6 +72,8 @@ class CashierService
             $product = MerchantProduct::where('id', $productId)
                 ->where('merchant_user_id', $merchant->id)->lockForUpdate()->firstOrFail();
             $this->assertMerchantProductFields($merchant, $data, $productId);
+            $requestedQuantity = array_key_exists('quantity', $data)
+                ? (string) $data['quantity'] : null;
             $product->fill([
                 'name' => $data['name'] ?? $product->name,
                 'price' => isset($data['price']) ? MoneyService::normalize((string) $data['price']) : $product->price,
@@ -79,7 +81,7 @@ class CashierService
                 'offer_price' => array_key_exists('offer_price', $data)
                     ? ($data['offer_price'] !== null && $data['offer_price'] !== ''
                         ? MoneyService::normalize((string) $data['offer_price']) : null) : $product->offer_price,
-                'quantity' => $data['quantity'] ?? $product->quantity,
+                // Existing stock adjustments must be journaled, not saved as a raw number.
                 'production_date' => $data['production_date'] ?? $product->production_date,
                 'expiry_date' => $data['expiry_date'] ?? $product->expiry_date,
                 'category' => !empty($data['category_id'])
@@ -94,6 +96,18 @@ class CashierService
                 'is_active' => $data['is_active'] ?? $product->is_active,
             ]);
             $product->save();
+            if ($requestedQuantity !== null
+                && bccomp($requestedQuantity, (string) $product->quantity, 3) !== 0) {
+                $locations = \App\Models\Retail\ProductStock::where('product_id', $product->id)
+                    ->where('on_hand', '!=', 0)->distinct('location_id')->count('location_id');
+                if ($locations > 1) {
+                    throw new DomainException('لهذا الصنف مخزون في عدة مواقع؛ عدّل الكمية من جرد الفرع المحدد');
+                }
+                $delta = bcsub($requestedQuantity, (string) $product->quantity, 3);
+                $stock = app(\App\Services\Retail\StockService::class);
+                $stock->move($product, $stock->defaultLocation($merchant->id), $delta,
+                    'count_adjustment', $merchant, note: 'تعديل مخزون المنتج من لوحة المنشأة');
+            }
             if (array_key_exists('barcode', $data)) {
                 app(MerchantProductBarcodeService::class)->ensurePrimary($merchant, $product, $data['barcode']);
             }
@@ -608,7 +622,7 @@ class CashierService
             $product = MerchantProduct::where('id', $line->product_id)
                 ->where('merchant_user_id', $sale->merchant_user_id)
                 ->first();
-            if (!$product) continue;
+            if (!$product || $product->track_stock === false) continue;
 
             $movement = $stock->move(
                 product: $product,
