@@ -29,6 +29,9 @@ Route::middleware('merchant.web')->group(function () {
         Route::get('/overview', [Operations::class, 'summary'])->name('overview');
         Route::get('/plans', [Plans::class, 'show'])->name('plans');
         Route::get('/sector', [Sector::class, 'overview'])->name('sector');
+        Route::get('/sector/types', [Sector::class, 'businessTypes'])->name('sector.types');
+        Route::put('/sector/type', [Sector::class, 'updateBusinessType'])
+            ->middleware('throttle:10,1')->name('sector.type.update');
         Route::get('/sector/products', [Sector::class, 'products'])->name('sector.products');
         Route::get('/sector/products/lookup', [Sector::class, 'lookupBarcode'])
             ->middleware('throttle:120,1')->name('sector.products.lookup');

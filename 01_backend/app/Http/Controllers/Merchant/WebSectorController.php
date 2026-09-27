@@ -10,6 +10,8 @@ use App\Models\Retail\MerchantBrand;
 use App\Models\Retail\MerchantCategory;
 use App\Models\Retail\MerchantUnit;
 use App\Models\Retail\ProductBarcode;
+use App\Domain\Verticals\VerticalRegistry as VR;
+use App\Services\FeatureAccessService;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Controllers\Api\V1\Amial\FuelStationController;
 use App\Http\Controllers\Api\V1\Amial\PharmacyController;
@@ -50,6 +52,43 @@ class WebSectorController extends Controller
 
         if (!$target) return $this->unsupported($sector);
         return $this->invoke($target, $request, $sector);
+    }
+
+    /** Owner onboarding stays on the web after the merchant app became POS-only. */
+    public function businessTypes(): JsonResponse
+    {
+        $types = [];
+        foreach (VR::current() as $code => $vertical) {
+            $types[] = [
+                'code' => $code,
+                'label' => VR::labels()[$code] ?? $vertical->nameAr(),
+                'hint' => $vertical instanceof \App\Domain\Verticals\DbVertical
+                    ? $vertical->hint() : null,
+            ];
+        }
+
+        return response()->json(['success' => true, 'code' => 'BUSINESS_TYPES',
+            'meta' => ['business_types' => $types]]);
+    }
+
+    /** The merchant owner chooses the vertical in the same portal they operate. */
+    public function updateBusinessType(Request $request, FeatureAccessService $access): JsonResponse
+    {
+        $valid = Validator::make($request->all(), [
+            'business_type' => 'required|in:' . implode(',', VR::codes()),
+        ]);
+        if ($valid->fails()) return response()->json(['success' => false, 'code' => 'VALIDATION',
+            'message' => $valid->errors()->first()], 422);
+
+        $profile = MerchantProfile::where('user_id', $request->user('merchant_web')->id)->firstOrFail();
+        $updated = $access->updateBusinessType($profile, $valid->validated()['business_type']);
+
+        return response()->json(['success' => true, 'code' => 'BUSINESS_TYPE_UPDATED',
+            'message' => 'تم حفظ نوع النشاط. ستُحدّث البوابة الآن.',
+            'meta' => [
+                'business_type' => $updated->business_type,
+                'business_type_label' => VR::labels()[$updated->business_type] ?? $updated->business_type,
+            ]]);
     }
 
     public function products(Request $request): JsonResponse

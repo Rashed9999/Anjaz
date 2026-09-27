@@ -100,6 +100,27 @@ void main() {
             'بيعه. والوجودُ وحدَه لا يكفي: الموضعُ هو الإصلاح.');
   });
 
+  test('مالك المنشأة يُحال إلى بوابة الويب ولا تعود له لوحة داخل التطبيق', () {
+    final src = dispatcher.readAsStringSync();
+    final posBranch = src.indexOf('if (_access.isPosStaff)');
+    final ownerBranch = src.indexOf("WebPortalNoticeScreen(role: 'merchant')");
+
+    expect(ownerBranch, greaterThan(posBranch),
+        reason: 'إحالة المالك يجب أن تأتي بعد فحص POS؛ وإلا سيذهب الكاشير إلى بوابة مالكه.');
+    for (final legacyOwnerHome in [
+      'FuelOwnerConsoleScreen',
+      'PharmacyDashboardScreen',
+      'WholesaleDashboardScreen',
+      'MerchantQuickSaleHomeScreen',
+      'MerchantRetailHomeScreen',
+      'RestaurantScreen',
+      'MerchantAdaptiveShell',
+    ]) {
+      expect(src.contains(legacyOwnerHome), isFalse,
+          reason: '$legacyOwnerHome أعادت لوحة مالك موازية إلى التطبيق.');
+    }
+  });
+
   test('شاشةُ الكاشير تفتح بيعاً، ولا تحمل بابَ مالك', () {
     final src = posHome.readAsStringSync();
 

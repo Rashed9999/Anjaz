@@ -2,26 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
-import 'package:amial_pay/features/access/widgets/access_gate.dart';
-import 'package:amial_pay/features/access/screens/role_based_home_screens.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
-import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
-import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
-import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_adaptive_shell.dart';
 import 'package:amial_pay/features/merchant/screens/pos_employee_home_screen.dart';
-import 'package:amial_pay/features/entitlements/capability_screens.dart';
 
 /// CRITICAL-001 — Home Dispatcher.
 ///
 /// نقطة الدخول الموحّدة بعد تسجيل الدخول.
 /// يفحص access ويعرض الشاشة المناسبة:
-///   - تاجر بدون business_type → BusinessTypeSelectionScreen (إلزامي)
-///   - Fuel → FuelOwnerConsoleScreen
-///   - Pharmacy → PharmacyDashboardScreen
-///   - Quick Sale → MerchantQuickSaleHomeScreen
-///   - Retail/Wholesale → MerchantRetailHomeScreen
+///   - Merchant owner → WebPortalNoticeScreen (لوحة المنشأة على المتصفّح)
+///   - POS staff → PosEmployeeHomeScreen (البيع والوردية في التطبيق)
 ///   - Agent/Admin → WebPortalNoticeScreen (لوحتاهما على المتصفّح)
 ///   - User → الـ Home الأصلي (existing)
 class HomeDispatcherScreen extends StatefulWidget {
@@ -47,8 +36,6 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
       }
     });
   }
-
-  Widget _merchantShell(Widget child) => MerchantAdaptiveShell(child: child);
 
   @override
   Widget build(BuildContext context) {
@@ -92,75 +79,16 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
         return const PosEmployeeHomeScreen();
       }
 
-      // 4) تاجر لم يختر نوع نشاطه → إجبار الاختيار
-      if (_access.needsBusinessTypeSelection) {
-        return const BusinessTypeSelectionScreen(mandatory: true);
-      }
-
-      // 5) Route حسب الدور + business_type
-      // Merchant + fuel → **لوحة المحطة** (AMIAL-FUEL-VERTICAL-001 · ٨)
-      //
-      // وكانت تقود إلى لوحةٍ واحدةٍ للجميع، فيرى الكاشيرُ ما يراه المالك.
-      // ولوحةُ المحطة تُبنى من صلاحيّات الداخل: المالكُ يرى الأقسام
-      // السبعة، والكاشيرُ يرى البيعَ وورديّتَه، وموظّفُ المخزون يرى
-      // الخزّاناتِ ولا يرى ريالاً.
-      if (_access.isMerchant && _access.isFuel) {
-        return _merchantShell(const FuelOwnerConsoleScreen());
-      }
-
-      // Merchant + pharmacy → Pharmacy Dashboard
-      if (_access.isMerchant && _access.isPharmacy) {
-        return _merchantShell(const PharmacyDashboardScreen());
-      }
-
-      // Merchant + wholesale → Wholesale Dashboard
-      if (_access.isMerchant && _access.isWholesale) {
-        return _merchantShell(const WholesaleDashboardScreen());
-      }
-
-      // Merchant + quick_sale → بسيط جداً
-      if (_access.isMerchant && _access.isQuickSale) {
-        return _merchantShell(const MerchantQuickSaleHomeScreen());
-      }
-
-      // Merchant + retail → POS متوسط
-      if (_access.isMerchant && _access.isRetail) {
-        return _merchantShell(const MerchantRetailHomeScreen());
-      }
-
-      // Merchant + restaurant → operational restaurant workspace.
-      if (_access.isMerchant && _access.isRestaurant) {
-        return _merchantShell(const RestaurantScreen());
-      }
-
-      // ══════════════════════════════════════════════════════════════
-      // AMIAL-VERTICAL-COMPOSE-001 — **قطاعٌ أنشأته الإدارةُ يقول أين
-      // يبدأ، فلا يهبط على شاشةٍ عامّة.**
-      //
-      // وهذا هو السطرُ الذي يجعل «إضافةَ قطاعٍ من اللوحة» تصل التاجرَ
-      // شاشةً لا قائمةَ صلاحيّاتٍ فقط: الخادمُ يرسل رمزَ قدرةٍ في
-      // `business_type_home`، و`CapabilityScreens` تعرف شاشتَها منذ
-      // بُنيت. **فهو آخرُ قطاعٍ يحتاج تعديلاً في Dart** — ما بعده
-      // بياناتٌ في جدول.
-      //
-      // وبلا هذا يهبط تاجرُ المخبز على الشاشة الاحتياطيّة العامّة:
-      // حسابٌ يعمل، وقدراتٌ مفتوحةٌ، وواجهةٌ لا تدلّ على شيء.
-      if (_access.isMerchant && !_access.isBuiltInVertical) {
-        final home = _access.businessTypeHome.value;
-        final builder = home == null ? null : CapabilityScreens.screenFor(home);
-
-        if (builder != null) {
-          return _merchantShell(builder());
-        }
-      }
-
-      // أي نشاط تاجر جديد لم يُضف له Dispatcher متخصص بعد يحصل على القائمة
-      // الذكية أيضاً، لكن يبقى محتوى Home هو fallback الحقيقي القائم.
+      // 4) المالك لا يرث نقاط البيع ولا تبقى له لوحة ثانية داخل التطبيق.
+      // كل ما كان في لوحات القطاعات (المنتجات، المخزون، المحفظة، الآجل،
+      // الموظفون والتقارير) انتقل إلى بوابة المنشأة على الويب. يبقى
+      // التطبيق للعميل ولموظف نقطة البيع فقط؛ وفحص POS أعلاه يسبق هذا
+      // الفرع حتى لا يُحال الكاشير إلى بوابة مالكه بسبب نوع نشاط المنشأة.
       if (_access.isMerchant) {
-        return _merchantShell(widget.userHomeFallback);
+        return const WebPortalNoticeScreen(role: 'merchant');
       }
 
-      // AMIAL-WEB-ONLY-PORTALS-001: الوكيل والأدمن لوحتاهما على المتصفّح.
+      // 5) AMIAL-WEB-ONLY-PORTALS-001: الوكيل والأدمن لوحتاهما على المتصفّح.
       // يُفحصان هنا أيضاً لا في RoleRouter وحده — لهذه الشاشة مدخلان:
       // بعد الدخول مباشرةً، وعند العودة إليها لاحقاً بحسابٍ محفوظ.
       // (القاعدة الرابعة: ميزةٌ لها مدخلان تُختبَر من مدخليها.)

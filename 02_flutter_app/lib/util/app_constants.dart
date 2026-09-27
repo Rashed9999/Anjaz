@@ -28,6 +28,12 @@ class AppConstants {
   // خطواتُ التحوّل بالترتيب في: docs/التحوّل-إلى-النطاق.md
   static const String productionDomain = 'https://amialpay.com';
 
+  // بوابة مالك المنشأة مستقلة عن تطبيق العميل ونقطة البيع. إبقاؤها في
+  // ثابتٍ واحد يمنع أن يتسلل رابط /merchant على النطاق العام إلى شاشة
+  // التطبيق بينما تضيع عزلته عن بوابة المالك.
+  static const String merchantPortalDomain = 'https://merchant.amialpay.com';
+  static const String merchantPortalUrl = '$merchantPortalDomain/merchant/login';
+
   static const String baseUrl =
       String.fromEnvironment('BASE_URL', defaultValue: productionDomain);
 

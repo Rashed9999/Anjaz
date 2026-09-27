@@ -64,6 +64,25 @@ class MerchantWebPortalTest extends TestCase
             ->assertSee('جدول قابل للتمرير أفقياً', false);
     }
 
+    public function test_owner_without_a_vertical_can_choose_it_from_the_web_portal(): void
+    {
+        $owner = $this->owner();
+        MerchantProfile::where('user_id', $owner->id)->update(['business_type' => null]);
+
+        $this->actingAs($owner, 'merchant_web')
+            ->getJson('/merchant/data/sector/types')
+            ->assertOk()
+            ->assertJsonFragment(['code' => A::BIZ_PHARMACY]);
+
+        $this->putJson('/merchant/data/sector/type', ['business_type' => A::BIZ_PHARMACY])
+            ->assertOk()
+            ->assertJsonPath('code', 'BUSINESS_TYPE_UPDATED')
+            ->assertJsonPath('meta.business_type', A::BIZ_PHARMACY);
+
+        $this->assertSame(A::BIZ_PHARMACY,
+            MerchantProfile::where('user_id', $owner->id)->value('business_type'));
+    }
+
     public function test_wallet_and_credit_pages_use_owner_only_shared_data_routes(): void
     {
         $owner = $this->owner();
