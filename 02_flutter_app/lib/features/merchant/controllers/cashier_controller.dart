@@ -38,6 +38,7 @@ class CashierController extends GetxController implements GetxService {
   // الحالة
   final RxBool isSubmitting = false.obs;
   final RxString lastError = ''.obs;
+  int lastScannedQuantity = 1;
 
   // التقرير
   final Rx<Map<String, dynamic>?> report = Rx<Map<String, dynamic>?>(null);
@@ -156,19 +157,20 @@ class CashierController extends GetxController implements GetxService {
   }
 
   // ---- السلة ----
-  void addToCart(String name, double price, {int? productId}) {
+  void addToCart(String name, double price, {int? productId, int quantity = 1}) {
+    if (quantity <= 0) return;
     final existing = cart.firstWhereOrNull(
         (l) => l.productId != null ? l.productId == productId : (l.name == name && l.price == price));
     if (existing != null) {
-      existing.qty++;
+      existing.qty += quantity;
       cart.refresh();
     } else {
-      cart.add(CartLine(name: name, price: price, productId: productId));
+      cart.add(CartLine(name: name, price: price, qty: quantity, productId: productId));
     }
   }
 
   /// AMIAL-CASHIER-BARCODE-001 — يضيف منتجاً (من المسح أو القائمة) للسلّة بـ product_id.
-  void addProductToCart(Map<String, dynamic> product) {
+  void addProductToCart(Map<String, dynamic> product, {int quantity = 1}) {
     final price = double.tryParse(
             (product['offer_price'] ?? product['price'] ?? '0').toString()) ??
         0;
@@ -176,6 +178,7 @@ class CashierController extends GetxController implements GetxService {
       (product['name'] ?? '').toString(),
       price,
       productId: product['id'] is int ? product['id'] as int : int.tryParse('${product['id']}'),
+      quantity: quantity,
     );
   }
 
@@ -228,8 +231,17 @@ class CashierController extends GetxController implements GetxService {
     try {
       final r = await repo.lookupBarcode(barcode);
       if (_ok(r)) {
-        final p = Map<String, dynamic>.from((r.body['meta']?['product'] ?? {}) as Map);
-        addProductToCart(p);
+        final meta = Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+        final p = Map<String, dynamic>.from((meta['product'] ?? {}) as Map);
+        final pack = double.tryParse('${meta['pack_size'] ?? '1'}');
+        // Cart and cashier stock engine currently operate in whole pieces.
+        // Do not round fractional packs and silently deduct the wrong stock.
+        if (pack == null || pack <= 0 || pack > 100000 || pack != pack.truncateToDouble()) {
+          lastError.value = 'حجم العبوة غير مناسب لكاشير القطع؛ راجع وحدة الصنف لدى التاجر';
+          return 'error';
+        }
+        lastScannedQuantity = pack.toInt();
+        addProductToCart(p, quantity: lastScannedQuantity);
         return 'added';
       }
       if (r.statusCode == 404) return 'not_found';

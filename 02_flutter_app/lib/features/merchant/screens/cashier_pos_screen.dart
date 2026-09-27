@@ -80,6 +80,24 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     }).toList();
   }
 
+  /// USB/Bluetooth scanners usually type the barcode and finish with Enter.
+  /// Resolve through the same owner-scoped endpoint as the camera scanner.
+  Future<void> _scanTypedBarcode() async {
+    final code = _search.text.trim();
+    if (code.isEmpty) return;
+    final result = await c.lookupAndAddByBarcode(code);
+    if (!mounted) return;
+    if (result == 'added') {
+      _search.clear();
+      setState(() {});
+      Get.snackbar('أُضيف إلى السلة', 'تمت إضافة ${c.lastScannedQuantity} وحدة');
+    } else if (result == 'error') {
+      Get.snackbar('تعذّر مسح الصنف', c.lastError.value);
+    } else {
+      Get.snackbar('الباركود غير مسجّل', 'اطلب من مالك المتجر إضافته إلى المنتجات');
+    }
+  }
+
   /// بيع بمبلغ حرّ (بلا منتجات) — «إدخال يدوي» من التصميم 35.
   Future<void> _manualAmount() async {
     final amount = TextEditingController();
@@ -402,6 +420,8 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                 child: TextField(
                   controller: _search,
                   onChanged: (_) => setState(() {}),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _scanTypedBarcode(),
                   decoration: InputDecoration(
                     hintText: 'بحث عن منتج أو كود...'.tr,
                     hintStyle: const TextStyle(fontSize: 13),
