@@ -73,8 +73,12 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
-        $hit = app(\App\Services\MerchantProductBarcodeService::class)->find(
-            $merchant, (string) $request->query('barcode', $request->input('barcode')));
+        try {
+            $hit = app(\App\Services\MerchantProductBarcodeService::class)->find(
+                $merchant, (string) $request->query('barcode', $request->input('barcode')));
+        } catch (\DomainException $e) {
+            return $this->error('AMBIGUOUS_BARCODE', $e->getMessage(), 409);
+        }
         if (!$hit) {
             return $this->error('NOT_FOUND', 'لا يوجد منتج بهذا الباركود', 404);
         }

@@ -50,12 +50,16 @@ class BarcodeLookupController extends Controller
             };
         }
 
-        $product = match ($context) {
+        try {
+            $product = match ($context) {
             'wholesale' => $this->lookupWholesale($merchant->id, $barcode),
             'pharmacy' => $this->lookupPharmacy($merchant->id, $barcode),
             'retail' => $this->lookupRetail($merchant, $barcode),
             default => $this->lookupRetail($merchant, $barcode),
-        };
+            };
+        } catch (\DomainException $e) {
+            return $this->error('AMBIGUOUS_BARCODE', $e->getMessage(), 409);
+        }
 
         if (!$product) {
             return new JsonResponse([

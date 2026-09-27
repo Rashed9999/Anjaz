@@ -211,6 +211,13 @@ class ProductCatalogService
         }
 
         return DB::transaction(function () use ($merchant, $product, $code, $data, $pack) {
+            // Products created after the initial migration may have only the
+            // legacy barcode mirror. Preserve it before adding a carton code.
+            if ($product->barcode && !ProductBarcode::where('product_id', $product->id)
+                ->where('barcode', $product->barcode)->exists()) {
+                app(\App\Services\MerchantProductBarcodeService::class)
+                    ->ensurePrimary($merchant, $product, $product->barcode);
+            }
             $isPrimary = (bool) ($data['is_primary'] ?? false)
                 || ! ProductBarcode::where('product_id', $product->id)->exists();
 
@@ -243,27 +250,15 @@ class ProductCatalogService
      */
     public function scan(User $merchant, string $barcode): ?array
     {
-        $barcode = trim($barcode);
-        if ($barcode === '') {
-            return null;
-        }
-
-        $row = ProductBarcode::where('merchant_user_id', $merchant->id)
-            ->where('barcode', $barcode)->with('product')->first();
-
-        if ($row && $row->product && $row->product->is_active && ! $row->product->is_variant_parent) {
-            return [
-                'product' => $row->product,
-                'pack_size' => (string) $row->pack_size,
-                'unit_id' => $row->unit_id,
-            ];
-        }
-
-        // احتياطاً: الأصنافُ التي لم تُهاجَر بعد تقرأ العمودَ القديم.
-        $legacy = MerchantProduct::where('merchant_user_id', $merchant->id)
-            ->where('barcode', $barcode)->where('is_active', true)->first();
-
-        return $legacy ? ['product' => $legacy, 'pack_size' => '1', 'unit_id' => $legacy->unit_id] : null;
+        $hit = app(\App\Services\MerchantProductBarcodeService::class)->find($merchant, $barcode);
+        if (!$hit) return null;
+        $link = ProductBarcode::where('merchant_user_id', $merchant->id)
+            ->where('barcode', trim($barcode))->first();
+        return [
+            'product' => $hit['product'],
+            'pack_size' => $hit['pack_size'],
+            'unit_id' => $link?->unit_id ?? $hit['product']->unit_id,
+        ];
     }
 
     // ══════════════════════════════════════════════════════════════════

@@ -85,14 +85,24 @@ class MerchantProductBarcodeService
         $link = ProductBarcode::where('merchant_user_id', $owner->id)
             ->where('barcode', $code)->with('product')->first();
         if ($link) {
+            // Historical merchant_products rows sometimes reused the same
+            // barcode before the unique product_barcodes index existed.
+            // Never resolve an ambiguous code to an arbitrary stock item.
+            $ambiguous = MerchantProduct::where('merchant_user_id', $owner->id)
+                ->whereRaw('TRIM(barcode) = ?', [$code])
+                ->where('id', '!=', $link->product_id)->exists();
+            if ($ambiguous) throw new DomainException('هذا الباركود مكرر على أكثر من صنف؛ يجب تصحيحه من إدارة المنتجات');
             $p = $link->product;
             if (!$p || (int) $p->merchant_user_id !== (int) $owner->id
                 || !$p->is_active || $p->is_variant_parent) return null;
             return ['product' => $p, 'pack_size' => (string) $link->pack_size, 'barcode' => $code];
         }
         // Legacy rows that predate product_barcodes stay scannable.
-        $p = MerchantProduct::where('merchant_user_id', $owner->id)
-            ->where('barcode', $code)->where('is_active', true)
+        $legacy = MerchantProduct::where('merchant_user_id', $owner->id)
+            ->whereRaw('TRIM(barcode) = ?', [$code]);
+        if ((clone $legacy)->limit(2)->count() > 1)
+            throw new DomainException('هذا الباركود مكرر على أكثر من صنف؛ يجب تصحيحه من إدارة المنتجات');
+        $p = $legacy->where('is_active', true)
             ->where(fn ($q) => $q->whereNull('is_variant_parent')->orWhere('is_variant_parent', false))
             ->first();
         return $p ? ['product' => $p, 'pack_size' => '1', 'barcode' => $code] : null;

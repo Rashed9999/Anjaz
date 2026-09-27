@@ -107,4 +107,20 @@ class BarcodeProductIntegrationTest extends TestCase
         ]]);
         $this->assertSame('13.000', (string) $p->fresh()->quantity);
     }
+
+    public function test_ambiguous_historical_barcode_is_refused_instead_of_selling_wrong_stock(): void
+    {
+        $owner = $this->owner();
+        $svc = app(CashierService::class);
+        $a = $svc->addProduct($owner, ['name' => 'عصير', 'price' => 50, 'barcode' => 'LEGACY-SAME']);
+        $b = $svc->addProduct($owner, ['name' => 'ماء', 'price' => 40]);
+        // Simulate an old duplicate entered before the unique barcode index.
+        $b->forceFill(['barcode' => 'LEGACY-SAME'])->save();
+        Passport::actingAs($owner);
+        $this->getJson('/api/v1/amial/merchant/cashier/products/lookup?barcode=LEGACY-SAME')
+            ->assertStatus(409)->assertJsonPath('code', 'AMBIGUOUS_BARCODE');
+        $this->getJson('/api/v1/amial/barcode/lookup?barcode=LEGACY-SAME')
+            ->assertStatus(409)->assertJsonPath('code', 'AMBIGUOUS_BARCODE');
+        $this->assertSame(2, MerchantProduct::where('merchant_user_id', $owner->id)->count());
+    }
 }
