@@ -90,11 +90,12 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     if (result == 'added') {
       _search.clear();
       setState(() {});
-      Get.snackbar('أُضيف إلى السلة', 'تمت إضافة ${c.lastScannedQuantity} وحدة');
+      Get.snackbar('pos_barcode_added_title'.tr,
+          'pos_barcode_added_quantity'.trParams({'quantity': '${c.lastScannedQuantity}'}));
     } else if (result == 'error') {
-      Get.snackbar('تعذّر مسح الصنف', c.lastError.value);
+      Get.snackbar('pos_barcode_scan_failed'.tr, c.lastError.value);
     } else {
-      Get.snackbar('الباركود غير مسجّل', 'اطلب من مالك المتجر إضافته إلى المنتجات');
+      Get.snackbar('pos_barcode_not_found'.tr, 'pos_barcode_ask_owner'.tr);
     }
   }
 

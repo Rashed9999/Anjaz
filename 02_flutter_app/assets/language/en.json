@@ -1017,5 +1017,10 @@
   "credit_collect_pos_inactive": "This account is inactive. Contact the business owner.",
   "credit_collect_pos_network": "Could not reach the server. Check your connection and try again.",
   "credit_collect_pos_failed": "Could not look up the credit account.",
-  "credit_collect_pos_balance": "Outstanding debt: @amount"
+  "credit_collect_pos_balance": "Outstanding debt: @amount",
+  "pos_barcode_added_title": "Added to cart",
+  "pos_barcode_added_quantity": "Added @quantity unit(s) to the cart",
+  "pos_barcode_scan_failed": "Could not scan product",
+  "pos_barcode_not_found": "Barcode not registered",
+  "pos_barcode_ask_owner": "Ask the shop owner to add this barcode to the product catalogue"
 }

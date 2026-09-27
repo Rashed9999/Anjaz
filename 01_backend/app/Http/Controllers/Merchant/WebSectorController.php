@@ -206,7 +206,7 @@ class WebSectorController extends Controller
         if (!$this->genericSector($sector)) return $this->unsupported($sector);
         $valid = Validator::make($request->all(), [
             'barcode' => 'required|string|max:64',
-            'pack_size' => 'required|numeric|gt:0|max:100000',
+            'pack_size' => 'required|integer|min:1|max:100000',
             'is_primary' => 'sometimes|boolean',
         ]);
         if ($valid->fails()) return response()->json(['success' => false,

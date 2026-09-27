@@ -98,14 +98,17 @@ class CashierService
             $product->save();
             if ($requestedQuantity !== null
                 && bccomp($requestedQuantity, (string) $product->quantity, 3) !== 0) {
-                $locations = \App\Models\Retail\ProductStock::where('product_id', $product->id)
-                    ->where('on_hand', '!=', 0)->distinct('location_id')->count('location_id');
-                if ($locations > 1) {
-                    throw new DomainException('لهذا الصنف مخزون في عدة مواقع؛ عدّل الكمية من جرد الفرع المحدد');
+                $stock = app(\App\Services\Retail\StockService::class);
+                $defaultLocation = $stock->defaultLocation($merchant->id);
+                // A total merchant-wide quantity may not be written into the
+                // default branch when there is nonzero stock in ANY other branch.
+                if (\App\Models\Retail\ProductStock::where('product_id', $product->id)
+                    ->where('location_id', '!=', $defaultLocation->id)
+                    ->where('on_hand', '!=', 0)->exists()) {
+                    throw new DomainException('يوجد مخزون في فرع آخر؛ عدّل كمية كل فرع من شاشة الجرد');
                 }
                 $delta = bcsub($requestedQuantity, (string) $product->quantity, 3);
-                $stock = app(\App\Services\Retail\StockService::class);
-                $stock->move($product, $stock->defaultLocation($merchant->id), $delta,
+                $stock->move($product, $defaultLocation, $delta,
                     'count_adjustment', $merchant, note: 'تعديل مخزون المنتج من لوحة المنشأة');
             }
             if (array_key_exists('barcode', $data)) {

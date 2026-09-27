@@ -1017,5 +1017,10 @@
   "credit_collect_pos_inactive": "هذا الحساب غير نشط. تواصل مع مالك المنشأة.",
   "credit_collect_pos_network": "تعذّر الوصول إلى الخادم. تحقق من الاتصال وأعد المحاولة.",
   "credit_collect_pos_failed": "تعذّر البحث في حساب الآجل.",
-  "credit_collect_pos_balance": "الدين المستحق: @amount"
+  "credit_collect_pos_balance": "الدين المستحق: @amount",
+  "pos_barcode_added_title": "أُضيف إلى السلة",
+  "pos_barcode_added_quantity": "أُضيفت @quantity وحدة إلى السلة",
+  "pos_barcode_scan_failed": "تعذّر مسح الصنف",
+  "pos_barcode_not_found": "الباركود غير مسجّل",
+  "pos_barcode_ask_owner": "اطلب من مالك المتجر إضافته إلى المنتجات"
 }
