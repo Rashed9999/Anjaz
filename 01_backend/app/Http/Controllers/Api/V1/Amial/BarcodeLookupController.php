@@ -71,6 +71,7 @@ class BarcodeLookupController extends Controller
             'product' => $product,
             'barcode' => $barcode,
             'context' => $context,
+            'pack_size' => $product['_pack_size'] ?? '1',
         ]);
     }
 
@@ -112,15 +113,15 @@ class BarcodeLookupController extends Controller
      */
     private function lookupRetail(User $merchant, string $barcode): ?array
     {
-        $product = \App\Models\MerchantProduct::where('merchant_user_id', $merchant->id)
-            ->where('barcode', $barcode)
-            ->where('is_active', true)
-            ->first();
-
-        return $product ? array_merge($product->toArray(), [
+        $hit = app(\App\Services\MerchantProductBarcodeService::class)
+            ->find($merchant, $barcode);
+        if (!$hit) return null;
+        $product = $hit['product'];
+        return array_merge($product->toArray(), [
             '_type' => 'retail',
-            'available_stock' => $product->quantity !== null ? (float)$product->quantity : null,
-        ]) : null;
+            '_pack_size' => $hit['pack_size'],
+            'available_stock' => $product->quantity !== null ? (float) $product->quantity : null,
+        ]);
     }
 
     // ============ Helpers ============

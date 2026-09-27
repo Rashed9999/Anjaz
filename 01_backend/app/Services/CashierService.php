@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MerchantProduct;
+use App\Services\MerchantProductBarcodeService;
 use App\Models\MerchantSale;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -26,48 +27,56 @@ class CashierService
 
     // ============ المنتجات (اختيارية) ============
 
+    /** Primary barcode and product are committed together, never separately. */
     public function addProduct(User $merchant, array $data): MerchantProduct
     {
-        $created = MerchantProduct::create([
-            'merchant_user_id' => $merchant->id,
-            'name' => $data['name'],
-            'price' => MoneyService::normalize((string)($data['price'] ?? 0)),           // سعر البيع
-            'cost_price' => MoneyService::normalize((string)($data['cost_price'] ?? 0)),  // التكلفة
-            'offer_price' => isset($data['offer_price']) && $data['offer_price'] !== null && $data['offer_price'] !== ''
-                ? MoneyService::normalize((string)$data['offer_price']) : null,           // العرض
-            'quantity' => (string)($data['quantity'] ?? 0),                               // المخزون
-            'production_date' => $data['production_date'] ?? null,
-            'expiry_date' => $data['expiry_date'] ?? null,
-            'category' => $data['category'] ?? null,
-            'barcode' => $data['barcode'] ?? null,
-            'is_active' => true,
-        ]);
-
-        return $created->fresh();
+        return DB::transaction(function () use ($merchant, $data) {
+            $barcode = trim((string) ($data['barcode'] ?? ''));
+            $product = MerchantProduct::create([
+                'merchant_user_id' => $merchant->id,
+                'name' => $data['name'],
+                'price' => MoneyService::normalize((string) ($data['price'] ?? 0)),
+                'cost_price' => MoneyService::normalize((string) ($data['cost_price'] ?? 0)),
+                'offer_price' => isset($data['offer_price']) && $data['offer_price'] !== ''
+                    ? MoneyService::normalize((string) $data['offer_price']) : null,
+                'quantity' => (string) ($data['quantity'] ?? 0),
+                'production_date' => $data['production_date'] ?? null,
+                'expiry_date' => $data['expiry_date'] ?? null,
+                'category' => $data['category'] ?? null,
+                'barcode' => null,
+                'is_active' => true,
+            ]);
+            if ($barcode !== '') {
+                app(MerchantProductBarcodeService::class)->ensurePrimary($merchant, $product, $barcode);
+            }
+            return $product->fresh()->load('barcodes');
+        }, 3);
     }
 
     public function updateProduct(User $merchant, int $productId, array $data): MerchantProduct
     {
-        $product = MerchantProduct::where('id', $productId)
-            ->where('merchant_user_id', $merchant->id)
-            ->firstOrFail();
-
-        $product->fill([
-            'name' => $data['name'] ?? $product->name,
-            'price' => isset($data['price']) ? MoneyService::normalize((string)$data['price']) : $product->price,
-            'cost_price' => isset($data['cost_price']) ? MoneyService::normalize((string)$data['cost_price']) : $product->cost_price,
-            'offer_price' => array_key_exists('offer_price', $data)
-                ? ($data['offer_price'] !== null && $data['offer_price'] !== '' ? MoneyService::normalize((string)$data['offer_price']) : null)
-                : $product->offer_price,
-            'quantity' => $data['quantity'] ?? $product->quantity,
-            'production_date' => $data['production_date'] ?? $product->production_date,
-            'expiry_date' => $data['expiry_date'] ?? $product->expiry_date,
-            'category' => $data['category'] ?? $product->category,
-            'barcode' => $data['barcode'] ?? $product->barcode,
-            'is_active' => $data['is_active'] ?? $product->is_active,
-        ])->save();
-
-        return $product;
+        return DB::transaction(function () use ($merchant, $productId, $data) {
+            $product = MerchantProduct::where('id', $productId)
+                ->where('merchant_user_id', $merchant->id)->lockForUpdate()->firstOrFail();
+            $product->fill([
+                'name' => $data['name'] ?? $product->name,
+                'price' => isset($data['price']) ? MoneyService::normalize((string) $data['price']) : $product->price,
+                'cost_price' => isset($data['cost_price']) ? MoneyService::normalize((string) $data['cost_price']) : $product->cost_price,
+                'offer_price' => array_key_exists('offer_price', $data)
+                    ? ($data['offer_price'] !== null && $data['offer_price'] !== ''
+                        ? MoneyService::normalize((string) $data['offer_price']) : null) : $product->offer_price,
+                'quantity' => $data['quantity'] ?? $product->quantity,
+                'production_date' => $data['production_date'] ?? $product->production_date,
+                'expiry_date' => $data['expiry_date'] ?? $product->expiry_date,
+                'category' => $data['category'] ?? $product->category,
+                'is_active' => $data['is_active'] ?? $product->is_active,
+            ]);
+            $product->save();
+            if (array_key_exists('barcode', $data)) {
+                app(MerchantProductBarcodeService::class)->ensurePrimary($merchant, $product, $data['barcode']);
+            }
+            return $product->fresh()->load('barcodes');
+        }, 3);
     }
 
     /**
@@ -107,12 +116,14 @@ class CashierService
     ) {
         return MerchantProduct::where('merchant_user_id', $merchant->id)
             ->where('is_active', true)
+            ->with(['barcodes'])
             // **مِظلّةُ المتغيّرات تُستثنى** — ومخزونُها ليس مخزوناً يُباع.
             ->when(! $includeVariantParents,
                 fn ($q) => $q->where(fn ($w) => $w->whereNull('is_variant_parent')
                     ->orWhere('is_variant_parent', false)))
             ->when($search, fn ($q) => $q->where(function ($w) use ($search) {
-                $w->where('name', 'like', "%{$search}%")->orWhere('barcode', $search);
+                $w->where('name', 'like', "%{$search}%")->orWhere('barcode', $search)
+                   ->orWhereHas('barcodes', fn ($b) => $b->where('barcode', $search));
             }))
             ->orderBy('name')
             ->get()
@@ -137,10 +148,7 @@ class CashierService
             return null;
         }
 
-        return MerchantProduct::where('merchant_user_id', $merchant->id)
-            ->where('is_active', true)
-            ->where('barcode', $barcode)
-            ->first();
+        return app(MerchantProductBarcodeService::class)->find($merchant, $barcode)['product'] ?? null;
     }
 
     // ============ البيع ============

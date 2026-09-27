@@ -193,9 +193,17 @@ class ProductCatalogService
             ->where('barcode', $code)->first();
         if ($clash) {
             $other = MerchantProduct::find($clash->product_id);
+            if ((int) $clash->product_id === (int) $product->id
+                && (string) $clash->pack_size === (string) ($data['pack_size'] ?? $clash->pack_size)
+                && (!(bool) ($data['is_primary'] ?? false) || $clash->is_primary)) {
+                return $clash; // Repeated barcode scan/add is idempotent.
+            }
             throw new DomainException(
                 'هذا الباركود مسجَّل على «' . ($other->name ?? 'صنف آخر') . '»');
         }
+        $legacyClash = MerchantProduct::where('merchant_user_id', $merchant->id)
+            ->where('barcode', $code)->where('id', '!=', $product->id)->first();
+        if ($legacyClash) throw new DomainException('هذا الباركود مرتبط بالصنف: ' . $legacyClash->name);
 
         $pack = (string) ($data['pack_size'] ?? '1');
         if (bccomp($pack, '0', 3) <= 0) {
@@ -243,7 +251,7 @@ class ProductCatalogService
         $row = ProductBarcode::where('merchant_user_id', $merchant->id)
             ->where('barcode', $barcode)->with('product')->first();
 
-        if ($row && $row->product) {
+        if ($row && $row->product && $row->product->is_active && ! $row->product->is_variant_parent) {
             return [
                 'product' => $row->product,
                 'pack_size' => (string) $row->pack_size,

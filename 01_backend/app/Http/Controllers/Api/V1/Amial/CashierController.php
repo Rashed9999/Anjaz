@@ -73,12 +73,14 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
-        $product = $this->cashier->findByBarcode($merchant, (string) $request->query('barcode', $request->input('barcode')));
-        if (!$product) {
+        $hit = app(\App\Services\MerchantProductBarcodeService::class)->find(
+            $merchant, (string) $request->query('barcode', $request->input('barcode')));
+        if (!$hit) {
             return $this->error('NOT_FOUND', 'لا يوجد منتج بهذا الباركود', 404);
         }
 
-        return $this->ok(['product' => $product]);
+        return $this->ok(['product' => $hit['product'], 'pack_size' => $hit['pack_size'],
+            'barcode' => $hit['barcode']]);
     }
 
     public function addProduct(Request $request): JsonResponse
@@ -100,7 +102,11 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
-        $product = $this->cashier->addProduct($merchant, $v->validated());
+        try {
+            $product = $this->cashier->addProduct($merchant, $v->validated());
+        } catch (\DomainException $e) {
+            return $this->error('BARCODE_CONFLICT', $e->getMessage(), 422);
+        }
 
         // AMIAL-CATALOG-001 — **ما أدخله التاجر يُفيد من بعده.**
         //
@@ -196,6 +202,8 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             $product = $this->cashier->updateProduct($merchant, $id, $v->validated());
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('NOT_FOUND', 'المنتج غير موجود', 404);
+        } catch (\DomainException $e) {
+            return $this->error('BARCODE_CONFLICT', $e->getMessage(), 422);
         }
         return $this->ok(['product' => $product], 'PRODUCT_UPDATED', 'تم التحديث');
     }

@@ -134,17 +134,19 @@ class ProductCatalogService
         if ($existing) {
             throw new \DomainException('هذا الصنف عندك بالفعل: ' . $existing->name);
         }
+        if (\App\Models\Retail\ProductBarcode::where('merchant_user_id', $merchant->id)
+            ->where('barcode', $barcode)->exists()) {
+            throw new \DomainException('هذا الباركود مرتبط بصنف آخر في منشأتك');
+        }
 
         return DB::transaction(function () use ($merchant, $entry, $barcode, $overrides) {
-            $product = MerchantProduct::create([
-                'merchant_user_id' => $merchant->id,
+            $product = app(\App\Services\CashierService::class)->addProduct($merchant, [
                 'name' => $entry->name,
                 'category' => $entry->category,
                 'barcode' => $barcode,
                 'price' => MoneyService::normalize((string) ($overrides['price'] ?? 0)),
                 'cost_price' => MoneyService::normalize((string) ($overrides['cost_price'] ?? 0)),
                 'quantity' => (string) ($overrides['quantity'] ?? 0),
-                'is_active' => true,
             ]);
 
             // **العدّادُ يقيس النفعَ لا الكتابة.**
