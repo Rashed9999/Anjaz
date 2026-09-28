@@ -22,7 +22,7 @@ import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_account_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
-import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_payout_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
 
 /// **ملكيّةُ المنشأة، وغيابُ المتحكّم لا يُقرأ ملكيّةً.**
@@ -427,7 +427,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       icon: Icons.account_balance,
                       label: 'سحب رصيدي',
                       ownerOnly: true,
-                      onTap: () => Get.to(() => const WithdrawRequestScreen()),
+                      onTap: () => Get.to(() => const MerchantPayoutScreen()),
                     ),
                     _LinkTile(
                       icon: Icons.people,

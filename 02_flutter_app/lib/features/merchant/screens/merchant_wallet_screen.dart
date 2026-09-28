@@ -5,7 +5,7 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_transactions_screen.dart';
 import 'package:amial_pay/features/transaction_money/screens/amial_send_money_screen.dart';
-import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_payout_screen.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/util/app_direction.dart';
@@ -98,7 +98,7 @@ class _MerchantWalletScreenState extends State<MerchantWalletScreen> {
                       icon: Icons.account_balance_outlined,
                       label: 'سحب',
                       subtitle: 'نقداً عبر وكيل',
-                      onTap: () => Get.to(() => const WithdrawRequestScreen()),
+                      onTap: () => Get.to(() => const MerchantPayoutScreen()),
                     ),
                   ),
                   const SizedBox(width: 12),

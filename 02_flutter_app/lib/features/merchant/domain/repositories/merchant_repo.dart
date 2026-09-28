@@ -90,20 +90,20 @@ class MerchantRepo extends GetxService {
   Future<Response> ledger({int page = 1}) =>
       apiClient.getData('/api/v1/amial/merchant/ledger?page=$page');
 
-  // ====== Withdraw (التاجر يسحب إلى بنكه) ======
-  Future<Response> withdraw({
-    required String amount,
-    required int withdrawalMethodId,
-    Map<String, dynamic>? methodFields,
-  }) {
-    return apiClient.postData(
-      '$_customerBase/withdraw',
-      {
+  // ====== Merchant payout ======
+  // ليس /customer/withdraw: ذلك باب العميل التاريخي ويختلف عن مستحقات
+  // مالك المنشأة ومراحل اعتمادها وتسليمها.
+  Future<Response> payoutRequests() =>
+      apiClient.getData('/api/v1/amial/merchant/payouts');
+
+  Future<Response> requestPayout({required String amount, String? note}) =>
+      apiClient.postData('/api/v1/amial/merchant/payouts', {
         'amount': amount,
-        'withdrawal_method_id': withdrawalMethodId,
-        ...?methodFields,
-      },
-      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('merchant_withdraw'),
-    );
-  }
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }, idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('merchant_payout'));
+
+  Future<Response> confirmPayoutHandover(String payoutUlid, {String? note}) =>
+      apiClient.postData('/api/v1/amial/merchant/payouts/$payoutUlid/confirm-handover', {
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }, idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('merchant_payout_handover'));
 }
