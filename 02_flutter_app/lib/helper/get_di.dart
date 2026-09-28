@@ -27,8 +27,6 @@ import 'package:amial_pay/features/merchant/domain/repositories/split_bill_repo.
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/features/merchant/domain/repositories/cashier_repo.dart';
 import 'package:amial_pay/features/favorite_number/controllers/amial_favorites_controller.dart';
-import 'package:amial_pay/features/suppliers/controllers/suppliers_controller.dart';
-import 'package:amial_pay/features/suppliers/domain/repositories/suppliers_repo.dart';
 import 'package:amial_pay/features/merchant/controllers/customer_credit_controller.dart';
 import 'package:amial_pay/features/merchant/domain/repositories/customer_credit_repo.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_refund_controller.dart';
@@ -42,14 +40,9 @@ import 'package:amial_pay/features/withdraw/domain/repositories/customer_withdra
 import 'package:amial_pay/features/me/domain/me_repo.dart';
 import 'package:amial_pay/features/safe_payment/controllers/safe_payment_controller.dart';
 import 'package:amial_pay/features/safe_payment/domain/repositories/safe_payment_repo.dart';
-import 'package:amial_pay/features/merchant_verification/controllers/merchant_verification_controller.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
-import 'package:amial_pay/features/fuel_station/domain/repositories/fuel_vertical_repo.dart';
-import 'package:amial_pay/features/fuel_station/controllers/fuel_vertical_controller.dart';
 import 'package:amial_pay/features/entitlements/controllers/entitlements_controller.dart';
 import 'package:amial_pay/features/entitlements/domain/repositories/entitlements_repo.dart';
-import 'package:amial_pay/features/retail/controllers/retail_vertical_controller.dart';
-import 'package:amial_pay/features/retail/domain/repositories/retail_vertical_repo.dart';
 import 'package:amial_pay/features/fuel_station/domain/repositories/fuel_station_repo.dart';
 import 'package:amial_pay/features/pharmacy/controllers/pharmacy_controller.dart';
 import 'package:amial_pay/features/pharmacy/domain/repositories/pharmacy_repo.dart';
@@ -58,11 +51,6 @@ import 'package:amial_pay/features/access/domain/repositories/access_repo.dart';
 import 'package:amial_pay/features/barcode/domain/repositories/barcode_repo.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
 import 'package:amial_pay/features/wholesale/domain/repositories/wholesale_repo.dart';
-import 'package:amial_pay/features/plans/controllers/plans_controller.dart';
-import 'package:amial_pay/features/plans/domain/repositories/plans_repo.dart';
-import 'package:amial_pay/features/branches/controllers/branches_controller.dart';
-import 'package:amial_pay/features/branches/controllers/pos_rbac_controller.dart';
-import 'package:amial_pay/features/branches/domain/repositories/branches_repo.dart';
 import 'package:amial_pay/features/home/controllers/banner_controller.dart';
 import 'package:amial_pay/features/auth/controllers/create_account_controller.dart';
 import 'package:amial_pay/features/onboarding/controllers/on_boarding_controller.dart';
@@ -248,25 +236,13 @@ Future<Map<String, Map<String, String>>> init() async {
   Get.lazyPut(() => PaymentRequestRepo(apiClient: Get.find()));
   Get.lazyPut(() => PaymentRequestController(repo: Get.find()), fenix: true);
 
-  // AMIAL-MERCHANT-VERIFY-001 — توثيق التاجر
-  Get.lazyPut(() => MerchantVerificationRepo(apiClient: Get.find()));
-  Get.lazyPut(() => MerchantVerificationController(repo: Get.find()), fenix: true);
-
   // AMIAL-FUEL-001 — محطة الوقود (Cashier متخصّص)
   Get.lazyPut(() => FuelStationRepo(apiClient: Get.find()));
   Get.lazyPut(() => FuelStationController(repo: Get.find()), fenix: true);
 
-  // AMIAL-FUEL-VERTICAL-001 · المرحلة ٨ — قطاع الوقود الكامل.
-  Get.lazyPut(() => FuelVerticalRepo(apiClient: Get.find()));
-  Get.lazyPut(() => FuelVerticalController(repo: Get.find()), fenix: true);
-
   // AMIAL-ENTITLEMENTS-001 — ملفّ خدمات التاجر (يُرسم منه كلُّ شيء).
   Get.lazyPut(() => EntitlementsRepo(apiClient: Get.find()));
   Get.lazyPut(() => EntitlementsController(repo: Get.find()), fenix: true);
-
-  // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١٠ — قطاع التجزئة الكامل.
-  Get.lazyPut(() => RetailVerticalRepo(apiClient: Get.find()));
-  Get.lazyPut(() => RetailVerticalController(repo: Get.find()), fenix: true);
 
   // AMIAL-PHARMACY-001 — الصيدلية (Cashier متخصّص)
   Get.lazyPut(() => PharmacyRepo(apiClient: Get.find()));
@@ -284,18 +260,6 @@ Future<Map<String, Map<String, String>>> init() async {
   Get.lazyPut(() => WholesaleRepo(apiClient: Get.find()));
   Get.lazyPut(() => WholesaleController(repo: Get.find()), fenix: true);
 
-  // CRITICAL-001-PLANS — الخطط + الاستخدام
-  Get.lazyPut(() => PlansRepo(apiClient: Get.find()));
-  Get.lazyPut(() => PlansController(repo: Get.find()), fenix: true);
-
-  // P1-BRANCHES — إدارة الفروع
-  Get.lazyPut(() => BranchesRepo(apiClient: Get.find()));
-  Get.lazyPut(() => BranchesController(repo: Get.find()), fenix: true);
-
-  // P1-RBAC — الأدوار والصلاحيات
-  Get.lazyPut(() => PosRbacRepo(apiClient: Get.find()));
-  Get.lazyPut(() => PosRbacController(repo: Get.find()), fenix: true);
-
   // AMIAL-NOTIFICATIONS-001 — مركز الإشعارات
   Get.lazyPut(() => NotificationsCenterRepo(apiClient: Get.find()));
   Get.lazyPut(() => NotificationsCenterController(repo: Get.find()), fenix: true);
@@ -311,10 +275,6 @@ Future<Map<String, Map<String, String>>> init() async {
   // AMIAL-CASHIER-001 — كاشير التاجر
   Get.lazyPut(() => CashierRepo(apiClient: Get.find()));
   Get.lazyPut(() => CashierController(repo: Get.find()), fenix: true);
-
-  // AMIAL-SUPPLIERS-001 — الموردون وأوامر الشراء
-  Get.lazyPut(() => SuppliersRepo(apiClient: Get.find()));
-  Get.lazyPut(() => SuppliersController(repo: Get.find()), fenix: true);
 
   // AMIAL-FAVORITES-001: المفضّلة الموحّدة — permanent لأن النجمة تظهر في
   // شاشات كثيرة، وإعادة بنائها في كل شاشة تُفقد الحالة المخبّأة فترتدّ

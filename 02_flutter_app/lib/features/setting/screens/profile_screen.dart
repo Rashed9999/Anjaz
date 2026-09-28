@@ -5,7 +5,7 @@ import 'package:amial_pay/common/widgets/custom_switch_button.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/favorite_number/screens/amial_favorites_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_account_screen.dart';
+import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_pos_home_screen.dart';
 import 'package:amial_pay/features/me/screens/my_services_screen.dart';
 import 'package:amial_pay/features/kyc_verification/screens/customer_verification_center_screen.dart';
@@ -50,7 +50,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return const MerchantPosHomeScreen();
     }
     if (access.isMerchantSession) {
-      return const MerchantAccountScreen();
+      return const WebPortalNoticeScreen(role: 'merchant');
     }
     final splashController = Get.find<SplashController>();
     List<TransactionTableModel> transactionTableModelList = [];
@@ -407,4 +407,3 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
-

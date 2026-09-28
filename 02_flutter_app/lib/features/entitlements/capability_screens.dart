@@ -1,230 +1,76 @@
 import 'package:flutter/material.dart';
-
-import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.dart';
-import 'package:amial_pay/features/branches/screens/branches_management_screen.dart';
-import 'package:amial_pay/features/corporate/screens/corporate_accounts_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_ops_center_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_companies_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_shifts_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_tanks_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_variances_screen.dart';
+import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_shift_screen.dart';
-import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
-import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_api_keys_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_advanced_reports_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_backup_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_currencies_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_excel_export_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_expenses_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_gift_cards_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_installments_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_loyalty_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_promotions_screen.dart';
-import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
-import 'package:amial_pay/features/access/screens/role_based_home_screens.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
-import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/pos_credit_lookup_screen.dart';
 import 'package:amial_pay/features/merchant/screens/split_bill_create_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
-import 'package:amial_pay/features/suppliers/screens/purchase_order_create_screen.dart';
-import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
-import 'package:amial_pay/features/merchant/screens/inventory_audit_screen.dart';
-import 'package:amial_pay/features/merchant/screens/inventory_screen.dart';
-import 'package:amial_pay/features/retail/screens/retail_ops_center_screen.dart';
-import 'package:amial_pay/features/retail/screens/retail_locations_screen.dart';
-import 'package:amial_pay/features/retail/screens/retail_transfers_screen.dart';
-import 'package:amial_pay/features/retail/screens/retail_wastes_screen.dart';
-import 'package:amial_pay/features/merchant/screens/stock_alerts_screen.dart';
-import 'package:amial_pay/features/suppliers/screens/suppliers_screen.dart';
-import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
-// **استُعيد هذا الاستيراد** — الشاشةُ موجودةٌ والمُنادي بلا استيراد،
-// فكان التطبيقُ لا يُصرَّف: Couldn't find constructor 'PharmacySaleScreen'.
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
+import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_workflow_screens.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
-import 'package:amial_pay/features/wholesale/screens/wholesale_policy_screens.dart';
 
-/// AMIAL-CAP-SCREENS-001 — **مصدرُ حقيقةٍ واحدٌ للتنقّل بالقدرة.**
+/// خريطة القدرة في التطبيق بعد فصل المالك إلى الويب.
 ///
-/// ══════════════════════════════════════════════════════════════════════
-/// **العطلُ الذي وُلد منه — مقيسٌ لا مفترَض:**
-///
-/// كان في المنصّة **كتالوجان**: سجلُّ الخادم فيه ٤٧ قدرة، وقائمةٌ مكتوبةٌ
-/// بيدٍ داخل `merchant_services_hub_screen.dart` فيها ٢٧. فكان التاجرُ
-/// يقرأ «مفتوح لديك ١٢ من ٢٧ خدمة» — **ومقامٌ لا يُحسب من مصدره**
-/// (القاعدة السادسة). و٢٢ قدرةً في الخادم لا مدخلَ لها في الشاشة
-/// إطلاقاً، منها الكاشيرُ والبيعُ السريع والباركود ومحطّةُ الوقود
-/// والصيدليّةُ والجملةُ كلُّها.
-///
-/// **والأسوأ:** `my_capabilities_screen` كان ينقل **بالاسم** إلى ما
-/// يُعلنه الخادمُ (`/cashier`, `/products` …)، و`route_helper.dart` لا
-/// يسجّل واحداً من الأربعين — المسجَّلُ فيه مساراتُ القالب القديم
-/// (`/splash`, `/send_money`). فكلُّ خدمةٍ «متاحة» تُضغَط فتُخرج
-/// «لم تُفعَّل شاشتها بعد». **قِيس: ٤٠ من ٤٠.**
-///
-/// ══════════════════════════════════════════════════════════════════════
-/// **فصار المفتاحُ رمزَ القدرة لا نصَّ المسار.** الرمزُ هو ما يعرفه
-/// الطرفان أصلاً — `access.has(code)` تقرؤه، والخادمُ يُصدره. ونصُّ
-/// المسار كان طرفاً ثالثاً لا يقرؤه أحد.
-///
-/// **وما لا شاشةَ له يُقال ولا يُسكت عنه:** `screenFor` تُرجع `null`،
-/// والشاشةُ تعرض سببَه. (القاعدة السابعة: الغيابُ يُقال صراحةً.)
-///
-/// ويحرس تمامَها `CapabilityScreenMapGuardTest`: كلُّ قدرةٍ يُعلن الخادمُ
-/// لها `screen` لها مدخلٌ هنا، وكلُّ رمزٍ هنا موجودٌ في سجلّ الخادم.
+/// لا نكسر عقد القدرات مع الخادم ولا نترك رابطاً ميتاً: كل رمزٍ يظل معروفاً.
+/// لكن ما كان لوحة مالك (موظفون، أجهزة، مخزون، أسعار، إعدادات وتقارير
+/// مؤسسية) يحيل إلى البوابة بدلاً من أن يُضمَّن سطحٌ موازٍ في تطبيق العميل
+/// وPOS. العمليات التي يحتاجها الكاشير تبقى شاشات محمولة محدودة.
 class CapabilityScreens {
   CapabilityScreens._();
 
-  /// رمزُ القدرة ⇒ باني الشاشة. و`null` = لا شاشةَ في التطبيق بعد.
-  static final Map<String, Widget Function()> _map = {
-    // ── البيع ──────────────────────────────────────────────────────
-    // **«البيع السريع» يفتح شاشةَ البيع** لا رئيسيّةً ثانية. فتاجرُ
-    // تجزئةٍ يضغطها فيهبط في رئيسيّةٍ أخرى ببطاقة ترحيبٍ وأزرارٍ مختلفة
-    // — رئيسيّتان لحسابٍ واحد، ويظنّ أنّه تاه.
+  static final Map<String, Widget Function()> _pos = {
     'quick_sale': () => const CashierPosScreen(),
     'cashier': () => const CashierPosScreen(),
     'refunds': () => const MerchantRefundScreen(),
-    'debts': () => const CreditDashboardScreen(),
+    'debts': () => const PosCreditLookupScreen(),
     'offline_pos': () => const OfflineSalesScreen(),
     'split_bill': () => const SplitBillCreateScreen(),
-    'gift_cards': () => const MerchantGiftCardsScreen(),
-    'installments': () => const MerchantInstallmentsScreen(),
-
-    // ── الأصناف والمخزون ───────────────────────────────────────────
     'products': () => const CashierProductsScreen(),
-    'promotions': () => const MerchantPromotionsScreen(),
-    'loyalty': () => const MerchantLoyaltyScreen(),
-    'inventory': () => const InventoryScreen(),
-    'low_stock_alerts': () => const StockAlertsScreen(),
-    'inventory_audit': () => const InventoryAuditScreen(),
-    'suppliers': () => const SuppliersScreen(),
-    'purchases': () => const PurchaseOrderCreateScreen(),
-
-    // ── العملاء والفريق ────────────────────────────────────────────
-    'customers': () => const CreditCustomersScreen(),
-    'employees': () => const MerchantStaffScreen(),
-    // AMIAL-POS-DEVICES-008 — الجهازُ مقعدٌ، والموظّفُ حساب: شاشتان لا واحدة.
-    'multi_pos': () => const MerchantPosDevicesScreen(),
-    'branches': () => const BranchesManagementScreen(),
-    'corporate_accounts': () => const CorporateAccountsScreen(),
-
-    // ── المال والتقارير ────────────────────────────────────────────
+    'customers': () => const PosCreditLookupScreen(),
     'shift_close': () => const CashierShiftScreen(),
-    'daily_reports': () => const FinancialTruthReportScreen(dailyOnly: true),
-    'profit_reports': () => const ProfitReportScreen(),
-    'advanced_reports': () => const MerchantAdvancedReportsScreen(),
-    'excel_export': () => const MerchantExcelExportScreen(),
-    'expenses': () => const MerchantExpensesScreen(),
-    'audit_log': () => const MerchantAuditLogScreen(),
-    'advanced_backup': () => const MerchantBackupScreen(),
-    'multi_currency': () => const MerchantCurrenciesScreen(),
-    'api_access': () => const MerchantApiKeysScreen(),
-
-    // ── أصنافُ التجّار ─────────────────────────────────────────────
-    // ══════════════════════════════════════════════════════════════════
-    // **القدرةُ تفتح ميزتَها لا رئيسيّةً ثانية.**
-    //
-    // كان الضغطُ على «بيع الوقود» يهبط في **لوحة المحطّة** كاملةً،
-    // و«فواتير الجملة» و«التحصيلات» في **لوحة الجملة** — فيرى التاجرُ
-    // رئيسيّتين لحسابٍ واحد ببطاقتَي ترحيبٍ وأزرارٍ مختلفة، ويظنّ أنّه
-    // تاه. والشاشاتُ الحقيقيّةُ مبنيّةٌ كلُّها.
-    // ══════════════════════════════════════════════════════════════════
+    'daily_reports': () => const CashierReportScreen(),
     'fuel_pos': () => const FuelSaleScreen(),
-    'fuel_pumps': () => const FuelTanksScreen(),
-    'fuel_variance': () => const FuelVariancesScreen(),
-    'fuel_cards': () => const FuelOpsCenterScreen(),
-    'fuel_products': () => const FuelOpsCenterScreen(),
-    'fuel_companies': () => const FuelCompaniesScreen(),
-    'fuel_shifts': () => const FuelShiftsScreen(),
     'pharmacy_pos': () => const PharmacySaleScreen(),
     'pharmacy_products': () => const PharmacyProductsScreen(),
-    // ══════════════════════════════════════════════════════════════════
-    // **هذه الثلاثةُ أفعالٌ داخل شاشة الأصناف لا وجهاتٌ مستقلّة.**
-    //
-    // «الدفعات» و«البدائل» و«إخراج الدفعة المنتهية» تُفتح بعد اختيار
-    // صنفٍ بعينه، **والشاشةُ تحرس كلاًّ منها بقدرتها** بالفعل
-    // (`has('pharmacy_substitutions')` وأخواتها).
-    //
-    // فإسنادُ شاشةٍ لكلّ واحدةٍ يرسم **أربعةَ أزرارٍ مختلفةِ الأسماء
-    // تُفضي إلى موضعٍ واحد** — يعمل الزرُّ ويفتح غيرَ ما يقول. فتُترك
-    // بلا وجهةٍ ويبقى حرسُها حيث تُستعمَل.
-    // ══════════════════════════════════════════════════════════════════
-    // البدائل وإخراج المنتهي يقعان في تفاصيل الصنف/دفعاته، لا في صفحة عامة.
-    'pharmacy_alerts': () => const PharmacyAlertsScreen(),
-    'pharmacy_customers': () => const PharmacyCustomersScreen(),
-    // **الوصفاتُ تُدار من لوحة الصيدليّة نفسِها** — وسمُ الصنف وحقولُ
-    // الوصفة في البيعة. ولا شاشةَ ثالثةٌ لها، فتُوجَّه إلى موضع عملها.
-    // (‏وبلا هذا السطر يظهر سهمُ الدخول ويُضغط فلا يفتح — أمسكه
-    // `CapabilityScreenMapGuardTest`.)
-    // **والوصفةُ تُوثَّق على البيعة** — لا شاشةَ وصفاتٍ مستقلّة: الوسمُ
-    // يوقف البيعَ بلا رقمها، والتوثيقُ يقع في شاشة البيع نفسِها.
     'pharmacy_prescriptions': () => const PharmacySaleScreen(),
     'wholesale_invoices': () => const WholesaleProInvoicesScreen(),
-    // **والتحصيلُ يقع من الفاتورة** — لا شاشةَ تحصيلٍ مستقلّةً في
-    // المنتج، والقبضُ يبدأ من فاتورةٍ بعينها (`AmialQrCollectScreen`).
-    // فتُفتح شاشةُ الفواتير حيث يُحصَّل فعلاً، لا اللوحةُ العامّة.
     'wholesale_collections': () => const WholesaleProInvoicesScreen(),
-
-    // AMIAL-WHOLESALE-GUIDE-001 — **قدرةٌ تُباع ولا مدخلَ لها.**
-    //
-    // `wholesale_multi_pricing` تُعرَض في «مزايا باقتي» — وهي مبيعةٌ في
-    // باقة الأعمال — **ويُضغط اسمُها ولا يُفتح شيء**. والشاشةُ الوحيدةُ
-    // التي تحمل «شرائح الأسعار» هي إعداداتُ منشأة الجملة، ودليلُ
-    // التشغيل يجعل «التسعير» قسماً قائماً بذاته.
-    //
-    // **استُعيد المدخلُ بعد أن نُزع** مع دمج أقسام الدرج.
-    'wholesale_multi_pricing': () =>
-        const WholesalePolicyBusinessSettingsScreen(),
-    // ══════════════════════════════════════════════════════════════════
-    // **ثلاثُ قدراتٍ للمطعم، وثلاثُ وجهاتٍ لا وجهةٌ واحدة.**
-    //
-    // كانت «طلبات المطعم» و«شاشة المطبخ» **بلا مدخلٍ في هذه الخريطة**
-    // والخادمُ يُعلن لهما `screen('/restaurant')` — فتُعرضان ومعهما سهمُ
-    // الدخول، وتُضغطان فلا تفتحان.
-    //
-    // **والبنيةُ التي تفرّقهما كانت مبنيّةً ولا تُستعمَل**:
-    // `RestaurantScreen` تقبل `initialTab` منذ `AMIAL-RESTAURANT-GATE-002`
-    // (‏٠ = الطاولات · ١ = المطبخ)، وتوثيقُها يحذّر بالنصّ: «لو فُتحت
-    // كلُّها على التبويب الأوّل لكان زرُّ شاشة المطبخ يفتح الطاولات —
-    // **يعمل ويفعل الشيءَ الخطأ**».
-    //
-    // فليس هذا من باب «قدراتٌ تُفضي إلى شاشةٍ واحدة»: الوجهاتُ ثلاثٌ
-    // مختلفة، والشاشةُ واحدةٌ تحمل ثلاثتها. (القاعدة التاسعة.)
-    // ══════════════════════════════════════════════════════════════════
     'restaurant_tables': () => const RestaurantScreen(),
     'restaurant_orders': () => const RestaurantScreen(),
     'restaurant_kitchen': () => const RestaurantScreen(initialTab: 1),
-
-    // ── تجزئةٌ: أرمزٌ منقّطةٌ فاتت أوّلَ مسحٍ لي ─────────────────────
-    //
-    // **أمسكها الحارسُ لا أنا.** كان تعبيري `[a-z_0-9]+` فأسقط كلَّ رمزٍ
-    // فيه نقطة — سبعُ قدراتٍ يُعلن الخادمُ لها شاشةً. وهو بعينه ما تحذّر
-    // منه القاعدةُ الخامسة: تعبيرٌ نمطيٌّ يقطع ما لم يُتوقَّع.
-    'retail.catalog': () => const RetailOpsCenterScreen(),
-    // `ProductVariantsScreen` تحتاج `productId` و`productName` — فهي
-    // شاشةُ صنفٍ بعينه لا مدخلَ قائمة. والطريقُ إليها من شاشة الأصناف.
     'retail.variants': () => const CashierProductsScreen(),
-    'retail.price_versions': () => const RetailOpsCenterScreen(),
-    'retail.locations': () => const RetailLocationsScreen(),
-    'retail.transfers': () => const RetailTransfersScreen(),
-    'retail.waste': () => const RetailWastesScreen(),
     'retail.returns.by_line': () => const MerchantRefundScreen(),
-
-    // ── وما يُفتح من مركزٍ لا من شاشةٍ مستقلّة ──────────────────────
-    'rbac': () => const RetailOpsCenterScreen(),
     'barcode': () => const CashierPosScreen(),
   };
 
-  /// الشاشةُ التي تفتحها هذه القدرة، أو `null` إن لم تُبنَ بعد.
-  static Widget Function()? screenFor(String code) => _map[code];
+  /// هذه القدرات لا تعمل من التطبيق بعد الآن؛ أسماءها تبقى حتى لا يختل
+  /// عقد الباقة أو تظهر خدمة بلا تفسير، والوجهة تعلن بوضوح أين توجد.
+  static const Set<String> _ownerWebOnly = {
+    'gift_cards', 'installments', 'promotions', 'loyalty', 'inventory',
+    'low_stock_alerts', 'inventory_audit', 'suppliers', 'purchases',
+    'employees', 'multi_pos', 'branches', 'corporate_accounts',
+    'profit_reports', 'advanced_reports', 'excel_export', 'expenses',
+    'audit_log', 'advanced_backup', 'multi_currency', 'api_access',
+    'fuel_pumps', 'fuel_variance', 'fuel_cards', 'fuel_products',
+    'fuel_companies', 'fuel_shifts', 'pharmacy_alerts',
+    'pharmacy_customers', 'wholesale_multi_pricing', 'retail.catalog',
+    'retail.price_versions', 'retail.locations', 'retail.transfers',
+    'retail.waste', 'rbac',
+  };
 
-  /// أرمزُ كلِّ ما له شاشة — يقرؤها الحارس.
-  static Set<String> get codes => _map.keys.toSet();
+  static Widget Function()? screenFor(String code) {
+    final posScreen = _pos[code];
+    if (posScreen != null) return posScreen;
+    if (_ownerWebOnly.contains(code)) {
+      return () => const WebPortalNoticeScreen(role: 'merchant');
+    }
+    return null;
+  }
+
+  static Set<String> get codes => {..._pos.keys, ..._ownerWebOnly};
 }

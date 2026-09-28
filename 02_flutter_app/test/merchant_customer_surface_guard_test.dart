@@ -9,13 +9,11 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   final customerServices = File('lib/features/me/screens/my_services_screen.dart');
   final customerProfile = File('lib/features/setting/screens/profile_screen.dart');
-  final merchantDrawer = File('lib/features/merchant/screens/merchant_adaptive_shell.dart');
-  final merchantHome = File('lib/features/access/screens/role_based_home_screens.dart');
-  final merchantSettings = File('lib/features/merchant/screens/merchant_account_screen.dart');
-  final posHome = File('lib/features/merchant/screens/merchant_pos_home_screen.dart');
+  final portalNotice = File('lib/features/access/screens/web_portal_notice_screen.dart');
+  final posHome = File('lib/features/merchant/screens/pos_employee_home_screen.dart');
 
   test('مصادر حدود العميل والتاجر موجودة', () {
-    for (final file in [customerServices, customerProfile, merchantDrawer, merchantHome, merchantSettings, posHome]) {
+    for (final file in [customerServices, customerProfile, portalNotice, posHome]) {
       expect(file.existsSync(), isTrue, reason: 'ملف مفقود: ${file.path}');
     }
   });
@@ -25,19 +23,15 @@ void main() {
     expect(src, contains('_merchantAtEntry = Get.find<AccessController>().isMerchantSession'));
     expect(src, contains('if (_merchantAtEntry) return;'));
     expect(src, contains('if (_merchantAtEntry || access.isMerchantSession)'));
-    expect(src, contains('return const MerchantServicesHubScreen();'));
+    expect(src, contains("return const WebPortalNoticeScreen(role: 'merchant');"));
+    expect(src, isNot(contains('MerchantServicesHubScreen'));
   });
 
-  test('التاجر لا يفتح حساب العميل من قائمة أو لوحة تشغيله', () {
+  test('التاجر لا يفتح حساب العميل أو لوحة منشأة قديمة من التطبيق', () {
     final profile = customerProfile.readAsStringSync();
-    final drawer = merchantDrawer.readAsStringSync();
-    final home = merchantHome.readAsStringSync();
 
-    expect(profile, contains('return const MerchantAccountScreen();'));
-    expect(drawer, contains("label: 'إعدادات المنشأة'"));
-    expect(drawer, isNot(contains('const ProfileScreen()')));
-    expect(home, isNot(contains('const MyServicesScreen()')));
-    expect(home, contains('const MerchantServicesHubScreen()'));
+    expect(profile, contains("return const WebPortalNoticeScreen(role: 'merchant');"));
+    expect(profile, isNot(contains('MerchantAccountScreen'));
   });
 
   /// ══════════════════════════════════════════════════════════════════

@@ -7,8 +7,8 @@ import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/credit/screens/my_credits_screen.dart';
 import 'package:amial_pay/features/me/domain/me_repo.dart';
 import 'package:amial_pay/features/me/screens/my_account_number_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_pos_home_screen.dart';
+import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
+import 'package:amial_pay/features/merchant/screens/pos_employee_home_screen.dart';
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
@@ -59,10 +59,10 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
   Widget build(BuildContext context) {
     final access = Get.find<AccessController>();
     if (access.isPos) {
-      return const MerchantPosHomeScreen();
+      return const PosEmployeeHomeScreen();
     }
     if (_merchantAtEntry || access.isMerchantSession) {
-      return const MerchantServicesHubScreen();
+      return const WebPortalNoticeScreen(role: 'merchant');
     }
     return Scaffold(
       backgroundColor: AmialColors.background,
