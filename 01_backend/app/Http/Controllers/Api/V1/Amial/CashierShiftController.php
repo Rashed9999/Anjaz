@@ -8,6 +8,7 @@ use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\CashierShiftService;
+use App\Services\BranchResolverService;
 use App\Services\FeatureAccessService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Http\JsonResponse;
@@ -28,14 +29,15 @@ class CashierShiftController extends Controller
     public function __construct(
         private FeatureAccessService $access,
         private CashierShiftService $svc,
+        private BranchResolverService $branches,
     ) {}
 
     public function current(Request $request): JsonResponse
     {
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, $posId] = $ctx;
-        $shift = $this->svc->current($merchant, $posId);
+        [$merchant, $posId, $branch] = $ctx;
+        $shift = $this->svc->current($merchant, $posId, $branch?->id);
 
         // AMIAL-SHIFT-GATE-001 — **والشاشةُ تُخبَر أنّ الحدَّ مطلوبٌ أصلاً.**
         //
@@ -53,7 +55,7 @@ class CashierShiftController extends Controller
     {
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, $posId] = $ctx;
+        [$merchant, $posId, $branch] = $ctx;
 
         $v = Validator::make($request->all(), ['opening_float' => 'sometimes|numeric|min:0']);
         if ($v->fails()) return $this->err('VALIDATION', $v->errors()->first(), 422);
@@ -68,6 +70,7 @@ class CashierShiftController extends Controller
                 $posId,
                 (string) $request->input('opening_float', '0'),
                 \App\Http\Middleware\EnsurePosDevice::deviceOf($request)?->id,
+                $branch?->id,
             );
         } catch (\RuntimeException $e) {
             return $this->err('OPEN_FAILED', $e->getMessage(), 422);
@@ -79,8 +82,8 @@ class CashierShiftController extends Controller
     {
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, $posId] = $ctx;
-        $shift = $this->svc->current($merchant, $posId);
+        [$merchant, $posId, $branch] = $ctx;
+        $shift = $this->svc->current($merchant, $posId, $branch?->id);
         if (!$shift) return $this->err('NO_SHIFT', 'لا توجد وردية مفتوحة', 404);
         return $this->ok(['report' => $this->svc->snapshot($shift)]);
     }
@@ -89,7 +92,7 @@ class CashierShiftController extends Controller
     {
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, $posId] = $ctx;
+        [$merchant, $posId, $branch] = $ctx;
 
         $v = Validator::make($request->all(), [
             'counted_cash' => 'required|numeric|min:0',
@@ -97,7 +100,7 @@ class CashierShiftController extends Controller
         ]);
         if ($v->fails()) return $this->err('VALIDATION', $v->errors()->first(), 422);
 
-        $shift = $this->svc->current($merchant, $posId);
+        $shift = $this->svc->current($merchant, $posId, $branch?->id);
         if (!$shift) return $this->err('NO_SHIFT', 'لا توجد وردية مفتوحة', 404);
 
         try {
@@ -113,8 +116,9 @@ class CashierShiftController extends Controller
     {
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , $branch] = $ctx;
         $list = CashierShift::where('merchant_user_id', $merchant->id)
+            ->when($branch !== null, fn ($q) => $q->where('branch_id', $branch->id))
             ->where('status', 'closed')->orderByDesc('id')->limit(60)->get()
             ->map(fn ($s) => $this->arr($s));
         return $this->ok(['shifts' => $list, 'count' => $list->count()]);
@@ -167,13 +171,21 @@ class CashierShiftController extends Controller
         if (!$this->access->hasFeature($merchant, A::F_SHIFT_CLOSE)) {
             return $this->err('FEATURE_LOCKED', 'إقفال الوردية متاح في باقة الأعمال فأعلى', 402);
         }
-        return [$merchant, $posId];
+        try {
+            $branch = $this->branches->resolveOperational($request, $merchant, $pos ?? null);
+            $this->branches->assertDeviceMatches(
+                \App\Http\Middleware\EnsurePosDevice::deviceOf($request), $merchant, $branch);
+        } catch (\LogicException $e) {
+            return $this->err('BRANCH_SCOPE_INVALID', $e->getMessage(), 403);
+        }
+        return [$merchant, $posId, $branch];
     }
 
     private function arr(CashierShift $s): array
     {
         return [
             'id' => $s->id,
+            'branch_id' => $s->branch_id !== null ? (int) $s->branch_id : null,
             'opening_float' => (string) $s->opening_float,
             'cash_sales' => (string) $s->cash_sales,
             'sales_count' => (int) $s->sales_count,

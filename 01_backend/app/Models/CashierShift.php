@@ -9,7 +9,7 @@ class CashierShift extends Model
     protected $table = 'cashier_shifts';
 
     protected $fillable = [
-        'merchant_user_id', 'pos_user_id', 'opening_float', 'expected_cash',
+        'merchant_user_id', 'branch_id', 'pos_user_id', 'opening_float', 'expected_cash',
         'counted_cash', 'variance', 'cash_sales', 'sales_count', 'status',
         'notes', 'opened_by', 'opened_at', 'closed_at', 'zone_code',
         // AMIAL-SHIFT-GATE-001 — **وغيابُها هنا يُسقطها صامتاً**:
@@ -25,6 +25,7 @@ class CashierShift extends Model
     ];
 
     protected $casts = [
+        'branch_id' => 'integer',
         'opening_float' => 'decimal:2',
         'expected_cash' => 'decimal:2',
         'counted_cash' => 'decimal:2',

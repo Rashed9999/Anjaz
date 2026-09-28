@@ -6,6 +6,7 @@ use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\CashierShiftService;
+use App\Services\BranchResolverService;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -53,7 +54,10 @@ use Illuminate\Http\Request;
  */
 class EnsureOpenShift
 {
-    public function __construct(private readonly CashierShiftService $shifts)
+    public function __construct(
+        private readonly CashierShiftService $shifts,
+        private readonly BranchResolverService $branches,
+    )
     {
     }
 
@@ -68,9 +72,19 @@ class EnsureOpenShift
             return $next($request);
         }
 
-        [$merchant, $posUserId] = $ctx;
+        [$merchant, $posUserId, $pos] = $ctx;
+        try {
+            $branch = $this->branches->resolveOperational($request, $merchant, $pos);
+            $this->branches->assertDeviceMatches(
+                EnsurePosDevice::deviceOf($request), $merchant, $branch);
+        } catch (\LogicException $e) {
+            return new JsonResponse([
+                'success' => false, 'code' => 'BRANCH_SCOPE_INVALID',
+                'message' => $e->getMessage(), 'errors' => (object) [], 'meta' => (object) [],
+            ], 403);
+        }
 
-        return $this->refusalFor($merchant, $posUserId) ?? $next($request);
+        return $this->refusalFor($merchant, $posUserId, $branch?->id) ?? $next($request);
     }
 
     /**
@@ -89,7 +103,7 @@ class EnsureOpenShift
      *
      * @return JsonResponse|null  الرفضُ، أو `null` إن كان الطريقُ مفتوحاً.
      */
-    public function refusalFor(User $merchant, ?int $posUserId): ?JsonResponse
+    public function refusalFor(User $merchant, ?int $posUserId, ?int $branchId = null): ?JsonResponse
     {
         // ④ الحدُّ يُطفأ من اللوحة بقرارٍ مكتوب، لا بتعليق سطر.
         $required = (bool) (MerchantProfile::where('user_id', $merchant->id)
@@ -99,7 +113,7 @@ class EnsureOpenShift
             return null;
         }
 
-        if ($this->shifts->current($merchant, $posUserId) !== null) {
+        if ($this->shifts->current($merchant, $posUserId, $branchId) !== null) {
             return null;
         }
 
@@ -117,7 +131,7 @@ class EnsureOpenShift
         ], 409);
     }
 
-    /** @return array{0:User,1:?int}|null */
+    /** @return array{0:User,1:?int,2:?PosUser}|null */
     private function resolve(Request $request): ?array
     {
         $user = $request->user();
@@ -130,13 +144,13 @@ class EnsureOpenShift
         if ($pos) {
             $merchant = User::find($pos->merchant_user_id);
 
-            return $merchant ? [$merchant, $pos->id] : null;
+            return $merchant ? [$merchant, $pos->id, $pos] : null;
         }
 
         if (! MerchantProfile::where('user_id', $user->id)->exists()) {
             return null;
         }
 
-        return [$user, null];
+        return [$user, null, null];
     }
 }

@@ -10,6 +10,7 @@ use App\Models\MerchantSale;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\MerchantSaleRefundService;
+use App\Services\BranchResolverService;
 use App\Services\Merchant\MerchantPermissionService;
 use App\Support\Merchant\MerchantPermissions as P;
 use DomainException;
@@ -32,6 +33,7 @@ class CashierRefundController extends Controller
     public function __construct(
         private readonly MerchantSaleRefundService $refundSvc,
         private readonly MerchantPermissionService $perm,
+        private readonly BranchResolverService $branches,
     ) {}
 
     /** إنشاء مرتجع جديد. */
@@ -71,7 +73,11 @@ class CashierRefundController extends Controller
 
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, $posUserId] = $ctx;
+        [$merchant, $posUserId, $branch] = $ctx;
+
+        if (! $this->saleInScope($merchant, $saleUlid, $branch?->id)) {
+            return $this->error('NOT_FOUND', 'العملية غير موجودة في فرعك', 404);
+        }
 
         try {
             $refund = $this->refundSvc->refund(
@@ -100,9 +106,12 @@ class CashierRefundController extends Controller
     {
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , $branch] = $ctx;
 
         $page = MerchantRefund::where('merchant_user_id', $merchant->id)
+            ->when($branch !== null, fn ($q) => $q->whereIn('original_sale_ulid',
+                MerchantSale::where('merchant_user_id', $merchant->id)
+                    ->where('branch_id', $branch->id)->select('sale_ulid')))
             ->orderByDesc('id')
             ->paginate(20);
 
@@ -121,10 +130,13 @@ class CashierRefundController extends Controller
     {
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , $branch] = $ctx;
 
         $refund = MerchantRefund::where('id', $id)
             ->where('merchant_user_id', $merchant->id)
+            ->when($branch !== null, fn ($q) => $q->whereIn('original_sale_ulid',
+                MerchantSale::where('merchant_user_id', $merchant->id)
+                    ->where('branch_id', $branch->id)->select('sale_ulid')))
             ->first();
         if (!$refund) return $this->error('NOT_FOUND', 'المرتجع غير موجود', 404);
 
@@ -139,10 +151,11 @@ class CashierRefundController extends Controller
     {
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , $branch] = $ctx;
 
         $sale = MerchantSale::where('sale_ulid', $saleUlid)
             ->where('merchant_user_id', $merchant->id)
+            ->when($branch !== null, fn ($q) => $q->where('branch_id', $branch->id))
             ->first();
         if (!$sale) return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
 
@@ -194,12 +207,34 @@ class CashierRefundController extends Controller
         if ($pos) {
             $merchant = User::find($pos->merchant_user_id);
             if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
-            return [$merchant, $pos->id];
+            try {
+                $branch = $this->branches->resolveOperational($request, $merchant, $pos);
+                $this->branches->assertDeviceMatches(
+                    \App\Http\Middleware\EnsurePosDevice::deviceOf($request), $merchant, $branch);
+            } catch (\LogicException $e) {
+                return $this->error('BRANCH_SCOPE_INVALID', $e->getMessage(), 403);
+            }
+            return [$merchant, $pos->id, $branch];
         }
         if (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
             return $this->error('NOT_A_MERCHANT', 'متاح للتجار وموظفي نقاط البيع فقط', 403);
         }
-        return [$authUser, null];
+        try {
+            $branch = $this->branches->resolveOperational($request, $authUser);
+            $this->branches->assertDeviceMatches(
+                \App\Http\Middleware\EnsurePosDevice::deviceOf($request), $authUser, $branch);
+        } catch (\LogicException $e) {
+            return $this->error('BRANCH_SCOPE_INVALID', $e->getMessage(), 403);
+        }
+        return [$authUser, null, $branch];
+    }
+
+    private function saleInScope(User $merchant, string $saleUlid, ?int $branchId): bool
+    {
+        return MerchantSale::where('sale_ulid', $saleUlid)
+            ->where('merchant_user_id', $merchant->id)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->exists();
     }
 
     private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse

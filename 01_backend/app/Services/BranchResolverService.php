@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Branch;
+use App\Models\Merchant\PosDevice;
 use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\User;
@@ -24,6 +25,104 @@ use Illuminate\Http\Request;
  */
 class BranchResolverService
 {
+    /**
+     * نطاق التشغيل المالي للكاشير والوردية.
+     *
+     * `resolve()` أعلاه متسامح عمداً مع شاشات القراءة القديمة. أمّا البيع
+     * ودرج النقد فلا يحتملان التخمين: فرعٌ مزوّر لا يعود إلى الافتراضي
+     * صامتاً، وموظف POS لا يختار فرعاً غير الفرع المسند إليه.
+     *
+     * null مسموح فقط لمنشأة قديمة لا تملك أي فرع بعد (تشغيل فرع واحد).
+     * فور وجود فرع، يصبح النطاق حقيقة إلزامية لكل حركة تشغيلية جديدة.
+     *
+     * @throws \LogicException
+     */
+    public function resolveOperational(Request $request, User $merchant, ?PosUser $pos = null): ?Branch
+    {
+        $active = Branch::where('merchant_user_id', $merchant->id)
+            ->where('is_active', true);
+        $activeCount = (clone $active)->count();
+
+        if ($pos !== null) {
+            if ($pos->merchant_user_id !== $merchant->id || ! $pos->is_active) {
+                throw new \LogicException('موظف نقطة البيع غير صالح لهذه المنشأة.');
+            }
+            if ($activeCount === 0) {
+                return null; // منشأة قديمة أحادية الفرع، بلا تخمينٍ لفرع غير موجود.
+            }
+            if (! $pos->branch_id) {
+                throw new \LogicException('موظف نقطة البيع غير مسند إلى فرع نشط.');
+            }
+
+            $branch = (clone $active)->whereKey($pos->branch_id)->first();
+            if (! $branch) {
+                throw new \LogicException('فرع موظف نقطة البيع غير نشط أو لا يتبع المنشأة.');
+            }
+
+            $claimed = $request->header('X-Amial-Branch-ID');
+            if ($claimed !== null && (! ctype_digit((string) $claimed)
+                || (int) $claimed !== (int) $branch->id)) {
+                throw new \LogicException('لا يستطيع موظف نقطة البيع تغيير فرعه من الطلب.');
+            }
+
+            return $branch;
+        }
+
+        $claimed = $request->header('X-Amial-Branch-ID');
+        if ($claimed !== null && $claimed !== '') {
+            if (! ctype_digit((string) $claimed)) {
+                throw new \LogicException('معرّف الفرع غير صالح.');
+            }
+            $branch = (clone $active)->whereKey((int) $claimed)->first();
+            if (! $branch) {
+                throw new \LogicException('الفرع غير نشط أو لا يتبع المنشأة.');
+            }
+
+            return $branch;
+        }
+
+        if ($activeCount === 0) {
+            return null;
+        }
+
+        $default = (clone $active)->where('is_default', true)->first();
+        if ($default) {
+            return $default;
+        }
+        if ($activeCount === 1) {
+            return (clone $active)->first();
+        }
+
+        throw new \LogicException('اختر فرعاً نشطاً قبل بدء عملية الكاشير.');
+    }
+
+    /**
+     * الجهاز مقعد للفرع، لا ترويسة يختار بها المستخدم موقع البيع.
+     *
+     * @throws \LogicException
+     */
+    public function assertDeviceMatches(?PosDevice $device, User $merchant, ?Branch $branch): void
+    {
+        if ($device === null) {
+            return;
+        }
+        if ((int) $device->merchant_user_id !== (int) $merchant->id
+            || ! $device->is_active || $device->revoked_at !== null) {
+            throw new \LogicException('جهاز نقطة البيع غير صالح لهذه المنشأة.');
+        }
+
+        if ($branch === null) {
+            if ($device->branch_id !== null) {
+                throw new \LogicException('هذا الجهاز مرتبط بفرع، ولا يوجد نطاق فرع للعملية.');
+            }
+            return;
+        }
+
+        if ((int) $device->branch_id !== (int) $branch->id) {
+            throw new \LogicException('جهاز نقطة البيع لا يتبع الفرع التشغيلي الحالي.');
+        }
+    }
+
     /**
      * يحلّ الفرع للـ request الحالي.
      * يُرجع Branch | null (null = لا فروع، أو الخطّة لا تدعم).

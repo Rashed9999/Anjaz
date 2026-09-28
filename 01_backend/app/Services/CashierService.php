@@ -257,6 +257,7 @@ class CashierService
         // يُدخَل» لا صفراً: الآجلُ والمحفظةُ لا مستلَمَ فيهما أصلاً.
         // ══════════════════════════════════════════════════════════════
         ?string $amountReceived = null,
+        ?int $branchId = null,
     ): MerchantSale {
         // AMIAL-OFFLINE-POS-001: idempotency — بيع دون اتصال يُعاد إرساله بنفس
         // client_uuid عند المزامنة؛ إن كان مُسجَّلاً سابقاً نُعيده كما هو دون
@@ -264,7 +265,12 @@ class CashierService
         if (!empty($clientUuid)) {
             $existing = MerchantSale::where('merchant_user_id', $merchant->id)
                 ->where('client_uuid', $clientUuid)->first();
-            if ($existing) return $existing;
+            if ($existing) {
+                if ($branchId !== null && (int) $existing->branch_id !== $branchId) {
+                    throw new RuntimeException('معرّف المزامنة يعود إلى بيع في فرع آخر.');
+                }
+                return $existing;
+            }
         }
 
         if (!in_array($paymentMethod, MerchantSale::METHODS, true)) {
@@ -377,7 +383,7 @@ class CashierService
                 'استبدالُ النقاط يحتاج رقمَ العميل — فرصيدُ النقاط محفوظٌ على رقمه');
         }
 
-        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid, $currency, $fxRate, $baseTotal, $redeemPoints, $amountReceived) {
+        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid, $currency, $fxRate, $baseTotal, $redeemPoints, $amountReceived, $branchId) {
             // لا يكفي `paid_transaction_id` القادم من Flutter. يجب أن يكون
             // طلب QR مدفوعاً لمحفظة المنشأة وبالمبلغ نفسه وغير مستهلك.
             // البيع بلا مرجع يبقى معلّقاً إلى أن تُتم شاشة QR الدفع؛ أمّا إذا
@@ -408,8 +414,13 @@ class CashierService
             // **و`null` هنا ليست عطلاً** (القاعدة السابعة): تاجرٌ أطفأ
             // الحدَّ من لوحته يبيع بلا ورديّة عن قصد، والعمودُ يقول ذلك.
             // ══════════════════════════════════════════════════════════
-            $openShift = app(CashierShiftService::class)->current($merchant, $posUserId);
+            $openShift = app(CashierShiftService::class)->current($merchant, $posUserId, $branchId);
             $shiftId = $openShift?->id;
+
+            if ($branchId !== null && $openShift !== null
+                && (int) $openShift->branch_id !== $branchId) {
+                throw new RuntimeException('الوردية المفتوحة لا تتبع الفرع التشغيلي.');
+            }
 
             // AMIAL-SHIFT-DEVICE-001 — **والصندوقُ يُقرأ من الورديّة لا
             // من الطلب.**
@@ -427,6 +438,7 @@ class CashierService
                 'invoice_number' => $this->invoiceNumbers->nextForMerchant($merchant),
                 'client_uuid' => $clientUuid ?: null,
                 'merchant_user_id' => $merchant->id,
+                'branch_id' => $branchId,
                 'pos_user_id' => $posUserId,
                 'shift_id' => $shiftId,
                 'pos_device_id' => $saleDeviceId,
@@ -692,11 +704,14 @@ class CashierService
     }
 
     /** تسوية بيع أجل (تحويله مدفوعاً). */
-    public function settleCredit(User $merchant, int $saleId, ?string $paidTransactionId = null): MerchantSale
+    public function settleCredit(
+        User $merchant, int $saleId, ?string $paidTransactionId = null, ?int $branchId = null,
+    ): MerchantSale
     {
-        return DB::transaction(function () use ($merchant, $saleId, $paidTransactionId) {
+        return DB::transaction(function () use ($merchant, $saleId, $paidTransactionId, $branchId) {
             $sale = MerchantSale::where('id', $saleId)
                 ->where('merchant_user_id', $merchant->id)
+                ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -762,12 +777,13 @@ class CashierService
      * `unknown_cost` ويُقال عددُه وإيرادُه، فيعرف القارئ أنّ الهامش
      * محسوبٌ على جزءٍ لا على الكلّ.
      */
-    public function profitReport(User $merchant, int $days = 7): array
+    public function profitReport(User $merchant, int $days = 7, ?int $branchId = null): array
     {
         $days = max(1, min(90, $days));
         $from = now()->subDays($days - 1)->startOfDay();
 
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
             ->where('created_at', '>=', $from)
             ->with('lines')
@@ -868,11 +884,14 @@ class CashierService
      * المدخل الطبيعي لشاشة الاسترجاع: كل صف يحمل sale_ulid يُفتح به
      * تدفّق «refundable → refund». يُرفَق بكل بيع إجمالي ما استُرجع منه.
      */
-    public function listSales(User $merchant, ?string $date = null, int $limit = 100): array
+    public function listSales(
+        User $merchant, ?string $date = null, int $limit = 100, ?int $branchId = null,
+    ): array
     {
         $day = $date ? Carbon::parse($date) : now();
 
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->whereBetween('created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
             ->orderByDesc('id')
             ->limit(max(1, min($limit, 200)))
@@ -951,13 +970,14 @@ class CashierService
 
     // ============ التقرير اليومي ============
 
-    public function dailyReport(User $merchant, ?string $date = null): array
+    public function dailyReport(User $merchant, ?string $date = null, ?int $branchId = null): array
     {
         $day = $date ? Carbon::parse($date) : now();
         $from = $day->copy()->startOfDay();
         $to = $day->copy()->endOfDay();
 
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->whereBetween('created_at', [$from, $to])
             ->with('lines')
             ->get();
@@ -1007,6 +1027,7 @@ class CashierService
         // إجمالي الإيرادات الفعلية (نقد + أميال باي) — الأجل غير المسوّى مستحقّات
         $realized = MoneyService::add($byMethod['cash'], $byMethod['amial_pay']);
         $outstandingCredit = (string) MerchantSale::where('merchant_user_id', $merchant->id)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->where('status', 'credit_unpaid')
             ->sum(DB::raw('COALESCE(base_amount, total_amount)'));
 

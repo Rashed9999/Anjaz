@@ -17,10 +17,11 @@ use RuntimeException;
  */
 class CashierShiftService
 {
-    public function current(User $merchant, ?int $posUserId): ?CashierShift
+    public function current(User $merchant, ?int $posUserId, ?int $branchId = null): ?CashierShift
     {
         return CashierShift::where('merchant_user_id', $merchant->id)
             ->where('pos_user_id', $posUserId)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->where('status', 'open')
             ->latest('id')->first();
     }
@@ -30,8 +31,11 @@ class CashierShiftService
         ?int $posUserId,
         string $openingFloat,
         ?int $posDeviceId = null,
+        ?int $branchId = null,
     ): CashierShift {
-        if ($this->current($merchant, $posUserId)) {
+        $this->assertOperationalLinks($merchant, $posUserId, $posDeviceId, $branchId);
+
+        if ($this->current($merchant, $posUserId, $branchId)) {
             throw new RuntimeException('توجد وردية مفتوحة بالفعل — أغلِقها أولاً');
         }
 
@@ -66,6 +70,7 @@ class CashierShiftService
 
         return CashierShift::create([
             'merchant_user_id' => $merchant->id,
+            'branch_id' => $branchId,
             'pos_user_id' => $posUserId,
             'pos_device_id' => $posDeviceId,
 
@@ -81,6 +86,44 @@ class CashierShiftService
             'opened_at' => now(),
             'zone_code' => $merchant->zone_code ?? 'SOUTH',
         ]);
+    }
+
+    /** @throws RuntimeException */
+    private function assertOperationalLinks(
+        User $merchant,
+        ?int $posUserId,
+        ?int $posDeviceId,
+        ?int $branchId,
+    ): void {
+        // لا نكسر منشأةً قديمة أحادية الفرع؛ لكن فرعاً مُرسلاً يجب أن يكون
+        // صحيحاً، وكل نطاق متعدد الفروع يصل هنا ممرّراً من BranchResolver.
+        if ($branchId !== null && ! \App\Models\Branch::whereKey($branchId)
+            ->where('merchant_user_id', $merchant->id)->where('is_active', true)->exists()) {
+            throw new RuntimeException('الفرع التشغيلي غير صالح لهذه المنشأة.');
+        }
+
+        if ($posUserId !== null) {
+            $pos = \App\Models\PosUser::whereKey($posUserId)
+                ->where('merchant_user_id', $merchant->id)->where('is_active', true)->first();
+            if (! $pos) {
+                throw new RuntimeException('موظف نقطة البيع غير صالح لهذه المنشأة.');
+            }
+            if ($branchId !== null && (int) $pos->branch_id !== $branchId) {
+                throw new RuntimeException('موظف نقطة البيع لا يتبع الفرع التشغيلي.');
+            }
+        }
+
+        if ($posDeviceId !== null) {
+            $device = \App\Models\Merchant\PosDevice::whereKey($posDeviceId)
+                ->where('merchant_user_id', $merchant->id)->where('is_active', true)
+                ->whereNull('revoked_at')->first();
+            if (! $device) {
+                throw new RuntimeException('جهاز نقطة البيع غير صالح لهذه المنشأة.');
+            }
+            if ($branchId !== null && (int) $device->branch_id !== $branchId) {
+                throw new RuntimeException('جهاز نقطة البيع لا يتبع الفرع التشغيلي.');
+            }
+        }
     }
 
     /**

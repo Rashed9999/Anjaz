@@ -10,6 +10,7 @@ use App\Models\PosUser;
 use App\Models\User;
 use App\Services\CashierService;
 use App\Services\CashierSaleInvoicePdfService;
+use App\Services\BranchResolverService;
 use App\Services\Merchant\MerchantPermissionService;
 use App\Support\Merchant\MerchantPermissions as P;
 use DomainException;
@@ -43,13 +44,14 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
     public function __construct(
         private readonly CashierService $cashier,
         private readonly MerchantPermissionService $perm,
+        private readonly BranchResolverService $branches,
     ) {}
 
     public function products(Request $request): JsonResponse
     {
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         return $this->ok(['products' => $this->cashier->listProducts(
             $merchant,
@@ -71,7 +73,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         try {
             $hit = app(\App\Services\MerchantProductBarcodeService::class)->find(
@@ -110,7 +112,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         try {
             $product = $this->cashier->addProduct($merchant, $v->validated());
@@ -294,7 +296,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, $posUserId] = $ctx;
+        [$merchant, $posUserId, , $branch] = $ctx;
 
         // AMIAL-CORPORATE-ACCOUNTS-001: البيع على حساب شركة يتطلّب الباقة المؤسسية
         if ($request->input('payment_method') === 'corporate'
@@ -326,6 +328,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                     ? (float) $request->input('redeem_points') : null,
                 amountReceived: $request->input('amount_received') !== null
                     ? (string) $request->input('amount_received') : null,
+                branchId: $branch?->id,
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('SALE_INVALID', $e->getMessage(), 422);
@@ -508,10 +511,11 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
     {
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         $sale = MerchantSale::where('sale_ulid', $ulid)
             ->where('merchant_user_id', $merchant->id)
+            ->when($branch !== null, fn ($q) => $q->where('branch_id', $branch->id))
             ->first();
         if (!$sale) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
 
@@ -554,10 +558,11 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         }
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         try {
-            $sale = $this->cashier->settleCredit($merchant, $id, $request->input('paid_transaction_id'));
+            $sale = $this->cashier->settleCredit(
+                $merchant, $id, $request->input('paid_transaction_id'), $branch?->id);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
         } catch (\RuntimeException $e) {
@@ -578,12 +583,13 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         return $this->ok($this->cashier->listSales(
             $merchant,
             $request->query('date'),
-            (int) $request->query('limit', 100)
+            (int) $request->query('limit', 100),
+            $branch?->id,
         ));
     }
 
@@ -598,10 +604,11 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
     {
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         $sale = \App\Models\MerchantSale::where('sale_ulid', $ulid)
             ->where('merchant_user_id', $merchant->id)
+            ->when($branch !== null, fn ($q) => $q->where('branch_id', $branch->id))
             ->with('lines')
             ->first();
         if (! $sale) return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
@@ -649,9 +656,10 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
     {
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
-        return $this->ok($this->cashier->dailyReport($merchant, $request->query('date')));
+        return $this->ok($this->cashier->dailyReport(
+            $merchant, $request->query('date'), $branch?->id));
     }
 
     /** AMIAL-PROFIT-001 — GET /profit-report?days=7|30|90 */
@@ -659,10 +667,10 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
     {
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         $days = (int) $request->query('days', 7);
-        return $this->ok($this->cashier->profitReport($merchant, $days));
+        return $this->ok($this->cashier->profitReport($merchant, $days, $branch?->id));
     }
 
     /**
@@ -678,7 +686,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
     {
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         $v = \Illuminate\Support\Facades\Validator::make($request->query(), [
             'from' => 'sometimes|nullable|date',
@@ -693,12 +701,13 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             $merchant,
             $request->query('from'),
             $request->query('to'),
+            $branch?->id,
         ));
     }
 
     // ---- helpers ----
 
-    /** يرجّع [merchant(User), posUserId(?int)] أو JsonResponse عند الخطأ. */
+    /** يرجّع [merchant(User), posUserId(?int), posUser(?PosUser), branch(?Branch)]. */
     private function resolveMerchantPos(Request $request): array|JsonResponse
     {
         $authUser = $request->user();
@@ -714,7 +723,14 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                     403,
                 );
             }
-            return [$merchant, $pos->id];
+            try {
+                $branch = $this->branches->resolveOperational($request, $merchant, $pos);
+                $this->branches->assertDeviceMatches(
+                    \App\Http\Middleware\EnsurePosDevice::deviceOf($request), $merchant, $branch);
+            } catch (\LogicException $e) {
+                return $this->error('BRANCH_SCOPE_INVALID', $e->getMessage(), 403);
+            }
+            return [$merchant, $pos->id, $pos, $branch];
         }
 
         $profile = MerchantProfile::where('user_id', $authUser->id)->first();
@@ -728,7 +744,14 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                 403,
             );
         }
-        return [$authUser, null];
+        try {
+            $branch = $this->branches->resolveOperational($request, $authUser);
+            $this->branches->assertDeviceMatches(
+                \App\Http\Middleware\EnsurePosDevice::deviceOf($request), $authUser, $branch);
+        } catch (\LogicException $e) {
+            return $this->error('BRANCH_SCOPE_INVALID', $e->getMessage(), 403);
+        }
+        return [$authUser, null, null, $branch];
     }
 
     /** الكاشير العام يخص البيع السريع والتجزئة؛ الصيدلية لها مصدر بيع مستقل. */

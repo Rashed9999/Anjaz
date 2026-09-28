@@ -55,12 +55,15 @@ class SalesBreakdownService
     /**
      * @return array{range:array,totals:array,items:array,categories:array,cost_coverage:array}
      */
-    public function report(User $merchant, ?string $from = null, ?string $to = null): array
+    public function report(
+        User $merchant, ?string $from = null, ?string $to = null, ?int $branchId = null,
+    ): array
     {
         [$start, $end] = $this->range($from, $to);
 
         $lines = SaleLine::query()
             ->whereIn('sale_id', MerchantSale::where('merchant_user_id', $merchant->id)
+                ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
                 ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
                 ->whereBetween('created_at', [$start, $end])
                 ->select('id'))
