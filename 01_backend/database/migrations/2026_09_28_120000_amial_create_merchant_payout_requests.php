@@ -28,7 +28,10 @@ return new class extends Migration
             $table->string('rejection_reason', 500)->nullable();
             $table->timestamps();
 
-            $table->index(['merchant_user_id', 'status', 'created_at']);
+            $table->index(
+                ['merchant_user_id', 'status', 'created_at'],
+                'merchant_payout_user_status_created_idx'
+            );
             $table->foreign('merchant_user_id')->references('id')->on('users')->restrictOnDelete();
         });
     }
