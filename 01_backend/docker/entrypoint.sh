@@ -41,13 +41,15 @@ if [ -r /etc/amial-build-epoch ]; then
     fi
 fi
 
-# ── منافذ إصغاء nginx: منفذ Railway ($PORT) + الدومين (9000) + 8080 ──
-# نستمع على كل المنافذ المحتملة (IPv4 و IPv6) فينتهي أي لبس بين منفذ
-# الفحص الصحّي ومنفذ الدومين. php-fpm على 9001 فلا تعارض.
-PORT="${PORT:-8080}"
-echo "🔌 nginx يستمع على المنافذ المحتملة: ${PORT} + 9000 + 8080 (IPv4/IPv6)"
+# ── منافذ إصغاء nginx: Coolify (80) + المنفذ الديناميكي + المنافذ القديمة ──
+# Coolify يوجّه إلى منفذ الحاوية المعرّض (80). عدم وجود PORT في بيئة
+# Coolify كان يجعل nginx يستمع إلى 8080 و9000 فقط بينما الـ proxy يطلب 80،
+# فتظهر "no available server" رغم أن النشرة نفسها Successful.
+# نبقي 8080/9000 للتوافق، لكن 80 عقدٌ دائم مع Coolify.
+PORT="${PORT:-80}"
+echo "🔌 nginx يستمع على المنافذ المحتملة: ${PORT} + 80 + 9000 + 8080 (IPv4/IPv6)"
 : > /etc/nginx/listen.conf
-for p in "$PORT" 9000 8080; do
+for p in "$PORT" 80 9000 8080; do
     if ! grep -q "listen ${p};" /etc/nginx/listen.conf 2>/dev/null; then
         printf '        listen %s;\n        listen [::]:%s;\n' "$p" "$p" >> /etc/nginx/listen.conf
     fi
