@@ -35,6 +35,19 @@ class MerchantRepo extends GetxService {
         if (from != null) 'from': from,
         if (to != null) 'to': to,
       });
+
+  /// سجل مبيعات نقطة البيع مصدره `merchant_sales`، لا دفتر المحفظة.
+  /// لذلك تظهر المبيعات النقدية والآجلة أيضاً، مع طريقة الدفع ورقم الفاتورة.
+  Future<Response> cashierSales({required String date}) => apiClient.getData(
+        '/api/v1/amial/merchant/cashier/sales',
+        query: {'date': date},
+      );
+
+  /// التفصيل يُقرأ من الخادم قبل فتح الفاتورة؛ لا تعيد الشاشة بناءه محلياً.
+  Future<Response> cashierSale(String saleUlid) => apiClient.getData(
+        '/api/v1/amial/merchant/cashier/sales/$saleUlid',
+      );
+
   Future<Response> updateProfile(Map<String, dynamic> data) =>
       apiClient.putData('$_customerBase/update-profile', data);
   Future<Response> logout() => apiClient.postData('$_customerBase/logout', {});

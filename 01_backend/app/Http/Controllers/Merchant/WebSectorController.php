@@ -24,6 +24,7 @@ use App\Services\Access\EntitlementService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * الويب يعيد استخدام محركات القطاعات الأصلية ويختار من الملف الحقيقي للمالك.
@@ -31,6 +32,8 @@ use Illuminate\Http\Request;
  */
 class WebSectorController extends Controller
 {
+    public function __construct(private readonly EntitlementService $entitlements) {}
+
     private function sector(Request $request): ?string
     {
         return MerchantProfile::where('user_id', $request->user('merchant_web')->id)
@@ -40,6 +43,7 @@ class WebSectorController extends Controller
     public function overview(Request $request): JsonResponse
     {
         $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, $this->workspaceCapability($sector))) return $deny;
         $target = match ($sector) {
             A::BIZ_QUICK_SALE => [CashierController::class, 'report'],
             A::BIZ_RETAIL => [RetailVerticalController::class, 'operationsCenter'],
@@ -94,6 +98,7 @@ class WebSectorController extends Controller
     public function products(Request $request): JsonResponse
     {
         $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, $this->productCapability($sector))) return $deny;
         $target = match ($sector) {
             A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_RESTAURANT
                 => [CashierController::class, 'products'],
@@ -151,6 +156,7 @@ class WebSectorController extends Controller
     {
         $sector = $this->sector($request);
         if ($sector === A::BIZ_FUEL) return $this->unsupported($sector);
+        if ($deny = $this->requireCapability($request, A::F_BARCODE)) return $deny;
         $context = match ($sector) {
             A::BIZ_PHARMACY => 'pharmacy',
             A::BIZ_WHOLESALE => 'wholesale',
@@ -167,6 +173,7 @@ class WebSectorController extends Controller
     {
         if (!in_array($this->sector($request), [A::BIZ_RETAIL, A::BIZ_QUICK_SALE, A::BIZ_RESTAURANT], true))
             return $this->unsupported($this->sector($request));
+        if ($deny = $this->requireCapability($request, 'retail.catalog')) return $deny;
         return app(ProductCatalogController::class)->lookup($request);
     }
 
@@ -209,6 +216,7 @@ class WebSectorController extends Controller
     public function catalogueOptions(Request $request): JsonResponse
     {
         if (!$this->genericSector($this->sector($request))) return $this->unsupported($this->sector($request));
+        if ($deny = $this->requireCapability($request, 'retail.catalog')) return $deny;
         $id = (int) $request->user('merchant_web')->id;
         return response()->json(['success' => true, 'code' => 'CATALOGUE_OPTIONS',
             'meta' => [
@@ -225,6 +233,7 @@ class WebSectorController extends Controller
     {
         $sector = $this->sector($request);
         if (!$this->genericSector($sector)) return $this->unsupported($sector);
+        if ($deny = $this->requireCapability($request, 'retail.catalog')) return $deny;
         $valid = Validator::make($request->all(), ['name' => 'required|string|max:100']);
         if ($valid->fails()) return response()->json(['success' => false, 'code' => 'VALIDATION',
             'message' => $valid->errors()->first()], 422);
@@ -243,6 +252,7 @@ class WebSectorController extends Controller
     {
         $sector = $this->sector($request);
         if (!$this->genericSector($sector)) return $this->unsupported($sector);
+        if ($deny = $this->requireCapability($request, A::F_BARCODE)) return $deny;
         $valid = Validator::make($request->all(), [
             'barcode' => 'required|string|max:64',
             'pack_size' => 'required|integer|min:1|max:100000',
@@ -257,6 +267,7 @@ class WebSectorController extends Controller
     public function operations(Request $request): JsonResponse
     {
         $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, $this->workspaceCapability($sector))) return $deny;
         $target = match ($sector) {
             A::BIZ_FUEL => [FuelStationController::class, 'listPumps'],
             A::BIZ_PHARMACY => [PharmacyController::class, 'listAlerts'],
@@ -270,7 +281,67 @@ class WebSectorController extends Controller
         return $this->invoke($target, $request, $sector);
     }
 
-    private function invoke(array $target, Request $request, ?string $sector, ?int $id = null): JsonResponse
+    /**
+     * سجل المالك القطاعي. لا يُعاد استخدام سجل `merchant_sales` للوقود
+     * والصيدلية والجملة والمطعم، لأن لكل منها عملية مصدر وحالة دفع مختلفة.
+     */
+    public function sales(Request $request): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, $this->salesCapability($sector))) return $deny;
+
+        $target = match ($sector) {
+            A::BIZ_QUICK_SALE, A::BIZ_RETAIL => [CashierController::class, 'listSales'],
+            A::BIZ_FUEL => [FuelStationController::class, 'listSales'],
+            A::BIZ_PHARMACY => [PharmacyController::class, 'listSales'],
+            A::BIZ_WHOLESALE => [WholesaleController::class, 'listInvoices'],
+            A::BIZ_RESTAURANT => [RestaurantController::class, 'orders'],
+            default => null,
+        };
+
+        if (!$target) return $this->unsupported($sector);
+        return $this->invoke($target, $request, $sector);
+    }
+
+    /** تفصيل السجل نفسه الذي ظهر في قائمة القطاع، وبنطاق مالك الجلسة فقط. */
+    public function sale(Request $request, string $id): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, $this->salesCapability($sector))) return $deny;
+
+        $target = match ($sector) {
+            A::BIZ_QUICK_SALE, A::BIZ_RETAIL => [CashierController::class, 'showSale'],
+            A::BIZ_FUEL => [FuelStationController::class, 'showSale'],
+            A::BIZ_PHARMACY => [PharmacyController::class, 'showSale'],
+            A::BIZ_WHOLESALE => [WholesaleController::class, 'showInvoice'],
+            A::BIZ_RESTAURANT => [RestaurantController::class, 'showOrder'],
+            default => null,
+        };
+
+        if (!$target) return $this->unsupported($sector);
+        return $this->invoke($target, $request, $sector, $id);
+    }
+
+    /**
+     * لا تتوفر فاتورة PDF إلا حيث يوجد مولّد رسمي في محرك القطاع.
+     * إبقاء هذا الباب صريحاً يمنع توليد PDF عام ناقص للصيدلية أو للوقود.
+     */
+    public function saleInvoice(Request $request, string $id): Response|JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, $this->salesCapability($sector))) return $deny;
+
+        $target = match ($sector) {
+            A::BIZ_QUICK_SALE, A::BIZ_RETAIL => [CashierController::class, 'downloadInvoice'],
+            A::BIZ_PHARMACY => [PharmacyController::class, 'downloadInvoice'],
+            default => null,
+        };
+        if (!$target) return $this->unsupported($sector);
+
+        return app($target[0])->{$target[1]}($request, $id);
+    }
+
+    private function invoke(array $target, Request $request, ?string $sector, int|string|null $id = null): JsonResponse
     {
         $controller = app($target[0]);
         $response = $id === null ? $controller->{$target[1]}($request)
@@ -294,5 +365,62 @@ class WebSectorController extends Controller
             'message' => 'هذا القطاع ليس له مسار تشغيل ويب مكتمل بعد.',
             'meta' => ['sector' => $sector],
         ], 501);
+    }
+
+    private function workspaceCapability(?string $sector): ?string
+    {
+        return match ($sector) {
+            A::BIZ_QUICK_SALE => A::F_QUICK_SALE,
+            A::BIZ_RETAIL => A::F_INVENTORY,
+            A::BIZ_FUEL => A::F_FUEL_PUMPS,
+            A::BIZ_PHARMACY => A::F_PHARMACY_ALERTS,
+            A::BIZ_WHOLESALE => A::F_WHOLESALE_INVOICES,
+            A::BIZ_RESTAURANT => A::F_RESTAURANT_TABLES,
+            default => null,
+        };
+    }
+
+    private function productCapability(?string $sector): ?string
+    {
+        return match ($sector) {
+            A::BIZ_FUEL => A::F_FUEL_PRODUCTS,
+            A::BIZ_PHARMACY => A::F_PHARMACY_PRODUCTS,
+            A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_WHOLESALE, A::BIZ_RESTAURANT => A::F_PRODUCTS,
+            default => null,
+        };
+    }
+
+    private function salesCapability(?string $sector): ?string
+    {
+        return match ($sector) {
+            A::BIZ_QUICK_SALE, A::BIZ_RETAIL => A::F_QUICK_SALE,
+            A::BIZ_FUEL => A::F_FUEL_POS,
+            A::BIZ_PHARMACY => A::F_PHARMACY_POS,
+            A::BIZ_WHOLESALE => A::F_WHOLESALE_INVOICES,
+            A::BIZ_RESTAURANT => A::F_RESTAURANT_ORDERS,
+            default => null,
+        };
+    }
+
+    private function requireCapability(Request $request, ?string $capability): ?JsonResponse
+    {
+        if ($capability === null) return $this->unsupported($this->sector($request));
+
+        $gate = $this->entitlements->state($request->user('merchant_web'), $capability);
+        if (($gate['state'] ?? null) === EntitlementService::AVAILABLE) return null;
+
+        $status = match ($gate['state'] ?? '') {
+            EntitlementService::LOCKED_BY_PLAN, EntitlementService::LIMIT_REACHED => 402,
+            EntitlementService::COMING_SOON => 503,
+            EntitlementService::NOT_APPLICABLE => 404,
+            default => 403,
+        };
+
+        return response()->json([
+            'success' => false,
+            'code' => 'SECTOR_CAPABILITY_DENIED',
+            'message' => 'هذه المساحة غير متاحة للقطاع أو الباقة الحالية.',
+            'meta' => ['entitlement' => $gate],
+        ], $status);
     }
 }

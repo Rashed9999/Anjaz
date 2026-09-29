@@ -24,6 +24,7 @@ import 'package:amial_pay/features/merchant/screens/merchant_account_screen.dart
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_payout_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_sales_history_screen.dart';
 
 /// **ملكيّةُ المنشأة، وغيابُ المتحكّم لا يُقرأ ملكيّةً.**
 ///
@@ -292,13 +293,13 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                 ),
               ),
 
-              // ====== View all transactions ======
+              // ====== Wallet, distinct from POS sales ======
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('المبيعات',
+                    const Text('محفظة أميال',
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 14)),
                     // **بابُ المال من اللوحة** — كان يقود إلى شاشة الحركات
@@ -350,6 +351,11 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       icon: Icons.insights_outlined,
                       label: 'تقرير المال التشغيلي',
                       onTap: () => Get.to(() => const FinancialTruthReportScreen(dailyOnly: true)),
+                    ),
+                    _LinkTile(
+                      icon: Icons.receipt_long_outlined,
+                      label: 'سجل مبيعات نقاط البيع والفواتير',
+                      onTap: () => Get.to(() => const MerchantSalesHistoryScreen()),
                     ),
                     _LinkTile(
                       icon: Icons.receipt_long,

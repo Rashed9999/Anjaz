@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Merchant;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
+use App\Services\Access\EntitlementService;
+use App\Services\Merchant\MerchantPortalNavigationService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -12,7 +14,11 @@ use Illuminate\Http\Request;
 /** صفحة الويب تعرض مصادر الخادم القائمة، ولا تُنشئ محرك مالٍ أو POS موازياً. */
 class WebPortalController extends Controller
 {
-    public function index(Request $request): View
+    public function index(
+        Request $request,
+        EntitlementService $entitlements,
+        MerchantPortalNavigationService $navigation,
+    ): View
     {
         $owner = $request->user('merchant_web');
         $profile = MerchantProfile::where('user_id', $owner->id)->firstOrFail();
@@ -40,6 +46,9 @@ class WebPortalController extends Controller
             'sectorProductBarcodeAdd' => route('merchant.web.data.sector.products.barcodes.add', ['id' => '__ID__']),
             'sectorProductsCreate' => route('merchant.web.data.sector.products.create'),
             'sectorOperations' => route('merchant.web.data.sector.operations'),
+            'sectorSales' => route('merchant.web.data.sector.sales'),
+            'sectorSaleDetail' => route('merchant.web.data.sector.sales.show', ['id' => '__ID__']),
+            'sectorSaleInvoice' => route('merchant.web.data.sector.sales.invoice', ['id' => '__ID__']),
             'plans' => route('merchant.web.data.plans'),
             'stats' => route('merchant.web.data.stats'),
             'wallet' => route('merchant.web.data.wallet'),
@@ -80,6 +89,12 @@ class WebPortalController extends Controller
             'businessTypeCode' => (string) $profile->business_type,
             'plan' => (A::PLAN_LABELS[$effectivePlan] ?? 'مجاني')
                 . ($expired ? ' (انتهى الاشتراك المدفوع)' : ''),
+            // القائمة لا تُستنتج من المتصفح: القطاع والاستحقاق يُحسمان
+            // من المصدر نفسه الذي يحرس الأبواب عند الطلب.
+            'portalNavigation' => $navigation->forOwner(
+                $profile->business_type,
+                $entitlements->manifestFor($owner),
+            ),
         ]);
     }
 }

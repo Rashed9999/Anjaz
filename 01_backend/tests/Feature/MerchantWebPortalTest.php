@@ -89,7 +89,7 @@ class MerchantWebPortalTest extends TestCase
         $this->actingAs($owner, 'merchant_web')
             ->get('/merchant')
             ->assertOk()
-            ->assertSee('data-tab="debts"', false)
+            ->assertSee('id="portal-nav"', false)
             ->assertSee('walletVerification')
             ->assertSee('walletOrigins')
             ->assertSee('debtInvoices')
@@ -227,7 +227,7 @@ class MerchantWebPortalTest extends TestCase
 
     public function test_all_merchant_data_routes_require_owner_and_writes_keep_plan_gates(): void
     {
-        foreach (['overview', 'stats', 'wallet', 'ledger', 'wallet.origins', 'products',
+        foreach (['overview', 'sector.sales', 'sector.sales.show', 'sector.sales.invoice', 'stats', 'wallet', 'ledger', 'wallet.origins', 'products',
                   'branches', 'roles', 'staff', 'devices', 'receipts'] as $endpoint) {
             $route = Route::getRoutes()->getByName('merchant.web.data.' . $endpoint);
             $this->assertNotNull($route, $endpoint . ' not registered');
@@ -240,6 +240,26 @@ class MerchantWebPortalTest extends TestCase
             $this->assertContains($cap,
                 Route::getRoutes()->getByName('merchant.web.data.' . $endpoint)->gatherMiddleware());
         }
+    }
+
+    public function test_portal_navigation_and_sector_data_follow_the_actual_vertical_and_entitlement(): void
+    {
+        $owner = $this->owner();
+        MerchantProfile::where('user_id', $owner->id)->update([
+            'business_type' => A::BIZ_FUEL,
+            'subscription_plan' => A::PLAN_FREE,
+        ]);
+
+        $this->actingAs($owner, 'merchant_web')
+            ->get('/merchant')
+            ->assertOk()
+            ->assertSee('id="portal-nav"', false);
+
+        // منتجات الوقود مدفوعة؛ بوابة الويب لا يجوز أن تتجاوز الحارس
+        // بمجرد استدعائها المباشر لمحرك القطاع.
+        $this->getJson('/merchant/data/sector/products')
+            ->assertStatus(402)
+            ->assertJsonPath('code', 'SECTOR_CAPABILITY_DENIED');
     }
 
     public function test_bearer_token_cannot_change_the_merchant_web_entitlement_identity(): void

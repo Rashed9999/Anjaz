@@ -126,7 +126,8 @@ class _MerchantAcceptPaymentScreenState
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'اطلب من العميل مسح الرمز للدفع',
+                      'هذا رمز فاتورة متغيّر ومخصص لهذا المبلغ فقط؛ ينتهي بعد الدفع ولا يُعاد استخدامه.',
+                      textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 12),
                     ),
                   ],

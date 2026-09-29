@@ -69,24 +69,14 @@
     <aside class="side" id="merchant-side" aria-label="التنقل داخل لوحة المنشأة">
         <div class="brand">أميال <span>باي</span> <small style="font-size:12px">الأعمال</small></div>
         <div class="store"><strong>{{ $storeName }}</strong><small>{{ $businessType }} · {{ $plan }}</small></div>
-        <button class="nav active" data-tab="overview">◈ نظرة عامة</button>
-        <button class="nav" data-tab="wallet">◉ المحفظة وكشف الحساب</button>
-        <button class="nav" data-tab="debts">◫ الديون والدفع بالآجل</button>
-        <button class="nav" data-tab="sector">⌁ تشغيل قطاع {{ $businessType }}</button>
-        <button class="nav" data-tab="products">▤ المنتجات والمخزون</button>
-        <button class="nav" data-tab="branches">⌂ الفروع</button>
-        <button class="nav" data-tab="staff">♙ الموظفون والصلاحيات</button>
-        <button class="nav" data-tab="devices">▣ أجهزة نقاط البيع</button>
-        <button class="nav" data-tab="reports">▥ التقارير</button>
-        <button class="nav" data-tab="settings">⚙ الهوية والفواتير</button>
-        <button class="nav" data-tab="plans">✧ باقتي ومميزاتي</button>
+        <nav id="portal-nav" aria-label="أقسام منشأتك"></nav>
         <form class="logout" method="post" action="{{ route('merchant.web.logout') }}">@csrf
             <button type="submit">تسجيل الخروج</button>
         </form>
     </aside>
     <main>
         <header class="top">
-            <div><h1 id="page-title">نظرة عامة</h1><p class="muted">{{ $storeName }} · بيانات حيّة من حساب المنشأة نفسه</p></div>
+            <div><h1 id="page-title">{{ $portalNavigation[0]['label'] ?? 'لوحة المنشأة' }}</h1><p class="muted">{{ $storeName }} · بيانات حيّة من حساب المنشأة نفسه</p></div>
             <span class="badge">{{ $businessType }} · {{ $plan }}</span>
         </header>
         <div id="content" aria-live="polite"><div class="panel">جارٍ تحميل بيانات المنشأة…</div></div>
@@ -100,17 +90,49 @@
   const csrf = @json(csrf_token());
   const actualSector = @json($businessTypeCode);
   const actualSectorName = @json($businessType);
-  const titles={overview:'نظرة عامة',sector:'تشغيل قطاع '+actualSectorName,wallet:'المحفظة وكشف الحساب',debts:'الديون والدفع بالآجل',products:'المنتجات والمخزون',branches:'الفروع',staff:'الموظفون والصلاحيات',devices:'أجهزة نقاط البيع',reports:'التقارير',settings:'الهوية والفواتير',plans:'باقتي ومميزاتي'};
+  const navigation = @json($portalNavigation);
+  const titles=Object.fromEntries(navigation.map(item=>[item.tab,item.label]));
   let stopScanner=null;
-  let active='overview';const content=document.getElementById('content'),notice=document.getElementById('message');
+  let active=navigation[0]?.tab||'overview';const content=document.getElementById('content'),notice=document.getElementById('message');
   function node(tag,text,className){const e=document.createElement(tag);if(text!==undefined&&text!==null)e.textContent=String(text);if(className)e.className=className;return e}
   function box(title){const p=node('div',null,'panel');p.append(node('h2',title));content.append(p);return p}
   function metric(title,value){const d=node('div',null,'metric');d.append(node('small',title),node('strong',value===undefined||value===null?'غير متاح':String(value)));return d}
   function money(v){if(v===undefined||v===null||v==='')return'غير متاح';const bits=String(v).split('.');return bits[0].replace(/\B(?=(\d{3})+(?!\d))/g,',')+(bits[1]?'.'+bits[1].slice(0,2):'')+' ر.ي'}
   function grid(items){const g=node('div',null,'grid');items.forEach(x=>g.append(metric(x[0],x[1])));content.append(g)}
   function hint(p,msg){p.append(node('p',msg,'note'))}
-  function table(p,cols,rows){const wrap=node('div',null,'table-wrap'),t=node('table'),thead=node('thead'),h=node('tr'),body=node('tbody');cols.forEach(x=>h.append(node('th',x[0])));thead.append(h);t.append(thead);(rows||[]).forEach(row=>{const tr=node('tr');cols.forEach(c=>tr.append(node('td',c[1](row))));body.append(tr)});t.append(body);wrap.append(t);wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label','جدول قابل للتمرير أفقياً');p.append(node('p','اسحب الجدول أفقياً لمشاهدة جميع الأعمدة','table-help'),wrap);if(!rows||rows.length===0)p.append(node('p','لا توجد سجلات لهذه المنشأة حاليًا.','muted'))}
+  function table(p,cols,rows){const wrap=node('div',null,'table-wrap'),t=node('table'),thead=node('thead'),h=node('tr'),body=node('tbody');cols.forEach(x=>h.append(node('th',x[0])));thead.append(h);t.append(thead);(rows||[]).forEach(row=>{const tr=node('tr');cols.forEach(c=>{const cell=node('td'),value=c[1](row);if(value instanceof Node)cell.append(value);else cell.textContent=value===undefined||value===null?'—':String(value);tr.append(cell)});body.append(tr)});t.append(body);wrap.append(t);wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label','جدول قابل للتمرير أفقياً');p.append(node('p','اسحب الجدول أفقياً لمشاهدة جميع الأعمدة','table-help'),wrap);if(!rows||rows.length===0)p.append(node('p','لا توجد سجلات لهذه المنشأة حاليًا.','muted'))}
   function message(s){notice.textContent=s;notice.style.display='block';setTimeout(()=>notice.style.display='none',4800)}
+  function navigationNote(state){
+    return {
+      locked_by_plan:'هذه المساحة تحتاج باقة أعلى. راجع «باقتي ومميزاتي» لمعرفة الميزة والسعر الحقيقيين.',
+      locked_by_role:'هذه المساحة تحتاج صلاحية من مالك المنشأة أو مديرها.',
+      limit_reached:'وصلت منشأتك إلى الحد المتاح لهذه المساحة. راجع الباقة أو بيانات الاستخدام.',
+      coming_soon:'هذه المساحة قيد الإطلاق وليست عملية تشغيل متاحة بعد.',
+      not_applicable:'هذه المساحة لا تنطبق على نشاط منشأتك.',
+    }[state]||'هذه المساحة غير متاحة لهذا الحساب حالياً.';
+  }
+  function buildNavigation(){
+    const nav=document.getElementById('portal-nav');nav.replaceChildren();
+    const symbols={dashboard_customize:'⌁',insights:'◈',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌂',groups:'♙',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',auto_awesome:'✧',storefront:'⌂'};
+    navigation.forEach(item=>{
+      const button=node('button',(symbols[item.icon]||'•')+' '+item.label,'nav');
+      button.type='button';button.dataset.tab=item.tab;button.dataset.state=item.state;
+      button.title=item.state==='available'?item.label:navigationNote(item.state);
+      button.addEventListener('click',()=>{setMenu(false);load(item.tab)});nav.append(button);
+    });
+  }
+  function workspaceActions(panel,tabs){
+    const available=new Map(navigation.map(item=>[item.tab,item.state==='available']));
+    const names=new Map(navigation.map(item=>[item.tab,item.label]));
+    const usable=tabs.filter(tab=>available.get(tab));
+    if(!usable.length)return;
+    const actions=node('div',null,'buttons');
+    usable.forEach(tab=>{
+      const button=node('button','فتح '+(names.get(tab)||tab),'action secondary');
+      button.type='button';button.addEventListener('click',()=>load(tab));actions.append(button);
+    });
+    panel.append(node('h3','إجراءات هذه المساحة'),actions);
+  }
   async function api(key,body,url,method){const init={credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-TOKEN':csrf}};if(body!==undefined){init.method=method||'POST';init.headers['Content-Type']='application/json';init.headers['Idempotency-Key']='mw-'+Date.now()+'-'+Math.random().toString(36).slice(2);init.body=JSON.stringify(body)}const res=await fetch(url||routes[key],init);if(res.status===401){window.location.href=routes.login;throw Error('انتهت الجلسة')}const json=await res.json();if(!res.ok||json.success===false)throw Error(json.message||'لم ينجح تحميل البيانات');return json.meta||{}}
   function form(p,fields,button,submit){const f=node('form',null,'editor');fields.forEach(([key,label,type,options])=>{const l=node('label',label,'field');let inp;if(options){inp=node('select');options.forEach(o=>{const op=node('option',o.label);op.value=o.value;inp.append(op)})}else{inp=node('input');inp.type=type||'text';if(type==='number'){inp.step='any';inp.min='0'}if(type==='password')inp.autocomplete='new-password'}inp.name=key;inp.required=['name','price','trade_name','sale_price','base_price','price_per_liter','display_name','employee_code','password'].includes(key);l.append(inp);f.append(l)});const btn=node('button',button,'action');btn.type='submit';f.append(btn);f.addEventListener('submit',async ev=>{ev.preventDefault();btn.disabled=true;try{const data=Object.fromEntries(new FormData(f).entries());Object.keys(data).forEach(k=>{if(data[k]==='')delete data[k]});const result=await submit(data);if(result.activation_code){f.replaceChildren();const code=node('strong',result.activation_code);code.style.fontSize='29px';code.style.letterSpacing='5px';const secret=node('div',null,'note');secret.append(node('p','رمز التفعيل (صالح لمرة واحدة، حتى '+result.expires_at+')'),code);const copy=node('button','نسخ الرمز','action secondary');copy.type='button';copy.addEventListener('click',()=>navigator.clipboard.writeText(result.activation_code).then(()=>message('تم نسخ الرمز')));secret.append(copy);p.append(secret);message('تم إنشاء رمز التفعيل؛ انسخه قبل مغادرة الصفحة')}else{message(result.message||'تم الحفظ');await load(active)}}catch(e){message(e.message)}finally{btn.disabled=false}});p.append(f)}
   async function overview(){
@@ -635,6 +657,11 @@
   }
   function labelValue(p,label,value){const d=node('div',null,'metric');d.append(node('small',label),node('strong',value??'—'));p.append(d)}
   async function sector(){
+    const state=(navigation.find(item=>item.tab==='sector')||{}).state;
+    if(state&&state!=='available'){
+      const p=box('مساحة '+actualSectorName);hint(p,navigationNote(state));
+      hint(p,'لا تُعرض أرقام صفرية ولا أزرار تشغيل وهمية عندما يمنع الاستحقاق أو تكون الوحدة غير جاهزة.');return;
+    }
     const [data,ops]=await Promise.all([
       api('sector'),api('sectorOperations').catch(e=>({unavailable:e.message})),
     ]);
@@ -660,18 +687,57 @@
     if(ops.unavailable){hint(p,'بعض الوظائف غير متاحة حاليًا: '+ops.unavailable);return}
     if(actualSector==='fuel'){
       table(p,[['المضخة',x=>x.pump_name||'مضخة '+x.pump_number],['رقم',x=>x.pump_number],['النوع',x=>x.pump_type||'—']],o.pumps||[]);
+      workspaceActions(p,['sales','products','staff','devices','wallet']);
     }else if(actualSector==='pharmacy'){
       table(p,[['التنبيه',x=>x.product?.trade_name||x.type||'تنبيه مخزون'],['الدرجة',x=>x.severity||'—'],['التاريخ',x=>x.created_at||'—']],o.alerts||[]);
+      workspaceActions(p,['sales','products','debts','wallet']);
     }else if(actualSector==='wholesale'){
       table(p,[['الفاتورة',x=>x.invoice_number||x.id],['الحالة',x=>x.status],['الإجمالي',x=>money(x.total_amount)],['المتبقي',x=>money(x.balance_due)]],o.invoices||[]);
+      workspaceActions(p,['sales','products','wallet']);
     }else if(actualSector==='retail'){
       const cat=o.tree||[];hint(p,'التصنيفات وبيانات المخزون تُقرأ من محرك التجزئة مباشرةً.');table(p,[['التصنيف',x=>x.name||x.name_ar||'—'],['الكود',x=>x.code||'—']],Array.isArray(cat)?cat:[]);
+      workspaceActions(p,['sales','products','debts','branches','reports','wallet']);
     }else if(actualSector==='restaurant'){
       table(p,[['الطاولة',x=>x.label],['المقاعد',x=>x.seats],['الحالة',x=>x.status]],o.tables||[]);
+      workspaceActions(p,['sales','products','debts','wallet']);
     }else{
       table(p,[['الطلب المعلق',x=>x.label||x.ulid||x.id],['الإنشاء',x=>x.created_at||'—']],o.tickets||[]);
+      workspaceActions(p,['sales','products','debts','reports','wallet']);
     }
     hint(p,'هذه البيانات من وحدة قطاع منشأتك المسجّل؛ القطاعات الأخرى لا تمنح وصولًا إلى أعمالها.');
+  }
+  async function sales(){
+    const state=(navigation.find(item=>item.tab==='sales')||{}).state;
+    if(state&&state!=='available'){
+      const p=box('سجل '+actualSectorName);hint(p,navigationNote(state));return;
+    }
+    const data=await api('sectorSales'),r=data.result||{};
+    const p=box('سجل '+actualSectorName);
+    hint(p,'يعرض هذا السجل المصدر التشغيلي الحقيقي لقطاع منشأتك. لا يُستبدل بسجل قطاع آخر ولا يخلط بين طرق الدفع.');
+    if(actualSector==='fuel'){
+      table(p,[['المرجع',x=>x.sale_number||x.reference_number||x.id],['الكمية',x=>x.liters??x.quantity??'—'],['المبلغ',x=>money(x.total_amount??x.amount)],['طريقة الدفع',x=>x.payment_method||'—'],['الحالة',x=>x.status||'—'],['التفاصيل',saleDetailButton]],r.sales||[]);
+    }else if(actualSector==='pharmacy'){
+      table(p,[['المرجع',x=>x.invoice_number||x.sale_number||x.id],['المبلغ',x=>money(x.total_amount??x.amount)],['طريقة الدفع',x=>x.payment_method||'—'],['الحالة',x=>x.status||'—'],['التاريخ',x=>x.created_at||'—'],['التفاصيل',saleDetailButton]],r.sales||[]);
+    }else if(actualSector==='wholesale'){
+      table(p,[['الفاتورة',x=>x.invoice_number||x.id],['العميل',x=>x.customer?.name||x.customer_name||'—'],['الإجمالي',x=>money(x.total_amount)],['المتبقي',x=>money(x.balance_due)],['الحالة',x=>x.status||'—'],['التفاصيل',saleDetailButton]],r.invoices||[]);
+    }else if(actualSector==='restaurant'){
+      table(p,[['الطلب',x=>x.order_number||x.id],['الطاولة',x=>x.table?.label||x.table_label||'—'],['الإجمالي',x=>money(x.total_amount??x.amount)],['الدفع',x=>x.payment_method||'—'],['الحالة',x=>x.status||'—'],['التفاصيل',saleDetailButton]],r.orders||[]);
+    }else{
+      table(p,[['المرجع',x=>x.invoice_number||x.sale_number||x.sale_ulid||x.ulid||x.id],['الإجمالي',x=>money(x.total_amount??x.grand_total??x.amount)],['طريقة الدفع',x=>x.payment_method||'—'],['الحالة',x=>x.status||'—'],['التاريخ',x=>x.created_at||'—'],['التفاصيل',saleDetailButton]],r.sales||[]);
+    }
+  }
+  function saleIdentifier(row){return String((actualSector==='wholesale'||actualSector==='restaurant'?row.id:(row.sale_ulid||row.ulid||row.id))||'')}
+  function saleDetailButton(row){const id=saleIdentifier(row),button=node('button','عرض','action secondary');button.type='button';button.disabled=!id;button.addEventListener('click',()=>showSaleDetail(id));return button}
+  function invoiceButton(id){if(!['quick_sale','retail','pharmacy'].includes(actualSector))return null;const button=node('button','تنزيل الفاتورة','action secondary');button.type='button';button.addEventListener('click',()=>window.open(routes.sectorSaleInvoice.replace('__ID__',encodeURIComponent(id)),'_blank','noopener'));return button}
+  async function showSaleDetail(id){
+    const data=await api('sectorSaleDetail',undefined,routes.sectorSaleDetail.replace('__ID__',encodeURIComponent(id)));
+    const detail=data.result||{},record=detail.sale||detail.invoice||detail.order||{};
+    const p=box('تفاصيل العملية '+(record.invoice_number||record.order_number||record.sale_ulid||id));
+    grid([['الإجمالي',money(record.total_amount??record.amount)],['طريقة الدفع',record.payment_method],['الحالة',record.status],['التاريخ',record.created_at]]);
+    const lines=detail.lines||detail.items||record.items||[];
+    if(lines.length)table(p,[['الصنف',x=>x.name||x.product?.name||x.product_name||'—'],['الكمية',x=>x.quantity??x.qty??'—'],['السعر',x=>money(x.unit_price??x.price)],['الإجمالي',x=>money(x.line_total??x.total_amount??x.total)]],lines);
+    else hint(p,'لا يعلن محرك هذا القطاع أسطر الفاتورة في هذا السجل بعد؛ تُعرض بيانات العملية المتاحة فقط.');
+    const invoice=invoiceButton(id);if(invoice){const actions=node('div',null,'buttons');actions.append(invoice);p.append(actions)}
   }
   function limitText(v){return v===-1?'بلا حد':v===0?'غير متاح':v??'—'}
   function capabilityStatus(row){
@@ -741,8 +807,8 @@
   async function devices(){const data=await api('devices');const p=box('الأجهزة المرخصة');table(p,[['الجهاز',x=>x.display_name],['الفرع',x=>x.branch_name||'—'],['الحالة',x=>x.is_active?'نشط':'غير نشط'],['الجلسات',x=>x.live_sessions??0]],data.devices||[]);const create=box('تفعيل جهاز بيع جديد');hint(create,'ينشئ مالك المنشأة رمزًا مؤقتًا صالحًا لمرة واحدة. أدخله في تطبيق نقطة البيع على الجهاز الجديد.');form(create,[['display_name','اسم الجهاز']], 'إنشاء رمز التفعيل',async d=>{return api('deviceActivation',d)})}
   async function reports(){const r=(await api('wallet')).report||{};const sales=r.sales||{},methods=sales.by_payment_method||{};grid([['إجمالي المبيعات',money(sales.gross)],['عدد المبيعات',sales.count],['نقدًا',money(methods.cash)],['عبر أميال',money(methods.amial_pay)],['آجل',money(methods.credit)]]);const p=box('الحركة اليومية');hint(p,'التقرير يفصل المبيعات عن التحصيلات وعن حركة المحفظة؛ لا تُحسب التحويلات الشخصية مبيعات.');table(p,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[])}
   async function settings(){const data=await api('receipts'),s=data.settings||{};const p=box('هوية فاتورة منشأتك');form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});hint(p,'إعدادات الفاتورة موحدة بين الويب وكل نقاط البيع. صلاحية طباعة السند متاحة بحسب خصائص القطاع.')}
-  const pages={overview,sector,wallet,debts,products,branches,staff,devices,reports,settings,plans};
-  async function load(tab){if(stopScanner){stopScanner();stopScanner=null;}active=tab;document.getElementById('page-title').textContent=titles[tab];document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
+  const pages={overview,sector,sales,wallet,debts,products,branches,staff,devices,reports,settings,plans};
+  async function load(tab){if(stopScanner){stopScanner();stopScanner=null;}active=tab;document.getElementById('page-title').textContent=titles[tab]||'بوابة المنشأة';document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();if(!pages[tab])throw Error('هذا القسم غير معروف');await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
   const sidebar=document.getElementById('merchant-side');
   const menuToggle=document.getElementById('menu-toggle');
   const menuBackdrop=document.getElementById('nav-backdrop');
@@ -759,8 +825,8 @@
   menuBackdrop.addEventListener('click',()=>{setMenu(false);menuToggle.focus()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&sidebar.classList.contains('open')){setMenu(false);menuToggle.focus()}});
   compactLayout.addEventListener('change',()=>setMenu(false));
-  document.querySelectorAll('[data-tab]').forEach(e=>e.addEventListener('click',()=>{setMenu(false);load(e.dataset.tab)}));
-  load('overview');
+  buildNavigation();
+  load(active);
 })();
 </script>
 </body>

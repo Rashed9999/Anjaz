@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
@@ -48,8 +50,9 @@ class CapabilityScreens {
     'barcode': () => const CashierPosScreen(),
   };
 
-  /// هذه القدرات لا تعمل من التطبيق بعد الآن؛ أسماءها تبقى حتى لا يختل
-  /// عقد الباقة أو تظهر خدمة بلا تفسير، والوجهة تعلن بوضوح أين توجد.
+  /// هذه القدرات لا تفتح لمالك المنشأة من التطبيق؛ أسماءها تبقى حتى لا
+  /// يختل عقد الباقة أو تظهر خدمة بلا تفسير، والوجهة تعلن بوضوح أين توجد.
+  /// أمّا بدائل الويب فتُنقل وتُراجع على مراحل، لا بمجرد إخفاء الشاشة.
   static const Set<String> _ownerWebOnly = {
     'gift_cards', 'installments', 'promotions', 'loyalty', 'inventory',
     'low_stock_alerts', 'inventory_audit', 'suppliers', 'purchases',
@@ -64,6 +67,16 @@ class CapabilityScreens {
   };
 
   static Widget Function()? screenFor(String code) {
+    // قد يفتح المالك «خدماتي» من رابط قديم أو من شاشةٍ محفوظة، متجاوزاً
+    // HomeDispatcher. لا نعيد عندئذٍ بناء لوحة قطاع ثانية داخل التطبيق؛
+    // موظف POS وحده يبقى له حق التشغيل المحمول.
+    final access = Get.isRegistered<AccessController>()
+        ? Get.find<AccessController>()
+        : null;
+    if (access?.isMerchant == true && access?.isPosStaff != true) {
+      return () => const WebPortalNoticeScreen(role: 'merchant');
+    }
+
     final posScreen = _pos[code];
     if (posScreen != null) return posScreen;
     if (_ownerWebOnly.contains(code)) {

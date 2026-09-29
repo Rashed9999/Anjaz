@@ -758,6 +758,10 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — تفصيلُ البيعة سطراً سطراً
             Route::get('/{ulid}', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'showSale'])
                 ->where('ulid', '[A-Z0-9]{26}')->name('show');
+            // الفاتورةُ كانت لها متحكّم وشاشة تنزيل في التطبيق، لكن بلا راوت؛
+            // فلا تتحول إعادة الطباعة من سجل المبيعات إلى زر ميت.
+            Route::get('/{ulid}/invoice', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'downloadInvoice'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('invoice');
             Route::get('/{ulid}/refundable', [\App\Http\Controllers\Api\V1\Amial\CashierRefundController::class, 'refundable'])
                 ->where('ulid', '[A-Z0-9]{26}')->name('refundable');
             Route::post('/{ulid}/refund', [\App\Http\Controllers\Api\V1\Amial\CashierRefundController::class, 'create'])
