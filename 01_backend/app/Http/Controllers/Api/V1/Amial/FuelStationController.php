@@ -60,10 +60,14 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
     ) {}
 
     /** الخادم هو حد الصلاحية؛ إخفاء زر POS ليس حماية. */
-    private function guard(Request $request, string $permission, ?string $amount = null): ?JsonResponse
-    {
+    private function guard(
+        Request $request,
+        string $permission,
+        array $context = [],
+        ?string $amount = null,
+    ): ?JsonResponse {
         try {
-            $this->perm->assert($request->user(), $permission, [], $amount);
+            $this->perm->assert($request->user(), $permission, $context, $amount);
 
             return null;
         } catch (DomainException $e) {
@@ -204,10 +208,6 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
 
     public function closeShift(Request $request, int $shiftId): JsonResponse
     {
-        if ($deny = $this->guard($request, P::SHIFT_CLOSE)) {
-            return $deny;
-        }
-
         $v = Validator::make($request->all(), [
             'actual_cash' => 'required|numeric|min:0',
             'pump_closings' => 'sometimes|array',
@@ -225,6 +225,16 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
         $shift = FuelShift::where('id', $shiftId)
             ->where('station_id', $station->id)->first();
         if (!$shift) return $this->error('NOT_FOUND', 'النوبة غير موجودة', 404);
+
+        // نطاق own يعني وردية فتحها الموظف نفسه. تمرير صاحب الوردية هنا
+        // يمنع منحةً قديمة لكاشير من أن تُغلق وردية المحطة التي فتحها مشرف.
+        if ($deny = $this->guard($request, P::SHIFT_CLOSE, [
+            'station' => $station->id,
+            'shift' => $shift->id,
+            'owner_user_id' => $shift->opened_by_user_id,
+        ])) {
+            return $deny;
+        }
 
         try {
             $closed = $this->shifts->closeShift(
