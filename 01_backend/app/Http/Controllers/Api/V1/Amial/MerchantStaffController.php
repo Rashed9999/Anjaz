@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Controller;
 use App\Models\PosUser;
 use App\Models\Branch;
+use App\Models\MerchantProfile;
 use App\Models\Merchant\MerchantRole;
 use App\Models\User;
 use App\Models\MerchantSale;
@@ -182,7 +183,7 @@ class MerchantStaffController extends Controller
         $assignedRole = $request->filled('merchant_role_id')
             ? MerchantRole::where('id', $request->integer('merchant_role_id'))
                 ->where('merchant_user_id', $m->id)->where('is_active', true)->first()
-            : $this->cashierRole($m);
+            : $this->defaultStaffRole($m);
         if (! $assignedRole) {
             return $this->error('STAFF_ROLE_UNAVAILABLE', 'الدور المختار غير صالح أو غير نشط', 422);
         }
@@ -451,13 +452,25 @@ class MerchantStaffController extends Controller
             ?? (clone $branches)->value('id');
     }
 
-    /** دور البداية الأقل امتيازاً، وهو موجود في قوالب جميع الأنشطة. */
-    private function cashierRole(User $merchant): ?MerchantRole
+    /**
+     * دور البداية الأقل امتيازاً لنقطة البيع.
+     *
+     * أغلب القطاعات تملك دور `cashier`، لكن الجملة صُممت بفصل البيع
+     * والتحصيل والإبطال ولا يوجد فيها دور بهذا الاسم. كان الإنشاء بلا
+     * merchant_role_id يفشل هناك دائماً بـ STAFF_ROLE_UNAVAILABLE.
+     * مندوب المبيعات هو دور البيع الأدنى في الجملة؛ ولا نمنحه التحصيل
+     * المالي أو الإبطال أو صلاحيات المحاسب.
+     */
+    private function defaultStaffRole(User $merchant): ?MerchantRole
     {
         $this->verticals->ensureRolesFor($merchant);
 
+        $businessType = MerchantProfile::where('user_id', $merchant->id)
+            ->value('business_type');
+        $roleCode = $businessType === A::BIZ_WHOLESALE ? 'sales_rep' : 'cashier';
+
         return MerchantRole::where('merchant_user_id', $merchant->id)
-            ->where('code', 'cashier')
+            ->where('code', $roleCode)
             ->where('is_active', true)
             ->first();
     }
