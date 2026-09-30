@@ -152,11 +152,9 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   // ══════════════════════════════════════════════════════════════════
   bool _deviceActivated = false;
 
-  bool _showShopFields = false;
-
-  /// أيُطلَب من الموظّف بياناتُ متجرِه؟
-  bool get _needsShopFields =>
-      _kind != AccountKind.pos || ! _deviceActivated || _showShopFields;
+  /// بيانات المنشأة تخص المالك. موظف POS يكتب رمزه وكلمة مروره فقط؛
+  /// الخادم يشتق المنشأة من الجهاز المفعّل.
+  bool get _needsShopFields => _kind != AccountKind.pos;
 
   Future<void> _readDeviceActivation() async {
     final on = await PosDeviceIdentity.isActivated();
@@ -169,6 +167,13 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   }
 
   Future<void> _submit() async {
+    if (_kind == AccountKind.pos && !_deviceActivated) {
+      _snack(
+        'فعّل جهاز نقطة البيع أولاً باستخدام الرمز الذي ينشئه مالك المنشأة.',
+        danger: true,
+      );
+      return;
+    }
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final controller = Get.find<UnifiedAuthController>();
     var ok = false;
@@ -189,11 +194,9 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         );
         break;
       case AccountKind.pos:
-        ok = await controller.loginMerchant(
-          merchantNumber: _merchantNumCtrl.text.trim(),
-          phone: _phoneCtrl.text.trim(),
-          password: _passwordCtrl.text,
+        ok = await controller.loginPos(
           employeeCode: _posNumCtrl.text.trim(),
+          password: _passwordCtrl.text,
         );
         break;
     }
@@ -647,7 +650,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               final loading =
                   Get.find<UnifiedAuthController>().isSubmitting.value;
               return FilledButton.icon(
-                onPressed: loading ? null : _submit,
+                onPressed: loading ||
+                        (_kind == AccountKind.pos && !_deviceActivated)
+                    ? null
+                    : _submit,
                 icon: loading
                     ? const SizedBox(
                         width: AmialSpacing.lg,
@@ -674,17 +680,48 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             }),
             if (_kind == AccountKind.pos) ...[
               const SizedBox(height: AmialSpacing.sm),
-              // **المخرجُ ظاهرٌ دائماً** — من مسح بياناتِ تطبيقه، أو
-              // فُعّل جهازُه من تثبيتٍ آخر، يُظهر الحقلين ويدخل.
-              if (_deviceActivated && ! _showShopFields)
-                TextButton(
-                  onPressed: () => setState(() => _showShopFields = true),
-                  child: const Text('الجهاز ليس لهذا المتجر؟ أدخل بياناته'),
+              Container(
+                padding: const EdgeInsets.all(AmialSpacing.sm),
+                decoration: BoxDecoration(
+                  color: _deviceActivated
+                      ? AmialColors.successSurface
+                      : AmialColors.warningSurface,
+                  borderRadius: BorderRadius.circular(AmialSpacing.radiusMd),
+                  border: Border.all(
+                    color: _deviceActivated
+                        ? AmialColors.success
+                        : AmialColors.yellowDark,
+                  ),
                 ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _deviceActivated
+                          ? Icons.verified_outlined
+                          : Icons.phonelink_lock_outlined,
+                      color: _deviceActivated
+                          ? AmialColors.success
+                          : AmialColors.yellowDark,
+                    ),
+                    const SizedBox(width: AmialSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        _deviceActivated
+                            ? 'هذا الجهاز مفعّل. أدخل رمز الموظف وكلمة مروره.'
+                            : 'هذا الجهاز غير مفعّل للمنشأة. اطلب من المالك رمز تفعيل ثم أدخله هنا.',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AmialSpacing.sm),
               OutlinedButton.icon(
                 onPressed: _startPosRegistration,
                 icon: const Icon(Icons.add_to_home_screen_outlined),
-                label: const Text('تفعيل جهاز نقطة البيع'),
+                label: Text(_deviceActivated
+                    ? 'إعادة تفعيل الجهاز لمنشأة أخرى'
+                    : 'تفعيل جهاز نقطة البيع'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AmialColors.primary,
                   side: const BorderSide(color: AmialColors.border),
@@ -748,7 +785,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         AccountKind.merchant =>
           'استخدم بيانات حساب المالك أو الحساب الإداري للتاجر.',
         AccountKind.pos =>
-          'أدخل بيانات نقطة البيع المسجلة. PIN الموظف يحتاج عقداً مخصصاً من الخادم.',
+          'أدخل رمز الموظف وكلمة مروره. يجب تفعيل هذا الجهاز للمنشأة أولاً.',
       };
 
   String? Function(String?) _required(String message) =>
