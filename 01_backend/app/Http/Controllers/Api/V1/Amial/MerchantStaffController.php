@@ -245,7 +245,7 @@ class MerchantStaffController extends Controller
             'id' => $pos->id,
             'employee_code' => $pos->pos_number,
             'role_code' => $assignedRole->code,
-            'login_hint' => "دخول الموظف: رقم التاجر + جوال التاجر + رمز الموظف {$pos->pos_number} + كلمة مروره",
+            'login_hint' => "دخول الموظف بعد تفعيل جهاز POS: رمز الموظف {$pos->pos_number} + كلمة مروره",
         ], 'STAFF_CREATED', 'تم إنشاء الموظف', 201);
     }
 
@@ -455,11 +455,9 @@ class MerchantStaffController extends Controller
     /**
      * دور البداية الأقل امتيازاً لنقطة البيع.
      *
-     * أغلب القطاعات تملك دور `cashier`، لكن الجملة صُممت بفصل البيع
-     * والتحصيل والإبطال ولا يوجد فيها دور بهذا الاسم. كان الإنشاء بلا
-     * merchant_role_id يفشل هناك دائماً بـ STAFF_ROLE_UNAVAILABLE.
-     * مندوب المبيعات هو دور البيع الأدنى في الجملة؛ ولا نمنحه التحصيل
-     * المالي أو الإبطال أو صلاحيات المحاسب.
+     * أغلب القطاعات تملك `cashier`. الجملة تفصل المندوب والمحصّل
+     * والمحاسب، ولذلك لها `pos_cashier` مستقل: صندوق وجهاز وفاتورة
+     * وتحصيل ووردية، بلا إبطال ولا تسعير ولا إدارة ائتمان.
      */
     private function defaultStaffRole(User $merchant): ?MerchantRole
     {
@@ -467,7 +465,7 @@ class MerchantStaffController extends Controller
 
         $businessType = MerchantProfile::where('user_id', $merchant->id)
             ->value('business_type');
-        $roleCode = $businessType === A::BIZ_WHOLESALE ? 'sales_rep' : 'cashier';
+        $roleCode = $businessType === A::BIZ_WHOLESALE ? 'pos_cashier' : 'cashier';
 
         return MerchantRole::where('merchant_user_id', $merchant->id)
             ->where('code', $roleCode)
