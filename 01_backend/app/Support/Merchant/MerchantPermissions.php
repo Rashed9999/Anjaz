@@ -828,13 +828,24 @@ final class MerchantPermissions
                     self::WHOLESALE_INVOICE_VIEW, self::WHOLESALE_INVOICE_CREATE,
                     self::WHOLESALE_RETURN_VIEW, self::WHOLESALE_RETURN_REQUEST,
                     self::WHOLESALE_COLLECTION_RECORD,
+                    self::REPORT_SALES,
+                ]),
+                // **والمندوبُ يُحصّل فعلاً** — هو من يذهب إلى العميل. لكنّه
+                // **لا يُبطل** ولا يُغيّر سعراً ولا حدَّ آجل.
+            ],
+
+            // موظف نقطة البيع ليس «مندوب مبيعات» بالضرورة. هذا الدور
+            // مخصص للجهاز/الصندوق: يبيع ويحصّل ويفتح ورديته الشخصية،
+            // ولا يملك الإبطال أو التسعير أو حدود ائتمان العميل.
+            'pos_cashier' => [
+                'name' => 'موظف نقطة بيع',
+                'permissions' => array_merge($core, [
+                    self::WHOLESALE_INVOICE_VIEW, self::WHOLESALE_INVOICE_CREATE,
+                    self::WHOLESALE_COLLECTION_VIEW, self::WHOLESALE_COLLECTION_RECORD,
+                    self::WHOLESALE_RETURN_VIEW, self::WHOLESALE_RETURN_REQUEST,
                     self::CASH_COUNT, self::SHIFT_OPEN, self::SHIFT_CLOSE,
                     self::REPORT_SALES,
                 ]),
-                // **والمندوبُ يُحصّل فعلاً** — هو من يذهب إلى العميل. لذلك
-                // يملك ورديّتَه وصندوقَه، وإلّا كان endpoint التحصيل تحت
-                // amial.shift باباً لا يستطيع فتحه. لكنه
-                // **لا يُبطل** ولا يُغيّر سعراً ولا حدَّ آجل.
             ],
 
             'collector' => [
@@ -843,11 +854,9 @@ final class MerchantPermissions
                     self::WHOLESALE_INVOICE_VIEW,
                     self::WHOLESALE_COLLECTION_VIEW, self::WHOLESALE_COLLECTION_RECORD,
                     self::DEBT_COLLECT,
-                    self::CASH_COUNT, self::SHIFT_OPEN, self::SHIFT_CLOSE,
                     self::WHOLESALE_REPORT_VIEW,
                 ]),
-                // ولا إنشاءَ فاتورةٍ ولا إبطالَها. والتحصيل النقدي يمر
-                // من ورديّته هو حتى يُجرد ما قبضه.
+                // ولا إنشاءَ فاتورةٍ ولا إبطالَها.
             ],
 
             'accountant' => [
@@ -912,11 +921,14 @@ final class MerchantPermissions
                 // المكتوب في `retailSeedScopes`.
                 self::WHOLESALE_INVOICE_CREATE => ['scope' => 'own', 'limit' => '2000000'],
                 self::WHOLESALE_COLLECTION_RECORD => ['scope' => 'own', 'limit' => '1000000'],
+            ],
+            'pos_cashier' => [
+                self::WHOLESALE_INVOICE_CREATE => ['scope' => 'own', 'limit' => '2000000'],
+                self::WHOLESALE_COLLECTION_RECORD => ['scope' => 'own', 'limit' => '1000000'],
                 self::SHIFT_CLOSE => ['scope' => 'own'],
             ],
             'collector' => [
                 self::WHOLESALE_COLLECTION_RECORD => ['scope' => 'merchant', 'limit' => '5000000'],
-                self::SHIFT_CLOSE => ['scope' => 'own'],
             ],
             'accountant' => [
                 // **والإبطالُ للمحاسب وحدَه دون البيع والتحصيل** — وهو
