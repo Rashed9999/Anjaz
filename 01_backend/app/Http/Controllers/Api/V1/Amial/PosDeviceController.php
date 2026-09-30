@@ -382,11 +382,15 @@ class PosDeviceController extends Controller
             return null;
         }
 
-        $branch = Branch::where('merchant_user_id', $owner->id)->find((int) $branchId);
+        // لا يُفتح جهاز جديد على فرع موقوف. يبقى سجل الجهاز التاريخي
+        // قابلاً للقراءة، لكن التشغيل الجديد يحتاج فرعاً نشطاً للمنشأة.
+        $branch = Branch::where('merchant_user_id', $owner->id)
+            ->where('is_active', true)
+            ->find((int) $branchId);
 
         if ($branch === null) {
             return $this->error('BRANCH_NOT_FOUND',
-                'الفرع غير موجود لهذا الحساب', 404);
+                'الفرع غير موجود أو موقوف لهذا الحساب', 404);
         }
 
         return (int) $branch->id;
