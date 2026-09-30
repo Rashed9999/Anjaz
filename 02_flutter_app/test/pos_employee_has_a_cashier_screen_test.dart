@@ -37,9 +37,18 @@ void main() {
       File('lib/features/merchant/screens/merchant_dashboard_screen.dart');
   final restaurantCashier =
       File('lib/features/restaurant/screens/restaurant_cashier_screen.dart');
+  final genericCashier =
+      File('lib/features/merchant/screens/cashier_pos_screen.dart');
 
   test('الملفّاتُ في مواضعها — وإلّا فحصنا العدم', () {
-    for (final f in [dispatcher, posHome, access, dashboard, restaurantCashier]) {
+    for (final f in [
+      dispatcher,
+      posHome,
+      access,
+      dashboard,
+      restaurantCashier,
+      genericCashier,
+    ]) {
       expect(f.existsSync(), isTrue, reason: 'مفقود: ${f.path}');
     }
   });
@@ -172,6 +181,23 @@ void main() {
             'وضغطُها يُردّ من الخادم بـ٤٠٣ «متاح للتجّار فقط». '
             '**وزرٌّ يُرسَم ثمّ يُصفع أسوأُ من غيابه**: الغيابُ يُسأل '
             'عنه، والرفضُ يُقرأ عطلاً في التطبيق.');
+  });
+
+  test('حتى المسار القديم للكاشير لا يفتح قطاعاً خاطئاً', () {
+    final src = genericCashier.readAsStringSync();
+
+    for (final route in [
+      'FuelSaleScreen',
+      'PharmacySaleScreen',
+      'WholesaleInvoiceCreateScreen',
+      'RestaurantCashierScreen',
+    ]) {
+      expect(src.contains(route), isTrue,
+          reason: 'CashierPosScreen لا يعيد القطاع المتخصص إلى شاشته: ' + route);
+    }
+
+    expect(src.contains('access.isWholesale'), isTrue);
+    expect(src.contains('access.isRestaurant'), isTrue);
   });
 
   test('كاشيرُ المطعم يحصّل فقط ولا يدير المطعم', () {
