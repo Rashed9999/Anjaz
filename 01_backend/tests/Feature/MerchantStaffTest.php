@@ -134,6 +134,52 @@ class MerchantStaffTest extends TestCase
         ])->exists());
     }
 
+    public static function cashierSectors(): array
+    {
+        return [
+            'بيع سريع' => [A::BIZ_QUICK_SALE],
+            'تجزئة' => [A::BIZ_RETAIL],
+            'وقود' => [A::BIZ_FUEL],
+            'صيدلية' => [A::BIZ_PHARMACY],
+            'مطعم' => [A::BIZ_RESTAURANT],
+        ];
+    }
+
+    /**
+     * كل قطاع غير الجملة يملك دور cashier حقيقياً ويُسند تلقائياً.
+     *
+     * @dataProvider cashierSectors
+     */
+    public function default_pos_role_exists_for_every_cashier_sector(string $businessType): void
+    {
+        MerchantProfile::where('user_id', $this->merchant->id)
+            ->update(['business_type' => $businessType]);
+
+        $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+        app(SubscriptionService::class)->changePlan($this->merchant, A::PLAN_BUSINESS, $admin);
+        Passport::actingAs($this->merchant->fresh(), [], 'api');
+
+        $response = $this->postJson('/api/v1/amial/merchant/staff', [
+            'employee_code' => 'POS-' . strtoupper(substr(md5($businessType), 0, 6)),
+            'display_name' => 'كاشير القطاع',
+            'password' => 'TempPass2026',
+        ])->assertCreated()
+            ->assertJsonPath('meta.role_code', 'cashier');
+
+        $pos = PosUser::findOrFail((int) $response->json('meta.id'));
+        $cashier = MerchantRole::where('merchant_user_id', $this->merchant->id)
+            ->where('code', 'cashier')
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $this->assertTrue(MerchantUserRole::where([
+            'merchant_user_id' => $this->merchant->id,
+            'user_id' => $pos->user_id,
+            'merchant_role_id' => $cashier->id,
+            'is_active' => true,
+        ])->exists());
+    }
+
     /** @test رقم نقطة بيع مكرّر يُرفض. */
     public function duplicate_pos_number_is_rejected(): void
     {
