@@ -230,6 +230,44 @@ class PosDeviceBypassMatrixTest extends TestCase
         ])->assertStatus(200)->assertJsonPath('data.device.branch_id', $own->id);
     }
 
+    /** @test */
+    public function moving_a_device_to_another_branch_ends_its_live_sessions(): void
+    {
+        $m = $this->merchant(A::PLAN_BUSINESS);
+        $from = Branch::create([
+            'merchant_user_id' => $m->id, 'name' => 'الفرع أ',
+            'code' => 'DEVICE-A', 'is_active' => true,
+        ]);
+        $to = Branch::create([
+            'merchant_user_id' => $m->id, 'name' => 'الفرع ب',
+            'code' => 'DEVICE-B', 'is_active' => true,
+        ]);
+
+        $device = $this->reg()->register(
+            $m, 'device-branch-move', ['branch_id' => $from->id],
+        )['device'];
+
+        PosDeviceSession::create([
+            'access_token_id' => 'device-move-session',
+            'pos_device_id' => $device->id,
+            'merchant_user_id' => $m->id,
+            'actor_user_id' => $m->id,
+            'started_at' => now(),
+            'last_seen_at' => now(),
+        ]);
+
+        $this->actingAs($m, 'api')
+            ->patchJson($this->url('/'.$device->id), ['branch_id' => $to->id])
+            ->assertOk()
+            ->assertJsonPath('data.device.branch_id', $to->id)
+            ->assertJsonPath('data.ended_sessions', 1);
+
+        $this->assertNotNull(
+            PosDeviceSession::where('access_token_id', 'device-move-session')->value('ended_at'),
+            'نُقل الجهاز إلى فرع آخر وبقيت جلسة الفرع القديم حيّة',
+        );
+    }
+
     // ══════════════════════════════════════════════════════════════════
     //  ⑧ الملغى والحدُّ ممتلئ
     // ══════════════════════════════════════════════════════════════════
