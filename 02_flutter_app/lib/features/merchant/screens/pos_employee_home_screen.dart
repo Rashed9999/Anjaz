@@ -14,6 +14,8 @@ import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
+import 'package:amial_pay/features/restaurant/screens/restaurant_cashier_screen.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
 import 'package:amial_pay/features/setting/screens/profile_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/util/app_direction.dart';
@@ -66,7 +68,27 @@ class PosEmployeeHomeScreen extends StatelessWidget {
   Widget _sellScreen() {
     if (_access.isFuel) return const FuelSaleScreen();
     if (_access.isPharmacy) return const PharmacySaleScreen();
+    if (_access.isWholesale) return const WholesaleInvoiceCreateScreen();
+    if (_access.isRestaurant) return const RestaurantCashierScreen();
     return const CashierPosScreen();
+  }
+
+  String get _sellTitle {
+    if (_access.isFuel) return 'بيع وقود';
+    if (_access.isPharmacy) return 'بيع صيدلية';
+    if (_access.isWholesale) return 'فاتورة جملة جديدة';
+    if (_access.isRestaurant) return 'تحصيل طلبات المطعم';
+    if (_access.isQuickSale) return 'بيع سريع';
+    return 'بيع تجزئة';
+  }
+
+  String get _sellSubtitle {
+    if (_access.isFuel) return 'المضخة · الكمية · وسيلة الدفع';
+    if (_access.isPharmacy) return 'الدواء · التشغيلة · الدفع';
+    if (_access.isWholesale) return 'عميل · أصناف · سعر جملة';
+    if (_access.isRestaurant) return 'الطلبات المفتوحة · التحصيل · الفاتورة';
+    if (_access.isQuickSale) return 'أدخل المبلغ ثم استلم الدفع';
+    return 'الباركود · السلة · الدفع';
   }
 
   @override
@@ -105,7 +127,11 @@ class PosEmployeeHomeScreen extends StatelessWidget {
               const SizedBox(height: 18),
 
               // ── الإجراءُ الوحيدُ الكبير: البيع ──
-              _BigSellButton(onTap: () => Get.to(_sellScreen)),
+              _BigSellButton(
+                title: _sellTitle,
+                subtitle: _sellSubtitle,
+                onTap: () => Get.to(_sellScreen),
+              ),
               const SizedBox(height: 18),
 
               const _SectionTitle('ما لا يُنزَع عن أيّ موظّف'),
@@ -293,8 +319,14 @@ class _Chip extends StatelessWidget {
 }
 
 class _BigSellButton extends StatelessWidget {
-  const _BigSellButton({required this.onTap});
+  const _BigSellButton({
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
 
+  final String title;
+  final String subtitle;
   final VoidCallback onTap;
 
   @override
@@ -319,15 +351,15 @@ class _BigSellButton extends StatelessWidget {
                   color: Colors.white, size: 24),
             ),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('بيعٌ جديد',
-                    style: TextStyle(
+                Text(title,
+                    style: const TextStyle(
                         color: Colors.white,
                         fontSize: 17,
                         fontWeight: FontWeight.bold)),
-                Text('الكاشير — سلّةٌ ودفع',
-                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+                Text(subtitle,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12)),
               ]),
             ),
             const Icon(Icons.chevron_left_rounded, color: Colors.white70),
