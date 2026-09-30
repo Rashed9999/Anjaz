@@ -851,7 +851,7 @@
           const [nameLabel,nameInput]=field('اسم الموظف','display_name');
           const [codeLabel,codeInput]=field('رمز دخول الموظف','employee_code');
           const [passwordLabel,passwordInput]=field('كلمة مرور مؤقتة','password','password');
-          const [roleLabel,roleSelect]=field('دور الموظف','merchant_role_id','select',[{value:'',label:'كاشير (الدور الافتراضي)'},...roles.map(r=>({value:r.id,label:r.name_ar}))]);
+          const [roleLabel,roleSelect]=field('دور الموظف','merchant_role_id','select',[{value:'',label:'الدور الافتراضي لنقطة البيع'},...roles.map(r=>({value:r.id,label:r.name_ar}))]);
           [nameInput,codeInput,passwordInput].forEach(x=>x.required=true);
           employeeFields.append(nameLabel,codeLabel,passwordLabel,roleLabel);
         }
