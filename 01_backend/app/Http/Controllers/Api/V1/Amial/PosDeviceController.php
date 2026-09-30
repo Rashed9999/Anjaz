@@ -243,11 +243,24 @@ class PosDeviceController extends Controller
             $patch['branch_id'] = $branch;
         }
 
+        $endedSessions = 0;
+        $branchChanged = array_key_exists('branch_id', $patch)
+            && (string) ($device->branch_id ?? '') !== (string) ($patch['branch_id'] ?? '');
+
         if ($patch !== []) {
             $device->forceFill($patch)->save();
         }
 
-        return $this->ok(['device' => $this->present($device->refresh())]);
+        // نقل الصندوق إلى فرع آخر يقطع جلساته الحالية؛ وإلا يبقى موظف
+        // الفرع القديم يعمل برمز مربوط بالجهاز نفسه بعد تغيّر عهدته.
+        if ($branchChanged) {
+            $endedSessions = PosDeviceSession::endAllForDevice((int) $device->id);
+        }
+
+        return $this->ok([
+            'device' => $this->present($device->refresh()),
+            'ended_sessions' => $endedSessions,
+        ]);
     }
 
     /** DELETE — إلغاءٌ يُخلي المقعدَ ويقتل الجلسات. */
