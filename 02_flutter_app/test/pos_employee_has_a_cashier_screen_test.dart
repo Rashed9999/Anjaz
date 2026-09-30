@@ -133,6 +133,20 @@ void main() {
         reason: 'كاشيرُ محطّة الوقود يُفتح له كاشيرُ بقالة — ومسارُ '
             'البيع هناك `FuelSaleScreen` وحدَه');
 
+    expect(src.contains('PharmacySaleScreen'), isTrue,
+        reason: 'كاشير الصيدلية يجب أن يفتح بيع الصيدلية لا كاشير التجزئة');
+
+    expect(src.contains('WholesaleInvoiceCreateScreen'), isTrue,
+        reason: 'موظف الجملة يجب أن يفتح فاتورة الجملة، لا سلة التجزئة');
+
+    expect(src.contains('RestaurantCashierScreen'), isTrue,
+        reason: 'كاشير المطعم يجب أن يرى التحصيل فقط، لا لوحة الطاولات والمطبخ');
+
+    // البيع السريع والتجزئة يشتركان في الكاشير العام؛ داخله يتقدم الإدخال
+    // اليدوي للبيع السريع بينما تبقى شبكة المنتجات للتجزئة.
+    expect(src.contains('CashierPosScreen'), isTrue,
+        reason: 'التجزئة والبيع السريع فقدا شاشة الكاشير العامة');
+
     // ── ولا بابَ مالكٍ واحد ──
     //
     // **وتُسمّى الأبوابُ واحداً واحداً** لا بقائمةٍ مفتوحة: بابٌ يُضاف
