@@ -195,7 +195,7 @@ class MerchantStaffTest extends TestCase
         ])->exists());
     }
 
-    /** @test كاشير الوقود يبيع ويغلق ورديته، لكنه لا يفتح وردية المحطة. */
+    /** @test كاشير الوقود يبيع، لكنه لا يفتح أو يغلق وردية المحطة التي يديرها المشرف. */
     public function fuel_cashier_api_cannot_promote_itself_to_shift_supervisor(): void
     {
         MerchantProfile::where('user_id', $this->merchant->id)
@@ -223,13 +223,23 @@ class MerchantStaffTest extends TestCase
         ])->assertForbidden()
           ->assertJsonPath('code', 'FORBIDDEN');
 
-        // البيع وإغلاق الوردية من صلاحيات الكاشير. الطلب الناقص يصل إلى
+        // البيع نفسه من صلاحيات الكاشير. الطلب الناقص يصل إلى
         // validation (422) ولا يتوقف عند حارس الصلاحية (403).
         $this->postJson('/api/v1/amial/merchant/fuel/sales', [])
             ->assertStatus(422);
 
-        $this->postJson('/api/v1/amial/merchant/fuel/shifts/1/close', [])
-            ->assertStatus(422);
+        // وردية الوقود محطة-كاملة. إن فتحها المالك/المشرف فلا تكفي منحة
+        // SHIFT_CLOSE القديمة ذات scope=own كي يغلقها كاشير آخر.
+        $station = app(\App\Services\FuelStationService::class)
+            ->getOrCreateStation($this->merchant->fresh());
+        $shift = app(\App\Services\FuelShiftService::class)
+            ->openShift($station, $this->merchant->fresh(), '0');
+
+        Passport::actingAs($staff, [], 'api');
+        $this->postJson("/api/v1/amial/merchant/fuel/shifts/{$shift->id}/close", [
+            'actual_cash' => 0,
+        ])->assertForbidden()
+          ->assertJsonPath('code', 'FORBIDDEN');
     }
 
     /** @test رقم نقطة بيع مكرّر يُرفض. */
