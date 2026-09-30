@@ -18,11 +18,20 @@ void main() {
     expect(controller.readAsStringSync(), contains("== 'available'"));
   });
 
-  test('الأعمال تفتح شاشات التقارير وعميل الصيدلية المتخصصة', () {
+  test('قدرات المالك المدفوعة تبقى معروفة وتُحال إلى بوابة الويب', () {
     final src = map.readAsStringSync();
-    expect(src, contains("'advanced_reports': () => const MerchantAdvancedReportsScreen()"));
-    expect(src, contains("'profit_reports': () => const ProfitReportScreen()"));
-    expect(src, contains("'pharmacy_customers': () => const PharmacyCustomersScreen()"));
+
+    for (final code in const [
+      'advanced_reports',
+      'profit_reports',
+      'pharmacy_customers',
+    ]) {
+      expect(src, contains("'$code'"),
+          reason: 'اختفت قدرة $code من عقد التطبيق بعد نقل المالك إلى الويب');
+    }
+
+    expect(src, contains("WebPortalNoticeScreen(role: 'merchant')"),
+        reason: 'قدرات المالك لا تُحال إلى بوابة المنشأة');
   });
 
   /// ══════════════════════════════════════════════════════════════════
