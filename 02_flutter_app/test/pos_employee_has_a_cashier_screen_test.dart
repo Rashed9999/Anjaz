@@ -35,9 +35,11 @@ void main() {
       File('lib/features/access/controllers/access_controller.dart');
   final dashboard =
       File('lib/features/merchant/screens/merchant_dashboard_screen.dart');
+  final restaurantCashier =
+      File('lib/features/restaurant/screens/restaurant_cashier_screen.dart');
 
   test('الملفّاتُ في مواضعها — وإلّا فحصنا العدم', () {
-    for (final f in [dispatcher, posHome, access, dashboard]) {
+    for (final f in [dispatcher, posHome, access, dashboard, restaurantCashier]) {
       expect(f.existsSync(), isTrue, reason: 'مفقود: ${f.path}');
     }
   });
@@ -170,6 +172,27 @@ void main() {
             'وضغطُها يُردّ من الخادم بـ٤٠٣ «متاح للتجّار فقط». '
             '**وزرٌّ يُرسَم ثمّ يُصفع أسوأُ من غيابه**: الغيابُ يُسأل '
             'عنه، والرفضُ يُقرأ عطلاً في التطبيق.');
+  });
+
+  test('كاشيرُ المطعم يحصّل فقط ولا يدير المطعم', () {
+    final src = restaurantCashier.readAsStringSync();
+
+    expect(src.contains("'/api/v1/amial/restaurant/orders'"), isTrue,
+        reason: 'كاشير المطعم لا يقرأ الطلبات المفتوحة من الخادم');
+    expect(src.contains('checkoutOnly: true'), isTrue,
+        reason: 'شاشة التحصيل فتحت محرر الطلب الكامل بدل وضع الكاشير');
+    expect(src.contains('ShiftGate'), isTrue,
+        reason: 'تحصيل المطعم يثبت مالاً ويجب أن يمر من باب الوردية');
+
+    for (final ownerAction in [
+      '_addTable',
+      'RESTAURANT_TABLE_MANAGE',
+      'RestaurantScreen',
+      'kitchen',
+    ]) {
+      expect(src.contains(ownerAction), isFalse,
+          reason: 'واجهة كاشير المطعم تحمل صلاحية تشغيل ليست من عمله: ' + ownerAction);
+    }
   });
 
   test('وأبوابُ المالك في لوحته محروسةٌ بالملكيّة لا بالميزة', () {
