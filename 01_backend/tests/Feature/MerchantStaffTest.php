@@ -6,9 +6,11 @@ use App\Models\Branch;
 use App\Models\MerchantProfile;
 use App\Models\Merchant\MerchantRole;
 use App\Models\Merchant\MerchantUserRole;
+use App\Models\Merchant\PosDeviceSession;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\SubscriptionService;
+use App\Services\Merchant\PosDeviceRegistrar;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Passport\Passport;
@@ -280,6 +282,61 @@ class MerchantStaffTest extends TestCase
             $default->id,
             (int) PosUser::findOrFail((int) $legacyOmitted->json('meta.id'))->branch_id,
             'حذف branch_id كسر سلوك التوافق الذي يختار الفرع الافتراضي',
+        );
+    }
+
+    /** @test تغيير فرع الموظف عبر الـAPI يقطع جلسة الجهاز القديمة. */
+    public function staff_branch_assignment_route_updates_scope_and_ends_live_device_session(): void
+    {
+        $from = Branch::create([
+            'merchant_user_id' => $this->merchant->id,
+            'name' => 'فرع أ',
+            'code' => 'BR-A',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+        $to = Branch::create([
+            'merchant_user_id' => $this->merchant->id,
+            'name' => 'فرع ب',
+            'code' => 'BR-B',
+            'is_active' => true,
+            'is_default' => false,
+        ]);
+
+        $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+        app(SubscriptionService::class)->changePlan($this->merchant, A::PLAN_BUSINESS, $admin);
+        Passport::actingAs($this->merchant->fresh(), [], 'api');
+
+        $created = $this->postJson('/api/v1/amial/merchant/staff', [
+            'employee_code' => 'MOVE-POS',
+            'display_name' => 'موظف متنقل',
+            'password' => 'TempPass2026',
+            'branch_id' => $from->id,
+        ])->assertCreated();
+
+        $pos = PosUser::findOrFail((int) $created->json('meta.id'));
+        $device = app(PosDeviceRegistrar::class)
+            ->register($this->merchant, 'move-device', ['branch_id' => $from->id])['device'];
+
+        PosDeviceSession::create([
+            'access_token_id' => 'move-session-token',
+            'pos_device_id' => $device->id,
+            'merchant_user_id' => $this->merchant->id,
+            'actor_user_id' => $pos->user_id,
+            'started_at' => now(),
+            'last_seen_at' => now(),
+        ]);
+
+        $this->putJson('/api/v1/amial/merchant/staff/'.$pos->id.'/branch', [
+            'branch_id' => $to->id,
+        ])->assertOk()
+          ->assertJsonPath('meta.branch_id', $to->id)
+          ->assertJsonPath('meta.ended_device_sessions', 1);
+
+        $this->assertSame($to->id, (int) $pos->fresh()->branch_id);
+        $this->assertNotNull(
+            PosDeviceSession::where('access_token_id', 'move-session-token')->value('ended_at'),
+            'نُقل الموظف إلى فرع جديد وبقيت جلسة صندوق الفرع القديم حيّة',
         );
     }
 
