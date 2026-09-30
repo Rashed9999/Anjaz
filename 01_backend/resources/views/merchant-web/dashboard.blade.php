@@ -847,8 +847,8 @@
       function renderEmployeeFields(){
         employeeFields.replaceChildren();
         if(employeeMode==='existing'){
-          const [staffLabel,staffSelect]=field('الموظف النشط في الفرع','existing_staff_id','select',[{value:'',label:'اختر الموظف'}]);
-          const update=()=>{const rows=staff.filter(s=>String(s.branch_id)===value(branchSelect));staffSelect.replaceChildren(node('option','اختر الموظف'));staffSelect.options[0].value='';rows.forEach(s=>{const op=node('option',s.display_name+' — '+s.employee_code);op.value=s.id;staffSelect.append(op)});staffSelect.disabled=!branchSelect.value;};
+          const [staffLabel,staffSelect]=field(canUseBranches?'الموظف النشط في موقع التشغيل':'الموظف النشط في المنشأة','existing_staff_id','select',[{value:'',label:'اختر الموظف'}]);
+          const update=()=>{const normaliseBranch=x=>x===null||x===undefined?'':String(x);const selectedBranch=normaliseBranch(branchSelect.value);const rows=staff.filter(s=>normaliseBranch(s.branch_id)===selectedBranch);staffSelect.replaceChildren(node('option',rows.length?'اختر الموظف':'لا يوجد موظف نشط في موقع التشغيل'));staffSelect.options[0].value='';rows.forEach(s=>{const op=node('option',s.display_name+' — '+s.employee_code);op.value=s.id;staffSelect.append(op)});staffSelect.disabled=!rows.length;};
           branchSelect.addEventListener('change',update);update();staffSelect.required=true;employeeFields.append(staffLabel);
         }else{
           const [nameLabel,nameInput]=field('اسم الموظف','display_name');
