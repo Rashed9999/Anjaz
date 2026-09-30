@@ -76,6 +76,19 @@ class UnifiedAuthController extends GetxController implements GetxService {
     });
   }
 
+  /// POS on an activated device: the server derives the merchant from
+  /// X-POS-Device. The employee only supplies their own credentials.
+  Future<bool> loginPos({
+    required String employeeCode,
+    required String password,
+  }) async {
+    return _execute({
+      'role': 'merchant',
+      'employee_code': employeeCode,
+      'password': password,
+    });
+  }
+
   // ===== Admin (بريد + كلمة مرور) =====
   Future<bool> loginAdmin({
     required String email,
