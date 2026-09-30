@@ -18,6 +18,9 @@ use App\Services\FuelCompanyCardService;
 use App\Services\FuelReceiptPdfService;
 use App\Services\FuelShiftService;
 use App\Services\FuelStationService;
+use App\Services\Merchant\MerchantPermissionService;
+use App\Support\Merchant\MerchantPermissions as P;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -53,7 +56,20 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
         private readonly FuelStationService $svc,
         private readonly FuelShiftService $shifts,
         private readonly FuelCompanyCardService $cardSvc,
+        private readonly MerchantPermissionService $perm,
     ) {}
+
+    /** الخادم هو حد الصلاحية؛ إخفاء زر POS ليس حماية. */
+    private function guard(Request $request, string $permission, ?string $amount = null): ?JsonResponse
+    {
+        try {
+            $this->perm->assert($request->user(), $permission, [], $amount);
+
+            return null;
+        } catch (DomainException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        }
+    }
 
     // ============ Receipt PDF ============
 
@@ -159,6 +175,10 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
 
     public function openShift(Request $request): JsonResponse
     {
+        if ($deny = $this->guard($request, P::SHIFT_OPEN)) {
+            return $deny;
+        }
+
         $v = Validator::make($request->all(), [
             'opening_cash' => 'sometimes|nullable|numeric|min:0',
             'notes' => 'sometimes|nullable|string|max:500',
@@ -184,6 +204,10 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
 
     public function closeShift(Request $request, int $shiftId): JsonResponse
     {
+        if ($deny = $this->guard($request, P::SHIFT_CLOSE)) {
+            return $deny;
+        }
+
         $v = Validator::make($request->all(), [
             'actual_cash' => 'required|numeric|min:0',
             'pump_closings' => 'sometimes|array',
@@ -466,6 +490,10 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
 
     public function recordSale(Request $request): JsonResponse
     {
+        if ($deny = $this->guard($request, P::FUEL_SALE_CREATE)) {
+            return $deny;
+        }
+
         $v = Validator::make($request->all(), [
             'pump_id' => 'required|integer',
             'fuel_product_id' => 'required|integer',
