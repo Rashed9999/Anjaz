@@ -5,6 +5,7 @@ import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_qr_collect_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_receipt_screen.dart';
+import 'package:amial_pay/features/fuel_station/widgets/fuel_shift_gate.dart';
 import 'package:amial_pay/features/merchant/widgets/credit_sale_notice.dart';
 import 'package:amial_pay/features/merchant/widgets/merchant_payment_method_picker.dart';
 
@@ -174,7 +175,8 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return FuelShiftGate(
+      child: Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('بيع وقود'),
@@ -307,7 +309,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
           ]),
         );
       }),
-    );
+    ));
   }
 
   Widget _sectionTitle(String s) => Text(s,
