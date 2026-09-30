@@ -26,6 +26,7 @@
         .field input,.field select{padding:12px;border:1px solid #cbdcd5;border-radius:9px;min-height:44px;font:14px Tahoma;width:100%}
         .error{border:1px solid #e7af9e;background:#fff0ea;color:#9f3420;padding:14px;border-radius:12px}
         .note{background:#edf6f3;border-right:3px solid #21956e;padding:15px;border-radius:7px;color:#35594a;font-size:13px;line-height:1.9}
+        .setup-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:0 0 20px}.setup-step{border:1px solid #d7e7df;border-radius:12px;padding:11px 12px;background:#f8fbfa;color:#5b7268;font-size:12px;font-weight:700}.setup-step.current{background:#167550;color:#fff;border-color:#167550}.setup-step.done{background:#e5f5ec;border-color:#95d2ae;color:#146e4c}.setup-choice{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 14px}.setup-choice button{border:1px solid #bfd9cd;background:#fff;color:#165a42;border-radius:10px;padding:10px 13px;font:700 13px Tahoma;cursor:pointer}.setup-choice button.active{background:#e4f4eb;border-color:#167550}.setup-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}.setup-summary{display:grid;gap:9px;margin:13px 0}.setup-summary div{display:flex;justify-content:space-between;gap:15px;padding:11px 13px;border-radius:10px;background:#f5faf7;border:1px solid #e0eee7}.setup-summary strong{color:#224b3c}.setup-secret{background:#fff9ec;border:1px solid #ead28e;border-radius:14px;padding:16px;margin-top:15px}.setup-code{font:800 27px/1.3 monospace;letter-spacing:4px;direction:ltr;color:#155d45;margin:8px 0}
         #message{position:fixed;bottom:21px;left:21px;background:#173f32;color:white;border-radius:11px;padding:14px 20px;display:none;max-width:min(90vw,480px);z-index:9}
         [hidden]{display:none!important}
         .mobile-bar,.nav-backdrop{display:none}.table-help{display:none}
@@ -52,7 +53,7 @@
           .mobile-store{max-width:33vw}main{padding:16px 12px}
           .top{align-items:flex-start}.top h1{font-size:22px}.grid{gap:10px}
           .metric strong{font-size:clamp(18px,5vw,24px)}.metric small{font-size:12px}
-          form.editor{grid-template-columns:1fr}.field input,.field select{min-height:48px}
+          form.editor{grid-template-columns:1fr}.field input,.field select{min-height:48px}.setup-steps{grid-template-columns:1fr}.setup-summary div{align-items:flex-start;flex-direction:column;gap:4px}
           button.action{min-height:46px}#message{left:10px;right:10px;bottom:12px;max-width:none}
         }
         @media(prefers-reduced-motion:reduce){.side{transition:none}}
@@ -133,7 +134,7 @@
     });
     panel.append(node('h3','إجراءات هذه المساحة'),actions);
   }
-  async function api(key,body,url,method){const init={credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-TOKEN':csrf}};if(body!==undefined){init.method=method||'POST';init.headers['Content-Type']='application/json';init.headers['Idempotency-Key']='mw-'+Date.now()+'-'+Math.random().toString(36).slice(2);init.body=JSON.stringify(body)}const res=await fetch(url||routes[key],init);if(res.status===401){window.location.href=routes.login;throw Error('انتهت الجلسة')}const json=await res.json();if(!res.ok||json.success===false)throw Error(json.message||'لم ينجح تحميل البيانات');return json.meta||{}}
+  async function api(key,body,url,method){const init={credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-TOKEN':csrf}};if(body!==undefined){init.method=method||'POST';init.headers['Content-Type']='application/json';init.headers['Idempotency-Key']='mw-'+Date.now()+'-'+Math.random().toString(36).slice(2);init.body=JSON.stringify(body)}const res=await fetch(url||routes[key],init);if(res.status===401){window.location.href=routes.login;throw Error('انتهت الجلسة')}const json=await res.json();if(!res.ok||json.success===false)throw Error(json.message||'لم ينجح تحميل البيانات');const meta=json.meta;if(meta&&typeof meta==='object'&&!Array.isArray(meta)&&Object.keys(meta).length)return meta;return json.data&&typeof json.data==='object'?json.data:{}}
   function form(p,fields,button,submit){const f=node('form',null,'editor');fields.forEach(([key,label,type,options])=>{const l=node('label',label,'field');let inp;if(options){inp=node('select');options.forEach(o=>{const op=node('option',o.label);op.value=o.value;inp.append(op)})}else{inp=node('input');inp.type=type||'text';if(type==='number'){inp.step='any';inp.min='0'}if(type==='password')inp.autocomplete='new-password'}inp.name=key;inp.required=['name','price','trade_name','sale_price','base_price','price_per_liter','display_name','employee_code','password'].includes(key);l.append(inp);f.append(l)});const btn=node('button',button,'action');btn.type='submit';f.append(btn);f.addEventListener('submit',async ev=>{ev.preventDefault();btn.disabled=true;try{const data=Object.fromEntries(new FormData(f).entries());Object.keys(data).forEach(k=>{if(data[k]==='')delete data[k]});const result=await submit(data);if(result.activation_code){f.replaceChildren();const code=node('strong',result.activation_code);code.style.fontSize='29px';code.style.letterSpacing='5px';const secret=node('div',null,'note');secret.append(node('p','رمز التفعيل (صالح لمرة واحدة، حتى '+result.expires_at+')'),code);const copy=node('button','نسخ الرمز','action secondary');copy.type='button';copy.addEventListener('click',()=>navigator.clipboard.writeText(result.activation_code).then(()=>message('تم نسخ الرمز')));secret.append(copy);p.append(secret);message('تم إنشاء رمز التفعيل؛ انسخه قبل مغادرة الصفحة')}else{message(result.message||'تم الحفظ');await load(active)}}catch(e){message(e.message)}finally{btn.disabled=false}});p.append(f)}
   async function overview(){
     if(!actualSector){
@@ -803,11 +804,123 @@
     }
   }
   async function branches(){const data=await api('branches');const p=box('الفروع التابعة لمنشأتك');table(p,[['اسم الفرع',x=>x.name],['المدينة',x=>x.city||'—'],['العنوان',x=>x.address||'—'],['الحالة',x=>x.is_active?'نشط':'متوقف']],data.branches||[]);const create=box('إضافة فرع');form(create,[['name','اسم الفرع'],['address','العنوان'],['city','المدينة']], 'إنشاء الفرع',d=>api('branchesCreate',d))}
-  async function staff(){const [data,roles]=await Promise.all([api('staff'),api('roles')]);const p=box('الموظفون');table(p,[['الموظف',x=>x.display_name],['الرمز',x=>x.employee_code],['الفرع',x=>x.branch_name||'المنشأة'],['الحالة',x=>x.is_active?'نشط':'موقوف']],data.staff||[]);const create=box('إضافة موظف نقطة بيع');const choices=(roles.roles||[]).filter(r=>r.is_active).map(r=>({value:r.id,label:r.name_ar}));form(create,[['display_name','اسم الموظف'],['employee_code','رمز الدخول'],['password','كلمة مرور الموظف','password'],['merchant_role_id','الصلاحية','select',[{value:'',label:'الدور الافتراضي (كاشير)'},...choices]]], 'إنشاء حساب الموظف',d=>api('staffCreate',d))}
+  async function posSetup(){
+    const [branchesData,staffData,devicesData,rolesData]=await Promise.all([api('branches'),api('staff'),api('devices'),api('roles')]);
+    const branches=(branchesData.branches||[]).filter(x=>x.is_active);
+    const staff=(staffData.staff||[]).filter(x=>x.is_active);
+    const devices=(devicesData.devices||[]).filter(x=>x.is_active);
+    const roles=(rolesData.roles||[]).filter(x=>x.is_active);
+    const panel=box('إعداد نقطة بيع جديدة');
+    hint(panel,'إعداد بسيط، لكن الربط محفوظ: الفرع أولاً، ثم موظف نقطة البيع، ثم جهاز البيع. الجهاز يبقى أصلاً للمنشأة والفرع؛ لا يصبح ملكاً دائماً للموظف.');
+    if(!branches.length){
+      panel.append(node('div','لا يمكن إعداد نقطة بيع قبل إنشاء فرع نشط. أنشئ الفرع أولاً ثم عد إلى هذه الشاشة.','error'));
+      const go=node('button','فتح إدارة الفروع','action');go.type='button';go.onclick=()=>load('branches');panel.append(go);return;
+    }
+    let step=1,employeeMode='new',deviceMode='new',activation=null;
+    const steps=node('div',null,'setup-steps'),stage=node('div');
+    [['1','الفرع والموظف'],['2','الجهاز'],['3','المراجعة والتفعيل']].forEach(([number,label])=>{const item=node('div',number+' · '+label,'setup-step');item.dataset.step=number;steps.append(item)});
+    panel.append(steps,stage);
+    const value=(input)=>String(input?.value||'').trim();
+    const field=(label,name,type='text',options=null)=>{
+      const holder=node('label',label,'field'),input=options?node('select'):node('input');
+      input.name=name;
+      if(options){options.forEach(option=>{const item=node('option',option.label);item.value=option.value;input.append(item)})}
+      else {input.type=type;if(type==='password')input.autocomplete='new-password';}
+      holder.append(input);return [holder,input];
+    };
+    const activeStep=()=>steps.querySelectorAll('.setup-step').forEach(item=>{const n=Number(item.dataset.step);item.classList.toggle('current',n===step);item.classList.toggle('done',n<step)});
+    const button=(label,klass='action')=>{const item=node('button',label,klass);item.type='button';return item};
+    function setChoiceButtons(container,selected){container.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.value===selected))}
+    function renderStepOne(){
+      step=1;activeStep();stage.replaceChildren();
+      const formEl=node('form',null,'editor');
+      const [branchLabel,branchSelect]=field('الفرع','branch_id','select',[{value:'',label:'اختر الفرع'},...branches.map(b=>({value:b.id,label:b.name+(b.city?' — '+b.city:'')}))]);
+      branchSelect.required=true;formEl.append(branchLabel);
+      const modeLabel=node('div','الموظف','field'),modes=node('div',null,'setup-choice');
+      [['new','إضافة موظف جديد'],['existing','استخدام موظف موجود']].forEach(([mode,label])=>{const b=button(label);b.className='setup-choice-button';b.dataset.value=mode;modes.append(b);b.addEventListener('click',()=>{employeeMode=mode;setChoiceButtons(modes,mode);renderEmployeeFields()})});
+      modeLabel.append(modes);formEl.append(modeLabel);
+      const employeeFields=node('div');formEl.append(employeeFields);
+      const next=button('متابعة إلى الجهاز');next.type='submit';formEl.append(next);
+      function renderEmployeeFields(){
+        employeeFields.replaceChildren();
+        if(employeeMode==='existing'){
+          const [staffLabel,staffSelect]=field('الموظف النشط في الفرع','existing_staff_id','select',[{value:'',label:'اختر الموظف'}]);
+          const update=()=>{const rows=staff.filter(s=>String(s.branch_id)===value(branchSelect));staffSelect.replaceChildren(node('option','اختر الموظف'));staffSelect.options[0].value='';rows.forEach(s=>{const op=node('option',s.display_name+' — '+s.employee_code);op.value=s.id;staffSelect.append(op)});staffSelect.disabled=!branchSelect.value;};
+          branchSelect.addEventListener('change',update);update();staffSelect.required=true;employeeFields.append(staffLabel);
+        }else{
+          const [nameLabel,nameInput]=field('اسم الموظف','display_name');
+          const [codeLabel,codeInput]=field('رمز دخول الموظف','employee_code');
+          const [passwordLabel,passwordInput]=field('كلمة مرور مؤقتة','password','password');
+          const [roleLabel,roleSelect]=field('دور الموظف','merchant_role_id','select',[{value:'',label:'كاشير (الدور الافتراضي)'},...roles.map(r=>({value:r.id,label:r.name_ar}))]);
+          [nameInput,codeInput,passwordInput].forEach(x=>x.required=true);
+          employeeFields.append(nameLabel,codeLabel,passwordLabel,roleLabel);
+        }
+      }
+      setChoiceButtons(modes,employeeMode);renderEmployeeFields();
+      formEl.addEventListener('submit',event=>{
+        event.preventDefault();
+        if(!branchSelect.value){message('اختر الفرع أولاً');return}
+        if(employeeMode==='existing'&&!formEl.querySelector('[name="existing_staff_id"]').value){message('اختر موظفاً نشطاً من هذا الفرع');return}
+        if(employeeMode==='new'&&(!value(formEl.querySelector('[name="display_name"]'))||!value(formEl.querySelector('[name="employee_code"]'))||!value(formEl.querySelector('[name="password"]')))){message('أكمل بيانات الموظف');return}
+        renderStepTwo({branchId:branchSelect.value,branchName:branchSelect.selectedOptions[0].textContent,employeeId:employeeMode==='existing'?formEl.querySelector('[name="existing_staff_id"]').value:null,employeeName:employeeMode==='existing'?formEl.querySelector('[name="existing_staff_id"]').selectedOptions[0].textContent:null,staffPayload:employeeMode==='new'?{display_name:value(formEl.querySelector('[name="display_name"]')),employee_code:value(formEl.querySelector('[name="employee_code"]')),password:value(formEl.querySelector('[name="password"]')),merchant_role_id:value(formEl.querySelector('[name="merchant_role_id"]')),branch_id:branchSelect.value}:null});
+      });
+    }
+    function renderStepTwo(data){
+      step=2;activeStep();stage.replaceChildren();
+      const formEl=node('form',null,'editor');
+      const info=node('p','الفرع المختار: '+data.branchName,'note');stage.append(info);
+      const modeLabel=node('div','الجهاز','field'),modes=node('div',null,'setup-choice');
+      [['new','تفعيل جهاز جديد'],['existing','استخدام جهاز نشط']].forEach(([mode,label])=>{const b=button(label);b.className='setup-choice-button';b.dataset.value=mode;modes.append(b);b.addEventListener('click',()=>{deviceMode=mode;setChoiceButtons(modes,mode);renderDeviceFields()})});
+      modeLabel.append(modes);formEl.append(modeLabel);
+      const deviceFields=node('div');formEl.append(deviceFields);
+      const back=button('رجوع','action secondary'),next=button('مراجعة الإعداد');next.type='submit';const actions=node('div',null,'setup-actions');actions.append(back,next);formEl.append(actions);stage.append(formEl);
+      back.onclick=renderStepOne;
+      function renderDeviceFields(){
+        deviceFields.replaceChildren();
+        if(deviceMode==='existing'){
+          const rows=devices.filter(d=>String(d.branch_id)===String(data.branchId));
+          const [deviceLabel,deviceSelect]=field('جهاز نشط في الفرع','existing_device_id','select',[{value:'',label:rows.length?'اختر الجهاز':'لا يوجد جهاز نشط في هذا الفرع'},...rows.map(d=>({value:d.id,label:d.display_name+(d.hint?' — '+d.hint:'')}))]);
+          deviceSelect.required=true;deviceSelect.disabled=!rows.length;deviceFields.append(deviceLabel);
+        }else{
+          const [nameLabel,nameInput]=field('اسم الجهاز','display_name');nameInput.placeholder='مثال: كاشير 1';nameInput.required=true;deviceFields.append(nameLabel);
+          deviceFields.append(node('p','سيظهر رمز تفعيل صالح لمرة واحدة لمدة 15 دقيقة. يُدخل في تطبيق نقطة البيع على الجهاز الفعلي.','note'));
+        }
+      }
+      setChoiceButtons(modes,deviceMode);renderDeviceFields();
+      formEl.addEventListener('submit',event=>{event.preventDefault();const selected=deviceMode==='existing'?formEl.querySelector('[name="existing_device_id"]'):null;if(deviceMode==='existing'&&!selected.value){message('اختر جهازاً نشطاً من هذا الفرع');return}if(deviceMode==='new'&&!value(formEl.querySelector('[name="display_name"]'))){message('اكتب اسماً واضحاً للجهاز');return}renderStepThree({...data,deviceId:selected?.value||null,deviceName:selected?.selectedOptions?.[0]?.textContent||value(formEl.querySelector('[name="display_name"]'))});});
+    }
+    function renderStepThree(data){
+      step=3;activeStep();stage.replaceChildren();
+      const review=node('div',null,'setup-summary');
+      [['الفرع',data.branchName],['الموظف',data.employeeName||data.staffPayload.display_name],['الجهاز',data.deviceName],['الدور',data.staffPayload?(data.staffPayload.merchant_role_id?'الدور المحدد':'كاشير'):'الدور الحالي للموظف']].forEach(([label,text])=>{const row=node('div');row.append(node('span',label),node('strong',text));review.append(row)});
+      stage.append(node('p','راجع الإعداد قبل الإنشاء','muted'),review);
+      const note=node('p','سيُربط الموظف بالفرع ويُسند الجهاز إلى الفرع. عند التشغيل الفعلي تُربط كل عملية بالموظف والجهاز والوردية؛ لا يُمنح الموظف ملكية الجهاز أو محفظة المنشأة.','note');stage.append(note);
+      const actions=node('div',null,'setup-actions'),back=button('رجوع','action secondary'),save=button(data.staffPayload||deviceMode==='new'?'إنشاء وإظهار التفعيل':'إتمام الإعداد');actions.append(back,save);stage.append(actions);
+      back.onclick=()=>renderStepTwo(data);
+      save.onclick=async()=>{
+        save.disabled=true;back.disabled=true;
+        try{
+          // رمز الجهاز لا يحجز مقعداً ولا يظهر قبل اكتمال حساب الموظف. إن
+          // تعذّر إنشاء الحساب يبقى الرمز مخفياً وينتهي تلقائياً، فلا ننشئ
+          // موظفاً يتيماً بسبب فشل الخطوة اللاحقة.
+          if(deviceMode==='new'){activation=await api('deviceActivation',{display_name:data.deviceName,branch_id:data.branchId});}
+          let employee={id:data.employeeId,display_name:data.employeeName};
+          if(data.staffPayload){employee=await api('staffCreate',data.staffPayload);}
+          stage.replaceChildren(node('h3','تم إعداد نقطة البيع'),node('p','أُسند الموظف والجهاز إلى الفرع المختار. لا تبدأ المبيعات إلا بعد دخول الموظف وفتح وردية على الجهاز.','note'));
+          const result=node('div',null,'setup-summary');
+          [['الفرع',data.branchName],['الموظف',employee.employee_code?employee.employee_code+' — '+(data.staffPayload?.display_name||'موظف جديد'):data.employeeName],['الجهاز',data.deviceName]].forEach(([label,text])=>{const row=node('div');row.append(node('span',label),node('strong',text));result.append(row)});stage.append(result);
+          if(activation?.activation_code){const secret=node('div',null,'setup-secret');secret.append(node('strong','رمز تفعيل الجهاز'),node('div',activation.activation_code,'setup-code'),node('p','ينتهي في: '+activation.expires_at,'muted'));const copy=button('نسخ رمز التفعيل','action secondary');copy.onclick=()=>navigator.clipboard.writeText(activation.activation_code).then(()=>message('تم نسخ رمز التفعيل'));secret.append(copy);stage.append(secret)}
+          message('تم حفظ إعداد نقطة البيع');
+        }catch(error){message(error.message);save.disabled=false;back.disabled=false;}
+      };
+    }
+    renderStepOne();
+  }
+  async function staff(){const [data,roles]=await Promise.all([api('staff'),api('roles')]);const p=box('الموظفون');table(p,[['الموظف',x=>x.display_name],['الرمز',x=>x.employee_code],['الفرع',x=>x.branch_name||'المنشأة'],['الحالة',x=>x.is_active?'نشط':'موقوف']],data.staff||[]);const create=box('إضافة موظف نقطة بيع');const choices=(roles.roles||[]).filter(r=>r.is_active).map(r=>({value:r.id,label:r.name_ar}));form(create,[['display_name','اسم الموظف'],['employee_code','رمز الدخول'],['password','كلمة مرور الموظف','password'],['merchant_role_id','الصلاحية','select',[{value:'',label:'الدور الافتراضي لنقطة البيع'},...choices]]], 'إنشاء حساب الموظف',d=>api('staffCreate',d))}
   async function devices(){const data=await api('devices');const p=box('الأجهزة المرخصة');table(p,[['الجهاز',x=>x.display_name],['الفرع',x=>x.branch_name||'—'],['الحالة',x=>x.is_active?'نشط':'غير نشط'],['الجلسات',x=>x.live_sessions??0]],data.devices||[]);const create=box('تفعيل جهاز بيع جديد');hint(create,'ينشئ مالك المنشأة رمزًا مؤقتًا صالحًا لمرة واحدة. أدخله في تطبيق نقطة البيع على الجهاز الجديد.');form(create,[['display_name','اسم الجهاز']], 'إنشاء رمز التفعيل',async d=>{return api('deviceActivation',d)})}
   async function reports(){const r=(await api('wallet')).report||{};const sales=r.sales||{},methods=sales.by_payment_method||{};grid([['إجمالي المبيعات',money(sales.gross)],['عدد المبيعات',sales.count],['نقدًا',money(methods.cash)],['عبر أميال',money(methods.amial_pay)],['آجل',money(methods.credit)]]);const p=box('الحركة اليومية');hint(p,'التقرير يفصل المبيعات عن التحصيلات وعن حركة المحفظة؛ لا تُحسب التحويلات الشخصية مبيعات.');table(p,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[])}
   async function settings(){const data=await api('receipts'),s=data.settings||{};const p=box('هوية فاتورة منشأتك');form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});hint(p,'إعدادات الفاتورة موحدة بين الويب وكل نقاط البيع. صلاحية طباعة السند متاحة بحسب خصائص القطاع.')}
-  const pages={overview,sector,sales,wallet,debts,products,branches,staff,devices,reports,settings,plans};
+  const pages={overview,sector,sales,wallet,debts,products,branches,posSetup,staff,devices,reports,settings,plans};
   async function load(tab){if(stopScanner){stopScanner();stopScanner=null;}active=tab;document.getElementById('page-title').textContent=titles[tab]||'بوابة المنشأة';document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();if(!pages[tab])throw Error('هذا القسم غير معروف');await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
   const sidebar=document.getElementById('merchant-side');
   const menuToggle=document.getElementById('menu-toggle');
