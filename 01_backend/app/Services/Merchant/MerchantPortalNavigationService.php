@@ -119,10 +119,11 @@ final class MerchantPortalNavigationService
         if ($hasBranches) {
             $items[] = $this->item('branches', 'الفروع', 'account_tree', EntitlementService::AVAILABLE);
         }
-        // المعالج يجمع ثلاثة أصول حقيقية (فرع + موظف + جهاز)، لذلك لا
-        // نظهره إن كانت إحدى الوحدات مقفلة بالباقة. تبقى شاشتا الموظفين
-        // والأجهزة مستقلتين لمن يملك إحداهما دون الأخرى.
-        if ($hasBranches && $hasEmployees && $hasMultiPos) {
+        // نقطة البيع تحتاج موظفاً + مقعد جهاز. الفرع اختياري: باقة
+        // الأعمال تسمح بموظفين وأجهزة لكنها تعمل على «المنشأة الرئيسية»
+        // لأن الفروع تبدأ من مؤسسة. ربط المعالج بميزة branches كان يخفي
+        // الإعداد بالكامل عن باقة الأعمال رغم أن لها 5 موظفين و3 أجهزة.
+        if ($hasEmployees && $hasMultiPos) {
             $items[] = $this->item('posSetup', 'إعداد نقطة بيع', 'point_of_sale', EntitlementService::AVAILABLE);
         }
         if ($hasEmployees) {
