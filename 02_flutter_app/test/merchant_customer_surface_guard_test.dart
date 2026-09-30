@@ -24,14 +24,14 @@ void main() {
     expect(src, contains('if (_merchantAtEntry) return;'));
     expect(src, contains('if (_merchantAtEntry || access.isMerchantSession)'));
     expect(src, contains("return const WebPortalNoticeScreen(role: 'merchant');"));
-    expect(src, isNot(contains('MerchantServicesHubScreen'));
+    expect(src, isNot(contains('MerchantServicesHubScreen')));
   });
 
   test('التاجر لا يفتح حساب العميل أو لوحة منشأة قديمة من التطبيق', () {
     final profile = customerProfile.readAsStringSync();
 
     expect(profile, contains("return const WebPortalNoticeScreen(role: 'merchant');"));
-    expect(profile, isNot(contains('MerchantAccountScreen'));
+    expect(profile, isNot(contains('MerchantAccountScreen')));
   });
 
   /// ══════════════════════════════════════════════════════════════════
