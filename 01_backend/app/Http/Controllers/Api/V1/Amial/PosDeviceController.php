@@ -155,34 +155,23 @@ class PosDeviceController extends Controller
                 return ['error' => ['MERCHANT_INACTIVE', 'حساب التاجر غير متاح لتفعيل جهاز.', 403]];
             }
 
-            // جهازٌ فعليّ واحد لا يكون مقعداً نشطاً لتاجرين في الوقت نفسه.
-            // السماح بذلك يجعل تسجيل الدخول غامضاً لأن الهوية نفسها تشير إلى
-            // منشأتين. النقل مشروع فقط بعد أن يلغي المالك السابق مقعده.
-            $rawDevice = (string) $request->input('device_uuid');
-            $hashes = [PosDevice::hashUuid($rawDevice)];
-            foreach (PosDevice::previousKeys() as $key) {
-                $hashes[] = PosDevice::hashUuid($rawDevice, $key);
-            }
-            $foreignActive = PosDevice::whereIn('device_uuid_hash', array_values(array_unique($hashes)))
-                ->where('merchant_user_id', '!=', $owner->id)
-                ->whereNull('revoked_at')
-                ->where('is_active', true)
-                ->exists();
+            $registered = $this->registrar->register(
+                $owner,
+                (string) $request->input('device_uuid'),
+                [
+                'branch_id' => $activation->branch_id,
+                'display_name' => $activation->display_name,
+                'platform' => $request->input('platform'),
+                'app_version' => $request->input('app_version'),
+            ]);
 
-            if ($foreignActive) {
+            if ($registered['result'] === PosDeviceRegistrar::RESULT_OTHER_MERCHANT) {
                 return ['error' => [
                     'DEVICE_ASSIGNED_TO_OTHER_MERCHANT',
                     'هذا الجهاز مفعّل لمنشأة أخرى. يجب أن يلغي المالك السابق الجهاز أولاً ثم يُعاد تفعيله للمنشأة الجديدة.',
                     409,
                 ]];
             }
-
-            $registered = $this->registrar->register($owner, $rawDevice, [
-                'branch_id' => $activation->branch_id,
-                'display_name' => $activation->display_name,
-                'platform' => $request->input('platform'),
-                'app_version' => $request->input('app_version'),
-            ]);
 
             if ($registered['result'] === PosDeviceRegistrar::RESULT_LIMIT) {
                 return ['limit' => $registered];
@@ -330,6 +319,14 @@ class PosDeviceController extends Controller
             'platform' => $request->input('platform'),
             'app_version' => $request->input('app_version'),
         ]);
+
+        if ($result['result'] === PosDeviceRegistrar::RESULT_OTHER_MERCHANT) {
+            return $this->error(
+                'DEVICE_ASSIGNED_TO_OTHER_MERCHANT',
+                'هذا الجهاز مفعّل لمنشأة أخرى. يجب أن يلغي المالك السابق الجهاز أولاً ثم يُعاد تسجيله.',
+                409,
+            );
+        }
 
         if ($result['result'] === PosDeviceRegistrar::RESULT_LIMIT) {
             return new JsonResponse([
