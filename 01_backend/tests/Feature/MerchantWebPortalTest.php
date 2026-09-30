@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
+use App\Models\Branch;
 use App\Models\User;
 use App\Support\Access\AccessConstants as A;
 use App\Support\PortalHost;
@@ -62,6 +63,64 @@ class MerchantWebPortalTest extends TestCase
             ->assertSee('@media(max-width:1199px)', false)
             ->assertSee("e.key==='Escape'", false)
             ->assertSee('جدول قابل للتمرير أفقياً', false);
+    }
+
+    /** نقطة البيع معالجٌ فوق الفرع والموظف والجهاز في النسخة المنشورة فعلياً. */
+    public function test_owner_portal_exposes_guided_pos_setup_in_deployed_view(): void
+    {
+        $owner = $this->owner();
+
+        $this->actingAs($owner, 'merchant_web')
+            ->get('/merchant')
+            ->assertOk()
+            ->assertSee('إعداد نقطة بيع')
+            ->assertSee('async function posSetup()', false)
+            ->assertSee("json.data&&typeof json.data==='object'", false)
+            ->assertSee('branch_id', false);
+    }
+
+    /** إنشاء موظف الويب يجب أن يكتب حساباً فعلياً لا أن يكتفي بنموذج واجهة. */
+    public function test_owner_can_create_pos_employee_from_web_portal(): void
+    {
+        $owner = $this->owner();
+
+        $this->actingAs($owner, 'merchant_web')
+            ->postJson('/merchant/data/staff', [
+                'employee_code' => 'WEB-POS-01',
+                'display_name' => 'موظف الويب',
+                'password' => 'TempPass2026',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('code', 'STAFF_CREATED')
+            ->assertJsonPath('meta.employee_code', 'WEB-POS-01');
+
+        $this->assertDatabaseHas('pos_users', [
+            'merchant_user_id' => $owner->id,
+            'pos_number' => 'WEB-POS-01',
+            'display_name' => 'موظف الويب',
+            'is_active' => 1,
+        ]);
+    }
+
+    /** الفرع الموقوف لا يقبل رمز جهاز جديد. */
+    public function test_pos_activation_code_rejects_inactive_branch(): void
+    {
+        $owner = $this->owner();
+        $branch = Branch::create([
+            'merchant_user_id' => $owner->id,
+            'name' => 'فرع موقوف',
+            'code' => 'STOP-POS',
+            'is_active' => false,
+            'is_default' => false,
+        ]);
+
+        $this->actingAs($owner, 'merchant_web')
+            ->postJson('/merchant/data/devices/activation-codes', [
+                'display_name' => 'جهاز موقوف',
+                'branch_id' => $branch->id,
+            ])
+            ->assertNotFound()
+            ->assertJsonPath('code', 'BRANCH_NOT_FOUND');
     }
 
     public function test_owner_without_a_vertical_can_choose_it_from_the_web_portal(): void
