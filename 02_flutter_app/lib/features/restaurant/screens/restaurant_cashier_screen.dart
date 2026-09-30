@@ -108,9 +108,9 @@ class _RestaurantCashierScreenState extends State<RestaurantCashierScreen> {
 
   Widget _body() {
     if (_loading && _orders.isEmpty) {
-      return const ListView(
-        physics: AlwaysScrollableScrollPhysics(),
-        children: [
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
           SizedBox(height: 220),
           Center(child: CircularProgressIndicator(color: AmialColors.primary)),
         ],
