@@ -828,9 +828,12 @@ final class MerchantPermissions
                     self::WHOLESALE_INVOICE_VIEW, self::WHOLESALE_INVOICE_CREATE,
                     self::WHOLESALE_RETURN_VIEW, self::WHOLESALE_RETURN_REQUEST,
                     self::WHOLESALE_COLLECTION_RECORD,
+                    self::CASH_COUNT, self::SHIFT_OPEN, self::SHIFT_CLOSE,
                     self::REPORT_SALES,
                 ]),
-                // **والمندوبُ يُحصّل فعلاً** — هو من يذهب إلى العميل. لكنّه
+                // **والمندوبُ يُحصّل فعلاً** — هو من يذهب إلى العميل. لذلك
+                // يملك ورديّتَه وصندوقَه، وإلّا كان endpoint التحصيل تحت
+                // amial.shift باباً لا يستطيع فتحه. لكنه
                 // **لا يُبطل** ولا يُغيّر سعراً ولا حدَّ آجل.
             ],
 
@@ -840,9 +843,11 @@ final class MerchantPermissions
                     self::WHOLESALE_INVOICE_VIEW,
                     self::WHOLESALE_COLLECTION_VIEW, self::WHOLESALE_COLLECTION_RECORD,
                     self::DEBT_COLLECT,
+                    self::CASH_COUNT, self::SHIFT_OPEN, self::SHIFT_CLOSE,
                     self::WHOLESALE_REPORT_VIEW,
                 ]),
-                // ولا إنشاءَ فاتورةٍ ولا إبطالَها.
+                // ولا إنشاءَ فاتورةٍ ولا إبطالَها. والتحصيل النقدي يمر
+                // من ورديّته هو حتى يُجرد ما قبضه.
             ],
 
             'accountant' => [
@@ -907,9 +912,11 @@ final class MerchantPermissions
                 // المكتوب في `retailSeedScopes`.
                 self::WHOLESALE_INVOICE_CREATE => ['scope' => 'own', 'limit' => '2000000'],
                 self::WHOLESALE_COLLECTION_RECORD => ['scope' => 'own', 'limit' => '1000000'],
+                self::SHIFT_CLOSE => ['scope' => 'own'],
             ],
             'collector' => [
                 self::WHOLESALE_COLLECTION_RECORD => ['scope' => 'merchant', 'limit' => '5000000'],
+                self::SHIFT_CLOSE => ['scope' => 'own'],
             ],
             'accountant' => [
                 // **والإبطالُ للمحاسب وحدَه دون البيع والتحصيل** — وهو
