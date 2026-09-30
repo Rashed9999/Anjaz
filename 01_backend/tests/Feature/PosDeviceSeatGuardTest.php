@@ -283,6 +283,31 @@ class PosDeviceSeatGuardTest extends TestCase
             'المقاعدُ تجاوزت الحدَّ بعودةِ ملغى');
     }
 
+    /** @test */
+    public function one_active_installation_identity_cannot_belong_to_two_merchants(): void
+    {
+        $first = $this->merchant(self::SEAT_PLAN);
+        $second = $this->merchant(self::SEAT_PLAN);
+
+        $claimed = $this->reg()->register($first, 'shared-physical-device');
+        $this->assertSame(PosDeviceRegistrar::RESULT_REGISTERED, $claimed['result']);
+
+        $conflict = $this->reg()->register($second, 'shared-physical-device');
+        $this->assertSame(PosDeviceRegistrar::RESULT_OTHER_MERCHANT, $conflict['result'],
+            'هويّة جهاز واحدة صارت مقعداً نشطاً لمنشأتين');
+
+        $this->assertSame(0, PosDevice::activeSeats($second->id),
+            'التاجر الثاني استهلك مقعداً رغم أن الجهاز ما زال للمالك الأول');
+
+        // النقل مشروع بعد الإلغاء الصريح: لا قفل دائم على جهاز مستعمل.
+        $this->reg()->revoke($claimed['device'], $first->id);
+
+        $moved = $this->reg()->register($second, 'shared-physical-device');
+        $this->assertSame(PosDeviceRegistrar::RESULT_REGISTERED, $moved['result'],
+            'الجهاز لم ينتقل بعد أن ألغى المالك السابق مقعده');
+        $this->assertSame(1, PosDevice::activeSeats($second->id));
+    }
+
     /**
      * @test
      *
