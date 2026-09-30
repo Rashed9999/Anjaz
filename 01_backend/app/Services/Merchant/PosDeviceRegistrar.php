@@ -42,6 +42,9 @@ class PosDeviceRegistrar
     /** الحدُّ مستنفَد. */
     public const RESULT_LIMIT = 'limit_reached';
 
+    /** هويّة التثبيت نفسها ما زالت مقعداً نشطاً لمنشأة أخرى. */
+    public const RESULT_OTHER_MERCHANT = 'assigned_to_other_merchant';
+
     /**
      * يُسجّل جهازاً أو يُعيد المعروفَ منها.
      *
@@ -58,6 +61,35 @@ class PosDeviceRegistrar
             // **القفلُ على صفّ التاجر** — لا على جدول الأجهزة: فالمقعدُ
             // مورِدُ التاجر، والمتنافسون عليه طلباتُه هو.
             DB::table('users')->where('id', $merchant->id)->lockForUpdate()->first();
+
+            // **هوية تثبيت واحدة لا تكون مقعداً نشطاً لمنشأتين.**
+            //
+            // كانت هذه القاعدة في نقطة التفعيل وحدها؛ لكن التسجيل المباشر
+            // و`/pair` يمران بالمُسجّل نفسه، فتركها خارجَه يصنع باباً
+            // ثانياً يتجاوزها. نبحث بالمفتاح الحالي ومفاتيح التدوير السابقة
+            // حتى لا يصبح تدوير المفتاح طريقةً لتكرار الجهاز.
+            $hashes = [PosDevice::hashUuid($deviceUuid)];
+            foreach (PosDevice::previousKeys() as $key) {
+                $hashes[] = PosDevice::hashUuid($deviceUuid, $key);
+            }
+
+            $foreignActive = PosDevice::whereIn(
+                    'device_uuid_hash',
+                    array_values(array_unique($hashes)),
+                )
+                ->where('merchant_user_id', '!=', $merchant->id)
+                ->whereNull('revoked_at')
+                ->where('is_active', true)
+                ->exists();
+
+            if ($foreignActive) {
+                return [
+                    'result' => self::RESULT_OTHER_MERCHANT,
+                    'device' => null,
+                    'used' => PosDevice::activeSeats($merchant->id),
+                    'max' => $max,
+                ];
+            }
 
             // **البحثُ يمرّ بـ`locate` ولا يُجزّئ هنا** — فمصدرُ الهويّة
             // واحد. ولو جُزّئ في هذا الملفّ لعرف الجهازَ بالمفتاح الحاليّ
