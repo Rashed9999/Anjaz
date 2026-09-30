@@ -175,14 +175,21 @@ class FeatureAccessService
         $features = $this->resolveFeatures(
             $inheritRole, $verificationLevel, $businessType, $plan, $extraFeatures);
 
-        // POS debt access comes from the server role, never solely from the
-        // legacy free-form pos_users.permissions list. This makes new cashiers
-        // (whose legacy list is empty) see their legitimately granted action.
+        // POS UI grants come from the modern role engine first; the legacy
+        // pos_users.permissions array remains only as a compatibility supplement.
+        // Without this bridge, a newly-created cashier has SHIFT_OPEN/CLOSE in
+        // merchant_user_roles but the app hides the shift door because its old
+        // JSON list is empty.
         $posCanCollectDebt = $actor === 'pos' && $posUser !== null
             && ($this->merchantPermissions->can($user, \App\Support\Merchant\MerchantPermissions::DEBT_COLLECT)
                 || $this->merchantPermissions->can($user, \App\Support\Merchant\MerchantPermissions::CASH_MOVE));
+        $posCanUseCashierShift = $actor === 'pos' && $posUser !== null
+            && $businessType !== A::BIZ_FUEL
+            && ($this->merchantPermissions->can($user, \App\Support\Merchant\MerchantPermissions::SHIFT_OPEN)
+                || $this->merchantPermissions->can($user, \App\Support\Merchant\MerchantPermissions::SHIFT_CLOSE));
         if ($actor === 'pos') {
-            $features = $this->restrictToPosPermissions($features, $posUser, $posCanCollectDebt);
+            $features = $this->restrictToPosPermissions(
+                $features, $posUser, $posCanCollectDebt, $posCanUseCashierShift);
         }
         $posPermissions = $posUser && is_array($posUser->permissions)
             ? array_values(array_filter($posUser->permissions, static fn ($permission) => $permission !== 'credit')) : [];
@@ -266,7 +273,12 @@ class FeatureAccessService
      * @param  array<int,string>  $features
      * @return array<int,string>
      */
-    private function restrictToPosPermissions(array $features, ?PosUser $pos, bool $canCollectDebt = false): array
+    private function restrictToPosPermissions(
+        array $features,
+        ?PosUser $pos,
+        bool $canCollectDebt = false,
+        bool $canUseCashierShift = false,
+    ): array
     {
         $granted = ($pos && is_array($pos->permissions)) ? $pos->permissions : [];
 
@@ -280,7 +292,9 @@ class FeatureAccessService
         return array_values(array_filter(
             $features,
             static fn (string $f): bool => in_array($f, $always, true)
-                || ($f === A::F_DEBTS ? $canCollectDebt : in_array($f, $granted, true)),
+                || ($f === A::F_DEBTS && $canCollectDebt)
+                || ($f === A::F_SHIFT_CLOSE && $canUseCashierShift)
+                || in_array($f, $granted, true),
         ));
     }
 
