@@ -236,6 +236,34 @@ class PosDeviceLoginBindingTest extends TestCase
             'أُنشئت جلسة POS رغم اختلاف فرع الموظف عن فرع الجهاز');
     }
 
+    /** @test */
+    public function a_real_passport_request_rejects_a_token_presented_from_another_registered_device(): void
+    {
+        [$merchant] = $this->seedShop();
+
+        app(PosDeviceRegistrar::class)
+            ->register($merchant, 'real-route-device-A');
+
+        $login = $this->login('real-route-device-A');
+        $this->assertIsArray($login, is_string($login) ? $login : '');
+
+        app(PosDeviceRegistrar::class)
+            ->register($merchant, 'real-route-device-B');
+
+        $token = (string) ($login['token'] ?? '');
+        $this->assertNotSame('', $token, 'الدخول لم يُرجع access token');
+
+        config(['amial.pos_devices.enforce_session_binding' => true]);
+
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer '.$token,
+            EnsurePosDevice::HEADER => 'real-route-device-B',
+        ])->getJson('/api/v1/amial/cashier/shift');
+
+        $response->assertForbidden()
+            ->assertJsonPath('code', 'POS_DEVICE_MISMATCH');
+    }
+
     /**
      * @test
      *
