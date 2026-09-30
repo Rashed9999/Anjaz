@@ -104,7 +104,7 @@ class MerchantStaffTest extends TestCase
         $this->assertFalse((bool) PosUser::find($staffId)->is_active);
     }
 
-    /** @test الجملة تستخدم دور البيع الأدنى افتراضياً بدل دور cashier غير الموجود. */
+    /** @test الجملة تستخدم دور POS مستقل افتراضياً بدل خلطه بمندوب المبيعات. */
     public function wholesale_can_create_pos_employee_without_explicit_role(): void
     {
         MerchantProfile::where('user_id', $this->merchant->id)
@@ -120,11 +120,11 @@ class MerchantStaffTest extends TestCase
             'password' => 'TempPass2026',
         ])->assertCreated()
             ->assertJsonPath('code', 'STAFF_CREATED')
-            ->assertJsonPath('meta.role_code', 'sales_rep');
+            ->assertJsonPath('meta.role_code', 'pos_cashier');
 
         $pos = PosUser::findOrFail((int) $response->json('meta.id'));
         $role = MerchantRole::where('merchant_user_id', $this->merchant->id)
-            ->where('code', 'sales_rep')->firstOrFail();
+            ->where('code', 'pos_cashier')->firstOrFail();
 
         $this->assertTrue(MerchantUserRole::where([
             'merchant_user_id' => $this->merchant->id,
@@ -132,6 +132,21 @@ class MerchantStaffTest extends TestCase
             'merchant_role_id' => $role->id,
             'is_active' => true,
         ])->exists());
+
+        $staff = User::findOrFail($pos->user_id);
+        $perm = app(\App\Services\Merchant\MerchantPermissionService::class);
+        $this->assertTrue($perm->can($staff,
+            \App\Support\Merchant\MerchantPermissions::WHOLESALE_INVOICE_CREATE));
+        $this->assertTrue($perm->can($staff,
+            \App\Support\Merchant\MerchantPermissions::WHOLESALE_COLLECTION_RECORD));
+        $this->assertTrue($perm->can($staff,
+            \App\Support\Merchant\MerchantPermissions::SHIFT_OPEN));
+        $this->assertTrue($perm->can($staff,
+            \App\Support\Merchant\MerchantPermissions::SHIFT_CLOSE));
+        $this->assertFalse($perm->can($staff,
+            \App\Support\Merchant\MerchantPermissions::WHOLESALE_INVOICE_VOID));
+        $this->assertFalse($perm->can($staff,
+            \App\Support\Merchant\MerchantPermissions::WHOLESALE_PRICE_SET));
     }
 
     public static function cashierSectors(): array
