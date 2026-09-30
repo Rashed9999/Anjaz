@@ -806,16 +806,15 @@
   async function branches(){const data=await api('branches');const p=box('الفروع التابعة لمنشأتك');table(p,[['اسم الفرع',x=>x.name],['المدينة',x=>x.city||'—'],['العنوان',x=>x.address||'—'],['الحالة',x=>x.is_active?'نشط':'متوقف']],data.branches||[]);const create=box('إضافة فرع');form(create,[['name','اسم الفرع'],['address','العنوان'],['city','المدينة']], 'إنشاء الفرع',d=>api('branchesCreate',d))}
   async function posSetup(){
     const [branchesData,staffData,devicesData,rolesData]=await Promise.all([api('branches'),api('staff'),api('devices'),api('roles')]);
-    const branches=(branchesData.branches||[]).filter(x=>x.is_active);
+    const canUseBranches=navigation.some(item=>item.tab==='branches'&&item.state==='available');
+    const branches=canUseBranches?(branchesData.branches||[]).filter(x=>x.is_active):[];
     const staff=(staffData.staff||[]).filter(x=>x.is_active);
     const devices=(devicesData.devices||[]).filter(x=>x.is_active);
     const roles=(rolesData.roles||[]).filter(x=>x.is_active);
     const panel=box('إعداد نقطة بيع جديدة');
-    hint(panel,'إعداد بسيط، لكن الربط محفوظ: الفرع أولاً، ثم موظف نقطة البيع، ثم جهاز البيع. الجهاز يبقى أصلاً للمنشأة والفرع؛ لا يصبح ملكاً دائماً للموظف.');
-    if(!branches.length){
-      panel.append(node('div','لا يمكن إعداد نقطة بيع قبل إنشاء فرع نشط. أنشئ الفرع أولاً ثم عد إلى هذه الشاشة.','error'));
-      const go=node('button','فتح إدارة الفروع','action');go.type='button';go.onclick=()=>load('branches');panel.append(go);return;
-    }
+    hint(panel,canUseBranches
+      ?'اربط نقطة البيع بفرع أو بالمنشأة الرئيسية، ثم الموظف والجهاز. الجهاز أصل للمنشأة وليس ملكاً دائماً للموظف.'
+      :'باقة الأعمال تعمل على المنشأة الرئيسية: أنشئ الموظف والجهاز الآن، وتصبح الفروع اختياراً إضافياً عند الترقية إلى مؤسسة.');
     let step=1,employeeMode='new',deviceMode='new',activation=null;
     const steps=node('div',null,'setup-steps'),stage=node('div');
     [['1','الفرع والموظف'],['2','الجهاز'],['3','المراجعة والتفعيل']].forEach(([number,label])=>{const item=node('div',number+' · '+label,'setup-step');item.dataset.step=number;steps.append(item)});
@@ -834,8 +833,12 @@
     function renderStepOne(){
       step=1;activeStep();stage.replaceChildren();
       const formEl=node('form',null,'editor');
-      const [branchLabel,branchSelect]=field('الفرع','branch_id','select',[{value:'',label:'اختر الفرع'},...branches.map(b=>({value:b.id,label:b.name+(b.city?' — '+b.city:'')}))]);
-      branchSelect.required=true;formEl.append(branchLabel);
+      const branchOptions=[
+        {value:'',label:canUseBranches?'المنشأة الرئيسية (بدون فرع)':'المنشأة الرئيسية'},
+        ...branches.map(b=>({value:b.id,label:b.name+(b.city?' — '+b.city:'')})),
+      ];
+      const [branchLabel,branchSelect]=field(canUseBranches?'موقع نقطة البيع':'موقع التشغيل','branch_id','select',branchOptions);
+      formEl.append(branchLabel);
       const modeLabel=node('div','الموظف','field'),modes=node('div',null,'setup-choice');
       [['new','إضافة موظف جديد'],['existing','استخدام موظف موجود']].forEach(([mode,label])=>{const b=button(label);b.className='setup-choice-button';b.dataset.value=mode;modes.append(b);b.addEventListener('click',()=>{employeeMode=mode;setChoiceButtons(modes,mode);renderEmployeeFields()})});
       modeLabel.append(modes);formEl.append(modeLabel);
@@ -859,16 +862,15 @@
       setChoiceButtons(modes,employeeMode);renderEmployeeFields();
       formEl.addEventListener('submit',event=>{
         event.preventDefault();
-        if(!branchSelect.value){message('اختر الفرع أولاً');return}
-        if(employeeMode==='existing'&&!formEl.querySelector('[name="existing_staff_id"]').value){message('اختر موظفاً نشطاً من هذا الفرع');return}
+        if(employeeMode==='existing'&&!formEl.querySelector('[name="existing_staff_id"]').value){message('اختر موظفاً نشطاً في موقع التشغيل');return}
         if(employeeMode==='new'&&(!value(formEl.querySelector('[name="display_name"]'))||!value(formEl.querySelector('[name="employee_code"]'))||!value(formEl.querySelector('[name="password"]')))){message('أكمل بيانات الموظف');return}
-        renderStepTwo({branchId:branchSelect.value,branchName:branchSelect.selectedOptions[0].textContent,employeeId:employeeMode==='existing'?formEl.querySelector('[name="existing_staff_id"]').value:null,employeeName:employeeMode==='existing'?formEl.querySelector('[name="existing_staff_id"]').selectedOptions[0].textContent:null,staffPayload:employeeMode==='new'?{display_name:value(formEl.querySelector('[name="display_name"]')),employee_code:value(formEl.querySelector('[name="employee_code"]')),password:value(formEl.querySelector('[name="password"]')),merchant_role_id:value(formEl.querySelector('[name="merchant_role_id"]')),branch_id:branchSelect.value}:null});
+        renderStepTwo({branchId:branchSelect.value||null,branchName:branchSelect.selectedOptions[0].textContent,employeeId:employeeMode==='existing'?formEl.querySelector('[name="existing_staff_id"]').value:null,employeeName:employeeMode==='existing'?formEl.querySelector('[name="existing_staff_id"]').selectedOptions[0].textContent:null,staffPayload:employeeMode==='new'?{display_name:value(formEl.querySelector('[name="display_name"]')),employee_code:value(formEl.querySelector('[name="employee_code"]')),password:value(formEl.querySelector('[name="password"]')),merchant_role_id:value(formEl.querySelector('[name="merchant_role_id"]'))||null,branch_id:branchSelect.value||null}:null});
       });
     }
     function renderStepTwo(data){
       step=2;activeStep();stage.replaceChildren();
       const formEl=node('form',null,'editor');
-      const info=node('p','الفرع المختار: '+data.branchName,'note');stage.append(info);
+      const info=node('p','موقع التشغيل: '+data.branchName,'note');stage.append(info);
       const modeLabel=node('div','الجهاز','field'),modes=node('div',null,'setup-choice');
       [['new','تفعيل جهاز جديد'],['existing','استخدام جهاز نشط']].forEach(([mode,label])=>{const b=button(label);b.className='setup-choice-button';b.dataset.value=mode;modes.append(b);b.addEventListener('click',()=>{deviceMode=mode;setChoiceButtons(modes,mode);renderDeviceFields()})});
       modeLabel.append(modes);formEl.append(modeLabel);
@@ -878,7 +880,7 @@
       function renderDeviceFields(){
         deviceFields.replaceChildren();
         if(deviceMode==='existing'){
-          const rows=devices.filter(d=>String(d.branch_id)===String(data.branchId));
+          const normaliseBranch=x=>x===null||x===undefined?'':String(x);const rows=devices.filter(d=>normaliseBranch(d.branch_id)===normaliseBranch(data.branchId));
           const [deviceLabel,deviceSelect]=field('جهاز نشط في الفرع','existing_device_id','select',[{value:'',label:rows.length?'اختر الجهاز':'لا يوجد جهاز نشط في هذا الفرع'},...rows.map(d=>({value:d.id,label:d.display_name+(d.hint?' — '+d.hint:'')}))]);
           deviceSelect.required=true;deviceSelect.disabled=!rows.length;deviceFields.append(deviceLabel);
         }else{
@@ -892,9 +894,9 @@
     function renderStepThree(data){
       step=3;activeStep();stage.replaceChildren();
       const review=node('div',null,'setup-summary');
-      [['الفرع',data.branchName],['الموظف',data.employeeName||data.staffPayload.display_name],['الجهاز',data.deviceName],['الدور',data.staffPayload?(data.staffPayload.merchant_role_id?'الدور المحدد':'كاشير'):'الدور الحالي للموظف']].forEach(([label,text])=>{const row=node('div');row.append(node('span',label),node('strong',text));review.append(row)});
+      [['موقع التشغيل',data.branchName],['الموظف',data.employeeName||data.staffPayload.display_name],['الجهاز',data.deviceName],['الدور',data.staffPayload?(data.staffPayload.merchant_role_id?'الدور المحدد':'الدور الافتراضي لنقطة البيع'):'الدور الحالي للموظف']].forEach(([label,text])=>{const row=node('div');row.append(node('span',label),node('strong',text));review.append(row)});
       stage.append(node('p','راجع الإعداد قبل الإنشاء','muted'),review);
-      const note=node('p','سيُربط الموظف بالفرع ويُسند الجهاز إلى الفرع. عند التشغيل الفعلي تُربط كل عملية بالموظف والجهاز والوردية؛ لا يُمنح الموظف ملكية الجهاز أو محفظة المنشأة.','note');stage.append(note);
+      const note=node('p',data.branchId?'سيُربط الموظف والجهاز بالفرع المحدد. كل عملية تحفظ الموظف والجهاز والوردية.':'سيعمل الموظف والجهاز على المنشأة الرئيسية دون فرع. كل عملية تحفظ الموظف والجهاز والوردية، ويمكن نقلهما إلى فرع لاحقاً عند توفر ميزة الفروع.','note');stage.append(note);
       const actions=node('div',null,'setup-actions'),back=button('رجوع','action secondary'),save=button(data.staffPayload||deviceMode==='new'?'إنشاء وإظهار التفعيل':'إتمام الإعداد');actions.append(back,save);stage.append(actions);
       back.onclick=()=>renderStepTwo(data);
       save.onclick=async()=>{
