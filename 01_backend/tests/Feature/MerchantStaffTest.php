@@ -180,6 +180,43 @@ class MerchantStaffTest extends TestCase
         ])->exists());
     }
 
+    /** @test كاشير الوقود يبيع ويغلق ورديته، لكنه لا يفتح وردية المحطة. */
+    public function fuel_cashier_api_cannot_promote_itself_to_shift_supervisor(): void
+    {
+        MerchantProfile::where('user_id', $this->merchant->id)
+            ->update(['business_type' => A::BIZ_FUEL]);
+
+        $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+        app(SubscriptionService::class)->changePlan($this->merchant, A::PLAN_BUSINESS, $admin);
+        Passport::actingAs($this->merchant->fresh(), [], 'api');
+
+        $response = $this->postJson('/api/v1/amial/merchant/staff', [
+            'employee_code' => 'FUEL-POS-01',
+            'display_name' => 'كاشير المضخة',
+            'password' => 'TempPass2026',
+        ])->assertCreated();
+
+        $pos = PosUser::findOrFail((int) $response->json('meta.id'));
+        $staff = User::findOrFail($pos->user_id);
+
+        // هذا الاختبار يقيس RBAC نفسه؛ ربط الجهاز له حرّاس مستقلة.
+        config(['amial.pos_devices.enforce_session_binding' => false]);
+        Passport::actingAs($staff, [], 'api');
+
+        $this->postJson('/api/v1/amial/merchant/fuel/shifts/open', [
+            'opening_cash' => 0,
+        ])->assertForbidden()
+          ->assertJsonPath('code', 'FORBIDDEN');
+
+        // البيع وإغلاق الوردية من صلاحيات الكاشير. الطلب الناقص يصل إلى
+        // validation (422) ولا يتوقف عند حارس الصلاحية (403).
+        $this->postJson('/api/v1/amial/merchant/fuel/sales', [])
+            ->assertStatus(422);
+
+        $this->postJson('/api/v1/amial/merchant/fuel/shifts/1/close', [])
+            ->assertStatus(422);
+    }
+
     /** @test رقم نقطة بيع مكرّر يُرفض. */
     public function duplicate_pos_number_is_rejected(): void
     {
