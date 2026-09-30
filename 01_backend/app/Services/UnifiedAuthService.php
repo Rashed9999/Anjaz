@@ -536,6 +536,26 @@ class UnifiedAuthService
             throw new \RuntimeException('أُلغي هذا الجهاز. راجع صاحبَ الحساب.');
         }
 
+        // إن كانت المنشأة متعددة الفروع فلا يكفي أن يكون الجهاز والموظف
+        // للتاجر نفسه؛ يجب أن يكونا في الفرع نفسه. وإلا يستطيع كاشير فرع
+        // أن يبدأ يومه من صندوق فرع آخر، ثم يكتشف المنع لاحقاً عند فتح
+        // الوردية. نرفض مبكراً عند المصادقة برسالة تشغيلية واضحة.
+        $pos = \App\Models\PosUser::where('user_id', $user->id)
+            ->where('merchant_user_id', $merchantUserId)
+            ->first();
+
+        if ($pos !== null) {
+            $staffBranch = $pos->branch_id === null ? null : (int) $pos->branch_id;
+            $deviceBranch = $device->branch_id === null ? null : (int) $device->branch_id;
+
+            if ($staffBranch !== $deviceBranch) {
+                throw new \RuntimeException(
+                    'هذا الموظف مخصّص لفرع مختلف عن جهاز نقطة البيع. '
+                    . 'استخدم جهاز فرع الموظف أو غيّر تعيينه من لوحة التاجر.'
+                );
+            }
+        }
+
         if ($tokenId === null) {
             throw new \RuntimeException('تعذّر ربطُ الجلسة بالجهاز');
         }
