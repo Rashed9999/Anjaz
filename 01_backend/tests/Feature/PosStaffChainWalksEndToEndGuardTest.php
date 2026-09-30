@@ -192,15 +192,12 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
     private function staffLogsIn(string $deviceUuid): string
     {
         $res = $this->postJson('/api/v1/auth/login', [
-            // **`role` لا `kind`** — والشاشةُ تسمّيه `AccountKind`،
-            // فالتسميتان مختلفتان على طرفَي السلك. وهذا بعينه ما يفوت
-            // حرّاسَ الحلقة الواحدة: `PosDeviceLoginBindingTest` يستدعي
-            // `UnifiedAuthService` مباشرةً **فلا يمرّ بهذا المتحكّم أصلاً**.
+            // **موظف POS لا يحمل هوية مالكه.** الجهاز المفعّل يحمل
+            // merchant_user_id، والخادم يشتق منه رقم التاجر وهاتفه.
+            // واجهة التطبيق لذلك ترسل حقلَي الموظف فقط.
             'role' => 'merchant',
-            'merchant_number' => self::MERCHANT_NUMBER,
-            'phone' => self::MERCHANT_PHONE,
-            'password' => self::STAFF_PASSWORD,
             'employee_code' => self::STAFF_CODE,
+            'password' => self::STAFF_PASSWORD,
         ], [EnsurePosDevice::HEADER => $deviceUuid]);
 
         $res->assertOk();
