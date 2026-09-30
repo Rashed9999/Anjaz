@@ -104,6 +104,36 @@ class MerchantStaffTest extends TestCase
         $this->assertFalse((bool) PosUser::find($staffId)->is_active);
     }
 
+    /** @test الجملة تستخدم دور البيع الأدنى افتراضياً بدل دور cashier غير الموجود. */
+    public function wholesale_can_create_pos_employee_without_explicit_role(): void
+    {
+        MerchantProfile::where('user_id', $this->merchant->id)
+            ->update(['business_type' => A::BIZ_WHOLESALE]);
+
+        $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+        app(SubscriptionService::class)->changePlan($this->merchant, A::PLAN_BUSINESS, $admin);
+        Passport::actingAs($this->merchant->fresh(), [], 'api');
+
+        $response = $this->postJson('/api/v1/amial/merchant/staff', [
+            'employee_code' => 'WH-POS-01',
+            'display_name' => 'مندوب نقطة البيع',
+            'password' => 'TempPass2026',
+        ])->assertCreated()
+            ->assertJsonPath('code', 'STAFF_CREATED')
+            ->assertJsonPath('meta.role_code', 'sales_rep');
+
+        $pos = PosUser::findOrFail((int) $response->json('meta.id'));
+        $role = MerchantRole::where('merchant_user_id', $this->merchant->id)
+            ->where('code', 'sales_rep')->firstOrFail();
+
+        $this->assertTrue(MerchantUserRole::where([
+            'merchant_user_id' => $this->merchant->id,
+            'user_id' => $pos->user_id,
+            'merchant_role_id' => $role->id,
+            'is_active' => true,
+        ])->exists());
+    }
+
     /** @test رقم نقطة بيع مكرّر يُرفض. */
     public function duplicate_pos_number_is_rejected(): void
     {
