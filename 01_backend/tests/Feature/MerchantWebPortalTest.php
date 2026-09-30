@@ -76,7 +76,9 @@ class MerchantWebPortalTest extends TestCase
             ->assertSee('إعداد نقطة بيع')
             ->assertSee('async function posSetup()', false)
             ->assertSee("json.data&&typeof json.data==='object'", false)
-            ->assertSee('branch_id', false);
+            ->assertSee('branch_id', false)
+            ->assertSee("const selectedBranch=normaliseBranch(branchSelect.value)", false)
+            ->assertSee("staffSelect.disabled=!rows.length", false);
     }
 
     /** إنشاء موظف الويب يجب أن يكتب حساباً فعلياً لا أن يكتفي بنموذج واجهة. */
