@@ -155,7 +155,29 @@ class PosDeviceController extends Controller
                 return ['error' => ['MERCHANT_INACTIVE', 'حساب التاجر غير متاح لتفعيل جهاز.', 403]];
             }
 
-            $registered = $this->registrar->register($owner, (string) $request->input('device_uuid'), [
+            // جهازٌ فعليّ واحد لا يكون مقعداً نشطاً لتاجرين في الوقت نفسه.
+            // السماح بذلك يجعل تسجيل الدخول غامضاً لأن الهوية نفسها تشير إلى
+            // منشأتين. النقل مشروع فقط بعد أن يلغي المالك السابق مقعده.
+            $rawDevice = (string) $request->input('device_uuid');
+            $hashes = [PosDevice::hashUuid($rawDevice)];
+            foreach (PosDevice::previousKeys() as $key) {
+                $hashes[] = PosDevice::hashUuid($rawDevice, $key);
+            }
+            $foreignActive = PosDevice::whereIn('device_uuid_hash', array_values(array_unique($hashes)))
+                ->where('merchant_user_id', '!=', $owner->id)
+                ->whereNull('revoked_at')
+                ->where('is_active', true)
+                ->exists();
+
+            if ($foreignActive) {
+                return ['error' => [
+                    'DEVICE_ASSIGNED_TO_OTHER_MERCHANT',
+                    'هذا الجهاز مفعّل لمنشأة أخرى. يجب أن يلغي المالك السابق الجهاز أولاً ثم يُعاد تفعيله للمنشأة الجديدة.',
+                    409,
+                ]];
+            }
+
+            $registered = $this->registrar->register($owner, $rawDevice, [
                 'branch_id' => $activation->branch_id,
                 'display_name' => $activation->display_name,
                 'platform' => $request->input('platform'),
