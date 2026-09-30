@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
 use App\Models\MerchantProfile;
 use App\Models\Merchant\MerchantRole;
 use App\Models\Merchant\MerchantUserRole;
@@ -240,6 +241,46 @@ class MerchantStaffTest extends TestCase
             'actual_cash' => 0,
         ])->assertForbidden()
           ->assertJsonPath('code', 'FORBIDDEN');
+    }
+
+    /** @test اختيار المنشأة الرئيسية صراحةً لا يتحول خفيةً إلى الفرع الافتراضي. */
+    public function explicit_main_establishment_keeps_new_pos_staff_unassigned_to_a_branch(): void
+    {
+        $default = Branch::create([
+            'merchant_user_id' => $this->merchant->id,
+            'name' => 'الفرع الافتراضي',
+            'code' => 'DEFAULT',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+
+        $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+        app(SubscriptionService::class)->changePlan($this->merchant, A::PLAN_BUSINESS, $admin);
+        Passport::actingAs($this->merchant->fresh(), [], 'api');
+
+        $explicitMain = $this->postJson('/api/v1/amial/merchant/staff', [
+            'employee_code' => 'MAIN-POS',
+            'display_name' => 'كاشير المنشأة',
+            'password' => 'TempPass2026',
+            'branch_id' => null,
+        ])->assertCreated();
+
+        $this->assertNull(
+            PosUser::findOrFail((int) $explicitMain->json('meta.id'))->branch_id,
+            'اختيار المنشأة الرئيسية تحوّل إلى الفرع الافتراضي خفيةً',
+        );
+
+        $legacyOmitted = $this->postJson('/api/v1/amial/merchant/staff', [
+            'employee_code' => 'AUTO-BRANCH',
+            'display_name' => 'كاشير تلقائي',
+            'password' => 'TempPass2026',
+        ])->assertCreated();
+
+        $this->assertSame(
+            $default->id,
+            (int) PosUser::findOrFail((int) $legacyOmitted->json('meta.id'))->branch_id,
+            'حذف branch_id كسر سلوك التوافق الذي يختار الفرع الافتراضي',
+        );
     }
 
     /** @test رقم نقطة بيع مكرّر يُرفض. */
