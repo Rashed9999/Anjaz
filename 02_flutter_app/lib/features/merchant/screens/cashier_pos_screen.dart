@@ -5,6 +5,8 @@ import 'package:get/get.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
+import 'package:amial_pay/features/restaurant/screens/restaurant_cashier_screen.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_payment_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_scan_screen.dart';
@@ -35,9 +37,14 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
   @override
   void initState() {
     super.initState();
-    if (Get.isRegistered<AccessController>() &&
-        (Get.find<AccessController>().isFuel || Get.find<AccessController>().isPharmacy)) {
-      return;
+    if (Get.isRegistered<AccessController>()) {
+      final access = Get.find<AccessController>();
+      if (access.isFuel ||
+          access.isPharmacy ||
+          access.isWholesale ||
+          access.isRestaurant) {
+        return;
+      }
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       c.loadProducts();
@@ -255,15 +262,15 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // حاجز قطاعي أخير: الكاشير العام للتجزئة والبيع السريع فقط. الصيدلية
-    // تحتاج مسارها الذي يحفظ الوصفة والتشغيلة والانتهاء، والوقود له مساره.
-    if (Get.isRegistered<AccessController>() &&
-        Get.find<AccessController>().isFuel) {
-      return const FuelSaleScreen();
-    }
-    if (Get.isRegistered<AccessController>() &&
-        Get.find<AccessController>().isPharmacy) {
-      return const PharmacySaleScreen();
+    // حاجز قطاعي أخير: الكاشير العام للتجزئة والبيع السريع فقط.
+    // كل قطاع متخصص يعاد إلى شاشة البيع التي تحفظ قواعده حتى لو وصل
+    // إلى هذا المسار من رابط قديم أو إشعار أو زر لم يُحدّث بعد.
+    if (Get.isRegistered<AccessController>()) {
+      final access = Get.find<AccessController>();
+      if (access.isFuel) return const FuelSaleScreen();
+      if (access.isPharmacy) return const PharmacySaleScreen();
+      if (access.isWholesale) return const WholesaleInvoiceCreateScreen();
+      if (access.isRestaurant) return const RestaurantCashierScreen();
     }
     // AMIAL-SHIFT-GATE-001 — **الشبّاكُ لا يُفتح بلا ورديّة.**
     //
