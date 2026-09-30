@@ -720,7 +720,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
                 onPressed: _startPosRegistration,
                 icon: const Icon(Icons.add_to_home_screen_outlined),
                 label: Text(_deviceActivated
-                    ? 'إعادة تفعيل الجهاز لمنشأة أخرى'
+                    ? 'إدخال رمز تفعيل جديد للجهاز'
                     : 'تفعيل جهاز نقطة البيع'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AmialColors.primary,
