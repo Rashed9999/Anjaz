@@ -443,7 +443,10 @@ class MerchantStaffController extends Controller
         $branches = Branch::where('merchant_user_id', $merchant->id)->where('is_active', true);
         if (! $branches->exists()) return null;
 
-        if ($wasSent && $requested !== null && $requested !== '') {
+        if ($wasSent) {
+            // branch_id=null is an explicit choice of the main establishment.
+            // Omitting the field keeps the legacy fallback to the default branch.
+            if ($requested === null || $requested === '') return null;
             $branch = (clone $branches)->where('id', (int) $requested)->first();
             if (! $branch) return $this->error('INVALID_BRANCH', 'الفرع غير صالح لهذه المنشأة', 422);
             return $branch->id;
