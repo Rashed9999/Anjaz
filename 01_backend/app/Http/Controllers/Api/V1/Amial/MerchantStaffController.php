@@ -7,6 +7,7 @@ use App\Models\PosUser;
 use App\Models\Branch;
 use App\Models\MerchantProfile;
 use App\Models\Merchant\MerchantRole;
+use App\Models\Merchant\PosDeviceSession;
 use App\Models\User;
 use App\Models\MerchantSale;
 use App\Exceptions\UsageLimitExceededException;
@@ -425,16 +426,34 @@ class MerchantStaffController extends Controller
         $pos->branch_id = $branchId;
         $pos->save();
 
+        // تغيير موقع عمل الموظف يقتل جلسة الجهاز الحالية. وإلا يبقى token
+        // مربوطاً بصندوق الفرع القديم حتى أول عمليةٍ حساسة، فتتحول إعادة
+        // التعيين إلى حالة نصف-مطبقة. بعد النقل يعيد الموظف الدخول على جهاز
+        // يطابق موقعه الجديد.
+        $endedDeviceSessions = 0;
+        if ((string) ($old ?? '') !== (string) ($branchId ?? '')) {
+            $endedDeviceSessions = PosDeviceSession::where('actor_user_id', $pos->user_id)
+                ->whereNull('ended_at')
+                ->update(['ended_at' => now()]);
+        }
+
         $this->audit->record([
             'actor_type' => 'merchant', 'actor_user_id' => $m->id,
             'subject_type' => 'user', 'subject_id' => $pos->user_id,
             'action' => 'MERCHANT_STAFF_BRANCH_ASSIGNED', 'decision_code' => 'COMPLETED',
             'reason' => 'تغيّر نطاق عمل الموظف',
             'context' => ['merchant_user_id' => $m->id, 'staff_id' => $pos->id,
-                'old_branch_id' => $old, 'new_branch_id' => $branchId, 'branch_id' => $branchId],
+                'old_branch_id' => $old, 'new_branch_id' => $branchId, 'branch_id' => $branchId,
+                'ended_device_sessions' => $endedDeviceSessions],
         ]);
 
-        return $this->ok(['id' => $pos->id, 'branch_id' => $branchId], 'BRANCH_ASSIGNED', 'تم ربط الموظف بالفرع');
+        return $this->ok([
+            'id' => $pos->id,
+            'branch_id' => $branchId,
+            'ended_device_sessions' => $endedDeviceSessions,
+        ], 'BRANCH_ASSIGNED', $endedDeviceSessions > 0
+            ? 'تم تغيير موقع الموظف وإنهاء جلسة نقطة البيع؛ يلزم تسجيل الدخول من جديد'
+            : 'تم ربط الموظف بالفرع');
     }
 
     /** لا نصدّق معرف الفرع القادم من الهاتف؛ ونعيّن الافتراضي للموظف الجديد. */
