@@ -124,23 +124,18 @@ void main() {
             '**ولا خطأَ في أيّ سجلّ**، ويُقرأ قفلَ باقةٍ لا غلطةَ حرف.');
   });
 
-  test('وقدرةُ التسعير لها شاشةٌ تُفتح — لا اسمٌ بلا باب', () {
+  test('وقدرةُ التسعير لا تضيع بعد نقل أدوات المالك إلى الويب', () {
     final map = File('lib/features/entitlements/capability_screens.dart')
         .readAsStringSync();
 
-    expect(map.contains("'wholesale_multi_pricing':"), isTrue,
-        reason: '**«تسعير متعدد المستويات» بلا مدخلٍ في خريطة القدرات.** '
-            'فتُعرَض في «مزايا باقتي» ويُضغط اسمُها ولا يُفتح شيء — '
-            'وهي مبيعةٌ في باقة الأعمال.');
+    expect(map.contains("'wholesale_multi_pricing'"), isTrue,
+        reason: 'اختفت «تسعير متعدد المستويات» من عقد القدرات');
+    expect(map.contains("WebPortalNoticeScreen(role: 'merchant')"), isTrue,
+        reason: 'قدرات المالك لا تملك إحالةً واضحة إلى بوابة المنشأة');
 
     final reg = registry.readAsStringSync();
-    final at = reg.indexOf('F_WHOLESALE_MULTI_PRICING');
-    expect(at, greaterThan(-1), reason: 'اختفت القدرةُ من السجلّ');
-
-    final decl = reg.substring(at, at + 600);
-    expect(decl.contains("->screen("), isTrue,
-        reason: 'القدرةُ بلا `screen()` في السجلّ — و«قدراتي» تقرأ منه '
-            'وجهةَ الضغطة.');
+    expect(reg.contains('F_WHOLESALE_MULTI_PRICING'), isTrue,
+        reason: 'اختفت القدرةُ من سجل الخادم');
   });
 
   test('والهيكلُ يمرّر الرموزَ فعلاً — وإلّا كان الوصفُ زينة', () {
