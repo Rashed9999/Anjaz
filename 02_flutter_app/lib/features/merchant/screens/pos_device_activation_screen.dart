@@ -44,8 +44,12 @@ class _PosDeviceActivationScreenState extends State<PosDeviceActivationScreen> {
       });
       if (!mounted) return;
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
-        // AMIAL-POS-LOGIN-SIMPLE-001 — بها تُخفي شاشةُ الدخول حقلَي التاجر.
+        // AMIAL-POS-LOGIN-SIMPLE-002 — التفعيل يجب أن يصبح نافذاً
+        // في ApiClient الحالي فوراً، لا بعد إعادة تشغيل التطبيق. عادةً
+        // تكون بصمة الجهاز محمّلة منذ الإقلاع، لكن هذا الحزام يغطي حالة
+        // تعذّر التخزين/التهيئة أول مرة ثم نجاحه هنا.
         await PosDeviceIdentity.markActivated();
+        await _api.attachPosDeviceHeader();
         if (!mounted) return;
         await showDialog<void>(
           context: context,
@@ -81,7 +85,7 @@ class _PosDeviceActivationScreenState extends State<PosDeviceActivationScreen> {
           const SizedBox(height: 14),
           const Text('فعّل هذا الجهاز', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text('من حساب التاجر: أجهزة نقاط البيع ← إضافة جهاز ← إنشاء رمز تفعيل. لا تستخدم حساب الموظف أو كلمة مروره هنا.', textAlign: TextAlign.center),
+          const Text('من لوحة مالك المنشأة على الويب: إعداد نقطة بيع ← أنشئ رمز التفعيل، ثم أدخله هنا. لا تستخدم حساب الموظف أو كلمة مروره في هذه الخطوة.', textAlign: TextAlign.center),
           const SizedBox(height: 18),
           TextField(
             controller: _code,
