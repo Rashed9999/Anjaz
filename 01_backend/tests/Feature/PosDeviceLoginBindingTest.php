@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Middleware\EnsurePosDevice;
+use App\Models\Branch;
 use App\Models\Merchant\PosDevice;
 use App\Models\Merchant\PosDeviceSession;
 use App\Models\MerchantProfile;
@@ -196,6 +197,43 @@ class PosDeviceLoginBindingTest extends TestCase
         $this->assertSame($staff->id, (int) $session->actor_user_id);
         $this->assertSame($merchant->id, (int) $session->merchant_user_id);
         $this->assertNull($session->ended_at);
+    }
+
+    /** @test */
+    public function a_staff_member_cannot_login_on_a_device_assigned_to_another_branch(): void
+    {
+        [$merchant, $staff] = $this->seedShop();
+
+        $mine = Branch::create([
+            'merchant_user_id' => $merchant->id,
+            'name' => 'فرع الموظف',
+            'code' => 'STAFF-BR',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+        $other = Branch::create([
+            'merchant_user_id' => $merchant->id,
+            'name' => 'فرع الجهاز',
+            'code' => 'DEVICE-BR',
+            'is_active' => true,
+            'is_default' => false,
+        ]);
+
+        PosUser::where('user_id', $staff->id)->update(['branch_id' => $mine->id]);
+
+        app(PosDeviceRegistrar::class)->register(
+            $merchant,
+            'branch-device-login-001',
+            ['branch_id' => $other->id],
+        );
+
+        $result = $this->login('branch-device-login-001');
+
+        $this->assertIsString($result,
+            'دخول موظف على صندوق فرع آخر نجح بدل أن يُرفض عند المصادقة');
+        $this->assertStringContainsString('فرع مختلف', $result);
+        $this->assertSame(0, PosDeviceSession::count(),
+            'أُنشئت جلسة POS رغم اختلاف فرع الموظف عن فرع الجهاز');
     }
 
     /**
