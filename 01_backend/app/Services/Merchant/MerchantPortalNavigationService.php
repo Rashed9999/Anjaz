@@ -112,13 +112,23 @@ final class MerchantPortalNavigationService
         if ($businessType !== A::BIZ_WHOLESALE && $this->available($states, A::F_DEBTS)) {
             $items[] = $this->item('debts', $businessType === A::BIZ_WHOLESALE ? 'الذمم والتحصيلات' : 'الديون والدفع بالآجل', 'payments', EntitlementService::AVAILABLE);
         }
-        if ($this->available($states, A::F_BRANCHES)) {
+        $hasBranches = $this->available($states, A::F_BRANCHES);
+        $hasEmployees = $this->available($states, A::F_EMPLOYEES);
+        $hasMultiPos = $this->available($states, A::F_MULTI_POS);
+
+        if ($hasBranches) {
             $items[] = $this->item('branches', 'الفروع', 'account_tree', EntitlementService::AVAILABLE);
         }
-        if ($this->available($states, A::F_EMPLOYEES)) {
+        // المعالج يجمع ثلاثة أصول حقيقية (فرع + موظف + جهاز)، لذلك لا
+        // نظهره إن كانت إحدى الوحدات مقفلة بالباقة. تبقى شاشتا الموظفين
+        // والأجهزة مستقلتين لمن يملك إحداهما دون الأخرى.
+        if ($hasBranches && $hasEmployees && $hasMultiPos) {
+            $items[] = $this->item('posSetup', 'إعداد نقطة بيع', 'point_of_sale', EntitlementService::AVAILABLE);
+        }
+        if ($hasEmployees) {
             $items[] = $this->item('staff', 'الموظفون والصلاحيات', 'groups', EntitlementService::AVAILABLE);
         }
-        if ($this->available($states, A::F_MULTI_POS)) {
+        if ($hasMultiPos) {
             $items[] = $this->item('devices', 'أجهزة نقاط البيع', 'point_of_sale', EntitlementService::AVAILABLE);
         }
         // التقرير العام يقرأ `merchant_sales`؛ لا نعيد تسميته تقرير وقود أو
