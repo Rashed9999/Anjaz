@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CashierShift;
 use App\Models\Merchant\PosDevice;
+use App\Models\PosUser;
 use App\Models\User;
 use App\Services\CashierShiftService;
 use App\Services\Merchant\PosDeviceRegistrar;
@@ -84,11 +85,18 @@ class ShiftDeviceStaffBindingGuardTest extends TestCase
         $svc->open($m, null, '1000', $d->id);
 
         $staff = User::factory()->create(['type' => 4, 'is_active' => 1]);
+        $pos = PosUser::create([
+            'user_id' => $staff->id,
+            'merchant_user_id' => $m->id,
+            'pos_number' => 'SHIFT-SECOND',
+            'display_name' => 'الكاشير الثاني',
+            'is_active' => true,
+        ]);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/ورديّةٌ مفتوحة/u');
 
-        $svc->open($m, $staff->id, '500', $d->id);
+        $svc->open($m, $pos->id, '500', $d->id);
     }
 
     /** @test */
