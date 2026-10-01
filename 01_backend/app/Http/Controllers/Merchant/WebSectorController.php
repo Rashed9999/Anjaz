@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Amial\RetailVerticalController;
 use App\Http\Controllers\Api\V1\Amial\WholesaleController;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
+use App\Models\RestaurantOrder;
 use App\Services\Access\EntitlementService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Http\JsonResponse;
@@ -295,7 +296,7 @@ class WebSectorController extends Controller
             A::BIZ_FUEL => [FuelStationController::class, 'listSales'],
             A::BIZ_PHARMACY => [PharmacyController::class, 'listSales'],
             A::BIZ_WHOLESALE => [WholesaleController::class, 'listInvoices'],
-            A::BIZ_RESTAURANT => [RestaurantController::class, 'orders'],
+            A::BIZ_RESTAURANT => [RestaurantController::class, 'salesHistory'],
             default => null,
         };
 
@@ -331,9 +332,31 @@ class WebSectorController extends Controller
         $sector = $this->sector($request);
         if ($deny = $this->requireCapability($request, $this->salesCapability($sector))) return $deny;
 
+        // كل قطاع يستعمل مولّدَه الرسمي القائم؛ لا PDF عام يغيّر
+        // معنى الفاتورة. المطعم يغلق إلى MerchantSale، لذلك فاتورته هي
+        // فاتورة البيع المرتبطة بالطلب نفسه.
+        if ($sector === A::BIZ_RESTAURANT) {
+            $owner = $request->user('merchant_web');
+            $order = RestaurantOrder::where('merchant_user_id', $owner->id)
+                ->whereKey((int) $id)
+                ->first();
+
+            if (!$order || !$order->sale_ulid) {
+                return response()->json([
+                    'success' => false, 'code' => 'INVOICE_NOT_READY',
+                    'message' => 'هذا الطلب لم يُغلق إلى فاتورة بيع بعد.',
+                    'meta' => ['sector' => $sector],
+                ], 409);
+            }
+
+            return app(CashierController::class)->downloadInvoice($request, $order->sale_ulid);
+        }
+
         $target = match ($sector) {
             A::BIZ_QUICK_SALE, A::BIZ_RETAIL => [CashierController::class, 'downloadInvoice'],
             A::BIZ_PHARMACY => [PharmacyController::class, 'downloadInvoice'],
+            A::BIZ_FUEL => [FuelStationController::class, 'downloadReceipt'],
+            A::BIZ_WHOLESALE => [WholesaleController::class, 'downloadInvoicePdf'],
             default => null,
         };
         if (!$target) return $this->unsupported($sector);
