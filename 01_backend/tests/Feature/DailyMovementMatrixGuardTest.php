@@ -425,11 +425,13 @@ class DailyMovementMatrixGuardTest extends TestCase
     /**
      * @test
      *
-     * **والاستردادُ النقديُّ لا يمسّ الدين.**
+     * **طلب الاسترداد النقدي لا يخلق نقداً وهمياً قبل تسوية الدائن.**
      *
-     * المالُ عاد نقداً؛ وخصمُه من الدين فوقَ ذلك ردٌّ يُحاسَب مرّتين.
+     * إذا لم ندفع شيئاً من شراء قيمته 1000 ثم أعدنا منه 200، فالمورد لا
+     * يعيد لنا 200 نقداً ونحن ما زلنا ندين له بالألف؛ الصحيح أن الدين
+     * ينخفض إلى 800 ولا يدخل الدرج شيء.
      */
-    public function a_cash_refund_does_not_also_cut_the_debt(): void
+    public function cash_refund_offsets_supplier_payable_before_any_cash_is_returned(): void
     {
         $p = $this->product();
         [$supplier, $po, $item] = $this->approvedOrder($p, '10', '100');
@@ -444,23 +446,27 @@ class DailyMovementMatrixGuardTest extends TestCase
             ['purchase_order_id' => $po->id, 'settlement_type' => PurchaseReturn::SETTLE_CASH_REFUND],
         );
 
-        app(PurchaseReturnService::class)->approve($this->merchant, $return);
+        $approved = app(PurchaseReturnService::class)->approve($this->merchant, $return);
 
         $supplier->refresh();
-        $this->assertSame(0, bccomp((string) $supplier->current_debt, '1000', 4),
-            'الاستردادُ النقديُّ خصم من الدين أيضاً — فحُوسب الردُّ مرّتين');
+        $this->assertSame(0, bccomp((string) $supplier->current_debt, '800', 4));
+        $this->assertSame(0, bccomp((string) $approved->debt_applied, '200', 4));
+        $this->assertSame(0, bccomp((string) $approved->cash_refund_amount, '0', 4));
 
         $row = $this->rowOf($this->report(), 'purchase_return');
-        $this->assertSame(0, bccomp((string) $row['cash'], '200', 4),
-            'الاستردادُ النقديُّ لم يظهر في العمود النقديّ');
+        $this->assertSame(0, bccomp((string) $row['cash'], '0', 4),
+            'التقرير اخترع نقداً لم يدخل المنشأة');
+        $this->assertSame(0, bccomp((string) $row['supplier_credit'], '200', 4),
+            'تخفيض الدائن اختفى من عمود تسوية المورد');
     }
 
     /**
      * @test
      *
-     * **والدينُ لا يصير سالباً** — ويُقال الفائضُ في سطر الدفتر.
+     * **والدينُ لا يصير سالباً** — والفائض يصبح رصيداً حقيقياً لنا.
      *
-     * دينٌ سالبٌ يُقرأ «المورد مدينٌ لنا»، وهو معنىً لم يقصده أحد.
+     * لا يكفي ذكر الفائض في ملاحظة؛ يجب أن يبقى قابلاً للتحصيل أو
+     * للاستهلاك في شراء لاحق.
      */
     public function the_debt_never_goes_negative_and_the_excess_is_stated(): void
     {
@@ -483,10 +489,13 @@ class DailyMovementMatrixGuardTest extends TestCase
         $this->assertSame(0, bccomp((string) $supplier->current_debt, '0', 4),
             "الدينُ صار {$supplier->current_debt} — وسالبُه يُقرأ عكسَ معناه");
 
+        $this->assertSame(0, bccomp((string) $supplier->current_credit, '400', 4),
+            'فائض المرتجع لم يصبح رصيداً قابلاً للتحصيل من المورد');
+
         $entry = SupplierLedgerEntry::where('supplier_id', $supplier->id)
-            ->where('entry_type', 'po_return')->first();
-        $this->assertStringContainsString('بقي', (string) $entry->note,
-            'الفائضُ الذي لم يُخصَم لم يُذكَر في الدفتر — فيختفي بلا أثر');
+            ->where('entry_type', 'po_return')->firstOrFail();
+        $this->assertSame(0, bccomp((string) $entry->credit_after, '400', 4));
+        $this->assertStringContainsString('أصبح لنا', (string) $entry->note);
     }
 
     // ══════════════════════════════════════════════════════════════════
