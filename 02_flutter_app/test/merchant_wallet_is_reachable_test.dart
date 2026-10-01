@@ -51,9 +51,9 @@ void main() {
   test('وفيها البابان المطلوبان: سحبٌ وتحويل', () {
     final src = wallet.readAsStringSync();
 
-    expect(src.contains('WithdrawRequestScreen'), isTrue,
-        reason: '**لا سحبَ في المحفظة** — وهو مبنيٌّ ويعمل منذ شهور، '
-            'وكان مدفوناً في أسفل اللوحة.');
+    expect(src.contains('MerchantPayoutScreen'), isTrue,
+        reason: '**لا سحبَ في المحفظة** — شاشة صرف التاجر عبر الوكيل '
+            'غير موصولة بمحفظة المتجر.');
 
     expect(src.contains('AmialSendMoneyScreen'), isTrue,
         reason: '**لا تحويلَ في المحفظة.** وهو نصفُ الطلب: «يستطيع سحبَه '
