@@ -372,6 +372,24 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             'تسجيل البيع أضاف المبلغ إلى محفظة التاجر مرة ثانية'
         );
 
+        // المالك لا يكفيه أن يرى زيادة الرصيد: يجب أن يرى البيعة نفسها
+        // ومرجع التحصيل الذي حرّك محفظته حتى يستطيع المطابقة والدعم.
+        $ownerDetail = $this->actingAs($this->merchant, 'merchant_web')
+            ->withHeader('Authorization', '')
+            ->getJson('/merchant/data/sector/sales/'.$saleUlid)
+            ->assertOk();
+
+        $this->assertSame(
+            $paidTxId,
+            (string) $ownerDetail->json('meta.result.sale.paid_transaction_id'),
+            'المال وصل للمحفظة لكن مرجع دفع أميال لم يظهر في تفاصيل بيع المالك'
+        );
+        $this->assertSame(
+            'amial_pay',
+            (string) $ownerDetail->json('meta.result.sale.payment_method'),
+            'تفاصيل المالك فقدت طريقة الدفع الأصلية لبيع POS'
+        );
+
         // ⑥ المرتجع الحقيقي لنفس بيع QR: الكاشير يطلبه من جهاز POS،
         // وإذا احتاج اعتماداً يمنحه المالك من الويب ثم يعيد الكاشير
         // العملية. الفاتورة لا تحمل هاتف العميل عمداً؛ الخادم يستخرج
