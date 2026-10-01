@@ -51,6 +51,7 @@ class WebPortalController extends Controller
             'sectorSaleInvoice' => route('merchant.web.data.sector.sales.invoice', ['id' => '__ID__']),
             'plans' => route('merchant.web.data.plans'),
             'stats' => route('merchant.web.data.stats'),
+            'profitReport' => route('merchant.web.data.profit-report'),
             'wallet' => route('merchant.web.data.wallet'),
             'ledger' => route('merchant.web.data.ledger'),
             'walletVerification' => route('merchant.web.data.wallet.verification'),
