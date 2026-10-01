@@ -213,7 +213,7 @@
             font-size: 9pt;
             color: #9CA3AF;
         }
-        .footer .stamp {
+        .verify-qr { width: 105px; height: 105px; margin: 8px auto 4px; }\n        .verify-code { direction: ltr; font-family: monospace; font-size: 8pt; color: #6B7280; word-break: break-all; }\n        .footer .stamp {
             display: inline-block;
             padding: 6px 16px;
             border: 2px dashed #D1D5DB;
@@ -431,7 +431,7 @@
 
 {{-- ================= Footer ================= --}}
 <div class="footer">
-    <div>شكراً لتعاملكم معنا</div>
+    <div>شكراً لتعاملكم معنا</div>\n    @if(!empty($qrDataUri))<img class="verify-qr" src="{{ $qrDataUri }}" alt="QR تحقق">@endif\n    <div><strong>تحقق من أصالة الفاتورة</strong></div>\n    <div class="verify-code">{{ $invoice->invoice_ulid }}</div>\n    <div class="verify-code">{{ $verificationUrl }}</div>
     @if($invoice->status === 'paid')
         <div class="stamp" style="border-color: #059669; color: #059669;">✓ مدفوعة بالكامل</div>
     @elseif($invoice->status === 'voided')
