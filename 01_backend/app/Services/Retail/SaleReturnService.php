@@ -63,6 +63,9 @@ class SaleReturnService
                 'refund_method' => $opts['refund_method'] ?? 'cash',
                 'status' => 'pending',
                 'created_by' => $opts['actor_id'] ?? $merchant->id,
+                // إذا جاء من مسار استرداد المال نحتفظ بالربط الصريح؛
+                // البضاعة والمال حقيقتان منفصلتان لكنهما لن يفترقا بعد اليوم.
+                'refund_ulid' => $opts['refund_ulid'] ?? null,
                 'reason' => $opts['reason'] ?? null,
                 'zone_code' => $merchant->zone_code ?? 'SOUTH',
             ]);
