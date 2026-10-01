@@ -60,6 +60,8 @@ Route::middleware('merchant.web')->group(function () {
             ->middleware(['capability:employees', 'throttle:20,1'])->name('roles.create');
 
         Route::get('/stats', [MerchantController::class, 'dailyStats'])->name('stats');
+        Route::get('/profit-report', [CashierController::class, 'profitReport'])
+            ->middleware('capability:profit_reports')->name('profit-report');
         Route::get('/wallet', [MerchantController::class, 'financialReport'])->name('wallet');
         Route::get('/ledger', [MerchantController::class, 'ledger'])->name('ledger');
         // Shared owner wallet: same financial ledger as the app.
