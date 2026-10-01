@@ -43,9 +43,12 @@ class CashierRefundController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'refund_method' => 'required|string|in:cash,wallet,credit_account',
             'items' => 'sometimes|array',
-            'items.*.name' => 'required_with:items|string|max:120',
-            'items.*.qty' => 'required_with:items|numeric|min:0.01',
-            'items.*.price' => 'required_with:items|numeric|min:0',
+            // لا نثق باسم أو سعر من الهاتف. السطر الأصلي هو المرجع، والخادم
+            // يقرأ اسمه وسعره وحدّه القابل للارتجاع من merchant_sale_items.
+            'items.*.sale_item_id' => 'required_with:items|integer|min:1',
+            'items.*.quantity' => 'required_with:items|numeric|min:0.001',
+            'items.*.condition' => 'sometimes|string|in:good,damaged,expired',
+            'items.*.restock' => 'sometimes|boolean',
             'reason' => 'sometimes|nullable|string|max:500',
         ]);
         if ($v->fails()) return $this->validationError($v);
