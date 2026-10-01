@@ -450,6 +450,10 @@ class SupplierController extends Controller
                 return $this->error('ASSET_PRODUCT_CONFLICT',
                     'بند الأصل الثابت لا يُربط بصنف مخزون بيع؛ اختر أحد التصنيفين', 422);
             }
+            if ($type === 'inventory' && empty($item['product_id'])) {
+                return $this->error('INVENTORY_PRODUCT_REQUIRED',
+                    'بند المخزون يجب ربطه بمنتج فعلي؛ استخدم «شراء آخر» للبند غير المخزني', 422);
+            }
             if ($type === 'fixed_asset') {
                 if (empty($item['useful_life_months'])) {
                     return $this->error('ASSET_LIFE_REQUIRED',
@@ -488,7 +492,7 @@ class SupplierController extends Controller
 
                 PurchaseOrderItem::create([
                     'purchase_order_id' => $po->id,
-                    'product_id' => $it['product_id'] ?? null,
+                    'product_id' => $itemType === 'inventory' ? ($it['product_id'] ?? null) : null,
                     'item_type' => $itemType,
                     'asset_category' => $it['asset_category'] ?? null,
                     'useful_life_months' => $it['useful_life_months'] ?? null,
@@ -616,7 +620,7 @@ class SupplierController extends Controller
                         bcmul($qty, (string) $item->unit_cost, 4), 4);
 
                     // **المخزونُ يمرّ من صاحبه** — انظر ① في رأس الدالّة.
-                    if ($item->product_id) {
+                    if ((string) ($item->item_type ?? 'inventory') === 'inventory' && $item->product_id) {
                         $product = MerchantProduct::where('id', $item->product_id)
                             ->where('merchant_user_id', $mid)
                             ->first();
