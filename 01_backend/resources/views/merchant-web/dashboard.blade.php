@@ -1031,6 +1031,21 @@
     await load('suppliers');
   }
 
+  async function paySupplierWallet(row){
+    const debt=Number(row.current_debt||0);
+    if(!(debt>0)){message('لا توجد مديونية مستحقة لهذا المورد');return}
+    if(!row.phone){message('أضف رقم هاتف المورد المرتبط بحساب أميال أولاً');return}
+    const raw=window.prompt('مبلغ السداد عبر أميال للمورد '+row.name+' — الحد الأقصى '+money(row.current_debt));
+    if(raw===null)return;
+    const amount=Number(raw);
+    if(!(amount>0)||amount>debt){message('اكتب مبلغاً صحيحاً لا يتجاوز الرصيد المستحق');return}
+    const note=window.prompt('ملاحظة السداد (اختياري)')||'';
+    if(!window.confirm('سيُخصم '+money(amount)+' من محفظة المنشأة ويرسل إلى حساب أميال المرتبط برقم المورد '+row.phone+'. متابعة؟'))return;
+    const result=await api('supplierWalletPayment',{amount:String(amount),note},dataUrl('supplierWalletPayment',row.id));
+    message('تم السداد عبر أميال — مرجع العملية '+(result.transaction_id||'—'));
+    await load('suppliers');
+  }
+
   async function receivePurchaseOrder(row,openShifts){
     const data=await api('purchaseOrderShow',undefined,dataUrl('purchaseOrderShow',row.id));
     const order=data.order||{},items=(order.items||[]).filter(item=>Number(item.quantity||0)>Number(item.received_quantity||0));
@@ -1175,7 +1190,7 @@
 
     const p=box('الموردون');
     hint(p,'الرصيد هنا هو ما على المنشأة للمورد. السداد النقدي الخارجي لا يمس درج POS؛ وإذا اخترت وردية مفتوحة يُسجل الخروج على درجها فيظهر إغلاق الوردية صحيحاً.');
-    table(p,[['المورد',x=>x.name],['الهاتف',x=>x.phone||'—'],['التصنيف',x=>x.category||'—'],['الرصيد المستحق',x=>money(x.current_debt)],['الإجراءات',x=>buttons([action('كشف الحساب',()=>showSupplier(x.id)),Number(x.current_debt||0)>0?action('سداد',()=>paySupplier(x,openShifts),false):null])]],supplierRows);
+    table(p,[['المورد',x=>x.name],['الهاتف',x=>x.phone||'—'],['التصنيف',x=>x.category||'—'],['الرصيد المستحق',x=>money(x.current_debt)],['الإجراءات',x=>buttons([action('كشف الحساب',()=>showSupplier(x.id)),Number(x.current_debt||0)>0?action('سداد نقدي',()=>paySupplier(x,openShifts),false):null,Number(x.current_debt||0)>0?action('سداد أميال',()=>paySupplierWallet(x),false):null])]],supplierRows);
 
     const create=box('إضافة مورد');
     form(create,[['name','اسم المورد'],['contact_person','مسؤول التواصل'],['phone','الهاتف','tel'],['email','البريد','email'],['address','العنوان'],['category','التصنيف'],['opening_balance','رصيد افتتاحي مستحق','number']],'حفظ المورد',d=>api('supplierCreate',d));
