@@ -30,7 +30,7 @@ class PurchaseReturn extends Model
 
     protected $fillable = [
         'return_ulid', 'merchant_user_id', 'supplier_id', 'purchase_order_id',
-        'location_id', 'status', 'settlement_type', 'total_amount', 'reason',
+        'location_id', 'status', 'settlement_type', 'cashier_shift_id', 'total_amount', 'reason',
         'created_by', 'approved_by', 'approved_at', 'zone_code',
     ];
 
@@ -39,6 +39,7 @@ class PurchaseReturn extends Model
         'supplier_id' => 'integer',
         'purchase_order_id' => 'integer',
         'location_id' => 'integer',
+        'cashier_shift_id' => 'integer',
         'approved_at' => 'datetime',
     ];
 
