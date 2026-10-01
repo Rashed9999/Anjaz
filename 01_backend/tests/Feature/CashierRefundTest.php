@@ -10,6 +10,7 @@ use App\Models\MerchantSale;
 use App\Models\AmialNotification;
 use App\Models\User;
 use App\Services\CashierService;
+use App\Services\CashierShiftService;
 use App\Services\MerchantSaleRefundService;
 use App\Services\MoneyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -54,6 +55,8 @@ class CashierRefundTest extends TestCase
     /** @test */
     public function cash_refund_creates_record_without_wallet_movement(): void
     {
+        app(CashierShiftService::class)->open($this->merchant, null, '0');
+
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '5000',
@@ -222,6 +225,8 @@ class CashierRefundTest extends TestCase
     /** @test */
     public function multiple_partial_refunds_cannot_exceed_total(): void
     {
+        app(CashierShiftService::class)->open($this->merchant, null, '0');
+
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '1000',
