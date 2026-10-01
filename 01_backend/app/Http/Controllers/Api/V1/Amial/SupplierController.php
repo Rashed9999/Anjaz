@@ -289,14 +289,17 @@ class SupplierController extends Controller
                     );
                 }
 
-                return $s->fresh();
+                return [
+                    'supplier' => $s->fresh(),
+                    'receipt' => $entry,
+                ];
             }, 3);
         } catch (\RuntimeException|\DomainException $e) {
             return $this->error('SUPPLIER_CREDIT_REFUND_FAILED', $e->getMessage(), 422);
         }
 
         return $this->ok(
-            ['supplier' => $supplier],
+            $supplier,
             'SUPPLIER_CREDIT_REFUND_RECORDED',
             'تم تحصيل الرصيد من المورد'
         );
