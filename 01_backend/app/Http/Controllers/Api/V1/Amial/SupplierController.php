@@ -795,6 +795,7 @@ class SupplierController extends Controller
             'purchase_order_id' => 'sometimes|nullable|integer',
             'location_id' => 'sometimes|nullable|integer',
             'settlement_type' => 'sometimes|string|in:credit_note,cash_refund',
+            'cashier_shift_id' => 'sometimes|nullable|integer|min:1',
             'reason' => 'sometimes|nullable|string|max:500',
             'items' => 'required|array|min:1',
             'items.*.quantity' => 'required|numeric|min:0.001',
@@ -812,6 +813,7 @@ class SupplierController extends Controller
                     'purchase_order_id' => $request->input('purchase_order_id'),
                     'location_id' => $request->input('location_id'),
                     'settlement_type' => $request->input('settlement_type', 'credit_note'),
+                    'cashier_shift_id' => $request->input('cashier_shift_id'),
                     'reason' => $request->input('reason'),
                     'actor_id' => $request->user()->id,
                 ]);
