@@ -189,12 +189,12 @@ class _SaleCard extends StatelessWidget {
         title: Text('${sale['invoice_number'] ?? sale['sale_ulid'] ?? 'merchant_invoice'.tr}',
             textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('الدفع: $method · ${sale['items_count'] ?? 0} أصناف'),
-          if (status.isNotEmpty) Text('الحالة: $status', style: const TextStyle(fontSize: 11)),
-          if (refunded > 0) Text('المسترجع: $refunded ر.ي', style: const TextStyle(fontSize: 11, color: AmialColors.red)),
+          Text('merchant_sale_payment_summary'.trParams({'method': method, 'count': '${sale['items_count'] ?? 0}'})),
+          if (status.isNotEmpty) Text('merchant_sale_status_summary'.trParams({'status': status}), style: const TextStyle(fontSize: 11)),
+          if (refunded > 0) Text('merchant_refunded_amount'.trParams({'amount': '$refunded'}), style: const TextStyle(fontSize: 11, color: AmialColors.red)),
         ]),
         trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('${sale['total_amount'] ?? '0'} ر.ي', textDirection: TextDirection.ltr,
+          Text('currency_yer_amount'.trParams({'amount': '${sale['total_amount'] ?? '0'}'}), textDirection: TextDirection.ltr,
               style: const TextStyle(fontWeight: FontWeight.bold)),
           const Icon(Icons.chevron_left, size: 18),
         ]),
