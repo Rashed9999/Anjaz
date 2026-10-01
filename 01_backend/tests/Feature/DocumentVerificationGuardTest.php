@@ -7,6 +7,8 @@ use App\Models\Merchant;
 use App\Models\MerchantSale;
 use App\Models\Receipt;
 use App\Models\User;
+use App\Models\WholesaleBusiness;
+use App\Models\WholesaleInvoice;
 use App\Services\DocumentVerificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -188,6 +190,102 @@ class DocumentVerificationGuardTest extends TestCase
         $this->assertSame('refunded', $after['authenticity'],
             'استُرجعت البيعةُ وبقيت النتيجةُ «أصلي» — فالكاشُ يُبقي الورقَ '
             .'القديمَ صحيحاً في الدقائق التي يُستعمَل فيها');
+    }
+
+    /** @test */
+    public function cash_and_credit_pos_documents_verify_by_their_own_ulid(): void
+    {
+        $m = $this->merchant('متجر التحقق');
+        $ulid = (string) Str::ulid();
+
+        MerchantSale::create([
+            'sale_ulid' => $ulid,
+            'invoice_number' => 'INV-POS-001',
+            'merchant_user_id' => $m->id,
+            'total_amount' => '4700',
+            'payment_method' => 'cash',
+            'status' => 'completed',
+            'items' => [],
+        ]);
+
+        $r = $this->verifier()->verify($ulid);
+
+        $this->assertTrue($r['found'],
+            'فاتورة POS النقدية لا تُتحقَّق إلا إذا وُجد Receipt مالي — والنقد لا ينبغي أن يصنع حركة محفظة');
+        $this->assertSame('merchant_sale', $r['source']);
+        $this->assertSame('فاتورة نقطة بيع', $r['doc_type_label']);
+        $this->assertSame('INV-POS-001', $r['document_number']);
+        $this->assertSame('متجر التحقق', $r['issuer']);
+
+        $this->get('/v/'.$ulid)
+            ->assertOk()
+            ->assertSee('مستند أصلي', false);
+    }
+
+    /** @test */
+    public function wholesale_invoice_ulid_is_a_public_verification_code(): void
+    {
+        $m = $this->merchant('مؤسسة الجملة');
+        $business = WholesaleBusiness::create([
+            'merchant_user_id' => $m->id,
+            'business_name' => 'مؤسسة الجملة',
+            'invoice_prefix' => 'WG',
+            'next_invoice_number' => 2,
+            'is_active' => true,
+            'zone_code' => 'SOUTH',
+        ]);
+        $ulid = (string) Str::ulid();
+
+        WholesaleInvoice::create([
+            'invoice_ulid' => $ulid,
+            'invoice_number' => 'WG-2026-00001',
+            'business_id' => $business->id,
+            'customer_id' => 1,
+            'created_by_user_id' => $m->id,
+            'invoice_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'subtotal' => '12000',
+            'discount_amount' => '0',
+            'tax_rate' => '0',
+            'tax_amount' => '0',
+            'total_amount' => '12000',
+            'paid_amount' => '0',
+            'balance_due' => '12000',
+            'status' => 'issued',
+            'payment_type' => 'credit',
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $r = $this->verifier()->verify($ulid);
+        $this->assertTrue($r['found']);
+        $this->assertSame('wholesale_invoice', $r['source']);
+        $this->assertSame('غير مدفوع (آجل)', $r['state_label']);
+        $this->assertSame('مؤسسة الجملة', $r['issuer']);
+    }
+
+    /**
+     * @test
+     * كل مستند قطاعي يطبع QR ورابطه؛ والطباعة الحرارية نفسها لا تستثنى.
+     */
+    public function every_pos_document_surface_carries_a_verification_qr(): void
+    {
+        foreach ([
+            'pdf/cashier-sale-invoice.blade.php',
+            'pdf/pharmacy-sale-invoice.blade.php',
+            'pdf/fuel-sale-receipt.blade.php',
+            'pdf/wholesale-invoice.blade.php',
+        ] as $template) {
+            $src = (string) file_get_contents(resource_path('views/'.$template));
+            $this->assertStringContainsString('$qrDataUri', $src, "{$template} بلا QR تحقق");
+            $this->assertStringContainsString('$verificationUrl', $src, "{$template} بلا رابط تحقق");
+        }
+
+        $thermal = (string) file_get_contents(base_path(
+            '../02_flutter_app/lib/features/printer/widgets/thermal_receipt_widget.dart'));
+        $this->assertStringContainsString('QrImageView(', $thermal,
+            'الإيصال الحراري لا يرسم QR فعلياً');
+        $this->assertStringContainsString('verificationUrl', $thermal,
+            'الإيصال الحراري لا يحمل رابط التحقق');
     }
 
     /** @test */
