@@ -41,6 +41,7 @@ class AdminWalletTransferService
         ?string $creditTransactionType = null,
         ?string $description = null,
         ?string $walletReason = null,
+        string|int|float $fee = '0',
     ): array {
         $debitTransactionType ??= CASH_OUT;
         $creditTransactionType ??= CASH_IN;
@@ -52,6 +53,11 @@ class AdminWalletTransferService
         }
 
         $amount = MoneyService::normalize($amount);
+        $fee = MoneyService::normalize($fee);
+        if (! MoneyService::isNonNegative($fee)) {
+            throw new \InvalidArgumentException('رسم التحويل لا يمكن أن يكون سالباً');
+        }
+        $totalDebit = MoneyService::add($amount, $fee);
         if (! MoneyService::isPositive($amount)) {
             throw new \InvalidArgumentException('مبلغ التحويل يجب أن يكون أكبر من صفر');
         }
@@ -61,7 +67,7 @@ class AdminWalletTransferService
             ? 'hub-xfer:' . hash('sha256', $requestIdempotencyKey)
             : null;
 
-        return DB::transaction(function () use ($sender, $recipient, $amount, $reason, $ledgerKey, $actor, $sourceType, $debitTransactionType, $creditTransactionType, $description, $walletReason): array {
+        return DB::transaction(function () use ($sender, $recipient, $amount, $fee, $totalDebit, $reason, $ledgerKey, $actor, $sourceType, $debitTransactionType, $creditTransactionType, $description, $walletReason): array {
             if ($ledgerKey) {
                 $existing = \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', $ledgerKey)
                     ->lockForUpdate()
@@ -92,10 +98,10 @@ class AdminWalletTransferService
             $this->assertWalletMatchesLedger($senderWallet->current_balance, $senderLedger->id, 'المرسل');
             $this->assertWalletMatchesLedger($recipientWallet->current_balance, $recipientLedger->id, 'المستلم');
 
-            if (! MoneyService::gte((string) $senderWallet->current_balance, $amount)) {
+            if (! MoneyService::gte((string) $senderWallet->current_balance, $totalDebit)) {
                 throw new InsufficientBalanceException(
                     userId: $sender->id,
-                    required: $amount,
+                    required: $totalDebit,
                     available: (string) $senderWallet->current_balance,
                 );
             }
@@ -112,24 +118,38 @@ class AdminWalletTransferService
             $creditId = (string) Str::ulid();
             $debitId = (string) Str::ulid();
             $balanceAfterRecipient = MoneyService::add((string) $recipientWallet->current_balance, $amount);
-            $balanceAfterSender = MoneyService::sub((string) $senderWallet->current_balance, $amount);
+            $balanceAfterSender = MoneyService::sub((string) $senderWallet->current_balance, $totalDebit);
 
             // دفتر الأستاذ هو مصدر الحركة أولًا؛ سجلات التوافق لا تُكتب
             // إلا بعد نجاح القيد، ولا تغيّر الرصيد بنفسها.
+            $lines = [
+                ['account' => $senderLedger->account_code, 'direction' => 'debit', 'amount' => $totalDebit],
+                ['account' => $recipientLedger->account_code, 'direction' => 'credit', 'amount' => $amount],
+            ];
+            if (MoneyService::gt($fee, '0')) {
+                $feeAccount = $this->ledger->getOrCreateSystemAccount(
+                    'PLATFORM_FEE', 'revenue', 'رسوم المنصة', 'credit'
+                );
+                $lines[] = [
+                    'account' => $feeAccount->account_code,
+                    'direction' => 'credit',
+                    'amount' => $fee,
+                    'description' => 'رسم التحويل',
+                ];
+            }
+
             $entry = $this->ledger->post(
                 sourceType: $sourceType,
                 sourceId: (string) $transfer->id,
                 description: $description,
-                lines: [
-                    ['account' => $senderLedger->account_code, 'direction' => 'debit', 'amount' => $amount],
-                    ['account' => $recipientLedger->account_code, 'direction' => 'credit', 'amount' => $amount],
-                ],
+                lines: $lines,
                 idempotencyKey: $ledgerKey,
                 createdByUserId: $actor?->id,
                 metadata: [
                     'legacy_transaction_id' => $creditId,
                     'transfer_id' => $transfer->id,
                     'reason' => trim($reason) ?: null,
+                    'fee' => $fee,
                 ],
                 zoneCode: (string) $senderWallet->zone_code,
             );
@@ -153,6 +173,7 @@ class AdminWalletTransferService
                 'ref_trans_id' => $creditId,
                 'transaction_type' => $debitTransactionType,
                 'debit' => $amount, 'credit' => '0.0000', 'amount' => $amount,
+                'charge' => $fee,
                 'balance' => $balanceAfterSender,
                 'from_user_id' => $sender->id, 'to_user_id' => $recipient->id,
                 'note' => trim($reason) ?: 'تحويل من محفظة الإدارة',
@@ -160,7 +181,7 @@ class AdminWalletTransferService
                 'decision_code' => 'POSTED', 'zone_code' => (string) $senderWallet->zone_code,
             ]);
 
-            $senderAfter = $this->wallets->debit($sender->id, $amount, $walletReason);
+            $senderAfter = $this->wallets->debit($sender->id, $totalDebit, $walletReason);
             $recipientAfter = $this->wallets->credit($recipient->id, $amount, $walletReason);
 
             if (MoneyService::compare((string) $senderAfter->current_balance, $balanceAfterSender) !== 0
@@ -171,6 +192,8 @@ class AdminWalletTransferService
             return [
                 'transaction_id' => $creditId,
                 'ledger_entry_ulid' => (string) $entry->entry_ulid,
+                'fee' => $fee,
+                'total_debited' => $totalDebit,
                 'duplicate' => false,
             ];
         }, 3);
