@@ -287,6 +287,17 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
             'البيعة الأولى فقدت هوية صندوق POS المفعّل');
         $this->assertSame('cash', $sale->payment_method);
         $this->assertSame('1250.0000', (string) $sale->total_amount);
+
+        // ⑥ الرمز الذي صدر للجهاز المفعّل لا يعمل إذا قُدّمت هوية
+        // جهاز أخرى. هذا القياس يستخدم access token الحقيقي الذي خرج
+        // من /auth/login، لا withAccessToken الاصطناعي في اختبار الوسيط.
+        $mismatch = $this->withHeaders([
+            'Authorization' => 'Bearer '.$token,
+            EnsurePosDevice::HEADER => 'chain-foreign-device',
+        ])->getJson('/api/v1/amial/cashier/shift');
+
+        $mismatch->assertStatus(403)
+            ->assertJsonPath('code', 'POS_DEVICE_MISMATCH');
     }
 
     /**
