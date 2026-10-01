@@ -213,7 +213,7 @@ class _ErrorState extends StatelessWidget {
     padding: const EdgeInsets.all(36),
     child: Center(child: Column(children: [
       const Icon(Icons.cloud_off_outlined, size: 56, color: AmialColors.textMuted),
-      const const SizedBox(height: 10), Text(text, textAlign: TextAlign.center),
+      const SizedBox(height: 10), Text(text, textAlign: TextAlign.center),
       TextButton(onPressed: onRetry, child: Text('common_retry'.tr)),
     ])),
   );
