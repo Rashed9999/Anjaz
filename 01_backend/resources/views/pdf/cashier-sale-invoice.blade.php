@@ -22,7 +22,7 @@
     .summary td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
     .summary .grand td { background: #eaf1ff; border-top: 2px solid #053391; font-size: 13pt; color: #053391; font-weight: bold; }
     .notice { margin-top: 20px; padding: 10px; background: #f7f9fc; border-right: 3px solid #f4b223; color: #475467; }
-    .footer { margin-top: 22px; border-top: 1px solid #d9e0ec; padding-top: 8px; color: #667085; text-align: center; font-size: 8.5pt; }
+    .verify { margin-top: 18px; padding: 10px; border: 1px solid #d9e0ec; text-align: center; }\n    .verify img { width: 105px; height: 105px; }\n    .verify .code { direction: ltr; font-family: monospace; font-size: 8pt; word-break: break-all; }\n    .footer { margin-top: 22px; border-top: 1px solid #d9e0ec; padding-top: 8px; color: #667085; text-align: center; font-size: 8.5pt; }
   </style>
 </head>
 <body>
@@ -38,7 +38,7 @@
 
   <table class="meta"><tr>
     <td><div class="k">رقم الفاتورة</div><div class="v left">{{ $sale->invoice_number ?: $sale->sale_ulid }}</div></td>
-    <td><div class="k">تاريخ الإصدار</div><div class="v left">{{ $sale->created_at?->format('Y-m-d H:i') }}</div></td>
+    <td><div class="k">تاريخ الإصدار</div><div class="v left">{{ $sale->created_at?->copy()->setTimezone('Asia/Riyadh')->format('Y-m-d H:i') }}</div></td>
     <td><div class="k">طريقة الدفع</div><div class="v">{{ $paymentLabel }}</div></td>
     <td><div class="k">الحالة</div><div class="v">{{ $statusLabel }}</div></td>
   </tr></table>
