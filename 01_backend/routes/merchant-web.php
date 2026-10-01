@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\V1\Amial\MerchantOperationsCenterController as Oper
 use App\Http\Controllers\Api\V1\Amial\MerchantReceiptSettingsController as Receipts;
 use App\Http\Controllers\Api\V1\Amial\MerchantStaffController as Staff;
 use App\Http\Controllers\Api\V1\Amial\PosDeviceController as Devices;
+use App\Http\Controllers\Api\V1\Amial\SupplierController as Suppliers;
+use App\Http\Controllers\Api\V1\Amial\ExpenseController as Expenses;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [Login::class, 'login'])->name('login');
@@ -95,6 +97,51 @@ Route::middleware('merchant.web')->group(function () {
         Route::get('/products', [CashierController::class, 'products'])->name('products');
         Route::post('/products', [CashierController::class, 'addProduct'])
             ->middleware(['capability:products', 'throttle:30,1'])->name('products.create');
+
+        // AMIAL-MERCHANT-WEB-PROCUREMENT-001 — الموردون والمشتريات انتقلت
+        // إلى بوابة المالك، لكن مصدر الحقيقة يبقى SupplierController نفسه.
+        // كل كتابة مالية تحمل idempotency، والقدرة تُفحص على الخادم لا في الواجهة.
+        Route::prefix('suppliers')->name('suppliers.')->middleware('capability:suppliers')->group(function () {
+            Route::get('/', [Suppliers::class, 'index'])->name('index');
+            Route::post('/', [Suppliers::class, 'store'])
+                ->middleware(['amial.idempotency', 'throttle:20,1'])->name('store');
+            Route::get('/{id}', [Suppliers::class, 'show'])->whereNumber('id')->name('show');
+            Route::post('/{id}/payment', [Suppliers::class, 'payment'])
+                ->whereNumber('id')
+                ->middleware(['amial.idempotency', 'throttle:30,1'])->name('payment');
+        });
+        Route::prefix('purchase-orders')->name('purchase-orders.')->middleware('capability:purchases')->group(function () {
+            Route::get('/', [Suppliers::class, 'poIndex'])->name('index');
+            Route::post('/', [Suppliers::class, 'poStore'])
+                ->middleware(['amial.idempotency', 'throttle:30,1'])->name('store');
+            Route::get('/{id}', [Suppliers::class, 'poShow'])->whereNumber('id')->name('show');
+            Route::post('/{id}/approve', [Suppliers::class, 'poApprove'])
+                ->whereNumber('id')->middleware('amial.idempotency')->name('approve');
+            Route::post('/{id}/receive', [Suppliers::class, 'poReceive'])
+                ->whereNumber('id')
+                ->middleware(['amial.idempotency', 'throttle:30,1'])->name('receive');
+            Route::post('/{id}/cancel', [Suppliers::class, 'poCancel'])
+                ->whereNumber('id')->middleware('amial.idempotency')->name('cancel');
+        });
+        Route::prefix('purchase-returns')->name('purchase-returns.')->middleware('capability:purchases')->group(function () {
+            Route::get('/', [Suppliers::class, 'prIndex'])->name('index');
+            Route::post('/', [Suppliers::class, 'prStore'])->middleware('amial.idempotency')->name('store');
+            Route::get('/{id}', [Suppliers::class, 'prShow'])->whereNumber('id')->name('show');
+            Route::post('/{id}/approve', [Suppliers::class, 'prApprove'])
+                ->whereNumber('id')->middleware('amial.idempotency')->name('approve');
+            Route::post('/{id}/reject', [Suppliers::class, 'prReject'])
+                ->whereNumber('id')->middleware('amial.idempotency')->name('reject');
+        });
+
+        // المصروفات من بوابة المالك نفسها؛ لا شاشة Flutter موازية بعد نقل التاجر للويب.
+        Route::prefix('expenses')->name('expenses.')->middleware('capability:expenses')->group(function () {
+            Route::get('/', [Expenses::class, 'index'])->name('index');
+            Route::post('/', [Expenses::class, 'store'])->middleware('amial.idempotency')->name('store');
+            Route::post('/{id}', [Expenses::class, 'update'])
+                ->whereNumber('id')->middleware('amial.idempotency')->name('update');
+            Route::delete('/{id}', [Expenses::class, 'destroy'])
+                ->whereNumber('id')->middleware('amial.idempotency')->name('destroy');
+        });
 
         Route::get('/branches', [BranchController::class, 'index'])->name('branches');
         Route::post('/branches', [BranchController::class, 'store'])
