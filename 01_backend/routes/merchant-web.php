@@ -115,6 +115,9 @@ Route::middleware('merchant.web')->group(function () {
             Route::post('/{id}/payment', [Suppliers::class, 'payment'])
                 ->whereNumber('id')
                 ->middleware(['amial.idempotency', 'throttle:30,1'])->name('payment');
+            Route::post('/{id}/credit-refund', [Suppliers::class, 'creditRefund'])
+                ->whereNumber('id')
+                ->middleware(['amial.idempotency', 'throttle:30,1'])->name('credit-refund');
             Route::post('/{id}/wallet-payment', [Suppliers::class, 'walletPayment'])
                 ->whereNumber('id')
                 ->middleware(['amial.idempotency', 'throttle:20,1'])->name('wallet-payment');
