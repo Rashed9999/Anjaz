@@ -267,6 +267,70 @@ class DailyMovementMatrixGuardTest extends TestCase
     }
 
     // ══════════════════════════════════════════════════════════════════
+    public function supplier_payment_from_a_named_cashier_shift_reduces_that_drawer_only(): void
+    {
+        $supplier = Supplier::create([
+            'merchant_user_id' => $this->merchant->id,
+            'name' => 'مورد الصندوق',
+            'current_debt' => '500',
+        ]);
+        SupplierLedgerEntry::create([
+            'supplier_id' => $supplier->id,
+            'merchant_user_id' => $this->merchant->id,
+            'entry_type' => 'opening',
+            'amount' => '500',
+            'debt_after' => '500',
+        ]);
+
+        $shift = app(\App\Services\CashierShiftService::class)
+            ->open($this->merchant, null, '1000');
+
+        $this->actingAs($this->merchant, 'api')
+            ->postJson("/api/v1/amial/merchant/suppliers/{$supplier->id}/payment", [
+                'amount' => '300',
+                'cashier_shift_id' => $shift->id,
+            ])->assertOk();
+
+        $supplier->refresh();
+        $this->assertSame(0, bccomp((string) $supplier->current_debt, '200', 4));
+
+        $movement = \App\Models\Retail\ShiftCashMovement::where(
+            'shift_type', \App\Models\Retail\ShiftCashMovement::CASHIER
+        )->where('shift_id', $shift->id)->where('reason', 'supplier_payment')->firstOrFail();
+
+        $this->assertSame('out', $movement->direction);
+        $this->assertSame(0, bccomp((string) $movement->amount, '300', 4));
+
+        $snapshot = app(\App\Services\CashierShiftService::class)->snapshot($shift->fresh());
+        $this->assertSame(0, bccomp((string) $snapshot['expected_cash'], '700', 4),
+            'سداد المورد خرج من الدرج فعلاً لكن إغلاق الوردية ما زال يتوقع الألف كاملة');
+    }
+
+    public function external_supplier_payment_never_changes_an_open_pos_drawer(): void
+    {
+        $supplier = Supplier::create([
+            'merchant_user_id' => $this->merchant->id,
+            'name' => 'مورد خارجي',
+            'current_debt' => '500',
+        ]);
+        $shift = app(\App\Services\CashierShiftService::class)
+            ->open($this->merchant, null, '1000');
+
+        $this->actingAs($this->merchant, 'api')
+            ->postJson("/api/v1/amial/merchant/suppliers/{$supplier->id}/payment", [
+                'amount' => '300',
+            ])->assertOk();
+
+        $this->assertDatabaseMissing('merchant_shift_cash_movements', [
+            'shift_type' => 'cashier',
+            'shift_id' => $shift->id,
+            'reason' => 'supplier_payment',
+        ]);
+
+        $snapshot = app(\App\Services\CashierShiftService::class)->snapshot($shift->fresh());
+        $this->assertSame(0, bccomp((string) $snapshot['expected_cash'], '1000', 4));
+    }
+
     //  ③ مرتجعُ الشراء
     // ══════════════════════════════════════════════════════════════════
 
