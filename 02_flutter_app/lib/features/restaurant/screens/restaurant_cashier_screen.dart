@@ -62,11 +62,11 @@ class _RestaurantCashierScreenState extends State<RestaurantCashierScreen> {
         if (mounted) {
           setState(() => _error = message != null && message.isNotEmpty
               ? message
-              : 'تعذّر تحميل طلبات المطعم');
+              : 'restaurant_orders_load_failed'.tr);
         }
       }
     } catch (_) {
-      if (mounted) setState(() => _error = 'تعذّر الاتصال بالخادم');
+      if (mounted) setState(() => _error = 'common_server_connection_failed'.tr);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -76,7 +76,9 @@ class _RestaurantCashierScreenState extends State<RestaurantCashierScreen> {
     final tableId = (order['table_id'] as num?)?.toInt();
     final changed = await Get.to<bool>(() => RestaurantOrderScreen(
           tableId: tableId,
-          tableLabel: tableId == null ? 'سفري' : 'طاولة #' + tableId.toString(),
+          tableLabel: tableId == null
+              ? 'restaurant_takeaway'.tr
+              : 'restaurant_table_number'.trParams({'number': tableId.toString()}),
           existingOrder: order,
           checkoutOnly: true,
           nextSalePage: () => const RestaurantCashierScreen(),
@@ -90,12 +92,12 @@ class _RestaurantCashierScreenState extends State<RestaurantCashierScreen> {
       child: Scaffold(
         backgroundColor: AmialColors.background,
         appBar: AppBar(
-          title: const Text('كاشير المطعم'),
+          title: Text('restaurant_cashier_title'.tr),
           backgroundColor: AmialColors.primary,
           foregroundColor: Colors.white,
           actions: [
             IconButton(
-              tooltip: 'تحديث الطلبات',
+              tooltip: 'restaurant_refresh_orders'.tr,
               onPressed: _loading ? null : _load,
               icon: const Icon(Icons.refresh_rounded),
             ),
@@ -138,7 +140,7 @@ class _RestaurantCashierScreenState extends State<RestaurantCashierScreen> {
           FilledButton.icon(
             onPressed: _load,
             icon: const Icon(Icons.refresh_rounded),
-            label: const Text('إعادة المحاولة'),
+            label: Text('common_retry'.tr),
           ),
         ],
       );
@@ -148,13 +150,13 @@ class _RestaurantCashierScreenState extends State<RestaurantCashierScreen> {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(24),
-        children: const [
-          SizedBox(height: 110),
-          Icon(Icons.receipt_long_outlined,
+        children: [
+          const SizedBox(height: 110),
+          const Icon(Icons.receipt_long_outlined,
               size: 58, color: AmialColors.textMuted),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           Text(
-            'لا توجد طلبات بانتظار التحصيل',
+            'restaurant_no_orders_waiting'.tr,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 16,
@@ -164,7 +166,7 @@ class _RestaurantCashierScreenState extends State<RestaurantCashierScreen> {
           ),
           SizedBox(height: 6),
           Text(
-            'عندما يرسل النادل أو المطبخ طلباً سيظهر هنا ليقوم الكاشير بتحصيله وإصدار الفاتورة.',
+            'restaurant_orders_waiting_hint'.tr,
             textAlign: TextAlign.center,
             style: TextStyle(color: AmialColors.textMuted, height: 1.6),
           ),
@@ -212,8 +214,8 @@ class _RestaurantCashierScreenState extends State<RestaurantCashierScreen> {
                         ),
                         child: Text(
                           tableId == null
-                              ? 'سفري'
-                              : 'طاولة #' + tableId.toString(),
+                              ? 'restaurant_takeaway'.tr
+                              : 'restaurant_table_number'.trParams({'number': tableId.toString()}),
                           style: const TextStyle(
                             color: AmialColors.primary,
                             fontWeight: FontWeight.w800,
@@ -236,9 +238,10 @@ class _RestaurantCashierScreenState extends State<RestaurantCashierScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          items.length.toString() +
-                              ' صنف · ' +
-                              _statusLabel(status),
+                          'restaurant_items_status'.trParams({
+                            'count': items.length.toString(),
+                            'status': _statusLabel(status),
+                          }),
                           style: const TextStyle(
                             color: AmialColors.textSecondary,
                             fontWeight: FontWeight.w700,
@@ -256,14 +259,14 @@ class _RestaurantCashierScreenState extends State<RestaurantCashierScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.point_of_sale_rounded,
+                      const Icon(Icons.point_of_sale_rounded,
                           size: 18, color: AmialColors.success),
-                      SizedBox(width: 6),
+                      const SizedBox(width: 6),
                       Text(
-                        'اضغط للتحصيل وإغلاق الطلب',
-                        style: TextStyle(
+                        'restaurant_tap_to_checkout'.tr,
+                        style: const TextStyle(
                           color: AmialColors.success,
                           fontWeight: FontWeight.w800,
                           fontSize: 12,
@@ -280,11 +283,11 @@ class _RestaurantCashierScreenState extends State<RestaurantCashierScreen> {
     );
   }
 
-  static String _statusLabel(String status) => const {
-        'open': 'مفتوح',
-        'preparing': 'قيد التحضير',
-        'ready': 'جاهز',
-        'served': 'مُقدَّم',
+  static String _statusLabel(String status) => {
+        'open': 'restaurant_status_open'.tr,
+        'preparing': 'restaurant_status_preparing'.tr,
+        'ready': 'restaurant_status_ready'.tr,
+        'served': 'restaurant_status_served'.tr,
       }[status] ??
       status;
 }
