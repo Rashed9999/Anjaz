@@ -20,6 +20,9 @@ class AmialInvoiceCard extends StatelessWidget {
     this.totalYer,
     this.currencies = const [],
     this.verificationUrl,
+    this.paidAmount,
+    this.changeAmount,
+    this.balanceDueAmount,
   });
 
   /// إعدادات الفاتورة كما تعود من الخادم (merchant/receipt-settings).
@@ -39,6 +42,9 @@ class AmialInvoiceCard extends StatelessWidget {
   final double? totalYer;
   final List<Map<String, dynamic>> currencies;
   final String? verificationUrl;
+  final String? paidAmount;
+  final String? changeAmount;
+  final String? balanceDueAmount;
 
   double get _width => (settings['paper_width'] == 58) ? 230 : 300;
   bool _flag(String k, [bool def = true]) => settings[k] == null ? def : settings[k] == true;
@@ -113,6 +119,9 @@ class AmialInvoiceCard extends StatelessWidget {
           const Text('الإجمالي',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black)),
         ]),
+        if (paidAmount != null) _line('المبلغ المستلم', paidAmount!),
+        if (changeAmount != null) _line('الباقي', changeAmount!),
+        if (balanceDueAmount != null) _line('المتبقي', balanceDueAmount!),
         if (_equivalents().isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
