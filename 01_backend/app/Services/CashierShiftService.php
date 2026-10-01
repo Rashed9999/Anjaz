@@ -284,11 +284,27 @@ class CashierShiftService
             ->value('id');
 
         if ($business !== null) {
-            foreach (DB::table('wholesale_collections')
+            $q = DB::table('wholesale_collections')
                 ->where('business_id', $business)
                 ->where('payment_method', 'cash')
                 ->where('created_at', '>=', $shift->opened_at)
-                ->get(['amount']) as $r) {
+                ->when(
+                    $shift->closed_at,
+                    fn ($w) => $w->where('created_at', '<=', $shift->closed_at)
+                );
+
+            // wholesale_collections لا يحمل shift_id تاريخياً، لكنه يحمل
+            // received_by_user_id الموثوق من جلسة المصادقة. من دونه كانت
+            // وردية كاشير تجمع تحصيل زميله وتُظهر له فائضاً/عجزاً كاذباً.
+            $actorUserId = $shift->pos_user_id
+                ? AppModelsPosUser::whereKey($shift->pos_user_id)->value('user_id')
+                : $shift->opened_by;
+
+            if ($actorUserId) {
+                $q->where('received_by_user_id', (int) $actorUserId);
+            }
+
+            foreach ($q->get(['amount']) as $r) {
                 $cash = MoneyService::add($cash, (string) $r->amount);
                 $count++;
             }
