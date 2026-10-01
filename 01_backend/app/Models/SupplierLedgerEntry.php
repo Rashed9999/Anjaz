@@ -18,7 +18,8 @@ class SupplierLedgerEntry extends Model
      * نقديّ.
      */
     protected $fillable = [
-        'supplier_id', 'merchant_user_id', 'entry_type',
-        'amount', 'cash_amount', 'debt_after', 'reference', 'note',
+        'entry_ulid', 'supplier_id', 'merchant_user_id', 'entry_type',
+        'amount', 'cash_amount', 'payment_method', 'debt_after', 'reference',
+        'transaction_id', 'cashier_shift_id', 'note',
     ];
 }
