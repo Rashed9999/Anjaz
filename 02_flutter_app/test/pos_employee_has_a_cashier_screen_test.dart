@@ -98,17 +98,15 @@ void main() {
     //
     // فيُقاس الموضعُ لا الوجود.
     // ══════════════════════════════════════════════════════════════
-    final firstSectorBranch = RegExp(r'_access\.isMerchant\s*&&')
-        .firstMatch(src)
-        ?.start;
+    final ownerBranch = src.indexOf('if (_access.isMerchant)');
 
-    expect(firstSectorBranch, isNotNull,
-        reason: 'لم تُقرأ فروعُ القطاعات — الحارسُ يفحص مجموعةً فارغة');
+    expect(ownerBranch, greaterThan(-1),
+        reason: 'لم يُقرأ فرع مالك المنشأة المتجه إلى بوابة الويب');
 
-    expect(posBranch, lessThan(firstSectorBranch!),
-        reason: '**فرعُ الكاشير بعد فروع القطاعات** — فيرث صنفَ صاحبه '
-            'فيلتقطه أوّلُها ويفتح له **لوحةَ إدارة** القطاع بدل شاشة '
-            'بيعه. والوجودُ وحدَه لا يكفي: الموضعُ هو الإصلاح.');
+    expect(posBranch, lessThan(ownerBranch),
+        reason: '**فرعُ الكاشير بعد فرع المالك** — فيُحال موظف POS إلى '
+            'بوابة الويب بدل سطحه التشغيلي. والوجود وحده لا يكفي: '
+            'ترتيب الفصل بين الموظف والمالك هو الإصلاح.');
   });
 
   test('مالك المنشأة يُحال إلى بوابة الويب ولا تعود له لوحة داخل التطبيق', () {
