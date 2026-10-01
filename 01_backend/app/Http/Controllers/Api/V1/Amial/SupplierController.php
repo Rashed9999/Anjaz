@@ -47,9 +47,21 @@ class SupplierController extends Controller
             ->whereIn('status', ['draft', 'approved', 'partially_received'])
             ->count();
 
+        $totalDebt = $totalCredit = '0';
+        foreach ($suppliers as $supplier) {
+            $totalDebt = \App\Services\MoneyService::add(
+                $totalDebt, (string) $supplier->current_debt
+            );
+            $totalCredit = \App\Services\MoneyService::add(
+                $totalCredit, (string) ($supplier->current_credit ?? '0')
+            );
+        }
+
         return $this->ok([
             'totals' => [
-                'total_debt' => (string) $suppliers->sum(fn ($s) => (float) $s->current_debt),
+                'total_debt' => $totalDebt,
+                'total_credit' => $totalCredit,
+                'net_payable' => \App\Services\MoneyService::sub($totalDebt, $totalCredit),
                 'suppliers_count' => $suppliers->count(),
                 'active_po_count' => $activePoCount,
             ],
@@ -85,6 +97,7 @@ class SupplierController extends Controller
                 'address' => $request->input('address'),
                 'category' => $request->input('category'),
                 'current_debt' => $opening,
+                'current_credit' => '0',
             ]);
             if (bccomp($opening, '0', 4) > 0) {
                 SupplierLedgerEntry::create([
@@ -94,6 +107,7 @@ class SupplierController extends Controller
                     'entry_type' => 'opening',
                     'amount' => $opening,
                     'debt_after' => $opening,
+                    'credit_after' => '0',
                     'note' => 'رصيد افتتاحي (دين سابق للمورد)',
                 ]);
             }
@@ -161,6 +175,7 @@ class SupplierController extends Controller
                     'cash_amount' => $amount,
                     'payment_method' => $cashierShift ? 'cash_shift' : 'cash_external',
                     'debt_after' => (string) $s->current_debt,
+                    'credit_after' => (string) ($s->current_credit ?? '0'),
                     'reference' => $cashierShift ? 'SHIFT-'.$cashierShift->id : null,
                     'cashier_shift_id' => $cashierShift?->id,
                     'note' => trim((string) $request->input('note')) ?: (
@@ -194,6 +209,96 @@ class SupplierController extends Controller
             ['supplier' => $supplier],
             'PAYMENT_RECORDED',
             'تم تسجيل السداد وتخفيض المديونية'
+        );
+    }
+
+    /**
+     * تحصيل رصيد لنا عند المورد (نشأ مثلاً من مرتجع يفوق الدين).
+     * النقد الخارجي لا يغيّر POS، أما تحديد وردية فيسجل دخولاً في درجها.
+     */
+    public function creditRefund(Request $request, int $id): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:0.01',
+            'note' => 'sometimes|nullable|string|max:500',
+            'cashier_shift_id' => 'sometimes|nullable|integer|min:1',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $mid = $request->user()->id;
+
+        try {
+            $supplier = DB::transaction(function () use ($request, $id, $mid) {
+                $s = Supplier::whereKey($id)
+                    ->where('merchant_user_id', $mid)
+                    ->lockForUpdate()->first();
+                if (! $s) throw new \RuntimeException('المورد غير موجود');
+
+                $amount = \App\Services\MoneyService::normalize(
+                    (string) $request->input('amount')
+                );
+                $credit = (string) ($s->current_credit ?? '0');
+                if (bccomp($amount, $credit, 4) > 0) {
+                    throw new \RuntimeException('المبلغ أكبر من الرصيد المستحق لنا عند المورد');
+                }
+
+                $shift = null;
+                if ($request->filled('cashier_shift_id')) {
+                    $shift = \App\Models\CashierShift::whereKey(
+                            (int) $request->input('cashier_shift_id'))
+                        ->where('merchant_user_id', $mid)
+                        ->where('status', 'open')
+                        ->lockForUpdate()->first();
+                    if (! $shift) {
+                        throw new \RuntimeException('وردية التحصيل غير موجودة أو مغلقة');
+                    }
+                }
+
+                $s->current_credit = bcsub($credit, $amount, 4);
+                $s->save();
+
+                $entry = SupplierLedgerEntry::create([
+                    'entry_ulid' => (string) Str::ulid(),
+                    'supplier_id' => $s->id,
+                    'merchant_user_id' => $mid,
+                    'entry_type' => 'supplier_refund',
+                    'amount' => $amount,
+                    'cash_amount' => $amount,
+                    'payment_method' => $shift ? 'cash_shift' : 'cash_external',
+                    'debt_after' => (string) $s->current_debt,
+                    'credit_after' => (string) $s->current_credit,
+                    'reference' => $shift ? 'SHIFT-'.$shift->id : null,
+                    'cashier_shift_id' => $shift?->id,
+                    'note' => trim((string) $request->input('note'))
+                        ?: ($shift
+                            ? 'تحصيل رصيد من المورد إلى درج الوردية #'.$shift->id
+                            : 'تحصيل رصيد من المورد نقداً خارج نقاط البيع'),
+                ]);
+
+                if ($shift) {
+                    app(\App\Services\Retail\MerchantShiftCashService::class)->record(
+                        \App\Models\Retail\ShiftCashMovement::CASHIER,
+                        $shift->id,
+                        $request->user(),
+                        'in',
+                        'supplier_refund',
+                        $amount,
+                        'تحصيل رصيد من المورد '.$s->name,
+                        $entry->entry_ulid,
+                        $mid,
+                    );
+                }
+
+                return $s->fresh();
+            }, 3);
+        } catch (\RuntimeException|\DomainException $e) {
+            return $this->error('SUPPLIER_CREDIT_REFUND_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(
+            ['supplier' => $supplier],
+            'SUPPLIER_CREDIT_REFUND_RECORDED',
+            'تم تحصيل الرصيد من المورد'
         );
     }
 
@@ -356,6 +461,7 @@ class SupplierController extends Controller
                     'cash_amount' => '0',
                     'payment_method' => 'amial_pay',
                     'debt_after' => (string) $locked->current_debt,
+                    'credit_after' => (string) ($locked->current_credit ?? '0'),
                     'reference' => 'AMIAL-'.$transfer['transaction_id'],
                     'transaction_id' => $transfer['transaction_id'],
                     'idempotency_key' => $subledgerKey,
@@ -649,22 +755,28 @@ class SupplierController extends Controller
                     throw new \RuntimeException('لا كميات مستلمة');
                 }
 
-                // زيادة مديونية المورد بقيمة المُستلَم
+                // رصيد دائن سابق عند المورد يُستهلك أولاً. لا يجوز أن
+                // نظهر «ديناً علينا» و«رصيداً لنا» للمورد نفسه في الوقت نفسه.
                 $supplier = Supplier::where('id', $po->supplier_id)
                     ->lockForUpdate()->first();
-                $supplier->current_debt =
-                    bcadd((string) $supplier->current_debt, $receivedValue, 4);
+                $creditBefore = (string) ($supplier->current_credit ?? '0');
+                $creditApplied = bccomp($creditBefore, $receivedValue, 4) > 0
+                    ? $receivedValue : $creditBefore;
+                $netNewPayable = bcsub($receivedValue, $creditApplied, 4);
+
+                $supplier->current_credit = bcsub($creditBefore, $creditApplied, 4);
+                $supplier->current_debt = bcadd(
+                    (string) $supplier->current_debt, $netNewPayable, 4
+                );
                 $supplier->save();
 
-                // ② **ما دُفع فوراً** — ولا يتجاوز قيمةَ ما استُلم: دفعةٌ
-                //    أكبرُ ليست شراءً نقديّاً بل سدادُ دينٍ سابق، وبابُها
-                //    `/{id}/payment`. وخلطُهما يجعل مشترياتِ اليومِ أكبرَ
-                //    ممّا دخل المخزنَ فعلاً.
+                // ما يُدفع «عند هذا الاستلام» لا يتجاوز صافي ما نشأ بعد
+                // استهلاك رصيدنا السابق عند المورد.
                 $paidNow = trim((string) $request->input('paid_now', ''));
                 $paidNow = $paidNow === '' ? '0' : $paidNow;
-                if (bccomp($paidNow, $receivedValue, 4) > 0) {
+                if (bccomp($paidNow, $netNewPayable, 4) > 0) {
                     throw new \RuntimeException(
-                        'المدفوع فوراً أكبر من قيمة المستلَم — استعمل «سداد دفعة» لسداد دينٍ سابق');
+                        'المدفوع فوراً أكبر من صافي المستحق بعد رصيد المورد — استخدم سداداً مستقلاً لدين سابق');
                 }
 
                 SupplierLedgerEntry::create([
@@ -678,8 +790,11 @@ class SupplierController extends Controller
                         ? ($request->filled('cashier_shift_id') ? 'cash_shift' : 'cash_external')
                         : 'credit',
                     'debt_after' => (string) $supplier->current_debt,
+                    'credit_after' => (string) ($supplier->current_credit ?? '0'),
                     'reference' => $po->po_number,
-                    'note' => 'استلام بضاعة من أمر الشراء',
+                    'note' => bccomp($creditApplied, '0', 4) > 0
+                        ? 'استلام شراء — استُخدم '.$creditApplied.' من رصيد سابق لنا عند المورد'
+                        : 'استلام بضاعة من أمر الشراء',
                 ]);
 
                 if (bccomp($paidNow, '0', 4) > 0) {
@@ -700,6 +815,7 @@ class SupplierController extends Controller
                         'cash_amount' => $paidNow,
                         'payment_method' => $cashierShift ? 'cash_shift' : 'cash_external',
                         'debt_after' => (string) $supplier->current_debt,
+                        'credit_after' => (string) ($supplier->current_credit ?? '0'),
                         'reference' => $po->po_number,
                         'cashier_shift_id' => $cashierShift?->id,
                         'note' => $cashierShift
@@ -730,7 +846,7 @@ class SupplierController extends Controller
                     ? ['status' => 'completed', 'completed_at' => now()]
                     : ['status' => 'partially_received']);
 
-                return $po->fresh('items', 'supplier:id,name,current_debt');
+                return $po->fresh('items', 'supplier:id,name,current_debt,current_credit');
             });
         // **و`DomainException` تُلتقَط معها.** `StockService` يرميها
         // (`LogicException` لا `RuntimeException`)، ورسائلُها عربيّةٌ
