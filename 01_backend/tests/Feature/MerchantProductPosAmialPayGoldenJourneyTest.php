@@ -182,6 +182,10 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
 
         $this->assertNotNull($token, 'دخول موظف POS نجح بلا access token قابل للاستخدام');
 
+        // Passport::actingAs أعلاه يثبّت المالك داخل guard للاختبار؛
+        // نمسحه هنا حتى الطلبات التالية تقرأ Bearer الحقيقي للموظف.
+        app('auth')->forgetGuards();
+
         return [$uuid, $token];
     }
 
