@@ -791,6 +791,7 @@ class SupplierController extends Controller
                         : 'credit',
                     'debt_after' => (string) $supplier->current_debt,
                     'credit_after' => (string) ($supplier->current_credit ?? '0'),
+                    'supplier_credit_applied' => $creditApplied,
                     'reference' => $po->po_number,
                     'note' => bccomp($creditApplied, '0', 4) > 0
                         ? 'استلام شراء — استُخدم '.$creditApplied.' من رصيد سابق لنا عند المورد'
