@@ -198,6 +198,15 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         ];
     }
 
+    private function asMerchantWeb(): static
+    {
+        $this->defaultHeaders = [];
+        app('auth')->forgetGuards();
+        $this->actingAs($this->merchant, 'merchant_web');
+
+        return $this;
+    }
+
     private function refundThroughPosWithOwnerApproval(
         string $saleUlid,
         array $payload,
@@ -214,7 +223,7 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             $approvalId = (int) $first->json('meta.approval.request_id');
             $this->assertGreaterThan(0, $approvalId, 'طلب اعتماد المرتجع لم يحمل معرّفاً صالحاً');
 
-            $this->actingAs($this->merchant, 'merchant_web')
+            $this->asMerchantWeb()
                 ->postJson('/merchant/data/approvals/' . $approvalId . '/grant', [
                     'note' => 'اعتماد الرحلة الذهبية',
                 ])->assertOk()
@@ -237,7 +246,7 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
     public function owner_product_reaches_pos_and_real_amial_payment_reaches_merchant_wallet_once(): void
     {
         // ① المالك ينشئ المنتج من بوابته الحقيقية.
-        $this->actingAs($this->merchant, 'merchant_web');
+        $this->asMerchantWeb();
 
         $created = $this->postJson('/merchant/data/sector/products', [
             'name' => 'قهوة رحلة أميال',
@@ -380,8 +389,7 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
 
         // المالك لا يكفيه أن يرى زيادة الرصيد: يجب أن يرى البيعة نفسها
         // ومرجع التحصيل الذي حرّك محفظته حتى يستطيع المطابقة والدعم.
-        $ownerDetail = $this->actingAs($this->merchant, 'merchant_web')
-            ->withHeader('Authorization', '')
+        $ownerDetail = $this->asMerchantWeb()
             ->getJson('/merchant/data/sector/sales/'.$saleUlid)
             ->assertOk();
 
