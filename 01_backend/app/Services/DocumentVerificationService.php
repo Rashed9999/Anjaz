@@ -310,7 +310,7 @@ class DocumentVerificationService
             'partially_paid', 'partial', 'partial_paid' => 'مدفوع جزئيّاً',
             'refunded' => 'مسترجَع',
             'cancelled', 'voided' => 'ملغى',
-            'pending', 'open', 'preparing', 'ready', 'served', 'draft' => 'قيد الإتمام',
+            'pending', 'pending_payment', 'open', 'preparing', 'ready', 'served', 'draft' => 'قيد الإتمام',
             'overdue' => 'متأخر السداد',
             // **ولا يُخترَع معنىً لحالةٍ لا تُعرَف.** رمزٌ خامٌ يُوقف
             // القارئَ ليسأل، والترجمةُ المخترَعةُ تُمرّره واثقاً من معنىً
