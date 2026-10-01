@@ -985,7 +985,7 @@
   // من نسخة Flutter مهجورة ولا من جدول مالي موازٍ.
   function dataUrl(key,id){return routes[key].replace('__ID__',encodeURIComponent(String(id)))}
   function poStatus(v){return {draft:'مسودة',approved:'معتمد',partially_received:'مستلم جزئياً',completed:'مكتمل',cancelled:'ملغى'}[v]||v||'—'}
-  function ledgerType(v){return {opening:'رصيد افتتاحي',po_receive:'استلام شراء',payment:'سداد',po_return:'مرتجع شراء',adjustment:'تسوية'}[v]||v||'—'}
+  function ledgerType(v){return {opening:'رصيد افتتاحي',po_receive:'استلام شراء',payment:'سداد',supplier_refund:'تحصيل من المورد',po_return:'مرتجع شراء',adjustment:'تسوية'}[v]||v||'—'}
   function buttons(items){const wrap=node('div',null,'buttons');items.filter(Boolean).forEach(item=>wrap.append(item));return wrap}
   function action(label,handler,secondary=true){const b=node('button',label,secondary?'action secondary':'action');b.type='button';b.addEventListener('click',handler);return b}
 
@@ -996,9 +996,9 @@
     p.id='supplier-detail';
     hint(p,'هذا الكشف هو سجل المديونية: الاستلام يزيد ما عليك للمورد، والسداد أو إشعار المرتجع يخفضه. لا يغيّر رصيد محفظة أميال من نفسه.');
     const summary=node('div',null,'grid');
-    summary.append(metric('الرصيد المستحق',money(supplier.current_debt)),metric('الهاتف',supplier.phone||'—'),metric('التصنيف',supplier.category||'—'));
+    summary.append(metric('علينا للمورد',money(supplier.current_debt)),metric('لنا عند المورد',money(supplier.current_credit||0)),metric('صافي المركز',money(Number(supplier.current_debt||0)-Number(supplier.current_credit||0))),metric('الهاتف',supplier.phone||'—'));
     p.append(summary);
-    table(p,[['التاريخ',x=>x.created_at||'—'],['الحركة',x=>ledgerType(x.entry_type)],['القيمة',x=>money(x.amount)],['مدفوع نقداً',x=>x.cash_amount===null||x.cash_amount===undefined?'—':money(x.cash_amount)],['الرصيد بعد',x=>money(x.debt_after)],['المرجع',x=>x.reference||'—'],['المستند',x=>x.entry_type==='payment'&&x.entry_ulid?action('PDF',()=>window.open(dataUrl('supplierPaymentPdf',x.entry_ulid),'_blank','noopener')):'—'],['ملاحظة',x=>x.note||'—']],data.ledger||[]);
+    table(p,[['التاريخ',x=>x.created_at||'—'],['الحركة',x=>ledgerType(x.entry_type)],['القيمة',x=>money(x.amount)],['مدفوع نقداً',x=>x.cash_amount===null||x.cash_amount===undefined?'—':money(x.cash_amount)],['علينا بعد',x=>money(x.debt_after)],['لنا بعد',x=>money(x.credit_after||0)],['المرجع',x=>x.reference||'—'],['المستند',x=>x.entry_type==='payment'&&x.entry_ulid?action('PDF',()=>window.open(dataUrl('supplierPaymentPdf',x.entry_ulid),'_blank','noopener')):'—'],['ملاحظة',x=>x.note||'—']],data.ledger||[]);
     const pdf=action('تنزيل كشف المورد PDF',()=>window.open(dataUrl('supplierStatementPdf',id),'_blank','noopener'),false);
     p.append(buttons([pdf]));
     p.scrollIntoView({behavior:'smooth',block:'start'});
@@ -1045,6 +1045,24 @@
     if(!window.confirm('سيُخصم '+money(amount)+' من محفظة المنشأة ويرسل إلى حساب أميال المرتبط برقم المورد '+row.phone+'. متابعة؟'))return;
     const result=await api('supplierWalletPayment',{amount:String(amount),note},dataUrl('supplierWalletPayment',row.id));
     message('تم السداد عبر أميال — مرجع العملية '+(result.transaction_id||'—'));
+    await load('suppliers');
+  }
+
+  async function collectSupplierCredit(row,openShifts){
+    const credit=Number(row.current_credit||0);
+    if(!(credit>0)){message('لا يوجد رصيد لنا عند هذا المورد');return}
+    const raw=window.prompt('المبلغ المحصل من المورد '+row.name+' — الحد الأقصى '+money(row.current_credit),String(credit));
+    if(raw===null)return;
+    const amount=Number(raw);
+    if(!(amount>0)||amount>credit){message('اكتب مبلغاً صحيحاً لا يتجاوز الرصيد لنا عند المورد');return}
+    const note=window.prompt('ملاحظة التحصيل (اختياري)')||'';
+    const shiftId=chooseCashierShift(openShifts,'استلام هذا المبلغ من المورد');
+    if(shiftId===undefined)return;
+    await api('supplierCreditRefund',{
+      amount:String(amount),note,
+      ...(shiftId?{cashier_shift_id:shiftId}:{})
+    },dataUrl('supplierCreditRefund',row.id));
+    message('تم تحصيل رصيد المورد');
     await load('suppliers');
   }
 
@@ -1194,11 +1212,11 @@
     ]);
     const supplierRows=s.suppliers||[],orders=o.orders||[],returnRows=returns.returns||[];
     const openShifts=(ops.open_shifts||[]).filter(x=>x.shift_type==='cashier');
-    grid([['إجمالي ديون الموردين',money(s.totals?.total_debt||0)],['عدد الموردين',s.totals?.suppliers_count??supplierRows.length],['أوامر شراء نشطة',s.totals?.active_po_count??0],['مرتجعات معلقة',returnRows.filter(x=>x.status==='pending').length]]);
+    grid([['علينا للموردين',money(s.totals?.total_debt||0)],['لنا عند الموردين',money(s.totals?.total_credit||0)],['صافي المستحق',money(s.totals?.net_payable||0)],['عدد الموردين',s.totals?.suppliers_count??supplierRows.length],['أوامر شراء نشطة',s.totals?.active_po_count??0],['مرتجعات معلقة',returnRows.filter(x=>x.status==='pending').length]]);
 
     const p=box('الموردون');
-    hint(p,'الرصيد هنا هو ما على المنشأة للمورد. السداد النقدي الخارجي لا يمس درج POS؛ وإذا اخترت وردية مفتوحة يُسجل الخروج على درجها فيظهر إغلاق الوردية صحيحاً.');
-    table(p,[['المورد',x=>x.name],['الهاتف',x=>x.phone||'—'],['التصنيف',x=>x.category||'—'],['الرصيد المستحق',x=>money(x.current_debt)],['الإجراءات',x=>buttons([action('كشف الحساب',()=>showSupplier(x.id)),Number(x.current_debt||0)>0?action('سداد نقدي',()=>paySupplier(x,openShifts),false):null,Number(x.current_debt||0)>0?action('سداد أميال',()=>paySupplierWallet(x),false):null])]],supplierRows);
+    hint(p,'نُظهر ما علينا للمورد وما لنا عنده منفصلين. فائض المرتجع لا يضيع في ملاحظة؛ يصبح رصيداً لنا ويُستهلك تلقائياً في المشتريات التالية أو يُحصّل نقداً.');
+    table(p,[['المورد',x=>x.name],['الهاتف',x=>x.phone||'—'],['علينا',x=>money(x.current_debt)],['لنا',x=>money(x.current_credit||0)],['الصافي',x=>money(Number(x.current_debt||0)-Number(x.current_credit||0))],['الإجراءات',x=>buttons([action('كشف الحساب',()=>showSupplier(x.id)),Number(x.current_debt||0)>0?action('سداد نقدي',()=>paySupplier(x,openShifts),false):null,Number(x.current_debt||0)>0?action('سداد أميال',()=>paySupplierWallet(x),false):null,Number(x.current_credit||0)>0?action('تحصيل من المورد',()=>collectSupplierCredit(x,openShifts),false):null])]],supplierRows);
 
     const create=box('إضافة مورد');
     form(create,[['name','اسم المورد'],['contact_person','مسؤول التواصل'],['phone','الهاتف','tel'],['email','البريد','email'],['address','العنوان'],['category','التصنيف'],['opening_balance','رصيد افتتاحي مستحق','number']],'حفظ المورد',d=>api('supplierCreate',d));
