@@ -1242,13 +1242,31 @@
     message('تم تعديل المصروف');await load('expenses');
   }
   async function expenses(){
-    const data=await api('expenses'),rows=data.expenses||[];
-    grid([['إجمالي المصروفات',money(data.total||0)],['عدد القيود',data.count??rows.length],...Object.entries(data.by_category||{}).slice(0,2).map(([k,v])=>[expenseLabels[k]||k,money(v)])]);
+    const [data,ops]=await Promise.all([
+      api('expenses'),
+      api('overview').catch(()=>({open_shifts:[]}))
+    ]);
+    const rows=data.expenses||[];
+    const openShifts=(ops.open_shifts||[]).filter(x=>x.shift_type==='cashier');
+    grid([['إجمالي المصروفات النشطة',money(data.total||0)],['عدد القيود',data.count??rows.length],...Object.entries(data.by_category||{}).slice(0,2).map(([k,v])=>[expenseLabels[k]||k,money(v)])]);
     const p=box('سجل المصروفات');
-    hint(p,'هذه مصروفات تشغيل المنشأة مثل الإيجار والرواتب والكهرباء. شراء أصل ثابت مثل أثاث أو سيارة لا يُسجل هنا كمصروف تشغيلي.');
-    table(p,[['التاريخ',x=>x.spent_on],['البيان',x=>x.title],['الفئة',x=>expenseLabels[x.category]||x.category],['المبلغ',x=>money(x.amount)],['ملاحظة',x=>x.note||'—'],['الإجراء',x=>buttons([action('تعديل',()=>editExpense(x)),action('حذف',async()=>{if(!window.confirm('حذف هذا المصروف؟'))return;await api('expenseDelete',{},dataUrl('expenseDelete',x.id),'DELETE');message('تم حذف المصروف');await load('expenses')})])]],rows);
+    hint(p,'المصروف التشغيلي لا يُحذف من التاريخ. التصحيح يُنشئ عكساً مستقلاً بتاريخ الإلغاء. وإذا خرج النقد من درج POS اختر الوردية نفسها حتى يظل إغلاق الصندوق صحيحاً.');
+    table(p,[['التاريخ',x=>x.spent_on],['البيان',x=>x.title],['الفئة',x=>expenseLabels[x.category]||x.category],['المبلغ',x=>money(x.amount)],['المصدر',x=>x.payment_source==='cash_shift'?'درج وردية #'+x.cashier_shift_id:'نقد خارجي'],['ملاحظة',x=>x.note||'—'],['الإجراء',x=>buttons([
+      action('تعديل الوصف',()=>editExpense(x)),
+      action('إلغاء القيد',async()=>{
+        const reason=window.prompt('سبب إلغاء المصروف (لن يُحذف من التاريخ)');
+        if(!reason||reason.trim().length<5){message('اكتب سبباً واضحاً من 5 أحرف على الأقل');return}
+        if(!window.confirm('سيُسجل عكس محاسبي للمصروف ولن يُحذف أثره التاريخي. متابعة؟'))return;
+        await api('expenseDelete',{reason:reason.trim()},dataUrl('expenseDelete',x.id),'DELETE');
+        message('تم إلغاء المصروف بقيد عكسي');await load('expenses')
+      })
+    ])]],rows);
     const create=box('تسجيل مصروف');
-    form(create,[['title','البيان'],['amount','المبلغ','number'],['category','الفئة','select',Object.entries(expenseLabels).map(([value,label])=>({value,label}))],['spent_on','التاريخ','date'],['note','ملاحظة']],'تسجيل المصروف',d=>api('expenseCreate',d));
+    const sourceOptions=[
+      {value:'',label:'نقد خارجي — لا يغيّر أي درج POS'},
+      ...openShifts.map(s=>({value:String(s.id),label:'من درج وردية #'+s.id+(s.branch_name?' — '+s.branch_name:'')+(s.opened_by_name?' — '+s.opened_by_name:'')}))
+    ];
+    form(create,[['title','البيان'],['amount','المبلغ','number'],['category','الفئة','select',Object.entries(expenseLabels).map(([value,label])=>({value,label}))],['spent_on','التاريخ','date'],['cashier_shift_id','مصدر النقد','select',sourceOptions],['note','ملاحظة']],'تسجيل المصروف',d=>api('expenseCreate',d));
   }
 
   const assetCategoryLabels={furniture:'أثاث',equipment:'معدات',computer:'أجهزة وتقنية',vehicle:'مركبات',machinery:'آلات',fixtures:'تجهيزات',building_improvement:'تحسينات مبانٍ',other:'أخرى'};
