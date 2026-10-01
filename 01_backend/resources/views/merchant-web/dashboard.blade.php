@@ -1002,7 +1002,18 @@
     p.scrollIntoView({behavior:'smooth',block:'start'});
   }
 
-  async function paySupplier(row){
+  function chooseCashierShift(openShifts,verb){
+    if(!Array.isArray(openShifts)||openShifts.length===0)return null;
+    if(!window.confirm('هل '+verb+' من درج وردية POS مفتوحة؟\n«إلغاء» = نقد خارجي لا يخصم من أي درج.'))return null;
+    const list=openShifts.map((s,i)=>(i+1)+' — '+(s.opened_by_name||'وردية')+(s.branch_name?' · '+s.branch_name:'')+' (#'+s.id+')').join('\n');
+    const picked=window.prompt('اختر الوردية التي خرج منها النقد:\n'+list,'1');
+    if(picked===null)return undefined;
+    const shift=openShifts[Number(picked)-1];
+    if(!shift){message('اختيار الوردية غير صحيح');return undefined}
+    return shift.id;
+  }
+
+  async function paySupplier(row,openShifts){
     const debt=Number(row.current_debt||0);
     if(!(debt>0)){message('لا توجد مديونية مستحقة لهذا المورد');return}
     const raw=window.prompt('مبلغ السداد للمورد '+row.name+' — الحد الأقصى '+money(row.current_debt));
@@ -1010,12 +1021,17 @@
     const amount=Number(raw);
     if(!(amount>0)||amount>debt){message('اكتب مبلغاً صحيحاً لا يتجاوز الرصيد المستحق');return}
     const note=window.prompt('ملاحظة السداد (اختياري)')||'';
-    await api('supplierPayment',{amount:String(amount),note},dataUrl('supplierPayment',row.id));
+    const shiftId=chooseCashierShift(openShifts,'دفع هذا المبلغ');
+    if(shiftId===undefined)return;
+    await api('supplierPayment',{
+      amount:String(amount),note,
+      ...(shiftId?{cashier_shift_id:shiftId}:{})
+    },dataUrl('supplierPayment',row.id));
     message('تم تسجيل سداد المورد');
     await load('suppliers');
   }
 
-  async function receivePurchaseOrder(row){
+  async function receivePurchaseOrder(row,openShifts){
     const data=await api('purchaseOrderShow',undefined,dataUrl('purchaseOrderShow',row.id));
     const order=data.order||{},items=(order.items||[]).filter(item=>Number(item.quantity||0)>Number(item.received_quantity||0));
     if(!items.length){message('لا توجد كميات متبقية للاستلام');return}
@@ -1031,7 +1047,15 @@
     if(!payload.length){message('لم تحدد أي كمية للاستلام');return}
     const paid=window.prompt('المبلغ المدفوع نقداً عند هذا الاستلام (اتركه 0 إن كان كله آجلاً)','0');
     if(paid===null)return;
-    await api('purchaseOrderReceive',{items:payload,paid_now:paid||'0'},dataUrl('purchaseOrderReceive',row.id));
+    let shiftId=null;
+    if(Number(paid)>0){
+      shiftId=chooseCashierShift(openShifts,'دفع قيمة الاستلام');
+      if(shiftId===undefined)return;
+    }
+    await api('purchaseOrderReceive',{
+      items:payload,paid_now:paid||'0',
+      ...(shiftId?{cashier_shift_id:shiftId}:{})
+    },dataUrl('purchaseOrderReceive',row.id));
     message('تم الاستلام وتحديث المخزون وحساب المورد');
     await load('suppliers');
   }
@@ -1065,10 +1089,10 @@
     await load('suppliers');
   }
 
-  function purchaseOrderActions(row){
+  function purchaseOrderActions(row,openShifts){
     const list=[];
     if(row.status==='draft')list.push(action('اعتماد',async()=>{await api('purchaseOrderApprove',{},dataUrl('purchaseOrderApprove',row.id));message('تم اعتماد أمر الشراء');await load('suppliers')},false));
-    if(row.status==='approved'||row.status==='partially_received')list.push(action('استلام',()=>receivePurchaseOrder(row),false));
+    if(row.status==='approved'||row.status==='partially_received')list.push(action('استلام',()=>receivePurchaseOrder(row,openShifts),false));
     if(row.status==='draft'||row.status==='approved')list.push(action('إلغاء',async()=>{if(!window.confirm('إلغاء أمر الشراء '+row.po_number+'؟'))return;await api('purchaseOrderCancel',{},dataUrl('purchaseOrderCancel',row.id));message('تم إلغاء الأمر');await load('suppliers')}));
     if(row.status==='partially_received'||row.status==='completed')list.push(action('مرتجع',()=>createReturnFromOrder(row)));
     return buttons(list);
@@ -1114,23 +1138,25 @@
   }
 
   async function suppliers(){
-    const [s,o,returns,productData]=await Promise.all([
+    const [s,o,returns,productData,ops]=await Promise.all([
       api('suppliers'),api('purchaseOrders'),api('purchaseReturns'),
-      api('sectorProducts').catch(()=>({products:[]}))
+      api('sectorProducts').catch(()=>({products:[]})),
+      api('overview').catch(()=>({open_shifts:[]}))
     ]);
     const supplierRows=s.suppliers||[],orders=o.orders||[],returnRows=returns.returns||[];
+    const openShifts=(ops.open_shifts||[]).filter(x=>x.shift_type==='cashier');
     grid([['إجمالي ديون الموردين',money(s.totals?.total_debt||0)],['عدد الموردين',s.totals?.suppliers_count??supplierRows.length],['أوامر شراء نشطة',s.totals?.active_po_count??0],['مرتجعات معلقة',returnRows.filter(x=>x.status==='pending').length]]);
 
     const p=box('الموردون');
-    hint(p,'الرصيد هنا هو ما على المنشأة للمورد. وهو منفصل عن ديون العملاء وعن محفظة أميال.');
-    table(p,[['المورد',x=>x.name],['الهاتف',x=>x.phone||'—'],['التصنيف',x=>x.category||'—'],['الرصيد المستحق',x=>money(x.current_debt)],['الإجراءات',x=>buttons([action('كشف الحساب',()=>showSupplier(x.id)),Number(x.current_debt||0)>0?action('سداد',()=>paySupplier(x),false):null])]],supplierRows);
+    hint(p,'الرصيد هنا هو ما على المنشأة للمورد. السداد النقدي الخارجي لا يمس درج POS؛ وإذا اخترت وردية مفتوحة يُسجل الخروج على درجها فيظهر إغلاق الوردية صحيحاً.');
+    table(p,[['المورد',x=>x.name],['الهاتف',x=>x.phone||'—'],['التصنيف',x=>x.category||'—'],['الرصيد المستحق',x=>money(x.current_debt)],['الإجراءات',x=>buttons([action('كشف الحساب',()=>showSupplier(x.id)),Number(x.current_debt||0)>0?action('سداد',()=>paySupplier(x,openShifts),false):null])]],supplierRows);
 
     const create=box('إضافة مورد');
     form(create,[['name','اسم المورد'],['contact_person','مسؤول التواصل'],['phone','الهاتف','tel'],['email','البريد','email'],['address','العنوان'],['category','التصنيف'],['opening_balance','رصيد افتتاحي مستحق','number']],'حفظ المورد',d=>api('supplierCreate',d));
 
     const ordersPanel=box('أوامر الشراء');
     hint(ordersPanel,'المخزون لا يزيد عند إنشاء الأمر أو اعتماده؛ يزيد فقط عند تسجيل الاستلام الفعلي.');
-    table(ordersPanel,[['الأمر',x=>x.po_number],['المورد',x=>x.supplier?.name||'—'],['الإجمالي',x=>money(x.total_amount)],['الحالة',x=>poStatus(x.status)],['التاريخ',x=>x.created_at||'—'],['الإجراء',purchaseOrderActions]],orders);
+    table(ordersPanel,[['الأمر',x=>x.po_number],['المورد',x=>x.supplier?.name||'—'],['الإجمالي',x=>money(x.total_amount)],['الحالة',x=>poStatus(x.status)],['التاريخ',x=>x.created_at||'—'],['الإجراء',x=>purchaseOrderActions(x,openShifts)]],orders);
 
     const createOrder=box('أمر شراء جديد');
     const products=productData.products||productData.items||productData.result?.products||[];
