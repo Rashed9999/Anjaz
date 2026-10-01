@@ -266,7 +266,9 @@ class PurchaseReturnService
 
         if ($return->settlement_type === PurchaseReturn::SETTLE_CASH_REFUND) {
             SupplierLedgerEntry::create([
+                'entry_ulid' => (string) Str::ulid(),
                 'supplier_id' => $supplier->id,
+                'payment_method' => 'cash_external',
                 'merchant_user_id' => $return->merchant_user_id,
                 'entry_type' => 'po_return',
                 'amount' => $amount,
@@ -287,7 +289,9 @@ class PurchaseReturnService
         $supplier->save();
 
         SupplierLedgerEntry::create([
+            'entry_ulid' => (string) Str::ulid(),
             'supplier_id' => $supplier->id,
+            'payment_method' => 'credit_note',
             'merchant_user_id' => $return->merchant_user_id,
             'entry_type' => 'po_return',
             'amount' => $amount,
