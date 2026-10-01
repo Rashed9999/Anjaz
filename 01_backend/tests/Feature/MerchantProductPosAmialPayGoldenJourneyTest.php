@@ -294,6 +294,10 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         );
 
         // ⑦ المرجع المالي أحادي الاستعمال: فاتورة ثانية بنفس الدفع تُرفض.
+        // بعد فحص المرتجع كمالك نعيد هوية الكاشير؛ وإلا يفشل الطلب قبل
+        // مرجع الدفع عند بوابة الوردية، وهو ليس ما يقيسه هذا الجزء.
+        Passport::actingAs($this->staff, [], 'api');
+
         $second = $this->postJson('/api/v1/amial/merchant/cashier/sales', [
             'total' => '1500',
             'payment_method' => 'amial_pay',
@@ -379,6 +383,39 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         $this->assertSame(
             '9.000',
             (string) \App\Models\MerchantProduct::whereKey($productId)->value('quantity')
+        );
+
+        $xBeforeRefund = $this->getJson('/api/v1/amial/cashier/shift/x')
+            ->assertOk();
+        $this->assertSame('1500.0000',
+            (string) $xBeforeRefund->json('meta.report.expected_cash'));
+
+        // مرتجع نقدي من الكاشير نفسه: لا يلمس المحفظة، لكنه يخرج من
+        // الدرج ويجب أن يهبط «المتوقع» في تقرير X فوراً.
+        $this->postJson(
+            '/api/v1/amial/merchant/cashier/sales/'.$cashSale->sale_ulid.'/refund',
+            [
+                'amount' => '500',
+                'refund_method' => 'cash',
+                'reason' => 'مرتجع نقدي تجريبي',
+            ]
+        )->assertStatus(201)
+         ->assertJsonPath('code', 'REFUNDED');
+
+        $xAfterRefund = $this->getJson('/api/v1/amial/cashier/shift/x')
+            ->assertOk();
+        $this->assertSame('500.0000',
+            (string) $xAfterRefund->json('meta.report.cash_sales'));
+        $this->assertSame('500.0000',
+            (string) $xAfterRefund->json('meta.report.cash_movements_out'));
+        $this->assertSame('-500.0000',
+            (string) $xAfterRefund->json('meta.report.cash_movements_net'));
+        $this->assertSame('1000.0000',
+            (string) $xAfterRefund->json('meta.report.expected_cash'));
+        $this->assertSame(
+            $walletBefore,
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'),
+            'المرتجع النقدي حرّك محفظة أميال بدل درج الوردية'
         );
 
         // ② آجل: لا مال إلكتروني يتحرك؛ الذي يزيد هو دفتر دين العميل.
