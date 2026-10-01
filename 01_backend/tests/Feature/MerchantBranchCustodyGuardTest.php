@@ -47,7 +47,7 @@ class MerchantBranchCustodyGuardTest extends TestCase
             'branch_id' => $branch->id,
             'device_uuid_hash' => hash('sha256', 'branch-device-'.$branch->id),
             'hash_key_version' => 1,
-            'device_hint' => 'branch-device',
+            'device_hint' => PosDevice::hintOf('branch-device-'.$branch->id),
             'display_name' => 'صندوق الفرع',
             'registered_at' => now(),
             'is_active' => true,
