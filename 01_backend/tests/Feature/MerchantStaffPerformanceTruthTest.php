@@ -73,8 +73,8 @@ class MerchantStaffPerformanceTruthTest extends TestCase
 
         $this->assertNotNull($row);
         $this->assertSame(2, $row['sales_count']);
-        $this->assertEquals('300', $row['sales_total']);
-        $this->assertEquals('50', $meta['unattributed_total']);
-        $this->assertEquals('350', $meta['grand_total']);
+        $this->assertSame('300.0000', (string) $row['sales_total']);
+        $this->assertSame('50.0000', (string) $meta['unattributed_total']);
+        $this->assertSame('350.0000', (string) $meta['grand_total']);
     }
 }
