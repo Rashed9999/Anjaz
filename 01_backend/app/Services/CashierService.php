@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Models\MerchantProduct;
 use App\Models\MerchantExpense;
+use App\Models\MerchantExpenseReversal;
+use App\Models\MerchantFixedAsset;
+use App\Models\MerchantAssetAdjustment;
 use App\Models\MerchantAssetDepreciation;
 use App\Models\Retail\MerchantCategory;
 use App\Models\Retail\MerchantBrand;
@@ -843,25 +846,59 @@ class CashierService
             : '0';
 
         $cashOperatingExpenses = null;
+        $grossCashOperatingExpenses = null;
+        $expenseReversals = null;
         $depreciationExpense = null;
+        $depreciationReversals = null;
         $operatingExpenses = null;
+        $assetDisposalGainLoss = null;
+        $netResult = null;
         if ($branchId === null) {
             $cashOperatingExpenses = '0';
+            $grossCashOperatingExpenses = '0';
+            $expenseReversals = '0';
             $depreciationExpense = '0';
+            $depreciationReversals = '0';
+            $assetDisposalGainLoss = '0';
             $reportEnd = now()->endOfDay();
 
+            // الأصل يبقى في يوم صرفه حتى لو صُحّح لاحقاً. التصحيح نفسه
+            // قيد reversal بتاريخ التصحيح؛ حذف الأصل من التاريخ يعيد كتابة الماضي.
             $expenses = MerchantExpense::where('merchant_user_id', $merchant->id)
-                ->where('status', 'active')
                 ->whereDate('spent_on', '>=', $from->toDateString())
                 ->whereDate('spent_on', '<=', $reportEnd->toDateString())
-                ->get(['amount', 'spent_on']);
+                ->get(['id', 'amount', 'spent_on']);
 
             foreach ($expenses as $expense) {
                 $amount = (string) $expense->amount;
+                $grossCashOperatingExpenses = bcadd($grossCashOperatingExpenses, $amount, 4);
                 $cashOperatingExpenses = bcadd($cashOperatingExpenses, $amount, 4);
                 $day = $expense->spent_on?->format('Y-m-d');
                 if ($day) {
+                    $daily[$day]['cash_expenses_gross'] = bcadd(
+                        $daily[$day]['cash_expenses_gross'] ?? '0', $amount, 4
+                    );
                     $daily[$day]['cash_expenses'] = bcadd(
+                        $daily[$day]['cash_expenses'] ?? '0', $amount, 4
+                    );
+                }
+            }
+
+            $reversals = MerchantExpenseReversal::where('merchant_user_id', $merchant->id)
+                ->whereDate('effective_on', '>=', $from->toDateString())
+                ->whereDate('effective_on', '<=', $reportEnd->toDateString())
+                ->get(['amount', 'effective_on']);
+
+            foreach ($reversals as $reversal) {
+                $amount = (string) $reversal->amount;
+                $expenseReversals = bcadd($expenseReversals, $amount, 4);
+                $cashOperatingExpenses = bcsub($cashOperatingExpenses, $amount, 4);
+                $day = $reversal->effective_on?->format('Y-m-d');
+                if ($day) {
+                    $daily[$day]['expense_reversals'] = bcadd(
+                        $daily[$day]['expense_reversals'] ?? '0', $amount, 4
+                    );
+                    $daily[$day]['cash_expenses'] = bcsub(
                         $daily[$day]['cash_expenses'] ?? '0', $amount, 4
                     );
                 }
@@ -910,9 +947,53 @@ class CashierService
                 }
             }
 
+            // رد أصل للمورد بعد أشهر من الإهلاك يعكس حصة الإهلاك
+            // المتراكمة للكمية الخارجة. هذا أثر P&L في يوم الرد، لا تعديل
+            // لصفوف الأشهر القديمة.
+            $assetAdjustments = MerchantAssetAdjustment::where('merchant_user_id', $merchant->id)
+                ->whereDate('effective_on', '>=', $from->toDateString())
+                ->whereDate('effective_on', '<=', $reportEnd->toDateString())
+                ->where('depreciation_reversed', '>', 0)
+                ->get(['depreciation_reversed', 'effective_on']);
+
+            foreach ($assetAdjustments as $adjustment) {
+                $amount = (string) $adjustment->depreciation_reversed;
+                $depreciationReversals = bcadd($depreciationReversals, $amount, 4);
+                $depreciationExpense = bcsub($depreciationExpense, $amount, 4);
+                $day = $adjustment->effective_on?->format('Y-m-d');
+                if ($day) {
+                    $daily[$day]['depreciation_reversals'] = bcadd(
+                        $daily[$day]['depreciation_reversals'] ?? '0', $amount, 4
+                    );
+                    $daily[$day]['depreciation'] = bcsub(
+                        $daily[$day]['depreciation'] ?? '0', $amount, 4
+                    );
+                }
+            }
+
             $operatingExpenses = bcadd(
                 $cashOperatingExpenses, $depreciationExpense, 4
             );
+
+            // بيع/إتلاف أصل ليس مبيعات متجر ولا مصروف تشغيل. نعرض ربح/خسارة
+            // الاستبعاد مستقلاً ثم نضيفه إلى النتيجة النهائية.
+            $disposed = MerchantFixedAsset::where('merchant_user_id', $merchant->id)
+                ->whereNotNull('disposed_on')
+                ->whereNotNull('disposal_gain_loss')
+                ->whereDate('disposed_on', '>=', $from->toDateString())
+                ->whereDate('disposed_on', '<=', $reportEnd->toDateString())
+                ->get(['disposed_on', 'disposal_gain_loss']);
+
+            foreach ($disposed as $asset) {
+                $gainLoss = (string) $asset->disposal_gain_loss;
+                $assetDisposalGainLoss = bcadd($assetDisposalGainLoss, $gainLoss, 4);
+                $day = $asset->disposed_on?->format('Y-m-d');
+                if ($day) {
+                    $daily[$day]['asset_disposal_gain_loss'] = bcadd(
+                        $daily[$day]['asset_disposal_gain_loss'] ?? '0', $gainLoss, 4
+                    );
+                }
+            }
         }
 
         $netProfit = $operatingExpenses === null
@@ -921,6 +1002,10 @@ class CashierService
         $netMargin = $netProfit !== null && bccomp($totalRevenue, '0', 4) > 0
             ? bcmul(bcdiv($netProfit, $totalRevenue, 6), '100', 2)
             : ($netProfit === null ? null : '0');
+
+        $netResult = $netProfit === null
+            ? null
+            : bcadd($netProfit, $assetDisposalGainLoss ?? '0', 4);
 
         // سلسلة يومية كاملة (تشمل أيام الصفر) للأشرطة
         $series = [];
@@ -932,16 +1017,27 @@ class CashierService
             $depreciation = $operatingExpenses === null ? null : ($daily[$d]['depreciation'] ?? '0');
             $expense = $operatingExpenses === null
                 ? null : bcadd($cashExpense, $depreciation, 4);
+            $disposal = $operatingExpenses === null ? null
+                : ($daily[$d]['asset_disposal_gain_loss'] ?? '0');
             $dayGross = bcsub($rev, $cst, 4);
+            $dayOperating = $expense === null ? null : bcsub($dayGross, $expense, 4);
             $series[] = [
                 'date' => $d,
                 'revenue' => $rev,
                 'profit' => $dayGross, // توافق قديم: الربح الإجمالي
                 'gross_profit' => $dayGross,
                 'cash_operating_expenses' => $cashExpense,
+                'gross_cash_operating_expenses' => $operatingExpenses === null
+                    ? null : ($daily[$d]['cash_expenses_gross'] ?? '0'),
+                'expense_reversals' => $operatingExpenses === null
+                    ? null : ($daily[$d]['expense_reversals'] ?? '0'),
                 'depreciation_expense' => $depreciation,
+                'depreciation_reversals' => $operatingExpenses === null
+                    ? null : ($daily[$d]['depreciation_reversals'] ?? '0'),
                 'operating_expenses' => $expense,
-                'net_profit' => $expense === null ? null : bcsub($dayGross, $expense, 4),
+                'net_profit' => $dayOperating,
+                'asset_disposal_gain_loss' => $disposal,
+                'net_result' => $dayOperating === null ? null : bcadd($dayOperating, $disposal, 4),
             ];
         }
 
@@ -963,10 +1059,15 @@ class CashierService
                 'margin_percent' => $grossMargin,
                 'gross_margin_percent' => $grossMargin,
                 'cash_operating_expenses' => $cashOperatingExpenses,
+                'gross_cash_operating_expenses' => $grossCashOperatingExpenses,
+                'expense_reversals' => $expenseReversals,
                 'depreciation_expense' => $depreciationExpense,
+                'depreciation_reversals' => $depreciationReversals,
                 'operating_expenses' => $operatingExpenses,
                 'net_profit' => $netProfit,
                 'net_margin_percent' => $netMargin,
+                'asset_disposal_gain_loss' => $assetDisposalGainLoss,
+                'net_result' => $netResult,
                 'expense_scope' => $branchId === null ? 'merchant' : 'unallocated_for_branch',
                 'depreciation_basis' => $branchId === null ? 'posted_monthly_entries_prorated_to_period' : null,
                 'sales_count' => $sales->count(),
