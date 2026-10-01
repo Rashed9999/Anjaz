@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class MerchantExpense extends Model
 {
@@ -22,4 +23,9 @@ class MerchantExpense extends Model
     ];
 
     public const CATEGORIES = ['rent', 'salary', 'utilities', 'supplies', 'transport', 'other'];
+
+    public function reversal(): HasOne
+    {
+        return $this->hasOne(MerchantExpenseReversal::class, 'expense_id');
+    }
 }
