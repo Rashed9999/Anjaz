@@ -36,7 +36,9 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
 إجمالي المبيعات: ${AmialMoney.yer(t['revenue'])}
 إجمالي التكلفة: ${AmialMoney.yer(t['cost'])}
 الربح الإجمالي: ${AmialMoney.yer(t['gross_profit'] ?? t['profit'])}
-المصروفات التشغيلية: ${AmialMoney.yer(t['operating_expenses'])}
+المصروفات النقدية: ${AmialMoney.yer(t['cash_operating_expenses'])}
+إهلاك الأصول: ${AmialMoney.yer(t['depreciation_expense'])}
+إجمالي مصروفات التشغيل: ${AmialMoney.yer(t['operating_expenses'])}
 صافي الربح: ${AmialMoney.yer(t['net_profit'] ?? t['profit'])}
 هامش صافي الربح: ${t['net_margin_percent'] ?? t['margin_percent']}%
 عدد العمليات: ${t['sales_count']}
@@ -157,9 +159,18 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                       Container(height: 34, width: 1, color: AmialColors.border),
                       Expanded(
                         child: Column(children: [
-                          Text(AmialMoney.yer(totals['operating_expenses']),
+                          Text(AmialMoney.yer(totals['cash_operating_expenses']),
                               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AmialColors.red)),
-                          const Text('مصروفات التشغيل',
+                          const Text('مصروفات نقدية',
+                              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+                        ]),
+                      ),
+                      Container(height: 34, width: 1, color: AmialColors.border),
+                      Expanded(
+                        child: Column(children: [
+                          Text(AmialMoney.yer(totals['depreciation_expense']),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AmialColors.red)),
+                          const Text('إهلاك الأصول',
                               style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
                         ]),
                       ),
