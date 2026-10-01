@@ -112,12 +112,25 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
     if (ok) {
       final status = c.lastRefund.value?['status'];
       Get.back(result: true);
+      final ownerApproval = status == 'owner_approval_pending';
+      final refundApproval = status == 'pending_approval';
       Get.snackbar(
-        status == 'pending_approval' ? 'بانتظار الموافقة' : 'تم الاسترداد',
-        status == 'pending_approval'
-            ? 'تم إرسال المرتجع للإدارة للموافقة'
-            : 'تم تسجيل المرتجع بنجاح',
-        backgroundColor: Colors.green.shade100, colorText: Colors.green.shade800,
+        ownerApproval
+            ? 'بانتظار موافقة مالك المنشأة'
+            : refundApproval
+                ? 'بانتظار اعتماد المرتجع'
+                : 'تم الاسترداد',
+        ownerApproval
+            ? 'لم يُنفّذ المرتجع بعد. وافق المالك من لوحة المنشأة ثم أعد المحاولة.'
+            : refundApproval
+                ? 'تم إنشاء المرتجع وهو بانتظار الاعتماد المالي.'
+                : 'تم تسجيل المرتجع بنجاح',
+        backgroundColor: ownerApproval
+            ? Colors.orange.shade100
+            : Colors.green.shade100,
+        colorText: ownerApproval
+            ? Colors.orange.shade900
+            : Colors.green.shade800,
         snackPosition: SnackPosition.BOTTOM,
       );
     } else {
@@ -302,7 +315,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'المرتجعات أكثر من 5,000 ر.ي تحتاج موافقة الإدارة',
+                    'قد تتطلب بعض المرتجعات إذن مالك المنشأة حسب صلاحية الموظف، والمبالغ الكبيرة تخضع أيضاً لاعتماد مالي.',
                     style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                   ),
                 ),
