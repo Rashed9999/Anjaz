@@ -139,7 +139,7 @@ class _FinancialTruthReportScreenState extends State<FinancialTruthReportScreen>
 
     return [
       _section('الحركة اليومية الكاملة',
-          'المبيع والشراء ومرتجعاهما — نقداً وآجلاً، كلٌّ من مصدره'),
+          'المبيع والشراء ومرتجعاهما — نقداً وأميالاً وآجلاً ورصيد مورد، كلٌّ من مصدره'),
       Container(
         decoration: BoxDecoration(
           color: AmialColors.cardSurface,
@@ -158,6 +158,7 @@ class _FinancialTruthReportScreenState extends State<FinancialTruthReportScreen>
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900))),
               DataColumn(label: head('${labels['cash'] ?? 'نقدي'}')),
               DataColumn(label: head('${labels['amial_pay'] ?? 'أميال باي'}')),
+              DataColumn(label: head('${labels['supplier_credit'] ?? 'رصيد مورد'}')),
               DataColumn(label: head('${labels['credit'] ?? 'آجل'}')),
               const DataColumn(label: Text('الإجمالي',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900))),
@@ -188,6 +189,7 @@ class _FinancialTruthReportScreenState extends State<FinancialTruthReportScreen>
                   const DataCell(SizedBox.shrink()),
                   const DataCell(SizedBox.shrink()),
                   const DataCell(SizedBox.shrink()),
+                  const DataCell(SizedBox.shrink()),
                 ]);
               }
 
@@ -195,6 +197,7 @@ class _FinancialTruthReportScreenState extends State<FinancialTruthReportScreen>
                 DataCell(title),
                 DataCell(cell(r['cash'])),
                 DataCell(cell(r['amial_pay'])),
+                DataCell(cell(r['supplier_credit'])),
                 DataCell(cell(r['credit'])),
                 DataCell(Text(money(r['total']), textDirection: TextDirection.ltr,
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900))),
