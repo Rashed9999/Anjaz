@@ -39,9 +39,13 @@ class AdminWalletTransferService
         string $sourceType = 'admin_wallet_transfer',
         ?string $debitTransactionType = null,
         ?string $creditTransactionType = null,
+        ?string $description = null,
+        ?string $walletReason = null,
     ): array {
         $debitTransactionType ??= CASH_OUT;
         $creditTransactionType ??= CASH_IN;
+        $description = trim((string) $description) ?: (trim($reason) ?: 'تحويل بين محفظتين');
+        $walletReason = trim((string) $walletReason) ?: $sourceType;
 
         if ($sender->id === $recipient->id) {
             throw new RuntimeException('لا يمكن التحويل من المحفظة إلى نفسها');
@@ -57,7 +61,7 @@ class AdminWalletTransferService
             ? 'hub-xfer:' . hash('sha256', $requestIdempotencyKey)
             : null;
 
-        return DB::transaction(function () use ($sender, $recipient, $amount, $reason, $ledgerKey, $actor, $sourceType, $debitTransactionType, $creditTransactionType): array {
+        return DB::transaction(function () use ($sender, $recipient, $amount, $reason, $ledgerKey, $actor, $sourceType, $debitTransactionType, $creditTransactionType, $description, $walletReason): array {
             if ($ledgerKey) {
                 $existing = \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', $ledgerKey)
                     ->lockForUpdate()
@@ -77,7 +81,7 @@ class AdminWalletTransferService
             // المحافظ القديمة تدخل الدفتر مرة واحدة بقيد افتتاحي صريح قبل أن
             // تتحرك. أما المحفظة ذات التاريخ الدفتري فتُترك كما هي، ثم يثبت
             // فحص المطابقة أدناه أنها لا تحمل انحرافاً قائماً.
-            $this->openWalletBalanceIfPristine($sender->id, 'ترحيل محفظة الإدارة قبل تحويل موثّق');
+            $this->openWalletBalanceIfPristine($sender->id, 'ترحيل محفظة المرسل قبل تحويل موثّق');
             $this->openWalletBalanceIfPristine($recipient->id, 'ترحيل محفظة المستلم قبل تحويل موثّق');
 
             $senderWallet = $this->wallets->lockWallet($sender->id);
@@ -85,7 +89,7 @@ class AdminWalletTransferService
             $senderLedger = $this->ledger->getOrCreateUserWallet($sender->id, (string) $senderWallet->zone_code);
             $recipientLedger = $this->ledger->getOrCreateUserWallet($recipient->id, (string) $recipientWallet->zone_code);
 
-            $this->assertWalletMatchesLedger($senderWallet->current_balance, $senderLedger->id, 'الإدارة');
+            $this->assertWalletMatchesLedger($senderWallet->current_balance, $senderLedger->id, 'المرسل');
             $this->assertWalletMatchesLedger($recipientWallet->current_balance, $recipientLedger->id, 'المستلم');
 
             if (! MoneyService::gte((string) $senderWallet->current_balance, $amount)) {
@@ -115,7 +119,7 @@ class AdminWalletTransferService
             $entry = $this->ledger->post(
                 sourceType: $sourceType,
                 sourceId: (string) $transfer->id,
-                description: 'تحويل من محفظة الإدارة إلى مستخدم',
+                description: $description,
                 lines: [
                     ['account' => $senderLedger->account_code, 'direction' => 'debit', 'amount' => $amount],
                     ['account' => $recipientLedger->account_code, 'direction' => 'credit', 'amount' => $amount],
@@ -139,7 +143,7 @@ class AdminWalletTransferService
                 'debit' => '0.0000', 'credit' => $amount, 'amount' => $amount,
                 'balance' => $balanceAfterRecipient,
                 'from_user_id' => $sender->id, 'to_user_id' => $recipient->id,
-                'note' => trim($reason) ?: 'تحويل من محفظة الإدارة',
+                'note' => trim($reason) ?: $description,
                 'idempotency_key' => $ledgerKey,
                 'decision_code' => 'POSTED', 'zone_code' => (string) $recipientWallet->zone_code,
             ]);
@@ -156,8 +160,8 @@ class AdminWalletTransferService
                 'decision_code' => 'POSTED', 'zone_code' => (string) $senderWallet->zone_code,
             ]);
 
-            $senderAfter = $this->wallets->debit($sender->id, $amount, 'admin_wallet_transfer');
-            $recipientAfter = $this->wallets->credit($recipient->id, $amount, 'admin_wallet_transfer');
+            $senderAfter = $this->wallets->debit($sender->id, $amount, $walletReason);
+            $recipientAfter = $this->wallets->credit($recipient->id, $amount, $walletReason);
 
             if (MoneyService::compare((string) $senderAfter->current_balance, $balanceAfterSender) !== 0
                 || MoneyService::compare((string) $recipientAfter->current_balance, $balanceAfterRecipient) !== 0) {
