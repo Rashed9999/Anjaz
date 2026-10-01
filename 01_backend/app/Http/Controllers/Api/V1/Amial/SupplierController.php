@@ -443,7 +443,13 @@ class SupplierController extends Controller
         if (!$supplier) return $this->error('NOT_FOUND', 'المورد غير موجود', 404);
 
         foreach ($request->input('items') as $item) {
-            $type = (string) ($item['item_type'] ?? 'inventory');
+            $type = isset($item['item_type'])
+                ? (string) $item['item_type']
+                : (!empty($item['product_id']) ? 'inventory' : 'other');
+            if ($type === 'fixed_asset' && !empty($item['product_id'])) {
+                return $this->error('ASSET_PRODUCT_CONFLICT',
+                    'بند الأصل الثابت لا يُربط بصنف مخزون بيع؛ اختر أحد التصنيفين', 422);
+            }
             if ($type === 'fixed_asset') {
                 if (empty($item['useful_life_months'])) {
                     return $this->error('ASSET_LIFE_REQUIRED',
@@ -476,10 +482,14 @@ class SupplierController extends Controller
             ]);
 
             foreach ($request->input('items') as $it) {
+                $itemType = isset($it['item_type'])
+                    ? (string) $it['item_type']
+                    : (!empty($it['product_id']) ? 'inventory' : 'other');
+
                 PurchaseOrderItem::create([
                     'purchase_order_id' => $po->id,
                     'product_id' => $it['product_id'] ?? null,
-                    'item_type' => $it['item_type'] ?? 'inventory',
+                    'item_type' => $itemType,
                     'asset_category' => $it['asset_category'] ?? null,
                     'useful_life_months' => $it['useful_life_months'] ?? null,
                     'salvage_value' => (string) ($it['salvage_value'] ?? '0'),
