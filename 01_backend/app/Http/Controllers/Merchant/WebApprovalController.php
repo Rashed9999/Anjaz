@@ -56,6 +56,7 @@ class WebApprovalController extends Controller
                 'status' => (string) $row->status,
                 'permission_code' => (string) $row->permission_code,
                 'permission_label' => $this->permissionLabel((string) $row->permission_code),
+                'context_key' => $row->context_key === null ? null : (string) $row->context_key,
                 'amount' => $row->max_amount === null ? null : (string) $row->max_amount,
                 'reason' => (string) $row->reason,
                 'requested_by_user_id' => (int) $row->requested_by_user_id,
