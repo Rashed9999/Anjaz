@@ -448,4 +448,33 @@ class RetailSaleLinesGuardTest extends TestCase
         $this->assertSame(1, $body['totals']['unknown_cost_lines']);
         $this->assertSame('120.0000', $body['totals']['known_cost']);
     }
+
+    public function test_sale_detail_exposes_the_payment_trace_needed_for_reconciliation(): void
+    {
+        $sale = $this->cashier()->recordSale(
+            merchant: $this->merchant,
+            total: '250',
+            paymentMethod: 'cash',
+            items: [],
+        );
+
+        // نثبت شكل عملية رقمية مكتملة دون إنشاء بوابة دفع في هذا الحارس؛
+        // المطلوب هنا قياس عقد تفاصيل البيع الذي يقرأ السجل بعد وقوعه.
+        $sale->update([
+            'payment_method' => 'amial_pay',
+            'paid_transaction_id' => 'TX-AMIAL-250',
+            'settled_at' => now(),
+        ]);
+
+        $res = $this->actingAs($this->merchant, 'api')
+            ->getJson('/api/v1/amial/merchant/cashier/sales/' . $sale->sale_ulid);
+
+        $res->assertOk();
+        $body = $res->json('meta') ?? $res->json();
+
+        $this->assertSame('TX-AMIAL-250', $body['sale']['paid_transaction_id']);
+        $this->assertNotEmpty($body['sale']['settled_at']);
+        $this->assertArrayHasKey('branch_id', $body['sale']);
+        $this->assertArrayHasKey('pos_user_id', $body['sale']);
+    }
 }
