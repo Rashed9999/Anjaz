@@ -123,6 +123,11 @@ class CreditCollectionFlowTest extends TestCase
 
     public function test_cashier_can_collect_debt_without_general_cash_powers_or_colleague_access(): void
     {
+        // هذا الاختبار يقيس صلاحية التحصيل وعزل تحصيلات الزملاء. ربط
+        // جلسة Passport بجهاز POS له مصفوفة حرّاس مستقلة؛ تشغيله هنا
+        // يجعل فشل الجهاز يحجب نتيجة اختبار الدين نفسه.
+        config(['amial.pos_devices.enforce_session_binding' => false]);
+
         $owner=$this->owner();
         $permissions=app(MerchantPermissionService::class);
         $roles=$permissions->seedRetailRoles($owner);
