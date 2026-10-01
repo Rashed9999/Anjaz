@@ -7,6 +7,7 @@ use App\Http\Controllers\Merchant\WebPlansController as Plans;
 use App\Http\Controllers\Merchant\WebSectorController as Sector;
 use App\Http\Controllers\Merchant\WebFinanceController as Finance;
 use App\Http\Controllers\Merchant\WebApprovalController as Approvals;
+use App\Http\Controllers\Merchant\WebAssetController as Assets;
 use App\Http\Controllers\Api\V1\Amial\CustomerCreditController as Credits;
 use App\Http\Controllers\Api\V1\Amial\BranchController;
 use App\Http\Controllers\Api\V1\Amial\CashierController;
@@ -143,6 +144,17 @@ Route::middleware('merchant.web')->group(function () {
                 ->whereNumber('id')->middleware('amial.idempotency')->name('update');
             Route::delete('/{id}', [Expenses::class, 'destroy'])
                 ->whereNumber('id')->middleware('amial.idempotency')->name('destroy');
+        });
+
+        Route::prefix('assets')->name('assets.')->middleware('capability:expenses')->group(function () {
+            Route::get('/', [Assets::class, 'index'])->name('index');
+            Route::get('/{id}', [Assets::class, 'show'])->whereNumber('id')->name('show');
+            Route::post('/opening', [Assets::class, 'storeOpening'])
+                ->middleware(['amial.idempotency', 'throttle:20,1'])->name('opening');
+            Route::post('/depreciation', [Assets::class, 'postDepreciation'])
+                ->middleware(['amial.idempotency', 'throttle:10,1'])->name('depreciation');
+            Route::post('/{id}/dispose', [Assets::class, 'dispose'])
+                ->whereNumber('id')->middleware(['amial.idempotency', 'throttle:10,1'])->name('dispose');
         });
 
         Route::get('/branches', [BranchController::class, 'index'])->name('branches');
