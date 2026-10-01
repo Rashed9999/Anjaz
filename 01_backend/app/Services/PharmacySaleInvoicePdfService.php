@@ -17,6 +17,8 @@ class PharmacySaleInvoicePdfService
     {
         $sale->loadMissing(['items.batch', 'customer']);
         $merchant = Merchant::where('user_id', $sale->merchant_user_id)->first();
+        $qr = app(DocumentQrService::class);
+        $verificationCode = (string) $sale->sale_ulid;
 
         $items = $sale->items->map(fn ($item) => [
             'name' => (string) $item->product_trade_name,
@@ -34,6 +36,8 @@ class PharmacySaleInvoicePdfService
             'merchantLogoData' => app(MerchantLogoService::class)->dataUri($merchant),
             'items' => $items,
             'paymentLabel' => $this->paymentLabel((string) $sale->payment_method),
+            'verificationUrl' => $qr->url($verificationCode),
+            'qrDataUri' => $qr->dataUri($verificationCode),
         ])->render();
 
         return ArabicPdf::render($html, ['format' => 'A4', 'margin' => 12]);
