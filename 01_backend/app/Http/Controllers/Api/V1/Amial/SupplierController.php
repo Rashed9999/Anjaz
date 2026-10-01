@@ -120,6 +120,7 @@ class SupplierController extends Controller
         $v = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:0.01',
             'note' => 'sometimes|nullable|string|max:500',
+            'cashier_shift_id' => 'sometimes|nullable|integer|min:1',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -138,6 +139,14 @@ class SupplierController extends Controller
                 if (bccomp($amount, (string) $s->current_debt, 4) > 0) {
                     throw new \RuntimeException('مبلغ السداد أكبر من المديونية الحالية');
                 }
+
+                // **مصدر النقد صريح.** غياب cashier_shift_id يعني سداداً
+                // خارج درج نقاط البيع. وإذا اختير درجٌ فلا نسمح أن يصبح
+                // المتوقع سالباً؛ سجّل إيداعاً أولاً إن دخل نقد من الخارج.
+                $cashierShift = $this->lockCashierShiftForOutflow(
+                    $request, $mid, $amount
+                );
+
                 $s->current_debt = bcsub((string) $s->current_debt, $amount, 4);
                 $s->save();
 
@@ -147,8 +156,28 @@ class SupplierController extends Controller
                     'entry_type' => 'payment',
                     'amount' => $amount,
                     'debt_after' => (string) $s->current_debt,
-                    'note' => $request->input('note'),
+                    'reference' => $cashierShift ? 'SHIFT-'.$cashierShift->id : null,
+                    'note' => trim((string) $request->input('note')) ?: (
+                        $cashierShift
+                            ? 'سداد للمورد من درج الوردية #'.$cashierShift->id
+                            : 'سداد نقدي خارج درج نقاط البيع'
+                    ),
                 ]);
+
+                if ($cashierShift) {
+                    app(\App\Services\Retail\MerchantShiftCashService::class)->record(
+                        \App\Models\Retail\ShiftCashMovement::CASHIER,
+                        $cashierShift->id,
+                        $request->user(),
+                        'out',
+                        'supplier_payment',
+                        $amount,
+                        'سداد للمورد '.$s->name,
+                        'SUPPLIER-'.$s->id,
+                        $mid,
+                    );
+                }
+
                 return $s;
             });
         } catch (\RuntimeException $e) {
@@ -295,6 +324,7 @@ class SupplierController extends Controller
             'items.*.received_quantity' => 'required|numeric|min:0.001',
             'paid_now' => 'sometimes|nullable|numeric|min:0',
             'location_id' => 'sometimes|nullable|integer',
+            'cashier_shift_id' => 'sometimes|nullable|integer|min:1',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -393,6 +423,10 @@ class SupplierController extends Controller
                 ]);
 
                 if (bccomp($paidNow, '0', 4) > 0) {
+                    $cashierShift = $this->lockCashierShiftForOutflow(
+                        $request, $mid, $paidNow
+                    );
+
                     $supplier->current_debt =
                         bcsub((string) $supplier->current_debt, $paidNow, 4);
                     $supplier->save();
@@ -404,8 +438,24 @@ class SupplierController extends Controller
                         'amount' => $paidNow,
                         'debt_after' => (string) $supplier->current_debt,
                         'reference' => $po->po_number,
-                        'note' => 'دفعٌ نقديٌّ عند الاستلام',
+                        'note' => $cashierShift
+                            ? 'دفع نقدي عند الاستلام من درج الوردية #'.$cashierShift->id
+                            : 'دفع نقدي عند الاستلام خارج درج نقاط البيع',
                     ]);
+
+                    if ($cashierShift) {
+                        app(\App\Services\Retail\MerchantShiftCashService::class)->record(
+                            \App\Models\Retail\ShiftCashMovement::CASHIER,
+                            $cashierShift->id,
+                            $request->user(),
+                            'out',
+                            'supplier_payment',
+                            $paidNow,
+                            'دفع شراء للمورد '.$supplier->name,
+                            $po->po_number,
+                            $mid,
+                        );
+                    }
                 }
 
                 // تحديث حالة الأمر
@@ -547,6 +597,39 @@ class SupplierController extends Controller
     }
 
     // ---- helpers ----
+
+    /**
+     * يربط خروج النقد بدرج وردية محددة فقط عندما يصرّح المستخدم بذلك.
+     * لا نخمّن وردية من «آخر وردية مفتوحة»، لأن وجود أكثر من POS يجعل
+     * التخمين خصماً من درج موظف آخر.
+     */
+    private function lockCashierShiftForOutflow(
+        Request $request, int $merchantUserId, string $amount
+    ): ?\App\Models\CashierShift {
+        if (! $request->filled('cashier_shift_id')) {
+            return null;
+        }
+
+        $shift = \App\Models\CashierShift::where('id', (int) $request->input('cashier_shift_id'))
+            ->where('merchant_user_id', $merchantUserId)
+            ->where('status', 'open')
+            ->lockForUpdate()
+            ->first();
+
+        if (! $shift) {
+            throw new \RuntimeException('الوردية النقدية غير موجودة أو مغلقة');
+        }
+
+        $snapshot = app(\App\Services\CashierShiftService::class)->snapshot($shift);
+        $expected = (string) ($snapshot['expected_cash'] ?? '0');
+        if (bccomp($amount, $expected, 4) > 0) {
+            throw new \RuntimeException(
+                'رصيد الدرج المتوقع لا يكفي لهذا السداد — سجّل إيداعاً نقدياً أو اختر سداداً خارج الدرج'
+            );
+        }
+
+        return $shift;
+    }
 
     private function nextPoNumber(int $mid): string
     {
