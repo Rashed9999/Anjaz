@@ -323,6 +323,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
                   // وإلّا ضُرب سعرُ الصرف مرّتين.
                   totalYer: widget.baseTotal ?? widget.total,
                   currencies: _settings.currencies,
+                  verificationUrl: _verificationUrl,
                 )),
           ),
         ),
