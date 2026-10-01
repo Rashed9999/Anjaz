@@ -620,7 +620,14 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         return $this->ok([
             'sale' => $sale->only([
                 'id', 'sale_ulid', 'invoice_number', 'total_amount', 'discount_amount', 'payment_method',
-                'status', 'customer_name', 'customer_phone', 'created_at',
+                'status', 'customer_name', 'customer_phone',
+                // مرجع التحصيل والتسوية جزءٌ من تفاصيل البيع، لا من سجل
+                // المحفظة وحده. بدونه لا يستطيع المالك مطابقة شكوى عميل
+                // مع عملية أميال التي دفعت الفاتورة.
+                'paid_transaction_id', 'settled_at',
+                'cash_amount', 'wallet_amount', 'amount_received',
+                'branch_id', 'pos_user_id', 'shift_id', 'pos_device_id',
+                'created_at',
             ]),
             'lines' => $sale->lines->map(fn ($l) => [
                 'id' => $l->id,
