@@ -97,16 +97,19 @@ class MerchantStaffController extends Controller
         $days = max(1, min(90, (int) $request->query('days', 7)));
         $from = now()->subDays($days - 1)->startOfDay();
         $todayFrom = now()->startOfDay();
+        $financialStatuses = ['completed', 'credit_unpaid', 'credit_paid'];
 
         $staff = PosUser::where('merchant_user_id', $m->id)->orderBy('pos_number')->get();
 
         $agg = MerchantSale::where('merchant_user_id', $m->id)
+            ->whereIn('status', $financialStatuses)
             ->whereNotNull('pos_user_id')
             ->where('created_at', '>=', $from)
             ->selectRaw('pos_user_id, COUNT(*) as cnt, SUM(COALESCE(base_amount, total_amount)) as total')
             ->groupBy('pos_user_id')->get()->keyBy('pos_user_id');
 
         $todayAgg = MerchantSale::where('merchant_user_id', $m->id)
+            ->whereIn('status', $financialStatuses)
             ->whereNotNull('pos_user_id')
             ->where('created_at', '>=', $todayFrom)
             ->selectRaw('pos_user_id, COUNT(*) as cnt, SUM(COALESCE(base_amount, total_amount)) as total')
@@ -133,9 +136,11 @@ class MerchantStaffController extends Controller
 
         // مبيعات غير منسوبة لموظف (سجّلها التاجر نفسه) + الإجمالي العام
         $unattributed = (string) MerchantSale::where('merchant_user_id', $m->id)
+            ->whereIn('status', $financialStatuses)
             ->whereNull('pos_user_id')
             ->where('created_at', '>=', $from)->sum(\DB::raw('COALESCE(base_amount, total_amount)'));
         $grandTotal = (string) MerchantSale::where('merchant_user_id', $m->id)
+            ->whereIn('status', $financialStatuses)
             ->where('created_at', '>=', $from)->sum(\DB::raw('COALESCE(base_amount, total_amount)'));
 
         return $this->ok([
