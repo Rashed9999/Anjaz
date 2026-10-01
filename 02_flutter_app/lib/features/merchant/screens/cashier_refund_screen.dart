@@ -351,7 +351,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
                 icon: const Icon(Icons.remove_circle_outline),
                 onPressed: current > 0
                     ? () => setState(() =>
-                        _returnQty[index] = (current - 1).clamp(0, originalQty))
+                        _returnQty[index] = (current - 1).clamp(0, originalQty).toDouble())
                     : null,
               ),
               Container(
@@ -370,7 +370,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
                     const Icon(Icons.add_circle, color: AmialColors.primary),
                 onPressed: current < originalQty
                     ? () => setState(() =>
-                        _returnQty[index] = (current + 1).clamp(0, originalQty))
+                        _returnQty[index] = (current + 1).clamp(0, originalQty).toDouble())
                     : null,
               ),
             ]),
