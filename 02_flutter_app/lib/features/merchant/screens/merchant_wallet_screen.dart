@@ -70,7 +70,7 @@ class _MerchantWalletScreenState extends State<MerchantWalletScreen> {
       textDirection: appTextDirection(),
       child: Scaffold(
         backgroundColor: AmialColors.background,
-        appBar: AppBar(title: const Text('محفظة المتجر')),
+        appBar: AppBar(title: Text('merchant_wallet_title'.tr)),
         body: RefreshIndicator(
           onRefresh: _refresh,
           color: AmialColors.primary,
@@ -96,8 +96,8 @@ class _MerchantWalletScreenState extends State<MerchantWalletScreen> {
                   Expanded(
                     child: _ActionCard(
                       icon: Icons.account_balance_outlined,
-                      label: 'سحب',
-                      subtitle: 'نقداً عبر وكيل',
+                      label: 'merchant_withdraw'.tr,
+                      subtitle: 'merchant_cash_via_agent'.tr,
                       onTap: () => Get.to(() => const MerchantPayoutScreen()),
                     ),
                   ),
@@ -105,8 +105,8 @@ class _MerchantWalletScreenState extends State<MerchantWalletScreen> {
                   Expanded(
                     child: _ActionCard(
                       icon: Icons.send_rounded,
-                      label: 'تحويل',
-                      subtitle: 'إلى حساب أميال باي',
+                      label: 'merchant_transfer'.tr,
+                      subtitle: 'merchant_transfer_to_amial'.tr,
                       // **ورصيدُ المتجر يُمرَّر معها** — شاشةُ التحويل
                       // تقرأ رصيدَها من ملفّ العميل، وهو مسارٌ يردّ ٤٠٣
                       // لكلّ تاجر. (AMIAL-MERCHANT-SESSION-001)
@@ -117,7 +117,7 @@ class _MerchantWalletScreenState extends State<MerchantWalletScreen> {
                 ]),
 
                 const SizedBox(height: 20),
-                const _SectionTitle('إحصاءات اليوم'),
+                _SectionTitle('merchant_today_stats'.tr),
                 _StatsCard(
                   sales: stats.todaySales,
                   refunds: stats.todayRefunds,
@@ -128,11 +128,11 @@ class _MerchantWalletScreenState extends State<MerchantWalletScreen> {
 
                 const SizedBox(height: 20),
                 Row(children: [
-                  const Expanded(child: _SectionTitle('آخر الحركات')),
+                  Expanded(child: _SectionTitle('merchant_recent_movements'.tr)),
                   TextButton(
                     onPressed: () =>
                         Get.to(() => const MerchantTransactionsScreen()),
-                    child: const Text('عرض الكل'),
+                    child: Text('common_view_all'.tr),
                   ),
                 ]),
 
@@ -225,7 +225,7 @@ class _BalanceCard extends StatelessWidget {
         const SizedBox(width: 13),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('الرصيد المتاح',
+            Text('merchant_available_balance'.tr,
                 style: TextStyle(color: Colors.white70, fontSize: 12)),
             const SizedBox(height: 3),
 
@@ -238,7 +238,7 @@ class _BalanceCard extends StatelessWidget {
                       fontWeight: FontWeight.bold))
             else
               Text(
-                ownerOnly ? 'لمالك المتجر' : 'غير متاح الآن',
+                ownerOnly ? 'merchant_owner_only'.tr : 'common_unavailable_now'.tr,
                 style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 17,
@@ -325,20 +325,20 @@ class _StatsCard extends StatelessWidget {
         border: Border.all(color: AmialColors.border),
       ),
       child: Column(children: [
-        _row('المبيعات', AmialMoney.yer(sales), AmialColors.success),
+        _row('merchant_sales'.tr, AmialMoney.yer(sales), AmialColors.success),
         const Divider(height: 1),
         // **ولا يُعرَض صفرٌ بلا سبب**: السطرُ يظهر حين يصل مالٌ بلا بيع،
         // فيعرف صاحبُ المتجر أنّ في محفظته ما ليس من الكاشير.
         if (transfersIn != null && (double.tryParse(transfersIn!) ?? 0) > 0) ...[
-          _row('تحويلات واردة (ليست مبيعات)',
+          _row('merchant_incoming_transfers_not_sales'.tr,
               AmialMoney.yer(transfersIn!), AmialColors.primary),
           const Divider(height: 1),
         ],
-        _row('الاسترجاعات', AmialMoney.yer(refunds), AmialColors.red),
+        _row('merchant_refunds'.tr, AmialMoney.yer(refunds), AmialColors.red),
         const Divider(height: 1),
-        _row('الصافي', AmialMoney.yer(net), AmialColors.primary),
+        _row('merchant_net'.tr, AmialMoney.yer(net), AmialColors.primary),
         const Divider(height: 1),
-        _row('عدد العمليات', '$count', AmialColors.textSecondary),
+        _row('merchant_transactions_count'.tr, '$count', AmialColors.textSecondary),
       ]),
     );
   }
@@ -434,13 +434,13 @@ class _EmptyMovements extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 32),
       alignment: Alignment.center,
-      child: const Column(children: [
+      child: Column(children: [
         Icon(Icons.swap_vert_rounded, size: 46, color: AmialColors.textMuted),
         SizedBox(height: 10),
-        Text('لا حركةَ في المحفظة بعد',
+        Text('merchant_wallet_no_movements'.tr,
             style: TextStyle(fontSize: 13, color: AmialColors.textSecondary)),
         SizedBox(height: 4),
-        Text('أوّلُ عمليّة بيعٍ تظهر هنا',
+        Text('merchant_wallet_first_sale_hint'.tr,
             style: TextStyle(fontSize: 11.5, color: AmialColors.textMuted)),
       ]),
     );
@@ -479,10 +479,8 @@ class _ScopeNote extends StatelessWidget {
       ),
       child: Text(
         isOwner
-            ? 'هذه محفظةُ متجرك: يدخلها مالُ البيع، ويخرج منها سحباً عبر '
-                'وكيلٍ أو تحويلاً إلى حساب أميال باي. ولا شحنَ يدويّاً لها — '
-                'رصيدُها من بيعك.'
-            : 'رصيدُ المتجر لصاحبه. وما تراه هنا من حركاتٍ هو ما يخصّ عملك.',
+            ? 'merchant_wallet_owner_scope'.tr
+            : 'merchant_wallet_staff_scope'.tr,
         style: const TextStyle(
             fontSize: 11.5, height: 1.7, color: AmialColors.textMuted),
       ),
