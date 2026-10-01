@@ -21,6 +21,8 @@ class CashierSaleInvoicePdfService
         $sale->loadMissing('lines');
         $merchant = Merchant::where('user_id', $sale->merchant_user_id)->first();
         $profile = MerchantProfile::where('user_id', $sale->merchant_user_id)->first();
+        $qr = app(DocumentQrService::class);
+        $verificationCode = (string) $sale->sale_ulid;
 
         $items = $sale->lines->isNotEmpty()
             ? $sale->lines->map(fn ($line) => [
@@ -58,6 +60,8 @@ class CashierSaleInvoicePdfService
             'total' => $total,
             'paymentLabel' => $this->paymentLabel((string) $sale->payment_method),
             'statusLabel' => $this->statusLabel((string) $sale->status),
+            'verificationUrl' => $qr->url($verificationCode),
+            'qrDataUri' => $qr->dataUri($verificationCode),
         ])->render();
 
         return ArabicPdf::render($html, ['format' => 'A4', 'margin' => 12]);
