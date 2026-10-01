@@ -132,12 +132,14 @@ final class MerchantPortalNavigationService
         if ($hasMultiPos) {
             $items[] = $this->item('devices', 'أجهزة نقاط البيع', 'point_of_sale', EntitlementService::AVAILABLE);
         }
-        // التقرير العام يقرأ `merchant_sales`؛ لا نعيد تسميته تقرير وقود أو
-        // صيدلية أو جملة وهو لا يقرأ جداولها القطاعية. كل قطاع منها يقرأ
-        // ملخصه الحقيقي من مساحة التشغيل إلى أن يكتمل تقريره الخاص.
-        if (in_array($businessType, [A::BIZ_QUICK_SALE, A::BIZ_RETAIL], true)
-            && $this->available($states, A::F_DAILY_REPORTS)) {
-            $items[] = $this->item('reports', $vertical['reports'], 'analytics', EntitlementService::AVAILABLE);
+        // MerchantFinancialTruthReportService أصبح قطاعيّاً فعلاً:
+        // وقود=fuel_sales، صيدلية=pharmacy_sales، جملة=wholesale_invoices،
+        // والمطعم يغلق إلى merchant_sales. لذلك إخفاء التقرير عن أربعة
+        // قطاعات كان نقص ربط في الواجهة لا نقصاً في محرك التقرير.
+        if ($this->available($states, A::F_DAILY_REPORTS)) {
+            $items[] = $this->item(
+                'reports', $vertical['reports'], 'analytics', EntitlementService::AVAILABLE
+            );
         }
 
         $items[] = $this->item('settings', 'هوية المنشأة والفواتير', 'receipt_long', EntitlementService::AVAILABLE);
