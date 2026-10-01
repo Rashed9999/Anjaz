@@ -1133,5 +1133,9 @@
   "currency_yer_amount": "@amount YER",
   "merchant_cashier_name": "Cashier: @name",
   "common_today_time": "Today @time",
-  "common_yesterday_time": "Yesterday @time"
+  "common_yesterday_time": "Yesterday @time",
+  "document_verify_invoice": "Verify invoice authenticity",
+  "receipt_tendered_amount": "Amount tendered",
+  "receipt_change": "Change",
+  "receipt_balance_due": "Balance due"
 }
