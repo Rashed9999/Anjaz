@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Middleware\EnsurePosDevice;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
+use App\Models\MerchantSale;
 use App\Models\User;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -232,7 +233,7 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
     /** @test */
     public function a_merchant_can_take_a_new_employee_all_the_way_to_a_first_sale(): void
     {
-        $this->merchantAddsStaff();
+        $staffMeta = $this->merchantAddsStaff();
 
         $code = $this->merchantCreatesActivationCode();
         $deviceUuid = $this->deviceActivates($code);
@@ -242,16 +243,50 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
         //
         // وهي البابُ الذي لا بيعَ قبله — و`EnsurePosDevice` على المسار،
         // فترويسةُ الجهاز تُرسَل كما يرسلها التطبيق.
-        $shift = $this->withHeaders([
+        $headers = [
             'Authorization' => 'Bearer '.$token,
             EnsurePosDevice::HEADER => $deviceUuid,
-        ])->postJson('/api/v1/amial/cashier/shift/open', ['opening_float' => 0]);
+        ];
+
+        $shift = $this->withHeaders($headers)
+            ->postJson('/api/v1/amial/cashier/shift/open', ['opening_float' => 0]);
 
         $this->assertContains($shift->status(), [200, 201], sprintf(
             "**الموظّفُ دخل ولا يستطيع فتحَ ورديّة — والسلسلةُ تنقطع عند "
             ."آخر حلقة.**\n\nالحالة: %d\nالردّ: %s",
             $shift->status(),
             json_encode($shift->json(), JSON_UNESCAPED_UNICODE)));
+
+        // **⑤ ثمّ البيع الحقيقي نفسه.** اسم الاختبار كان يقول «إلى أول
+        // عملية بيع» بينما كان يتوقف عند فتح الوردية. هذا يترك الوصلة
+        // الأهم بلا قياس: هل الرمز والجهاز والموظف والوردية تصل فعلاً إلى
+        // MerchantSale واحدة منسوبة إلى الشخص والصندوق نفسيهما؟
+        $saleResponse = $this->withHeaders($headers)
+            ->postJson('/api/v1/amial/merchant/cashier/sales', [
+                'total' => '1250',
+                'payment_method' => 'cash',
+                'items' => [[
+                    'name' => 'صنف اختبار السلسلة',
+                    'qty' => 1,
+                    'price' => '1250',
+                ]],
+            ]);
+
+        $saleResponse->assertOk()
+            ->assertJsonPath('code', 'SALE_RECORDED');
+
+        $saleUlid = (string) $saleResponse->json('meta.sale.sale_ulid');
+        $this->assertNotSame('', $saleUlid, 'نجح الرد بلا معرّف بيعة يمكن تتبعه');
+
+        $sale = MerchantSale::where('sale_ulid', $saleUlid)->firstOrFail();
+        $this->assertSame($this->merchant->id, (int) $sale->merchant_user_id);
+        $this->assertSame((int) $staffMeta['id'], (int) $sale->pos_user_id);
+        $this->assertNotNull($sale->shift_id,
+            'البيعة الأولى خرجت من الوردية التي فتحها الموظف');
+        $this->assertNotNull($sale->pos_device_id,
+            'البيعة الأولى فقدت هوية صندوق POS المفعّل');
+        $this->assertSame('cash', $sale->payment_method);
+        $this->assertSame('1250.0000', (string) $sale->total_amount);
     }
 
     /**
