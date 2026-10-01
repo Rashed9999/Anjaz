@@ -45,12 +45,12 @@ class _MerchantSalesHistoryScreenState extends State<MerchantSalesHistoryScreen>
             ? raw.whereType<Map>().map((s) => Map<String, dynamic>.from(s)).toList()
             : const []);
       } else if (response.statusCode == 403) {
-        setState(() => _error = 'لا تملك صلاحية عرض مبيعات نقاط البيع لهذا الحساب.');
+        setState(() => _error = 'merchant_sales_permission_denied'.tr);
       } else {
-        setState(() => _error = 'تعذر تحميل سجل المبيعات الآن.');
+        setState(() => _error = 'merchant_sales_load_failed'.tr);
       }
     } catch (_) {
-      setState(() => _error = 'تعذر الاتصال. تحقق من الشبكة ثم أعد المحاولة.');
+      setState(() => _error = 'common_network_retry'.tr);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -71,7 +71,7 @@ class _MerchantSalesHistoryScreenState extends State<MerchantSalesHistoryScreen>
   Future<void> _openInvoice(Map<String, dynamic> row) async {
     final ulid = row['sale_ulid']?.toString() ?? '';
     if (!RegExp(r'^[A-Z0-9]{26}$').hasMatch(ulid)) {
-      _message('رقم البيع غير صالح لفتح الفاتورة.');
+      _message('merchant_invalid_sale_number'.tr);
       return;
     }
     _progress(true);
@@ -84,7 +84,7 @@ class _MerchantSalesHistoryScreenState extends State<MerchantSalesHistoryScreen>
           : null;
       final lines = meta is Map && meta['lines'] is List ? meta['lines'] as List : const [];
       if (response.statusCode != 200 || sale == null) {
-        _message(response.statusCode == 404 ? 'هذه الفاتورة لم تعد متاحة.' : 'تعذر فتح تفاصيل الفاتورة.');
+        _message(response.statusCode == 404 ? 'merchant_invoice_unavailable'.tr : 'merchant_invoice_details_failed'.tr);
         return;
       }
       sale['items'] = lines.whereType<Map>().map((line) => {
@@ -101,7 +101,7 @@ class _MerchantSalesHistoryScreenState extends State<MerchantSalesHistoryScreen>
         customerPhone: sale['customer_phone']?.toString(),
       ));
     } catch (_) {
-      _message('تعذر الاتصال أثناء فتح الفاتورة.');
+      _message('merchant_invoice_network_failed'.tr);
     } finally {
       _progress(false);
     }
@@ -121,7 +121,7 @@ class _MerchantSalesHistoryScreenState extends State<MerchantSalesHistoryScreen>
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: AmialColors.background,
-    appBar: AppBar(title: const Text('سجل مبيعات نقاط البيع')),
+    appBar: AppBar(title: Text('merchant_pos_sales_history'.tr)),
     body: RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -129,18 +129,18 @@ class _MerchantSalesHistoryScreenState extends State<MerchantSalesHistoryScreen>
         children: [
           _dateCard(),
           const SizedBox(height: 12),
-          const Text('اضغط أي عملية لعرض الأصناف وطريقة الدفع وإعادة الطباعة أو تنزيل PDF.',
+          Text('merchant_sales_history_intro'.tr,
               style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
           const SizedBox(height: 12),
           if (_loading) const Padding(
-            padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()),
+            padding: const EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()),
           ) else if (_error != null) _ErrorState(text: _error!, onRetry: _load)
-          else if (_sales.isEmpty) const Padding(
-            padding: EdgeInsets.all(40),
+          else if (_sales.isEmpty) Padding(
+            padding: const EdgeInsets.all(40),
             child: Center(child: Column(children: [
-              Icon(Icons.receipt_long_outlined, size: 60, color: AmialColors.textMuted),
-              SizedBox(height: 10),
-              Text('لا توجد مبيعات مسجلة في هذا اليوم.'),
+              const Icon(Icons.receipt_long_outlined, size: 60, color: AmialColors.textMuted),
+              const SizedBox(height: 10),
+              Text('merchant_no_sales_today'.tr),
             ])),
           ) else ..._sales.map((sale) => _SaleCard(sale: sale, onTap: () => _openInvoice(sale))),
         ],
@@ -151,7 +151,7 @@ class _MerchantSalesHistoryScreenState extends State<MerchantSalesHistoryScreen>
   Widget _dateCard() => Card(
     child: ListTile(
       leading: const Icon(Icons.calendar_today_outlined, color: AmialColors.primary),
-      title: const Text('تاريخ المبيعات'),
+      title: Text('merchant_sales_date'.tr),
       subtitle: Text(_dateText, textDirection: TextDirection.ltr),
       trailing: const Icon(Icons.chevron_left),
       onTap: _loading ? null : _pickDate,
@@ -165,12 +165,12 @@ class _SaleCard extends StatelessWidget {
   final VoidCallback onTap;
 
   String _method(String raw) => switch (raw) {
-    'cash' => 'نقداً',
-    'amial_pay' => 'أميال باي',
-    'credit' => 'آجل',
-    'mixed' => 'مختلط',
-    'corporate' => 'حساب شركة',
-    _ => raw.isEmpty ? 'غير محددة' : raw,
+    'cash' => 'payment_cash'.tr,
+    'amial_pay' => 'payment_amial_pay'.tr,
+    'credit' => 'payment_credit'.tr,
+    'mixed' => 'payment_mixed'.tr,
+    'corporate' => 'payment_corporate'.tr,
+    _ => raw.isEmpty ? 'common_unspecified'.tr : raw,
   };
 
   @override
@@ -186,7 +186,7 @@ class _SaleCard extends StatelessWidget {
           backgroundColor: AmialColors.background,
           child: Icon(Icons.receipt_long_outlined, color: AmialColors.primary),
         ),
-        title: Text('${sale['invoice_number'] ?? sale['sale_ulid'] ?? 'فاتورة'}',
+        title: Text('${sale['invoice_number'] ?? sale['sale_ulid'] ?? 'merchant_invoice'.tr}',
             textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('الدفع: $method · ${sale['items_count'] ?? 0} أصناف'),
@@ -213,8 +213,8 @@ class _ErrorState extends StatelessWidget {
     padding: const EdgeInsets.all(36),
     child: Center(child: Column(children: [
       const Icon(Icons.cloud_off_outlined, size: 56, color: AmialColors.textMuted),
-      const SizedBox(height: 10), Text(text, textAlign: TextAlign.center),
-      TextButton(onPressed: onRetry, child: const Text('إعادة المحاولة')),
+      const const SizedBox(height: 10), Text(text, textAlign: TextAlign.center),
+      TextButton(onPressed: onRetry, child: Text('common_retry'.tr)),
     ])),
   );
 }
