@@ -6,6 +6,8 @@ use App\Models\FuelSale;
 use App\Models\Merchant;
 use App\Models\MerchantSale;
 use App\Models\PharmacySale;
+use App\Models\PurchaseOrder;
+use App\Models\SupplierLedgerEntry;
 use App\Models\Receipt;
 use App\Models\RestaurantOrder;
 use App\Models\User;
@@ -77,6 +79,15 @@ class DocumentVerificationService
         // النقد والآجل على إنشاء Receipt مالي مصطنع؛ معرّف المستند نفسه
         // يكفي، والصفحة العامة تقرأ حالته الحية من مصدر القطاع.
         if (preg_match('/^[0-9A-Z]{26}$/', $code)) {
+            // مستندات المشتريات لها ULID مستقل. لا تُنشئ Receipt ماليّاً
+            // مصطنعاً للشراء النقدي/الآجل؛ نتحقق من مصدر المستند نفسه.
+            if ($purchase = PurchaseOrder::whereRaw('UPPER(document_ulid) = ?', [$code])->first()) {
+                return $this->fromPurchaseOrder($purchase);
+            }
+            if ($payment = SupplierLedgerEntry::whereRaw('UPPER(entry_ulid) = ?', [$code])
+                ->where('entry_type', 'payment')->first()) {
+                return $this->fromSupplierPayment($payment);
+            }
             if ($order = RestaurantOrder::whereRaw('UPPER(sale_ulid) = ?', [$code])->first()) {
                 return $this->fromRestaurantOrder($order);
             }
@@ -228,6 +239,34 @@ class DocumentVerificationService
         );
     }
 
+    private function fromPurchaseOrder(PurchaseOrder $order): array
+    {
+        return $this->businessDocument(
+            type: 'purchase_order',
+            label: 'أمر شراء',
+            number: (string) $order->po_number,
+            merchantUserId: (int) $order->merchant_user_id,
+            amount: (string) $order->total_amount,
+            status: (string) $order->status,
+            issuedAt: $order->created_at,
+            source: 'purchase_order',
+        );
+    }
+
+    private function fromSupplierPayment(SupplierLedgerEntry $payment): array
+    {
+        return $this->businessDocument(
+            type: 'supplier_payment',
+            label: 'سند سداد مورد',
+            number: (string) $payment->entry_ulid,
+            merchantUserId: (int) $payment->merchant_user_id,
+            amount: (string) $payment->amount,
+            status: 'completed',
+            issuedAt: $payment->created_at,
+            source: 'supplier_payment',
+        );
+    }
+
     private function fromRestaurantOrder(RestaurantOrder $order): array
     {
         return $this->businessDocument(
@@ -343,6 +382,8 @@ class DocumentVerificationService
     {
         return match ($status) {
             'completed', 'credit_paid', 'paid', 'closed' => 'مكتمل',
+            'approved' => 'معتمد',
+            'partially_received' => 'مستلم جزئياً',
             'credit_unpaid', 'issued' => 'غير مدفوع (آجل)',
             'partially_paid', 'partial', 'partial_paid' => 'مدفوع جزئيّاً',
             'refunded' => 'مسترجَع',
