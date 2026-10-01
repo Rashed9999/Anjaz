@@ -152,10 +152,13 @@ class MerchantFinancialTruthReportService
         }
 
         return [
-            'contract' => 'daily-movement/v1',
-            'columns' => ['cash', 'amial_pay', 'credit'],
+            'contract' => 'daily-movement/v2',
+            'columns' => ['cash', 'amial_pay', 'supplier_credit', 'credit'],
             'column_labels_ar' => [
-                'cash' => 'نقدي', 'amial_pay' => 'أميال باي', 'credit' => 'آجل',
+                'cash' => 'نقدي',
+                'amial_pay' => 'أميال باي',
+                'supplier_credit' => 'رصيد مورد',
+                'credit' => 'آجل',
             ],
             'rows' => $rows,
             'net_cash' => [
@@ -172,14 +175,19 @@ class MerchantFinancialTruthReportService
         array $cells, int $count, string $source): array
     {
         $total = MoneyService::add(
-            MoneyService::add($cells['cash'] ?? '0', $cells['amial_pay'] ?? '0'),
-            $cells['credit'] ?? '0');
+            MoneyService::add(
+                MoneyService::add($cells['cash'] ?? '0', $cells['amial_pay'] ?? '0'),
+                $cells['supplier_credit'] ?? '0'
+            ),
+            $cells['credit'] ?? '0'
+        );
 
         return [
             'code' => $code, 'label_ar' => $label, 'direction' => $direction,
             'available' => true,
             'cash' => $cells['cash'] ?? MoneyService::normalize('0'),
             'amial_pay' => $cells['amial_pay'] ?? MoneyService::normalize('0'),
+            'supplier_credit' => $cells['supplier_credit'] ?? MoneyService::normalize('0'),
             'credit' => $cells['credit'] ?? MoneyService::normalize('0'),
             'total' => $total, 'count' => $count, 'source' => $source,
         ];
@@ -191,7 +199,7 @@ class MerchantFinancialTruthReportService
         return [
             'code' => $code, 'label_ar' => $label, 'direction' => $direction,
             'available' => false, 'unavailable_reason_ar' => $why,
-            'cash' => null, 'amial_pay' => null, 'credit' => null,
+            'cash' => null, 'amial_pay' => null, 'supplier_credit' => null, 'credit' => null,
             'total' => null, 'count' => null, 'source' => null,
         ];
     }
@@ -263,20 +271,29 @@ class MerchantFinancialTruthReportService
         $rows = \App\Models\SupplierLedgerEntry::where('merchant_user_id', $merchant->id)
             ->where('entry_type', 'po_receive')
             ->whereBetween('created_at', [$start, $end])
-            ->get(['amount', 'cash_amount']);
+            ->get(['amount', 'cash_amount', 'supplier_credit_applied']);
 
-        $cash = '0'; $credit = '0';
+        $cash = '0'; $supplierCredit = '0'; $credit = '0';
         foreach ($rows as $r) {
             $amount = (string) $r->amount;
-            // **و`null` تعني «استلامٌ قبل أن يوجد هذا العمود» لا «دُفع
-            // صفر»** — وكان الاستلامُ يومَها آجلاً كلَّه فعلاً.
+            // null تعني استلاماً تاريخياً قبل وجود عمود المصدر.
             $paid = $r->cash_amount === null ? '0' : (string) $r->cash_amount;
+            $applied = (string) ($r->supplier_credit_applied ?? '0');
+            $newDebt = MoneyService::sub(
+                MoneyService::sub($amount, $paid),
+                $applied
+            );
+
             $cash = MoneyService::add($cash, $paid);
-            $credit = MoneyService::add($credit, MoneyService::sub($amount, $paid));
+            $supplierCredit = MoneyService::add($supplierCredit, $applied);
+            $credit = MoneyService::add($credit, $newDebt);
         }
 
         return $this->row('purchase', 'الشراء', 'out', [
-            'cash' => $cash, 'amial_pay' => MoneyService::normalize('0'), 'credit' => $credit,
+            'cash' => $cash,
+            'amial_pay' => MoneyService::normalize('0'),
+            'supplier_credit' => $supplierCredit,
+            'credit' => $credit,
         ], $rows->count(), 'supplier_ledger.po_receive');
     }
 
@@ -293,10 +310,15 @@ class MerchantFinancialTruthReportService
             ->get(['total_amount', 'settlement_type']);
 
         $z = MoneyService::normalize('0');
-        $cells = ['cash' => $z, 'amial_pay' => $z, 'credit' => $z];
+        $cells = [
+            'cash' => $z,
+            'amial_pay' => $z,
+            'supplier_credit' => $z,
+            'credit' => $z,
+        ];
         foreach ($rows as $r) {
             $key = $r->settlement_type === \App\Models\PurchaseReturn::SETTLE_CASH_REFUND
-                ? 'cash' : 'credit';
+                ? 'cash' : 'supplier_credit';
             $cells[$key] = MoneyService::add($cells[$key], (string) $r->total_amount);
         }
 
