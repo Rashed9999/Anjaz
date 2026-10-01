@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MerchantProduct;
 use App\Models\MerchantExpense;
+use App\Models\MerchantAssetDepreciation;
 use App\Models\Retail\MerchantCategory;
 use App\Models\Retail\MerchantBrand;
 use App\Models\Retail\MerchantUnit;
@@ -841,22 +842,76 @@ class CashierService
             ? bcmul(bcdiv($grossProfit, $totalRevenue, 6), '100', 2)
             : '0';
 
+        $cashOperatingExpenses = null;
+        $depreciationExpense = null;
         $operatingExpenses = null;
         if ($branchId === null) {
-            $operatingExpenses = '0';
+            $cashOperatingExpenses = '0';
+            $depreciationExpense = '0';
+            $reportEnd = now()->endOfDay();
+
             $expenses = MerchantExpense::where('merchant_user_id', $merchant->id)
                 ->whereDate('spent_on', '>=', $from->toDateString())
-                ->whereDate('spent_on', '<=', now()->toDateString())
+                ->whereDate('spent_on', '<=', $reportEnd->toDateString())
                 ->get(['amount', 'spent_on']);
 
             foreach ($expenses as $expense) {
                 $amount = (string) $expense->amount;
-                $operatingExpenses = bcadd($operatingExpenses, $amount, 4);
+                $cashOperatingExpenses = bcadd($cashOperatingExpenses, $amount, 4);
                 $day = $expense->spent_on?->format('Y-m-d');
                 if ($day) {
-                    $daily[$day]['expenses'] = bcadd($daily[$day]['expenses'] ?? '0', $amount, 4);
+                    $daily[$day]['cash_expenses'] = bcadd(
+                        $daily[$day]['cash_expenses'] ?? '0', $amount, 4
+                    );
                 }
             }
+
+            // الإهلاك مصروفٌ غير نقدي: لا يخرج من الدرج ولا المحفظة. نقرأ
+            // قيوده الشهرية المثبتة ونوزّع حصة الفترة على أيامها كي يظل
+            // مجموع السلسلة اليومية مساوياً للإجمالي حتى في مدى 7/30/90.
+            $fromMonth = $from->format('Y-m');
+            $toMonth = $reportEnd->format('Y-m');
+            $depreciations = MerchantAssetDepreciation::where('merchant_user_id', $merchant->id)
+                ->where('period', '>=', $fromMonth)
+                ->where('period', '<=', $toMonth)
+                ->get(['period', 'amount']);
+
+            foreach ($depreciations as $dep) {
+                $monthStart = Carbon::createFromFormat('Y-m-d', $dep->period.'-01')->startOfDay();
+                $monthEnd = $monthStart->copy()->endOfMonth()->endOfDay();
+                $overlapStart = $from->copy()->startOfDay()->gt($monthStart)
+                    ? $from->copy()->startOfDay() : $monthStart->copy();
+                $overlapEnd = $reportEnd->lt($monthEnd)
+                    ? $reportEnd->copy() : $monthEnd->copy();
+                if ($overlapEnd->lt($overlapStart)) continue;
+
+                $coveredDays = $overlapStart->copy()->startOfDay()
+                    ->diffInDays($overlapEnd->copy()->startOfDay()) + 1;
+                $monthDays = $monthStart->daysInMonth;
+                $share = bcdiv(
+                    bcmul((string) $dep->amount, (string) $coveredDays, 8),
+                    (string) $monthDays,
+                    4
+                );
+                $depreciationExpense = bcadd($depreciationExpense, $share, 4);
+
+                $baseDaily = bcdiv($share, (string) $coveredDays, 4);
+                $allocated = '0';
+                for ($d = 0; $d < $coveredDays; $d++) {
+                    $date = $overlapStart->copy()->addDays($d)->format('Y-m-d');
+                    $part = $d === $coveredDays - 1
+                        ? bcsub($share, $allocated, 4)
+                        : $baseDaily;
+                    $allocated = bcadd($allocated, $part, 4);
+                    $daily[$date]['depreciation'] = bcadd(
+                        $daily[$date]['depreciation'] ?? '0', $part, 4
+                    );
+                }
+            }
+
+            $operatingExpenses = bcadd(
+                $cashOperatingExpenses, $depreciationExpense, 4
+            );
         }
 
         $netProfit = $operatingExpenses === null
@@ -872,13 +927,18 @@ class CashierService
             $d = now()->subDays($i)->format('Y-m-d');
             $rev = $daily[$d]['revenue'] ?? '0';
             $cst = $daily[$d]['cost'] ?? '0';
-            $expense = $operatingExpenses === null ? null : ($daily[$d]['expenses'] ?? '0');
+            $cashExpense = $operatingExpenses === null ? null : ($daily[$d]['cash_expenses'] ?? '0');
+            $depreciation = $operatingExpenses === null ? null : ($daily[$d]['depreciation'] ?? '0');
+            $expense = $operatingExpenses === null
+                ? null : bcadd($cashExpense, $depreciation, 4);
             $dayGross = bcsub($rev, $cst, 4);
             $series[] = [
                 'date' => $d,
                 'revenue' => $rev,
                 'profit' => $dayGross, // توافق قديم: الربح الإجمالي
                 'gross_profit' => $dayGross,
+                'cash_operating_expenses' => $cashExpense,
+                'depreciation_expense' => $depreciation,
                 'operating_expenses' => $expense,
                 'net_profit' => $expense === null ? null : bcsub($dayGross, $expense, 4),
             ];
@@ -901,10 +961,13 @@ class CashierService
                 'gross_profit' => $grossProfit,
                 'margin_percent' => $grossMargin,
                 'gross_margin_percent' => $grossMargin,
+                'cash_operating_expenses' => $cashOperatingExpenses,
+                'depreciation_expense' => $depreciationExpense,
                 'operating_expenses' => $operatingExpenses,
                 'net_profit' => $netProfit,
                 'net_margin_percent' => $netMargin,
                 'expense_scope' => $branchId === null ? 'merchant' : 'unallocated_for_branch',
+                'depreciation_basis' => $branchId === null ? 'posted_monthly_entries_prorated_to_period' : null,
                 'sales_count' => $sales->count(),
             ],
             'daily' => $series,
