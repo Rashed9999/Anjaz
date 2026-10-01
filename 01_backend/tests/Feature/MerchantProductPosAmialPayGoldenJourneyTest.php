@@ -145,7 +145,8 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         )->assertOk();
 
         $code = null;
-        array_walk_recursive((array) $activation->json(), function ($value) use (&$code) {
+        $activationBody = (array) $activation->json();
+        array_walk_recursive($activationBody, function ($value) use (&$code) {
             if ($code === null && is_string($value) && preg_match('/^\d{8}$/', $value)) {
                 $code = $value;
             }
@@ -169,7 +170,8 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             ])->assertOk();
 
         $token = null;
-        array_walk_recursive((array) $login->json(), function ($value, $key) use (&$token) {
+        $loginBody = (array) $login->json();
+        array_walk_recursive($loginBody, function ($value, $key) use (&$token) {
             if ($token === null
                 && in_array($key, ['access_token', 'token'], true)
                 && is_string($value)
