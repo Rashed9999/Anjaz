@@ -65,6 +65,10 @@ class ProcurementPdfService
             'merchant' => $merchant,
             'merchantLogoData' => app(MerchantLogoService::class)->dataUri($merchant),
             'paymentLabel' => $this->paymentMethod((string) $payment->payment_method),
+            'documentTitle' => $payment->entry_type === 'supplier_refund'
+                ? 'سند تحصيل من مورد' : 'سند سداد مورد',
+            'amountLabel' => $payment->entry_type === 'supplier_refund'
+                ? 'المبلغ المحصل' : 'المبلغ المسدد',
             'verificationUrl' => $qr->url($code),
             'qrDataUri' => $qr->dataUri($code),
         ])->render();
@@ -84,7 +88,9 @@ class ProcurementPdfService
 
     public function supplierPaymentFilename(SupplierLedgerEntry $payment): string
     {
-        return 'supplier_payment_'.$this->safe((string) $payment->entry_ulid).'.pdf';
+        $prefix = $payment->entry_type === 'supplier_refund'
+            ? 'supplier_collection' : 'supplier_payment';
+        return $prefix.'_'.$this->safe((string) $payment->entry_ulid).'.pdf';
     }
 
     private function purchaseStatus(string $status): string
