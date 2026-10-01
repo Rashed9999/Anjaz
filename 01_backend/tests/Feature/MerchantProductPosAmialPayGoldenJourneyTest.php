@@ -267,11 +267,19 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             'بيع أميال الحقيقي لا يعرض الاسترداد إلى محفظة الدافع'
         );
 
+        $saleLine = $sale->lines()->firstOrFail();
+
         $refund = $this->postJson(
             '/api/v1/amial/merchant/cashier/sales/'.$saleUlid.'/refund',
             [
                 'amount' => '1500',
                 'refund_method' => 'wallet',
+                'items' => [[
+                    'sale_item_id' => $saleLine->id,
+                    'quantity' => 2,
+                    'condition' => 'good',
+                    'restock' => true,
+                ]],
                 'reason' => 'مرتجع كامل لاختبار السلسلة',
             ]
         )->assertStatus(201)
@@ -291,6 +299,16 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             $customerBefore,
             (string) EMoney::where('user_id', $customer->id)->value('current_balance'),
             'المرتجع لم يُعد المبلغ إلى محفظة العميل'
+        );
+        $this->assertSame(
+            '10.000',
+            (string) \App\Models\MerchantProduct::whereKey($productId)->value('quantity'),
+            'المرتجع المالي نجح لكن الصنف السليم لم يعد إلى المخزون'
+        );
+        $this->assertSame(
+            '2.000',
+            (string) $saleLine->fresh()->returned_quantity,
+            'سطر البيع لم يُقفل بكمية المرتجع المعتمدة'
         );
 
         // ⑦ المرجع المالي أحادي الاستعمال: فاتورة ثانية بنفس الدفع تُرفض.
@@ -392,11 +410,18 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
 
         // مرتجع نقدي من الكاشير نفسه: لا يلمس المحفظة، لكنه يخرج من
         // الدرج ويجب أن يهبط «المتوقع» في تقرير X فوراً.
+        $cashLine = $cashSale->lines()->firstOrFail();
         $this->postJson(
             '/api/v1/amial/merchant/cashier/sales/'.$cashSale->sale_ulid.'/refund',
             [
                 'amount' => '500',
                 'refund_method' => 'cash',
+                'items' => [[
+                    'sale_item_id' => $cashLine->id,
+                    'quantity' => 1,
+                    'condition' => 'good',
+                    'restock' => true,
+                ]],
                 'reason' => 'مرتجع نقدي تجريبي',
             ]
         )->assertStatus(201)
@@ -416,6 +441,11 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             $walletBefore,
             (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'),
             'المرتجع النقدي حرّك محفظة أميال بدل درج الوردية'
+        );
+        $this->assertSame(
+            '10.000',
+            (string) \App\Models\MerchantProduct::whereKey($productId)->value('quantity'),
+            'الصنف السليم المرتجع نقدياً لم يعد إلى المخزون'
         );
 
         // ② آجل: لا مال إلكتروني يتحرك؛ الذي يزيد هو دفتر دين العميل.
@@ -456,7 +486,7 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             'البيع الآجل حرّك محفظة التاجر قبل التحصيل'
         );
         $this->assertSame(
-            '7.000',
+            '8.000',
             (string) \App\Models\MerchantProduct::whereKey($productId)->value('quantity')
         );
 
