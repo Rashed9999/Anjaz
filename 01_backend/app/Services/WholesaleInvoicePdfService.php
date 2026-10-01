@@ -26,6 +26,8 @@ class WholesaleInvoicePdfService
         // تحميل العلاقات اللازمة
         $invoice->loadMissing(['business', 'customer', 'salesRep', 'items', 'collections']);
         $merchant = Merchant::where('user_id', $invoice->business?->merchant_user_id)->first();
+        $qr = app(DocumentQrService::class);
+        $verificationCode = (string) $invoice->invoice_ulid;
 
         $html = view('pdf.wholesale-invoice', [
             'invoice' => $invoice,
@@ -40,6 +42,8 @@ class WholesaleInvoicePdfService
             'days_overdue' => $invoice->isOverdue() ? $invoice->daysOverdue() : 0,
             'status_label' => $this->statusLabel($invoice->status),
             'status_color' => $this->statusColor($invoice->status),
+            'verificationUrl' => $qr->url($verificationCode),
+            'qrDataUri' => $qr->dataUri($verificationCode),
         ])->render();
 
         return ArabicPdf::render($html, ['format' => 'A4', 'margin' => 0]);
