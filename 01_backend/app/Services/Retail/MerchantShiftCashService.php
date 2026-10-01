@@ -37,6 +37,7 @@ class MerchantShiftCashService
      */
     public const REASON_DIRECTION = [
         'expense' => 'out',           // مصروف
+        'expense_reversal' => 'in',   // عكس مصروف قبل إغلاق الوردية
         'cash_drop' => 'out',         // تسليم للخزنة
         'refund' => 'out',            // استرجاع للعميل
         'supplier_payment' => 'out',  // دفع لمورّد من الدرج
@@ -47,6 +48,7 @@ class MerchantShiftCashService
 
     public const REASON_AR = [
         'expense' => 'مصروف',
+        'expense_reversal' => 'عكس مصروف',
         'cash_drop' => 'تسليم للخزنة',
         'refund' => 'استرجاع',
         'supplier_payment' => 'دفع لمورّد',
