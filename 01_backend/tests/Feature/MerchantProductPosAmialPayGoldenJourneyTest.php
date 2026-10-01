@@ -237,6 +237,14 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         $this->assertNotNull($sale->shift_id,
             'بيع أميال باي لم يُربط بالوردية المفتوحة');
 
+        // والبيع ليس رقماً فقط: الكميّة التي أنشأها المالك (10) يجب أن
+        // تنقص بصنف الكاشير نفسه بعد بيع وحدتين.
+        $this->assertSame(
+            '8.000',
+            (string) \App\Models\MerchantProduct::whereKey($productId)->value('quantity'),
+            'البيعة سُجّلت لكن مخزون المنتج المشترك بين الويب وPOS لم ينقص'
+        );
+
         // تسجيل الفاتورة لا يحرّك المال ثانية؛ الدفع هو الذي حرّكه فعلاً.
         $this->assertSame(
             $merchantAfterPayment,
