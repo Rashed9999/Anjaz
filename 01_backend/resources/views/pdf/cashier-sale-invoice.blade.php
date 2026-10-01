@@ -45,7 +45,15 @@
 
   <table class="party" style="margin-top:12px"><tr>
     <td><strong>العميل</strong><br>{{ $sale->customer_name ?: 'عميل نقدي' }}@if($sale->customer_phone)<br><span class="muted">{{ $sale->customer_phone }}</span>@endif</td>
-    <td><strong>مرجع البيع</strong><br><span class="left">{{ $sale->sale_ulid }}</span></td>
+    <td>
+      <strong>مرجع البيع</strong><br><span class="left">{{ $sale->sale_ulid }}</span>
+      @if(!empty($sale->paid_transaction_id))
+        <br><strong>مرجع دفع أميال</strong><br><span class="left">{{ $sale->paid_transaction_id }}</span>
+      @endif
+      @if(!empty($sale->settled_at))
+        <br><span class="muted">تمت التسوية: {{ $sale->settled_at?->format('Y-m-d H:i') }}</span>
+      @endif
+    </td>
   </tr></table>
 
   <table class="items"><thead><tr>
@@ -64,9 +72,14 @@
   <table class="summary">
     <tr><td>المجموع الفرعي</td><td class="left">{{ number_format((float)$subtotal, 2) }} ر.ي</td></tr>
     @if((float)$discount > 0)<tr><td>الخصم</td><td class="left">- {{ number_format((float)$discount, 2) }} ر.ي</td></tr>@endif
+    @if($sale->payment_method === 'mixed')
+      <tr><td>جزء نقدي</td><td class="left">{{ number_format((float)($sale->cash_amount ?? 0), 2) }} ر.ي</td></tr>
+      <tr><td>جزء أميال باي</td><td class="left">{{ number_format((float)($sale->wallet_amount ?? 0), 2) }} ر.ي</td></tr>
+    @endif
     <tr class="grand"><td>الإجمالي</td><td class="left">{{ number_format((float)$total, 2) }} ر.ي</td></tr>
   </table>
 
   @if($sale->status === 'credit_unpaid')<div class="notice">هذه فاتورة بيع آجل. يبقى السداد والتسوية مرتبطين بسجل الدين ولا تنشئ إعادة طباعة الفاتورة التزاماً جديداً.</div>@endif
+  @if($sale->status === 'pending_payment')<div class="notice">هذه العملية بانتظار إتمام دفع أميال باي، وليست إيصال قبض مكتملًا بعد.</div>@endif
   <div class="footer">فاتورة إلكترونية محفوظة في سجل المنشأة. إعادة التنزيل أو الطباعة لا تنشئ عملية بيع أو دفع جديدة.</div>
 </body></html>
