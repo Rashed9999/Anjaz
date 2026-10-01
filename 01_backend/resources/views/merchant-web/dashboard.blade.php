@@ -1185,7 +1185,33 @@
   }
 
   async function devices(){const data=await api('devices');const p=box('الأجهزة المرخصة');table(p,[['الجهاز',x=>x.display_name],['الفرع',x=>x.branch_name||'—'],['الحالة',x=>x.is_active?'نشط':'غير نشط'],['الجلسات',x=>x.live_sessions??0]],data.devices||[]);const create=box('تفعيل جهاز بيع جديد');hint(create,'ينشئ مالك المنشأة رمزًا مؤقتًا صالحًا لمرة واحدة. أدخله في تطبيق نقطة البيع على الجهاز الجديد.');form(create,[['display_name','اسم الجهاز']], 'إنشاء رمز التفعيل',async d=>{return api('deviceActivation',d)})}
-  async function reports(){const r=(await api('wallet')).report||{};const sales=r.sales||{},methods=sales.by_payment_method||{};grid([['إجمالي المبيعات',money(sales.gross)],['عدد المبيعات',sales.count],['نقدًا',money(methods.cash)],['عبر أميال',money(methods.amial_pay)],['آجل',money(methods.credit)]]);const p=box('الحركة اليومية');hint(p,'التقرير يفصل المبيعات عن التحصيلات وعن حركة المحفظة؛ لا تُحسب التحويلات الشخصية مبيعات.');table(p,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[])}
+  async function reports(){
+    const [financial,profitData]=await Promise.all([
+      api('wallet'),
+      api('profitReport').catch(()=>null)
+    ]);
+    const r=financial.report||{},sales=r.sales||{},methods=sales.by_payment_method||{};
+    const metrics=[['إجمالي المبيعات',money(sales.gross)],['عدد المبيعات',sales.count],['نقدًا',money(methods.cash)],['عبر أميال',money(methods.amial_pay)],['آجل',money(methods.credit)]];
+    if(profitData?.totals){
+      const t=profitData.totals;
+      metrics.push(['الربح الإجمالي',money(t.gross_profit??t.profit)]);
+      if(t.operating_expenses!==null&&t.operating_expenses!==undefined)metrics.push(['مصروفات التشغيل',money(t.operating_expenses)]);
+      if(t.net_profit!==null&&t.net_profit!==undefined)metrics.push(['صافي الربح',money(t.net_profit)]);
+    }
+    grid(metrics);
+    if(profitData?.totals){
+      const p=box('الربحية');
+      hint(p,'الربح الإجمالي = المبيعات ناقص تكلفة البضاعة المحفوظة لحظة البيع. صافي الربح يخصم المصروفات التشغيلية المسجلة، ولا يعامل شراء أصل ثابت كمصروف.');
+      table(p,[['المؤشر',x=>x.label],['القيمة',x=>money(x.value)]],[
+        {label:'الربح الإجمالي',value:profitData.totals.gross_profit??profitData.totals.profit},
+        {label:'المصروفات التشغيلية',value:profitData.totals.operating_expenses},
+        {label:'صافي الربح',value:profitData.totals.net_profit},
+      ]);
+    }
+    const p=box('الحركة اليومية');
+    hint(p,'التقرير يفصل المبيعات عن التحصيلات وعن حركة المحفظة؛ لا تُحسب التحويلات الشخصية مبيعات.');
+    table(p,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[]);
+  }
   async function settings(){const data=await api('receipts'),s=data.settings||{};const p=box('هوية فاتورة منشأتك');form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});hint(p,'إعدادات الفاتورة موحدة بين الويب وكل نقاط البيع. صلاحية طباعة السند متاحة بحسب خصائص القطاع.')}
   const pages={overview,sector,sales,wallet,debts,products,suppliers,expenses,branches,posSetup,staff,devices,reports,settings,plans};
   async function load(tab){if(stopScanner){stopScanner();stopScanner=null;}active=tab;document.getElementById('page-title').textContent=titles[tab]||'بوابة المنشأة';document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();if(!pages[tab])throw Error('هذا القسم غير معروف');await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
