@@ -1133,5 +1133,9 @@
   "currency_yer_amount": "@amount ر.ي",
   "merchant_cashier_name": "كاشير: @name",
   "common_today_time": "اليوم @time",
-  "common_yesterday_time": "أمس @time"
+  "common_yesterday_time": "أمس @time",
+  "document_verify_invoice": "تحقق من أصالة الفاتورة",
+  "receipt_tendered_amount": "المبلغ المستلم",
+  "receipt_change": "الباقي",
+  "receipt_balance_due": "المتبقي"
 }
