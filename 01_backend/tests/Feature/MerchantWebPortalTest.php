@@ -304,6 +304,10 @@ class MerchantWebPortalTest extends TestCase
             $this->assertContains('merchant.web', $route->gatherMiddleware());
         }
         foreach (['products.create' => 'capability:products',
+                  'suppliers.store' => 'capability:suppliers',
+                  'purchase-orders.store' => 'capability:purchases',
+                  'purchase-returns.store' => 'capability:purchases',
+                  'expenses.store' => 'capability:expenses',
                   'branches.create' => 'capability:branches',
                   'staff.create' => 'capability:employees',
                   'devices.activate' => 'capability:multi_pos'] as $endpoint => $cap) {
@@ -330,6 +334,80 @@ class MerchantWebPortalTest extends TestCase
         $this->getJson('/merchant/data/sector/products')
             ->assertStatus(402)
             ->assertJsonPath('code', 'SECTOR_CAPABILITY_DENIED');
+    }
+
+    /**
+     * المالك Web-only يجب أن ينفذ رحلة المورد والمشتريات من البوابة نفسها.
+     * المثال المحاسبي: شراء بـ 80,000 ودفع 30,000 فوراً = دين مورد 50,000.
+     */
+    public function test_owner_web_procurement_records_cash_and_supplier_debt_without_flutter(): void
+    {
+        $owner = $this->owner();
+
+        $this->actingAs($owner, 'merchant_web')
+            ->get('/merchant')
+            ->assertOk()
+            ->assertSee('الموردون والمشتريات')
+            ->assertSee('المصروفات')
+            ->assertSee('async function suppliers()', false)
+            ->assertSee('async function expenses()', false);
+
+        $supplier = $this->withHeader('Idempotency-Key', 'mw-supplier-1')
+            ->postJson('/merchant/data/suppliers', [
+                'name' => 'مورد الأثاث',
+                'phone' => '967777000001',
+            ])
+            ->assertCreated()
+            ->json('meta.supplier');
+
+        $order = $this->withHeader('Idempotency-Key', 'mw-po-1')
+            ->postJson('/merchant/data/purchase-orders', [
+                'supplier_id' => $supplier['id'],
+                'items' => [[
+                    'name' => 'أثاث مكتبي',
+                    'quantity' => '1',
+                    'unit_cost' => '80000',
+                ]],
+            ])
+            ->assertCreated()
+            ->json('meta.order');
+
+        $this->withHeader('Idempotency-Key', 'mw-po-approve-1')
+            ->postJson('/merchant/data/purchase-orders/'.$order['id'].'/approve')
+            ->assertOk();
+
+        $item = $this->getJson('/merchant/data/purchase-orders/'.$order['id'])
+            ->assertOk()
+            ->json('meta.order.items.0');
+
+        $this->withHeader('Idempotency-Key', 'mw-po-receive-1')
+            ->postJson('/merchant/data/purchase-orders/'.$order['id'].'/receive', [
+                'items' => [[
+                    'item_id' => $item['id'],
+                    'received_quantity' => '1',
+                ]],
+                'paid_now' => '30000',
+            ])
+            ->assertOk()
+            ->assertJsonPath('meta.order.supplier.current_debt', '50000.0000');
+
+        $this->getJson('/merchant/data/suppliers/'.$supplier['id'])
+            ->assertOk()
+            ->assertJsonPath('meta.supplier.current_debt', '50000.0000')
+            ->assertJsonCount(2, 'meta.ledger');
+
+        $this->withHeader('Idempotency-Key', 'mw-expense-1')
+            ->postJson('/merchant/data/expenses', [
+                'title' => 'كهرباء الفرع',
+                'amount' => '12000',
+                'category' => 'utilities',
+                'spent_on' => now()->toDateString(),
+            ])
+            ->assertCreated();
+
+        $this->getJson('/merchant/data/expenses')
+            ->assertOk()
+            ->assertJsonPath('meta.total', '12000.0000');
     }
 
     public function test_bearer_token_cannot_change_the_merchant_web_entitlement_identity(): void
