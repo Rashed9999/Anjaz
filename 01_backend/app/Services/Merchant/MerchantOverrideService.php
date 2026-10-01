@@ -52,11 +52,33 @@ class MerchantOverrideService
         $merchantId = $this->perm->merchantIdFor($staff);
         $now = now();
 
+        $normalizedAmount = $amount === null
+            ? null
+            : \App\Services\MoneyService::normalize($amount);
+
+        $existing = DB::table('merchant_permission_overrides')
+            ->where('merchant_user_id', $merchantId)
+            ->where('requested_by_user_id', $staff->id)
+            ->where('permission_code', $permission)
+            ->where('status', 'pending')
+            ->where('expires_at', '>', $now)
+            ->when(
+                $normalizedAmount === null,
+                fn ($q) => $q->whereNull('max_amount'),
+                fn ($q) => $q->where('max_amount', $normalizedAmount),
+            )
+            ->orderByDesc('id')
+            ->value('id');
+
+        if ($existing !== null) {
+            return (int) $existing;
+        }
+
         $id = (int) DB::table('merchant_permission_overrides')->insertGetId([
             'merchant_user_id' => $merchantId,
             'requested_by_user_id' => $staff->id,
             'permission_code' => $permission,
-            'max_amount' => $amount,
+            'max_amount' => $normalizedAmount,
             'reason' => mb_substr($reason, 0, 1000),
             'status' => 'pending',
             'expires_at' => $now->copy()->addHours(self::EXPIRY_HOURS),
@@ -150,16 +172,34 @@ class MerchantOverrideService
             throw new DomainException('سببُ الرفض مطلوب');
         }
 
-        $affected = DB::table('merchant_permission_overrides')
-            ->where('id', $id)->where('status', 'pending')
-            ->where('requested_by_user_id', '!=', $manager->id)
-            ->update(['status' => 'rejected', 'granted_by_user_id' => $manager->id,
-                'decision_note' => mb_substr($note, 0, 500),
-                'decided_at' => now(), 'updated_at' => now()]);
+        DB::transaction(function () use ($manager, $id, $note): void {
+            $row = DB::table('merchant_permission_overrides')
+                ->where('id', $id)->lockForUpdate()->first();
 
-        if ($affected === 0) {
-            throw new DomainException('الطلب لم يعد معلَّقاً');
-        }
+            if ($row === null) {
+                throw new DomainException('الطلب غير موجود');
+            }
+            if ((int) $row->requested_by_user_id === (int) $manager->id) {
+                throw new DomainException('لا يرفض أحدٌ طلبَ نفسِه');
+            }
+            if ((int) $this->perm->merchantIdFor($manager) !== (int) $row->merchant_user_id) {
+                throw new DomainException('الطلب يخصّ منشأةً أخرى');
+            }
+            if (! $this->grantsWithoutApproval($manager, $row->permission_code)) {
+                throw new DomainException('لا تملك سلطةَ القرار في هذا الإجراء');
+            }
+            if ($row->status !== 'pending') {
+                throw new DomainException('الطلب لم يعد معلَّقاً');
+            }
+
+            DB::table('merchant_permission_overrides')->where('id', $id)->update([
+                'status' => 'rejected',
+                'granted_by_user_id' => $manager->id,
+                'decision_note' => mb_substr($note, 0, 500),
+                'decided_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
 
         $this->audit->record([
             'actor_type' => 'merchant_staff',
