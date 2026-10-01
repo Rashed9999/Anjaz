@@ -56,7 +56,7 @@ void main() {
     final out = <String>{};
 
     for (final m in RegExp(
-      r"return const (PosEmployeeHomeScreen|WebPortalNoticeScreen)\\b",
+      r"return const (PosEmployeeHomeScreen|WebPortalNoticeScreen)\b",
     ).allMatches(src)) {
       out.add(m.group(1)!);
     }
