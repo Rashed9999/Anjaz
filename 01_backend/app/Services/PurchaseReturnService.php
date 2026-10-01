@@ -82,6 +82,21 @@ class PurchaseReturnService
             }
         }
 
+        if ($settlement !== PurchaseReturn::SETTLE_CASH_REFUND
+            && ! empty($opts['cashier_shift_id'])) {
+            throw new DomainException('اختيار درج نقد مسموح فقط عند استرداد المورد نقداً');
+        }
+
+        $seenPoItems = [];
+        foreach ($lines as $raw) {
+            if (empty($raw['purchase_order_item_id'])) continue;
+            $key = (int) $raw['purchase_order_item_id'];
+            if (isset($seenPoItems[$key])) {
+                throw new DomainException('لا تكرر بند أمر الشراء نفسه داخل مرتجع واحد');
+            }
+            $seenPoItems[$key] = true;
+        }
+
         return DB::transaction(function () use ($merchant, $supplier, $po, $lines, $opts, $settlement) {
             $location = ! empty($opts['location_id'])
                 ? MerchantLocation::where('id', (int) $opts['location_id'])
@@ -97,6 +112,9 @@ class PurchaseReturnService
                 'location_id' => $location->id,
                 'status' => 'pending',
                 'settlement_type' => $settlement,
+                'cashier_shift_id' => $settlement === PurchaseReturn::SETTLE_CASH_REFUND
+                    && ! empty($opts['cashier_shift_id'])
+                    ? (int) $opts['cashier_shift_id'] : null,
                 'total_amount' => '0',
                 'reason' => $opts['reason'] ?? null,
                 'created_by' => $opts['actor_id'] ?? $merchant->id,
@@ -194,11 +212,20 @@ class PurchaseReturnService
                                 "«{$poItem->name}» رُدّ بالكامل قبل اعتماد هذا المرتجع");
                         }
                         $poItem->update(['returned_quantity' => $newReturned]);
+
+                        // الأصل الثابت لا يخرج من مخزون البيع. نخفض أساسه
+                        // الجاري بسجل adjustment مستقل ونبقي تكلفة الاقتناء
+                        // الأصلية كما كانت يوم الاستلام.
+                        app(\App\Services\MerchantFixedAssetService::class)
+                            ->applySupplierReturn($actor, $return, $item, $poItem);
                     }
                 }
 
                 // ② البضاعةُ تخرج من الرفّ — **بسببها المعرَّف**.
-                if ($item->product_id) {
+                $returnPoItem = $item->purchase_order_item_id
+                    ? PurchaseOrderItem::find($item->purchase_order_item_id) : null;
+                if ($item->product_id
+                    && (string) ($returnPoItem?->item_type ?? 'inventory') === 'inventory') {
                     $product = MerchantProduct::find($item->product_id);
                     if ($product) {
                         $this->stock->move(
@@ -216,7 +243,7 @@ class PurchaseReturnService
                 }
             }
 
-            $this->settle($return);
+            $this->settle($return, $actor);
 
             $return->update([
                 'status' => 'approved',
@@ -254,7 +281,7 @@ class PurchaseReturnService
      * **وفي الحالتين يُكتب سطرُ دفتر** — فمرتجعٌ بلا أثرٍ في كشف المورد
      * يجعل الكشفَ يناقض المخزون.
      */
-    private function settle(PurchaseReturn $return): void
+    private function settle(PurchaseReturn $return, User $actor): void
     {
         $supplier = Supplier::where('id', $return->supplier_id)
             ->lockForUpdate()->first();
@@ -265,17 +292,46 @@ class PurchaseReturnService
         $amount = (string) $return->total_amount;
 
         if ($return->settlement_type === PurchaseReturn::SETTLE_CASH_REFUND) {
+            $shift = null;
+            if ($return->cashier_shift_id) {
+                $shift = \App\Models\CashierShift::whereKey($return->cashier_shift_id)
+                    ->where('merchant_user_id', $return->merchant_user_id)
+                    ->where('status', 'open')
+                    ->lockForUpdate()->first();
+
+                if (! $shift) {
+                    throw new DomainException(
+                        'وردية استرداد المورد أُغلقت أو غير موجودة؛ اختر نقداً خارجياً أو أنشئ مرتجعاً جديداً'
+                    );
+                }
+
+                app(\App\Services\Retail\MerchantShiftCashService::class)->record(
+                    \App\Models\Retail\ShiftCashMovement::CASHIER,
+                    $shift->id,
+                    $actor,
+                    'in',
+                    'supplier_refund',
+                    $amount,
+                    'استرداد نقدي من المورد',
+                    $return->return_ulid,
+                    $return->merchant_user_id,
+                );
+            }
+
             SupplierLedgerEntry::create([
                 'entry_ulid' => (string) Str::ulid(),
                 'supplier_id' => $supplier->id,
-                'payment_method' => 'cash_external',
+                'payment_method' => $shift ? 'cash_shift' : 'cash_external',
                 'merchant_user_id' => $return->merchant_user_id,
                 'entry_type' => 'po_return',
                 'amount' => $amount,
                 'cash_amount' => $amount,
                 'debt_after' => (string) $supplier->current_debt,
                 'reference' => $return->return_ulid,
-                'note' => 'مرتجع شراء — استُرِدّ نقداً، ولا يمسّ الدين',
+                'cashier_shift_id' => $shift?->id,
+                'note' => $shift
+                    ? 'مرتجع شراء — استُرِدّ في درج الوردية #'.$shift->id.'، ولا يمسّ الدين'
+                    : 'مرتجع شراء — استُرِدّ نقداً خارج نقاط البيع، ولا يمسّ الدين',
             ]);
 
             return;
