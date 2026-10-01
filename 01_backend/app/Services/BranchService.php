@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Exceptions\UsageLimitExceededException;
 use App\Models\Branch;
+use App\Models\CashierShift;
+use App\Models\Merchant\PosDevice;
+use App\Models\PosUser;
 use App\Models\MerchantProfile;
 use App\Models\User;
 use App\Support\Access\AccessConstants as A;
@@ -67,16 +70,52 @@ class BranchService
         $plan = $this->planFor($merchant);
         if (A::maxBranches($plan) === 0) return null;
 
-        $existing = Branch::where('merchant_user_id', $merchant->id)
-            ->where('is_default', true)->first();
-        if ($existing) return $existing;
+        return DB::transaction(function () use ($merchant) {
+            $branch = Branch::where('merchant_user_id', $merchant->id)
+                ->where('is_default', true)
+                ->lockForUpdate()
+                ->first();
 
-        return Branch::create([
-            'merchant_user_id' => $merchant->id,
-            'name' => 'الفرع الرئيسي',
-            'is_active' => true,
-            'is_default' => true,
-        ]);
+            if ($branch === null) {
+                $branch = Branch::create([
+                    'merchant_user_id' => $merchant->id,
+                    'name' => 'الفرع الرئيسي',
+                    'is_active' => true,
+                    'is_default' => true,
+                ]);
+            }
+
+            // ترقية تاجر من «أعمال» (بلا فروع) إلى «مؤسسة» لا يجوز أن
+            // تقطع يومه التشغيلي. قبل وجود الفروع كانت null تعني المنشأة
+            // الرئيسية؛ بعد إنشاء الفرع الافتراضي نحول *الحالة الحية*
+            // إلى المعنى الصريح نفسه:
+            //
+            //   موظف POS بلا فرع  -> الفرع الرئيسي
+            //   جهاز POS بلا فرع  -> الفرع الرئيسي
+            //   وردية مفتوحة      -> الفرع الرئيسي
+            //
+            // لا نعيد كتابة التاريخ المالي كله داخل ترقية الاشتراك؛
+            // المبيعات القديمة ذات branch_id=null تبقى «إرث المنشأة
+            // الرئيسية»، لكن الوردية الجارية تستمر بلا مطالبة الكاشير
+            // بفتح وردية ثانية ولا يصبح الجهاز فجأة «بلا فرع».
+            PosUser::where('merchant_user_id', $merchant->id)
+                ->where('is_active', true)
+                ->whereNull('branch_id')
+                ->update(['branch_id' => $branch->id]);
+
+            PosDevice::where('merchant_user_id', $merchant->id)
+                ->where('is_active', true)
+                ->whereNull('revoked_at')
+                ->whereNull('branch_id')
+                ->update(['branch_id' => $branch->id]);
+
+            CashierShift::where('merchant_user_id', $merchant->id)
+                ->where('status', 'open')
+                ->whereNull('branch_id')
+                ->update(['branch_id' => $branch->id]);
+
+            return $branch->fresh();
+        });
     }
 
     public function update(Branch $branch, array $data): Branch
