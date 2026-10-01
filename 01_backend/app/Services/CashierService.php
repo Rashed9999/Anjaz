@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MerchantProduct;
+use App\Models\MerchantExpense;
 use App\Models\Retail\MerchantCategory;
 use App\Models\Retail\MerchantBrand;
 use App\Models\Retail\MerchantUnit;
@@ -830,10 +831,40 @@ class CashierService
             }
         }
 
-        $profit = bcsub($totalRevenue, $totalCost, 4);
-        $margin = bccomp($totalRevenue, '0', 4) > 0
-            ? bcmul(bcdiv($profit, $totalRevenue, 6), '100', 2)
+        // **الربح التشغيلي ليس هامشَ البضاعة فقط.** كانت شاشة
+        // المصروفات تقول إن الإيجار والرواتب والكهرباء تُخصم من الربح،
+        // بينما هذا التقرير لا يقرأ merchant_expenses إطلاقاً. نُبقي
+        // `profit` مرادفاً للربح الإجمالي للتوافق، ونضيف صافي الربح
+        // صراحةً. وعند تقرير فرع لا نخترع توزيعاً لمصروف لم يُنسب لفرع.
+        $grossProfit = bcsub($totalRevenue, $totalCost, 4);
+        $grossMargin = bccomp($totalRevenue, '0', 4) > 0
+            ? bcmul(bcdiv($grossProfit, $totalRevenue, 6), '100', 2)
             : '0';
+
+        $operatingExpenses = null;
+        if ($branchId === null) {
+            $operatingExpenses = '0';
+            $expenses = MerchantExpense::where('merchant_user_id', $merchant->id)
+                ->whereDate('spent_on', '>=', $from->toDateString())
+                ->whereDate('spent_on', '<=', now()->toDateString())
+                ->get(['amount', 'spent_on']);
+
+            foreach ($expenses as $expense) {
+                $amount = (string) $expense->amount;
+                $operatingExpenses = bcadd($operatingExpenses, $amount, 4);
+                $day = $expense->spent_on?->format('Y-m-d');
+                if ($day) {
+                    $daily[$day]['expenses'] = bcadd($daily[$day]['expenses'] ?? '0', $amount, 4);
+                }
+            }
+        }
+
+        $netProfit = $operatingExpenses === null
+            ? null
+            : bcsub($grossProfit, $operatingExpenses, 4);
+        $netMargin = $netProfit !== null && bccomp($totalRevenue, '0', 4) > 0
+            ? bcmul(bcdiv($netProfit, $totalRevenue, 6), '100', 2)
+            : ($netProfit === null ? null : '0');
 
         // سلسلة يومية كاملة (تشمل أيام الصفر) للأشرطة
         $series = [];
@@ -841,10 +872,15 @@ class CashierService
             $d = now()->subDays($i)->format('Y-m-d');
             $rev = $daily[$d]['revenue'] ?? '0';
             $cst = $daily[$d]['cost'] ?? '0';
+            $expense = $operatingExpenses === null ? null : ($daily[$d]['expenses'] ?? '0');
+            $dayGross = bcsub($rev, $cst, 4);
             $series[] = [
                 'date' => $d,
                 'revenue' => $rev,
-                'profit' => bcsub($rev, $cst, 4),
+                'profit' => $dayGross, // توافق قديم: الربح الإجمالي
+                'gross_profit' => $dayGross,
+                'operating_expenses' => $expense,
+                'net_profit' => $expense === null ? null : bcsub($dayGross, $expense, 4),
             ];
         }
 
@@ -859,8 +895,16 @@ class CashierService
             'totals' => [
                 'revenue' => $totalRevenue,
                 'cost' => $totalCost,
-                'profit' => $profit,
-                'margin_percent' => $margin,
+                // `profit` و`margin_percent` محفوظان للتوافق مع العملاء
+                // القديمة، ومعناهما الآن موثّق: ربح إجمالي قبل المصروفات.
+                'profit' => $grossProfit,
+                'gross_profit' => $grossProfit,
+                'margin_percent' => $grossMargin,
+                'gross_margin_percent' => $grossMargin,
+                'operating_expenses' => $operatingExpenses,
+                'net_profit' => $netProfit,
+                'net_margin_percent' => $netMargin,
+                'expense_scope' => $branchId === null ? 'merchant' : 'unallocated_for_branch',
                 'sales_count' => $sales->count(),
             ],
             'daily' => $series,
