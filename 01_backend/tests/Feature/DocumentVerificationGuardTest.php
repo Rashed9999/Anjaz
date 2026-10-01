@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\FuelSale;
 use App\Models\Merchant;
 use App\Models\MerchantSale;
+use App\Models\PharmacySale;
 use App\Models\Receipt;
+use App\Models\RestaurantOrder;
 use App\Models\User;
 use App\Models\WholesaleBusiness;
 use App\Models\WholesaleInvoice;
@@ -286,6 +288,70 @@ class DocumentVerificationGuardTest extends TestCase
             'الإيصال الحراري لا يرسم QR فعلياً');
         $this->assertStringContainsString('verificationUrl', $thermal,
             'الإيصال الحراري لا يحمل رابط التحقق');
+    }
+
+    /** @test */
+    public function restaurant_sale_ulid_keeps_its_restaurant_identity(): void
+    {
+        $m = $this->merchant('مطعم أميال');
+        $ulid = (string) Str::ulid();
+
+        MerchantSale::create([
+            'sale_ulid' => $ulid,
+            'merchant_user_id' => $m->id,
+            'total_amount' => '3200',
+            'payment_method' => 'cash',
+            'status' => 'completed',
+            'items' => [],
+        ]);
+
+        RestaurantOrder::create([
+            'merchant_user_id' => $m->id,
+            'order_no' => 'REST-001',
+            'status' => 'closed',
+            'items' => [],
+            'subtotal' => '3200',
+            'total' => '3200',
+            'sale_ulid' => $ulid,
+            'closed_at' => now(),
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $r = $this->verifier()->verify($ulid);
+
+        $this->assertSame('restaurant_order', $r['source'],
+            'ULID المطعم موجود أيضاً في merchant_sales؛ يجب أن تبقى هوية المستند «مطعم»');
+        $this->assertSame('فاتورة مطعم', $r['doc_type_label']);
+        $this->assertSame('مطعم أميال', $r['issuer']);
+    }
+
+    /** @test */
+    public function a_sector_wallet_receipt_resolves_the_real_sector_issuer(): void
+    {
+        $m = $this->merchant('صيدلية أميال');
+        $sale = PharmacySale::create([
+            'sale_ulid' => (string) Str::ulid(),
+            'merchant_user_id' => $m->id,
+            'pharmacy_id' => 9001,
+            'subtotal' => '1800',
+            'discount_amount' => '0',
+            'total_amount' => '1800',
+            'payment_method' => 'amial_pay',
+            'status' => 'completed',
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $receipt = $this->receipt([
+            'reference_type' => 'pharmacy_sale',
+            'reference_id' => $sale->id,
+        ]);
+
+        $r = $this->verifier()->verify($receipt->verification_code);
+
+        $this->assertSame('صيدلية أميال', $r['issuer'],
+            'إيصال الصيدلية نُسب إلى أميال أو إلى MerchantSale يحمل id نفسه');
+        $this->assertSame('فاتورة صيدلية', $r['doc_type_label']);
+        $this->assertSame('مكتمل', $r['state_label']);
     }
 
     /** @test */
