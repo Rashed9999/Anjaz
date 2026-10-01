@@ -17,6 +17,7 @@ import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
 import 'package:amial_pay/features/printer/screens/printer_settings_screen.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-POS-003 / AMIAL-RECEIPT-SETTINGS-001 — «تم التحصيل».
 ///
@@ -112,6 +113,8 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
       };
 
   String get _ref => '${widget.sale['sale_ulid'] ?? widget.sale['id'] ?? ''}';
+  String get _verificationUrl => '${AppConstants.baseUrl}/v/$_ref';
+  DateTime get _meccaNow => DateTime.now().toUtc().add(const Duration(hours: 3));
 
   /// AMIAL-MULTI-CURRENCY-003 — علامةُ عملة البيعة، والأساسُ افتراضاً.
   String get _sym => widget.currencySymbol ?? 'ر.ي';
@@ -124,7 +127,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
       .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?:\.|$))'), (m) => '${m[1]},');
 
   String _now() {
-    final d = DateTime.now();
+    final d = _meccaNow;
     return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}  •  '
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
@@ -171,22 +174,28 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
         final discount = double.tryParse('${widget.sale['discount_amount'] ?? 0}') ?? 0;
         final subtotal = double.tryParse('${widget.sale['subtotal'] ?? ''}') ?? (widget.total + discount);
         final isCredit = widget.method == 'credit';
+        final tendered = double.tryParse('${widget.sale['amount_received'] ?? ''}');
+        final change = tendered == null ? null : (tendered - widget.total > 0 ? tendered - widget.total : 0);
         final r = await svc.printSale(
           settings: _settings.effective,
           lines: _thermalLines(),
           total: widget.total,
           subtotal: subtotal,
           discount: discount,
-          paid: isCredit ? 0 : widget.total,
+          paid: isCredit ? 0 : (widget.method == 'cash' && tendered != null ? tendered : widget.total),
+          change: widget.method == 'cash' ? change : null,
           balanceDue: isCredit ? widget.total : 0,
           contextLines: [
             'طريقة الدفع: $_methodLabel',
             if ((widget.customerName ?? widget.customerPhone ?? '').isNotEmpty)
               'العميل: ${widget.customerName ?? widget.customerPhone}',
             'مرجع البيع: $_ref',
+            if ('${widget.sale['paid_transaction_id'] ?? ''}'.isNotEmpty)
+              'مرجع أميال: ${widget.sale['paid_transaction_id']}',
           ],
           invoiceNo: _ref,
-          dateTime: DateTime.now(),
+          dateTime: _meccaNow,
+          verificationUrl: _verificationUrl,
         );
         if (mounted) _snack(r.message, ok: r.ok);
       } else {
