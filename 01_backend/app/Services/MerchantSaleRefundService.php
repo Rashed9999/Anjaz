@@ -9,7 +9,9 @@ use App\Models\MerchantRefund;
 use App\Models\MerchantSale;
 use App\Models\PaymentRequest;
 use App\Services\Retail\MerchantShiftCashService;
+use App\Services\Retail\SaleReturnService;
 use App\Models\Retail\ShiftCashMovement;
+use App\Models\Retail\SaleReturn;
 use App\Models\PosUser;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -49,8 +51,9 @@ class MerchantSaleRefundService
     /**
      * تنفيذ مرتجع.
      *
-     * @param array $items عناصر مرتجعة [{name, qty, price, product_id?}]
-     *                     (مطابقة لشكل items في merchant_sales)
+     * @param array $items أصناف مرتجعة موثقة من أسطر البيع:
+     *                     [{sale_item_id, quantity, condition, restock}]
+     *                     والقائمة الفارغة تعني استرداد مبلغ بلا حركة مخزون.
      */
     public function refund(
         User $merchant,
@@ -136,12 +139,23 @@ class MerchantSaleRefundService
                 'zone_code' => $merchant->zone_code ?? 'SOUTH',
             ]);
 
-            // 6) إن لم يحتج موافقة، نفّذ مالياً فوراً
+            // 6) إن كان المرتجع سطرياً نربط البضاعة بالمرتجع المالي نفسه.
+            // يبقى طلب البضاعة pending إن كان المال يحتاج موافقة، ويُعتمد
+            // معه في نفس معاملة قاعدة البيانات عند الاعتماد.
+            $goodsReturn = $this->prepareGoodsReturn($refund, $sale, $merchant);
+
+            // 7) إن لم يحتج موافقة، نفّذ المال والبضاعة معاً.
             if ($status === 'completed') {
                 $this->executeMoneyMovement($refund, $sale, $merchant);
+                if ($goodsReturn !== null) {
+                    app(SaleReturnService::class)->approve(
+                        $this->refundActor($refund, $merchant),
+                        $goodsReturn,
+                    );
+                }
             }
 
-            // 7) إشعارات (best-effort)
+            // 8) إشعارات (best-effort)
             $this->notifyOfRefund($refund, $merchant);
 
             return $refund->fresh();
@@ -166,6 +180,19 @@ class MerchantSaleRefundService
             ]);
 
             $this->executeMoneyMovement($refund, $sale, $merchant);
+
+            $goodsReturn = SaleReturn::where('refund_ulid', $refund->refund_ulid)
+                ->where('merchant_user_id', $merchant->id)
+                ->where('status', 'pending')
+                ->first();
+            if ($goodsReturn !== null) {
+                $admin = User::find($adminId);
+                if (! $admin) {
+                    throw new RuntimeException('حساب الموظف الإداري الذي اعتمد المرتجع غير موجود');
+                }
+                app(SaleReturnService::class)->approve($admin, $goodsReturn);
+            }
+
             $this->notifyOfRefund($refund->fresh(), $merchant);
 
             return $refund->fresh();
@@ -178,16 +205,123 @@ class MerchantSaleRefundService
         if ($refund->status !== 'pending_approval') {
             throw new RuntimeException('هذا المرتجع ليس بانتظار موافقة');
         }
-        $refund->update([
-            'status' => 'rejected',
-            'approved_by_admin_id' => $adminId,
-            'approved_at' => now(),
-            'reason' => $reason ?? $refund->reason,
-        ]);
-        return $refund->fresh();
+
+        return DB::transaction(function () use ($refund, $adminId, $reason) {
+            $admin = User::find($adminId);
+            if (! $admin) {
+                throw new RuntimeException('حساب الموظف الإداري الذي رفض المرتجع غير موجود');
+            }
+
+            $refund->update([
+                'status' => 'rejected',
+                'approved_by_admin_id' => $adminId,
+                'approved_at' => now(),
+                'reason' => $reason ?? $refund->reason,
+            ]);
+
+            $goodsReturn = SaleReturn::where('refund_ulid', $refund->refund_ulid)
+                ->where('merchant_user_id', $refund->merchant_user_id)
+                ->where('status', 'pending')
+                ->first();
+            if ($goodsReturn !== null) {
+                app(SaleReturnService::class)->reject(
+                    $admin, $goodsReturn, $reason ?? (string) $refund->reason
+                );
+            }
+
+            return $refund->fresh();
+        });
     }
 
     // ============ Private ============
+
+    /**
+     * جهّز حركة البضاعة للمرتجع السطري واربطها بالمرتجع المالي.
+     *
+     * لا نعتمد أسماء/أسعار أرسلها الهاتف؛ sale_item_id هو المرجع الحقيقي.
+     * كما يجب أن يساوي مجموع السطور مبلغَ الاسترداد، وإلا تنفصل حقيقة
+     * المال عن حقيقة المخزون.
+     */
+    private function prepareGoodsReturn(
+        MerchantRefund $refund,
+        MerchantSale $sale,
+        User $merchant,
+    ): ?SaleReturn {
+        $items = is_array($refund->items) ? $refund->items : [];
+        if ($items === []) {
+            return null;
+        }
+
+        $existing = SaleReturn::where('refund_ulid', $refund->refund_ulid)
+            ->where('merchant_user_id', $merchant->id)
+            ->first();
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $lines = [];
+        foreach ($items as $item) {
+            $lineId = (int) ($item['sale_item_id'] ?? 0);
+            $quantity = (string) ($item['quantity'] ?? 0);
+            if ($lineId <= 0 || bccomp($quantity, '0', 3) <= 0) {
+                throw new InvalidArgumentException(
+                    'كل صنف مرتجع يحتاج سطر البيع الأصلي وكمية موجبة'
+                );
+            }
+
+            $condition = (string) ($item['condition'] ?? 'good');
+            $lines[] = [
+                'sale_item_id' => $lineId,
+                'quantity' => $quantity,
+                'condition' => $condition,
+                'restock' => $condition === 'good'
+                    ? (bool) ($item['restock'] ?? true)
+                    : false,
+            ];
+        }
+
+        $return = app(SaleReturnService::class)->create(
+            $merchant,
+            $sale->sale_ulid,
+            $lines,
+            [
+                'refund_method' => $refund->refund_method,
+                'refund_ulid' => $refund->refund_ulid,
+                'actor_id' => $this->refundActor($refund, $merchant)->id,
+                'reason' => $refund->reason,
+            ],
+        );
+
+        if (MoneyService::compare(
+            (string) $return->total_amount,
+            (string) $refund->refund_amount,
+        ) !== 0) {
+            throw new InvalidArgumentException(
+                'مبلغ الاسترداد لا يساوي مجموع الأصناف المحددة للإرجاع'
+            );
+        }
+
+        return $return;
+    }
+
+    /** صاحب الفعل الحقيقي: موظف POS إن وجد، وإلا مالك المنشأة. */
+    private function refundActor(MerchantRefund $refund, User $merchant): User
+    {
+        if ($refund->pos_user_id === null) {
+            return $merchant;
+        }
+
+        $pos = PosUser::where('merchant_user_id', $merchant->id)
+            ->whereKey((int) $refund->pos_user_id)
+            ->first();
+
+        $actor = $pos?->user_id ? User::find($pos->user_id) : null;
+        if (! $actor) {
+            throw new RuntimeException('تعذّر تحديد منفّذ مرتجع نقطة البيع');
+        }
+
+        return $actor;
+    }
 
     /** تحقّق أن طريقة الاسترداد متناسقة مع طريقة الدفع الأصلية. */
     private function validateMethodCompatibility(MerchantSale $sale, string $refundMethod): void
