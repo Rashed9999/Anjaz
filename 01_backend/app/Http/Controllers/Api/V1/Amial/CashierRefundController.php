@@ -65,17 +65,25 @@ class CashierRefundController extends Controller
             return $this->error('NOT_FOUND', 'العملية غير موجودة في فرعك', 404);
         }
 
+        // الموافقة مرتبطة بهذه الفاتورة تحديداً؛ لا يكفي تطابق الصلاحية
+        // والمبلغ حتى لا تُستهلك موافقة فاتورة في مرتجع فاتورة أخرى.
+        $approvalKey = 'sale_refund:' . $saleUlid;
+
         try {
             $this->perm->assert(
-                $request->user(), P::RETAIL_RETURN_CREATE, [], (string) $request->input('amount'),
+                $request->user(),
+                P::RETAIL_RETURN_CREATE,
+                ['approval_key' => $approvalKey],
+                (string) $request->input('amount'),
             );
         } catch (DomainException $e) {
             if ($e->getCode() === MerchantPermissionService::APPROVAL_REQUIRED) {
                 // الكاشير لا يُترك أمام 403 ميت. ينشئ طلب إذن حقيقياً يراه
                 // مالك المنشأة، وبعد منحه يعيد الموظف المحاولة بنفس الفاتورة.
-                $reason = trim((string) $request->input('reason', ''));
-                if ($reason === '') {
-                    $reason = 'طلب اعتماد مرتجع للبيع ' . $saleUlid;
+                $userReason = trim((string) $request->input('reason', ''));
+                $reason = 'طلب اعتماد مرتجع للبيع ' . $saleUlid;
+                if ($userReason !== '') {
+                    $reason .= ' — ' . $userReason;
                 }
 
                 try {
@@ -84,6 +92,7 @@ class CashierRefundController extends Controller
                         P::RETAIL_RETURN_CREATE,
                         $reason,
                         (string) $request->input('amount'),
+                        $approvalKey,
                     );
                 } catch (DomainException $approvalError) {
                     return $this->error('FORBIDDEN', $approvalError->getMessage(), 403);
@@ -95,6 +104,7 @@ class CashierRefundController extends Controller
                         'status' => 'pending',
                         'permission' => P::RETAIL_RETURN_CREATE,
                         'amount' => (string) $request->input('amount'),
+                        'context_key' => $approvalKey,
                     ],
                 ], 'APPROVAL_PENDING',
                     'أُرسل طلب الاعتماد إلى مالك المنشأة. أعد المحاولة بعد الموافقة.',
