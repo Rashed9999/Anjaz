@@ -356,8 +356,8 @@ class MerchantFixedAssetService
 
     public function toArray(MerchantFixedAsset $asset): array
     {
-        $acc = property_exists($asset, 'accumulated_depreciation')
-            ? (string) ($asset->accumulated_depreciation ?? '0')
+        $acc = array_key_exists('accumulated_depreciation', $asset->getAttributes())
+            ? (string) ($asset->getAttribute('accumulated_depreciation') ?? '0')
             : (string) $asset->depreciations()->sum('amount');
 
         $book = bcsub((string) $asset->acquisition_cost, $acc, 4);
