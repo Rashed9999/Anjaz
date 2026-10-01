@@ -1077,7 +1077,7 @@
     await load('suppliers');
   }
 
-  async function createReturnFromOrder(row){
+  async function createReturnFromOrder(row,openShifts){
     const data=await api('purchaseOrderShow',undefined,dataUrl('purchaseOrderShow',row.id));
     const order=data.order||{};
     const items=(order.items||[]).filter(item=>Number(item.received_quantity||0)>Number(item.returned_quantity||0));
@@ -1095,10 +1095,16 @@
     const reason=window.prompt('سبب المرتجع (تالف، منتهي، زائد عن الأمر...)');
     if(!reason||reason.trim().length<3){message('سبب المرتجع مطلوب');return}
     const cash=window.confirm('اضغط «موافق» إذا أعاد المورد القيمة نقداً.\nاضغط «إلغاء» إذا ستُخصم من دين المورد.');
+    let shiftId=null;
+    if(cash){
+      shiftId=chooseCashierShift(openShifts,'استلام مبلغ المرتجع');
+      if(shiftId===undefined)return;
+    }
     await api('purchaseReturnCreate',{
       supplier_id:order.supplier_id,
       purchase_order_id:order.id,
       settlement_type:cash?'cash_refund':'credit_note',
+      ...(shiftId?{cashier_shift_id:shiftId}:{}),
       reason:reason.trim(),
       items:[{purchase_order_item_id:item.id,quantity:String(qty)}]
     });
@@ -1111,7 +1117,7 @@
     if(row.status==='draft')list.push(action('اعتماد',async()=>{await api('purchaseOrderApprove',{},dataUrl('purchaseOrderApprove',row.id));message('تم اعتماد أمر الشراء');await load('suppliers')},false));
     if(row.status==='approved'||row.status==='partially_received')list.push(action('استلام',()=>receivePurchaseOrder(row,openShifts),false));
     if(row.status==='draft'||row.status==='approved')list.push(action('إلغاء',async()=>{if(!window.confirm('إلغاء أمر الشراء '+row.po_number+'؟'))return;await api('purchaseOrderCancel',{},dataUrl('purchaseOrderCancel',row.id));message('تم إلغاء الأمر');await load('suppliers')}));
-    if(row.status==='partially_received'||row.status==='completed')list.push(action('مرتجع',()=>createReturnFromOrder(row)));
+    if(row.status==='partially_received'||row.status==='completed')list.push(action('مرتجع',()=>createReturnFromOrder(row,openShifts)));
     return buttons(list);
   }
 
@@ -1206,7 +1212,7 @@
     purchaseOrderCreator(createOrder,supplierRows,Array.isArray(products)?products:[]);
 
     const returnsPanel=box('مرتجعات الشراء');
-    hint(returnsPanel,'المرتجع لا يحرّك المخزون أو الدين إلا بعد الاعتماد. «استرداد نقدي» لا يخفض الدين مرتين.');
+    hint(returnsPanel,'المرتجع لا يحرّك المخزون أو الأصل أو الدين إلا بعد الاعتماد. إذا أعاد المورد نقداً يمكنك تحديد درج POS الذي دخل إليه المبلغ؛ والنقد الخارجي لا يغيّر أي وردية.');
     table(returnsPanel,[['المرجع',x=>x.return_ulid],['المورد',x=>x.supplier?.name||'—'],['القيمة',x=>money(x.total_amount)],['التسوية',x=>x.settlement_type==='cash_refund'?'استرداد نقدي':'خصم من دين المورد'],['الحالة',x=>x.status==='pending'?'بانتظار الاعتماد':x.status==='approved'?'معتمد':'مرفوض'],['الإجراء',returnActions]],returnRows);
   }
 
