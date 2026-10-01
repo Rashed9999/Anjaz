@@ -766,7 +766,9 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
                 ->where('ulid', '[A-Z0-9]{26}')->name('refundable');
             Route::post('/{ulid}/refund', [\App\Http\Controllers\Api\V1\Amial\CashierRefundController::class, 'create'])
                 ->where('ulid', '[A-Z0-9]{26}')
-                ->middleware('amial.rate-limit:cashier_refund,30,1')
+                // ApiClient يرسل المفتاح تلقائياً؛ الخادم يجب أن يستهلكه
+                // لأن إعادة المحاولة بعد timeout لا يجوز أن ترد المال مرتين.
+                ->middleware(['amial.idempotency', 'amial.rate-limit:cashier_refund,30,1'])
                 ->name('refund');
         });
 
