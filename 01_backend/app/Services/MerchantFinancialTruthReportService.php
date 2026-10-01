@@ -307,7 +307,10 @@ class MerchantFinancialTruthReportService
         $rows = \App\Models\PurchaseReturn::where('merchant_user_id', $merchant->id)
             ->where('status', 'approved')
             ->whereBetween('approved_at', [$start, $end])
-            ->get(['total_amount', 'settlement_type']);
+            ->get([
+                'total_amount', 'settlement_type',
+                'debt_applied', 'credit_created', 'cash_refund_amount',
+            ]);
 
         $z = MoneyService::normalize('0');
         $cells = [
@@ -317,9 +320,20 @@ class MerchantFinancialTruthReportService
             'credit' => $z,
         ];
         foreach ($rows as $r) {
-            $key = $r->settlement_type === \App\Models\PurchaseReturn::SETTLE_CASH_REFUND
-                ? 'cash' : 'supplier_credit';
-            $cells[$key] = MoneyService::add($cells[$key], (string) $r->total_amount);
+            // تخفيض الدائن تسوية غير نقدية دائماً. وإذا كان المرتجع
+            // credit_note فالفائض يصبح رصيداً لنا؛ وإذا كان cash_refund
+            // فالفائض فقط هو النقد الذي دخل فعلاً.
+            $cells['supplier_credit'] = MoneyService::add(
+                $cells['supplier_credit'],
+                MoneyService::add(
+                    (string) ($r->debt_applied ?? '0'),
+                    (string) ($r->credit_created ?? '0')
+                )
+            );
+            $cells['cash'] = MoneyService::add(
+                $cells['cash'],
+                (string) ($r->cash_refund_amount ?? '0')
+            );
         }
 
         return $this->row('purchase_return', 'مرتجع الشراء', 'in',
