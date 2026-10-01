@@ -258,6 +258,10 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
             ."طلباً واحداً بعدها.\n\nالردّ: %s",
             json_encode($res->json(), JSON_UNESCAPED_UNICODE)));
 
+        // امسح مستخدم Passport المزروع من خطوات المالك السابقة. من هنا
+        // يجب أن تكون كل هوية من Bearer الحقيقي + X-POS-Device فقط.
+        app('auth')->forgetGuards();
+
         return $token;
     }
 
