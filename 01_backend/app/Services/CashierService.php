@@ -851,6 +851,7 @@ class CashierService
             $reportEnd = now()->endOfDay();
 
             $expenses = MerchantExpense::where('merchant_user_id', $merchant->id)
+                ->where('status', 'active')
                 ->whereDate('spent_on', '>=', $from->toDateString())
                 ->whereDate('spent_on', '<=', $reportEnd->toDateString())
                 ->get(['amount', 'spent_on']);
