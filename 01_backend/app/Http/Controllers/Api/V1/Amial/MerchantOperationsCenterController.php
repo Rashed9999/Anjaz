@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Models\Branch;
 use App\Models\CashierShift;
+use App\Models\FuelShift;
 use App\Models\Merchant;
 use App\Models\Merchant\MerchantRole;
 use App\Models\Merchant\PosDevice;
@@ -38,28 +39,73 @@ class MerchantOperationsCenterController extends AmialApiController
         $roles = MerchantRole::where('merchant_user_id', $merchant->id)->where('is_active', true);
         $devices = PosDevice::where('merchant_user_id', $merchant->id)
             ->whereNull('revoked_at')->where('is_active', true);
-        $openShiftQuery = CashierShift::where('merchant_user_id', $merchant->id)
-            ->where('status', 'open');
-        // AMIAL-WIRING-002: the 12-row preview is not the total shift count.
-        $openShiftCount = (clone $openShiftQuery)->count();
-        $openShifts = (clone $openShiftQuery)->orderByDesc('opened_at')->limit(12)->get();
+        $businessType = MerchantProfile::where('user_id', $merchant->id)
+            ->value('business_type');
 
-        $staffById = PosUser::with('branch:id,name')
-            ->where('merchant_user_id', $merchant->id)->whereIn(
-            'id', $openShifts->pluck('pos_user_id')->filter()->unique(),
-        )->get()->keyBy('id');
+        // محطة الوقود لها FuelShift مستقل؛ عدّ CashierShift وحده كان يجعل
+        // لوحة المالك تقول «0 ورديات» بينما نقطة البيع تعمل في نوبة وقود
+        // مفتوحة. بقية القطاعات تستعمل CashierShift.
+        if ($businessType === A::BIZ_FUEL) {
+            $openShiftQuery = FuelShift::whereHas(
+                'station',
+                fn ($q) => $q->where('merchant_user_id', $merchant->id),
+            )->where('status', 'open');
 
-        $openShiftRows = $openShifts->map(function (CashierShift $shift) use ($staffById): array {
-            $employee = $staffById->get($shift->pos_user_id);
+            $openShiftCount = (clone $openShiftQuery)->count();
+            $openShifts = (clone $openShiftQuery)
+                ->with('station:id,merchant_user_id,station_name')
+                ->orderByDesc('opened_at')
+                ->limit(12)
+                ->get();
 
-            return [
-                'id' => $shift->id,
-                'opened_at' => $shift->opened_at?->toIso8601String(),
-                'opened_by_name' => $shift->opened_by_name ?: $employee?->display_name,
-                'employee_code' => $employee?->pos_number,
-                'branch_name' => $employee?->branch?->name,
-            ];
-        })->values();
+            $openers = User::whereIn(
+                'id', $openShifts->pluck('opened_by_user_id')->filter()->unique(),
+            )->get()->keyBy('id');
+
+            $openShiftRows = $openShifts->map(
+                function (FuelShift $shift) use ($openers): array {
+                    $opener = $openers->get($shift->opened_by_user_id);
+
+                    return [
+                        'id' => $shift->id,
+                        'shift_type' => 'fuel',
+                        'opened_at' => $shift->opened_at?->toIso8601String(),
+                        'opened_by_name' => trim(
+                            (string) ($opener?->f_name ?? '') . ' ' .
+                            (string) ($opener?->l_name ?? '')
+                        ) ?: null,
+                        'employee_code' => null,
+                        // نحافظ على عقد الواجهة الحالي ونضع موقع التشغيل
+                        // في الحقل نفسه؛ في الوقود هو المحطة لا «فرع متجر».
+                        'branch_name' => $shift->station?->station_name,
+                    ];
+                }
+            )->values();
+        } else {
+            $openShiftQuery = CashierShift::where('merchant_user_id', $merchant->id)
+                ->where('status', 'open');
+            // AMIAL-WIRING-002: the 12-row preview is not the total shift count.
+            $openShiftCount = (clone $openShiftQuery)->count();
+            $openShifts = (clone $openShiftQuery)->orderByDesc('opened_at')->limit(12)->get();
+
+            $staffById = PosUser::with('branch:id,name')
+                ->where('merchant_user_id', $merchant->id)->whereIn(
+                'id', $openShifts->pluck('pos_user_id')->filter()->unique(),
+            )->get()->keyBy('id');
+
+            $openShiftRows = $openShifts->map(function (CashierShift $shift) use ($staffById): array {
+                $employee = $staffById->get($shift->pos_user_id);
+
+                return [
+                    'id' => $shift->id,
+                    'shift_type' => 'cashier',
+                    'opened_at' => $shift->opened_at?->toIso8601String(),
+                    'opened_by_name' => $shift->opened_by_name ?: $employee?->display_name,
+                    'employee_code' => $employee?->pos_number,
+                    'branch_name' => $employee?->branch?->name,
+                ];
+            })->values();
+        }
 
         $activeDeviceIds = PosDeviceSession::where('merchant_user_id', $merchant->id)
             ->whereNull('ended_at')->pluck('pos_device_id')->filter()->unique();
