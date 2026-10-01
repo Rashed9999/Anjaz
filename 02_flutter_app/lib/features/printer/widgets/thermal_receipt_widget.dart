@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:amial_pay/util/app_direction.dart';
 
@@ -203,7 +204,7 @@ class ThermalReceiptWidget extends StatelessWidget {
           ],
           _divider(),
           if (verificationUrl != null && verificationUrl!.isNotEmpty) ...[
-            const Text('تحقق من أصالة الفاتورة', textAlign: TextAlign.center,
+            Text('document_verify_invoice'.tr, textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             Center(
