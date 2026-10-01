@@ -7,6 +7,7 @@ use App\CentralLogics\Helpers;
 use App\Models\CustomerCreditAccount;
 use App\Models\MerchantRefund;
 use App\Models\MerchantSale;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -104,17 +105,26 @@ class MerchantSaleRefundService
             $needsApproval = MoneyService::compare($refundAmount, self::AUTO_APPROVE_THRESHOLD) > 0;
             $status = $needsApproval ? 'pending_approval' : 'completed';
 
-            // 5) جهّز السجل
+            // 5) جهّز السجل. في بيع أميال باي الحقيقي لا يكتب POS رقم
+            // العميل في الفاتورة؛ هوية الدافع المثبتة موجودة في PaymentRequest.
+            // لذلك نحلّ العميل من مرجع الدفع أولاً، ثم نستخدم الهاتف كـ fallback.
+            $customerUserId = $this->resolveCustomerUserIdForSale($sale);
+            $customerUser = $customerUserId ? User::find($customerUserId) : null;
+            $customerName = $sale->customer_name;
+            if (($customerName === null || trim((string) $customerName) === '') && $customerUser) {
+                $customerName = trim(($customerUser->f_name ?? '') . ' ' . ($customerUser->l_name ?? ''));
+            }
+
             $refund = MerchantRefund::create([
                 'refund_ulid' => (string) Str::ulid(),
                 'merchant_user_id' => $merchant->id,
-                'customer_user_id' => $this->resolveCustomerUserId($sale),
+                'customer_user_id' => $customerUserId,
                 'pos_user_id' => $posUserId,
                 'original_transaction_id' => $sale->paid_transaction_id ?? $sale->sale_ulid,
                 'original_sale_ulid' => $sale->sale_ulid,
                 'original_amount' => (string)$sale->total_amount,
-                'customer_phone' => $sale->customer_phone,
-                'customer_name' => $sale->customer_name,
+                'customer_phone' => $sale->customer_phone ?: $customerUser?->phone,
+                'customer_name' => $customerName,
                 'refund_amount' => $refundAmount,
                 'refund_method' => $refundMethod,
                 'items' => $items,
@@ -192,7 +202,7 @@ class MerchantSaleRefundService
 
         if ($refundMethod === 'wallet') {
             // يلزم عميل مسجّل في أميال باي
-            if (!$this->resolveCustomerUserId($sale)) {
+            if (!$this->resolveCustomerUserIdForSale($sale)) {
                 throw new InvalidArgumentException(
                     'الاسترداد للمحفظة يحتاج عميلاً مسجّلاً في أميال باي'
                 );
@@ -353,17 +363,37 @@ class MerchantSaleRefundService
         }
     }
 
-    /** المعرّف الفعلي للعميل (قد يكون nullable). */
-    private function resolveCustomerUserId(MerchantSale $sale): ?int
+    /**
+     * المعرّف الفعلي للعميل الذي دفع هذه البيعة.
+     *
+     * بيع QR الحقيقي لا يحتاج أن يكتب الكاشير هاتف العميل: طلب الدفع نفسه
+     * يحمل paid_by_user_id بعد أن تحرّك المال. الاعتماد على customer_phone
+     * وحده كان يجعل زر «إلى محفظة العميل» يختفي من بيع أميال الحقيقي،
+     * بينما الاختبارات القديمة تمر لأنها كانت تضيف الهاتف يدوياً.
+     */
+    public function resolveCustomerUserIdForSale(MerchantSale $sale): ?int
     {
-        // إن كان البيع amial_pay مع paid_transaction_id، حاول الوصول للعميل
-        if ($sale->payment_method === 'amial_pay' && !empty($sale->customer_phone)) {
-            return User::whereIn('phone', \App\Support\Phone::variants((string) $sale->customer_phone))->value('id');
+        if (!empty($sale->paid_transaction_id)) {
+            $payerId = PaymentRequest::where('paid_transaction_id', $sale->paid_transaction_id)
+                ->where('requester_user_id', $sale->merchant_user_id)
+                ->where('status', 'paid')
+                ->whereNotNull('paid_by_user_id')
+                ->value('paid_by_user_id');
+
+            if ($payerId !== null) {
+                return (int) $payerId;
+            }
         }
-        // الأجل: ابحث بالهاتف
+
+        // النقد/الأجل أو السجلات التاريخية: الهاتف هو هوية الربط المتاحة.
         if (!empty($sale->customer_phone)) {
-            return User::whereIn('phone', \App\Support\Phone::variants((string) $sale->customer_phone))->value('id');
+            $id = User::whereIn(
+                'phone', \App\Support\Phone::variants((string) $sale->customer_phone)
+            )->value('id');
+
+            return $id !== null ? (int) $id : null;
         }
+
         return null;
     }
 }
