@@ -568,6 +568,7 @@ class WholesaleController extends GetxController implements GetxService {
     final total = number(invoice['total_amount']);
     final paid = number(invoice['paid_amount']);
     final due = number(invoice['balance_due']);
+    final verificationCode = '${invoice['invoice_ulid'] ?? ''}'.trim();
 
     return printer.printSale(
       settings: receiptSettings.effective,
@@ -583,7 +584,13 @@ class WholesaleController extends GetxController implements GetxService {
         if ((customer['full_name'] ?? '').toString().isNotEmpty)
           'العميل: ${customer['full_name']}',
         'الحالة: ${invoice['status'] ?? ''}',
+        if ('${invoice['paid_transaction_id'] ?? ''}'.isNotEmpty)
+          'مرجع أميال: ${invoice['paid_transaction_id']}',
       ],
+      dateTime: DateTime.now().toUtc().add(const Duration(hours: 3)),
+      verificationUrl: verificationCode.isEmpty
+          ? null
+          : '${AppConstants.baseUrl}/v/$verificationCode',
     );
   }
 
