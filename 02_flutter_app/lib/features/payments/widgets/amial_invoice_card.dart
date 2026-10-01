@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 /// AMIAL-RECEIPT-SETTINGS-001 — بطاقة الفاتورة الموحّدة (حرارية 58/80مم).
@@ -119,9 +120,9 @@ class AmialInvoiceCard extends StatelessWidget {
           const Text('الإجمالي',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black)),
         ]),
-        if (paidAmount != null) _line('المبلغ المستلم', paidAmount!),
-        if (changeAmount != null) _line('الباقي', changeAmount!),
-        if (balanceDueAmount != null) _line('المتبقي', balanceDueAmount!),
+        if (paidAmount != null) _line('receipt_tendered_amount'.tr, paidAmount!),
+        if (changeAmount != null) _line('receipt_change'.tr, changeAmount!),
+        if (balanceDueAmount != null) _line('receipt_balance_due'.tr, balanceDueAmount!),
         if (_equivalents().isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -141,7 +142,7 @@ class AmialInvoiceCard extends StatelessWidget {
         ],
         _dashed(),
         if (verificationUrl != null && verificationUrl!.isNotEmpty) ...[
-          const Text('تحقق من أصالة الفاتورة', textAlign: TextAlign.center,
+          Text('document_verify_invoice'.tr, textAlign: TextAlign.center,
               style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.black87)),
           const SizedBox(height: 5),
           Center(child: QrImageView(
