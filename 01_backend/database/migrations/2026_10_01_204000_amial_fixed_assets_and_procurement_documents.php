@@ -49,6 +49,7 @@ return new class extends Migration
             $table->string('payment_method', 24)->nullable()->after('cash_amount');
             $table->string('transaction_id', 64)->nullable()->after('reference')->index();
             $table->unsignedBigInteger('cashier_shift_id')->nullable()->after('transaction_id')->index();
+            $table->string('idempotency_key', 80)->nullable()->after('cashier_shift_id')->unique();
         });
 
         DB::table('supplier_ledger')->whereNull('entry_ulid')->orderBy('id')
@@ -116,7 +117,8 @@ return new class extends Migration
             $table->dropUnique(['entry_ulid']);
             $table->dropIndex(['transaction_id']);
             $table->dropIndex(['cashier_shift_id']);
-            $table->dropColumn(['entry_ulid', 'payment_method', 'transaction_id', 'cashier_shift_id']);
+            $table->dropUnique(['idempotency_key']);
+            $table->dropColumn(['entry_ulid', 'payment_method', 'transaction_id', 'cashier_shift_id', 'idempotency_key']);
         });
 
         Schema::table('purchase_order_items', function (Blueprint $table) {
