@@ -30,7 +30,8 @@ class PurchaseReturn extends Model
 
     protected $fillable = [
         'return_ulid', 'merchant_user_id', 'supplier_id', 'purchase_order_id',
-        'location_id', 'status', 'settlement_type', 'cashier_shift_id', 'total_amount', 'reason',
+        'location_id', 'status', 'settlement_type', 'cashier_shift_id', 'total_amount',
+        'debt_applied', 'credit_created', 'cash_refund_amount', 'reason',
         'created_by', 'approved_by', 'approved_at', 'zone_code',
     ];
 
@@ -41,6 +42,10 @@ class PurchaseReturn extends Model
         'location_id' => 'integer',
         'cashier_shift_id' => 'integer',
         'approved_at' => 'datetime',
+        'total_amount' => 'decimal:4',
+        'debt_applied' => 'decimal:4',
+        'credit_created' => 'decimal:4',
+        'cash_refund_amount' => 'decimal:4',
     ];
 
     public function items(): HasMany
