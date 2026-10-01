@@ -1242,26 +1242,41 @@
     g.append(metric('تكلفة الاقتناء',money(a.acquisition_cost)),metric('الإهلاك المتراكم',money(a.accumulated_depreciation)),metric('القيمة الدفترية',money(a.book_value)),metric('العمر الإنتاجي',String(a.useful_life_months||0)+' شهر'));
     p.append(g);
     table(p,[['الشهر',x=>x.period],['إهلاك الشهر',x=>money(x.amount)],['المتراكم',x=>money(x.accumulated_after)],['القيمة بعد الإهلاك',x=>money(x.book_value_after)]],data.depreciations||[]);
+    if((data.adjustments||[]).length)table(p,[['التاريخ',x=>x.effective_on],['التعديل',x=>x.type==='supplier_return'?'رد للمورد':x.type],['الكمية',x=>x.quantity],['خفض التكلفة',x=>money(x.cost_amount)],['عكس الإهلاك',x=>money(x.depreciation_reversed)]],data.adjustments||[]);
     p.scrollIntoView({behavior:'smooth',block:'start'});
   }
-  async function disposeAsset(row){
+  async function disposeAsset(row,openShifts){
     const date=window.prompt('تاريخ استبعاد الأصل YYYY-MM-DD',new Date().toISOString().slice(0,10));if(date===null)return;
     const reason=window.prompt('سبب الاستبعاد/البيع');if(!reason||reason.trim().length<5){message('اكتب سبباً واضحاً');return}
     const proceeds=window.prompt('متحصلات البيع إن وجدت (اتركها فارغة عند الإتلاف)','');if(proceeds===null)return;
-    await api('assetDispose',{disposed_on:date,reason:reason.trim(),...(proceeds.trim()!==''?{disposal_proceeds:proceeds}:{})},dataUrl('assetDispose',row.id));
+    let shiftId=null;
+    if(proceeds.trim()!==''&&Number(proceeds)>0){
+      shiftId=chooseCashierShift(openShifts,'استلام متحصلات بيع الأصل');
+      if(shiftId===undefined)return;
+    }
+    await api('assetDispose',{
+      disposed_on:date,reason:reason.trim(),
+      ...(proceeds.trim()!==''?{disposal_proceeds:proceeds}:{}),
+      ...(shiftId?{cashier_shift_id:shiftId}:{})
+    },dataUrl('assetDispose',row.id));
     message('تم استبعاد الأصل وتجميد الإهلاك');await load('assets');
   }
   async function assets(){
-    const data=await api('assets'),rows=data.assets||[],t=data.totals||{};
+    const [data,ops]=await Promise.all([
+      api('assets'),
+      api('overview').catch(()=>({open_shifts:[]}))
+    ]);
+    const rows=data.assets||[],t=data.totals||{};
+    const openShifts=(ops.open_shifts||[]).filter(x=>x.shift_type==='cashier');
     grid([['تكلفة الأصول',money(t.acquisition_cost)],['الإهلاك المتراكم',money(t.accumulated_depreciation)],['القيمة الدفترية',money(t.book_value)],['أصول نشطة',t.active_count??0]]);
     const p=box('سجل الأصول الثابتة');
     hint(p,'الأثاث والمعدات والسيارات لا تُسجل كمصروف تشغيلي كامل عند الشراء. الأصل القادم من أمر شراء يُنشأ تلقائياً عند الاستلام ويُهلك على عمره الإنتاجي.');
-    table(p,[['الأصل',x=>x.name],['الفئة',x=>assetCategoryLabels[x.category]||x.category],['التكلفة',x=>money(x.acquisition_cost)],['الإهلاك',x=>money(x.accumulated_depreciation)],['القيمة الدفترية',x=>money(x.book_value)],['الحالة',x=>x.status==='active'?'نشط':'مستبعد'],['المصدر',x=>x.source==='purchase_order'?'أمر شراء':'رصيد افتتاحي'],['الإجراء',x=>buttons([action('التفاصيل',()=>assetDetails(x.id)),x.status==='active'?action('استبعاد',()=>disposeAsset(x)):null])]],rows);
+    table(p,[['الأصل',x=>x.name],['الفئة',x=>assetCategoryLabels[x.category]||x.category],['التكلفة الجارية',x=>money(x.carrying_cost_basis)],['الإهلاك',x=>money(x.accumulated_depreciation)],['القيمة الدفترية',x=>money(x.book_value)],['الحالة',x=>x.status==='active'?'نشط':x.status==='returned_to_supplier'?'مردود للمورد':'مستبعد'],['المصدر',x=>x.source==='purchase_order'?'أمر شراء':'رصيد افتتاحي'],['الإجراء',x=>buttons([action('التفاصيل',()=>assetDetails(x.id)),x.status==='active'?action('استبعاد',()=>disposeAsset(x,openShifts)):null])]],rows);
 
     const post=box('إثبات الإهلاك');
-    const m=new Date().toISOString().slice(0,7);
-    hint(post,'المجدول يثبت الشهر المغلق تلقائياً. استخدم هذا الزر فقط إذا أردت إثبات الإهلاك حتى شهر محدد الآن؛ إعادة الطلب لا تكرر الشهر.');
-    const monthLabel=node('label','حتى شهر','field'),month=node('input');month.type='month';month.value=m;monthLabel.append(month);
+    const prev=new Date();prev.setUTCDate(1);prev.setUTCMonth(prev.getUTCMonth()-1);const m=prev.toISOString().slice(0,7);
+    hint(post,'الإهلاك الدوري يُثبت للشهور المغلقة فقط. الشهر الجاري لا يُرحّل قبل إغلاقه، وإعادة الطلب للشهر نفسه لا تكرر القيد.');
+    const monthLabel=node('label','حتى شهر مغلق','field'),month=node('input');month.type='month';month.value=m;month.max=m;monthLabel.append(month);
     const postBtn=node('button','إثبات الإهلاك','action');postBtn.type='button';postBtn.onclick=async()=>{postBtn.disabled=true;try{const r=await api('assetDepreciation',{through:month.value});message('تم إثبات '+r.entries_posted+' قيد إهلاك بقيمة '+money(r.amount_posted));await load('assets')}catch(e){message(e.message)}finally{postBtn.disabled=false}};
     post.append(monthLabel,postBtn);
 
@@ -1283,8 +1298,12 @@
       metrics.push(['الربح الإجمالي',money(t.gross_profit??t.profit)]);
       if(t.cash_operating_expenses!==null&&t.cash_operating_expenses!==undefined)metrics.push(['مصروفات نقدية',money(t.cash_operating_expenses)]);
       if(t.depreciation_expense!==null&&t.depreciation_expense!==undefined)metrics.push(['إهلاك أصول',money(t.depreciation_expense)]);
+      if(t.expense_reversals!==null&&t.expense_reversals!==undefined&&Number(t.expense_reversals)!==0)metrics.push(['عكس مصروفات',money(t.expense_reversals)]);
+      if(t.depreciation_reversals!==null&&t.depreciation_reversals!==undefined&&Number(t.depreciation_reversals)!==0)metrics.push(['عكس إهلاك مرتجعات أصول',money(t.depreciation_reversals)]);
       if(t.operating_expenses!==null&&t.operating_expenses!==undefined)metrics.push(['إجمالي مصروفات التشغيل',money(t.operating_expenses)]);
-      if(t.net_profit!==null&&t.net_profit!==undefined)metrics.push(['صافي الربح',money(t.net_profit)]);
+      if(t.net_profit!==null&&t.net_profit!==undefined)metrics.push(['الربح التشغيلي',money(t.net_profit)]);
+      if(t.asset_disposal_gain_loss!==null&&t.asset_disposal_gain_loss!==undefined&&Number(t.asset_disposal_gain_loss)!==0)metrics.push(['ربح/خسارة استبعاد أصول',money(t.asset_disposal_gain_loss)]);
+      if(t.net_result!==null&&t.net_result!==undefined)metrics.push(['النتيجة النهائية',money(t.net_result)]);
     }
     grid(metrics);
     if(profitData?.totals){
@@ -1295,7 +1314,9 @@
         {label:'المصروفات النقدية',value:profitData.totals.cash_operating_expenses},
         {label:'إهلاك الأصول',value:profitData.totals.depreciation_expense},
         {label:'إجمالي مصروفات التشغيل',value:profitData.totals.operating_expenses},
-        {label:'صافي الربح',value:profitData.totals.net_profit},
+        {label:'الربح التشغيلي',value:profitData.totals.net_profit},
+        {label:'ربح/خسارة استبعاد الأصول',value:profitData.totals.asset_disposal_gain_loss},
+        {label:'النتيجة النهائية',value:profitData.totals.net_result},
       ]);
     }
     const p=box('الحركة اليومية');
