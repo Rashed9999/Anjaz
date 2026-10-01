@@ -694,6 +694,9 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             Route::post('/{id}/payment', [$sc, 'payment'])
                 ->where('id', '[0-9]+')
                 ->middleware('amial.rate-limit:supplier_payment,30,1')->name('payment');
+            Route::post('/{id}/credit-refund', [$sc, 'creditRefund'])
+                ->where('id', '[0-9]+')
+                ->middleware('amial.rate-limit:supplier_credit_refund,30,1')->name('credit-refund');
         });
         Route::prefix('purchase-orders')->name('purchase-orders.')->middleware('capability:purchases')->group(function () {
             $sc = \App\Http\Controllers\Api\V1\Amial\SupplierController::class;
