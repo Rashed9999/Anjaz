@@ -171,7 +171,9 @@ class CashierRefundController extends Controller
         if ($sale->payment_method === 'credit') {
             $availableMethods[] = 'credit_account';
         }
-        if (!empty($sale->customer_phone) && User::whereIn('phone', \App\Support\Phone::variants((string) $sale->customer_phone))->exists()) {
+        // بيع QR الحقيقي لا يحمل بالضرورة customer_phone في الفاتورة؛
+        // هوية الدافع المثبتة تُقرأ من PaymentRequest عبر خدمة المرتجعات.
+        if ($this->refundSvc->resolveCustomerUserIdForSale($sale) !== null) {
             $availableMethods[] = 'wallet';
         }
 
