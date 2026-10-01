@@ -1275,7 +1275,9 @@
     if(profitData?.totals){
       const t=profitData.totals;
       metrics.push(['الربح الإجمالي',money(t.gross_profit??t.profit)]);
-      if(t.operating_expenses!==null&&t.operating_expenses!==undefined)metrics.push(['مصروفات التشغيل',money(t.operating_expenses)]);
+      if(t.cash_operating_expenses!==null&&t.cash_operating_expenses!==undefined)metrics.push(['مصروفات نقدية',money(t.cash_operating_expenses)]);
+      if(t.depreciation_expense!==null&&t.depreciation_expense!==undefined)metrics.push(['إهلاك أصول',money(t.depreciation_expense)]);
+      if(t.operating_expenses!==null&&t.operating_expenses!==undefined)metrics.push(['إجمالي مصروفات التشغيل',money(t.operating_expenses)]);
       if(t.net_profit!==null&&t.net_profit!==undefined)metrics.push(['صافي الربح',money(t.net_profit)]);
     }
     grid(metrics);
@@ -1284,7 +1286,9 @@
       hint(p,'الربح الإجمالي = المبيعات ناقص تكلفة البضاعة المحفوظة لحظة البيع. صافي الربح يخصم المصروفات التشغيلية المسجلة، ولا يعامل شراء أصل ثابت كمصروف.');
       table(p,[['المؤشر',x=>x.label],['القيمة',x=>money(x.value)]],[
         {label:'الربح الإجمالي',value:profitData.totals.gross_profit??profitData.totals.profit},
-        {label:'المصروفات التشغيلية',value:profitData.totals.operating_expenses},
+        {label:'المصروفات النقدية',value:profitData.totals.cash_operating_expenses},
+        {label:'إهلاك الأصول',value:profitData.totals.depreciation_expense},
+        {label:'إجمالي مصروفات التشغيل',value:profitData.totals.operating_expenses},
         {label:'صافي الربح',value:profitData.totals.net_profit},
       ]);
     }
