@@ -2,8 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Http\Controllers\Api\V1\Amial\PaymentRequestController;
+use App\Http\Middleware\EnsurePosDevice;
 use App\Models\EMoney;
+use App\Models\Merchant;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSale;
 use App\Models\PaymentRequest;
@@ -14,7 +15,7 @@ use App\Services\PaymentRequestService;
 use App\Services\Vertical\VerticalBootstrapService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
 
@@ -41,21 +42,47 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
     private User $merchant;
     private User $staff;
     private PosUser $pos;
+    private string $deviceUuid;
+    private string $staffToken;
+
+    private const STAFF_PASSWORD = 'GoldenPOS@2026';
+    private const MERCHANT_NUMBER = 'M-PAY-GOLDEN-01';
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        // ربط جلسة Passport بالجهاز له حارسه الشامل المستقل. هذا الاختبار
-        // يقيس من المنتج إلى المال، فلا نجعل عطل جهاز يحجب حقيقة المحفظة.
-        config(['amial.pos_devices.enforce_session_binding' => false]);
+        // الاختبار المالي نفسه يمرّ الآن عبر Access Token حقيقي مربوط
+        // بجهاز POS مفعّل. لا استثناءً أمنياً داخل الرحلة الذهبية.
+        \Laravel\Passport\Client::unguarded(function () {
+            $client = \Laravel\Passport\Client::create([
+                'name' => 'amial-golden-pos-personal',
+                'secret' => \Illuminate\Support\Str::random(40),
+                'redirect' => 'http://localhost',
+                'personal_access_client' => true,
+                'password_client' => false,
+                'revoked' => false,
+            ]);
+
+            \Laravel\Passport\PersonalAccessClient::unguarded(
+                fn () => \Laravel\Passport\PersonalAccessClient::create(['client_id' => $client->id])
+            );
+        });
 
         $this->merchant = User::factory()->create([
             'type' => MERCHANT_TYPE,
             'role' => A::ROLE_MERCHANT,
             'is_active' => 1,
             'zone_code' => 'SOUTH',
+            'phone' => '967700880011',
+            'password' => Hash::make('OwnerGolden@2026'),
         ]);
+
+        $merchantRow = new Merchant();
+        $merchantRow->user_id = $this->merchant->id;
+        $merchantRow->merchant_number = self::MERCHANT_NUMBER;
+        $merchantRow->store_name = 'متجر الرحلة الذهبية';
+        $merchantRow->save();
 
         MerchantProfile::create([
             'user_id' => $this->merchant->id,
@@ -85,6 +112,7 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             'role' => 'pos',
             'is_active' => 1,
             'zone_code' => 'SOUTH',
+            'password' => Hash::make(self::STAFF_PASSWORD),
         ]);
 
         $this->pos = PosUser::create([
@@ -102,6 +130,101 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
 
         $this->assertNotNull($cashierRole, 'لم يُزرع دور الكاشير للتاجر');
         $permissions->assign($this->merchant, $this->staff, $cashierRole);
+
+        [$this->deviceUuid, $this->staffToken] = $this->activateDeviceAndLoginStaff();
+    }
+
+    /** @return array{0:string,1:string} */
+    private function activateDeviceAndLoginStaff(): array
+    {
+        Passport::actingAs($this->merchant);
+
+        $activation = $this->postJson(
+            '/api/v1/amial/merchant/pos-devices/activation-codes',
+            ['display_name' => 'جهاز الرحلة الذهبية']
+        )->assertOk();
+
+        $code = null;
+        array_walk_recursive((array) $activation->json(), function ($value) use (&$code) {
+            if ($code === null && is_string($value) && preg_match('/^\d{8}$/', $value)) {
+                $code = $value;
+            }
+        });
+
+        $this->assertNotNull($code, 'إنشاء جهاز POS لم يُرجع رمز تفعيل من 8 أرقام');
+
+        $uuid = 'golden-pos-' . \Illuminate\Support\Str::random(12);
+
+        $this->postJson('/api/v1/amial/pos-devices/activate', [
+            'activation_code' => $code,
+            'device_uuid' => $uuid,
+            'platform' => 'android',
+        ])->assertOk();
+
+        $login = $this->withHeader(EnsurePosDevice::HEADER, $uuid)
+            ->postJson('/api/v1/auth/login', [
+                'role' => 'merchant',
+                'employee_code' => 'PAY-GOLDEN-01',
+                'password' => self::STAFF_PASSWORD,
+            ])->assertOk();
+
+        $token = null;
+        array_walk_recursive((array) $login->json(), function ($value, $key) use (&$token) {
+            if ($token === null
+                && in_array($key, ['access_token', 'token'], true)
+                && is_string($value)
+                && strlen($value) > 40) {
+                $token = $value;
+            }
+        });
+
+        $this->assertNotNull($token, 'دخول موظف POS نجح بلا access token قابل للاستخدام');
+
+        return [$uuid, $token];
+    }
+
+    /** @return array<string,string> */
+    private function posHeaders(): array
+    {
+        return [
+            'Authorization' => 'Bearer ' . $this->staffToken,
+            EnsurePosDevice::HEADER => $this->deviceUuid,
+        ];
+    }
+
+    private function refundThroughPosWithOwnerApproval(
+        string $saleUlid,
+        array $payload,
+        string $idempotencyBase,
+    ): \Illuminate\Testing\TestResponse {
+        $first = $this->withHeaders(array_merge($this->posHeaders(), [
+            'Idempotency-Key' => $idempotencyBase . '-request',
+        ]))->postJson(
+            '/api/v1/amial/merchant/cashier/sales/' . $saleUlid . '/refund',
+            $payload,
+        );
+
+        if ($first->status() === 202 && $first->json('code') === 'APPROVAL_PENDING') {
+            $approvalId = (int) $first->json('meta.approval.request_id');
+            $this->assertGreaterThan(0, $approvalId, 'طلب اعتماد المرتجع لم يحمل معرّفاً صالحاً');
+
+            $this->actingAs($this->merchant, 'merchant_web')
+                ->postJson('/merchant/data/approvals/' . $approvalId . '/grant', [
+                    'note' => 'اعتماد الرحلة الذهبية',
+                ])->assertOk()
+                  ->assertJsonPath('code', 'APPROVAL_GRANTED');
+
+            return $this->withHeaders(array_merge($this->posHeaders(), [
+                'Idempotency-Key' => $idempotencyBase . '-approved',
+            ]))->postJson(
+                '/api/v1/amial/merchant/cashier/sales/' . $saleUlid . '/refund',
+                $payload,
+            )->assertStatus(201)
+              ->assertJsonPath('code', 'REFUNDED');
+        }
+
+        return $first->assertStatus(201)
+            ->assertJsonPath('code', 'REFUNDED');
     }
 
     /** @test */
@@ -121,17 +244,18 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         $productId = (int) $created->json('meta.result.product.id');
         $this->assertGreaterThan(0, $productId, 'بوابة التاجر لم تُرجع المنتج المنشأ');
 
-        // ② الموظف يفتح ورديته ثم يرى المنتج نفسه، لا نسخةً في جدول آخر.
-        Passport::actingAs($this->staff, [], 'api');
-
-        $shift = $this->postJson('/api/v1/amial/cashier/shift/open', [
+        // ② الموظف يفتح ورديته من الجلسة الحقيقية المربوطة بالجهاز ثم يرى
+        // المنتج نفسه، لا نسخةً في جدول آخر.
+        $shift = $this->withHeaders($this->posHeaders())
+            ->postJson('/api/v1/amial/cashier/shift/open', [
             'opening_float' => '0',
         ]);
         $this->assertContains($shift->status(), [200, 201], json_encode(
             $shift->json(), JSON_UNESCAPED_UNICODE
         ));
 
-        $products = $this->getJson('/api/v1/amial/merchant/cashier/products')
+        $products = $this->withHeaders($this->posHeaders())
+            ->getJson('/api/v1/amial/merchant/cashier/products')
             ->assertOk()
             ->json('meta.products');
 
@@ -141,21 +265,17 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         $this->assertSame('قهوة رحلة أميال', $row['name'] ?? null);
         $this->assertSame('750.0000', (string) ($row['price'] ?? ''));
 
-        // ③ شاشة QR في POS تنادي PaymentRequestController. ننادي المتحكم
-        // نفسه بطلبٍ يحمل هوية الموظف، كي نثبت commerceRequester(): الطلب
-        // المالي يجب أن يُنشأ باسم التاجر المالك لا باسم حساب الموظف.
-        $qrHttp = Request::create('/api/v1/amial/payment-requests', 'POST', [
-            'amount' => '1500',
-            'note' => 'دفع مشتريات — قهوة رحلة أميال',
-            'share_method' => 'qr',
-        ]);
-        $qrHttp->setUserResolver(fn () => $this->staff);
+        // ③ QR يخرج من مسار HTTP نفسه الذي يستخدمه تطبيق POS، وبنفس
+        // Access Token وترويسة الجهاز. يجب أن يُسجّل الطلب باسم التاجر
+        // المالك، لا باسم حساب الموظف.
+        $qrResponse = $this->withHeaders($this->posHeaders())
+            ->postJson('/api/v1/amial/payment-requests', [
+                'amount' => '1500',
+                'note' => 'دفع مشتريات — قهوة رحلة أميال',
+                'share_method' => 'qr',
+            ])->assertStatus(201);
 
-        $qrResponse = app(PaymentRequestController::class)->create($qrHttp);
-        $this->assertSame(201, $qrResponse->getStatusCode());
-
-        $qrBody = $qrResponse->getData(true);
-        $requestId = (int) ($qrBody['meta']['request']['id'] ?? 0);
+        $requestId = (int) $qrResponse->json('meta.request.id');
         $this->assertGreaterThan(0, $requestId, 'POS لم يُنشئ طلب دفع QR');
 
         $paymentRequest = PaymentRequest::findOrFail($requestId);
@@ -209,10 +329,10 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             'محفظة العميل لم تُخصم بالمبلغ المدفوع'
         );
 
-        // ⑤ بعد أن يرى POS أن QR صار paid، يسجل البيع بمرجع الحركة نفسه.
-        Passport::actingAs($this->staff, [], 'api');
-
-        $saleResponse = $this->postJson('/api/v1/amial/merchant/cashier/sales', [
+        // ⑤ بعد أن يرى POS أن QR صار paid، يسجل البيع بمرجع الحركة نفسه
+        // من الجهاز المفعّل نفسه.
+        $saleResponse = $this->withHeaders($this->posHeaders())
+            ->postJson('/api/v1/amial/merchant/cashier/sales', [
             'total' => '1500',
             'payment_method' => 'amial_pay',
             'paid_transaction_id' => $paidTxId,
@@ -252,12 +372,11 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             'تسجيل البيع أضاف المبلغ إلى محفظة التاجر مرة ثانية'
         );
 
-        // ⑥ المرتجع الحقيقي لنفس بيع QR: الفاتورة لم تحمل هاتف العميل
-        // عمداً، كما يفعل التطبيق. يجب مع ذلك أن يعرف الخادم الدافع من
-        // PaymentRequest.paid_by_user_id ويعرض «إلى محفظة العميل».
-        Passport::actingAs($this->merchant, [], 'api');
-
-        $refundable = $this->getJson(
+        // ⑥ المرتجع الحقيقي لنفس بيع QR: الكاشير يطلبه من جهاز POS،
+        // وإذا احتاج اعتماداً يمنحه المالك من الويب ثم يعيد الكاشير
+        // العملية. الفاتورة لا تحمل هاتف العميل عمداً؛ الخادم يستخرج
+        // الدافع من PaymentRequest.paid_by_user_id.
+        $refundable = $this->withHeaders($this->posHeaders())->getJson(
             '/api/v1/amial/merchant/cashier/sales/'.$saleUlid.'/refundable'
         )->assertOk();
 
@@ -269,10 +388,8 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
 
         $saleLine = $sale->lines()->firstOrFail();
 
-        $refund = $this->withHeader(
-            'Idempotency-Key', 'golden-wallet-refund-'.$saleUlid
-        )->postJson(
-            '/api/v1/amial/merchant/cashier/sales/'.$saleUlid.'/refund',
+        $refund = $this->refundThroughPosWithOwnerApproval(
+            $saleUlid,
             [
                 'amount' => '1500',
                 'refund_method' => 'wallet',
@@ -283,9 +400,9 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
                     'restock' => true,
                 ]],
                 'reason' => 'مرتجع كامل لاختبار السلسلة',
-            ]
-        )->assertStatus(201)
-         ->assertJsonPath('code', 'REFUNDED');
+            ],
+            'golden-wallet-refund-'.$saleUlid,
+        );
 
         $this->assertSame(
             $customer->id,
@@ -313,12 +430,10 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             'سطر البيع لم يُقفل بكمية المرتجع المعتمدة'
         );
 
-        // ⑦ المرجع المالي أحادي الاستعمال: فاتورة ثانية بنفس الدفع تُرفض.
-        // بعد فحص المرتجع كمالك نعيد هوية الكاشير؛ وإلا يفشل الطلب قبل
-        // مرجع الدفع عند بوابة الوردية، وهو ليس ما يقيسه هذا الجزء.
-        Passport::actingAs($this->staff, [], 'api');
-
-        $second = $this->postJson('/api/v1/amial/merchant/cashier/sales', [
+        // ⑦ المرجع المالي أحادي الاستعمال: فاتورة ثانية بنفس الدفع تُرفض
+        // من الجلسة المربوطة بالجهاز نفسها.
+        $second = $this->withHeaders($this->posHeaders())
+            ->postJson('/api/v1/amial/merchant/cashier/sales', [
             'total' => '1500',
             'payment_method' => 'amial_pay',
             'paid_transaction_id' => $paidTxId,
@@ -364,8 +479,8 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         $productId = (int) $created->json('meta.result.product.id');
         $this->assertGreaterThan(0, $productId);
 
-        Passport::actingAs($this->staff, [], 'api');
-        $shift = $this->postJson('/api/v1/amial/cashier/shift/open', [
+        $shift = $this->withHeaders($this->posHeaders())
+            ->postJson('/api/v1/amial/cashier/shift/open', [
             'opening_float' => '1000',
         ]);
         $this->assertContains($shift->status(), [200, 201], json_encode(
@@ -376,7 +491,8 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             ->value('current_balance');
 
         // ① نقد: الفاتورة مكتملة والمخزون ينقص، لكن محفظة أميال لا تتحرك.
-        $cash = $this->postJson('/api/v1/amial/merchant/cashier/sales', [
+        $cash = $this->withHeaders($this->posHeaders())
+            ->postJson('/api/v1/amial/merchant/cashier/sales', [
             'total' => '500',
             'payment_method' => 'cash',
             'amount_received' => '500',
@@ -405,7 +521,8 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             (string) \App\Models\MerchantProduct::whereKey($productId)->value('quantity')
         );
 
-        $xBeforeRefund = $this->getJson('/api/v1/amial/cashier/shift/x')
+        $xBeforeRefund = $this->withHeaders($this->posHeaders())
+            ->getJson('/api/v1/amial/cashier/shift/x')
             ->assertOk();
         $this->assertSame('1500.0000',
             (string) $xBeforeRefund->json('meta.report.expected_cash'));
@@ -413,10 +530,8 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         // مرتجع نقدي من الكاشير نفسه: لا يلمس المحفظة، لكنه يخرج من
         // الدرج ويجب أن يهبط «المتوقع» في تقرير X فوراً.
         $cashLine = $cashSale->lines()->firstOrFail();
-        $this->withHeader(
-            'Idempotency-Key', 'golden-cash-refund-'.$cashSale->sale_ulid
-        )->postJson(
-            '/api/v1/amial/merchant/cashier/sales/'.$cashSale->sale_ulid.'/refund',
+        $this->refundThroughPosWithOwnerApproval(
+            $cashSale->sale_ulid,
             [
                 'amount' => '500',
                 'refund_method' => 'cash',
@@ -427,11 +542,12 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
                     'restock' => true,
                 ]],
                 'reason' => 'مرتجع نقدي تجريبي',
-            ]
-        )->assertStatus(201)
-         ->assertJsonPath('code', 'REFUNDED');
+            ],
+            'golden-cash-refund-'.$cashSale->sale_ulid,
+        );
 
-        $xAfterRefund = $this->getJson('/api/v1/amial/cashier/shift/x')
+        $xAfterRefund = $this->withHeaders($this->posHeaders())
+            ->getJson('/api/v1/amial/cashier/shift/x')
             ->assertOk();
         $this->assertSame('500.0000',
             (string) $xAfterRefund->json('meta.report.cash_sales'));
@@ -461,7 +577,8 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             'zone_code' => 'SOUTH',
         ]);
 
-        $credit = $this->postJson('/api/v1/amial/merchant/cashier/sales', [
+        $credit = $this->withHeaders($this->posHeaders())
+            ->postJson('/api/v1/amial/merchant/cashier/sales', [
             'total' => '1000',
             'payment_method' => 'credit',
             'credit_due_date' => '2026-12-31',
@@ -511,17 +628,17 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         );
 
         // ③ مرتجع بيع آجل غير مسدد: لا نخلق مالاً ولا نخصم محفظة؛ نزيل
-        // الالتزام من دفتر العميل نفسه.
-        Passport::actingAs($this->merchant, [], 'api');
-        $this->postJson(
-            '/api/v1/amial/merchant/cashier/sales/'.$creditSale->sale_ulid.'/refund',
+        // الالتزام من دفتر العميل نفسه. الطلب يخرج من جهاز POS نفسه،
+        // والمالك يعتمد عند الحاجة.
+        $this->refundThroughPosWithOwnerApproval(
+            $creditSale->sale_ulid,
             [
                 'amount' => '1000',
                 'refund_method' => 'credit_account',
                 'reason' => 'مرتجع بيع آجل تجريبي',
-            ]
-        )->assertStatus(201)
-         ->assertJsonPath('code', 'REFUNDED');
+            ],
+            'golden-credit-refund-'.$creditSale->sale_ulid,
+        );
 
         $this->assertSame('0.0000', (string) $account->fresh()->current_balance);
         $this->assertSame(
