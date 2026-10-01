@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProduct;
+use App\Models\MerchantExpense;
 use App\Models\MerchantSale;
 use App\Models\Retail\SaleLine;
 use App\Models\User;
@@ -125,6 +126,39 @@ class RetailSaleLinesGuardTest extends TestCase
         $report = $this->cashier()->profitReport($this->merchant, 7);
         $this->assertSame('500.0000', $report['totals']['cost']);
         $this->assertSame('300.0000', $report['totals']['profit']);
+    }
+
+    public function test_operating_expenses_are_separate_from_gross_profit_and_reduce_net_profit(): void
+    {
+        $p = $this->product('800', '500', 'كرسي مكتب');
+
+        $this->cashier()->recordSale(
+            merchant: $this->merchant,
+            total: '800',
+            paymentMethod: 'cash',
+            items: [['product_id' => $p->id, 'name' => 'كرسي مكتب', 'qty' => 1, 'price' => '800']],
+        );
+
+        MerchantExpense::create([
+            'merchant_user_id' => $this->merchant->id,
+            'category' => 'utilities',
+            'title' => 'كهرباء',
+            'amount' => '100',
+            'spent_on' => now()->toDateString(),
+            'created_by' => $this->merchant->id,
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $report = $this->cashier()->profitReport($this->merchant, 7);
+
+        $this->assertSame('300.0000', $report['totals']['gross_profit']);
+        $this->assertSame('300.0000', $report['totals']['profit'],
+            'حقل التوافق profit يجب ألا يغيّر معناه بصمت');
+        $this->assertSame('100.0000', $report['totals']['operating_expenses']);
+        $this->assertSame('200.0000', $report['totals']['net_profit']);
+        $this->assertSame('merchant', $report['totals']['expense_scope']);
+        $this->assertSame('100.0000', collect($report['daily'])->last()['operating_expenses']);
+        $this->assertSame('200.0000', collect($report['daily'])->last()['net_profit']);
     }
 
     /** **جرّبَ الحارسَ بالعكس**: القراءةُ من المنتج تُسقطه. */
