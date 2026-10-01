@@ -729,7 +729,7 @@
   }
   function saleIdentifier(row){return String((actualSector==='wholesale'||actualSector==='restaurant'?row.id:(row.sale_ulid||row.ulid||row.id))||'')}
   function saleDetailButton(row){const id=saleIdentifier(row),button=node('button','عرض','action secondary');button.type='button';button.disabled=!id;button.addEventListener('click',()=>showSaleDetail(id));return button}
-  function invoiceButton(id){if(!['quick_sale','retail','pharmacy'].includes(actualSector))return null;const button=node('button','تنزيل الفاتورة','action secondary');button.type='button';button.addEventListener('click',()=>window.open(routes.sectorSaleInvoice.replace('__ID__',encodeURIComponent(id)),'_blank','noopener'));return button}
+  function invoiceButton(id){if(!['quick_sale','retail','pharmacy','fuel','wholesale','restaurant'].includes(actualSector))return null;const button=node('button','تنزيل الفاتورة','action secondary');button.type='button';button.addEventListener('click',()=>window.open(routes.sectorSaleInvoice.replace('__ID__',encodeURIComponent(id)),'_blank','noopener'));return button}
   async function showSaleDetail(id){
     const data=await api('sectorSaleDetail',undefined,routes.sectorSaleDetail.replace('__ID__',encodeURIComponent(id)));
     const detail=data.result||{},record=detail.sale||detail.invoice||detail.order||{};
