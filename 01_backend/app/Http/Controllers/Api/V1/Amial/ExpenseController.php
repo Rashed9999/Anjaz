@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Models\MerchantExpense;
+use App\Models\MerchantExpenseReversal;
 use App\Models\Retail\ShiftCashMovement;
 use App\Services\FeatureAccessService;
 use App\Services\MoneyService;
@@ -232,9 +233,22 @@ class ExpenseController extends Controller
                     }
                 }
 
+                $voidedAt = now();
+                $reversal = MerchantExpenseReversal::firstOrCreate(
+                    ['expense_id' => $e->id],
+                    [
+                        'reversal_ulid' => (string) Str::ulid(),
+                        'merchant_user_id' => $u->id,
+                        'amount' => (string) $e->amount,
+                        'effective_on' => $voidedAt->copy()->setTimezone('Asia/Riyadh')->toDateString(),
+                        'reason' => mb_substr($reason, 0, 500),
+                        'created_by' => $u->id,
+                    ]
+                );
+
                 $e->update([
                     'status' => 'voided',
-                    'voided_at' => now(),
+                    'voided_at' => $voidedAt,
                     'void_reason' => mb_substr($reason, 0, 500),
                 ]);
 
@@ -252,6 +266,8 @@ class ExpenseController extends Controller
                         'cashier_shift_id' => $e->cashier_shift_id,
                         'shift_reversed' => (bool) ($shift ?? null)
                             && ($shift->status ?? null) === 'open',
+                        'reversal_ulid' => $reversal->reversal_ulid,
+                        'reversal_effective_on' => $reversal->effective_on?->toDateString(),
                     ],
                 ]);
 
