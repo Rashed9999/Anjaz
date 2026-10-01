@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\CashierShift;
 use App\Models\MerchantSale;
+use App\Models\Retail\ShiftCashMovement;
+use App\Services\Retail\MerchantShiftCashService;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -393,14 +395,28 @@ class CashierShiftService
     public function snapshot(CashierShift $shift): array
     {
         $c = $this->computeCash($shift);
+        $movements = app(MerchantShiftCashService::class)
+            ->summarise(ShiftCashMovement::CASHIER, $shift->id);
+
+        // حقيقة الدرج ليست المبيعات فقط:
+        // افتتاح + مبيعات نقدية + تحصيل ديون + الداخل − الخارج.
+        // ومن الخارج المرتجع النقدي، المصروف، وتسليم النقد للخزنة.
         $expected = MoneyService::add(
-            MoneyService::add((string) $shift->opening_float, $c['cash_sales']),
-            $c['cash_collections']
+            MoneyService::add(
+                MoneyService::add((string) $shift->opening_float, $c['cash_sales']),
+                $c['cash_collections']
+            ),
+            $movements['net']
         );
+
         return [
             'opening_float' => (string) $shift->opening_float,
             'cash_sales' => $c['cash_sales'],
             'cash_collections' => $c['cash_collections'],
+            'cash_movements_in' => MoneyService::normalize($movements['in']),
+            'cash_movements_out' => MoneyService::normalize($movements['out']),
+            'cash_movements_net' => MoneyService::normalize($movements['net']),
+            'cash_movements_count' => $movements['count'],
             'sales_count' => $c['sales_count'],
             'expected_cash' => MoneyService::normalize($expected),
             'opened_at' => $shift->opened_at?->toIso8601String(),
@@ -420,9 +436,14 @@ class CashierShiftService
                 throw new RuntimeException('الوردية مُقفلة مسبقاً');
             }
             $c = $this->computeCash($locked);
+            $movements = app(MerchantShiftCashService::class)
+                ->summarise(ShiftCashMovement::CASHIER, $locked->id);
             $expected = MoneyService::normalize(MoneyService::add(
-                MoneyService::add((string) $locked->opening_float, $c['cash_sales']),
-                $c['cash_collections']
+                MoneyService::add(
+                    MoneyService::add((string) $locked->opening_float, $c['cash_sales']),
+                    $c['cash_collections']
+                ),
+                $movements['net']
             ));
             $counted = MoneyService::normalize($countedCash);
             $variance = MoneyService::normalize(MoneyService::sub($counted, $expected));
