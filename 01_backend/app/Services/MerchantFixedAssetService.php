@@ -200,82 +200,7 @@ class MerchantFixedAssetService
             ->whereIn('status', ['active', 'disposed'])->pluck('id');
 
         foreach ($assetIds as $assetId) {
-            $result = DB::transaction(function () use ($merchant, $through, $assetId) {
-                $asset = MerchantFixedAsset::where('id', $assetId)
-                    ->where('merchant_user_id', $merchant->id)
-                    ->lockForUpdate()->firstOrFail();
-
-                $end = $through->copy();
-                if ($asset->disposed_on && $asset->disposed_on->lt($end)) {
-                    $end = $asset->disposed_on->copy()->endOfMonth();
-                }
-
-                $start = $asset->depreciation_starts_on->copy()->startOfMonth();
-                if ($end->lt($start)) {
-                    return ['count' => 0, 'total' => '0'];
-                }
-
-                $depreciable = bcsub(
-                    (string) $asset->acquisition_cost,
-                    (string) $asset->salvage_value,
-                    4
-                );
-                if (bccomp($depreciable, '0', 4) <= 0) {
-                    return ['count' => 0, 'total' => '0'];
-                }
-
-                $monthly = bcdiv($depreciable, (string) $asset->useful_life_months, 4);
-                $existing = MerchantAssetDepreciation::where('asset_id', $asset->id)
-                    ->orderBy('period')->get()->keyBy('period');
-                $accumulated = '0';
-                foreach ($existing as $row) {
-                    $accumulated = bcadd($accumulated, (string) $row->amount, 4);
-                }
-
-                $count = 0;
-                $sum = '0';
-                for ($i = 0; $i < $asset->useful_life_months; $i++) {
-                    $periodDate = $start->copy()->addMonthsNoOverflow($i);
-                    if ($periodDate->gt($end)) {
-                        break;
-                    }
-                    $period = $periodDate->format('Y-m');
-                    if ($existing->has($period)) {
-                        continue;
-                    }
-
-                    $remaining = bcsub($depreciable, $accumulated, 4);
-                    if (bccomp($remaining, '0', 4) <= 0) {
-                        break;
-                    }
-                    $amount = $i === $asset->useful_life_months - 1
-                        ? $remaining
-                        : (bccomp($monthly, $remaining, 4) > 0 ? $remaining : $monthly);
-
-                    $accumulated = bcadd($accumulated, $amount, 4);
-                    $book = bcsub((string) $asset->acquisition_cost, $accumulated, 4);
-                    if (bccomp($book, (string) $asset->salvage_value, 4) < 0) {
-                        $book = (string) $asset->salvage_value;
-                    }
-
-                    MerchantAssetDepreciation::create([
-                        'entry_ulid' => (string) Str::ulid(),
-                        'merchant_user_id' => $merchant->id,
-                        'asset_id' => $asset->id,
-                        'period' => $period,
-                        'amount' => $amount,
-                        'accumulated_after' => $accumulated,
-                        'book_value_after' => $book,
-                        'posted_by' => $merchant->id,
-                        'posted_at' => now(),
-                    ]);
-                    $count++;
-                    $sum = bcadd($sum, $amount, 4);
-                }
-
-                return ['count' => $count, 'total' => $sum];
-            }, 3);
-
+            $result = $this->postOneAssetThrough($merchant, (int) $assetId, $through);
             $posted += $result['count'];
             $total = bcadd($total, $result['total'], 4);
         }
@@ -304,6 +229,91 @@ class MerchantFixedAssetService
         ];
     }
 
+    /**
+     * إهلاك أصل واحد. نستخدمه عند الاستبعاد حتى لا يؤدي استبعاد كرسي واحد
+     * إلى ترحيل إهلاك كل أصول المنشأة للشهر الحالي قبل موعد الإغلاق.
+     *
+     * @return array{count:int,total:string}
+     */
+    private function postOneAssetThrough(User $merchant, int $assetId, Carbon $through): array
+    {
+        return DB::transaction(function () use ($merchant, $through, $assetId) {
+            $asset = MerchantFixedAsset::where('id', $assetId)
+                ->where('merchant_user_id', $merchant->id)
+                ->lockForUpdate()->firstOrFail();
+
+            $end = $through->copy()->endOfMonth();
+            if ($asset->disposed_on && $asset->disposed_on->lt($end)) {
+                $end = $asset->disposed_on->copy()->endOfMonth();
+            }
+
+            $start = $asset->depreciation_starts_on->copy()->startOfMonth();
+            if ($end->lt($start)) {
+                return ['count' => 0, 'total' => '0'];
+            }
+
+            $depreciable = bcsub(
+                (string) $asset->acquisition_cost,
+                (string) $asset->salvage_value,
+                4
+            );
+            if (bccomp($depreciable, '0', 4) <= 0) {
+                return ['count' => 0, 'total' => '0'];
+            }
+
+            $monthly = bcdiv($depreciable, (string) $asset->useful_life_months, 4);
+            $existing = MerchantAssetDepreciation::where('asset_id', $asset->id)
+                ->orderBy('period')->get()->keyBy('period');
+            $accumulated = '0';
+            foreach ($existing as $row) {
+                $accumulated = bcadd($accumulated, (string) $row->amount, 4);
+            }
+
+            $count = 0;
+            $sum = '0';
+            for ($i = 0; $i < $asset->useful_life_months; $i++) {
+                $periodDate = $start->copy()->addMonthsNoOverflow($i);
+                if ($periodDate->gt($end)) {
+                    break;
+                }
+                $period = $periodDate->format('Y-m');
+                if ($existing->has($period)) {
+                    continue;
+                }
+
+                $remaining = bcsub($depreciable, $accumulated, 4);
+                if (bccomp($remaining, '0', 4) <= 0) {
+                    break;
+                }
+                $amount = $i === $asset->useful_life_months - 1
+                    ? $remaining
+                    : (bccomp($monthly, $remaining, 4) > 0 ? $remaining : $monthly);
+
+                $accumulated = bcadd($accumulated, $amount, 4);
+                $book = bcsub((string) $asset->acquisition_cost, $accumulated, 4);
+                if (bccomp($book, (string) $asset->salvage_value, 4) < 0) {
+                    $book = (string) $asset->salvage_value;
+                }
+
+                MerchantAssetDepreciation::create([
+                    'entry_ulid' => (string) Str::ulid(),
+                    'merchant_user_id' => $merchant->id,
+                    'asset_id' => $asset->id,
+                    'period' => $period,
+                    'amount' => $amount,
+                    'accumulated_after' => $accumulated,
+                    'book_value_after' => $book,
+                    'posted_by' => $merchant->id,
+                    'posted_at' => now(),
+                ]);
+                $count++;
+                $sum = bcadd($sum, $amount, 4);
+            }
+
+            return ['count' => $count, 'total' => $sum];
+        }, 3);
+    }
+
     public function dispose(
         User $merchant,
         int $id,
@@ -311,8 +321,8 @@ class MerchantFixedAssetService
         ?string $proceeds,
         string $reason,
     ): MerchantFixedAsset {
-        // إثبات الإهلاك حتى شهر الاستبعاد قبل تجميد الأصل.
-        $this->postDepreciationThrough($merchant, $date);
+        // إثبات إهلاك الأصل المستبعد وحده؛ لا نرحّل بقية المحفظة مبكراً.
+        $this->postOneAssetThrough($merchant, $id, $date);
 
         $asset = DB::transaction(function () use ($merchant, $id, $date, $proceeds, $reason) {
             $asset = MerchantFixedAsset::where('id', $id)
