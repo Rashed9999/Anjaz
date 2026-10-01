@@ -29,6 +29,8 @@ return new class extends Migration
         Schema::table('supplier_ledger', function (Blueprint $table) {
             $table->decimal('credit_after', 20, 4)->default(0)
                 ->after('debt_after');
+            $table->decimal('supplier_credit_applied', 20, 4)->default(0)
+                ->after('credit_after');
         });
 
         Schema::table('purchase_returns', function (Blueprint $table) {
@@ -113,7 +115,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('supplier_ledger', function (Blueprint $table) {
-            $table->dropColumn('credit_after');
+            $table->dropColumn(['credit_after', 'supplier_credit_applied']);
         });
 
         Schema::table('suppliers', function (Blueprint $table) {
