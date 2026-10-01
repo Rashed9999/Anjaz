@@ -34,7 +34,7 @@ class MerchantOverrideService
      * @throws DomainException إن كان لا يملك الفعلَ أصلاً
      */
     public function request(User $staff, string $permission, string $reason,
-        ?string $amount = null): int
+        ?string $amount = null, ?string $contextKey = null): int
     {
         if (trim($reason) === '') {
             throw new DomainException('سببُ الطلب مطلوب');
@@ -55,6 +55,10 @@ class MerchantOverrideService
         $normalizedAmount = $amount === null
             ? null
             : \App\Services\MoneyService::normalize($amount);
+        $normalizedContext = $contextKey === null ? null : trim($contextKey);
+        if ($normalizedContext === '') {
+            $normalizedContext = null;
+        }
 
         $existing = DB::table('merchant_permission_overrides')
             ->where('merchant_user_id', $merchantId)
@@ -67,6 +71,11 @@ class MerchantOverrideService
                 fn ($q) => $q->whereNull('max_amount'),
                 fn ($q) => $q->where('max_amount', $normalizedAmount),
             )
+            ->when(
+                $normalizedContext === null,
+                fn ($q) => $q->whereNull('context_key'),
+                fn ($q) => $q->where('context_key', $normalizedContext),
+            )
             ->orderByDesc('id')
             ->value('id');
 
@@ -78,6 +87,7 @@ class MerchantOverrideService
             'merchant_user_id' => $merchantId,
             'requested_by_user_id' => $staff->id,
             'permission_code' => $permission,
+            'context_key' => $normalizedContext,
             'max_amount' => $normalizedAmount,
             'reason' => mb_substr($reason, 0, 1000),
             'status' => 'pending',
@@ -95,7 +105,7 @@ class MerchantOverrideService
             'reason' => $reason,
             'severity' => 'notice',
             'context' => ['permission' => $permission, 'amount' => $amount,
-                'override_id' => $id],
+                'context_key' => $normalizedContext, 'override_id' => $id],
         ]);
 
         return $id;
@@ -219,14 +229,30 @@ class MerchantOverrideService
      * ولا يُنادى إلّا لحظةَ التنفيذ: **إذنٌ يُقرأ ولا يُستهلَك إذنٌ دائم**،
      * فيُنفَّذ به مرّتان.
      */
-    public function consume(User $staff, string $permission, ?string $amount = null): bool
-    {
-        return (bool) DB::transaction(function () use ($staff, $permission, $amount) {
+    public function consume(
+        User $staff,
+        string $permission,
+        ?string $amount = null,
+        ?string $contextKey = null,
+    ): bool {
+        return (bool) DB::transaction(function () use ($staff, $permission, $amount, $contextKey) {
+            $merchantId = $this->perm->merchantIdFor($staff);
+            $normalizedContext = $contextKey === null ? null : trim($contextKey);
+            if ($normalizedContext === '') {
+                $normalizedContext = null;
+            }
+
             $row = DB::table('merchant_permission_overrides')
+                ->where('merchant_user_id', $merchantId)
                 ->where('requested_by_user_id', $staff->id)
                 ->where('permission_code', $permission)
                 ->where('status', 'granted')
                 ->where('expires_at', '>', now())
+                ->when(
+                    $normalizedContext === null,
+                    fn ($q) => $q->whereNull('context_key'),
+                    fn ($q) => $q->where('context_key', $normalizedContext),
+                )
                 ->orderBy('id')          // الأقدمُ أوّلاً — لا يُترَك ليموت
                 ->lockForUpdate()->first();
 
