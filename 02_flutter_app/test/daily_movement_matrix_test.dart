@@ -24,11 +24,13 @@ class _MockMerchantRepo extends Mock implements MerchantRepo {}
 Map<String, dynamic> _row(String code, String label, String direction,
         {String cash = '0.0000',
         String amialPay = '0.0000',
+        String supplierCredit = '0.0000',
         String credit = '0.0000',
         String total = '0.0000'}) =>
     {
       'code': code, 'label_ar': label, 'direction': direction,
       'available': true, 'cash': cash, 'amial_pay': amialPay,
+      'supplier_credit': supplierCredit,
       'credit': credit, 'total': total, 'count': 1, 'source': 'قياس',
     };
 
@@ -42,10 +44,11 @@ Map<String, dynamic> _report({required List<Map<String, dynamic>> rows}) => {
       'wallet': {'balance': '0'},
       'receivables': {'known': true, 'amount': '0', 'source': 'قياس'},
       'movement': {
-        'contract': 'daily-movement/v1',
-        'columns': ['cash', 'amial_pay', 'credit'],
+        'contract': 'daily-movement/v2',
+        'columns': ['cash', 'amial_pay', 'supplier_credit', 'credit'],
         'column_labels_ar': {
-          'cash': 'نقدي', 'amial_pay': 'أميال باي', 'credit': 'آجل',
+          'cash': 'نقدي', 'amial_pay': 'أميال باي',
+          'supplier_credit': 'رصيد مورد', 'credit': 'آجل',
         },
         'rows': rows,
         'net_cash': {
@@ -89,6 +92,8 @@ void main() {
 
     expect(find.text('صافي النقد من حركة اليوم'), findsOneWidget,
         reason: 'الصافي النقديُّ لا يصل العين');
+    expect(find.text('رصيد مورد'), findsOneWidget,
+        reason: 'تسوية رصيد المورد اختفت من المصفوفة الجديدة');
   });
 
   testWidgets('والصفُّ الغائبُ يكتب سببَه ولا يُرسَم صفراً', (t) async {
@@ -100,7 +105,7 @@ void main() {
       {
         'code': 'purchase', 'label_ar': 'الشراء', 'direction': 'out',
         'available': false, 'unavailable_reason_ar': why,
-        'cash': null, 'amial_pay': null, 'credit': null,
+        'cash': null, 'amial_pay': null, 'supplier_credit': null, 'credit': null,
         'total': null, 'count': null, 'source': null,
       },
       {
