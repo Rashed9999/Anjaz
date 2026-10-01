@@ -67,15 +67,15 @@ class WebProcurementDocumentController extends Controller
         $owner = $request->user('merchant_web');
         $payment = SupplierLedgerEntry::where('entry_ulid', strtoupper($entryUlid))
             ->where('merchant_user_id', $owner->id)
-            ->where('entry_type', 'payment')
+            ->whereIn('entry_type', ['payment', 'supplier_refund'])
             ->first();
 
-        if (! $payment) return $this->notFound('سند سداد المورد غير موجود');
+        if (! $payment) return $this->notFound('سند حركة المورد غير موجود');
 
         try {
             // السداد immutable؛ نفس المستند ونفس الرقم، وإعادة التحميل لا تنشئ دفعاً جديداً.
             $bytes = $this->cache->remember(
-                'supplier_payment_'.$payment->entry_ulid,
+                'supplier_cash_document_'.$payment->entry_ulid,
                 fn () => $this->pdf->supplierPaymentReceipt($payment)
             );
 
