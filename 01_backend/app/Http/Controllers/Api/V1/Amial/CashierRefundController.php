@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\MerchantSaleRefundService;
 use App\Services\BranchResolverService;
 use App\Services\Merchant\MerchantPermissionService;
+use App\Services\Merchant\MerchantOverrideService;
 use App\Support\Merchant\MerchantPermissions as P;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -57,6 +58,38 @@ class CashierRefundController extends Controller
                 $request->user(), P::RETAIL_RETURN_CREATE, [], (string) $request->input('amount'),
             );
         } catch (DomainException $e) {
+            if ($e->getCode() === MerchantPermissionService::APPROVAL_REQUIRED) {
+                // الكاشير لا يُترك أمام 403 ميت. ينشئ طلب إذن حقيقياً يراه
+                // مالك المنشأة، وبعد منحه يعيد الموظف المحاولة بنفس الفاتورة.
+                $reason = trim((string) $request->input('reason', ''));
+                if ($reason === '') {
+                    $reason = 'طلب اعتماد مرتجع للبيع ' . $saleUlid;
+                }
+
+                try {
+                    $approvalId = app(MerchantOverrideService::class)->request(
+                        $request->user(),
+                        P::RETAIL_RETURN_CREATE,
+                        $reason,
+                        (string) $request->input('amount'),
+                    );
+                } catch (DomainException $approvalError) {
+                    return $this->error('FORBIDDEN', $approvalError->getMessage(), 403);
+                }
+
+                return $this->ok([
+                    'approval' => [
+                        'request_id' => $approvalId,
+                        'status' => 'pending',
+                        'permission' => P::RETAIL_RETURN_CREATE,
+                        'amount' => (string) $request->input('amount'),
+                    ],
+                ], 'APPROVAL_PENDING',
+                    'أُرسل طلب الاعتماد إلى مالك المنشأة. أعد المحاولة بعد الموافقة.',
+                    202
+                );
+            }
+
             return $this->error('FORBIDDEN', $e->getMessage(), 403);
         }
 
