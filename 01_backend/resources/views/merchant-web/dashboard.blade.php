@@ -998,7 +998,7 @@
     const summary=node('div',null,'grid');
     summary.append(metric('علينا للمورد',money(supplier.current_debt)),metric('لنا عند المورد',money(supplier.current_credit||0)),metric('صافي المركز',money(Number(supplier.current_debt||0)-Number(supplier.current_credit||0))),metric('الهاتف',supplier.phone||'—'));
     p.append(summary);
-    table(p,[['التاريخ',x=>x.created_at||'—'],['الحركة',x=>ledgerType(x.entry_type)],['القيمة',x=>money(x.amount)],['مدفوع نقداً',x=>x.cash_amount===null||x.cash_amount===undefined?'—':money(x.cash_amount)],['علينا بعد',x=>money(x.debt_after)],['لنا بعد',x=>money(x.credit_after||0)],['المرجع',x=>x.reference||'—'],['المستند',x=>x.entry_type==='payment'&&x.entry_ulid?action('PDF',()=>window.open(dataUrl('supplierPaymentPdf',x.entry_ulid),'_blank','noopener')):'—'],['ملاحظة',x=>x.note||'—']],data.ledger||[]);
+    table(p,[['التاريخ',x=>x.created_at||'—'],['الحركة',x=>ledgerType(x.entry_type)],['القيمة',x=>money(x.amount)],['مدفوع نقداً',x=>x.cash_amount===null||x.cash_amount===undefined?'—':money(x.cash_amount)],['علينا بعد',x=>money(x.debt_after)],['لنا بعد',x=>money(x.credit_after||0)],['المرجع',x=>x.reference||'—'],['المستند',x=>['payment','supplier_refund'].includes(x.entry_type)&&x.entry_ulid?action('PDF',()=>window.open(dataUrl('supplierPaymentPdf',x.entry_ulid),'_blank','noopener')):'—'],['ملاحظة',x=>x.note||'—']],data.ledger||[]);
     const pdf=action('تنزيل كشف المورد PDF',()=>window.open(dataUrl('supplierStatementPdf',id),'_blank','noopener'),false);
     p.append(buttons([pdf]));
     p.scrollIntoView({behavior:'smooth',block:'start'});
@@ -1058,11 +1058,14 @@
     const note=window.prompt('ملاحظة التحصيل (اختياري)')||'';
     const shiftId=chooseCashierShift(openShifts,'استلام هذا المبلغ من المورد');
     if(shiftId===undefined)return;
-    await api('supplierCreditRefund',{
+    const result=await api('supplierCreditRefund',{
       amount:String(amount),note,
       ...(shiftId?{cashier_shift_id:shiftId}:{})
     },dataUrl('supplierCreditRefund',row.id));
     message('تم تحصيل رصيد المورد');
+    if(result.receipt?.entry_ulid&&window.confirm('تم التحصيل. هل تريد فتح سند التحصيل PDF؟')){
+      window.open(dataUrl('supplierPaymentPdf',result.receipt.entry_ulid),'_blank','noopener');
+    }
     await load('suppliers');
   }
 
