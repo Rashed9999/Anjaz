@@ -136,7 +136,7 @@ class PosDeviceSessionBindingGuardTest extends TestCase
 
         $this->bind($m, $actor, 'device-alpha', 'tok-alive');
 
-        $this->assertSame(200, $this->pass($actor, 'tok-alive')->getStatusCode(),
+        $this->assertSame(200, $this->pass($actor, 'tok-alive', 'device-alpha')->getStatusCode(),
             'جلسةٌ سليمةٌ على جهازٍ حيٍّ مُنعت — فالبوّابةُ تمنع الجميع');
     }
 
@@ -246,6 +246,25 @@ class PosDeviceSessionBindingGuardTest extends TestCase
 
         $this->assertSame(401, $this->pass($actor, 'tok-silent')->getStatusCode(),
             'حذفُ الترويسة حرّر الرمزَ من مقعده الملغى — فالربطُ في العميل لا في الخادم');
+    }
+
+    /** @test */
+    public function a_live_bound_session_cannot_drop_the_device_header(): void
+    {
+        $m = $this->merchant();
+        $actor = $this->cashier($m);
+
+        $this->bind($m, $actor, 'device-bound', 'tok-bound');
+
+        $response = $this->pass($actor, 'tok-bound');
+
+        $this->assertSame(403, $response->getStatusCode(),
+            'رمز POS مربوطٌ بمقعد حي عمل بعد حذف هوية الجهاز — نسخ access token وحده صار كافياً');
+
+        $this->assertSame(
+            'POS_DEVICE_HEADER_REQUIRED',
+            json_decode($response->getContent(), true)['code'] ?? null,
+        );
     }
 
     /**
