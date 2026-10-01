@@ -272,6 +272,7 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
                     customer: widget.customerPhone,
                     totalYer: double.tryParse('${widget.sale['total_amount'] ?? 0}'),
                     currencies: _settings.currencies,
+                    verificationUrl: _verificationUrl,
                   )),
             ),
           ),
