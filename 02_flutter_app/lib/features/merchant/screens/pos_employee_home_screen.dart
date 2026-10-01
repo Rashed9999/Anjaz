@@ -74,21 +74,21 @@ class PosEmployeeHomeScreen extends StatelessWidget {
   }
 
   String get _sellTitle {
-    if (_access.isFuel) return 'بيع وقود';
-    if (_access.isPharmacy) return 'بيع صيدلية';
-    if (_access.isWholesale) return 'فاتورة جملة جديدة';
-    if (_access.isRestaurant) return 'تحصيل طلبات المطعم';
-    if (_access.isQuickSale) return 'بيع سريع';
-    return 'بيع تجزئة';
+    if (_access.isFuel) return 'pos_sell_fuel'.tr;
+    if (_access.isPharmacy) return 'pos_sell_pharmacy'.tr;
+    if (_access.isWholesale) return 'pos_new_wholesale_invoice'.tr;
+    if (_access.isRestaurant) return 'pos_collect_restaurant_orders'.tr;
+    if (_access.isQuickSale) return 'pos_quick_sale'.tr;
+    return 'pos_retail_sale'.tr;
   }
 
   String get _sellSubtitle {
-    if (_access.isFuel) return 'المضخة · الكمية · وسيلة الدفع';
-    if (_access.isPharmacy) return 'الدواء · التشغيلة · الدفع';
-    if (_access.isWholesale) return 'عميل · أصناف · سعر جملة';
-    if (_access.isRestaurant) return 'الطلبات المفتوحة · التحصيل · الفاتورة';
-    if (_access.isQuickSale) return 'أدخل المبلغ ثم استلم الدفع';
-    return 'الباركود · السلة · الدفع';
+    if (_access.isFuel) return 'pos_fuel_sale_subtitle'.tr;
+    if (_access.isPharmacy) return 'pos_pharmacy_sale_subtitle'.tr;
+    if (_access.isWholesale) return 'pos_wholesale_sale_subtitle'.tr;
+    if (_access.isRestaurant) return 'pos_restaurant_sale_subtitle'.tr;
+    if (_access.isQuickSale) return 'pos_quick_sale_subtitle'.tr;
+    return 'pos_retail_sale_subtitle'.tr;
   }
 
   @override
@@ -98,15 +98,15 @@ class PosEmployeeHomeScreen extends StatelessWidget {
       child: Scaffold(
         backgroundColor: AmialColors.background,
         appBar: AppBar(
-          title: Obx(() => Text(_access.posDisplayName.value ?? 'نقطة البيع')),
+          title: Obx(() => Text(_access.posDisplayName.value ?? 'pos_point_of_sale'.tr)),
           actions: [
             IconButton(
-              tooltip: 'إشعاراتي',
+              tooltip: 'pos_my_notifications'.tr,
               icon: const Icon(Icons.notifications_none_rounded),
               onPressed: () => Get.to(() => const NotificationsCenterScreen()),
             ),
             IconButton(
-              tooltip: 'تسجيل الخروج',
+              tooltip: 'common_logout'.tr,
               icon: const Icon(Icons.logout_rounded),
               onPressed: () => _confirmLogout(context),
             ),
@@ -119,7 +119,7 @@ class PosEmployeeHomeScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             children: [
               _IdentityCard(
-                name: _access.posDisplayName.value ?? 'موظّف نقطة بيع',
+                name: _access.posDisplayName.value ?? 'pos_employee'.tr,
                 code: _access.posNumber.value,
                 store: _access.businessName,
                 businessLabel: _access.businessTypeLabel.value,
