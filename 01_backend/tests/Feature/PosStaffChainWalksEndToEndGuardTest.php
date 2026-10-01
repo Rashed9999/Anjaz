@@ -152,7 +152,19 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
 
         $res->assertStatus(201);
 
-        return (array) $res->json('meta');
+        $id = (int) (
+            $res->json('meta.id')
+            ?? $res->json('meta.result.id')
+            ?? $res->json('data.id')
+            ?? 0
+        );
+
+        $this->assertGreaterThan(0, $id, sprintf(
+            "تم إنشاء الموظف لكن الرد لم يُرجع معرّف PosUser صالحاً. الرد: %s",
+            json_encode($res->json(), JSON_UNESCAPED_UNICODE)
+        ));
+
+        return ['id' => $id];
     }
 
     /**
