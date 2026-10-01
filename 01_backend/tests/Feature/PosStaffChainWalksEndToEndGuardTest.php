@@ -105,6 +105,15 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
         $row->save();
     }
 
+    private function asMerchantWeb(): static
+    {
+        $this->defaultHeaders = [];
+        app('auth')->forgetGuards();
+        $this->actingAs($this->merchant, 'merchant_web');
+
+        return $this;
+    }
+
     /**
      * **٠ — المالك ينشئ الصنف من بوابة الويب التي يعمل عليها فعلاً.**
      *
@@ -113,7 +122,7 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
      */
     private function merchantCreatesProductOnWeb(): int
     {
-        $res = $this->actingAs($this->merchant, 'merchant_web')
+        $res = $this->asMerchantWeb()
             ->postJson('/merchant/data/sector/products', [
                 'name' => 'ماء أميال 500مل',
                 'price' => '125',
@@ -351,8 +360,7 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
             'البيع نجح لكن مخزون المنتج الذي أنشأه التاجر لم ينقص');
 
         // والمالك يرى البيعة نفسها من سجل الويب القطاعي.
-        $webSales = $this->actingAs($this->merchant, 'merchant_web')
-            ->withHeader('Authorization', '')
+        $webSales = $this->asMerchantWeb()
             ->getJson('/merchant/data/sector/sales');
         $webSales->assertOk();
         $ownerRows = collect($webSales->json('meta.result.sales') ?? []);
