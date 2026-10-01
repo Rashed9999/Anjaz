@@ -180,7 +180,7 @@ class MerchantPermissionService
     /**
      * الفحصُ الكامل — **يُنادى قبل كلّ فعلٍ خطير**.
      *
-     * @param  array{station?:int,branch?:int,shift?:int,owner_user_id?:int}  $context
+     * @param  array{station?:int,branch?:int,shift?:int,owner_user_id?:int,approval_key?:string}  $context
      * @return array{allowed:bool,approval:string,reason:?string}
      */
     public function evaluate(
@@ -283,7 +283,16 @@ class MerchantPermissionService
         //
         // فيُبحَث عن إذنِ مديرٍ صالحٍ ويُستهلَك. **والاستهلاكُ لحظةَ
         // التنفيذ**: إذنٌ يُقرأ ولا يُستهلَك إذنٌ دائمٌ يُنفَّذ به مرّتان.
-        if (app(MerchantOverrideService::class)->consume($user, $permission, $amount)) {
+        $approvalKey = isset($context['approval_key'])
+            ? (string) $context['approval_key']
+            : null;
+
+        if (app(MerchantOverrideService::class)->consume(
+            $user,
+            $permission,
+            $amount,
+            $approvalKey,
+        )) {
             return;
         }
 
