@@ -124,6 +124,7 @@ final class MerchantPortalNavigationService
         }
         if ($this->available($states, A::F_EXPENSES)) {
             $items[] = $this->item('expenses', 'المصروفات', 'payments', EntitlementService::AVAILABLE);
+            $items[] = $this->item('assets', 'الأصول الثابتة', 'business_center', EntitlementService::AVAILABLE);
         }
         $hasBranches = $this->available($states, A::F_BRANCHES);
         $hasEmployees = $this->available($states, A::F_EMPLOYEES);
