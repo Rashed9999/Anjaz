@@ -248,10 +248,19 @@ class MerchantWebPortalTest extends TestCase
             ['type' => 4, 'role' => 'pos'],
         ] as $identity) {
             $user = User::factory()->create($identity);
-            $this->actingAs($user, 'merchant_web')
-                ->getJson('/merchant/data/wallet-verification')->assertForbidden();
-            $this->getJson('/merchant/data/debts')->assertForbidden();
-            $this->getJson('/merchant/data/wallet-origins')->assertForbidden();
+
+            // بعض حرّاس البوابة ينهون جلسة الهوية غير المسموح بها بعد
+            // أول رفض. نعيد المصادقة لكل باب حتى نقيس تفويض كل endpoint
+            // نفسه (403)، لا أثر رفض الباب السابق (401).
+            foreach ([
+                '/merchant/data/wallet-verification',
+                '/merchant/data/debts',
+                '/merchant/data/wallet-origins',
+            ] as $endpoint) {
+                $this->actingAs($user, 'merchant_web')
+                    ->getJson($endpoint)
+                    ->assertForbidden();
+            }
         }
     }
 
