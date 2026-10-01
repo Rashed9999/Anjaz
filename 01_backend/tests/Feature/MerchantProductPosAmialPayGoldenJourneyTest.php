@@ -252,7 +252,48 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             'تسجيل البيع أضاف المبلغ إلى محفظة التاجر مرة ثانية'
         );
 
-        // ⑥ المرجع المالي أحادي الاستعمال: فاتورة ثانية بنفس الدفع تُرفض.
+        // ⑥ المرتجع الحقيقي لنفس بيع QR: الفاتورة لم تحمل هاتف العميل
+        // عمداً، كما يفعل التطبيق. يجب مع ذلك أن يعرف الخادم الدافع من
+        // PaymentRequest.paid_by_user_id ويعرض «إلى محفظة العميل».
+        Passport::actingAs($this->merchant, [], 'api');
+
+        $refundable = $this->getJson(
+            '/api/v1/amial/merchant/cashier/sales/'.$saleUlid.'/refundable'
+        )->assertOk();
+
+        $this->assertContains(
+            'wallet',
+            (array) $refundable->json('meta.available_methods'),
+            'بيع أميال الحقيقي لا يعرض الاسترداد إلى محفظة الدافع'
+        );
+
+        $refund = $this->postJson(
+            '/api/v1/amial/merchant/cashier/sales/'.$saleUlid.'/refund',
+            [
+                'amount' => '1500',
+                'refund_method' => 'wallet',
+                'reason' => 'مرتجع كامل لاختبار السلسلة',
+            ]
+        )->assertStatus(201)
+         ->assertJsonPath('code', 'REFUNDED');
+
+        $this->assertSame(
+            $customer->id,
+            (int) $refund->json('meta.refund.customer_user_id'),
+            'المرتجع لم يتعرّف على العميل الذي دفع QR فعلياً'
+        );
+        $this->assertSame(
+            $merchantBefore,
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'),
+            'المرتجع لم يخصم المبلغ من محفظة التاجر'
+        );
+        $this->assertSame(
+            $customerBefore,
+            (string) EMoney::where('user_id', $customer->id)->value('current_balance'),
+            'المرتجع لم يُعد المبلغ إلى محفظة العميل'
+        );
+
+        // ⑦ المرجع المالي أحادي الاستعمال: فاتورة ثانية بنفس الدفع تُرفض.
         $second = $this->postJson('/api/v1/amial/merchant/cashier/sales', [
             'total' => '1500',
             'payment_method' => 'amial_pay',
