@@ -53,6 +53,18 @@ class CashierRefundController extends Controller
             'reason' => 'sometimes|nullable|string|max:500',
         ]);
         if ($v->fails()) return $this->validationError($v);
+
+        // لا ننشئ طلبَ اعتماد قبل التحقق من أن البيع موجود داخل منشأة/فرع
+        // هذا الموظف. وإلا يستطيع رقم ULID مخترَع أن يملأ لوحة المالك بطلبات
+        // اعتماد لا يمكن تنفيذها أصلاً.
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posUserId, $branch] = $ctx;
+
+        if (! $this->saleInScope($merchant, $saleUlid, $branch?->id)) {
+            return $this->error('NOT_FOUND', 'العملية غير موجودة في فرعك', 404);
+        }
+
         try {
             $this->perm->assert(
                 $request->user(), P::RETAIL_RETURN_CREATE, [], (string) $request->input('amount'),
@@ -105,14 +117,6 @@ class CashierRefundController extends Controller
             if ($deny = $this->denyUnless($request, 'retail.returns.by_line')) {
                 return $deny;
             }
-        }
-
-        $ctx = $this->resolveMerchant($request);
-        if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, $posUserId, $branch] = $ctx;
-
-        if (! $this->saleInScope($merchant, $saleUlid, $branch?->id)) {
-            return $this->error('NOT_FOUND', 'العملية غير موجودة في فرعك', 404);
         }
 
         try {
