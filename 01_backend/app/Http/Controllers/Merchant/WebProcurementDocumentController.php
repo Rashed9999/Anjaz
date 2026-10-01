@@ -50,7 +50,9 @@ class WebProcurementDocumentController extends Controller
         try {
             // الكشف حيّ؛ يدخل آخر قيد + الرصيد في المفتاح حتى لا نخدم كشفاً قديماً.
             $last = SupplierLedgerEntry::where('supplier_id', $supplier->id)->max('id') ?? 0;
-            $key = 'supplier_statement_'.$supplier->id.'_'.$last.'_'.str_replace('.', '_', (string) $supplier->current_debt);
+            $key = 'supplier_statement_'.$supplier->id.'_'.$last.'_'
+                .str_replace('.', '_', (string) $supplier->current_debt).'_'
+                .str_replace('.', '_', (string) ($supplier->current_credit ?? '0'));
             $bytes = $this->cache->remember($key, fn () => $this->pdf->supplierStatement($supplier));
 
             return $this->download($bytes, $this->pdf->supplierStatementFilename($supplier));
