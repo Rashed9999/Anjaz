@@ -987,6 +987,7 @@ class CashierService
 
         $zero = MoneyService::normalize('0');
         $byMethod = ['cash' => $zero, 'credit' => $zero, 'amial_pay' => $zero];
+        $totalAll = $zero;
         $topProducts = [];
 
         // AMIAL-REPORTS-HOURLY-001: توزيع المبيعات على 24 ساعة (عدد + مبلغ).
@@ -996,6 +997,8 @@ class CashierService
         }
 
         foreach ($sales as $sale) {
+            $totalAll = MoneyService::add($totalAll, (string) $sale->total_amount);
+
             // نفس عقد الحقيقة المالية في لوحة التاجر:
             // المختلط يُقسّم بين الدرج والمحفظة، وحساب الشركة ذمّة لا نقد.
             if ($sale->payment_method === 'mixed') {
@@ -1053,7 +1056,7 @@ class CashierService
         return [
             'date' => $day->format('Y-m-d'),
             'sales_count' => $sales->count(),
-            'total_all' => (string) $sales->sum(fn ($s) => (float) $s->total_amount),
+            'total_all' => $totalAll,
             'realized_revenue' => $realized, // نقد + رقمي
             'by_method' => $byMethod,
             'outstanding_credit_total' => $outstandingCredit, // كل الأجل غير المسوّى
