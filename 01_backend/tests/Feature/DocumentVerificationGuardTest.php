@@ -106,7 +106,7 @@ class DocumentVerificationGuardTest extends TestCase
     }
 
     /** @test */
-    public function the_short_fuel_code_printed_on_the_voucher_actually_verifies(): void
+    public function the_legacy_short_fuel_code_still_verifies_after_full_qr_migration(): void
     {
         $m = $this->merchant('محطة الأمل للوقود');
         $ulid = (string) Str::ulid();
@@ -432,8 +432,11 @@ class DocumentVerificationGuardTest extends TestCase
         ] as $template) {
             $src = (string) file_get_contents(resource_path('views/'.$template));
 
-            $this->assertStringContainsString('/verify', $src,
-                "المستند «{$template}» يطبع رمزاً بلا موضعٍ يُكتب فيه — "
+            $hasDestination = str_contains($src, '/verify')
+                || str_contains($src, '$verificationUrl');
+
+            $this->assertTrue($hasDestination,
+                "المستند «{$template}» يطبع رمزاً بلا وجهة تحقق — "
                 .'فمن يحمل الورقةَ لا يعرف أين يذهب به');
         }
     }
