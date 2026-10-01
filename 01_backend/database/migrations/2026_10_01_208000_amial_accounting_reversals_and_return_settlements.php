@@ -19,6 +19,18 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::table('suppliers', function (Blueprint $table) {
+            // ما للمورد علينا يبقى current_debt، وما لنا عند المورد بعد
+            // مرتجعٍ يفوق الدين يُحفظ منفصلاً بدل دفنه في ملاحظة.
+            $table->decimal('current_credit', 20, 4)->default(0)
+                ->after('current_debt');
+        });
+
+        Schema::table('supplier_ledger', function (Blueprint $table) {
+            $table->decimal('credit_after', 20, 4)->default(0)
+                ->after('debt_after');
+        });
+
         Schema::table('purchase_returns', function (Blueprint $table) {
             $table->unsignedBigInteger('cashier_shift_id')->nullable()
                 ->after('settlement_type')->index();
@@ -100,6 +112,14 @@ return new class extends Migration
 
     public function down(): void
     {
+        Schema::table('supplier_ledger', function (Blueprint $table) {
+            $table->dropColumn('credit_after');
+        });
+
+        Schema::table('suppliers', function (Blueprint $table) {
+            $table->dropColumn('current_credit');
+        });
+
         Schema::table('merchant_fixed_assets', function (Blueprint $table) {
             $table->dropIndex(['disposal_cashier_shift_id']);
             $table->dropColumn([
