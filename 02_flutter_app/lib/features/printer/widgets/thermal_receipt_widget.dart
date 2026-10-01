@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:amial_pay/util/app_direction.dart';
 
 /// AMIAL-THERMAL-PRINT-001 — سطر في الإيصال الحراري.
@@ -37,6 +38,7 @@ class ThermalReceiptWidget extends StatelessWidget {
     this.logoBytes,
     this.phone,
     this.address,
+    this.verificationUrl,
   });
 
   /// يبني الإيصال من إعدادات متجر التاجر (اسم/شعار/هاتف/عنوان/تذييل).
@@ -54,6 +56,7 @@ class ThermalReceiptWidget extends StatelessWidget {
     num? tax,
     num? balanceDue,
     List<String> contextLines = const [],
+    String? verificationUrl,
   }) {
     String s(String k, [String d = '']) => '${settings[k] ?? d}';
     bool flag(String k) => settings[k] == true || settings[k] == 1 || settings[k] == '1';
@@ -75,6 +78,7 @@ class ThermalReceiptWidget extends StatelessWidget {
       tax: tax,
       balanceDue: balanceDue,
       contextLines: contextLines,
+      verificationUrl: verificationUrl,
     );
   }
 
@@ -95,6 +99,7 @@ class ThermalReceiptWidget extends StatelessWidget {
   final Uint8List? logoBytes;
   final String? phone;
   final String? address;
+  final String? verificationUrl;
 
   String _money(num v) => v.toStringAsFixed(0);
 
@@ -197,6 +202,23 @@ class ThermalReceiptWidget extends StatelessWidget {
             ]),
           ],
           _divider(),
+          if (verificationUrl != null && verificationUrl!.isNotEmpty) ...[
+            const Text('تحقق من أصالة الفاتورة', textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Center(
+              child: QrImageView(
+                data: verificationUrl!,
+                size: 128,
+                padding: EdgeInsets.zero,
+                backgroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(verificationUrl!, textAlign: TextAlign.center,
+                style: small.copyWith(fontSize: 13)),
+            _divider(),
+          ],
           const SizedBox(height: 4),
           Text(footer, textAlign: TextAlign.center, style: black.copyWith(fontSize: 20)),
           const SizedBox(height: 6),
