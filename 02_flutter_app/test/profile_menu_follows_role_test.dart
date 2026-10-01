@@ -161,12 +161,12 @@ void main() {
     // ══════════════════════════════════════════════════════════════
     final src = dashboard.readAsStringSync();
 
-    final directly = src.contains('const WithdrawRequestScreen()');
+    final directly = src.contains('const MerchantPayoutScreen()');
 
     final viaWallet = src.contains('const MerchantWalletScreen()') &&
         File('lib/features/merchant/screens/merchant_wallet_screen.dart')
             .readAsStringSync()
-            .contains('const WithdrawRequestScreen()');
+            .contains('const MerchantPayoutScreen()');
 
     expect(directly || viaWallet, isTrue,
         reason: '**لا يبلغ التاجرُ سحبَ ماله من لوحته.** '
