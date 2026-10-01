@@ -90,7 +90,7 @@
 <table class="info-table">
     <tr>
         <td class="label">التاريخ</td>
-        <td class="value">{{ $sale->created_at->format('Y-m-d H:i') }}</td>
+        <td class="value">{{ $sale->created_at->copy()->setTimezone('Asia/Riyadh')->format('Y-m-d H:i') }}</td>
     </tr>
     <tr>
         <td class="label">المضخّة</td>
@@ -163,9 +163,10 @@
     {{-- AMIAL-DOC-VERIFY-001 — **الرمزُ يصير رابطاً يُقرأ.**
          كان يُطبَع الرمزُ وحدَه تحت لافتة «رمز التحقّق» — **ولا مُتحقِّقَ
          يقبله ولا موضعَ يُكتب فيه**. فمن جرّبه قرأ سندَه الصحيحَ مزوَّراً. --}}
-    <div class="verification-code">{{ strtoupper(substr($sale->sale_ulid, -8)) }}</div>
-    <div style="font-size:9px; margin-top:4px">رمز التحقّق</div>
-    <div style="font-size:9px; margin-top:2px" dir="ltr">{{ rtrim(config('app.url', 'https://amialpay.com'), '/') }}/verify</div>
+    @if(!empty($qrDataUri))<img class="verification-qr" src="{{ $qrDataUri }}" alt="QR تحقق">@endif
+    <div style="font-size:9px; margin-top:4px">تحقق من أصالة السند</div>
+    <div class="verification-code">{{ $sale->sale_ulid }}</div>
+    <div style="font-size:8px; margin-top:2px" dir="ltr">{{ $verificationUrl }}</div>
     <div class="amial-brand">Amial Pay © {{ now()->year }}</div>
 </div>
 
