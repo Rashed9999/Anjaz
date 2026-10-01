@@ -3,6 +3,8 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * AMIAL-MERCHANT-ACCOUNTING-REVERSAL-001
@@ -60,6 +62,29 @@ return new class extends Migration
                 'mer_owner_effective_idx'
             );
         });
+
+        // أي مصروف أُلغي قبل نشر هذه الهجرة لا يجوز أن يختفي من الماضي.
+        // نولّد له reversal بتاريخ الإلغاء نفسه؛ فيبقى المصروف في يومه ويظهر
+        // التصحيح في يوم الإلغاء.
+        DB::table('merchant_expenses')
+            ->where('status', 'voided')
+            ->whereNotNull('voided_at')
+            ->orderBy('id')
+            ->chunkById(200, function ($rows) {
+                foreach ($rows as $row) {
+                    DB::table('merchant_expense_reversals')->insertOrIgnore([
+                        'reversal_ulid' => (string) Str::ulid(),
+                        'merchant_user_id' => $row->merchant_user_id,
+                        'expense_id' => $row->id,
+                        'amount' => $row->amount,
+                        'effective_on' => substr((string) $row->voided_at, 0, 10),
+                        'reason' => $row->void_reason ?: 'ترحيل إلغاء تاريخي',
+                        'created_by' => $row->created_by,
+                        'created_at' => $row->voided_at,
+                        'updated_at' => $row->voided_at,
+                    ]);
+                }
+            });
 
         Schema::table('merchant_fixed_assets', function (Blueprint $table) {
             $table->decimal('disposal_book_value', 20, 4)->nullable()
