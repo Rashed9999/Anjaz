@@ -998,7 +998,9 @@
     const summary=node('div',null,'grid');
     summary.append(metric('الرصيد المستحق',money(supplier.current_debt)),metric('الهاتف',supplier.phone||'—'),metric('التصنيف',supplier.category||'—'));
     p.append(summary);
-    table(p,[['التاريخ',x=>x.created_at||'—'],['الحركة',x=>ledgerType(x.entry_type)],['القيمة',x=>money(x.amount)],['مدفوع نقداً',x=>x.cash_amount===null||x.cash_amount===undefined?'—':money(x.cash_amount)],['الرصيد بعد',x=>money(x.debt_after)],['المرجع',x=>x.reference||'—'],['ملاحظة',x=>x.note||'—']],data.ledger||[]);
+    table(p,[['التاريخ',x=>x.created_at||'—'],['الحركة',x=>ledgerType(x.entry_type)],['القيمة',x=>money(x.amount)],['مدفوع نقداً',x=>x.cash_amount===null||x.cash_amount===undefined?'—':money(x.cash_amount)],['الرصيد بعد',x=>money(x.debt_after)],['المرجع',x=>x.reference||'—'],['المستند',x=>x.entry_type==='payment'&&x.entry_ulid?action('PDF',()=>window.open(dataUrl('supplierPaymentPdf',x.entry_ulid),'_blank','noopener')):'—'],['ملاحظة',x=>x.note||'—']],data.ledger||[]);
+    const pdf=action('تنزيل كشف المورد PDF',()=>window.open(dataUrl('supplierStatementPdf',id),'_blank','noopener'),false);
+    p.append(buttons([pdf]));
     p.scrollIntoView({behavior:'smooth',block:'start'});
   }
 
@@ -1105,7 +1107,7 @@
   }
 
   function purchaseOrderActions(row,openShifts){
-    const list=[];
+    const list=[action('PDF',()=>window.open(dataUrl('purchaseOrderPdf',row.id),'_blank','noopener'))];
     if(row.status==='draft')list.push(action('اعتماد',async()=>{await api('purchaseOrderApprove',{},dataUrl('purchaseOrderApprove',row.id));message('تم اعتماد أمر الشراء');await load('suppliers')},false));
     if(row.status==='approved'||row.status==='partially_received')list.push(action('استلام',()=>receivePurchaseOrder(row,openShifts),false));
     if(row.status==='draft'||row.status==='approved')list.push(action('إلغاء',async()=>{if(!window.confirm('إلغاء أمر الشراء '+row.po_number+'؟'))return;await api('purchaseOrderCancel',{},dataUrl('purchaseOrderCancel',row.id));message('تم إلغاء الأمر');await load('suppliers')}));
