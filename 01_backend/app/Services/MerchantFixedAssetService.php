@@ -364,8 +364,12 @@ class MerchantFixedAssetService
                 ->where('merchant_user_id', $merchant->id)
                 ->lockForUpdate()->firstOrFail();
 
-            if ($asset->status === 'disposed') {
-                throw new RuntimeException('الأصل مستبعد بالفعل');
+            if ($asset->status !== 'active') {
+                throw new RuntimeException(
+                    $asset->status === 'disposed'
+                        ? 'الأصل مستبعد بالفعل'
+                        : 'الأصل غير نشط ولا يمكن استبعاده مرة أخرى'
+                );
             }
             if ($date->lt($asset->acquired_on)) {
                 throw new RuntimeException('تاريخ الاستبعاد لا يسبق تاريخ اقتناء الأصل');
@@ -531,18 +535,23 @@ class MerchantFixedAssetService
     public function toArray(MerchantFixedAsset $asset): array
     {
         $balance = $this->balanceAt($asset, now());
+        $removedFromBooks = in_array($asset->status, ['disposed', 'returned_to_supplier'], true);
+        $currentCost = $removedFromBooks ? '0.0000' : $balance['carrying_cost_basis'];
+        $currentAccumulated = $removedFromBooks ? '0.0000' : $balance['accumulated_depreciation'];
+        $currentBook = $removedFromBooks ? '0.0000' : $balance['book_value'];
 
         return [
             'id' => $asset->id,
             'asset_ulid' => $asset->asset_ulid,
             'name' => $asset->name,
             'category' => $asset->category,
-            'quantity' => MoneyService::normalize((string) $asset->quantity, 3),
+            'quantity' => number_format((float) $asset->quantity, 3, '.', ''),
             'active_quantity' => $balance['active_quantity'],
             'returned_quantity' => $balance['returned_quantity'],
             'gross_acquisition_cost' => MoneyService::normalize((string) $asset->acquisition_cost),
             'returned_cost' => $balance['returned_cost'],
-            'carrying_cost_basis' => $balance['carrying_cost_basis'],
+            'carrying_cost_basis' => $currentCost,
+            'historical_carrying_cost_basis' => $balance['carrying_cost_basis'],
             // الاسم القديم يبقى الأصل التاريخي للسطر، وتعرض المجاميع أساس
             // التكلفة الجاري. لا نعيد كتابة تاريخ الاقتناء.
             'acquisition_cost' => MoneyService::normalize((string) $asset->acquisition_cost),
@@ -553,9 +562,11 @@ class MerchantFixedAssetService
             'monthly_depreciation' => MoneyService::normalize(
                 bcdiv($balance['depreciable_base'], (string) max(1, $asset->useful_life_months), 4)
             ),
-            'accumulated_depreciation' => $balance['accumulated_depreciation'],
+            'accumulated_depreciation' => $currentAccumulated,
+            'lifetime_accumulated_depreciation' => $balance['accumulated_depreciation'],
             'depreciation_reversed' => $balance['depreciation_reversed'],
-            'book_value' => $balance['book_value'],
+            'book_value' => $currentBook,
+            'book_value_before_removal' => $removedFromBooks ? $balance['book_value'] : null,
             'acquired_on' => $asset->acquired_on?->toDateString(),
             'depreciation_starts_on' => $asset->depreciation_starts_on?->toDateString(),
             'status' => $asset->status,
