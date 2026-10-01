@@ -74,6 +74,7 @@ class WebPortalController extends Controller
             'supplierShow' => route('merchant.web.data.suppliers.show', ['id' => '__ID__']),
             'supplierStatementPdf' => route('merchant.web.data.suppliers.statement.pdf', ['id' => '__ID__']),
             'supplierPayment' => route('merchant.web.data.suppliers.payment', ['id' => '__ID__']),
+            'supplierCreditRefund' => route('merchant.web.data.suppliers.credit-refund', ['id' => '__ID__']),
             'supplierWalletPayment' => route('merchant.web.data.suppliers.wallet-payment', ['id' => '__ID__']),
             'purchaseOrders' => route('merchant.web.data.purchase-orders.index'),
             'purchaseOrderCreate' => route('merchant.web.data.purchase-orders.store'),
