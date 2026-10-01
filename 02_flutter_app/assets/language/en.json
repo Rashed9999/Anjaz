@@ -1126,5 +1126,12 @@
   "pos_point_of_sale": "Point of sale",
   "pos_my_notifications": "My notifications",
   "common_logout": "Log out",
-  "pos_employee": "POS employee"
+  "pos_employee": "POS employee",
+  "merchant_sale_payment_summary": "Payment: @method · @count items",
+  "merchant_sale_status_summary": "Status: @status",
+  "merchant_refunded_amount": "Refunded: @amount YER",
+  "currency_yer_amount": "@amount YER",
+  "merchant_cashier_name": "Cashier: @name",
+  "common_today_time": "Today @time",
+  "common_yesterday_time": "Yesterday @time"
 }
