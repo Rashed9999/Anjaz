@@ -18,7 +18,7 @@
     .summary { margin-top: 14px; width: 42%; margin-right: auto; }.summary td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
     .summary .grand td { background: #eaf1ff; border-top: 2px solid #053391; font-size: 13pt; color: #053391; font-weight: bold; }
     .notice { margin-top: 16px; padding: 10px; background: #f7f9fc; border-right: 3px solid #f4b223; color: #475467; }
-    .footer { margin-top: 22px; border-top: 1px solid #d9e0ec; padding-top: 8px; color: #667085; text-align: center; font-size: 8.5pt; }
+    .verify { margin-top: 18px; padding: 10px; border: 1px solid #d9e0ec; text-align: center; }\n    .verify img { width: 105px; height: 105px; }\n    .verify .code { direction: ltr; font-family: monospace; font-size: 8pt; word-break: break-all; }\n    .footer { margin-top: 22px; border-top: 1px solid #d9e0ec; padding-top: 8px; color: #667085; text-align: center; font-size: 8.5pt; }
   </style>
 </head>
 <body>
@@ -28,19 +28,19 @@
   </td><td class="title">فاتورة صيدلية</td></tr></table>
   <table class="meta"><tr>
     <td><div class="k">رقم الفاتورة</div><div class="v left">{{ $sale->invoice_number ?: $sale->sale_ulid }}</div></td>
-    <td><div class="k">تاريخ الإصدار</div><div class="v left">{{ $sale->created_at?->format('Y-m-d H:i') }}</div></td>
+    <td><div class="k">تاريخ الإصدار</div><div class="v left">{{ $sale->created_at?->copy()->setTimezone('Asia/Riyadh')->format('Y-m-d H:i') }}</div></td>
     <td><div class="k">طريقة الدفع</div><div class="v">{{ $paymentLabel }}</div></td>
     <td><div class="k">الحالة</div><div class="v">{{ $sale->payment_method === 'credit' ? 'آجلة — غير مسددة' : 'مكتملة' }}</div></td>
   </tr></table>
   <table class="party" style="margin-top:12px"><tr><td><strong>العميل</strong><br>{{ $sale->customer?->full_name ?: 'عميل نقدي' }}@if($sale->customer?->phone)<br><span class="muted">{{ $sale->customer->phone }}</span>@endif</td>
     <td><strong>مرجع البيع</strong><br><span class="left">{{ $sale->sale_ulid }}</span>
       @if($sale->prescription_number)<br><span class="muted">الوصفة: {{ $sale->prescription_number }}</span>@endif
-      @if($sale->prescribing_doctor)<br><span class="muted">الطبيب: {{ $sale->prescribing_doctor }}</span>@endif
+      @if($sale->prescribing_doctor)<br><span class="muted">الطبيب: {{ $sale->prescribing_doctor }}</span>@endif\n      @if($sale->paid_transaction_id)<br><strong>مرجع دفع أميال</strong><br><span class="left">{{ $sale->paid_transaction_id }}</span>@endif
     </td></tr></table>
   <table class="items"><thead><tr><th style="width:5%">#</th><th>الصنف</th><th style="width:13%">التشغيلة</th><th style="width:13%">الانتهاء</th><th style="width:9%">الكمية</th><th style="width:13%">سعر الوحدة</th><th style="width:14%">الإجمالي</th></tr></thead><tbody>
   @forelse($items as $i => $item)<tr><td class="center">{{ $i + 1 }}</td><td>{{ $item['name'] }}@if($item['requires_prescription'])<br><span class="muted">بوصفة طبية</span>@endif</td><td class="center">{{ $item['batch_number'] ?: '—' }}</td><td class="center">{{ $item['expiry_date'] ?: '—' }}</td><td class="center">{{ rtrim(rtrim(number_format((float)$item['quantity'], 3, '.', ''), '0'), '.') }}</td><td class="left">{{ number_format((float)$item['unit_price'], 2) }}</td><td class="left"><strong>{{ number_format((float)$item['total'], 2) }}</strong></td></tr>
   @empty<tr><td colspan="7" class="center">لا توجد بنود مسجلة</td></tr>@endforelse</tbody></table>
-  <table class="summary"><tr><td>المجموع الفرعي</td><td class="left">{{ number_format((float)$sale->subtotal, 2) }} ر.ي</td></tr>@if((float)$sale->discount_amount > 0)<tr><td>الخصم</td><td class="left">- {{ number_format((float)$sale->discount_amount, 2) }} ر.ي</td></tr>@endif<tr class="grand"><td>الإجمالي</td><td class="left">{{ number_format((float)$sale->total_amount, 2) }} ر.ي</td></tr></table>
+  <table class="summary"><tr><td>المجموع الفرعي</td><td class="left">{{ number_format((float)$sale->subtotal, 2) }} ر.ي</td></tr>@if((float)$sale->discount_amount > 0)<tr><td>الخصم</td><td class="left">- {{ number_format((float)$sale->discount_amount, 2) }} ر.ي</td></tr>@endif<tr class="grand"><td>الإجمالي</td><td class="left">{{ number_format((float)$sale->total_amount, 2) }} ر.ي</td></tr>@if($sale->payment_method === 'cash' && $sale->amount_received !== null)<tr><td>المبلغ المستلم</td><td class="left">{{ number_format((float)$sale->amount_received, 2) }} ر.ي</td></tr><tr><td>الباقي</td><td class="left">{{ number_format(max(0, (float)$sale->amount_received - (float)$sale->total_amount), 2) }} ر.ي</td></tr>@endif</table>
   @if($sale->payment_method === 'credit')<div class="notice">فاتورة بيع آجل مرتبطة بدفتر ديون العميل ويمكن سدادها جزئياً أو كلياً من تطبيق أميال.</div>@endif
   <div class="footer">فاتورة صيدلية إلكترونية. إعادة التنزيل أو الطباعة لا تنشئ بيعاً أو دفعاً جديداً.</div>
 </body></html>
