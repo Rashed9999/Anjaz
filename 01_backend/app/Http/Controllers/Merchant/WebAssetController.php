@@ -67,7 +67,7 @@ class WebAssetController extends Controller
             'salvage_value' => 'sometimes|numeric|min:0',
             'useful_life_months' => 'required|integer|min:1|max:600',
             'acquired_on' => 'required|date|before_or_equal:today',
-            'depreciation_starts_on' => 'sometimes|nullable|date',
+            'depreciation_starts_on' => 'sometimes|nullable|date|after_or_equal:acquired_on|before_or_equal:today',
         ]);
         if ($v->fails()) return $this->err('VALIDATION', $v->errors()->first(), 422);
 
@@ -115,6 +115,7 @@ class WebAssetController extends Controller
         $v = Validator::make($request->all(), [
             'disposed_on' => 'required|date|before_or_equal:today',
             'disposal_proceeds' => 'sometimes|nullable|numeric|min:0',
+            'cashier_shift_id' => 'sometimes|nullable|integer|min:1',
             'reason' => 'required|string|min:5|max:500',
         ]);
         if ($v->fails()) return $this->err('VALIDATION', $v->errors()->first(), 422);
@@ -127,6 +128,8 @@ class WebAssetController extends Controller
                 $request->filled('disposal_proceeds')
                     ? (string) $request->input('disposal_proceeds') : null,
                 (string) $request->input('reason'),
+                $request->filled('cashier_shift_id')
+                    ? (int) $request->input('cashier_shift_id') : null,
             );
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
             return $this->err('NOT_FOUND', 'الأصل غير موجود', 404);
