@@ -8,6 +8,9 @@ use App\Models\CustomerCreditAccount;
 use App\Models\MerchantRefund;
 use App\Models\MerchantSale;
 use App\Models\PaymentRequest;
+use App\Services\Retail\MerchantShiftCashService;
+use App\Models\Retail\ShiftCashMovement;
+use App\Models\PosUser;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -215,7 +218,7 @@ class MerchantSaleRefundService
     private function executeMoneyMovement(MerchantRefund $refund, MerchantSale $sale, User $merchant): void
     {
         match ($refund->refund_method) {
-            'cash' => $this->refundCash($refund, $merchant),
+            'cash' => $this->refundCash($refund, $sale, $merchant),
             'wallet' => $this->refundToWallet($refund, $merchant),
             'credit_account' => $this->refundToCreditAccount($refund, $sale, $merchant),
         };
@@ -233,8 +236,60 @@ class MerchantSaleRefundService
      * نقداً ورقيّاً خارج دفتر المال الإلكترونيّ — كما في إعفاءَي «نقدٌ
      * ورقيّ» المقرَّرَين في `LedgerCoverageGuardTest`.
      */
-    private function refundCash(MerchantRefund $refund, User $merchant): void
-    {
+    private function refundCash(
+        MerchantRefund $refund,
+        MerchantSale $sale,
+        User $merchant,
+    ): void {
+        // النقد لا يلمس محفظة أميال، لكنه يخرج فعلياً من درج وردية.
+        // إن لم توجد وردية مفتوحة فلا نكذب في تقرير Z ثم نسمّي الفرق عجزاً.
+        $shift = app(CashierShiftService::class)->current(
+            $merchant,
+            $refund->pos_user_id,
+            $sale->branch_id !== null ? (int) $sale->branch_id : null,
+        );
+
+        if ($shift === null) {
+            throw new RuntimeException(
+                'افتح وردية نقطة البيع قبل الاسترداد النقدي — المبلغ يخرج من درج يجب أن يُجرَد.'
+            );
+        }
+
+        $actor = $merchant;
+        if ($refund->pos_user_id !== null) {
+            $pos = PosUser::where('merchant_user_id', $merchant->id)
+                ->whereKey((int) $refund->pos_user_id)
+                ->first();
+
+            $actor = $pos?->user_id ? User::find($pos->user_id) : null;
+            if (! $actor) {
+                throw new RuntimeException('تعذّر تحديد موظف نقطة البيع الذي نفّذ المرتجع النقدي');
+            }
+        }
+
+        // مرجع المرتجع هو مفتاحنا التشغيلي: لو أعيد استدعاء التنفيذ بعد
+        // انقطاع لا نطرح النقد من الوردية مرتين.
+        $exists = ShiftCashMovement::where('shift_type', ShiftCashMovement::CASHIER)
+            ->where('shift_id', $shift->id)
+            ->where('reason', 'refund')
+            ->where('reference', $refund->refund_ulid)
+            ->exists();
+
+        if (! $exists) {
+            app(MerchantShiftCashService::class)->record(
+                shiftType: ShiftCashMovement::CASHIER,
+                shiftId: $shift->id,
+                actor: $actor,
+                direction: 'out',
+                reason: 'refund',
+                amount: (string) $refund->refund_amount,
+                note: 'مرتجع نقدي للبيع '.$sale->sale_ulid,
+                reference: $refund->refund_ulid,
+                merchantUserId: $merchant->id,
+            );
+        }
+
+        // لا قيد دفتر إلكتروني للنقد الورقي؛ الحقيقة هنا في حركة الوردية.
         $refund->update(['ledger_entry_ulid' => null]);
     }
 
