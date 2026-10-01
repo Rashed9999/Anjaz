@@ -269,7 +269,9 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
 
         $saleLine = $sale->lines()->firstOrFail();
 
-        $refund = $this->postJson(
+        $refund = $this->withHeader(
+            'Idempotency-Key', 'golden-wallet-refund-'.$saleUlid
+        )->postJson(
             '/api/v1/amial/merchant/cashier/sales/'.$saleUlid.'/refund',
             [
                 'amount' => '1500',
@@ -411,7 +413,9 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         // مرتجع نقدي من الكاشير نفسه: لا يلمس المحفظة، لكنه يخرج من
         // الدرج ويجب أن يهبط «المتوقع» في تقرير X فوراً.
         $cashLine = $cashSale->lines()->firstOrFail();
-        $this->postJson(
+        $this->withHeader(
+            'Idempotency-Key', 'golden-cash-refund-'.$cashSale->sale_ulid
+        )->postJson(
             '/api/v1/amial/merchant/cashier/sales/'.$cashSale->sale_ulid.'/refund',
             [
                 'amount' => '500',
