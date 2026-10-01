@@ -77,6 +77,9 @@ class DocumentVerificationService
         // النقد والآجل على إنشاء Receipt مالي مصطنع؛ معرّف المستند نفسه
         // يكفي، والصفحة العامة تقرأ حالته الحية من مصدر القطاع.
         if (preg_match('/^[0-9A-Z]{26}$/', $code)) {
+            if ($order = RestaurantOrder::whereRaw('UPPER(sale_ulid) = ?', [$code])->first()) {
+                return $this->fromRestaurantOrder($order);
+            }
             if ($sale = MerchantSale::whereRaw('UPPER(sale_ulid) = ?', [$code])->first()) {
                 return $this->fromMerchantSale($sale);
             }
@@ -88,9 +91,6 @@ class DocumentVerificationService
             }
             if ($invoice = WholesaleInvoice::whereRaw('UPPER(invoice_ulid) = ?', [$code])->first()) {
                 return $this->fromWholesaleInvoice($invoice);
-            }
-            if ($order = RestaurantOrder::whereRaw('UPPER(sale_ulid) = ?', [$code])->first()) {
-                return $this->fromRestaurantOrder($order);
             }
         }
 
@@ -120,13 +120,15 @@ class DocumentVerificationService
         // ① **الملغى يُقال ملغىً، لا «غير موجود».**
         $voided = $receipt->status === 'voided';
 
-        // والفاتورةُ التي وُلدت من بيعةٍ تُسأل عن حالتها الحيّة: بيعةٌ
-        // أُلغيت أو استُرجعت بعد طباعة فاتورتها **لا تبقى «مكتملة»**.
-        $sale = $this->saleBehind($receipt);
-        [$state, $stateLabel] = $this->saleState($sale, $voided);
+        // مرجع القطاع يُحلّ حسب نوعه الحقيقي. لا يجوز قراءة pharmacy_sale
+        // أو fuel_sale بمعرّف من جدول merchant_sales لمجرّد أن الاسم يحوي
+        // كلمة sale؛ ذلك قد ينسب الإيصال لبيعة أخرى تحمل الرقم الداخلي نفسه.
+        $business = $this->receiptBusinessContext($receipt);
+        $state = $voided ? 'cancelled' : ($business['status'] ?? 'completed');
+        $stateLabel = $voided ? 'ملغى' : $this->stateLabel($state);
 
         $authenticity = match (true) {
-            $voided => 'cancelled',
+            $voided, $state === 'cancelled', $state === 'voided' => 'cancelled',
             $state === 'refunded' => 'refunded',
             default => 'authentic',
         };
@@ -136,9 +138,11 @@ class DocumentVerificationService
             'authenticity' => $authenticity,
             'authenticity_label' => $this->authenticityLabel($authenticity),
             'doc_type' => $receipt->receipt_type,
-            'doc_type_label' => $this->typeLabel($receipt->receipt_type),
+            'doc_type_label' => $business['label'] ?? $this->typeLabel($receipt->receipt_type),
             'document_number' => $receipt->receipt_number,
-            'issuer' => $this->issuerOf($receipt, $sale),
+            'issuer' => isset($business['merchant_user_id'])
+                ? $this->merchantName((int) $business['merchant_user_id'])
+                : 'أميال باي',
             'amount' => (string) $receipt->amount,
             'currency' => 'ر.ي',
             'issued_at' => $this->mecca($receipt->issued_at ?? $receipt->created_at),
@@ -272,34 +276,67 @@ class DocumentVerificationService
 
     // ── مساعدات ───────────────────────────────────────────────────────
 
-    /** البيعةُ التي وُلدت منها الفاتورة — إن كانت فاتورةَ تاجر. */
-    private function saleBehind(Receipt $receipt): ?MerchantSale
+    /**
+     * سياق المنشأة خلف Receipt مالي.
+     *
+     * @return array{status:string,merchant_user_id:int,label:string}|array{}
+     */
+    private function receiptBusinessContext(Receipt $receipt): array
     {
-        $ref = (string) ($receipt->reference_type ?? '');
-
-        if (! str_contains(strtolower($ref), 'sale')) {
-            return null;
+        $id = (int) ($receipt->reference_id ?? 0);
+        if ($id <= 0) {
+            return [];
         }
 
-        $id = $receipt->reference_id;
+        $ref = strtolower((string) ($receipt->reference_type ?? ''));
 
-        return $id ? MerchantSale::find($id) : null;
-    }
-
-    /** @return array{0:string,1:string} */
-    private function saleState(?MerchantSale $sale, bool $voided): array
-    {
-        if ($voided) {
-            return ['cancelled', 'ملغى'];
+        if ($ref === 'merchant_sale') {
+            $sale = MerchantSale::find($id);
+            return $sale ? [
+                'status' => (string) $sale->status,
+                'merchant_user_id' => (int) $sale->merchant_user_id,
+                'label' => 'فاتورة نقطة بيع',
+            ] : [];
         }
 
-        if (! $sale) {
-            return ['completed', 'مكتمل'];
+        if ($ref === 'pharmacy_sale') {
+            $sale = PharmacySale::find($id);
+            return $sale ? [
+                'status' => (string) $sale->status,
+                'merchant_user_id' => (int) $sale->merchant_user_id,
+                'label' => 'فاتورة صيدلية',
+            ] : [];
         }
 
-        $status = (string) $sale->status;
+        if ($ref === 'fuel_sale') {
+            $sale = FuelSale::find($id);
+            return $sale ? [
+                'status' => (string) $sale->status,
+                'merchant_user_id' => (int) $sale->merchant_user_id,
+                'label' => 'سند بيع وقود',
+            ] : [];
+        }
 
-        return [$status, $this->stateLabel($status)];
+        if ($ref === 'restaurant_order') {
+            $order = RestaurantOrder::find($id);
+            return $order ? [
+                'status' => (string) $order->status,
+                'merchant_user_id' => (int) $order->merchant_user_id,
+                'label' => 'فاتورة مطعم',
+            ] : [];
+        }
+
+        if ($ref === 'wholesale_invoice') {
+            $invoice = WholesaleInvoice::with('business')->find($id);
+            $merchantUserId = (int) ($invoice?->business?->merchant_user_id ?? 0);
+            return $invoice && $merchantUserId > 0 ? [
+                'status' => (string) $invoice->status,
+                'merchant_user_id' => $merchantUserId,
+                'label' => 'فاتورة جملة',
+            ] : [];
+        }
+
+        return [];
     }
 
     private function stateLabel(string $status): string
@@ -345,21 +382,6 @@ class DocumentVerificationService
             'bank_settlement' => 'تسوية بنكيّة',
             default => 'عملية مالية',
         };
-    }
-
-    /**
-     * **اسمُ المنشأة المُصدِرة — لا اسمُ العميل.**
-     *
-     * ومن لا منشأةَ له (تحويلٌ بين عميلين) مُصدِرُه المنصّة، ويُقال ذلك
-     * صراحةً: فراغٌ في خانة المُصدِر يُقرأ نقصاً في المستند.
-     */
-    private function issuerOf(Receipt $receipt, ?MerchantSale $sale): string
-    {
-        if ($sale) {
-            return $this->merchantName((int) $sale->merchant_user_id);
-        }
-
-        return 'أميال باي';
     }
 
     private function merchantName(int $merchantUserId): string
