@@ -8,6 +8,7 @@ use App\Http\Controllers\Merchant\WebSectorController as Sector;
 use App\Http\Controllers\Merchant\WebFinanceController as Finance;
 use App\Http\Controllers\Merchant\WebApprovalController as Approvals;
 use App\Http\Controllers\Merchant\WebAssetController as Assets;
+use App\Http\Controllers\Merchant\WebProcurementDocumentController as ProcurementDocuments;
 use App\Http\Controllers\Api\V1\Amial\CustomerCreditController as Credits;
 use App\Http\Controllers\Api\V1\Amial\BranchController;
 use App\Http\Controllers\Api\V1\Amial\CashierController;
@@ -109,6 +110,8 @@ Route::middleware('merchant.web')->group(function () {
             Route::post('/', [Suppliers::class, 'store'])
                 ->middleware(['amial.idempotency', 'throttle:20,1'])->name('store');
             Route::get('/{id}', [Suppliers::class, 'show'])->whereNumber('id')->name('show');
+            Route::get('/{id}/statement/pdf', [ProcurementDocuments::class, 'supplierStatement'])
+                ->whereNumber('id')->middleware('throttle:15,1')->name('statement.pdf');
             Route::post('/{id}/payment', [Suppliers::class, 'payment'])
                 ->whereNumber('id')
                 ->middleware(['amial.idempotency', 'throttle:30,1'])->name('payment');
@@ -121,6 +124,8 @@ Route::middleware('merchant.web')->group(function () {
             Route::post('/', [Suppliers::class, 'poStore'])
                 ->middleware(['amial.idempotency', 'throttle:30,1'])->name('store');
             Route::get('/{id}', [Suppliers::class, 'poShow'])->whereNumber('id')->name('show');
+            Route::get('/{id}/pdf', [ProcurementDocuments::class, 'purchaseOrder'])
+                ->whereNumber('id')->middleware('throttle:15,1')->name('pdf');
             Route::post('/{id}/approve', [Suppliers::class, 'poApprove'])
                 ->whereNumber('id')->middleware('amial.idempotency')->name('approve');
             Route::post('/{id}/receive', [Suppliers::class, 'poReceive'])
@@ -129,6 +134,11 @@ Route::middleware('merchant.web')->group(function () {
             Route::post('/{id}/cancel', [Suppliers::class, 'poCancel'])
                 ->whereNumber('id')->middleware('amial.idempotency')->name('cancel');
         });
+        Route::get('/supplier-payments/{entryUlid}/pdf', [ProcurementDocuments::class, 'supplierPayment'])
+            ->where('entryUlid', '[0-9A-Za-z]{26}')
+            ->middleware(['capability:suppliers', 'throttle:15,1'])
+            ->name('supplier-payments.pdf');
+
         Route::prefix('purchase-returns')->name('purchase-returns.')->middleware('capability:purchases')->group(function () {
             Route::get('/', [Suppliers::class, 'prIndex'])->name('index');
             Route::post('/', [Suppliers::class, 'prStore'])->middleware('amial.idempotency')->name('store');
