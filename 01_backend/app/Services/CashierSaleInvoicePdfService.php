@@ -43,7 +43,11 @@ class CashierSaleInvoicePdfService
             ])->values()->all();
 
         $vertical = (string) ($profile?->business_type ?? 'retail');
-        $title = $vertical === 'quick_sale' ? 'فاتورة بيع سريع' : 'فاتورة بيع بالتجزئة';
+        $title = match ($vertical) {
+            'quick_sale' => 'فاتورة بيع سريع',
+            'restaurant' => 'فاتورة مطعم',
+            default => 'فاتورة بيع بالتجزئة',
+        };
         $discount = (string) ($sale->discount_amount ?? '0');
         $total = (string) $sale->total_amount;
         $subtotal = MoneyService::add($total, $discount);
