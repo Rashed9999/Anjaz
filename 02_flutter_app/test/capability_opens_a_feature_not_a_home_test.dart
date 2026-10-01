@@ -46,14 +46,22 @@ void main() {
     expect(dispatcher.existsSync(), isTrue);
   });
 
-  /// الشاشاتُ التي يبنيها المُرسِلُ **رئيسيّةً** لتاجر.
-  Set<String> homeScreens() {
+  /// الوجهاتُ العليا التي يوزّع إليها التطبيق بعد فصل المالك إلى الويب.
+  ///
+  /// لم يعد هناك `_merchantShell(...)` ولا أربع رئيسيّات تاجر داخل
+  /// التطبيق. المساران المقصودان فقط: موظف POS إلى سطحه التشغيلي،
+  /// والمالك/الوكيل/الإدارة إلى إشعار البوابة.
+  Set<String> dispatcherRoleDestinations() {
     final src = dispatcher.readAsStringSync();
+    final out = <String>{};
 
-    return RegExp(r'_merchantShell\(const ([A-Za-z0-9_]+)\(')
-        .allMatches(src)
-        .map((m) => m.group(1)!)
-        .toSet();
+    for (final m in RegExp(
+      r"return const (PosEmployeeHomeScreen|WebPortalNoticeScreen)\\b",
+    ).allMatches(src)) {
+      out.add(m.group(1)!);
+    }
+
+    return out;
   }
 
   /// القدرةُ ← اسمُ الشاشة التي تفتحها.
@@ -70,22 +78,36 @@ void main() {
     return out;
   }
 
-  test('المُرسِلُ يُقرأ فعلاً — وإلّا فحص الحارسُ مجموعةً فارغة', () {
-    final homes = homeScreens();
+  test('المُرسِلُ يثبت فصل المالك عن موظف POS', () {
+    final destinations = dispatcherRoleDestinations();
 
-    expect(homes.length, greaterThan(3),
-        reason: 'لم تُقرأ شاشاتُ الرئيسيّة من المُرسِل — والحارسُ يفحص '
-            'فراغاً فيقول «سليم» ولم ينظر. (وهو ما تحذّر منه القاعدةُ '
-            'السابعة: صفرٌ لا يعني «فُحص».)');
+    expect(destinations, contains('PosEmployeeHomeScreen'),
+        reason: 'موظف POS فقد سطحه التشغيلي بعد تسجيل الدخول');
+    expect(destinations, contains('WebPortalNoticeScreen'),
+        reason: 'مالك المنشأة لم يعد موجّهاً بوضوح إلى بوابة الويب');
+
+    final src = dispatcher.readAsStringSync();
+    expect(src.contains('_merchantShell('), isFalse,
+        reason: 'عاد غلاف رئيسية التاجر القديمة إلى التطبيق بعد نقل المالك للويب');
   });
 
-  test('والخريطةُ تُقرأ — عشراتُ القدرات لا صفر', () {
-    expect(capabilityTargets().length, greaterThan(30),
-        reason: 'لم تُقرأ خريطةُ القدرات');
+  test('وخريطة تشغيل POS تُقرأ فعلاً ولا يفحص الحارس فراغاً', () {
+    final targets = capabilityTargets();
+
+    expect(targets.length, greaterThanOrEqualTo(20),
+        reason: 'لم تُقرأ خريطة تشغيل POS الحالية أو تقلّصت بلا مراجعة');
+    expect(targets.keys, containsAll(<String>[
+      'cashier',
+      'debts',
+      'shift_close',
+      'fuel_pos',
+      'pharmacy_pos',
+      'wholesale_invoices',
+      'restaurant_orders',
+    ]));
   });
 
-  test('لا قدرةَ تفتح شاشةَ رئيسيّةٍ لتاجر', () {
-    final homes = homeScreens();
+  test('لا قدرة تشغيل POS تعيد الموظف إلى سطح المالك أو بوابة الويب', () {
     final targets = capabilityTargets();
 
     // ══════════════════════════════════════════════════════════════
@@ -99,22 +121,27 @@ void main() {
     // **والاستثناءُ مسمّىً واحداً واحداً**: أيُّ شاشةِ رئيسيّةٍ أخرى
     // تدخل الخريطةَ غداً تسقط هنا.
     // ══════════════════════════════════════════════════════════════
-    const allowed = {'RestaurantScreen'};
+    const forbidden = {
+      'WebPortalNoticeScreen',
+      'MerchantDashboardScreen',
+      'MerchantAdaptiveShell',
+      'PharmacyDashboardScreen',
+      'WholesaleDashboardScreen',
+    };
 
     final leaks = <String>[];
 
     targets.forEach((capability, screen) {
-      if (homes.contains(screen) && !allowed.contains(screen)) {
+      if (forbidden.contains(screen)) {
         leaks.add('  $capability → $screen');
       }
     });
 
     expect(leaks, isEmpty,
-        reason: '**قدراتٌ تفتح شاشةَ رئيسيّةٍ بدل ميزتها:**\n'
+        reason: '**قدرات تشغيل POS خرجت من سطح الموظف إلى سطح مالك:**\n'
             '${leaks.join('\n')}\n\n'
-            'فيضغط التاجرُ زرَّ ميزةٍ فيهبط في رئيسيّةٍ ثانيةٍ ببطاقة '
-            'ترحيبٍ أخرى وأزرارٍ أخرى — رئيسيّتان لحسابٍ واحد، وهو ما '
-            'يُقرأ عشوائيّةً. ولا يُنتج خطأً في أيّ سجلّ.');
+            'موظف نقطة البيع يجب أن يبقى داخل رحلة التشغيل المحمولة؛ '
+            'إدارة المنشأة انتقلت إلى الويب.');
   });
 
   test('ولا خمسُ قدراتٍ تُفضي إلى شاشةٍ واحدة', () {
