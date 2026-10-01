@@ -238,7 +238,7 @@ class _WholesaleProInvoiceDetailsScreenState extends State<WholesaleProInvoiceDe
         if (verificationUrl.isNotEmpty) ...[
           const SizedBox(height: 8),
           Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(children: [
-            const Text('تحقق من أصالة الفاتورة', style: TextStyle(fontWeight: FontWeight.w900)),
+            Text('document_verify_invoice'.tr, style: const TextStyle(fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
             QrImageView(data: verificationUrl, size: 118, padding: EdgeInsets.zero, backgroundColor: Colors.white),
             const SizedBox(height: 4),
