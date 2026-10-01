@@ -320,12 +320,12 @@ class PosDeviceLoginBindingTest extends TestCase
 
         $session = PosDeviceSession::firstOrFail();
 
-        $this->assertSame(200, $this->probe($staff, (string) $session->access_token_id),
+        $this->assertSame(200, $this->probe($staff, (string) $session->access_token_id, 'device-to-be-revoked'),
             'الجلسةُ لم تعمل أصلاً — فالمنعُ التالي لا يُثبت شيئاً');
 
         app(PosDeviceRegistrar::class)->revoke($device, $merchant->id);
 
-        $this->assertSame(401, $this->probe($staff, (string) $session->access_token_id),
+        $this->assertSame(401, $this->probe($staff, (string) $session->access_token_id, 'device-to-be-revoked'),
             '**رمزٌ استمرّ بعد إلغاء جهازه** — فالإلغاءُ يُخلي المقعدَ ولا يوقف الجلسة');
     }
 
@@ -355,13 +355,14 @@ class PosDeviceLoginBindingTest extends TestCase
     }
 
     /** يطرق البوّابةَ برمزٍ بعينه ويُعيد رمزَ الاستجابة. */
-    private function probe(User $actor, string $tokenId): int
+    private function probe(User $actor, string $tokenId, string $deviceUuid): int
     {
         $token = new \Laravel\Passport\Token();
         $token->id = $tokenId;
 
         $request = Request::create('/api/v1/amial/probe', 'GET');
         $request->setUserResolver(fn () => $actor->withAccessToken($token));
+        $request->headers->set(EnsurePosDevice::HEADER, $deviceUuid);
 
         return app(EnsurePosDevice::class)
             ->handle($request, fn () => response()->json(['ok' => true]))
