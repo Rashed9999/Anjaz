@@ -8,6 +8,7 @@ use App\Models\MerchantProfile;
 use App\Models\MerchantRefund;
 use App\Models\User;
 use App\Services\CashierService;
+use App\Services\CashierShiftService;
 use App\Services\MerchantSaleRefundService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -230,6 +231,8 @@ class RefundLedgerTruthTest extends TestCase
      */
     public function a_cash_refund_does_not_pretend_to_have_a_ledger_entry(): void
     {
+        app(CashierShiftService::class)->open($this->merchant, null, '0');
+
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant, total: '5000', paymentMethod: 'cash',
             items: [['name' => 'منتج', 'qty' => 1, 'price' => '5000']],
