@@ -156,12 +156,12 @@ class PosDeviceSessionBindingGuardTest extends TestCase
 
         $device = $this->bind($m, $actor, 'device-to-steal', 'tok-stolen');
 
-        $this->assertSame(200, $this->pass($actor, 'tok-stolen')->getStatusCode(),
+        $this->assertSame(200, $this->pass($actor, 'tok-stolen', 'device-to-steal')->getStatusCode(),
             'الجلسةُ لم تكن تعمل أصلاً — فالمنعُ التالي لا يُثبت شيئاً');
 
         $this->reg()->revoke($device, $m->id);
 
-        $response = $this->pass($actor, 'tok-stolen');
+        $response = $this->pass($actor, 'tok-stolen', 'device-to-steal');
 
         $this->assertSame(401, $response->getStatusCode(),
             '**الجهازُ الملغى ما زال يعمل** — فالإلغاءُ يُخلي المقعدَ ولا يوقف السرقة');
