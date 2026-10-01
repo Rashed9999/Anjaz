@@ -16,6 +16,8 @@ class FuelReceiptPdfService
     {
         $sale->loadMissing(['pump.station', 'product', 'companyAccount']);
         $merchant = Merchant::where('user_id', $sale->merchant_user_id)->first();
+        $qr = app(DocumentQrService::class);
+        $verificationCode = (string) $sale->sale_ulid;
 
         $html = view('pdf.fuel-sale-receipt', [
             'sale' => $sale,
@@ -24,6 +26,8 @@ class FuelReceiptPdfService
             'station' => $sale->pump->station,
             'company' => $sale->companyAccount,
             'merchantLogoData' => app(MerchantLogoService::class)->dataUri($merchant),
+            'verificationUrl' => $qr->url($verificationCode),
+            'qrDataUri' => $qr->dataUri($verificationCode),
         ])->render();
 
         // DomPDF يعكس العربية ويفصل حروفها؛ محرك المشروع العربي هو مصدر
