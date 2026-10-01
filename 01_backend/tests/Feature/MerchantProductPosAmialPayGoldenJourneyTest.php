@@ -315,12 +315,148 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
         );
 
         $this->assertSame(
-            $merchantAfterPayment,
+            $merchantBefore,
             (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'),
-            'إعادة استخدام مرجع الدفع غيّرت رصيد التاجر'
+            'إعادة استخدام مرجع الدفع غيّرت رصيد التاجر بعد الاسترداد'
         );
 
         $this->assertSame(1, MerchantSale::where('paid_transaction_id', $paidTxId)->count(),
             'مرجع دفع واحد أنشأ أكثر من بيعة');
+    }
+
+    /** @test */
+    public function the_same_web_product_can_be_sold_for_cash_or_credit_without_touching_the_merchant_wallet(): void
+    {
+        // منتجٌ واحد يخرجه المالك من الويب ثم يبيعه POS بالطريقتين.
+        $this->actingAs($this->merchant, 'merchant_web');
+        $created = $this->postJson('/merchant/data/sector/products', [
+            'name' => 'ماء اختبار النقد والآجل',
+            'price' => '500',
+            'cost_price' => '300',
+            'quantity' => 10,
+            'barcode' => '6291000999002',
+        ])->assertOk();
+
+        $productId = (int) $created->json('meta.result.product.id');
+        $this->assertGreaterThan(0, $productId);
+
+        Passport::actingAs($this->staff, [], 'api');
+        $shift = $this->postJson('/api/v1/amial/cashier/shift/open', [
+            'opening_float' => '1000',
+        ]);
+        $this->assertContains($shift->status(), [200, 201], json_encode(
+            $shift->json(), JSON_UNESCAPED_UNICODE
+        ));
+
+        $walletBefore = (string) EMoney::where('user_id', $this->merchant->id)
+            ->value('current_balance');
+
+        // ① نقد: الفاتورة مكتملة والمخزون ينقص، لكن محفظة أميال لا تتحرك.
+        $cash = $this->postJson('/api/v1/amial/merchant/cashier/sales', [
+            'total' => '500',
+            'payment_method' => 'cash',
+            'amount_received' => '500',
+            'items' => [[
+                'product_id' => $productId,
+                'name' => 'ماء اختبار النقد والآجل',
+                'qty' => 1,
+                'price' => '500',
+            ]],
+        ])->assertOk()->assertJsonPath('code', 'SALE_RECORDED');
+
+        $cashSale = MerchantSale::where(
+            'sale_ulid', (string) $cash->json('meta.sale.sale_ulid')
+        )->firstOrFail();
+
+        $this->assertSame('cash', $cashSale->payment_method);
+        $this->assertSame('completed', $cashSale->status);
+        $this->assertNotNull($cashSale->shift_id);
+        $this->assertSame(
+            $walletBefore,
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'),
+            'البيع النقدي حرّك محفظة أميال للتاجر'
+        );
+        $this->assertSame(
+            '9.000',
+            (string) \App\Models\MerchantProduct::whereKey($productId)->value('quantity')
+        );
+
+        // ② آجل: لا مال إلكتروني يتحرك؛ الذي يزيد هو دفتر دين العميل.
+        $customer = User::factory()->create([
+            'type' => CUSTOMER_TYPE,
+            'role' => 'customer',
+            'phone' => '+967700444555',
+            'is_active' => 1,
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $credit = $this->postJson('/api/v1/amial/merchant/cashier/sales', [
+            'total' => '1000',
+            'payment_method' => 'credit',
+            'credit_due_date' => '2026-12-31',
+            'customer' => [
+                'name' => 'عميل الآجل التجريبي',
+                'phone' => $customer->phone,
+            ],
+            'items' => [[
+                'product_id' => $productId,
+                'name' => 'ماء اختبار النقد والآجل',
+                'qty' => 2,
+                'price' => '500',
+            ]],
+        ])->assertOk()->assertJsonPath('code', 'SALE_RECORDED');
+
+        $creditSale = MerchantSale::where(
+            'sale_ulid', (string) $credit->json('meta.sale.sale_ulid')
+        )->firstOrFail();
+
+        $this->assertSame('credit', $creditSale->payment_method);
+        $this->assertSame('credit_unpaid', $creditSale->status);
+        $this->assertNotNull($creditSale->shift_id);
+        $this->assertSame(
+            $walletBefore,
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'),
+            'البيع الآجل حرّك محفظة التاجر قبل التحصيل'
+        );
+        $this->assertSame(
+            '7.000',
+            (string) \App\Models\MerchantProduct::whereKey($productId)->value('quantity')
+        );
+
+        $account = \App\Models\CustomerCreditAccount::where(
+            'merchant_user_id', $this->merchant->id
+        )->whereIn(
+            'customer_phone', \App\Support\Phone::variants((string) $customer->phone)
+        )->firstOrFail();
+
+        $this->assertSame($customer->id, (int) $account->customer_user_id);
+        $this->assertSame('1000.0000', (string) $account->current_balance);
+
+        $movement = $account->movements()->where('type', 'sale')->latest('id')->firstOrFail();
+        $this->assertSame('1000.0000', (string) $movement->amount);
+        $this->assertSame(
+            '2026-12-31',
+            \Illuminate\Support\Carbon::parse($movement->due_date)->format('Y-m-d')
+        );
+
+        // ③ مرتجع بيع آجل غير مسدد: لا نخلق مالاً ولا نخصم محفظة؛ نزيل
+        // الالتزام من دفتر العميل نفسه.
+        Passport::actingAs($this->merchant, [], 'api');
+        $this->postJson(
+            '/api/v1/amial/merchant/cashier/sales/'.$creditSale->sale_ulid.'/refund',
+            [
+                'amount' => '1000',
+                'refund_method' => 'credit_account',
+                'reason' => 'مرتجع بيع آجل تجريبي',
+            ]
+        )->assertStatus(201)
+         ->assertJsonPath('code', 'REFUNDED');
+
+        $this->assertSame('0.0000', (string) $account->fresh()->current_balance);
+        $this->assertSame(
+            $walletBefore,
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'),
+            'مرتجع الآجل حرّك محفظة رغم أن البيع لم يُحصّل إلكترونياً'
+        );
     }
 }
