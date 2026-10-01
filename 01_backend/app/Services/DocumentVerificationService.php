@@ -85,7 +85,7 @@ class DocumentVerificationService
                 return $this->fromPurchaseOrder($purchase);
             }
             if ($payment = SupplierLedgerEntry::whereRaw('UPPER(entry_ulid) = ?', [$code])
-                ->where('entry_type', 'payment')->first()) {
+                ->whereIn('entry_type', ['payment', 'supplier_refund'])->first()) {
                 return $this->fromSupplierPayment($payment);
             }
             if ($order = RestaurantOrder::whereRaw('UPPER(sale_ulid) = ?', [$code])->first()) {
@@ -255,15 +255,17 @@ class DocumentVerificationService
 
     private function fromSupplierPayment(SupplierLedgerEntry $payment): array
     {
+        $isCollection = $payment->entry_type === 'supplier_refund';
+
         return $this->businessDocument(
-            type: 'supplier_payment',
-            label: 'سند سداد مورد',
+            type: $isCollection ? 'supplier_collection' : 'supplier_payment',
+            label: $isCollection ? 'سند تحصيل من مورد' : 'سند سداد مورد',
             number: (string) $payment->entry_ulid,
             merchantUserId: (int) $payment->merchant_user_id,
             amount: (string) $payment->amount,
             status: 'completed',
             issuedAt: $payment->created_at,
-            source: 'supplier_payment',
+            source: $isCollection ? 'supplier_collection' : 'supplier_payment',
         );
     }
 
