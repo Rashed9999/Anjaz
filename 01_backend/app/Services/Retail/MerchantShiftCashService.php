@@ -41,6 +41,8 @@ class MerchantShiftCashService
         'cash_drop' => 'out',         // تسليم للخزنة
         'refund' => 'out',            // استرجاع للعميل
         'supplier_payment' => 'out',  // دفع لمورّد من الدرج
+        'supplier_refund' => 'in',    // استرداد نقدي من مورّد
+        'asset_disposal_proceeds' => 'in', // متحصلات بيع/استبعاد أصل
         'cash_in' => 'in',            // إيداع نقد
         'change_fund' => 'in',        // فكّة
         'owner_injection' => 'in',    // ضخّ من المالك
@@ -52,6 +54,8 @@ class MerchantShiftCashService
         'cash_drop' => 'تسليم للخزنة',
         'refund' => 'استرجاع',
         'supplier_payment' => 'دفع لمورّد',
+        'supplier_refund' => 'استرداد من مورّد',
+        'asset_disposal_proceeds' => 'متحصلات أصل',
         'cash_in' => 'إيداع نقد',
         'change_fund' => 'فكّة',
         'owner_injection' => 'ضخّ من المالك',
