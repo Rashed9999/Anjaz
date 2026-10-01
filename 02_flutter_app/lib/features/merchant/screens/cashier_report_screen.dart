@@ -45,6 +45,8 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
         'cash' => 'نقد',
         'credit' => 'أجل',
         'amial_pay' => 'أميال باي',
+        'mixed' => 'مختلط',
+        'corporate' => 'حساب شركة',
         _ => m ?? '',
       };
 
@@ -57,6 +59,8 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
   Widget _saleRow(Map<String, dynamic> s) {
     final fullyRefunded = s['fully_refunded'] == true;
     final refunded = double.tryParse((s['refunded_total'] ?? '0').toString()) ?? 0;
+    final status = (s['status'] ?? '').toString();
+    final refundable = const {'completed', 'credit_unpaid', 'credit_paid'}.contains(status);
     return Card(
       color: AmialColors.cardSurface,
       child: ListTile(
@@ -82,12 +86,21 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
         trailing: fullyRefunded
             ? const Text('مسترجَع كاملاً',
                 style: TextStyle(fontSize: 11, color: AmialColors.red))
-            : TextButton.icon(
-                onPressed: () => _openRefund((s['sale_ulid'] ?? '').toString()),
-                icon: const Icon(Icons.replay_rounded, size: 16),
-                label: const Text('استرجاع', style: TextStyle(fontSize: 12)),
-                style: TextButton.styleFrom(foregroundColor: AmialColors.red),
-              ),
+            : !refundable
+                ? const Text(
+                    'بانتظار الدفع',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AmialColors.yellowDark,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+                : TextButton.icon(
+                    onPressed: () => _openRefund((s['sale_ulid'] ?? '').toString()),
+                    icon: const Icon(Icons.replay_rounded, size: 16),
+                    label: const Text('استرجاع', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(foregroundColor: AmialColors.red),
+                  ),
       ),
     );
   }
