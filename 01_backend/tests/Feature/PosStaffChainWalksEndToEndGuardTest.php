@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsurePosDevice;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSale;
+use App\Models\MerchantProduct;
 use App\Models\User;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -102,6 +103,34 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
         $row->merchant_number = self::MERCHANT_NUMBER;
         $row->store_name = 'متجرُ السلسلة';
         $row->save();
+    }
+
+    /**
+     * **٠ — المالك ينشئ الصنف من بوابة الويب التي يعمل عليها فعلاً.**
+     *
+     * لا نزرع MerchantProduct مباشرةً: المطلوب قياس الوصلة
+     * Web owner → CashierController → CashierService → نفس كتالوج POS.
+     */
+    private function merchantCreatesProductOnWeb(): int
+    {
+        $res = $this->actingAs($this->merchant, 'merchant_web')
+            ->postJson('/merchant/data/sector/products', [
+                'name' => 'ماء أميال 500مل',
+                'price' => '125',
+                'cost_price' => '80',
+                'quantity' => '7',
+                'barcode' => '628CHAIN0001',
+                'sku' => 'CHAIN-WATER-1',
+                'track_stock' => true,
+            ]);
+
+        $res->assertOk()
+            ->assertJsonPath('code', 'OK');
+
+        $id = (int) $res->json('meta.result.product.id');
+        $this->assertGreaterThan(0, $id, 'بوابة التاجر قالت تم الحفظ بلا معرّف منتج');
+
+        return $id;
     }
 
     /**
@@ -233,6 +262,7 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
     /** @test */
     public function a_merchant_can_take_a_new_employee_all_the_way_to_a_first_sale(): void
     {
+        $productId = $this->merchantCreatesProductOnWeb();
         $staffMeta = $this->merchantAddsStaff();
 
         $code = $this->merchantCreatesActivationCode();
@@ -247,6 +277,19 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
             'Authorization' => 'Bearer '.$token,
             EnsurePosDevice::HEADER => $deviceUuid,
         ];
+
+        // المنتج الذي أنشأه المالك من الويب يجب أن يظهر للكاشير نفسه،
+        // لا في كتالوجٍ موازٍ ولا في حساب مالك لا يراه موظف POS.
+        $products = $this->withHeaders($headers)
+            ->getJson('/api/v1/amial/merchant/cashier/products');
+
+        $products->assertOk();
+        $rows = collect($products->json('meta.products') ?? []);
+        $visible = $rows->firstWhere('id', $productId);
+        $this->assertNotNull($visible,
+            'منتج الويب لم يصل إلى كاشير نقطة البيع');
+        $this->assertSame('ماء أميال 500مل', $visible['name'] ?? null);
+        $this->assertEquals('7.000', (string) ($visible['quantity'] ?? ''));
 
         $shift = $this->withHeaders($headers)
             ->postJson('/api/v1/amial/cashier/shift/open', ['opening_float' => 0]);
@@ -263,12 +306,13 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
         // MerchantSale واحدة منسوبة إلى الشخص والصندوق نفسيهما؟
         $saleResponse = $this->withHeaders($headers)
             ->postJson('/api/v1/amial/merchant/cashier/sales', [
-                'total' => '1250',
+                'total' => '250',
                 'payment_method' => 'cash',
                 'items' => [[
-                    'name' => 'صنف اختبار السلسلة',
-                    'qty' => 1,
-                    'price' => '1250',
+                    'product_id' => $productId,
+                    'name' => 'ماء أميال 500مل',
+                    'qty' => 2,
+                    'price' => '125',
                 ]],
             ]);
 
@@ -286,7 +330,18 @@ class PosStaffChainWalksEndToEndGuardTest extends TestCase
         $this->assertNotNull($sale->pos_device_id,
             'البيعة الأولى فقدت هوية صندوق POS المفعّل');
         $this->assertSame('cash', $sale->payment_method);
-        $this->assertSame('1250.0000', (string) $sale->total_amount);
+        $this->assertSame('250.0000', (string) $sale->total_amount);
+        $this->assertSame('5.000', (string) MerchantProduct::findOrFail($productId)->quantity,
+            'البيع نجح لكن مخزون المنتج الذي أنشأه التاجر لم ينقص');
+
+        // والمالك يرى البيعة نفسها من سجل الويب القطاعي.
+        $webSales = $this->actingAs($this->merchant, 'merchant_web')
+            ->withHeader('Authorization', '')
+            ->getJson('/merchant/data/sector/sales');
+        $webSales->assertOk();
+        $ownerRows = collect($webSales->json('meta.result.sales') ?? []);
+        $this->assertNotNull($ownerRows->firstWhere('sale_ulid', $saleUlid),
+            'البيعة ظهرت للكاشير ولم تصل إلى سجل مبيعات التاجر');
 
         // ⑥ الرمز الذي صدر للجهاز المفعّل لا يعمل إذا قُدّمت هوية
         // جهاز أخرى. هذا القياس يستخدم access token الحقيقي الذي خرج
