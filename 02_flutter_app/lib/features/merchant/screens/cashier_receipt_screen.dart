@@ -115,6 +115,13 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
   String get _ref => '${widget.sale['sale_ulid'] ?? widget.sale['id'] ?? ''}';
   String get _verificationUrl => '${AppConstants.baseUrl}/v/$_ref';
   DateTime get _meccaNow => DateTime.now().toUtc().add(const Duration(hours: 3));
+  double? get _tendered => double.tryParse('${widget.sale['amount_received'] ?? ''}');
+  double? get _change {
+    final tendered = _tendered;
+    if (tendered == null) return null;
+    final change = tendered - widget.total;
+    return change > 0 ? change : 0;
+  }
 
   /// AMIAL-MULTI-CURRENCY-003 — علامةُ عملة البيعة، والأساسُ افتراضاً.
   String get _sym => widget.currencySymbol ?? 'ر.ي';
@@ -324,6 +331,15 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
                   totalYer: widget.baseTotal ?? widget.total,
                   currencies: _settings.currencies,
                   verificationUrl: _verificationUrl,
+                  paidAmount: widget.method == 'cash' && _tendered != null
+                      ? _money(_tendered!)
+                      : null,
+                  changeAmount: widget.method == 'cash' && _change != null
+                      ? _money(_change!)
+                      : null,
+                  balanceDueAmount: widget.method == 'credit'
+                      ? _money(widget.total)
+                      : null,
                 )),
           ),
         ),
