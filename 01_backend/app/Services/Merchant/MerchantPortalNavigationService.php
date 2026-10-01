@@ -112,6 +112,19 @@ final class MerchantPortalNavigationService
         if ($businessType !== A::BIZ_WHOLESALE && $this->available($states, A::F_DEBTS)) {
             $items[] = $this->item('debts', $businessType === A::BIZ_WHOLESALE ? 'الذمم والتحصيلات' : 'الديون والدفع بالآجل', 'payments', EntitlementService::AVAILABLE);
         }
+        if ($this->available($states, A::F_SUPPLIERS) || $this->available($states, A::F_PURCHASES)) {
+            $items[] = $this->item(
+                'suppliers',
+                'الموردون والمشتريات',
+                'local_shipping',
+                $this->available($states, A::F_SUPPLIERS)
+                    ? EntitlementService::AVAILABLE
+                    : $this->state($states, A::F_PURCHASES)
+            );
+        }
+        if ($this->available($states, A::F_EXPENSES)) {
+            $items[] = $this->item('expenses', 'المصروفات', 'payments', EntitlementService::AVAILABLE);
+        }
         $hasBranches = $this->available($states, A::F_BRANCHES);
         $hasEmployees = $this->available($states, A::F_EMPLOYEES);
         $hasMultiPos = $this->available($states, A::F_MULTI_POS);
