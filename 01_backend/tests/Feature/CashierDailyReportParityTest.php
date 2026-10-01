@@ -47,6 +47,7 @@ class CashierDailyReportParityTest extends TestCase
         $report = app(CashierService::class)->dailyReport($merchant);
 
         $this->assertSame(5, $report['sales_count']);
+        $this->assertSame('2300.0000', $report['total_all']);
         $this->assertSame('500.0000', $report['by_method']['cash']);
         $this->assertSame('900.0000', $report['by_method']['amial_pay']);
         $this->assertSame('900.0000', $report['by_method']['credit']);
