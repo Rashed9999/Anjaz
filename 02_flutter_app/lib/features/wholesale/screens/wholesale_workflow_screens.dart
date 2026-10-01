@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:screenshot/screenshot.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import 'package:amial_pay/features/merchant/widgets/invoice_whatsapp_sheet.dart';
 import 'package:amial_pay/features/merchant/widgets/merchant_invoice_actions.dart';
@@ -14,6 +15,7 @@ import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart
 import 'package:amial_pay/features/wholesale/controllers/wholesale_access_controller.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 /// الشاشات التشغيلية التي تستدعيها مساحة الجملة العامة. كل إجراء فيها يمر
 /// بالمتحكم ثم API الجملة؛ لا توجد بيانات تجريبية أو أزرار للعرض فقط.
@@ -221,6 +223,8 @@ class _WholesaleProInvoiceDetailsScreenState extends State<WholesaleProInvoiceDe
       if (invoice == null) return _EmptyState(icon: Icons.receipt_long_outlined, text: c.lastError.value.isEmpty ? 'تعذر تحميل الفاتورة' : c.lastError.value);
       final customer = invoice['customer'] is Map ? invoice['customer'] as Map : const {};
       final items = invoice['items'] is List ? invoice['items'] as List : const [];
+      final verificationCode = '${invoice['invoice_ulid'] ?? ''}'.trim();
+      final verificationUrl = verificationCode.isEmpty ? '' : '${AppConstants.baseUrl}/v/$verificationCode';
       return Screenshot(controller: _shot, child: RefreshIndicator(onRefresh: () => c.loadInvoiceDetails(widget.invoiceId), child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), children: [
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${invoice['invoice_number'] ?? '—'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
@@ -231,6 +235,17 @@ class _WholesaleProInvoiceDetailsScreenState extends State<WholesaleProInvoiceDe
         ]))),
         const SizedBox(height: 12), const Text('الأصناف', style: TextStyle(fontWeight: FontWeight.w900)),
         ...items.map((raw) { final row = raw as Map; return Card(child: ListTile(title: Text('${row['product_name'] ?? '—'}'), subtitle: Text('${row['quantity'] ?? 0} × ${_money(row['unit_price'])}'), trailing: Text('${_money(row['line_total'])} ر.ي'))); }),
+        if (verificationUrl.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(children: [
+            const Text('تحقق من أصالة الفاتورة', style: TextStyle(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 8),
+            QrImageView(data: verificationUrl, size: 118, padding: EdgeInsets.zero, backgroundColor: Colors.white),
+            const SizedBox(height: 4),
+            SelectableText(verificationUrl, textDirection: TextDirection.ltr, textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10, color: AmialColors.textSecondary)),
+          ]))),
+        ],
         const SizedBox(height: 8),
         MerchantInvoiceActions(
           busy: c.isSubmitting.value,
