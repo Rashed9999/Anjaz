@@ -978,11 +978,15 @@ class CashierService
 
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            // البيع المعلّق عبر QR ليس بيعاً مالياً بعد. إبقاؤه هنا كان
+            // يجعل تقرير نقطة البيع أعلى من تقرير لوحة التاجر لنفس اليوم.
+            ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
             ->whereBetween('created_at', [$from, $to])
             ->with('lines')
             ->get();
 
-        $byMethod = ['cash' => '0', 'credit' => '0', 'amial_pay' => '0'];
+        $zero = MoneyService::normalize('0');
+        $byMethod = ['cash' => $zero, 'credit' => $zero, 'amial_pay' => $zero];
         $topProducts = [];
 
         // AMIAL-REPORTS-HOURLY-001: توزيع المبيعات على 24 ساعة (عدد + مبلغ).
@@ -992,10 +996,25 @@ class CashierService
         }
 
         foreach ($sales as $sale) {
-            $byMethod[$sale->payment_method] = MoneyService::add(
-                $byMethod[$sale->payment_method] ?? '0',
-                (string) $sale->total_amount
-            );
+            // نفس عقد الحقيقة المالية في لوحة التاجر:
+            // المختلط يُقسّم بين الدرج والمحفظة، وحساب الشركة ذمّة لا نقد.
+            if ($sale->payment_method === 'mixed') {
+                $byMethod['cash'] = MoneyService::add(
+                    $byMethod['cash'], (string) ($sale->cash_amount ?? '0')
+                );
+                $byMethod['amial_pay'] = MoneyService::add(
+                    $byMethod['amial_pay'], (string) ($sale->wallet_amount ?? '0')
+                );
+            } elseif ($sale->payment_method === 'corporate') {
+                $byMethod['credit'] = MoneyService::add(
+                    $byMethod['credit'], (string) $sale->total_amount
+                );
+            } elseif (array_key_exists($sale->payment_method, $byMethod)) {
+                $byMethod[$sale->payment_method] = MoneyService::add(
+                    $byMethod[$sale->payment_method], (string) $sale->total_amount
+                );
+            }
+
             $h = (int) Carbon::parse($sale->created_at)->format('G'); // 0..23 بتوقيت التطبيق
             $byHour[$h]['count']++;
             $byHour[$h]['total'] = MoneyService::add($byHour[$h]['total'], (string) $sale->total_amount);
