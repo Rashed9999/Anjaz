@@ -6,6 +6,9 @@ use App\Models\FuelSale;
 use App\Models\Merchant;
 use App\Models\MerchantSale;
 use App\Models\PharmacySale;
+use App\Models\PurchaseOrder;
+use App\Models\Supplier;
+use App\Models\SupplierLedgerEntry;
 use App\Models\Receipt;
 use App\Models\RestaurantOrder;
 use App\Models\User;
@@ -275,7 +278,11 @@ class DocumentVerificationGuardTest extends TestCase
             'pdf/cashier-sale-invoice.blade.php',
             'pdf/pharmacy-sale-invoice.blade.php',
             'pdf/fuel-sale-receipt.blade.php',
+            'pdf/purchase-order.blade.php',
+            'pdf/supplier-payment-receipt.blade.php',
             'pdf/wholesale-invoice.blade.php',
+            'pdf/purchase-order.blade.php',
+            'pdf/supplier-payment-receipt.blade.php',
         ] as $template) {
             $src = (string) file_get_contents(resource_path('views/'.$template));
             $this->assertStringContainsString('$qrDataUri', $src, "{$template} بلا QR تحقق");
@@ -352,6 +359,52 @@ class DocumentVerificationGuardTest extends TestCase
             'إيصال الصيدلية نُسب إلى أميال أو إلى MerchantSale يحمل id نفسه');
         $this->assertSame('فاتورة صيدلية', $r['doc_type_label']);
         $this->assertSame('مكتمل', $r['state_label']);
+    }
+
+    /** @test */
+    public function procurement_document_ulids_verify_without_leaking_supplier_identity(): void
+    {
+        $m = $this->merchant('مؤسسة المشتريات');
+        $supplier = Supplier::create([
+            'merchant_user_id' => $m->id,
+            'name' => 'مورد خاص لا يظهر للعامة',
+            'phone' => '967779991234',
+            'current_debt' => '50000',
+        ]);
+
+        $po = PurchaseOrder::create([
+            'document_ulid' => (string) Str::ulid(),
+            'po_number' => 'PO-DOC-001',
+            'merchant_user_id' => $m->id,
+            'supplier_id' => $supplier->id,
+            'status' => 'approved',
+            'total_amount' => '80000',
+        ]);
+        $payment = SupplierLedgerEntry::create([
+            'entry_ulid' => (string) Str::ulid(),
+            'supplier_id' => $supplier->id,
+            'merchant_user_id' => $m->id,
+            'entry_type' => 'payment',
+            'amount' => '30000',
+            'payment_method' => 'cash_external',
+            'debt_after' => '50000',
+        ]);
+
+        $verifiedPo = $this->verifier()->verify($po->document_ulid);
+        $this->assertSame('purchase_order', $verifiedPo['source']);
+        $this->assertSame('أمر شراء', $verifiedPo['doc_type_label']);
+        $this->assertSame('معتمد', $verifiedPo['state_label']);
+
+        $verifiedPayment = $this->verifier()->verify($payment->entry_ulid);
+        $this->assertSame('supplier_payment', $verifiedPayment['source']);
+        $this->assertSame('سند سداد مورد', $verifiedPayment['doc_type_label']);
+        $this->assertSame('مكتمل', $verifiedPayment['state_label']);
+
+        foreach ([$po->document_ulid, $payment->entry_ulid] as $code) {
+            $html = $this->get('/v/'.$code)->assertOk()->getContent();
+            $this->assertStringNotContainsString('مورد خاص لا يظهر للعامة', $html);
+            $this->assertStringNotContainsString('967779991234', $html);
+        }
     }
 
     /** @test */
