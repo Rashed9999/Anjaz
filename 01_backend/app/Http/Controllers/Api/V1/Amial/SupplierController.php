@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 /**
  * AMIAL-SUPPLIERS-001 — الموردون وأوامر الشراء (تصاميم 53/57/67/68).
@@ -87,6 +88,7 @@ class SupplierController extends Controller
             ]);
             if (bccomp($opening, '0', 4) > 0) {
                 SupplierLedgerEntry::create([
+                    'entry_ulid' => (string) Str::ulid(),
                     'supplier_id' => $s->id,
                     'merchant_user_id' => $mid,
                     'entry_type' => 'opening',
@@ -151,12 +153,16 @@ class SupplierController extends Controller
                 $s->save();
 
                 SupplierLedgerEntry::create([
+                    'entry_ulid' => (string) Str::ulid(),
                     'supplier_id' => $s->id,
                     'merchant_user_id' => $mid,
                     'entry_type' => 'payment',
                     'amount' => $amount,
+                    'cash_amount' => $amount,
+                    'payment_method' => $cashierShift ? 'cash_shift' : 'cash_external',
                     'debt_after' => (string) $s->current_debt,
                     'reference' => $cashierShift ? 'SHIFT-'.$cashierShift->id : null,
+                    'cashier_shift_id' => $cashierShift?->id,
                     'note' => trim((string) $request->input('note')) ?: (
                         $cashierShift
                             ? 'سداد للمورد من درج الوردية #'.$cashierShift->id
@@ -218,6 +224,10 @@ class SupplierController extends Controller
             'items.*.quantity' => 'required|numeric|min:0.001',
             'items.*.unit_cost' => 'required|numeric|min:0',
             'items.*.product_id' => 'sometimes|nullable|integer',
+            'items.*.item_type' => 'sometimes|string|in:inventory,fixed_asset,other',
+            'items.*.asset_category' => 'sometimes|nullable|string|in:furniture,equipment,computer,vehicle,machinery,fixtures,building_improvement,other',
+            'items.*.useful_life_months' => 'sometimes|nullable|integer|min:1|max:600',
+            'items.*.salvage_value' => 'sometimes|nullable|numeric|min:0',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -225,6 +235,22 @@ class SupplierController extends Controller
         $supplier = Supplier::where('id', $request->input('supplier_id'))
             ->where('merchant_user_id', $mid)->first();
         if (!$supplier) return $this->error('NOT_FOUND', 'المورد غير موجود', 404);
+
+        foreach ($request->input('items') as $item) {
+            $type = (string) ($item['item_type'] ?? 'inventory');
+            if ($type === 'fixed_asset') {
+                if (empty($item['useful_life_months'])) {
+                    return $this->error('ASSET_LIFE_REQUIRED',
+                        'العمر الإنتاجي مطلوب لبند الأصل الثابت', 422);
+                }
+                $unitCost = (string) ($item['unit_cost'] ?? '0');
+                $salvage = (string) ($item['salvage_value'] ?? '0');
+                if (bccomp($salvage, $unitCost, 4) >= 0) {
+                    return $this->error('ASSET_SALVAGE_INVALID',
+                        'القيمة المتبقية للوحدة يجب أن تكون أقل من تكلفة الوحدة', 422);
+                }
+            }
+        }
 
         $po = DB::transaction(function () use ($request, $mid, $supplier) {
             $total = '0';
@@ -234,6 +260,7 @@ class SupplierController extends Controller
             }
 
             $po = PurchaseOrder::create([
+                'document_ulid' => (string) Str::ulid(),
                 'po_number' => $this->nextPoNumber($mid),
                 'merchant_user_id' => $mid,
                 'supplier_id' => $supplier->id,
@@ -246,6 +273,10 @@ class SupplierController extends Controller
                 PurchaseOrderItem::create([
                     'purchase_order_id' => $po->id,
                     'product_id' => $it['product_id'] ?? null,
+                    'item_type' => $it['item_type'] ?? 'inventory',
+                    'asset_category' => $it['asset_category'] ?? null,
+                    'useful_life_months' => $it['useful_life_months'] ?? null,
+                    'salvage_value' => (string) ($it['salvage_value'] ?? '0'),
                     'name' => $it['name'],
                     'quantity' => (string) $it['quantity'],
                     'unit_cost' => (string) $it['unit_cost'],
@@ -387,6 +418,11 @@ class SupplierController extends Controller
                             );
                         }
                     }
+
+                    // الأصل الثابت لا يدخل مخزون البيع. يُنشأ من الكمية
+                    // المستلمة فعلاً ويرتبط بأمر الشراء والبند والمورد.
+                    app(\App\Services\MerchantFixedAssetService::class)
+                        ->registerPurchaseReceipt($request->user(), $po, $item, $qty);
                 }
 
                 if (bccomp($receivedValue, '0', 4) <= 0) {
@@ -412,11 +448,15 @@ class SupplierController extends Controller
                 }
 
                 SupplierLedgerEntry::create([
+                    'entry_ulid' => (string) Str::ulid(),
                     'supplier_id' => $supplier->id,
                     'merchant_user_id' => $mid,
                     'entry_type' => 'po_receive',
                     'amount' => $receivedValue,
                     'cash_amount' => $paidNow,
+                    'payment_method' => bccomp($paidNow, '0', 4) > 0
+                        ? ($request->filled('cashier_shift_id') ? 'cash_shift' : 'cash_external')
+                        : 'credit',
                     'debt_after' => (string) $supplier->current_debt,
                     'reference' => $po->po_number,
                     'note' => 'استلام بضاعة من أمر الشراء',
@@ -432,12 +472,16 @@ class SupplierController extends Controller
                     $supplier->save();
 
                     SupplierLedgerEntry::create([
+                        'entry_ulid' => (string) Str::ulid(),
                         'supplier_id' => $supplier->id,
                         'merchant_user_id' => $mid,
                         'entry_type' => 'payment',
                         'amount' => $paidNow,
+                        'cash_amount' => $paidNow,
+                        'payment_method' => $cashierShift ? 'cash_shift' : 'cash_external',
                         'debt_after' => (string) $supplier->current_debt,
                         'reference' => $po->po_number,
+                        'cashier_shift_id' => $cashierShift?->id,
                         'note' => $cashierShift
                             ? 'دفع نقدي عند الاستلام من درج الوردية #'.$cashierShift->id
                             : 'دفع نقدي عند الاستلام خارج درج نقاط البيع',
