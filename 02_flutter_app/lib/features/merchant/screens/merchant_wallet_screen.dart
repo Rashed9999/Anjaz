@@ -156,7 +156,7 @@ class _MerchantWalletScreenState extends State<MerchantWalletScreen> {
                             t.customerName!.trim(),
                           if (t.posUserName != null &&
                               t.posUserName!.trim().isNotEmpty)
-                            'كاشير: ${t.posUserName!.trim()}',
+                            'merchant_cashier_name'.trParams({'name': t.posUserName!.trim()}),
                           _shortTime(t.createdAt),
                         ].join(' · '),
                         amount: t.amount,
@@ -186,8 +186,8 @@ String _shortTime(DateTime t) {
   final clock = '${t.hour.toString().padLeft(2, '0')}:'
       '${t.minute.toString().padLeft(2, '0')}';
 
-  if (day == today) return 'اليوم $clock';
-  if (day == today.subtract(const Duration(days: 1))) return 'أمس $clock';
+  if (day == today) return 'common_today_time'.trParams({'time': clock});
+  if (day == today.subtract(const Duration(days: 1))) return 'common_yesterday_time'.trParams({'time': clock});
 
   return '${t.year}-${t.month.toString().padLeft(2, '0')}-'
       '${t.day.toString().padLeft(2, '0')} $clock';
