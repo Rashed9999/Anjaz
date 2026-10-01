@@ -20,6 +20,6 @@ class SupplierLedgerEntry extends Model
     protected $fillable = [
         'entry_ulid', 'supplier_id', 'merchant_user_id', 'entry_type',
         'amount', 'cash_amount', 'payment_method', 'debt_after', 'reference',
-        'transaction_id', 'cashier_shift_id', 'note',
+        'transaction_id', 'cashier_shift_id', 'idempotency_key', 'note',
     ];
 }
