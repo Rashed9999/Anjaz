@@ -127,16 +127,25 @@ class EnsurePosDevice
                 'أُلغي هذا الجهاز. راجع صاحبَ الحساب لتسجيله من جديد.', 401);
         }
 
-        // ② والترويسةُ إن حضرت طُوبقت.
+        // ② الجلسة الحديثة المربوطة بمقعد يجب أن تقدّم هوية جهازها
+        // في كل طلب. السماح بحذف الترويسة يجعل سرقة access token وحده
+        // كافية لتشغيله من عميل آخر، لأن الخادم يعرف المقعد لكنه لا يثبت
+        // أن الطلب الحالي جاء من الجهاز الذي ارتبط به.
         $presented = trim((string) $request->header(self::HEADER, ''));
 
-        if ($presented !== '') {
-            [$claimed] = PosDevice::locate((int) $session->merchant_user_id, $presented);
+        if ($presented === '') {
+            return $this->deny(
+                'POS_DEVICE_HEADER_REQUIRED',
+                'تعذّر إثبات جهاز نقطة البيع لهذه الجلسة. أعد فتح التطبيق أو سجّل الدخول من الجهاز المفعّل.',
+                403,
+            );
+        }
 
-            if ($claimed === null || $claimed->id !== $device->id) {
-                return $this->deny('POS_DEVICE_MISMATCH',
-                    'الرمزُ صدر لجهازٍ آخر.', 403);
-            }
+        [$claimed] = PosDevice::locate((int) $session->merchant_user_id, $presented);
+
+        if ($claimed === null || $claimed->id !== $device->id) {
+            return $this->deny('POS_DEVICE_MISMATCH',
+                'الرمزُ صدر لجهازٍ آخر.', 403);
         }
 
         $this->touch($session, $device);
