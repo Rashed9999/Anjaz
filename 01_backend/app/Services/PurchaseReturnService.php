@@ -38,10 +38,9 @@ use Illuminate\Support\Str;
  *      أو استردادٌ نقديّ (`cash_refund`). وخلطُهما يُنقص الدينَ **ويقبض
  *      النقدَ معاً** — أي ردٌّ يُحاسَب مرّتين.
  *
- * **ولا يُنقَص دينٌ لا وجودَ له**: إن كان الدينُ أقلَّ من قيمة المرتجع
- * فالفائضُ لا يُحوَّل إلى دينٍ سالب — يُخصَم ما يُمكن، ويُقال الباقي
- * صراحةً في سطر الدفتر. (والدينُ السالبُ يُقرأ «المورد مدينٌ لنا» وهو
- * معنىً لم يقصده أحد.)
+ * **ولا يُخفى حقّنا عند المورد**: إن كان الدين أقل من قيمة المرتجع
+ * يُصفّر الدين ويذهب الفائض إلى `current_credit` مستقلاً. هكذا لا يظهر
+ * دين سالب مبهم، ولا تضيع مطالبة التاجر النقدية على المورد.
  */
 class PurchaseReturnService
 {
@@ -274,7 +273,7 @@ class PurchaseReturnService
     /**
      * **③ وجهُ المال — واحدٌ لا اثنان.**
      *
-     * `credit_note` يُنقص الدينَ بقدر ما يمكن، ولا يجعله سالباً. أمّا
+     * `credit_note` يُنقص الدينَ أولاً، وأي فائض يصبح رصيداً لنا عند المورد. أمّا
      * `cash_refund` **فلا يمسّ الدينَ إطلاقاً**: المالُ عاد نقداً، وخصمُه
      * من الدين فوقَ ذلك احتسابٌ مرّتين.
      *
@@ -327,6 +326,7 @@ class PurchaseReturnService
                 'amount' => $amount,
                 'cash_amount' => $amount,
                 'debt_after' => (string) $supplier->current_debt,
+                'credit_after' => (string) ($supplier->current_credit ?? '0'),
                 'reference' => $return->return_ulid,
                 'cashier_shift_id' => $shift?->id,
                 'note' => $shift
@@ -339,9 +339,12 @@ class PurchaseReturnService
 
         $debt = (string) $supplier->current_debt;
         $applied = bccomp($amount, $debt, 4) > 0 ? $debt : $amount;
-        $unapplied = bcsub($amount, $applied, 4);
+        $excess = bcsub($amount, $applied, 4);
 
         $supplier->current_debt = bcsub($debt, $applied, 4);
+        $supplier->current_credit = bcadd(
+            (string) ($supplier->current_credit ?? '0'), $excess, 4
+        );
         $supplier->save();
 
         SupplierLedgerEntry::create([
@@ -353,11 +356,13 @@ class PurchaseReturnService
             'amount' => $amount,
             'cash_amount' => '0',
             'debt_after' => (string) $supplier->current_debt,
+            'credit_after' => (string) $supplier->current_credit,
             'reference' => $return->return_ulid,
-            // **والفائضُ يُقال ولا يُخفى** — دينٌ سالبٌ يُقرأ عكسَ معناه.
-            'note' => bccomp($unapplied, '0', 4) > 0
-                ? sprintf('مرتجع شراء — خُصم %s من الدين، وبقي %s بلا خصم (الدين لا يصير سالباً)',
-                    $applied, $unapplied)
+            'note' => bccomp($excess, '0', 4) > 0
+                ? sprintf(
+                    'مرتجع شراء — خُصم %s من الدين وأصبح لنا %s رصيد عند المورد',
+                    $applied, $excess
+                )
                 : 'مرتجع شراء — خُصم من دين المورد',
         ]);
     }
