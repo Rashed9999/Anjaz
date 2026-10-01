@@ -157,6 +157,7 @@ class ThermalPrintService extends GetxService {
     num? balanceDue,
     List<String> contextLines = const [],
     DateTime? dateTime,
+    String? verificationUrl,
   }) async {
     final logo = await fetchLogoBytes(settings['logo_url']?.toString());
     return printWidget(ThermalReceiptWidget.fromSettings(
@@ -173,6 +174,7 @@ class ThermalPrintService extends GetxService {
       balanceDue: balanceDue,
       contextLines: contextLines,
       dateTime: dateTime,
+      verificationUrl: verificationUrl,
     ));
   }
 
