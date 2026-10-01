@@ -112,6 +112,9 @@ Route::middleware('merchant.web')->group(function () {
             Route::post('/{id}/payment', [Suppliers::class, 'payment'])
                 ->whereNumber('id')
                 ->middleware(['amial.idempotency', 'throttle:30,1'])->name('payment');
+            Route::post('/{id}/wallet-payment', [Suppliers::class, 'walletPayment'])
+                ->whereNumber('id')
+                ->middleware(['amial.idempotency', 'throttle:20,1'])->name('wallet-payment');
         });
         Route::prefix('purchase-orders')->name('purchase-orders.')->middleware('capability:purchases')->group(function () {
             Route::get('/', [Suppliers::class, 'poIndex'])->name('index');
