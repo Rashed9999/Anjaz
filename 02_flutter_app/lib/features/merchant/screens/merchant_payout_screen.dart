@@ -44,10 +44,10 @@ class _MerchantPayoutScreenState extends State<MerchantPayoutScreen> {
       if (r.statusCode == 200 && body is Map && body['success'] == true) {
         setState(() => _items = List<dynamic>.from((body['meta']?['requests'] ?? const [])));
       } else {
-        setState(() => _error = 'تعذر تحميل طلبات السحب الآن.');
+        setState(() => _error = 'merchant_payout_load_failed'.tr);
       }
     } catch (_) {
-      setState(() => _error = 'تعذر الاتصال. تحقق من الشبكة ثم أعد المحاولة.');
+      setState(() => _error = 'common_network_retry'.tr);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -56,15 +56,15 @@ class _MerchantPayoutScreenState extends State<MerchantPayoutScreen> {
   Future<void> _submit() async {
     final value = _amount.text.trim();
     if ((double.tryParse(value) ?? 0) <= 0) {
-      Get.snackbar('المبلغ غير صحيح', 'أدخل مبلغاً أكبر من صفر.');
+      Get.snackbar('merchant_invalid_amount_title'.tr, 'merchant_amount_positive'.tr);
       return;
     }
     final confirmed = await Get.dialog<bool>(AlertDialog(
-      title: const Text('تأكيد طلب السحب'),
-      content: Text('سيُحجز ${AmialMoney.yer(value)} حتى تعتمد الإدارة الطلب وتزوّدك بتعليمات الاستلام.'),
+      title: Text('merchant_payout_confirm_title'.tr),
+      content: Text('merchant_payout_hold_message'.trParams({'amount': AmialMoney.yer(value)})),
       actions: [
-        TextButton(onPressed: () => Get.back(result: false), child: const Text('إلغاء')),
-        FilledButton(onPressed: () => Get.back(result: true), child: const Text('إرسال الطلب')),
+        TextButton(onPressed: () => Get.back(result: false), child: Text('common_cancel'.tr)),
+        FilledButton(onPressed: () => Get.back(result: true), child: Text('merchant_send_request'.tr)),
       ],
     ));
     if (confirmed != true) return;
@@ -75,13 +75,13 @@ class _MerchantPayoutScreenState extends State<MerchantPayoutScreen> {
       final body = r.body;
       if (r.statusCode == 201 && body is Map && body['success'] == true) {
         _amount.clear(); _note.clear();
-        Get.snackbar('تم الإرسال', 'حُجز المبلغ وبانتظار اعتماد الإدارة.');
+        Get.snackbar('merchant_request_sent'.tr, 'merchant_payout_pending_approval'.tr);
         await _load();
       } else {
-        Get.snackbar('تعذر الإرسال', 'راجع رصيدك أو أعد المحاولة لاحقاً.');
+        Get.snackbar('merchant_send_failed'.tr, 'merchant_payout_balance_retry'.tr);
       }
     } catch (_) {
-      Get.snackbar('تعذر الإرسال', 'تعذر الاتصال. لم يُنشأ طلب جديد.');
+      Get.snackbar('merchant_send_failed'.tr, 'merchant_payout_network_not_created'.tr);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -91,24 +91,24 @@ class _MerchantPayoutScreenState extends State<MerchantPayoutScreen> {
     final ulid = item['payout_ulid']?.toString();
     if (ulid == null || ulid.isEmpty) return;
     final ok = await Get.dialog<bool>(AlertDialog(
-      title: const Text('تأكيد استلام النقد'),
-      content: const Text('أكّد فقط بعد أن تستلم المبلغ فعلياً. لا يمكن التراجع عن التأكيد.'),
+      title: Text('merchant_cash_receipt_confirm_title'.tr),
+      content: Text('merchant_cash_receipt_confirm_body'.tr),
       actions: [
-        TextButton(onPressed: () => Get.back(result: false), child: const Text('ليس بعد')),
-        FilledButton(onPressed: () => Get.back(result: true), child: const Text('استلمت النقد')),
+        TextButton(onPressed: () => Get.back(result: false), child: Text('merchant_not_yet'.tr)),
+        FilledButton(onPressed: () => Get.back(result: true), child: Text('merchant_cash_received'.tr)),
       ],
     ));
     if (ok != true) return;
     try {
       final r = await _repo.confirmPayoutHandover(ulid);
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
-        Get.snackbar('تم التأكيد', 'سُجّل استلامك للنقد.');
+        Get.snackbar('merchant_confirmed'.tr, 'merchant_cash_receipt_recorded'.tr);
         await _load();
       } else {
-        Get.snackbar('تعذر التأكيد', 'هذا التسليم غير متاح للتأكيد الآن.');
+        Get.snackbar('merchant_confirm_failed'.tr, 'merchant_handover_unavailable'.tr);
       }
     } catch (_) {
-      Get.snackbar('تعذر التأكيد', 'تحقق من الشبكة ثم أعد المحاولة.');
+      Get.snackbar('merchant_confirm_failed'.tr, 'common_network_retry'.tr);
     }
   }
 
@@ -117,28 +117,28 @@ class _MerchantPayoutScreenState extends State<MerchantPayoutScreen> {
     textDirection: appTextDirection(),
     child: Scaffold(
       backgroundColor: AmialColors.background,
-      appBar: AppBar(title: const Text('سحب مستحقات المتجر')),
+      appBar: AppBar(title: Text('merchant_payout_title'.tr)),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(padding: const EdgeInsets.all(16), children: [
-          const Text('اطلب السحب، ثم تظهر لك تعليمات الاستلام بعد اعتماد الإدارة.',
+          Text('merchant_payout_intro'.tr,
               style: TextStyle(color: AmialColors.textSecondary)),
           const SizedBox(height: 16),
           TextField(controller: _amount, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'المبلغ', suffixText: 'ر.ي', border: OutlineInputBorder())),
+              decoration: InputDecoration(labelText: 'merchant_amount'.tr, suffixText: 'currency_yer_short'.tr, border: const OutlineInputBorder())),
           const SizedBox(height: 10),
           TextField(controller: _note, maxLength: 500,
-              decoration: const InputDecoration(labelText: 'ملاحظة للإدارة (اختياري)', border: OutlineInputBorder())),
+              decoration: InputDecoration(labelText: 'merchant_admin_note_optional'.tr, border: const OutlineInputBorder())),
           const SizedBox(height: 4),
           FilledButton.icon(onPressed: _submitting ? null : _submit,
               icon: _submitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.account_balance_outlined),
-              label: Text(_submitting ? 'جارٍ الإرسال…' : 'طلب سحب')),
+              label: Text(_submitting ? 'merchant_sending'.tr : 'merchant_request_payout'.tr)),
           const SizedBox(height: 22),
-          const Text('طلبات السحب', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text('merchant_payout_requests'.tr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
           if (_loading) const Padding(padding: EdgeInsets.all(30), child: Center(child: CircularProgressIndicator()))
           else if (_error != null) _Retry(error: _error!, onRetry: _load)
-          else if (_items.isEmpty) const Padding(padding: EdgeInsets.all(30), child: Center(child: Text('لا توجد طلبات سحب بعد.')))
+          else if (_items.isEmpty) Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('merchant_no_payout_requests'.tr)))
           else ..._items.whereType<Map>().map((raw) => _PayoutCard(item: Map<String, dynamic>.from(raw), onConfirm: _confirm)),
         ]),
       ),
@@ -150,7 +150,7 @@ class _Retry extends StatelessWidget {
   const _Retry({required this.error, required this.onRetry});
   final String error; final VoidCallback onRetry;
   @override
-  Widget build(BuildContext context) => Center(child: Column(children: [Text(error), TextButton(onPressed: onRetry, child: const Text('إعادة المحاولة'))]));
+  Widget build(BuildContext context) => Center(child: Column(children: [Text(error), TextButton(onPressed: onRetry, child: Text('common_retry'.tr))]));
 }
 
 class _PayoutCard extends StatelessWidget {
@@ -164,12 +164,12 @@ class _PayoutCard extends StatelessWidget {
     final instructions = item['collection_instructions']?.toString();
     final canConfirm = status == 'paid' && (item['handover_ulid']?.toString().isNotEmpty ?? false);
     final color = switch (status) { 'approved' => Colors.blue, 'paid' => AmialColors.success, 'rejected' => Colors.red, _ => Colors.orange };
-    final label = switch (status) { 'approved' => 'معتمد', 'paid' => 'صُرف بانتظار تأكيد الاستلام', 'rejected' => 'مرفوض', _ => 'بانتظار الاعتماد' };
+    final label = switch (status) { 'approved' => 'merchant_status_approved'.tr, 'paid' => 'merchant_status_paid_waiting_receipt'.tr, 'rejected' => 'merchant_status_rejected'.tr, _ => 'merchant_status_pending_approval'.tr };
     return Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [Expanded(child: Text(AmialMoney.yer(item['amount']?.toString() ?? '0'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17))), Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold))]),
-      if (instructions != null && instructions.isNotEmpty) ...[const SizedBox(height: 9), const Text('تعليمات الاستلام', style: TextStyle(fontWeight: FontWeight.w600)), Text(instructions)],
-      if (status == 'rejected' && (item['rejection_reason']?.toString().isNotEmpty ?? false)) ...[const SizedBox(height: 8), Text('سبب الرفض: ${item['rejection_reason']}', style: const TextStyle(color: Colors.red))],
-      if (canConfirm) ...[const SizedBox(height: 12), OutlinedButton.icon(onPressed: () => onConfirm(item), icon: const Icon(Icons.verified_outlined), label: const Text('تأكيد استلام النقد'))],
+      if (instructions != null && instructions.isNotEmpty) ...[const SizedBox(height: 9), Text('merchant_collection_instructions'.tr, style: const TextStyle(fontWeight: FontWeight.w600)), Text(instructions)],
+      if (status == 'rejected' && (item['rejection_reason']?.toString().isNotEmpty ?? false)) ...[const SizedBox(height: 8), Text('merchant_rejection_reason'.trParams({'reason': '${item['rejection_reason']}'}), style: const TextStyle(color: Colors.red))],
+      if (canConfirm) ...[const SizedBox(height: 12), OutlinedButton.icon(onPressed: () => onConfirm(item), icon: const Icon(Icons.verified_outlined), label: Text('merchant_cash_receipt_confirm_title'.tr))],
     ])));
   }
 }
