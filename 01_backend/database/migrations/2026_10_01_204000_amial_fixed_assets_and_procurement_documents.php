@@ -44,6 +44,12 @@ return new class extends Migration
             $table->decimal('salvage_value', 20, 4)->default(0)->after('useful_life_months');
         });
 
+        // البنود التاريخية غير المربوطة بمنتج كانت "بنوداً حرة"، لا مخزوناً
+        // مجهولاً. تصنيفها other يمنعها من اكتساب أثر مخزني بعد هذه الهجرة.
+        DB::table('purchase_order_items')
+            ->whereNull('product_id')
+            ->update(['item_type' => 'other']);
+
         Schema::table('supplier_ledger', function (Blueprint $table) {
             $table->string('entry_ulid', 26)->nullable()->after('id')->unique();
             $table->string('payment_method', 24)->nullable()->after('cash_amount');
