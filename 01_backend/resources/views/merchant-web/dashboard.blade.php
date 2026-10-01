@@ -116,7 +116,7 @@
   }
   function buildNavigation(){
     const nav=document.getElementById('portal-nav');nav.replaceChildren();
-    const symbols={dashboard_customize:'⌁',insights:'◈',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌂',groups:'♙',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨'};
+    const symbols={dashboard_customize:'⌁',insights:'◈',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌂',groups:'♙',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨',business_center:'▣'};
     navigation.forEach(item=>{
       const button=node('button',(symbols[item.icon]||'•')+' '+item.label,'nav');
       button.type='button';button.dataset.tab=item.tab;button.dataset.state=item.state;
@@ -1110,27 +1110,53 @@
     const supplierLabel=node('label','المورد','field'),supplier=node('select');supplier.name='supplier_id';supplier.required=true;supplier.append(new Option('اختر المورد',''));
     suppliersList.forEach(s=>supplier.append(new Option(s.name,s.id)));supplierLabel.append(supplier);f.append(supplierLabel);
     const lines=node('div'),rows=[];
+    const assetCategories={furniture:'أثاث',equipment:'معدات',computer:'أجهزة وتقنية',vehicle:'مركبات',machinery:'آلات',fixtures:'تجهيزات',building_improvement:'تحسينات مبانٍ',other:'أخرى'};
     const addLine=()=>{
       const row=node('div',null,'editor');
-      const productLabel=node('label','الصنف','field'),product=node('select');product.append(new Option('بند حر غير مربوط بالمخزون',''));
+      const typeLabel=node('label','نوع البند','field'),type=node('select');
+      [['inventory','بضاعة/مخزون'],['fixed_asset','أصل ثابت'],['other','شراء آخر غير مخزني']].forEach(([v,l])=>type.append(new Option(l,v)));typeLabel.append(type);
+      const productLabel=node('label','الصنف من المخزون','field'),product=node('select');product.append(new Option('غير مربوط بصنف',''));
       products.forEach(p=>product.append(new Option(p.name||p.trade_name||('منتج '+p.id),p.id)));
       productLabel.append(product);
       const nameLabel=node('label','اسم البند','field'),name=node('input');name.required=true;nameLabel.append(name);
       const qtyLabel=node('label','الكمية','field'),qty=node('input');qty.type='number';qty.step='0.001';qty.min='0.001';qty.value='1';qty.required=true;qtyLabel.append(qty);
       const costLabel=node('label','تكلفة الوحدة','field'),cost=node('input');cost.type='number';cost.step='0.01';cost.min='0';cost.required=true;costLabel.append(cost);
+      const assetBox=node('div',null,'editor');
+      const catLabel=node('label','فئة الأصل','field'),cat=node('select');Object.entries(assetCategories).forEach(([v,l])=>cat.append(new Option(l,v)));catLabel.append(cat);
+      const lifeLabel=node('label','العمر الإنتاجي بالأشهر','field'),life=node('input');life.type='number';life.min='1';life.max='600';life.value='60';lifeLabel.append(life);
+      const salvageLabel=node('label','القيمة المتبقية للوحدة','field'),salvage=node('input');salvage.type='number';salvage.step='0.01';salvage.min='0';salvage.value='0';salvageLabel.append(salvage);
+      assetBox.append(catLabel,lifeLabel,salvageLabel);
       const remove=action('حذف البند',()=>{row.remove();const i=rows.findIndex(x=>x.row===row);if(i>=0)rows.splice(i,1)});
-      product.addEventListener('change',()=>{const p=products.find(x=>String(x.id)===String(product.value));if(!p)return;name.value=p.name||p.trade_name||'';const cp=p.cost_price??p.purchase_price??p.unit_cost;if(cp!==undefined&&cp!==null)cost.value=cp});
-      row.append(productLabel,nameLabel,qtyLabel,costLabel,remove);lines.append(row);rows.push({row,product,name,qty,cost});
+      const syncType=()=>{
+        const isAsset=type.value==='fixed_asset';
+        assetBox.hidden=!isAsset;
+        life.required=isAsset;
+        if(product.value){type.value='inventory';assetBox.hidden=true;life.required=false}
+      };
+      product.addEventListener('change',()=>{const p=products.find(x=>String(x.id)===String(product.value));if(p){name.value=p.name||p.trade_name||'';const cp=p.cost_price??p.purchase_price??p.unit_cost;if(cp!==undefined&&cp!==null)cost.value=cp}syncType()});
+      type.addEventListener('change',()=>{if(type.value!=='inventory')product.value='';syncType()});
+      syncType();
+      row.append(typeLabel,productLabel,nameLabel,qtyLabel,costLabel,assetBox,remove);lines.append(row);
+      rows.push({row,type,product,name,qty,cost,cat,life,salvage});
     };
     addLine();f.append(lines);
     const add=action('إضافة بند آخر',addLine);f.append(add);
     const save=node('button','إنشاء أمر الشراء','action');save.type='submit';f.append(save);
     f.addEventListener('submit',async e=>{
       e.preventDefault();if(!supplier.value){message('اختر المورد');return}
-      const items=rows.filter(x=>x.row.isConnected).map(x=>({
-        ...(x.product.value?{product_id:Number(x.product.value)}:{}),
-        name:x.name.value.trim(),quantity:x.qty.value,unit_cost:x.cost.value
-      })).filter(x=>x.name&&Number(x.quantity)>0);
+      const items=rows.filter(x=>x.row.isConnected).map(x=>{
+        const item={
+          ...(x.product.value?{product_id:Number(x.product.value)}:{}),
+          item_type:x.type.value,
+          name:x.name.value.trim(),quantity:x.qty.value,unit_cost:x.cost.value
+        };
+        if(x.type.value==='fixed_asset'){
+          item.asset_category=x.cat.value;
+          item.useful_life_months=Number(x.life.value);
+          item.salvage_value=x.salvage.value||'0';
+        }
+        return item;
+      }).filter(x=>x.name&&Number(x.quantity)>0);
       if(!items.length){message('أضف بنداً واحداً على الأقل');return}
       save.disabled=true;try{await api('purchaseOrderCreate',{supplier_id:Number(supplier.value),items});message('تم إنشاء أمر الشراء كمسودة');await load('suppliers')}catch(err){message(err.message)}finally{save.disabled=false}
     });
@@ -1184,6 +1210,43 @@
     form(create,[['title','البيان'],['amount','المبلغ','number'],['category','الفئة','select',Object.entries(expenseLabels).map(([value,label])=>({value,label}))],['spent_on','التاريخ','date'],['note','ملاحظة']],'تسجيل المصروف',d=>api('expenseCreate',d));
   }
 
+  const assetCategoryLabels={furniture:'أثاث',equipment:'معدات',computer:'أجهزة وتقنية',vehicle:'مركبات',machinery:'آلات',fixtures:'تجهيزات',building_improvement:'تحسينات مبانٍ',other:'أخرى'};
+  async function assetDetails(id){
+    const data=await api('assetShow',undefined,dataUrl('assetShow',id)),a=data.asset||{};
+    const p=box('تفاصيل الأصل — '+(a.name||''));
+    hint(p,'سجل الإهلاك تاريخي ولا يعاد حساب الأشهر السابقة عند فتح الشاشة.');
+    const g=node('div',null,'grid');
+    g.append(metric('تكلفة الاقتناء',money(a.acquisition_cost)),metric('الإهلاك المتراكم',money(a.accumulated_depreciation)),metric('القيمة الدفترية',money(a.book_value)),metric('العمر الإنتاجي',String(a.useful_life_months||0)+' شهر'));
+    p.append(g);
+    table(p,[['الشهر',x=>x.period],['إهلاك الشهر',x=>money(x.amount)],['المتراكم',x=>money(x.accumulated_after)],['القيمة بعد الإهلاك',x=>money(x.book_value_after)]],data.depreciations||[]);
+    p.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  async function disposeAsset(row){
+    const date=window.prompt('تاريخ استبعاد الأصل YYYY-MM-DD',new Date().toISOString().slice(0,10));if(date===null)return;
+    const reason=window.prompt('سبب الاستبعاد/البيع');if(!reason||reason.trim().length<5){message('اكتب سبباً واضحاً');return}
+    const proceeds=window.prompt('متحصلات البيع إن وجدت (اتركها فارغة عند الإتلاف)','');if(proceeds===null)return;
+    await api('assetDispose',{disposed_on:date,reason:reason.trim(),...(proceeds.trim()!==''?{disposal_proceeds:proceeds}:{})},dataUrl('assetDispose',row.id));
+    message('تم استبعاد الأصل وتجميد الإهلاك');await load('assets');
+  }
+  async function assets(){
+    const data=await api('assets'),rows=data.assets||[],t=data.totals||{};
+    grid([['تكلفة الأصول',money(t.acquisition_cost)],['الإهلاك المتراكم',money(t.accumulated_depreciation)],['القيمة الدفترية',money(t.book_value)],['أصول نشطة',t.active_count??0]]);
+    const p=box('سجل الأصول الثابتة');
+    hint(p,'الأثاث والمعدات والسيارات لا تُسجل كمصروف تشغيلي كامل عند الشراء. الأصل القادم من أمر شراء يُنشأ تلقائياً عند الاستلام ويُهلك على عمره الإنتاجي.');
+    table(p,[['الأصل',x=>x.name],['الفئة',x=>assetCategoryLabels[x.category]||x.category],['التكلفة',x=>money(x.acquisition_cost)],['الإهلاك',x=>money(x.accumulated_depreciation)],['القيمة الدفترية',x=>money(x.book_value)],['الحالة',x=>x.status==='active'?'نشط':'مستبعد'],['المصدر',x=>x.source==='purchase_order'?'أمر شراء':'رصيد افتتاحي'],['الإجراء',x=>buttons([action('التفاصيل',()=>assetDetails(x.id)),x.status==='active'?action('استبعاد',()=>disposeAsset(x)):null])]],rows);
+
+    const post=box('إثبات الإهلاك');
+    const m=new Date().toISOString().slice(0,7);
+    hint(post,'المجدول يثبت الشهر المغلق تلقائياً. استخدم هذا الزر فقط إذا أردت إثبات الإهلاك حتى شهر محدد الآن؛ إعادة الطلب لا تكرر الشهر.');
+    const monthLabel=node('label','حتى شهر','field'),month=node('input');month.type='month';month.value=m;monthLabel.append(month);
+    const postBtn=node('button','إثبات الإهلاك','action');postBtn.type='button';postBtn.onclick=async()=>{postBtn.disabled=true;try{const r=await api('assetDepreciation',{through:month.value});message('تم إثبات '+r.entries_posted+' قيد إهلاك بقيمة '+money(r.amount_posted));await load('assets')}catch(e){message(e.message)}finally{postBtn.disabled=false}};
+    post.append(monthLabel,postBtn);
+
+    const create=box('تسجيل أصل افتتاحي');
+    hint(create,'للأصول الموجودة قبل تشغيل النظام فقط. لا ينشئ هذا التسجيل شراءً ولا يخصم نقداً أو محفظة.');
+    form(create,[['name','اسم الأصل'],['category','الفئة','select',Object.entries(assetCategoryLabels).map(([value,label])=>({value,label}))],['quantity','الكمية','number'],['acquisition_cost','تكلفة الاقتناء','number'],['salvage_value','القيمة المتبقية','number'],['useful_life_months','العمر الإنتاجي بالأشهر','number'],['acquired_on','تاريخ الاقتناء','date'],['depreciation_starts_on','بدء الإهلاك','date']],'تسجيل الأصل',d=>api('assetOpening',d));
+  }
+
   async function devices(){const data=await api('devices');const p=box('الأجهزة المرخصة');table(p,[['الجهاز',x=>x.display_name],['الفرع',x=>x.branch_name||'—'],['الحالة',x=>x.is_active?'نشط':'غير نشط'],['الجلسات',x=>x.live_sessions??0]],data.devices||[]);const create=box('تفعيل جهاز بيع جديد');hint(create,'ينشئ مالك المنشأة رمزًا مؤقتًا صالحًا لمرة واحدة. أدخله في تطبيق نقطة البيع على الجهاز الجديد.');form(create,[['display_name','اسم الجهاز']], 'إنشاء رمز التفعيل',async d=>{return api('deviceActivation',d)})}
   async function reports(){
     const [financial,profitData]=await Promise.all([
@@ -1213,7 +1276,7 @@
     table(p,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[]);
   }
   async function settings(){const data=await api('receipts'),s=data.settings||{};const p=box('هوية فاتورة منشأتك');form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});hint(p,'إعدادات الفاتورة موحدة بين الويب وكل نقاط البيع. صلاحية طباعة السند متاحة بحسب خصائص القطاع.')}
-  const pages={overview,sector,sales,wallet,debts,products,suppliers,expenses,branches,posSetup,staff,devices,reports,settings,plans};
+  const pages={overview,sector,sales,wallet,debts,products,suppliers,expenses,assets,branches,posSetup,staff,devices,reports,settings,plans};
   async function load(tab){if(stopScanner){stopScanner();stopScanner=null;}active=tab;document.getElementById('page-title').textContent=titles[tab]||'بوابة المنشأة';document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();if(!pages[tab])throw Error('هذا القسم غير معروف');await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
   const sidebar=document.getElementById('merchant-side');
   const menuToggle=document.getElementById('menu-toggle');
