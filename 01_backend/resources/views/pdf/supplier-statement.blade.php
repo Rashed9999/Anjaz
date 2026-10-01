@@ -18,20 +18,23 @@
 </td><td class="title">كشف حساب مورد</td></tr></table>
 <table class="meta"><tr>
 <td><div class="k">المورد</div><div class="v">{{ $supplier->name }}</div></td>
-<td><div class="k">الرصيد المستحق حتى وقت التوليد</div><div class="v ltr">{{ number_format((float)$supplier->current_debt,2) }} ر.ي</div></td>
+<td><div class="k">علينا للمورد</div><div class="v ltr">{{ number_format((float)$supplier->current_debt,2) }} ر.ي</div></td>
+<td><div class="k">لنا عند المورد</div><div class="v ltr">{{ number_format((float)($supplier->current_credit ?? 0),2) }} ر.ي</div></td>
+<td><div class="k">صافي المركز</div><div class="v ltr">{{ number_format((float)$supplier->current_debt-(float)($supplier->current_credit ?? 0),2) }} ر.ي</div></td>
 <td><div class="k">وقت التوليد</div><div class="v ltr">{{ $generatedAt->format('Y-m-d H:i') }}</div></td>
 </tr></table>
-<table class="ledger"><thead><tr><th>التاريخ</th><th>الحركة</th><th>المبلغ</th><th>المصدر</th><th>الرصيد بعد</th><th>المرجع</th></tr></thead><tbody>
+<table class="ledger"><thead><tr><th>التاريخ</th><th>الحركة</th><th>المبلغ</th><th>المصدر</th><th>علينا بعد</th><th>لنا بعد</th><th>المرجع</th></tr></thead><tbody>
 @forelse($ledgerRows as $row)
 <tr>
 <td class="num">{{ $row->created_at?->copy()->setTimezone('Asia/Riyadh')->format('Y-m-d H:i') }}</td>
-<td>{{ $row->entry_type === 'po_receive' ? 'استلام شراء' : ($row->entry_type === 'payment' ? 'سداد' : ($row->entry_type === 'po_return' ? 'مرتجع شراء' : ($row->entry_type === 'opening' ? 'رصيد افتتاحي' : $row->entry_type))) }}</td>
+<td>{{ $row->entry_type === 'po_receive' ? 'استلام شراء' : ($row->entry_type === 'payment' ? 'سداد' : ($row->entry_type === 'supplier_refund' ? 'تحصيل من المورد' : ($row->entry_type === 'po_return' ? 'مرتجع شراء' : ($row->entry_type === 'opening' ? 'رصيد افتتاحي' : $row->entry_type)))) }}</td>
 <td class="num">{{ number_format((float)$row->amount,2) }}</td>
 <td>{{ $row->payment_method === 'amial_pay' ? 'أميال باي' : ($row->payment_method === 'cash_shift' ? 'درج وردية' : ($row->payment_method === 'cash_external' ? 'نقد خارجي' : ($row->payment_method === 'credit' ? 'آجل' : '—'))) }}</td>
 <td class="num">{{ number_format((float)$row->debt_after,2) }}</td>
+<td class="num">{{ number_format((float)($row->credit_after ?? 0),2) }}</td>
 <td class="num">{{ $row->reference ?: '—' }}</td>
 </tr>
-@empty<tr><td colspan="6" class="center">لا توجد حركات</td></tr>@endforelse
+@empty<tr><td colspan="7" class="center">لا توجد حركات</td></tr>@endforelse
 </tbody></table>
 <div class="note">هذا كشف حيّ يعكس سجل المورد حتى وقت التوليد. أي حركة لاحقة تظهر في كشف جديد ولا تعيد كتابة الحركات السابقة.</div>
 <div class="footer">كشف داخلي للمنشأة - مصدره سجل المورد في أميال باي.</div>
