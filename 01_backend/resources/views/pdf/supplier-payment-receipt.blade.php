@@ -1,4 +1,4 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>سند سداد مورد</title><style>
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>{{ $documentTitle }}</title><style>
 *{box-sizing:border-box} body{font-family:dejavusans,sans-serif;direction:rtl;color:#172033;font-size:10pt;line-height:1.55}
 .header{width:100%;border-bottom:3px solid #053391;padding-bottom:10px;margin-bottom:14px}
 .brand{font-size:18pt;font-weight:bold;color:#053391}.logo{max-width:88px;max-height:55px;margin-bottom:4px}
@@ -15,20 +15,21 @@
 <table class="header"><tr><td>
 @if(!empty($merchantLogoData))<img class="logo" src="{{ $merchantLogoData }}" alt="شعار المنشأة">@endif
 <div class="brand">{{ $merchant?->store_name ?: 'منشأة التاجر' }}</div>
-</td><td class="title">سند سداد مورد</td></tr></table>
+</td><td class="title">{{ $documentTitle }}</td></tr></table>
 <table class="meta">
 <tr><td><div class="k">المورد</div><div class="v">{{ $supplier->name }}</div></td><td><div class="k">التاريخ</div><div class="v ltr">{{ $payment->created_at?->copy()->setTimezone('Asia/Riyadh')->format('Y-m-d H:i') }}</div></td></tr>
-<tr><td><div class="k">طريقة السداد</div><div class="v">{{ $paymentLabel }}</div></td><td><div class="k">الرصيد المتبقي للمورد</div><div class="v ltr">{{ number_format((float)$payment->debt_after,2) }} ر.ي</div></td></tr>
+<tr><td><div class="k">طريقة الحركة</div><div class="v">{{ $paymentLabel }}</div></td><td><div class="k">علينا للمورد بعد الحركة</div><div class="v ltr">{{ number_format((float)$payment->debt_after,2) }} ر.ي</div></td></tr>
+<tr><td colspan="2"><div class="k">لنا عند المورد بعد الحركة</div><div class="v ltr">{{ number_format((float)($payment->credit_after ?? 0),2) }} ر.ي</div></td></tr>
 @if($payment->transaction_id)<tr><td colspan="2"><div class="k">مرجع عملية أميال</div><div class="v code">{{ $payment->transaction_id }}</div></td></tr>@endif
 @if($payment->cashier_shift_id)<tr><td colspan="2"><div class="k">وردية الصندوق</div><div class="v ltr">#{{ $payment->cashier_shift_id }}</div></td></tr>@endif
 </table>
-<table class="total"><tr class="grand"><td>المبلغ المسدد</td><td class="num">{{ number_format((float)$payment->amount,2) }} ر.ي</td></tr></table>
+<table class="total"><tr class="grand"><td>{{ $amountLabel }}</td><td class="num">{{ number_format((float)$payment->amount,2) }} ر.ي</td></tr></table>
 @if($payment->note)<div class="note">{{ $payment->note }}</div>@endif
 <div class="verify">
 @if(!empty($qrDataUri))<img src="{{ $qrDataUri }}" alt="QR تحقق">@endif
-<div><strong>تحقق من أصالة سند السداد</strong></div>
+<div><strong>تحقق من أصالة {{ $documentTitle }}</strong></div>
 <div class="code">{{ $payment->entry_ulid }}</div>
 <div class="code">{{ $verificationUrl }}</div>
 </div>
-<div class="footer">إعادة تنزيل أو طباعة هذا السند لا تخصم مبلغاً جديداً ولا تغيّر مديونية المورد.</div>
+<div class="footer">إعادة تنزيل أو طباعة هذا السند لا تنشئ حركة مالية جديدة ولا تغيّر حساب المورد.</div>
 </body></html>
