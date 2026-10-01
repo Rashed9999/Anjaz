@@ -918,7 +918,60 @@
     }
     renderStepOne();
   }
-  async function staff(){const [data,roles]=await Promise.all([api('staff'),api('roles')]);const p=box('الموظفون');table(p,[['الموظف',x=>x.display_name],['الرمز',x=>x.employee_code],['الفرع',x=>x.branch_name||'المنشأة'],['الحالة',x=>x.is_active?'نشط':'موقوف']],data.staff||[]);const create=box('إضافة موظف نقطة بيع');const choices=(roles.roles||[]).filter(r=>r.is_active).map(r=>({value:r.id,label:r.name_ar}));form(create,[['display_name','اسم الموظف'],['employee_code','رمز الدخول'],['password','كلمة مرور الموظف','password'],['merchant_role_id','الصلاحية','select',[{value:'',label:'الدور الافتراضي لنقطة البيع'},...choices]]], 'إنشاء حساب الموظف',d=>api('staffCreate',d))}
+  function approvalAction(row){
+    const actions=node('div',null,'buttons');
+    if(row.status==='granted'){
+      actions.append(node('span','تمت الموافقة — ينتظر إعادة التنفيذ','note'));
+      return actions;
+    }
+    const grant=button('موافقة لمرة واحدة','action');
+    grant.onclick=async()=>{
+      grant.disabled=true;
+      try{
+        await api('approvalGrant',{note:'اعتماد من مالك المنشأة'},
+          routes.approvalGrant.replace('__ID__',encodeURIComponent(row.id)));
+        message('تم منح الإذن؛ يستطيع الموظف إعادة تنفيذ العملية الآن');
+        await load('staff');
+      }catch(e){message(e.message);grant.disabled=false}
+    };
+    const reject=button('رفض','action secondary');
+    reject.onclick=async()=>{
+      const reason=window.prompt('اكتب سبب الرفض للموظف');
+      if(!reason||!reason.trim())return;
+      reject.disabled=true;
+      try{
+        await api('approvalReject',{reason:reason.trim()},
+          routes.approvalReject.replace('__ID__',encodeURIComponent(row.id)));
+        message('تم رفض طلب الإذن');
+        await load('staff');
+      }catch(e){message(e.message);reject.disabled=false}
+    };
+    actions.append(grant,reject);return actions;
+  }
+  async function staff(){
+    const [data,roles,approvalData]=await Promise.all([
+      api('staff'),api('roles'),api('approvals')
+    ]);
+    const approvals=approvalData.approvals||[];
+    if(approvals.length){
+      const a=box('طلبات اعتماد نقاط البيع');
+      hint(a,'هذه أفعال بدأها موظف نقطة البيع وتحتاج إذن المالك. الموافقة لا تنفذ العملية عن الموظف؛ تمنحه إذناً لمرة واحدة ثم يعيد التنفيذ بنفسه.');
+      table(a,[
+        ['الموظف',x=>(x.requested_by_name||'موظف')+(x.employee_code?' — '+x.employee_code:'')],
+        ['الإجراء',x=>x.permission_label||x.permission_code],
+        ['المبلغ',x=>x.amount===null?'—':money(x.amount)],
+        ['السبب',x=>x.reason||'—'],
+        ['ينتهي',x=>x.expires_at||'—'],
+        ['الحالة',x=>x.status==='pending'?'بانتظار قرار':'موافق عليه'],
+        ['القرار',approvalAction]
+      ],approvals);
+    }
+    const p=box('الموظفون');
+    table(p,[['الموظف',x=>x.display_name],['الرمز',x=>x.employee_code],['الفرع',x=>x.branch_name||'المنشأة'],['الحالة',x=>x.is_active?'نشط':'موقوف']],data.staff||[]);
+    const create=box('إضافة موظف نقطة بيع');
+    const choices=(roles.roles||[]).filter(r=>r.is_active).map(r=>({value:r.id,label:r.name_ar}));
+    form(create,[['display_name','اسم الموظف'],['employee_code','رمز الدخول'],['password','كلمة مرور الموظف','password'],['merchant_role_id','الصلاحية','select',[{value:'',label:'الدور الافتراضي لنقطة البيع'},...choices]]], 'إنشاء حساب الموظف',d=>api('staffCreate',d))
+  }
   async function devices(){const data=await api('devices');const p=box('الأجهزة المرخصة');table(p,[['الجهاز',x=>x.display_name],['الفرع',x=>x.branch_name||'—'],['الحالة',x=>x.is_active?'نشط':'غير نشط'],['الجلسات',x=>x.live_sessions??0]],data.devices||[]);const create=box('تفعيل جهاز بيع جديد');hint(create,'ينشئ مالك المنشأة رمزًا مؤقتًا صالحًا لمرة واحدة. أدخله في تطبيق نقطة البيع على الجهاز الجديد.');form(create,[['display_name','اسم الجهاز']], 'إنشاء رمز التفعيل',async d=>{return api('deviceActivation',d)})}
   async function reports(){const r=(await api('wallet')).report||{};const sales=r.sales||{},methods=sales.by_payment_method||{};grid([['إجمالي المبيعات',money(sales.gross)],['عدد المبيعات',sales.count],['نقدًا',money(methods.cash)],['عبر أميال',money(methods.amial_pay)],['آجل',money(methods.credit)]]);const p=box('الحركة اليومية');hint(p,'التقرير يفصل المبيعات عن التحصيلات وعن حركة المحفظة؛ لا تُحسب التحويلات الشخصية مبيعات.');table(p,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[])}
   async function settings(){const data=await api('receipts'),s=data.settings||{};const p=box('هوية فاتورة منشأتك');form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});hint(p,'إعدادات الفاتورة موحدة بين الويب وكل نقاط البيع. صلاحية طباعة السند متاحة بحسب خصائص القطاع.')}
