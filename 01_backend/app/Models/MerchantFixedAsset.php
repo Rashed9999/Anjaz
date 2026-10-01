@@ -13,7 +13,9 @@ class MerchantFixedAsset extends Model
         'purchase_order_item_id', 'name', 'category', 'quantity',
         'acquisition_cost', 'salvage_value', 'useful_life_months',
         'depreciation_method', 'acquired_on', 'depreciation_starts_on',
-        'status', 'disposed_on', 'disposal_proceeds', 'disposal_reason',
+        'status', 'disposed_on', 'disposal_proceeds', 'disposal_book_value',
+        'disposal_gain_loss', 'disposal_payment_source', 'disposal_cashier_shift_id',
+        'disposal_reason',
         'created_by', 'zone_code',
     ];
 
@@ -30,6 +32,9 @@ class MerchantFixedAsset extends Model
         'depreciation_starts_on' => 'date',
         'disposed_on' => 'date',
         'disposal_proceeds' => 'decimal:4',
+        'disposal_book_value' => 'decimal:4',
+        'disposal_gain_loss' => 'decimal:4',
+        'disposal_cashier_shift_id' => 'integer',
     ];
 
     public const CATEGORIES = [
@@ -45,6 +50,12 @@ class MerchantFixedAsset extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    public function adjustments(): HasMany
+    {
+        return $this->hasMany(MerchantAssetAdjustment::class, 'asset_id')
+            ->orderBy('id');
     }
 
     public function depreciations(): HasMany
