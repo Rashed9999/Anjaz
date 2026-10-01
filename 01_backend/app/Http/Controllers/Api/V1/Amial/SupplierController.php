@@ -197,6 +197,212 @@ class SupplierController extends Controller
         );
     }
 
+    /**
+     * سداد دين المورد من محفظة المنشأة إلى حساب أميال المرتبط بالمورد.
+     * المال يتحرك عبر محرك المحافظ والدفتر نفسه؛ سجل المورد لا يحرّك المال
+     * بل يقرأ نتيجة التحويل ثم يخفض الدين بالمبلغ الأصلي فقط.
+     */
+    public function walletPayment(Request $request, int $id): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:0.01',
+            'note' => 'sometimes|nullable|string|max:500',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $merchant = $request->user();
+        $mid = $merchant->id;
+        if ($err = $this->assertMerchant($mid)) return $err;
+
+        $profile = MerchantProfile::where('user_id', $mid)->first();
+        if (($profile?->verification_status ?? null) !== 'verified') {
+            return $this->error('MERCHANT_NOT_VERIFIED',
+                'يجب اعتماد المنشأة قبل السداد من المحفظة', 403);
+        }
+
+        $supplier = Supplier::where('id', $id)
+            ->where('merchant_user_id', $mid)->first();
+        if (! $supplier) return $this->error('NOT_FOUND', 'المورد غير موجود', 404);
+        if (! $supplier->phone && ! $supplier->amial_user_id) {
+            return $this->error('SUPPLIER_AMIAL_ACCOUNT_REQUIRED',
+                'أضف رقم هاتف المورد المرتبط بحساب أميال قبل السداد من المحفظة', 422);
+        }
+
+        $recipient = $supplier->amial_user_id
+            ? \App\Models\User::find($supplier->amial_user_id)
+            : \App\Models\User::whereIn(
+                'phone',
+                \App\Support\Phone::variants((string) $supplier->phone)
+            )->first();
+
+        if (! $recipient) {
+            return $this->error('SUPPLIER_AMIAL_ACCOUNT_NOT_FOUND',
+                'لا يوجد حساب أميال مرتبط برقم هذا المورد', 422);
+        }
+        if ((int) $recipient->id === (int) $merchant->id) {
+            return $this->error('SUPPLIER_SELF_PAYMENT_FORBIDDEN',
+                'لا يمكن سداد المورد إلى محفظة المنشأة نفسها', 422);
+        }
+        if ((int) ($recipient->is_active ?? 0) !== 1
+            || (int) ($recipient->is_temp_blocked ?? 0) === 1
+            || (string) ($recipient->sanction_status ?? 'clear') === 'blocked') {
+            return $this->error('SUPPLIER_AMIAL_ACCOUNT_UNAVAILABLE',
+                'حساب أميال المرتبط بالمورد غير متاح لاستقبال السداد', 422);
+        }
+
+        try {
+            $kyc = app(\App\Services\KycTierService::class);
+            if ($kyc->isIndividualCustomer($recipient)) {
+                $kyc->assertIndividualCanReceive($recipient, (string) $request->input('amount'));
+            } elseif ((int) ($recipient->is_kyc_verified ?? 0) !== 1
+                && ! MerchantProfile::where('user_id', $recipient->id)
+                    ->where('verification_status', 'verified')->exists()) {
+                throw new \RuntimeException('حساب المورد لم يُعتمد بعد لاستقبال الأموال');
+            }
+
+            foreach ([$merchant, $recipient] as $party) {
+                $policy = app(\App\Services\ZonePolicyService::class)
+                    ->authorize($party, 'send_money');
+                if (! ($policy['allowed'] ?? false)) {
+                    throw new \RuntimeException('سياسة المنطقة لا تسمح بالسداد لهذا الحساب حالياً');
+                }
+            }
+        } catch (\RuntimeException $e) {
+            return $this->error('SUPPLIER_PAYMENT_POLICY_DENIED', $e->getMessage(), 403);
+        }
+
+        $pricing = app(\App\Services\FeeService::class)->calculate(
+            'SUPPLIER_PAYMENT',
+            (string) $request->input('amount'),
+            [
+                'zone_code' => $merchant->zone_code ?? 'SOUTH',
+                'applies_to' => 'merchant',
+                'plan' => $profile?->subscription_plan,
+            ],
+        );
+        if (($pricing['pricing_state'] ?? null) === 'missing_config') {
+            return $this->error('SUPPLIER_PAYMENT_PRICING_MISSING',
+                'تسعير سداد المورد غير مهيأ؛ لم تُنفّذ العملية', 503);
+        }
+
+        $requestKey = trim((string) $request->header('Idempotency-Key'));
+        $subledgerKey = $requestKey !== ''
+            ? 'supplier-pay:'.hash('sha256', $requestKey)
+            : null;
+
+        try {
+            $result = DB::transaction(function () use (
+                $request, $merchant, $recipient, $supplier, $pricing,
+                $requestKey, $subledgerKey, $mid
+            ) {
+                if ($subledgerKey) {
+                    $existing = SupplierLedgerEntry::where('idempotency_key', $subledgerKey)
+                        ->where('merchant_user_id', $mid)
+                        ->lockForUpdate()->first();
+                    if ($existing) {
+                        return [
+                            'supplier' => Supplier::findOrFail($existing->supplier_id),
+                            'payment' => $existing,
+                            'transaction_id' => $existing->transaction_id,
+                            'ledger_entry_ulid' => null,
+                            'duplicate' => true,
+                        ];
+                    }
+                }
+
+                $locked = Supplier::where('id', $supplier->id)
+                    ->where('merchant_user_id', $mid)
+                    ->lockForUpdate()->firstOrFail();
+
+                $amount = \App\Services\MoneyService::normalize(
+                    (string) $request->input('amount')
+                );
+                if (bccomp($amount, (string) $locked->current_debt, 4) > 0) {
+                    throw new \RuntimeException('مبلغ السداد أكبر من المديونية الحالية');
+                }
+
+                $transfer = app(\App\Services\AdminWalletTransferService::class)->transfer(
+                    sender: $merchant,
+                    recipient: $recipient,
+                    amount: $amount,
+                    reason: trim((string) $request->input('note'))
+                        ?: 'سداد مورد: '.$locked->name,
+                    requestIdempotencyKey: $requestKey !== '' ? $requestKey : null,
+                    actor: $merchant,
+                    sourceType: 'supplier_payment',
+                    debitTransactionType: SEND_MONEY,
+                    creditTransactionType: RECEIVED_MONEY,
+                    description: 'سداد مورد من محفظة المنشأة إلى محفظة أميال',
+                    walletReason: 'supplier_payment',
+                    fee: (string) ($pricing['fee'] ?? '0'),
+                    metadata: [
+                        'supplier_id' => $locked->id,
+                        'merchant_user_id' => $mid,
+                        'fee_scheme_id' => $pricing['scheme_id'] ?? null,
+                        'fee_scheme_version' => $pricing['scheme_version'] ?? null,
+                    ],
+                );
+
+                $locked->current_debt = bcsub((string) $locked->current_debt, $amount, 4);
+                $locked->amial_user_id = $recipient->id;
+                $locked->save();
+
+                $payment = SupplierLedgerEntry::create([
+                    'entry_ulid' => (string) Str::ulid(),
+                    'supplier_id' => $locked->id,
+                    'merchant_user_id' => $mid,
+                    'entry_type' => 'payment',
+                    'amount' => $amount,
+                    'cash_amount' => '0',
+                    'payment_method' => 'amial_pay',
+                    'debt_after' => (string) $locked->current_debt,
+                    'reference' => 'AMIAL-'.$transfer['transaction_id'],
+                    'transaction_id' => $transfer['transaction_id'],
+                    'idempotency_key' => $subledgerKey,
+                    'note' => trim((string) $request->input('note'))
+                        ?: 'سداد من محفظة أميال',
+                ]);
+
+                app(\App\Services\AuditService::class)->record([
+                    'actor_type' => 'merchant',
+                    'actor_user_id' => $mid,
+                    'subject_type' => 'supplier_payment',
+                    'subject_id' => $payment->entry_ulid,
+                    'action' => 'SUPPLIER_WALLET_PAYMENT_COMPLETED',
+                    'decision_code' => 'POSTED',
+                    'severity' => 'info',
+                    'transaction_id' => $transfer['transaction_id'],
+                    'idempotency_key' => $subledgerKey,
+                    'context' => [
+                        'supplier_id' => $locked->id,
+                        'recipient_user_id' => $recipient->id,
+                        'amount' => $amount,
+                        'fee' => (string) ($pricing['fee'] ?? '0'),
+                        'debt_after' => (string) $locked->current_debt,
+                    ],
+                ]);
+
+                return [
+                    'supplier' => $locked->fresh(),
+                    'payment' => $payment,
+                    'transaction_id' => $transfer['transaction_id'],
+                    'ledger_entry_ulid' => $transfer['ledger_entry_ulid'],
+                    'fee' => (string) ($pricing['fee'] ?? '0'),
+                    'total_debited' => (string) ($transfer['total_debited']
+                        ?? \App\Services\MoneyService::add($amount, (string) ($pricing['fee'] ?? '0'))),
+                    'duplicate' => (bool) ($transfer['duplicate'] ?? false),
+                ];
+            }, 3);
+        } catch (\App\Exceptions\InsufficientBalanceException $e) {
+            return $this->error('INSUFFICIENT_BALANCE', 'رصيد محفظة المنشأة غير كافٍ', 422);
+        } catch (\RuntimeException|\InvalidArgumentException $e) {
+            return $this->error('SUPPLIER_WALLET_PAYMENT_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok($result, 'SUPPLIER_WALLET_PAYMENT_COMPLETED',
+            'تم سداد المورد من محفظة المنشأة');
+    }
+
     // ============ أوامر الشراء ============
 
     public function poIndex(Request $request): JsonResponse
