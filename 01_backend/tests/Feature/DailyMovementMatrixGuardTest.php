@@ -381,8 +381,9 @@ class DailyMovementMatrixGuardTest extends TestCase
 
         $row = $this->rowOf($this->report(), 'purchase_return');
         $this->assertTrue($row['available']);
-        $this->assertSame(0, bccomp((string) $row['credit'], '300', 4),
-            'مرتجعُ الشراء لا يظهر في مصفوفة الحركة');
+        $this->assertSame(0, bccomp((string) $row['supplier_credit'], '300', 4),
+            'إشعار خصم المورد ظهر آجلًا أو نقدًا بدل «رصيد مورد»');
+        $this->assertSame(0, bccomp((string) $row['credit'], '0', 4));
     }
 
     /**
@@ -501,8 +502,8 @@ class DailyMovementMatrixGuardTest extends TestCase
     {
         $m = $this->report()['movement'];
 
-        $this->assertSame('daily-movement/v1', $m['contract']);
-        $this->assertSame(['cash', 'amial_pay', 'credit'], $m['columns']);
+        $this->assertSame('daily-movement/v2', $m['contract']);
+        $this->assertSame(['cash', 'amial_pay', 'supplier_credit', 'credit'], $m['columns']);
 
         $codes = array_column($m['rows'], 'code');
         $this->assertSame(
