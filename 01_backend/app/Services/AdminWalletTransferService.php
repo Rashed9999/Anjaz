@@ -42,6 +42,7 @@ class AdminWalletTransferService
         ?string $description = null,
         ?string $walletReason = null,
         string|int|float $fee = '0',
+        array $metadata = [],
     ): array {
         $debitTransactionType ??= CASH_OUT;
         $creditTransactionType ??= CASH_IN;
@@ -67,7 +68,7 @@ class AdminWalletTransferService
             ? 'hub-xfer:' . hash('sha256', $requestIdempotencyKey)
             : null;
 
-        return DB::transaction(function () use ($sender, $recipient, $amount, $fee, $totalDebit, $reason, $ledgerKey, $actor, $sourceType, $debitTransactionType, $creditTransactionType, $description, $walletReason): array {
+        return DB::transaction(function () use ($sender, $recipient, $amount, $fee, $totalDebit, $reason, $ledgerKey, $actor, $sourceType, $debitTransactionType, $creditTransactionType, $description, $walletReason, $metadata): array {
             if ($ledgerKey) {
                 $existing = \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', $ledgerKey)
                     ->lockForUpdate()
@@ -145,12 +146,12 @@ class AdminWalletTransferService
                 lines: $lines,
                 idempotencyKey: $ledgerKey,
                 createdByUserId: $actor?->id,
-                metadata: [
+                metadata: array_merge($metadata, [
                     'legacy_transaction_id' => $creditId,
                     'transfer_id' => $transfer->id,
                     'reason' => trim($reason) ?: null,
                     'fee' => $fee,
-                ],
+                ]),
                 zoneCode: (string) $senderWallet->zone_code,
             );
 
