@@ -1126,5 +1126,12 @@
   "pos_point_of_sale": "نقطة البيع",
   "pos_my_notifications": "إشعاراتي",
   "common_logout": "تسجيل الخروج",
-  "pos_employee": "موظّف نقطة بيع"
+  "pos_employee": "موظّف نقطة بيع",
+  "merchant_sale_payment_summary": "الدفع: @method · @count أصناف",
+  "merchant_sale_status_summary": "الحالة: @status",
+  "merchant_refunded_amount": "المسترجع: @amount ر.ي",
+  "currency_yer_amount": "@amount ر.ي",
+  "merchant_cashier_name": "كاشير: @name",
+  "common_today_time": "اليوم @time",
+  "common_yesterday_time": "أمس @time"
 }
