@@ -271,14 +271,14 @@ class PurchaseReturnService
     }
 
     /**
-     * **③ وجهُ المال — واحدٌ لا اثنان.**
+     * **③ قيمةُ المرتجع تُقسَّم حسب ما حدث فعلاً.**
      *
-     * `credit_note` يُنقص الدينَ أولاً، وأي فائض يصبح رصيداً لنا عند المورد. أمّا
-     * `cash_refund` **فلا يمسّ الدينَ إطلاقاً**: المالُ عاد نقداً، وخصمُه
-     * من الدين فوقَ ذلك احتسابٌ مرّتين.
+     * مثال: اشترينا 80 ألفاً ودفعنا 30 وبقي علينا 50. إن أعدنا البضاعة
+     * وطلبنا استرداداً نقدياً، الصحيح: 50 تُسقط الدين و30 فقط تدخل نقداً.
+     * تسجيل 80 نقداً وترك 50 ديناً كان يخلق 50 ألفاً وهمية.
      *
-     * **وفي الحالتين يُكتب سطرُ دفتر** — فمرتجعٌ بلا أثرٍ في كشف المورد
-     * يجعل الكشفَ يناقض المخزون.
+     * credit_note: يسقط الدين أولاً، ثم يتحول الفائض إلى رصيد لنا عند المورد.
+     * cash_refund: يسقط الدين أولاً، ثم **الفائض فقط** يعود نقداً.
      */
     private function settle(PurchaseReturn $return, User $actor): void
     {
@@ -289,10 +289,19 @@ class PurchaseReturnService
         }
 
         $amount = (string) $return->total_amount;
+        $debtBefore = (string) $supplier->current_debt;
+        $debtApplied = bccomp($amount, $debtBefore, 4) > 0
+            ? $debtBefore : $amount;
+        $excess = bcsub($amount, $debtApplied, 4);
+
+        $supplier->current_debt = bcsub($debtBefore, $debtApplied, 4);
 
         if ($return->settlement_type === PurchaseReturn::SETTLE_CASH_REFUND) {
+            // الفائض وحده نقد مسترد. الجزء الأول مجرد إلغاء لدائن قائم.
+            $cashRefund = $excess;
             $shift = null;
-            if ($return->cashier_shift_id) {
+
+            if (bccomp($cashRefund, '0', 4) > 0 && $return->cashier_shift_id) {
                 $shift = \App\Models\CashierShift::whereKey($return->cashier_shift_id)
                     ->where('merchant_user_id', $return->merchant_user_id)
                     ->where('status', 'open')
@@ -310,42 +319,61 @@ class PurchaseReturnService
                     $actor,
                     'in',
                     'supplier_refund',
-                    $amount,
-                    'استرداد نقدي من المورد',
+                    $cashRefund,
+                    'استرداد نقدي من المورد بعد تسوية الدائن',
                     $return->return_ulid,
                     $return->merchant_user_id,
                 );
             }
 
+            $supplier->save();
+
+            $return->update([
+                'debt_applied' => $debtApplied,
+                'credit_created' => '0',
+                'cash_refund_amount' => $cashRefund,
+                // إن لم يدخل نقد فعلياً فلا ننسب المرتجع إلى درج.
+                'cashier_shift_id' => $shift?->id,
+            ]);
+
             SupplierLedgerEntry::create([
                 'entry_ulid' => (string) Str::ulid(),
                 'supplier_id' => $supplier->id,
-                'payment_method' => $shift ? 'cash_shift' : 'cash_external',
+                'payment_method' => bccomp($cashRefund, '0', 4) > 0
+                    ? ($shift ? 'cash_shift' : 'cash_external')
+                    : 'credit_note',
                 'merchant_user_id' => $return->merchant_user_id,
                 'entry_type' => 'po_return',
                 'amount' => $amount,
-                'cash_amount' => $amount,
+                'cash_amount' => $cashRefund,
                 'debt_after' => (string) $supplier->current_debt,
                 'credit_after' => (string) ($supplier->current_credit ?? '0'),
                 'reference' => $return->return_ulid,
                 'cashier_shift_id' => $shift?->id,
-                'note' => $shift
-                    ? 'مرتجع شراء — استُرِدّ في درج الوردية #'.$shift->id.'، ولا يمسّ الدين'
-                    : 'مرتجع شراء — استُرِدّ نقداً خارج نقاط البيع، ولا يمسّ الدين',
+                'note' => sprintf(
+                    'مرتجع شراء — سُوّي %s من الدين%s',
+                    $debtApplied,
+                    bccomp($cashRefund, '0', 4) > 0
+                        ? ' واستُرد '.$cashRefund.' نقداً'.($shift ? ' في الوردية #'.$shift->id : ' خارج نقاط البيع')
+                        : ' ولم ينتج عنه نقد مسترد'
+                ),
             ]);
 
             return;
         }
 
-        $debt = (string) $supplier->current_debt;
-        $applied = bccomp($amount, $debt, 4) > 0 ? $debt : $amount;
-        $excess = bcsub($amount, $applied, 4);
-
-        $supplier->current_debt = bcsub($debt, $applied, 4);
+        // إشعار الخصم: الفائض حقّ للتاجر عند المورد ولا يختفي.
         $supplier->current_credit = bcadd(
             (string) ($supplier->current_credit ?? '0'), $excess, 4
         );
         $supplier->save();
+
+        $return->update([
+            'debt_applied' => $debtApplied,
+            'credit_created' => $excess,
+            'cash_refund_amount' => '0',
+            'cashier_shift_id' => null,
+        ]);
 
         SupplierLedgerEntry::create([
             'entry_ulid' => (string) Str::ulid(),
@@ -361,9 +389,11 @@ class PurchaseReturnService
             'note' => bccomp($excess, '0', 4) > 0
                 ? sprintf(
                     'مرتجع شراء — خُصم %s من الدين وأصبح لنا %s رصيد عند المورد',
-                    $applied, $excess
+                    $debtApplied, $excess
                 )
                 : 'مرتجع شراء — خُصم من دين المورد',
         ]);
     }
+}
+
 }
