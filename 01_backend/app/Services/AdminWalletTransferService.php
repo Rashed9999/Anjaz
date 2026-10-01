@@ -177,7 +177,7 @@ class AdminWalletTransferService
                 'charge' => $fee,
                 'balance' => $balanceAfterSender,
                 'from_user_id' => $sender->id, 'to_user_id' => $recipient->id,
-                'note' => trim($reason) ?: 'تحويل من محفظة الإدارة',
+                'note' => trim($reason) ?: $description,
                 'idempotency_key' => $ledgerKey,
                 'decision_code' => 'POSTED', 'zone_code' => (string) $senderWallet->zone_code,
             ]);
