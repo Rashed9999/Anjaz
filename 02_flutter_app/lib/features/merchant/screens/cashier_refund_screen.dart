@@ -111,9 +111,15 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
     if (!mounted) return;
     if (ok) {
       final status = c.lastRefund.value?['status'];
-      Get.back(result: true);
       final ownerApproval = status == 'owner_approval_pending';
       final refundApproval = status == 'pending_approval';
+
+      // طلب موافقة المالك لم ينفّذ المرتجع بعد، لذلك نبقي الشاشة مفتوحة
+      // حتى يعيد الكاشير الضغط على التأكيد بعد منح الإذن.
+      if (!ownerApproval) {
+        Get.back(result: true);
+      }
+
       Get.snackbar(
         ownerApproval
             ? 'بانتظار موافقة مالك المنشأة'
@@ -121,7 +127,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
                 ? 'بانتظار اعتماد المرتجع'
                 : 'تم الاسترداد',
         ownerApproval
-            ? 'لم يُنفّذ المرتجع بعد. وافق المالك من لوحة المنشأة ثم أعد المحاولة.'
+            ? 'لم يُنفّذ المرتجع بعد. بعد موافقة المالك اضغط تأكيد مرة أخرى من هذه الشاشة.'
             : refundApproval
                 ? 'تم إنشاء المرتجع وهو بانتظار الاعتماد المالي.'
                 : 'تم تسجيل المرتجع بنجاح',
