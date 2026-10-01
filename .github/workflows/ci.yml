@@ -162,6 +162,10 @@ jobs:
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/CustomerFactoryContractTest.php tests/Feature/CustomerGoldenJourneyGuardTest.php tests/Feature/CustomerKycUpgradeJourneyGuardTest.php tests/Feature/ResidenceVerificationLegacyStateTest.php
 
+      - name: رحلة التاجر وPOS — منتج ثم جهاز ثم دفع واسترجاع
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Feature/MerchantProductPosAmialPayGoldenJourneyTest.php tests/Feature/PosStaffChainWalksEndToEndGuardTest.php tests/Feature/PosDeviceLoginBindingTest.php tests/Feature/PosDeviceSessionBindingGuardTest.php tests/Feature/MerchantStaffPerformanceTruthTest.php
+
       - name: وصلات الإدارة الحرجة — المسار والصلاحية والمدخل
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/AdminCriticalRouteContractTest.php tests/Feature/AdminRouteReferenceGuardTest.php tests/Feature/MerchantVerificationAdminGuardTest.php
