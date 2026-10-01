@@ -15,6 +15,7 @@ import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
 import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
 import 'package:amial_pay/features/printer/screens/printer_settings_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-FUEL-RECEIPT-001 — فاتورة بيع الوقود بمقاس حراري 80مم.
 ///
@@ -84,6 +85,8 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
   }
 
   String get _ref => '${widget.sale['sale_ulid'] ?? widget.sale['id'] ?? ''}';
+  String get _verificationUrl => '${AppConstants.baseUrl}/v/$_ref';
+  DateTime get _meccaNow => DateTime.now().toUtc().add(const Duration(hours: 3));
 
   Map<String, dynamic> get _invoiceSettings => {
         ..._settings.effective,
@@ -94,11 +97,9 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
       };
 
   String _now() {
-    final d = DateTime.now();
-    final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
-    final ampm = d.hour < 12 ? 'ص' : 'م';
+    final d = _meccaNow;
     return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}'
-        '  •  $h12:${d.minute.toString().padLeft(2, '0')} $ampm';
+        '  •  ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
 
   Future<File?> _capture() async {
@@ -148,7 +149,8 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
             'طريقة الدفع: $_method',
           ],
           invoiceNo: _ref,
-          dateTime: DateTime.now(),
+          dateTime: _meccaNow,
+          verificationUrl: _verificationUrl,
         );
         if (mounted) _snack(r.message, ok: r.ok);
       } else {
