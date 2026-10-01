@@ -203,6 +203,22 @@ final class FeeOperationRegistry
             ),
 
             new FeeOperation(
+                code: 'SUPPLIER_PAYMENT',
+                labelAr: 'سداد مورد من محفظة المنشأة',
+                labelEn: 'Supplier wallet payment',
+                category: 'merchant',
+                actors: ['merchant'],
+                bearers: ['merchant'],
+                agentCommission: false,
+                zoneScoped: true,
+                consumers: [
+                    'app/Http/Controllers/Api/V1/Amial/SupplierController.php',
+                    'app/Services/AdminWalletTransferService.php',
+                ],
+                owner: 'App\\Http\\Controllers\\Api\\V1\\Amial\\SupplierController::walletPayment',
+            ),
+
+            new FeeOperation(
                 code: 'SAFE_PAYMENT',
                 labelAr: 'الدفع الآمن (وسيط)',
                 labelEn: 'Escrow payment',
