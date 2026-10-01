@@ -3,9 +3,13 @@
 namespace App\Services;
 
 use App\Models\MerchantAssetDepreciation;
+use App\Models\MerchantAssetAdjustment;
 use App\Models\MerchantFixedAsset;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Models\PurchaseReturn;
+use App\Models\PurchaseReturnItem;
+use App\Models\Retail\ShiftCashMovement;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -137,14 +141,20 @@ class MerchantFixedAssetService
     public function index(User $merchant): array
     {
         $assets = MerchantFixedAsset::where('merchant_user_id', $merchant->id)
-            ->withSum('depreciations as accumulated_depreciation', 'amount')
+            ->withSum('depreciations as posted_depreciation', 'amount')
+            ->withSum('adjustments as returned_quantity', 'quantity')
+            ->withSum('adjustments as returned_cost', 'cost_amount')
+            ->withSum('adjustments as returned_salvage', 'salvage_amount')
+            ->withSum('adjustments as depreciation_reversed', 'depreciation_reversed')
             ->orderByDesc('id')->get();
 
         $rows = $assets->map(fn (MerchantFixedAsset $a) => $this->toArray($a))->all();
 
-        $cost = $accumulated = $book = '0';
+        $grossCost = $returnedCost = $carryingCost = $accumulated = $book = '0';
         foreach ($rows as $row) {
-            $cost = MoneyService::add($cost, $row['acquisition_cost']);
+            $grossCost = MoneyService::add($grossCost, $row['gross_acquisition_cost']);
+            $returnedCost = MoneyService::add($returnedCost, $row['returned_cost']);
+            $carryingCost = MoneyService::add($carryingCost, $row['carrying_cost_basis']);
             $accumulated = MoneyService::add($accumulated, $row['accumulated_depreciation']);
             $book = MoneyService::add($book, $row['book_value']);
         }
@@ -152,11 +162,14 @@ class MerchantFixedAssetService
         return [
             'assets' => $rows,
             'totals' => [
-                'acquisition_cost' => MoneyService::normalize($cost),
+                'acquisition_cost' => MoneyService::normalize($carryingCost),
+                'gross_acquisition_cost' => MoneyService::normalize($grossCost),
+                'returned_cost' => MoneyService::normalize($returnedCost),
                 'accumulated_depreciation' => MoneyService::normalize($accumulated),
                 'book_value' => MoneyService::normalize($book),
                 'active_count' => $assets->where('status', 'active')->count(),
                 'disposed_count' => $assets->where('status', 'disposed')->count(),
+                'returned_count' => $assets->where('status', 'returned_to_supplier')->count(),
             ],
         ];
     }
@@ -164,7 +177,7 @@ class MerchantFixedAssetService
     public function show(User $merchant, int $id): array
     {
         $asset = MerchantFixedAsset::where('merchant_user_id', $merchant->id)
-            ->with(['supplier:id,name', 'purchaseOrder:id,po_number,document_ulid', 'depreciations'])
+            ->with(['supplier:id,name', 'purchaseOrder:id,po_number,document_ulid', 'depreciations', 'adjustments'])
             ->findOrFail($id);
 
         return [
@@ -176,6 +189,16 @@ class MerchantFixedAssetService
                 'accumulated_after' => (string) $d->accumulated_after,
                 'book_value_after' => (string) $d->book_value_after,
                 'posted_at' => $d->posted_at?->toIso8601String(),
+            ])->all(),
+            'adjustments' => $asset->adjustments->map(fn ($a) => [
+                'adjustment_ulid' => $a->adjustment_ulid,
+                'type' => $a->type,
+                'quantity' => (string) $a->quantity,
+                'cost_amount' => (string) $a->cost_amount,
+                'salvage_amount' => (string) $a->salvage_amount,
+                'depreciation_reversed' => (string) $a->depreciation_reversed,
+                'effective_on' => $a->effective_on?->toDateString(),
+                'note' => $a->note,
             ])->all(),
             'supplier' => $asset->supplier,
             'purchase_order' => $asset->purchaseOrder,
@@ -189,8 +212,10 @@ class MerchantFixedAssetService
     public function postDepreciationThrough(User $merchant, Carbon $through): array
     {
         $through = $through->copy()->endOfMonth();
-        if ($through->gt(now()->endOfMonth())) {
-            throw new RuntimeException('لا يمكن إثبات إهلاك شهر مستقبلي');
+        // الإهلاك الدوري لا يُثبت لشهر ما زال مفتوحاً؛ وإلا صار فتح شاشة
+        // اليوم الأول من الشهر مصروفاً لشهر كامل. الاستبعاد له مساره الخاص.
+        if ($through->gte(now()->startOfMonth())) {
+            throw new RuntimeException('لا يمكن إثبات إهلاك شهر لم يُغلق بعد');
         }
 
         $posted = 0;
@@ -252,22 +277,23 @@ class MerchantFixedAssetService
                 return ['count' => 0, 'total' => '0'];
             }
 
-            $depreciable = bcsub(
-                (string) $asset->acquisition_cost,
-                (string) $asset->salvage_value,
-                4
-            );
-            if (bccomp($depreciable, '0', 4) <= 0) {
+            $balance = $this->balanceAt($asset, $end);
+            $depreciable = $balance['depreciable_base'];
+            if (bccomp($depreciable, '0', 4) <= 0
+                || bccomp($balance['active_quantity'], '0', 3) <= 0) {
                 return ['count' => 0, 'total' => '0'];
             }
 
             $monthly = bcdiv($depreciable, (string) $asset->useful_life_months, 4);
             $existing = MerchantAssetDepreciation::where('asset_id', $asset->id)
+                ->where('period', '<=', $end->format('Y-m'))
                 ->orderBy('period')->get()->keyBy('period');
-            $accumulated = '0';
+            $posted = '0';
             foreach ($existing as $row) {
-                $accumulated = bcadd($accumulated, (string) $row->amount, 4);
+                $posted = bcadd($posted, (string) $row->amount, 4);
             }
+            $accumulated = bcsub($posted, $balance['depreciation_reversed'], 4);
+            if (bccomp($accumulated, '0', 4) < 0) $accumulated = '0';
 
             $count = 0;
             $sum = '0';
@@ -290,9 +316,9 @@ class MerchantFixedAssetService
                     : (bccomp($monthly, $remaining, 4) > 0 ? $remaining : $monthly);
 
                 $accumulated = bcadd($accumulated, $amount, 4);
-                $book = bcsub((string) $asset->acquisition_cost, $accumulated, 4);
-                if (bccomp($book, (string) $asset->salvage_value, 4) < 0) {
-                    $book = (string) $asset->salvage_value;
+                $book = bcsub($balance['carrying_cost_basis'], $accumulated, 4);
+                if (bccomp($book, $balance['carrying_salvage_value'], 4) < 0) {
+                    $book = $balance['carrying_salvage_value'];
                 }
 
                 MerchantAssetDepreciation::create([
@@ -320,11 +346,20 @@ class MerchantFixedAssetService
         Carbon $date,
         ?string $proceeds,
         string $reason,
+        ?int $cashierShiftId = null,
     ): MerchantFixedAsset {
-        // إثبات إهلاك الأصل المستبعد وحده؛ لا نرحّل بقية المحفظة مبكراً.
-        $this->postOneAssetThrough($merchant, $id, $date);
+        // الشهر الجاري مفتوح. للاستبعاد اليوم نثبت حتى آخر شهر مغلق فقط؛
+        // أما استبعاد تاريخي في شهر مغلق فيثبت حتى شهر الاستبعاد.
+        $closedThrough = $date->copy()->endOfMonth()->lt(now()->startOfMonth())
+            ? $date->copy()->endOfMonth()
+            : now()->subMonthNoOverflow()->endOfMonth();
+        $assetBefore = MerchantFixedAsset::whereKey($id)
+            ->where('merchant_user_id', $merchant->id)->firstOrFail();
+        if ($closedThrough->gte($assetBefore->depreciation_starts_on->copy()->startOfMonth())) {
+            $this->postOneAssetThrough($merchant, $id, $closedThrough);
+        }
 
-        $asset = DB::transaction(function () use ($merchant, $id, $date, $proceeds, $reason) {
+        $asset = DB::transaction(function () use ($merchant, $id, $date, $proceeds, $reason, $cashierShiftId) {
             $asset = MerchantFixedAsset::where('id', $id)
                 ->where('merchant_user_id', $merchant->id)
                 ->lockForUpdate()->firstOrFail();
@@ -336,10 +371,44 @@ class MerchantFixedAssetService
                 throw new RuntimeException('تاريخ الاستبعاد لا يسبق تاريخ اقتناء الأصل');
             }
 
+            $balance = $this->balanceAt($asset, $date);
+            $normalizedProceeds = $proceeds === null
+                ? '0.0000' : MoneyService::normalize($proceeds);
+            $gainLoss = bcsub($normalizedProceeds, $balance['book_value'], 4);
+
+            $shift = null;
+            if ($cashierShiftId !== null && MoneyService::gt($normalizedProceeds, '0')) {
+                $shift = \App\Models\CashierShift::whereKey($cashierShiftId)
+                    ->where('merchant_user_id', $merchant->id)
+                    ->where('status', 'open')
+                    ->lockForUpdate()->first();
+                if (! $shift) {
+                    throw new RuntimeException('وردية تحصيل بيع الأصل غير موجودة أو مغلقة');
+                }
+
+                app(\App\Services\Retail\MerchantShiftCashService::class)->record(
+                    ShiftCashMovement::CASHIER,
+                    $shift->id,
+                    $merchant,
+                    'in',
+                    'asset_disposal_proceeds',
+                    $normalizedProceeds,
+                    'متحصلات استبعاد/بيع أصل: '.$asset->name,
+                    'ASSET-'.$asset->asset_ulid,
+                    $merchant->id,
+                );
+            }
+
             $asset->update([
                 'status' => 'disposed',
                 'disposed_on' => $date->toDateString(),
-                'disposal_proceeds' => $proceeds === null ? null : MoneyService::normalize($proceeds),
+                'disposal_proceeds' => $normalizedProceeds,
+                'disposal_book_value' => $balance['book_value'],
+                'disposal_gain_loss' => $gainLoss,
+                'disposal_payment_source' => MoneyService::gt($normalizedProceeds, '0')
+                    ? ($shift ? 'cash_shift' : 'cash_external')
+                    : 'none',
+                'disposal_cashier_shift_id' => $shift?->id,
                 'disposal_reason' => mb_substr(trim($reason), 0, 500),
             ]);
 
@@ -357,55 +426,203 @@ class MerchantFixedAssetService
             'reason' => $reason,
             'context' => [
                 'disposed_on' => $date->toDateString(),
-                'proceeds' => $proceeds,
+                'proceeds' => (string) $asset->disposal_proceeds,
+                'book_value' => (string) $asset->disposal_book_value,
+                'gain_loss' => (string) $asset->disposal_gain_loss,
+                'payment_source' => $asset->disposal_payment_source,
+                'cashier_shift_id' => $asset->disposal_cashier_shift_id,
             ],
         ]);
 
         return $asset;
     }
 
-    public function toArray(MerchantFixedAsset $asset): array
-    {
-        $acc = array_key_exists('accumulated_depreciation', $asset->getAttributes())
-            ? (string) ($asset->getAttribute('accumulated_depreciation') ?? '0')
-            : (string) $asset->depreciations()->sum('amount');
+    /**
+     * يسجل رد أصل ثابت للمورد كـ adjustment مستقل. لا نغيّر تكلفة الاقتناء
+     * التاريخية؛ بل نقلّص أساس الأصل الجاري ونعكس حصة الإهلاك المتراكم
+     * الخاصة بالكمية الخارجة.
+     */
+    public function applySupplierReturn(
+        User $actor,
+        PurchaseReturn $return,
+        PurchaseReturnItem $returnItem,
+        PurchaseOrderItem $poItem,
+    ): void {
+        if ((string) ($poItem->item_type ?? 'inventory') !== 'fixed_asset') return;
 
-        $book = bcsub((string) $asset->acquisition_cost, $acc, 4);
-        if (bccomp($book, (string) $asset->salvage_value, 4) < 0) {
-            $book = (string) $asset->salvage_value;
+        $remaining = (string) $returnItem->quantity;
+        $assets = MerchantFixedAsset::where('merchant_user_id', $return->merchant_user_id)
+            ->where('purchase_order_item_id', $poItem->id)
+            ->where('status', 'active')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($assets as $asset) {
+            if (bccomp($remaining, '0', 3) <= 0) break;
+
+            $balance = $this->balanceAt($asset, now());
+            $available = $balance['active_quantity'];
+            if (bccomp($available, '0', 3) <= 0) continue;
+
+            $qty = bccomp($remaining, $available, 3) > 0 ? $available : $remaining;
+            $costPerUnit = bcdiv((string) $asset->acquisition_cost, (string) $asset->quantity, 8);
+            $salvagePerUnit = bcdiv((string) $asset->salvage_value, (string) $asset->quantity, 8);
+            $cost = MoneyService::normalize(bcmul($costPerUnit, $qty, 8));
+            $salvage = MoneyService::normalize(bcmul($salvagePerUnit, $qty, 8));
+
+            $depReversed = '0.0000';
+            if (bccomp($available, '0', 3) > 0
+                && bccomp($balance['accumulated_depreciation'], '0', 4) > 0) {
+                $depReversed = MoneyService::normalize(
+                    bcmul(
+                        bcdiv($balance['accumulated_depreciation'], $available, 8),
+                        $qty,
+                        8
+                    )
+                );
+            }
+
+            MerchantAssetAdjustment::create([
+                'adjustment_ulid' => (string) Str::ulid(),
+                'merchant_user_id' => $return->merchant_user_id,
+                'asset_id' => $asset->id,
+                'purchase_return_id' => $return->id,
+                'type' => 'supplier_return',
+                'quantity' => $qty,
+                'cost_amount' => $cost,
+                'salvage_amount' => $salvage,
+                'depreciation_reversed' => $depReversed,
+                'effective_on' => now()->toDateString(),
+                'note' => 'مرتجع شراء '.$return->return_ulid,
+                'created_by' => $actor->id,
+            ]);
+
+            $remaining = bcsub($remaining, $qty, 3);
+            $after = $this->balanceAt($asset->fresh(), now());
+            if (bccomp($after['active_quantity'], '0', 3) <= 0) {
+                $asset->update(['status' => 'returned_to_supplier']);
+            }
+
+            $this->audit->record([
+                'actor_type' => 'merchant',
+                'actor_user_id' => $actor->id,
+                'subject_type' => 'merchant_fixed_asset',
+                'subject_id' => $asset->asset_ulid,
+                'action' => 'FIXED_ASSET_RETURNED_TO_SUPPLIER',
+                'decision_code' => 'ADJUSTED',
+                'severity' => 'notice',
+                'context' => [
+                    'purchase_return' => $return->return_ulid,
+                    'quantity' => $qty,
+                    'cost_reduction' => $cost,
+                    'depreciation_reversed' => $depReversed,
+                ],
+            ]);
         }
 
-        $depreciable = bcsub(
-            (string) $asset->acquisition_cost,
-            (string) $asset->salvage_value,
-            4
-        );
+        if (bccomp($remaining, '0', 3) > 0) {
+            throw new RuntimeException(
+                'سجل الأصول لا يغطي كامل كمية الأصل المراد ردها؛ أوقفت العملية لمنع اختلاف الأصول عن المورد'
+            );
+        }
+    }
+
+    public function toArray(MerchantFixedAsset $asset): array
+    {
+        $balance = $this->balanceAt($asset, now());
 
         return [
             'id' => $asset->id,
             'asset_ulid' => $asset->asset_ulid,
             'name' => $asset->name,
             'category' => $asset->category,
-            'quantity' => (string) $asset->quantity,
+            'quantity' => MoneyService::normalize((string) $asset->quantity, 3),
+            'active_quantity' => $balance['active_quantity'],
+            'returned_quantity' => $balance['returned_quantity'],
+            'gross_acquisition_cost' => MoneyService::normalize((string) $asset->acquisition_cost),
+            'returned_cost' => $balance['returned_cost'],
+            'carrying_cost_basis' => $balance['carrying_cost_basis'],
+            // الاسم القديم يبقى الأصل التاريخي للسطر، وتعرض المجاميع أساس
+            // التكلفة الجاري. لا نعيد كتابة تاريخ الاقتناء.
             'acquisition_cost' => MoneyService::normalize((string) $asset->acquisition_cost),
             'salvage_value' => MoneyService::normalize((string) $asset->salvage_value),
-            'depreciable_base' => MoneyService::normalize($depreciable),
+            'carrying_salvage_value' => $balance['carrying_salvage_value'],
+            'depreciable_base' => $balance['depreciable_base'],
             'useful_life_months' => (int) $asset->useful_life_months,
             'monthly_depreciation' => MoneyService::normalize(
-                bcdiv($depreciable, (string) max(1, $asset->useful_life_months), 4)
+                bcdiv($balance['depreciable_base'], (string) max(1, $asset->useful_life_months), 4)
             ),
-            'accumulated_depreciation' => MoneyService::normalize($acc),
-            'book_value' => MoneyService::normalize($book),
+            'accumulated_depreciation' => $balance['accumulated_depreciation'],
+            'depreciation_reversed' => $balance['depreciation_reversed'],
+            'book_value' => $balance['book_value'],
             'acquired_on' => $asset->acquired_on?->toDateString(),
             'depreciation_starts_on' => $asset->depreciation_starts_on?->toDateString(),
             'status' => $asset->status,
             'disposed_on' => $asset->disposed_on?->toDateString(),
             'disposal_proceeds' => $asset->disposal_proceeds === null
                 ? null : MoneyService::normalize((string) $asset->disposal_proceeds),
+            'disposal_book_value' => $asset->disposal_book_value === null
+                ? null : MoneyService::normalize((string) $asset->disposal_book_value),
+            'disposal_gain_loss' => $asset->disposal_gain_loss === null
+                ? null : MoneyService::normalize((string) $asset->disposal_gain_loss),
+            'disposal_payment_source' => $asset->disposal_payment_source,
+            'disposal_cashier_shift_id' => $asset->disposal_cashier_shift_id,
             'disposal_reason' => $asset->disposal_reason,
             'source' => $asset->purchase_order_id ? 'purchase_order' : 'opening_register',
             'purchase_order_id' => $asset->purchase_order_id,
             'supplier_id' => $asset->supplier_id,
+        ];
+    }
+
+    /** @return array<string,string> */
+    private function balanceAt(MerchantFixedAsset $asset, Carbon $at): array
+    {
+        $adjustments = MerchantAssetAdjustment::where('asset_id', $asset->id)
+            ->whereDate('effective_on', '<=', $at->toDateString())->get();
+
+        $returnedQuantity = '0';
+        $returnedCost = '0';
+        $returnedSalvage = '0';
+        $depReversed = '0';
+        foreach ($adjustments as $a) {
+            $returnedQuantity = bcadd($returnedQuantity, (string) $a->quantity, 3);
+            $returnedCost = bcadd($returnedCost, (string) $a->cost_amount, 4);
+            $returnedSalvage = bcadd($returnedSalvage, (string) $a->salvage_amount, 4);
+            $depReversed = bcadd($depReversed, (string) $a->depreciation_reversed, 4);
+        }
+
+        $posted = '0';
+        $deps = MerchantAssetDepreciation::where('asset_id', $asset->id)
+            ->where('period', '<=', $at->format('Y-m'))->get(['amount']);
+        foreach ($deps as $d) $posted = bcadd($posted, (string) $d->amount, 4);
+
+        $activeQuantity = bcsub((string) $asset->quantity, $returnedQuantity, 3);
+        if (bccomp($activeQuantity, '0', 3) < 0) $activeQuantity = '0';
+        $carryingCost = bcsub((string) $asset->acquisition_cost, $returnedCost, 4);
+        if (bccomp($carryingCost, '0', 4) < 0) $carryingCost = '0';
+        $carryingSalvage = bcsub((string) $asset->salvage_value, $returnedSalvage, 4);
+        if (bccomp($carryingSalvage, '0', 4) < 0) $carryingSalvage = '0';
+
+        $effectiveDep = bcsub($posted, $depReversed, 4);
+        if (bccomp($effectiveDep, '0', 4) < 0) $effectiveDep = '0';
+        $depreciable = bcsub($carryingCost, $carryingSalvage, 4);
+        if (bccomp($depreciable, '0', 4) < 0) $depreciable = '0';
+        if (bccomp($effectiveDep, $depreciable, 4) > 0) $effectiveDep = $depreciable;
+
+        $book = bcsub($carryingCost, $effectiveDep, 4);
+        if (bccomp($book, $carryingSalvage, 4) < 0) $book = $carryingSalvage;
+
+        return [
+            'active_quantity' => number_format((float) $activeQuantity, 3, '.', ''),
+            'returned_quantity' => number_format((float) $returnedQuantity, 3, '.', ''),
+            'returned_cost' => MoneyService::normalize($returnedCost),
+            'carrying_cost_basis' => MoneyService::normalize($carryingCost),
+            'carrying_salvage_value' => MoneyService::normalize($carryingSalvage),
+            'depreciation_reversed' => MoneyService::normalize($depReversed),
+            'accumulated_depreciation' => MoneyService::normalize($effectiveDep),
+            'depreciable_base' => MoneyService::normalize($depreciable),
+            'book_value' => MoneyService::normalize($book),
         ];
     }
 
