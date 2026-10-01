@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Amial\CreditCollectionController as Collections;
 use App\Http\Controllers\Merchant\WebPlansController as Plans;
 use App\Http\Controllers\Merchant\WebSectorController as Sector;
 use App\Http\Controllers\Merchant\WebFinanceController as Finance;
+use App\Http\Controllers\Merchant\WebApprovalController as Approvals;
 use App\Http\Controllers\Api\V1\Amial\CustomerCreditController as Credits;
 use App\Http\Controllers\Api\V1\Amial\BranchController;
 use App\Http\Controllers\Api\V1\Amial\CashierController;
@@ -98,6 +99,13 @@ Route::middleware('merchant.web')->group(function () {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches');
         Route::post('/branches', [BranchController::class, 'store'])
             ->middleware(['capability:branches', 'throttle:10,1'])->name('branches.create');
+
+        // طلبات اعتماد POS: الموظف يطلب من مسار الفعل، والمالك يقرر هنا.
+        Route::get('/approvals', [Approvals::class, 'index'])->name('approvals');
+        Route::post('/approvals/{id}/grant', [Approvals::class, 'grant'])
+            ->whereNumber('id')->middleware('throttle:30,1')->name('approvals.grant');
+        Route::post('/approvals/{id}/reject', [Approvals::class, 'reject'])
+            ->whereNumber('id')->middleware('throttle:30,1')->name('approvals.reject');
 
         Route::get('/staff', [Staff::class, 'index'])->middleware('capability:employees')->name('staff');
         Route::post('/staff', [Staff::class, 'store'])
