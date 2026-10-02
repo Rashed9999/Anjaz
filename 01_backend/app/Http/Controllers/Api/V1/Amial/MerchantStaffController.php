@@ -554,6 +554,94 @@ class MerchantStaffController extends Controller
             : 'تم ربط الموظف بالفرع');
     }
 
+    /**
+     * يبدّل الدور التشغيلي الأساسي للموظف من المصدر الذي يقرأه حارس
+     * الصلاحيات. لا نكتب قائمة permissions نصية ونترك RBAC على دور قديم.
+     */
+    public function setRole(Request $request, int $id): JsonResponse
+    {
+        $m = $this->guardMerchant($request);
+        if ($m instanceof JsonResponse) return $m;
+
+        $v = Validator::make($request->all(), [
+            'merchant_role_id' => 'required|integer',
+        ]);
+        if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
+
+        $role = MerchantRole::where('id', $request->integer('merchant_role_id'))
+            ->where('merchant_user_id', $m->id)
+            ->where('is_active', true)
+            ->first();
+        if (! $role) {
+            return $this->error('STAFF_ROLE_UNAVAILABLE', 'الدور المختار غير صالح أو غير نشط', 422);
+        }
+
+        return DB::transaction(function () use ($m, $id, $role): JsonResponse {
+            $pos = PosUser::where('id', $id)
+                ->where('merchant_user_id', $m->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $pos) return $this->error('NOT_FOUND', 'الموظف غير موجود', 404);
+
+            $employee = User::whereKey($pos->user_id)->lockForUpdate()->first();
+            if (! $employee) return $this->error('STAFF_USER_MISSING', 'حساب دخول الموظف غير موجود', 409);
+
+            $oldRoles = DB::table('merchant_user_roles as mur')
+                ->join('merchant_roles as mr', 'mr.id', '=', 'mur.merchant_role_id')
+                ->where('mur.merchant_user_id', $m->id)
+                ->where('mur.user_id', $employee->id)
+                ->where('mur.is_active', true)
+                ->pluck('mr.code')->values()->all();
+
+            // هذه الشاشة تدير «الدور التشغيلي الأساسي»: نغلق الإسنادات
+            // النشطة الحالية ثم نعيد استخدام خدمة الصلاحيات نفسها.
+            DB::table('merchant_user_roles')
+                ->where('merchant_user_id', $m->id)
+                ->where('user_id', $employee->id)
+                ->where('is_active', true)
+                ->update([
+                    'is_active' => false,
+                    'suspended_by_staff_toggle' => false,
+                    'updated_at' => now(),
+                ]);
+
+            $this->merchantPermissions->assign(
+                merchant: $m,
+                employee: $employee,
+                role: $role,
+                branchId: $pos->branch_id,
+            );
+
+            $this->audit->record([
+                'actor_type' => 'merchant',
+                'actor_user_id' => $m->id,
+                'subject_type' => 'user',
+                'subject_id' => $employee->id,
+                'action' => 'MERCHANT_STAFF_ROLE_CHANGED',
+                'decision_code' => 'COMPLETED',
+                'reason' => 'تغيّر الدور التشغيلي للموظف',
+                'context' => [
+                    'merchant_user_id' => $m->id,
+                    'staff_id' => $pos->id,
+                    'old_roles' => $oldRoles,
+                    'new_role_code' => $role->code,
+                    'new_role_id' => $role->id,
+                    'branch_id' => $pos->branch_id,
+                ],
+            ]);
+
+            return $this->ok([
+                'id' => $pos->id,
+                'role' => [
+                    'id' => $role->id,
+                    'code' => $role->code,
+                    'name_ar' => $role->name_ar,
+                ],
+            ], 'STAFF_ROLE_SET', 'تم تحديث دور الموظف');
+        });
+    }
+
     /** لا نصدّق معرف الفرع القادم من الهاتف؛ ونعيّن الافتراضي للموظف الجديد. */
     private function branchId(User $merchant, mixed $requested, bool $wasSent): int|JsonResponse|null
     {
