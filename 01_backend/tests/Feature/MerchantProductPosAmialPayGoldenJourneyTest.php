@@ -679,4 +679,212 @@ class MerchantProductPosAmialPayGoldenJourneyTest extends TestCase
             'مرتجع الآجل حرّك محفظة رغم أن البيع لم يُحصّل إلكترونياً'
         );
     }
+
+    /**
+     * @test
+     *
+     * AMIAL-POS-CREDIT-CUSTOMER-E2E-001
+     *
+     * بيع POS الآجل ليس رقماً في لوحة التاجر فقط:
+     * يصل فوراً إلى «فواتيري الآجلة» لصاحب الرقم، ثم سداد العميل من
+     * محفظته يخفض الفاتورة نفسها ويصل إلى محفظة التاجر ويقفل البيع.
+     */
+    public function credit_sale_reaches_customer_deferred_invoices_and_wallet_settlement_reaches_merchant(): void
+    {
+        config(['amial.operational_governorates' => ['YE-AD']]);
+
+        $customer = User::factory()->create([
+            'type' => CUSTOMER_TYPE,
+            'role' => 'customer',
+            'phone' => '+967700444777',
+            'is_active' => 1,
+            'zone_code' => 'SOUTH',
+            'kyc_tier' => 1,
+            'is_phone_verified' => 1,
+            'is_kyc_verified' => 0,
+            'residence_governorate' => 'YE-AD',
+            'verified_residence_governorate' => 'YE-AD',
+            'residence_verified_at' => now(),
+            'transaction_pin' => Hash::make('1234'),
+        ]);
+
+        \Illuminate\Support\Facades\DB::table('residence_verifications')->insert([
+            'user_id' => $customer->id,
+            'kyc_document_id' => null,
+            'declared_governorate' => 'YE-AD',
+            'evidence_type' => 'government_residence_document',
+            'evidence_strength' => 'strong',
+            'status' => 'verified',
+            'submitted_at' => now()->subMinute(),
+            'reviewed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        EMoney::create([
+            'user_id' => $customer->id,
+            'current_balance' => '5000.0000',
+            'pending_balance' => '0.0000',
+            'held_balance' => '0.0000',
+            'charge_earned' => '0.0000',
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $shift = $this->withHeaders($this->posHeaders())
+            ->postJson('/api/v1/amial/cashier/shift/open', [
+                'opening_float' => '0',
+            ]);
+        $this->assertContains($shift->status(), [200, 201], json_encode(
+            $shift->json(), JSON_UNESCAPED_UNICODE
+        ));
+
+        $merchantBefore = (string) EMoney::where('user_id', $this->merchant->id)
+            ->value('current_balance');
+
+        $saleResponse = $this->withHeaders($this->posHeaders())
+            ->postJson('/api/v1/amial/merchant/cashier/sales', [
+                'total' => '1200',
+                'payment_method' => 'credit',
+                'credit_due_date' => '2026-12-31',
+                'customer' => [
+                    'name' => 'عميل فواتيري الآجلة',
+                    'phone' => $customer->phone,
+                ],
+                'items' => [[
+                    'name' => 'سلعة آجلة تجريبية',
+                    'qty' => 1,
+                    'price' => '1200',
+                ]],
+            ])->assertOk()
+              ->assertJsonPath('code', 'SALE_RECORDED');
+
+        $sale = MerchantSale::where(
+            'sale_ulid', (string) $saleResponse->json('meta.sale.sale_ulid')
+        )->firstOrFail();
+
+        $this->assertSame('credit', $sale->payment_method);
+        $this->assertSame('credit_unpaid', $sale->status);
+        $this->assertSame(
+            $merchantBefore,
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'),
+            'بيع الآجل حرّك محفظة التاجر قبل أن يسدّد العميل'
+        );
+
+        $account = \App\Models\CustomerCreditAccount::where(
+            'merchant_user_id', $this->merchant->id
+        )->whereIn(
+            'customer_phone', \App\Support\Phone::variants((string) $customer->phone)
+        )->firstOrFail();
+
+        $this->assertSame($customer->id, (int) $account->customer_user_id);
+        $this->assertSame('1200.0000', (string) $account->current_balance);
+
+        $saleMovement = $account->movements()
+            ->where('type', 'sale')
+            ->where('reference_type', 'merchant_sale')
+            ->where('reference_id', $sale->sale_ulid)
+            ->firstOrFail();
+
+        $this->assertSame($sale->invoice_number, $saleMovement->reference_number);
+        $this->assertSame('2026-12-31', $saleMovement->due_date?->format('Y-m-d'));
+
+        // من هذه اللحظة نقرأ المسارات نفسها التي يقرأها تطبيق العميل.
+        app('auth')->forgetGuards();
+        Passport::actingAs($customer->fresh(), [], 'api');
+
+        $this->getJson('/api/v1/amial/customer/credits')
+            ->assertOk()
+            ->assertJsonPath('meta.total_owed', '1200.0000')
+            ->assertJsonFragment([
+                'account_id' => $account->id,
+                'current_balance' => '1200.0000',
+            ]);
+
+        $statement = $this->getJson(
+            "/api/v1/amial/customer/credits/{$account->id}/statement"
+        )->assertOk();
+
+        $this->assertSame(
+            $sale->invoice_number,
+            (string) $statement->json('meta.invoices.0.reference_number'),
+            'فاتورة POS الآجلة لم تظهر برقمها في «فواتيري الآجلة»'
+        );
+        $this->assertSame(
+            '1200.0000',
+            (string) $statement->json('meta.invoices.0.remaining')
+        );
+        $this->assertSame(
+            $saleMovement->movement_ulid,
+            (string) $statement->json('meta.invoices.0.movement_ulid')
+        );
+
+        // سداد جزئي للفواتير المختارة: العميل ينقص 400، التاجر يزيد 400،
+        // والمتبقي في نفس الفاتورة يصبح 800 لا في حساب موازٍ.
+        $this->withHeader('Idempotency-Key', 'golden-credit-customer-400')
+            ->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+                'amount' => '400',
+                'pin' => '1234',
+                'sale_movement_ulid' => $saleMovement->movement_ulid,
+            ])->assertOk()
+              ->assertJsonPath('code', 'SETTLED')
+              ->assertJsonPath('meta.new_balance', '800.0000');
+
+        $this->assertSame(
+            '4600.0000',
+            (string) EMoney::where('user_id', $customer->id)->value('current_balance')
+        );
+        $this->assertSame(
+            bcadd($merchantBefore, '400.0000', 4),
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance')
+        );
+        $this->assertSame('800.0000', (string) $account->fresh()->current_balance);
+        $this->assertSame('credit_unpaid', $sale->fresh()->status);
+
+        $afterPartial = $this->getJson(
+            "/api/v1/amial/customer/credits/{$account->id}/statement"
+        )->assertOk();
+        $this->assertSame(
+            '800.0000',
+            (string) $afterPartial->json('meta.invoices.0.remaining'),
+            'السداد الجزئي لم ينعكس على المتبقي الذي يراه العميل'
+        );
+
+        // ثم السداد الكامل للباقي يقفل الفاتورة وبيع POS نفسه.
+        $this->withHeader('Idempotency-Key', 'golden-credit-customer-800')
+            ->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+                'amount' => '800',
+                'pin' => '1234',
+                'sale_movement_ulid' => $saleMovement->movement_ulid,
+            ])->assertOk()
+              ->assertJsonPath('meta.new_balance', '0.0000');
+
+        $this->assertSame('3800.0000',
+            (string) EMoney::where('user_id', $customer->id)->value('current_balance'));
+        $this->assertSame(
+            bcadd($merchantBefore, '1200.0000', 4),
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance')
+        );
+        $this->assertSame('0.0000', (string) $account->fresh()->current_balance);
+        $this->assertSame('credit_paid', $sale->fresh()->status,
+            'العميل سدّد الفاتورة لكن بيع POS بقي credit_unpaid');
+
+        $finalStatement = $this->getJson(
+            "/api/v1/amial/customer/credits/{$account->id}/statement"
+        )->assertOk();
+        $this->assertSame([], $finalStatement->json('meta.invoices'));
+        $this->assertSame('0.0000', (string) $finalStatement->json('meta.current_balance'));
+
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $customer->id,
+            'to_user_id' => $this->merchant->id,
+            'transaction_type' => 'debt_payment',
+        ]);
+        $this->assertDatabaseHas('receipts', [
+            'user_id' => $customer->id,
+            'counterparty_user_id' => $this->merchant->id,
+            'receipt_type' => 'debt_payment',
+            'direction' => 'debit',
+        ]);
+    }
+
 }
