@@ -107,6 +107,7 @@ final class MerchantPortalNavigationService
             $this->item('sales', $vertical['sales'], 'receipt_long', $this->state($states, $vertical['sales_capability'])),
             $this->item('wallet', 'المحفظة وكشف الحساب', 'account_balance_wallet', EntitlementService::AVAILABLE),
             $this->item('documents', 'المستندات والطباعة', 'print', EntitlementService::AVAILABLE),
+            $this->item('integrations', 'التكاملات والتطبيقات', 'extension', EntitlementService::AVAILABLE),
         ];
 
         if ($vertical['product_capability'] !== null && $this->available($states, $vertical['product_capability'])) {
