@@ -68,6 +68,7 @@ class WebPortalController extends Controller
             'sectorReturnInfo' => route('merchant.web.data.sector.returns.info', ['id' => '__ID__']),
             'sectorReturnCreate' => route('merchant.web.data.sector.returns.create', ['id' => '__ID__']),
             'sectorReturnResolve' => route('merchant.web.data.sector.returns.resolve', ['id' => '__ID__']),
+            'sectorReturnSettle' => route('merchant.web.data.sector.returns.settle', ['id' => '__ID__']),
             'sectorSales' => route('merchant.web.data.sector.sales'),
             'sectorSaleDetail' => route('merchant.web.data.sector.sales.show', ['id' => '__ID__']),
             'sectorSaleInvoice' => route('merchant.web.data.sector.sales.invoice', ['id' => '__ID__']),
