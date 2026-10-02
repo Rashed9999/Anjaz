@@ -482,7 +482,10 @@ class StockService
             'out_locations' => (clone $base)
                 ->whereRaw('(product_stocks.on_hand - product_stocks.reserved) <= 0')
                 ->count(),
-            'negative_locations' => (clone $base)
+            // السالب خلل بيانات حتى لو أوقف الصنف أو الموقع؛ لا نخفيه
+            // من العداد بينما قائمة المصالحة ما زالت تعرضه.
+            'negative_locations' => ProductStock::query()
+                ->whereHas('product', fn ($w) => $w->where('merchant_user_id', $merchantUserId))
                 ->where('product_stocks.on_hand', '<', 0)
                 ->count(),
         ];
