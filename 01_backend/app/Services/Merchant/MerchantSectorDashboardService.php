@@ -65,6 +65,7 @@ final class MerchantSectorDashboardService
         $low = $this->stock->lowStock($merchant->id);
         $out = $this->stock->outOfStock($merchant->id);
         $negative = $this->stock->negativeStock($merchant->id);
+        $health = $this->stock->healthCounts($merchant->id);
 
         $stockAttention = collect($out)
             ->map(fn (array $row) => [
@@ -82,9 +83,9 @@ final class MerchantSectorDashboardService
             'vertical' => $vertical,
             'kind' => 'retail',
             'cards' => [
-                ['code' => 'low_stock', 'label' => 'مواقع تحت حد إعادة الطلب', 'value' => count($low), 'tone' => count($low) ? 'warning' : 'ok'],
-                ['code' => 'out_of_stock', 'label' => 'مواقع نافدة للبيع', 'value' => count($out), 'tone' => count($out) ? 'danger' : 'ok'],
-                ['code' => 'negative_stock', 'label' => 'أرصدة سالبة تحتاج جرداً', 'value' => count($negative), 'tone' => count($negative) ? 'danger' : 'ok'],
+                ['code' => 'low_stock', 'label' => 'مواقع تحت حد إعادة الطلب', 'value' => $health['low_locations'], 'tone' => $health['low_locations'] ? 'warning' : 'ok'],
+                ['code' => 'out_of_stock', 'label' => 'مواقع نافدة للبيع', 'value' => $health['out_locations'], 'tone' => $health['out_locations'] ? 'danger' : 'ok'],
+                ['code' => 'negative_stock', 'label' => 'أرصدة سالبة تحتاج جرداً', 'value' => $health['negative_locations'], 'tone' => $health['negative_locations'] ? 'danger' : 'ok'],
                 ['code' => 'sold_qty', 'label' => 'صافي الوحدات المباعة', 'value' => $breakdown['totals']['qty'], 'tone' => 'neutral'],
                 ['code' => 'cost_coverage', 'label' => 'أسطر بتكلفة مجهولة', 'value' => $breakdown['cost_coverage']['unknown_cost_lines'], 'tone' => $breakdown['cost_coverage']['unknown_cost_lines'] ? 'warning' : 'ok'],
             ],
