@@ -297,7 +297,7 @@ class CashierShiftService
             // received_by_user_id الموثوق من جلسة المصادقة. من دونه كانت
             // وردية كاشير تجمع تحصيل زميله وتُظهر له فائضاً/عجزاً كاذباً.
             $actorUserId = $shift->pos_user_id
-                ? AppModelsPosUser::whereKey($shift->pos_user_id)->value('user_id')
+                ? \App\Models\PosUser::whereKey($shift->pos_user_id)->value('user_id')
                 : $shift->opened_by;
 
             if ($actorUserId) {
