@@ -7,6 +7,7 @@ use App\Models\Retail\ShiftCashMovement;
 use App\Models\User;
 use App\Models\WholesaleBusiness;
 use App\Models\WholesaleCustomer;
+use App\Models\WholesaleInvoice;
 use App\Models\WholesaleReturn;
 use App\Models\WholesaleReturnSettlement;
 use App\Services\CashierShiftService;
@@ -58,10 +59,30 @@ class WholesaleReturnSettlementTest extends TestCase
             'is_active' => true,
         ]);
 
+        $invoice = WholesaleInvoice::create([
+            'invoice_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'invoice_number' => 'W-0001',
+            'business_id' => $business->id,
+            'branch_id' => null,
+            'customer_id' => $customer->id,
+            'created_by_user_id' => $merchant->id,
+            'invoice_date' => now()->toDateString(),
+            'subtotal' => '1000',
+            'discount_amount' => '0',
+            'tax_rate' => '0',
+            'tax_amount' => '0',
+            'total_amount' => '1000',
+            'paid_amount' => '1000',
+            'balance_due' => '0',
+            'status' => 'paid',
+            'payment_type' => 'cash',
+            'zone_code' => 'SOUTH',
+        ]);
+
         $return = WholesaleReturn::create([
             'return_ulid' => (string) \Illuminate\Support\Str::ulid(),
             'business_id' => $business->id,
-            'invoice_id' => 999999,
+            'invoice_id' => $invoice->id,
             'customer_id' => $customer->id,
             'requested_by_user_id' => $merchant->id,
             'reviewed_by_user_id' => $merchant->id,
