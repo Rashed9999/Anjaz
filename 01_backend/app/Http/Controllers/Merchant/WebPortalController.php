@@ -35,6 +35,7 @@ class WebPortalController extends Controller
         $merchantRoutes = [
             'overview' => route('merchant.web.data.overview'),
             'dashboardV2' => route('merchant.web.data.dashboard-v2'),
+            'salesV2' => route('merchant.web.data.sales-v2'),
             'sector' => route('merchant.web.data.sector'),
             'sectorTypes' => route('merchant.web.data.sector.types'),
             'sectorTypeSave' => route('merchant.web.data.sector.type.update'),
