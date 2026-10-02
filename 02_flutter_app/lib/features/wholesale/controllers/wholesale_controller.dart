@@ -591,6 +591,10 @@ class WholesaleController extends GetxController implements GetxService {
       verificationUrl: verificationCode.isEmpty
           ? null
           : '${AppConstants.baseUrl}/v/$verificationCode',
+      documentType: 'wholesale_invoice',
+      documentId: '${invoice['invoice_ulid'] ?? invoice['id'] ?? ''}',
+      documentNumber: '${invoice['invoice_number'] ?? invoice['id'] ?? ''}',
+      metadata: {'status': '${invoice['status'] ?? ''}'},
     );
   }
 
