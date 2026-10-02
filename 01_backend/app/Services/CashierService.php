@@ -789,6 +789,7 @@ class CashierService
 
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($posUserId !== null, fn ($q) => $q->where('pos_user_id', $posUserId))
             ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
             ->where('created_at', '>=', $from)
             ->with('lines')
@@ -1179,7 +1180,7 @@ class CashierService
 
     // ============ التقرير اليومي ============
 
-    public function dailyReport(User $merchant, ?string $date = null, ?int $branchId = null): array
+    public function dailyReport(User $merchant, ?string $date = null, ?int $branchId = null, ?int $posUserId = null): array
     {
         $day = $date ? Carbon::parse($date) : now();
         $from = $day->copy()->startOfDay();
@@ -1259,6 +1260,7 @@ class CashierService
         $realized = MoneyService::add($byMethod['cash'], $byMethod['amial_pay']);
         $outstandingCredit = (string) MerchantSale::where('merchant_user_id', $merchant->id)
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($posUserId !== null, fn ($q) => $q->where('pos_user_id', $posUserId))
             ->where('status', 'credit_unpaid')
             ->sum(DB::raw('COALESCE(base_amount, total_amount)'));
 
@@ -1285,6 +1287,135 @@ class CashierService
             ),
             'peak_hour' => $peakHour,
             'peak_hour_total' => $peakTotal,
+            'source' => 'merchant_sales',
+            'report_scope' => $posUserId !== null ? 'pos_user' : 'merchant',
+        ];
+    }
+
+    /**
+     * تقرير يوم موظف POS من مصدر القطاع الحقيقي، ومقيّد بالموظف نفسه.
+     *
+     * لا نستعمل MerchantFinancialTruthReportService هنا: ذلك تقرير المنشأة
+     * (محفظة/ذمم/حركة شاملة)، بينما هذا تقرير كاشير مفوّض. وخلطهما يكشف
+     * مبيعات زملائه أو فروع أخرى لمجرد أن لديه صلاحية «تقرير اليوم».
+     */
+    public function dailyReportForPos(
+        User $merchant,
+        int $posUserId,
+        int $actorUserId,
+        ?string $date = null,
+        ?int $branchId = null,
+    ): array {
+        $vertical = (string) (DB::table('merchant_profiles')
+            ->where('user_id', $merchant->id)->value('business_type') ?: 'retail');
+
+        // القطاعات التي تُغلق بيعها إلى merchant_sales تستفيد من التقرير
+        // الغني نفسه (أسطر/أكثر الأصناف/المختلط)، لكن بنطاق الموظف.
+        if (in_array($vertical, ['retail', 'quick_sale', 'restaurant'], true)) {
+            return $this->dailyReport($merchant, $date, $branchId, $posUserId);
+        }
+
+        $day = $date ? Carbon::parse($date) : now();
+        $from = $day->copy()->startOfDay();
+        $to = $day->copy()->endOfDay();
+
+        $rows = match ($vertical) {
+            'pharmacy' => DB::table('pharmacy_sales')
+                ->where('merchant_user_id', $merchant->id)
+                ->where('pos_user_id', $posUserId)
+                ->where('status', 'completed')
+                ->whereBetween('created_at', [$from, $to])
+                ->get(['total_amount as amount', 'payment_method as method', 'created_at']),
+
+            'fuel' => DB::table('fuel_sales')
+                ->where('merchant_user_id', $merchant->id)
+                ->where('pos_user_id', $posUserId)
+                ->where('status', 'completed')
+                ->whereBetween('created_at', [$from, $to])
+                ->get(['total_amount as amount', 'payment_method as method', 'created_at']),
+
+            'wholesale' => (function () use ($merchant, $actorUserId, $day, $branchId) {
+                $businessId = DB::table('wholesale_businesses')
+                    ->where('merchant_user_id', $merchant->id)->value('id');
+                if (! $businessId) return collect();
+
+                return DB::table('wholesale_invoices')
+                    ->where('business_id', $businessId)
+                    ->where('created_by_user_id', $actorUserId)
+                    ->when($branchId !== null, fn ($q) => $q->where(function ($b) use ($branchId) {
+                        // السجلات التاريخية السابقة لربط الفروع تبقى معروفة
+                        // المصدر ولا ننسبها إلى فرع آخر.
+                        $b->where('branch_id', $branchId)->orWhereNull('branch_id');
+                    }))
+                    ->whereNotIn('status', ['draft', 'voided'])
+                    ->whereDate('invoice_date', $day->toDateString())
+                    ->get(['total_amount as amount', 'payment_type as method', 'created_at']);
+            })(),
+
+            default => collect(),
+        };
+
+        $zero = MoneyService::normalize('0');
+        $byMethod = ['cash' => $zero, 'credit' => $zero, 'amial_pay' => $zero];
+        $totalAll = $zero;
+        $byHour = [];
+        for ($h = 0; $h < 24; $h++) {
+            $byHour[$h] = ['count' => 0, 'total' => $zero];
+        }
+
+        foreach ($rows as $sale) {
+            $amount = MoneyService::normalize((string) ($sale->amount ?? '0'));
+            $method = match ((string) ($sale->method ?? '')) {
+                'cash' => 'cash',
+                'amial_pay' => 'amial_pay',
+                // وقود الشركة وفاتورة الجملة الآجلة ليست نقداً في الدرج.
+                'credit', 'company_card', 'corporate' => 'credit',
+                default => null,
+            };
+
+            $totalAll = MoneyService::add($totalAll, $amount);
+            if ($method !== null) {
+                $byMethod[$method] = MoneyService::add($byMethod[$method], $amount);
+            }
+
+            $hour = (int) Carbon::parse($sale->created_at)->format('G');
+            $byHour[$hour]['count']++;
+            $byHour[$hour]['total'] = MoneyService::add($byHour[$hour]['total'], $amount);
+        }
+
+        $peakHour = null;
+        $peakTotal = $zero;
+        foreach ($byHour as $hour => $bucket) {
+            if (MoneyService::gt($bucket['total'], $peakTotal)) {
+                $peakHour = $hour;
+                $peakTotal = $bucket['total'];
+            }
+        }
+
+        return [
+            'date' => $day->format('Y-m-d'),
+            'sales_count' => $rows->count(),
+            'total_all' => $totalAll,
+            'realized_revenue' => MoneyService::add($byMethod['cash'], $byMethod['amial_pay']),
+            'by_method' => $byMethod,
+            // ذمم المنشأة ليست رقماً خاصاً بالكاشير؛ لا نحوّل «غير مصرح»
+            // إلى صفر يوحي بعدم وجود ديون.
+            'outstanding_credit_total' => null,
+            'top_products' => [],
+            'by_hour' => array_map(
+                fn ($h, $b) => ['hour' => $h, 'count' => $b['count'], 'total' => $b['total']],
+                array_keys($byHour), $byHour
+            ),
+            'peak_hour' => $peakHour,
+            'peak_hour_total' => $peakTotal,
+            'source' => match ($vertical) {
+                'pharmacy' => 'pharmacy_sales',
+                'fuel' => 'fuel_sales',
+                'wholesale' => 'wholesale_invoices',
+                default => 'unknown',
+            },
+            'vertical' => $vertical,
+            'report_scope' => 'pos_user',
         ];
     }
 }
