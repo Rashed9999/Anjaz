@@ -15,6 +15,7 @@ use App\Models\Retail\ProductBarcode;
 use App\Domain\Verticals\VerticalRegistry as VR;
 use App\Services\FeatureAccessService;
 use Illuminate\Support\Facades\Validator;
+use App\Services\Merchant\MerchantCustomerProfileService;
 use App\Http\Controllers\Api\V1\Amial\FuelStationController;
 use App\Http\Controllers\Api\V1\Amial\PharmacyController;
 use App\Http\Controllers\Api\V1\Amial\RestaurantController;
@@ -379,6 +380,46 @@ class WebSectorController extends Controller
 
         if (!$target) return $this->unsupported($sector);
         return $this->invoke($target, $request, $sector);
+    }
+
+    public function customerProfile(
+        Request $request,
+        int $id,
+        MerchantCustomerProfileService $profiles,
+    ): JsonResponse {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, A::F_CUSTOMERS)) return $deny;
+
+        try {
+            $owner = $request->user('merchant_web') ?? $request->user();
+
+            return response()->json([
+                'success' => true,
+                'code' => 'OK',
+                'message' => 'ملف العميل',
+                'errors' => (object) [],
+                'meta' => [
+                    'sector' => $sector,
+                    'profile' => $profiles->profile($owner, $id),
+                ],
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return response()->json([
+                'success' => false,
+                'code' => 'CUSTOMER_NOT_FOUND',
+                'message' => 'العميل غير موجود في هذه المنشأة',
+                'errors' => (object) [],
+                'meta' => ['sector' => $sector],
+            ], 404);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'code' => 'CUSTOMER_PROFILE_UNAVAILABLE',
+                'message' => $e->getMessage(),
+                'errors' => (object) [],
+                'meta' => ['sector' => $sector],
+            ], 422);
+        }
     }
 
     public function createCustomer(Request $request): JsonResponse
