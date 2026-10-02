@@ -1588,13 +1588,24 @@
     const amountLabel=node('label','المبلغ — المتبقي '+money(remaining),'field'),amount=node('input');
     amount.type='number';amount.step='0.01';amount.min='0.01';amount.max=String(remaining);amount.value=String(remaining);amount.required=true;amountLabel.append(amount);
 
+    const invoiceBranchId=row.invoice?.branch_id??null;
+    const eligibleShifts=openShifts.filter(s=>String(s.branch_id??'')===String(invoiceBranchId??''));
+
     const methodLabel=node('label','طريقة الصرف','field'),method=node('select');
-    method.append(new Option('نقد من درج وردية POS','cash'),new Option('إلى محفظة العميل في أميال','amial_pay'));methodLabel.append(method);
+    const cashOption=new Option('نقد من درج وردية POS','cash');
+    cashOption.disabled=!eligibleShifts.length;
+    method.append(cashOption,new Option('إلى محفظة العميل في أميال','amial_pay'));
+    if(!eligibleShifts.length)method.value='amial_pay';
+    methodLabel.append(method);
 
     const shiftLabel=node('label','الوردية التي سيخرج منها النقد','field'),shift=node('select');
-    shift.append(new Option('اختر وردية مفتوحة',''));
-    openShifts.forEach(s=>shift.append(new Option((s.opened_by_name||'وردية')+(s.branch_name?' · '+s.branch_name:'')+' — #'+s.id,String(s.id))));
+    shift.append(new Option(eligibleShifts.length?'اختر وردية فرع الفاتورة':'لا توجد وردية مفتوحة في موقع الفاتورة',''));
+    eligibleShifts.forEach(s=>shift.append(new Option((s.opened_by_name||'وردية')+(s.branch_name?' · '+s.branch_name:' · المنشأة الرئيسية')+' — #'+s.id,String(s.id))));
     shiftLabel.append(shift);
+    if(!eligibleShifts.length){
+      const guardNote=node('p','الصرف النقدي معطّل حتى تُفتح وردية في نفس موقع الفاتورة الأصلية. يمكنك رد المبلغ إلى محفظة العميل إذا كان حسابه مرتبطاً.','note');
+      frm.append(guardNote);
+    }
 
     const refLabel=node('label','مرجع خارجي / سند (اختياري)','field'),reference=node('input');reference.maxLength=100;refLabel.append(reference);
     const noteLabel=node('label','ملاحظة الصرف','field'),note=node('input');note.maxLength=500;noteLabel.append(note);
