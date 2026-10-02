@@ -3,6 +3,7 @@
 use App\Http\Controllers\Merchant\WebAuthController as Login;
 use App\Http\Controllers\Merchant\WebPortalController as Portal;
 use App\Http\Controllers\Merchant\WebDashboardController as Dashboard;
+use App\Http\Controllers\Merchant\WebSalesController as SalesDirectory;
 use App\Http\Controllers\Api\V1\Amial\CreditCollectionController as Collections;
 use App\Http\Controllers\Merchant\WebPlansController as Plans;
 use App\Http\Controllers\Merchant\WebSectorController as Sector;
@@ -34,6 +35,7 @@ Route::middleware('merchant.web')->group(function () {
     Route::prefix('data')->name('data.')->group(function () {
         Route::get('/overview', [Operations::class, 'summary'])->name('overview');
         Route::get('/dashboard-v2', [Dashboard::class, 'show'])->name('dashboard-v2');
+        Route::get('/sales-v2', [SalesDirectory::class, 'index'])->name('sales-v2');
         Route::get('/plans', [Plans::class, 'show'])->name('plans');
         Route::get('/sector', [Sector::class, 'overview'])->name('sector');
         Route::get('/sector/types', [Sector::class, 'businessTypes'])->name('sector.types');
