@@ -18,7 +18,10 @@
     .summary { margin-top: 14px; width: 42%; margin-right: auto; }.summary td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
     .summary .grand td { background: #eaf1ff; border-top: 2px solid #053391; font-size: 13pt; color: #053391; font-weight: bold; }
     .notice { margin-top: 16px; padding: 10px; background: #f7f9fc; border-right: 3px solid #f4b223; color: #475467; }
-    .verify { margin-top: 18px; padding: 10px; border: 1px solid #d9e0ec; text-align: center; }\n    .verify img { width: 105px; height: 105px; }\n    .verify .code { direction: ltr; font-family: monospace; font-size: 8pt; word-break: break-all; }\n    .footer { margin-top: 22px; border-top: 1px solid #d9e0ec; padding-top: 8px; color: #667085; text-align: center; font-size: 8.5pt; }
+    .verify { margin-top: 18px; padding: 10px; border: 1px solid #d9e0ec; text-align: center; }
+    .verify img { width: 105px; height: 105px; }
+    .verify .code { direction: ltr; font-family: monospace; font-size: 8pt; word-break: break-all; }
+    .footer { margin-top: 22px; border-top: 1px solid #d9e0ec; padding-top: 8px; color: #667085; text-align: center; font-size: 8.5pt; }
   </style>
 </head>
 <body>
@@ -35,7 +38,8 @@
   <table class="party" style="margin-top:12px"><tr><td><strong>العميل</strong><br>{{ $displayCustomerName }}@if($displayCustomerPhone)<br><span class="muted">{{ $displayCustomerPhone }}</span>@endif@if($creditState['due_date'] ?? null)<br><span class="muted">الاستحقاق: {{ $creditState['due_date'] }}</span>@endif</td>
     <td><strong>مرجع البيع</strong><br><span class="left">{{ $sale->sale_ulid }}</span>
       @if($sale->prescription_number)<br><span class="muted">الوصفة: {{ $sale->prescription_number }}</span>@endif
-      @if($sale->prescribing_doctor)<br><span class="muted">الطبيب: {{ $sale->prescribing_doctor }}</span>@endif\n      @if($sale->paid_transaction_id)<br><strong>مرجع دفع أميال</strong><br><span class="left">{{ $sale->paid_transaction_id }}</span>@endif
+      @if($sale->prescribing_doctor)<br><span class="muted">الطبيب: {{ $sale->prescribing_doctor }}</span>@endif
+      @if($sale->paid_transaction_id)<br><strong>مرجع دفع أميال</strong><br><span class="left">{{ $sale->paid_transaction_id }}</span>@endif
     </td></tr></table>
   <table class="items"><thead><tr><th style="width:5%">#</th><th>الصنف</th><th style="width:13%">التشغيلة</th><th style="width:13%">الانتهاء</th><th style="width:9%">الكمية</th><th style="width:13%">سعر الوحدة</th><th style="width:14%">الإجمالي</th></tr></thead><tbody>
   @forelse($items as $i => $item)<tr><td class="center">{{ $i + 1 }}</td><td>{{ $item['name'] }}@if($item['requires_prescription'])<br><span class="muted">بوصفة طبية</span>@endif</td><td class="center">{{ $item['batch_number'] ?: '—' }}</td><td class="center">{{ $item['expiry_date'] ?: '—' }}</td><td class="center">{{ rtrim(rtrim(number_format((float)$item['quantity'], 3, '.', ''), '0'), '.') }}</td><td class="left">{{ number_format((float)$item['unit_price'], 2) }}</td><td class="left"><strong>{{ number_format((float)$item['total'], 2) }}</strong></td></tr>
