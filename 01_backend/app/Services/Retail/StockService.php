@@ -101,6 +101,27 @@ class StockService
     }
 
     /**
+     * يضمن وجود لقطة موقع للصنف حتى لو كان رصيده صفراً.
+     * إنشاء صفر ليس حركة مالية/مخزنية؛ لذلك لا نختلق stock_movement.
+     */
+    public function ensureLocationStock(
+        MerchantProduct $product,
+        MerchantLocation $location,
+    ): ProductStock {
+        if ((int) $product->merchant_user_id !== (int) $location->merchant_user_id) {
+            throw new DomainException('موقع المخزون لا يتبع منشأة الصنف');
+        }
+
+        return DB::transaction(function () use ($product, $location) {
+            $stock = ProductStock::where('product_id', $product->id)
+                ->where('location_id', $location->id)
+                ->lockForUpdate()->first();
+
+            return $stock ?: $this->openStockRow($product, $location);
+        });
+    }
+
+    /**
      * **الحركةُ الواحدة** — وكلُّ ما يمسّ المخزون يمرّ من هنا.
      *
      * @param  string  $delta  موجبٌ يزيد وسالبٌ ينقص
