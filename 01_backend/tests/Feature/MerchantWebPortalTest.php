@@ -353,7 +353,7 @@ class MerchantWebPortalTest extends TestCase
             ->assertSee('async function suppliers()', false)
             ->assertSee('async function expenses()', false);
 
-        $supplier = $this->withHeader('Idempotency-Key', 'mw-supplier-1')
+        $supplier = $this->withHeader('Idempotency-Key', 'guard-mw-supplier-1-2026')
             ->postJson('/merchant/data/suppliers', [
                 'name' => 'مورد الأثاث',
                 'phone' => '967777000001',
@@ -361,7 +361,7 @@ class MerchantWebPortalTest extends TestCase
             ->assertCreated()
             ->json('meta.supplier');
 
-        $order = $this->withHeader('Idempotency-Key', 'mw-po-1')
+        $order = $this->withHeader('Idempotency-Key', 'guard-mw-po-1-2026')
             ->postJson('/merchant/data/purchase-orders', [
                 'supplier_id' => $supplier['id'],
                 'items' => [[
@@ -373,7 +373,7 @@ class MerchantWebPortalTest extends TestCase
             ->assertCreated()
             ->json('meta.order');
 
-        $this->withHeader('Idempotency-Key', 'mw-po-approve-1')
+        $this->withHeader('Idempotency-Key', 'guard-mw-po-approve-1-2026')
             ->postJson('/merchant/data/purchase-orders/'.$order['id'].'/approve')
             ->assertOk();
 
@@ -381,7 +381,7 @@ class MerchantWebPortalTest extends TestCase
             ->assertOk()
             ->json('meta.order.items.0');
 
-        $this->withHeader('Idempotency-Key', 'mw-po-receive-1')
+        $this->withHeader('Idempotency-Key', 'guard-mw-po-receive-1-2026')
             ->postJson('/merchant/data/purchase-orders/'.$order['id'].'/receive', [
                 'items' => [[
                     'item_id' => $item['id'],
@@ -397,7 +397,7 @@ class MerchantWebPortalTest extends TestCase
             ->assertJsonPath('meta.supplier.current_debt', '50000.0000')
             ->assertJsonCount(2, 'meta.ledger');
 
-        $this->withHeader('Idempotency-Key', 'mw-expense-1')
+        $this->withHeader('Idempotency-Key', 'guard-mw-expense-1-2026')
             ->postJson('/merchant/data/expenses', [
                 'title' => 'كهرباء الفرع',
                 'amount' => '12000',
