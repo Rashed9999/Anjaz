@@ -93,9 +93,9 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           children: [
-            chip('الكل', '', Icons.all_inclusive_rounded),
-            chip('صادر', 'debit', Icons.arrow_upward_rounded),
-            chip('وارد', 'credit', Icons.arrow_downward_rounded),
+            chip('receipts_filter_all'.tr, '', Icons.all_inclusive_rounded),
+            chip('receipts_filter_outgoing'.tr, 'debit', Icons.arrow_upward_rounded),
+            chip('receipts_filter_incoming'.tr, 'credit', Icons.arrow_downward_rounded),
           ],
         ),
       );
@@ -145,23 +145,23 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                       color: AmialColors.border,
                       borderRadius: BorderRadius.circular(2))),
               const SizedBox(height: 16),
-              const Text('تصفية الإيصالات',
+              Text('receipts_filter_title'.tr,
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
 
               DropdownButtonFormField<String>(
                 key: const Key('receipts-filter-type'),
                 initialValue: type.isEmpty ? null : type,
-                decoration: const InputDecoration(
-                    labelText: 'نوع العملية', isDense: true),
+                decoration: InputDecoration(
+                    labelText: 'receipts_filter_type'.tr, isDense: true),
                 items: const [
-                  DropdownMenuItem(value: '', child: Text('كل الأنواع')),
-                  DropdownMenuItem(value: 'send_money', child: Text('تحويل أموال')),
-                  DropdownMenuItem(value: 'cash_in', child: Text('إيداع نقدي')),
-                  DropdownMenuItem(value: 'cash_out', child: Text('سحب نقدي')),
-                  DropdownMenuItem(value: 'merchant_pay', child: Text('دفع لتاجر')),
-                  DropdownMenuItem(value: 'debt_payment', child: Text('سداد دين آجل')),
-                  DropdownMenuItem(value: 'safe_payment', child: Text('دفع آمن')),
+                  DropdownMenuItem(value: '', child: Text('receipts_filter_all_types'.tr)),
+                  DropdownMenuItem(value: 'send_money', child: Text('receipts_filter_send_money'.tr)),
+                  DropdownMenuItem(value: 'cash_in', child: Text('receipts_filter_cash_in'.tr)),
+                  DropdownMenuItem(value: 'cash_out', child: Text('receipts_filter_cash_out'.tr)),
+                  DropdownMenuItem(value: 'merchant_pay', child: Text('receipts_filter_merchant_pay'.tr)),
+                  DropdownMenuItem(value: 'debt_payment', child: Text('receipts_filter_debt_payment'.tr)),
+                  DropdownMenuItem(value: 'safe_payment', child: Text('receipts_filter_safe_payment'.tr)),
                 ],
                 onChanged: (v) => setSheet(() => type = v ?? ''),
               ),
@@ -173,7 +173,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                     key: const Key('receipts-filter-from'),
                     onPressed: () => pick(true),
                     icon: const Icon(Icons.calendar_today_rounded, size: 16),
-                    label: Text(from.isEmpty ? 'من تاريخ' : from,
+                    label: Text(from.isEmpty ? 'receipts_filter_from_date'.tr : from,
                         style: const TextStyle(fontSize: 13)),
                   ),
                 ),
@@ -183,7 +183,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                     key: const Key('receipts-filter-to'),
                     onPressed: () => pick(false),
                     icon: const Icon(Icons.event_rounded, size: 16),
-                    label: Text(to.isEmpty ? 'إلى تاريخ' : to,
+                    label: Text(to.isEmpty ? 'receipts_filter_to_date'.tr : to,
                         style: const TextStyle(fontSize: 13)),
                   ),
                 ),
@@ -197,7 +197,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                     controller: minCtrl,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                        labelText: 'أقل مبلغ', isDense: true),
+                        labelText: 'receipts_filter_min_amount'.tr, isDense: true),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -207,7 +207,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                     controller: maxCtrl,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                        labelText: 'أعلى مبلغ', isDense: true),
+                        labelText: 'receipts_filter_max_amount'.tr, isDense: true),
                   ),
                 ),
               ]),
@@ -223,7 +223,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                         minCtrl.clear(); maxCtrl.clear();
                       });
                     },
-                    child: const Text('مسح'),
+                    child: Text('receipts_filter_reset'.tr),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -236,7 +236,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                         foregroundColor: Colors.white,
                         minimumSize: const Size.fromHeight(46)),
                     onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('تطبيق'),
+                    child: Text('receipts_filter_apply'.tr),
                   ),
                 ),
               ]),
@@ -264,7 +264,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('الإيصالات'),
+        title: Text('receipts_title'.tr),
         actions: [
           Obx(() {
             final ctrl = Get.find<ReceiptsController>();
@@ -273,7 +273,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
             return Stack(alignment: Alignment.center, children: [
               IconButton(
                 key: const Key('receipts-filter-btn'),
-                tooltip: 'تصفية',
+                tooltip: 'receipts_filter_tooltip'.tr,
                 onPressed: _openFilters,
                 icon: const Icon(Icons.tune_rounded),
               ),
@@ -306,7 +306,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                 onChanged: _onSearchChanged,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
-                  hintText: 'ابحث برقم الهاتف أو الاسم أو رقم العملية',
+                  hintText: 'receipts_search_hint'.tr,
                   prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: _searchCtrl.text.isEmpty
                       ? null
@@ -361,14 +361,14 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                   ctrl.lastError.value.isNotEmpty
                       ? ctrl.lastError.value
                       : (ctrl.hasAnyFilter
-                          ? 'لا نتائج مطابقة'
-                          : 'لا توجد إيصالات بعد'),
+                          ? 'receipts_no_matches'.tr
+                          : 'receipts_empty'.tr),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AmialColors.textSecondary, fontSize: 14),
                 ),
                 if (ctrl.hasAnyFilter && ctrl.lastError.value.isEmpty) ...[
                   const SizedBox(height: 6),
-                  Text('جرّب توسيع البحث أو امسح الفلاتر',
+                  Text('receipts_expand_search'.tr,
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AmialColors.textMuted, fontSize: 12)),
                 ],
@@ -384,11 +384,11 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                             setState(() {});
                           },
                           icon: const Icon(Icons.filter_alt_off_rounded),
-                          label: const Text('مسح البحث والفلاتر'),
+                          label: Text('receipts_clear_filters'.tr),
                         )
                       : TextButton(
                           onPressed: () => ctrl.loadReceipts(refresh: true),
-                          child: const Text('إعادة المحاولة'),
+                          child: Text('receipts_retry'.tr),
                         ),
                 ),
               ],
