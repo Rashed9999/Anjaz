@@ -542,6 +542,16 @@ class WebSectorController extends Controller
         return $this->unsupported($sector);
     }
 
+    /** صرفُ الالتزام المالي الناتج من مرتجع الجملة بعد اعتماده. */
+    public function settleSaleReturn(Request $request, int $id): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($sector !== A::BIZ_WHOLESALE) return $this->unsupported($sector);
+        if ($deny = $this->requireCapability($request, A::F_REFUNDS)) return $deny;
+
+        return app(WholesaleController::class)->settleReturn($request, $id);
+    }
+
     /** قرار مرتجع الجملة. المرتجع العام الكبير يبقى في مسار اعتماد الإدارة القائم. */
     public function resolveSaleReturn(Request $request, int $id): JsonResponse
     {
