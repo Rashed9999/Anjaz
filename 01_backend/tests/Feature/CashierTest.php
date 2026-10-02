@@ -162,17 +162,36 @@ class CashierTest extends TestCase
             'name' => 'دواء', 'price' => '1000', 'cost_price' => '600',
             'offer_price' => '850', 'quantity' => '40',
             'production_date' => '2026-01-01', 'expiry_date' => '2027-01-01',
-            'category' => 'صيدلية',
+            'category' => 'صيدلية', 'reorder_level' => '7',
         ]);
 
         $this->assertSame(MoneyService::normalize('600'), (string)$p->cost_price);
         $this->assertSame('40.000', (string)$p->quantity);
+
+        // الرصيد الافتتاحي ليس كتابة خاماً على quantity: له موقع وحركة.
+        $stock = \App\Models\Retail\ProductStock::where('product_id', $p->id)->firstOrFail();
+        $this->assertSame('40.000', (string) $stock->on_hand);
+        $this->assertSame('7.000', (string) $stock->reorder_level);
+        $this->assertTrue((bool) $stock->location->is_default);
+        $opening = \App\Models\Retail\StockMovement::where('product_id', $p->id)
+            ->where('reason', 'opening_balance')->firstOrFail();
+        $this->assertSame('40.000', (string) $opening->quantity_delta);
+        $this->assertSame($stock->location_id, $opening->location_id);
+
         // السعر الفعّال = سعر العرض لأنه موجود
         $this->assertSame(MoneyService::normalize('850'), MoneyService::normalize($p->effective_price));
 
         // بلا عرض → السعر الفعّال = سعر البيع
         $p2 = $this->svc->addProduct($this->merchant, ['name' => 'علبة', 'price' => '500']);
         $this->assertSame(MoneyService::normalize('500'), MoneyService::normalize($p2->effective_price));
+        $this->assertDatabaseHas('product_stocks', [
+            'product_id' => $p2->id,
+            'on_hand' => '0.000',
+        ]);
+        $this->assertDatabaseMissing('stock_movements', [
+            'product_id' => $p2->id,
+            'reason' => 'opening_balance',
+        ]);
     }
 
     /** @test */
