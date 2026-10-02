@@ -32,7 +32,7 @@
     <td><div class="k">طريقة الدفع</div><div class="v">{{ $paymentLabel }}</div></td>
     <td><div class="k">الحالة</div><div class="v">{{ $creditState['label'] }}</div></td>
   </tr></table>
-  <table class="party" style="margin-top:12px"><tr><td><strong>العميل</strong><br>{{ $sale->customer?->full_name ?: 'عميل نقدي' }}@if($sale->customer?->phone)<br><span class="muted">{{ $sale->customer->phone }}</span>@endif</td>
+  <table class="party" style="margin-top:12px"><tr><td><strong>العميل</strong><br>{{ $displayCustomerName }}@if($displayCustomerPhone)<br><span class="muted">{{ $displayCustomerPhone }}</span>@endif@if($creditState['due_date'] ?? null)<br><span class="muted">الاستحقاق: {{ $creditState['due_date'] }}</span>@endif</td>
     <td><strong>مرجع البيع</strong><br><span class="left">{{ $sale->sale_ulid }}</span>
       @if($sale->prescription_number)<br><span class="muted">الوصفة: {{ $sale->prescription_number }}</span>@endif
       @if($sale->prescribing_doctor)<br><span class="muted">الطبيب: {{ $sale->prescribing_doctor }}</span>@endif\n      @if($sale->paid_transaction_id)<br><strong>مرجع دفع أميال</strong><br><span class="left">{{ $sale->paid_transaction_id }}</span>@endif
