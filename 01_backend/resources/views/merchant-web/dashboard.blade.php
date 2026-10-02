@@ -189,10 +189,10 @@
   }
   function buildNavigation(){
     const nav=document.getElementById('portal-nav');nav.replaceChildren();
-    const symbols={dashboard_customize:'⌁',insights:'⌂',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌘',groups:'♙',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨',business_center:'▣'};
+    const symbols={dashboard_customize:'⌁',insights:'⌂',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌘',groups:'♙',people:'♟',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨',business_center:'▣'};
     const groups=[
       ['نظرة عامة',['overview']],
-      ['التشغيل والمبيعات',['sector','sales','products','debts','suppliers','expenses','assets']],
+      ['التشغيل والمبيعات',['sector','sales','products','customers','debts','suppliers','expenses','assets']],
       ['الفريق ونقاط البيع',['branches','posSetup','staff','devices']],
       ['المالية والتقارير',['wallet','reports']],
       ['إعدادات المنشأة',['settings','plans']],
@@ -444,6 +444,155 @@
       controls.append(back,node('span','الصفحة '+pagination.current_page+' من '+pagination.last_page,'muted'),forward);p.append(controls);
     }
   }
+  function customerName(row){
+    return row.full_name||row.customer_name||row.company_name||'عميل';
+  }
+  function customerPhone(row){
+    return row.phone||row.customer_phone||'—';
+  }
+  function customerBalance(row){
+    return row.current_balance===undefined||row.current_balance===null?null:Number(row.current_balance);
+  }
+  function customerClassLabel(v){
+    return {gold:'ذهبي',silver:'فضي',bronze:'برونزي'}[v]||v||'—';
+  }
+  function customerEditor(row=null){
+    document.getElementById('customer-editor')?.remove();
+    const p=box(row?'تعديل بيانات العميل':'إضافة عميل');
+    p.id='customer-editor';
+    const fields=actualSector==='pharmacy'?[
+      ['full_name','اسم العميل / المريض','text'],
+      ['phone','رقم الهاتف','tel'],
+      ['date_of_birth','تاريخ الميلاد','date'],
+      ['gender','الجنس','select',[{value:'',label:'غير محدد'},{value:'male',label:'ذكر'},{value:'female',label:'أنثى'}]],
+      ['notes','ملاحظات','text'],
+    ]:actualSector==='wholesale'?[
+      ['full_name','اسم العميل','text'],
+      ['company_name','اسم المنشأة / الشركة','text'],
+      ['phone','رقم الهاتف','tel'],
+      ['email','البريد الإلكتروني','email'],
+      ['city','المدينة','text'],
+      ['address','العنوان','text'],
+      ['credit_limit','حد الائتمان','number'],
+      ['payment_terms_days','مدة السداد بالأيام','number'],
+      ['tax_number','الرقم الضريبي','text'],
+      ['notes','ملاحظات','text'],
+    ]:[
+      ['name','اسم العميل','text'],
+      ['phone','رقم الهاتف','tel'],
+      ['credit_limit','حد الائتمان (اختياري)','number'],
+    ];
+
+    const frm=node('form',null,'editor');
+    fields.forEach(([key,label,type,options])=>{
+      const holder=node('label',label,'field');
+      let input;
+      if(type==='select'){
+        input=node('select');
+        (options||[]).forEach(o=>{const op=node('option',o.label);op.value=o.value;input.append(op)});
+      }else{
+        input=node('input');input.type=type||'text';
+        if(type==='number'){input.min='0';input.step='any'}
+      }
+      input.name=key;
+      const sourceKey=key==='name'?'customer_name':key==='phone'?(actualSector==='retail'||actualSector==='quick_sale'||actualSector==='restaurant'?'customer_phone':'phone'):key;
+      const value=row?.[sourceKey]??row?.[key]??'';
+      input.value=value===null||value===undefined?'':String(value);
+      if(['full_name','name'].includes(key))input.required=true;
+      if(key==='phone'&&!['pharmacy','wholesale'].includes(actualSector))input.required=true;
+      holder.append(input);frm.append(holder);
+    });
+
+    const actions=node('div',null,'buttons');
+    const save=node('button',row?'حفظ التعديلات':'إضافة العميل','action');save.type='submit';
+    const cancel=node('button','إلغاء','action secondary');cancel.type='button';cancel.onclick=()=>p.remove();
+    actions.append(save,cancel);frm.append(actions);
+    frm.addEventListener('submit',async ev=>{
+      ev.preventDefault();save.disabled=true;
+      try{
+        const payload=Object.fromEntries(new FormData(frm).entries());
+        Object.keys(payload).forEach(k=>{if(payload[k]==='')delete payload[k]});
+        let result;
+        if(row&&['pharmacy','wholesale'].includes(actualSector)){
+          result=await api('sectorCustomersUpdate',payload,routes.sectorCustomersUpdate.replace('__ID__',String(row.id)),'PUT');
+        }else{
+          result=await api('sectorCustomersCreate',payload);
+        }
+        message(result.message||'تم حفظ العميل');
+        await load('customers');
+      }catch(e){message(e.message);save.disabled=false}
+    });
+    p.append(frm);
+    p.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  async function customers(search=''){
+    const url=new URL(routes.sectorCustomers,window.location.href);
+    if(search)url.searchParams.set('search',search);
+    const data=await api('sectorCustomers',undefined,url.toString()),r=data.result||{};
+    const rows=Array.isArray(r.customers)?r.customers:[];
+    const pagination=r.pagination||{};
+    const balanceRows=rows.filter(x=>customerBalance(x)!==null);
+    const debtors=balanceRows.filter(x=>customerBalance(x)>0).length;
+    const totalKnown=balanceRows.reduce((sum,x)=>sum+Math.max(0,customerBalance(x)||0),0);
+
+    const summary=node('section',null,'kpi-grid');
+    summary.append(
+      kpiCard('العملاء المعروضون',String(rows.length),'♟',pagination.total!==undefined?'إجمالي السجل '+pagination.total:'حسب نتائج البحث'),
+      kpiCard('عملاء برصيد مستحق',String(debtors),'◫',balanceRows.length?'ضمن النتائج المعروضة':'لا يعلن هذا القطاع رصيداً هنا','blue'),
+      kpiCard('رصيد مستحق ظاهر',balanceRows.length?money(totalKnown):'غير معروض','◌','لا يُخلط مع رصيد المحفظة',totalKnown>0?'red':''),
+      kpiCard('نوع ملف العميل',actualSector==='pharmacy'?'ملف صيدلية':actualSector==='wholesale'?'عميل جملة':'عميل المنشأة','◇','المصدر تابع لقطاع المنشأة')
+    );
+    content.append(summary);
+
+    const p=box('قاعدة بيانات العملاء');
+    hint(p,actualSector==='pharmacy'
+      ?'هذا ملف عملاء الصيدلية نفسه المستخدم أثناء البيع والوصفات؛ لا ننشئ نسخة عملاء موازية في الويب.'
+      :actualSector==='wholesale'
+        ?'هذه قاعدة عملاء الجملة نفسها المرتبطة بالفواتير وشروط السداد والحدود الائتمانية.'
+        :'العميل هنا هو الحساب الموحد الذي يمكن أن يرتبط بالبيع الآجل وكشف الحساب. وجوده لا يعني أن عليه ديناً.');
+
+    const tools=node('form',null,'product-tools'),searchLabel=node('label','بحث بالاسم أو الهاتف','field'),input=node('input');
+    input.type='search';input.value=search;input.placeholder='اسم العميل أو رقم الهاتف';searchLabel.append(input);
+    const go=node('button','بحث','action secondary');go.type='submit';
+    const add=node('button','+ إضافة عميل','action');add.type='button';add.onclick=()=>customerEditor();
+    tools.append(searchLabel,go,add);p.append(tools);
+    tools.addEventListener('submit',ev=>{ev.preventDefault();customers(input.value.trim()).catch(e=>message(e.message))});
+
+    if(actualSector==='pharmacy'){
+      table(p,[
+        ['العميل',x=>customerName(x)],['الهاتف',x=>customerPhone(x)],
+        ['تاريخ الميلاد',x=>x.date_of_birth||'—'],
+        ['الجنس',x=>x.gender==='male'?'ذكر':x.gender==='female'?'أنثى':'—'],
+        ['ملاحظات',x=>x.notes||'—'],
+        ['الإجراء',x=>action('تعديل',()=>customerEditor(x))]
+      ],rows);
+    }else if(actualSector==='wholesale'){
+      table(p,[
+        ['العميل',x=>customerName(x)],['المنشأة',x=>x.company_name||'—'],
+        ['الهاتف',x=>customerPhone(x)],['المدينة',x=>x.city||'—'],
+        ['الرصيد المستحق',x=>money(x.current_balance||0)],
+        ['حد الائتمان',x=>x.credit_limit?money(x.credit_limit):'غير محدد'],
+        ['مدة السداد',x=>x.payment_terms_days?x.payment_terms_days+' يوم':'—'],
+        ['الإجراء',x=>action('تعديل',()=>customerEditor(x))]
+      ],rows);
+    }else{
+      const canOpenDebt=navigation.some(item=>item.tab==='debts'&&item.state==='available');
+      table(p,[
+        ['العميل',x=>customerName(x)],['الهاتف',x=>customerPhone(x)],
+        ['التصنيف',x=>customerClassLabel(x.classification)],
+        ['الرصيد المستحق',x=>money(x.current_balance||0)],
+        ['حد الائتمان',x=>Number(x.credit_limit||0)>0?money(x.credit_limit):'غير محدد'],
+        ['آخر سداد',x=>x.last_payment_at||'—'],
+        ['الإجراء',x=>buttons([
+          action('تعديل',()=>customerEditor(x)),
+          canOpenDebt?action('كشف الحساب',()=>{load('debts').then(()=>setTimeout(()=>debtDetails(x.id),100))}):null
+        ])]
+      ],rows);
+    }
+
+    if(!rows.length)p.append(node('div',search?'لا توجد نتائج مطابقة للبحث.':'لا يوجد عملاء مسجلون حتى الآن.','dashboard-empty'));
+  }
+
   function debtUrl(key,id){return routes[key].replace('__ID__',encodeURIComponent(String(id)))}
   function collectionVoucher(panel,result){
     if(!result.receipt_number){panel.append(node('p','تم التسجيل؛ تعذّر إظهار رقم السند. راجع سجل التحصيلات.','note warning-note'));return}
@@ -1563,7 +1712,7 @@
     table(p,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['رصيد مورد',x=>x.available?money(x.supplier_credit):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[]);
   }
   async function settings(){const data=await api('receipts'),s=data.settings||{};const p=box('هوية فاتورة منشأتك');form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});hint(p,'إعدادات الفاتورة موحدة بين الويب وكل نقاط البيع. صلاحية طباعة السند متاحة بحسب خصائص القطاع.')}
-  const pages={overview,sector,sales,wallet,debts,products,suppliers,expenses,assets,branches,posSetup,staff,devices,reports,settings,plans};
+  const pages={overview,sector,sales,customers,wallet,debts,products,suppliers,expenses,assets,branches,posSetup,staff,devices,reports,settings,plans};
   async function load(tab){if(stopScanner){stopScanner();stopScanner=null;}active=tab;document.getElementById('page-title').textContent=titles[tab]||'بوابة المنشأة';document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();if(!pages[tab])throw Error('هذا القسم غير معروف');await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
   const sidebar=document.getElementById('merchant-side');
   const menuToggle=document.getElementById('menu-toggle');
