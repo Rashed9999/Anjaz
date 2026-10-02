@@ -1309,6 +1309,10 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'myAccounts'])->name('mine');
         Route::get('/{id}/statement', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'myStatement'])
             ->where('id', '[0-9]+')->name('statement');
+        Route::get('/{id}/invoices/{movementUlid}/pdf', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'invoicePdf'])
+            ->where('id', '[0-9]+')
+            ->where('movementUlid', '[0-9A-Z]{26}')
+            ->name('invoice.pdf');
         Route::post('/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'settle'])
             ->where('id', '[0-9]+')
             ->middleware(['amial.terms', 'amial.rate-limit:credit_settle,30,1'])->name('settle');

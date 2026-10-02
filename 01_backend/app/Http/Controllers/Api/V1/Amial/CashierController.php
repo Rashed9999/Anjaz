@@ -527,7 +527,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             $pdfSvc = app(CashierSaleInvoicePdfService::class);
 
             $pdf = app(\App\Services\PdfCacheService::class)->remember(
-                "cashier_invoice_{$sale->sale_ulid}",
+                $pdfSvc->cacheKey($sale),
                 fn () => $pdfSvc->generate($sale),
             );
 

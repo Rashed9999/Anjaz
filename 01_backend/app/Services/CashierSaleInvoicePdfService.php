@@ -71,6 +71,20 @@ class CashierSaleInvoicePdfService
         return ArabicPdf::render($html, ['format' => 'A4', 'margin' => 12]);
     }
 
+    /**
+     * مفتاح النسخة يتبدّل عندما تتبدّل حالة البيع.
+     *
+     * بيع الآجل يمكن أن ينتقل من credit_unpaid إلى credit_paid بعد أن يكون
+     * العميل قد نزّل PDF مرةً؛ المفتاح الثابت كان سيخدم النسخة القديمة
+     * ويعرض «غير مسددة» بعد وصول المال. الحالة + updated_at تمنع ذلك.
+     */
+    public function cacheKey(MerchantSale $sale): string
+    {
+        $version = $sale->updated_at?->format('YmdHis') ?? '0';
+
+        return "cashier_invoice_{$sale->sale_ulid}_{$sale->status}_{$version}";
+    }
+
     public function suggestedFilename(MerchantSale $sale): string
     {
         $number = $sale->invoice_number ?: $sale->sale_ulid;

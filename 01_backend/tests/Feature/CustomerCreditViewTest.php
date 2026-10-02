@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
 use App\Models\User;
+use App\Services\CashierSaleInvoicePdfService;
+use App\Services\CashierService;
 use App\Services\CustomerCreditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Passport\Passport;
@@ -68,6 +70,59 @@ class CustomerCreditViewTest extends TestCase
             ->assertJsonPath('meta.movements.0.type', 'sale')
             ->assertJsonPath('meta.movements.0.amount', '1200.0000')
             ->assertJsonPath('meta.movements.0.reference_number', 'INV-1');
+    }
+
+    /**
+     * @test
+     *
+     * الفاتورة التي أنشأت الآجل ليست حكراً على شاشة التاجر: صاحب الدَّين
+     * يستطيع تنزيل PDF الأصلي، وأي مستخدم آخر يأخذ 404. كما أن مفتاح
+     * الكاش يتبدّل بعد السداد حتى لا تبقى نسخة «غير مسددة» معلّقة.
+     */
+    public function customer_can_download_only_the_pdf_of_their_own_deferred_merchant_sale(): void
+    {
+        $sale = app(CashierService::class)->recordSale(
+            merchant: $this->merchant,
+            total: '1200',
+            paymentMethod: 'credit',
+            items: [['name' => 'سكر', 'qty' => 1, 'price' => '1200']],
+            customer: ['name' => 'علي نونو', 'phone' => $this->customer->phone],
+            creditDueDate: '2026-12-31',
+        );
+
+        $account = \App\Models\CustomerCreditAccount::where(
+            'merchant_user_id', $this->merchant->id
+        )->where('customer_user_id', $this->customer->id)->firstOrFail();
+
+        $movement = $account->movements()
+            ->where('type', 'sale')
+            ->where('reference_type', 'merchant_sale')
+            ->where('reference_id', $sale->sale_ulid)
+            ->firstOrFail();
+
+        Passport::actingAs($this->customer->fresh(), [], 'api');
+
+        $response = $this->get(
+            "/api/v1/amial/customer/credits/{$account->id}/invoices/{$movement->movement_ulid}/pdf"
+        );
+        $response->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+
+        $pdfSvc = app(CashierSaleInvoicePdfService::class);
+        $before = $pdfSvc->cacheKey($sale->fresh());
+        $sale->update(['status' => 'credit_paid', 'settled_at' => now()]);
+        $after = $pdfSvc->cacheKey($sale->fresh());
+        $this->assertNotSame($before, $after,
+            'تغيّرت حالة بيع الآجل لكن مفتاح PDF بقي ثابتاً وسيخدم نسخة قديمة');
+
+        $intruder = User::factory()->create([
+            'type' => 2, 'zone_code' => 'SOUTH', 'phone' => '+967771700088',
+        ]);
+        Passport::actingAs($intruder, [], 'api');
+
+        $this->get(
+            "/api/v1/amial/customer/credits/{$account->id}/invoices/{$movement->movement_ulid}/pdf"
+        )->assertStatus(404);
     }
 
     /** @test لا يرى العميل حساب عميل آخر (عزل). */

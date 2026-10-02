@@ -6,7 +6,9 @@ use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\CustomerCreditAccount;
 use App\Models\CustomerCreditMovement;
+use App\Models\MerchantSale;
 use App\Models\User;
+use App\Services\CashierSaleInvoicePdfService;
 use App\Services\CustomerCreditSettleService;
 use App\Services\CreditSourceSettlementService;
 use Illuminate\Http\JsonResponse;
@@ -100,6 +102,7 @@ class CustomerCreditViewController extends Controller
             ->get()
             ->map(fn (CustomerCreditMovement $m) => [
                 'id' => $m->id,
+                'movement_ulid' => $m->movement_ulid,
                 'type' => $m->type, // sale | payment | return | adjustment
                 'type_label' => $this->typeLabel($m->type),
                 'amount' => (string) $m->amount,
@@ -124,6 +127,70 @@ class CustomerCreditViewController extends Controller
             'movements' => $movements,
             ...$breakdown,
         ], 'OK', 'كشف الحساب الآجل');
+    }
+
+    /**
+     * AMIAL-CUSTOMER-CREDIT-PDF-001 — نسخة العميل من فاتورة البيع التي أنشأت الدَّين.
+     *
+     * لا نقبل sale_ulid قادماً من التطبيق مباشرةً: يبدأ التفويض من حساب
+     * الآجل المملوك للعميل ثم من حركة البيع داخله، وبعدها فقط نصل إلى
+     * MerchantSale التابعة للتاجر نفسه. بذلك لا يتحول مسار PDF إلى IDOR.
+     */
+    public function invoicePdf(Request $request, int $id, string $movementUlid)
+    {
+        $account = CustomerCreditAccount::where('id', $id)
+            ->where('customer_user_id', $request->user()->id)
+            ->first();
+
+        if (!$account) {
+            return $this->error('NOT_FOUND', 'الفاتورة غير موجودة أو لا تخصّك', 404);
+        }
+
+        $movement = CustomerCreditMovement::where('account_id', $account->id)
+            ->where('movement_ulid', $movementUlid)
+            ->where('type', 'sale')
+            ->first();
+
+        if (!$movement
+            || $movement->reference_type !== 'merchant_sale'
+            || empty($movement->reference_id)) {
+            return $this->error('NOT_FOUND', 'لا توجد فاتورة PDF لهذا القيد', 404);
+        }
+
+        $sale = MerchantSale::where('sale_ulid', $movement->reference_id)
+            ->where('merchant_user_id', $account->merchant_user_id)
+            ->first();
+
+        if (!$sale) {
+            return $this->error('NOT_FOUND', 'الفاتورة الأصلية غير موجودة', 404);
+        }
+
+        try {
+            $pdfSvc = app(CashierSaleInvoicePdfService::class);
+            $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                $pdfSvc->cacheKey($sale),
+                fn () => $pdfSvc->generate($sale),
+            );
+
+            return response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Length' => (string) strlen($pdf),
+                'Content-Disposition' => 'attachment; filename="'
+                    . $pdfSvc->suggestedFilename($sale) . '"',
+                'Cache-Control' => 'private, max-age=900',
+                'Content-Encoding' => 'identity',
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Customer deferred invoice PDF failed', [
+                'customer_user_id' => $request->user()->id,
+                'credit_account_id' => $account->id,
+                'movement_ulid' => $movementUlid,
+                'sale_ulid' => $sale->sale_ulid,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->error('PDF_FAILED', 'تعذّر تجهيز الفاتورة PDF', 500);
+        }
     }
 
     /** سداد الدَّين الآجل (كلّه أو جزء) من محفظة العميل. */
