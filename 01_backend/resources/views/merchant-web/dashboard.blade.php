@@ -759,6 +759,8 @@
       :actualSector==='wholesale'
         ?'هذه قاعدة عملاء الجملة نفسها المرتبطة بالفواتير وشروط السداد والحدود الائتمانية.'
         :'العميل هنا هو الحساب الموحد الذي يمكن أن يرتبط بالبيع الآجل وكشف الحساب. وجوده لا يعني أن عليه ديناً.');
+    bulkCsvControls(p,'customers');
+    hint(p,'استيراد العملاء لا يستورد أرصدة الديون أو الحركات المالية. الأرصدة تُنشأ فقط من بيع آجل/تحصيل/مرتجع موثق، فلا يمكن لملف CSV اختراع ذمة.');
 
     const tools=node('form',null,'product-tools'),searchLabel=node('label','بحث بالاسم أو الهاتف','field'),input=node('input');
     input.type='search';input.value=search;input.placeholder='اسم العميل أو رقم الهاتف';searchLabel.append(input);
@@ -975,6 +977,12 @@
     hint(page,generic
       ?'تُضاف الأصناف والتصنيفات والعلامات والوحدات إلى كتالوج المنشأة نفسه الذي تقرؤه نقاط البيع. الباركود الأساسي والبديل وحجم العبوة مرتبطان بالمخزون نفسه.'
       :'المنتجات والباركود من نظام القطاع نفسه. لا تخلط مخزون الصيدلية أو الجملة بكتالوج التجزئة.');
+    bulkCsvControls(page,'products',()=>refresh(1));
+    if(actualSector==='pharmacy'){
+      hint(page,'CSV الصيدلية يدير بطاقة الدواء فقط. الدفعات والكميات وتواريخ الصلاحية تبقى في «الدفعات والصلاحية» حتى لا نخلق مخزوناً بلا Batch.');
+    }else if(actualSector==='wholesale'){
+      hint(page,'CSV الجملة يقبل الرصيد الافتتاحي للصنف فقط. التشغيلات والوحدات التفصيلية تبقى في «الوحدات والتشغيلات» لتظل قابلة للتتبع.');
+    }
     const tools=node('div',null,'product-tools'),codeLabel=node('label',null,'field'),code=node('input');
     codeLabel.append(node('span','ابحث بالاسم أو SKU أو الباركود'));
     code.type='search';code.placeholder='امسح الباركود بقارئ USB أو أدخله يدوياً';
