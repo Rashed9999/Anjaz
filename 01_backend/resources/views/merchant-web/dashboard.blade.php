@@ -2691,18 +2691,21 @@
     message('التقرير ما زال يُجهّز في الخلفية؛ سيظهر في قائمة التصديرات عند فتح التقارير مرة أخرى.');
   }
   async function documents(){
-    const [receiptData,salesData,devicesData]=await Promise.all([
+    const [receiptData,salesData,devicesData,printData]=await Promise.all([
       api('receipts'),
       api('salesV2').catch(()=>({rows:[],summary:{},pagination:{}})),
-      api('devices').catch(()=>({devices:[]}))
+      api('devices').catch(()=>({devices:[]})),
+      api('printMonitor').catch(()=>({profiles:[],jobs:[],stats:{total:0,completed:0,failed:0,failure_rate:0,queue_length:0}}))
     ]);
-    const settings=receiptData.settings||{},rows=salesData.rows||[],devices=devicesData.devices||[];
+    const settings=receiptData.settings||{},rows=salesData.rows||[],devices=devicesData.devices||[],
+      printStats=printData.stats||{},printerProfiles=printData.profiles||[],printJobs=printData.jobs||[];
     const autoPrint=settings.auto_print_receipts===true||settings.auto_print_receipts===1;
 
     dashboardKpis([
       ['مقاس الإيصال الحراري',(settings.paper_width||80)+' مم','▰','إعداد المنشأة الحالي'],
       ['الطباعة التلقائية',autoPrint?'مفعّلة':'متوقفة','◎','تطبق داخل تطبيق POS المؤهل',autoPrint?'gold':''],
-      ['أجهزة POS',String(devices.filter(x=>x.is_active).length),'▣','أجهزة يمكنها تشغيل طباعة محلية','blue'],
+      ['طابعات معروفة',String(printerProfiles.length),'▣','تُكتشف من نتائج الطباعة الفعلية','blue'],
+      ['نسبة فشل الطباعة',(Number(printStats.failure_rate||0)).toFixed(2)+'%','!','آخر '+(printData.days||30)+' يوم',Number(printStats.failure_rate||0)>5?'red':''],
       ['فواتير حديثة',String(rows.length),'▧','PDF رسمي قابل لإعادة التنزيل']
     ]);
 
@@ -2732,6 +2735,42 @@
     ],rows.slice(0,12));
     if(!rows.length)recent.append(node('div','لا توجد مبيعات حديثة لها مستندات بعد.','dashboard-empty'));
 
+    const monitor=box('مراقبة الطباعة الحرارية');
+    hint(monitor,'هذه البيانات لا تتخيل أن الخادم طبع الورقة؛ تطبيق POS هو الذي يرسل فعلياً للطابعة، ثم يسجل النجاح أو سبب الفشل هنا. فشل الطباعة لا يلغي البيع.');
+
+    const health=node('div',null,'kpi-grid');
+    health.append(
+      kpiCard('مهام الطباعة',String(printStats.total||0),'▰',(printStats.completed||0)+' ناجح'),
+      kpiCard('فشل',String(printStats.failed||0),'!','يمكن تتبع السبب والجهاز',Number(printStats.failed||0)>0?'red':''),
+      kpiCard('قيد التنفيذ',String(printStats.queue_length||0),'◷','queued / printing / retrying','gold'),
+      kpiCard('أجهزة POS نشطة',String(devices.filter(x=>x.is_active).length),'▣','مصدر التنفيذ المحلي','blue')
+    );
+    monitor.append(health);
+
+    if(printerProfiles.length){
+      monitor.append(node('h3','الطابعات المكتشفة'));
+      table(monitor,[
+        ['الطابعة',x=>x.name],['الاتصال',x=>x.connection_type==='bluetooth'?'Bluetooth':x.connection_type==='network'?'شبكة':x.connection_type],
+        ['النقطة',x=>x.endpoint_hint||'—'],['الورق',x=>x.paper_size||'—'],
+        ['الجهاز',x=>x.device_name||'—'],['الفرع',x=>x.branch_name||'المنشأة الرئيسية'],
+        ['الحالة',x=>x.status==='degraded'?'تحتاج فحص':x.status==='active'?'نشطة':x.status||'—'],
+        ['آخر نجاح',x=>x.last_success_at?new Date(x.last_success_at).toLocaleString('ar-YE'):'—'],
+        ['آخر فشل',x=>x.last_failure_at?new Date(x.last_failure_at).toLocaleString('ar-YE'):'—']
+      ],printerProfiles);
+    }else hint(monitor,'لم يصل بعد تقرير طباعة من أي جهاز POS. ستظهر الطابعة تلقائياً بعد أول محاولة طباعة من التطبيق.');
+
+    if(printJobs.length){
+      monitor.append(node('h3','آخر مهام الطباعة'));
+      table(monitor,[
+        ['الوقت',x=>x.created_at?new Date(x.created_at).toLocaleString('ar-YE'):'—'],
+        ['المستند',x=>x.document_number||x.document_id||x.document_type],
+        ['النوع',x=>x.document_type||'—'],['الطابعة',x=>x.printer_name||'—'],
+        ['الموظف',x=>x.employee_name||'المالك'],['الجهاز',x=>x.device_name||'—'],
+        ['الحالة',x=>x.status==='completed'?'نجاح':x.status==='failed'?'فشل':x.status],
+        ['السبب',x=>x.error_code?x.error_code+' · '+(x.error_message||''):x.result_message||'—']
+      ],printJobs.slice(0,20));
+    }
+
     const setup=box('إعدادات الفاتورة والطباعة');
     hint(setup,'هوية الفاتورة مشتركة بين الويب ونقاط البيع. خيار الطباعة التلقائية لا يعني أن المتصفح يستطيع التحكم بطابعة Bluetooth؛ تنفذه طبقة الطباعة في الجهاز المؤهل.');
     form(setup,[
@@ -2751,7 +2790,7 @@
     });
 
     const pos=box('الطباعة الحرارية والأجهزة');
-    hint(pos,'الويب لا يدّعي نجاح USB/Bluetooth من دون جهاز. اختبر الطابعة من تطبيق نقطة البيع؛ هنا ندير الأجهزة وهوية المستند فقط.');
+    hint(pos,'الويب لا يتحكم في Bluetooth/USB مباشرة. اختبر الطابعة من تطبيق نقطة البيع؛ بعدها تظهر صحة الطابعة ونتيجة المهمة أعلاه من تقرير الجهاز نفسه.');
     const actions=node('div',null,'buttons');
     if(navigation.some(x=>x.tab==='devices'&&x.state==='available')){
       const d=action('إدارة أجهزة POS',()=>load('devices'));actions.append(d);
