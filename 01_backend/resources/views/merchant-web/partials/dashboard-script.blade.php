@@ -1728,12 +1728,55 @@
     form(create,[['name','اسم الفرع'],['address','العنوان'],['city','المدينة']],'إنشاء الفرع',d=>api('branchesCreate',d));
   }
   async function posSetup(){
-    const [branchesData,staffData,devicesData,rolesData]=await Promise.all([api('branches'),api('staff'),api('devices'),api('roles')]);
+    const [branchesData,staffData,devicesData,rolesData,opsData,printData]=await Promise.all([
+      api('branches'),api('staff'),api('devices'),api('roles'),
+      api('overview').catch(()=>({counts:{},open_shifts:[]})),
+      api('printMonitor').catch(()=>({profiles:[],jobs:[],stats:{}}))
+    ]);
     const canUseBranches=navigation.some(item=>item.tab==='branches'&&item.state==='available');
     const branches=canUseBranches?(branchesData.branches||[]).filter(x=>x.is_active):[];
     const staff=(staffData.staff||[]).filter(x=>x.is_active);
     const devices=(devicesData.devices||[]).filter(x=>x.is_active);
     const roles=(rolesData.roles||[]).filter(x=>x.is_active);
+
+    const status=box('حالة نقاط البيع الآن');
+    hint(status,'صورة تشغيلية من الجلسات والورديات والطابعات الفعلية. لا تُحسب «نقطة بيع متصلة» من مجرد وجود جهاز مسجل.');
+    const counts=opsData.counts||{},printStats=printData.stats||{},profiles=printData.profiles||[],openShifts=opsData.open_shifts||[];
+    const degraded=profiles.filter(x=>x.status==='degraded').length;
+    const live=node('div',null,'kpi-grid');
+    live.append(
+      kpiCard('الموظفون النشطون',String(counts.active_employees??staff.length),'♟','حسابات صالحة للتشغيل'),
+      kpiCard('أجهزة متصلة الآن',String(counts.active_device_sessions??0),'▣',(counts.devices??devices.length)+' جهاز مسجل','blue'),
+      kpiCard('ورديات مفتوحة',String(counts.open_shifts??openShifts.length),'◉',opsData.open_shifts_has_more?'توجد ورديات إضافية خارج المعاينة':'المعاينة الحالية','gold'),
+      kpiCard('طابعات تحتاج فحص',String(degraded),'!','فشل حديث في الطباعة',degraded>0?'red':'')
+    );
+    status.append(live);
+
+    if(openShifts.length){
+      status.append(node('h3','الورديات المفتوحة الآن'));
+      table(status,[
+        ['الموظف',x=>x.opened_by_name||x.employee_code||'—'],
+        ['النوع',x=>x.shift_type==='fuel'?'نوبة وقود':'وردية كاشير'],
+        ['موقع التشغيل',x=>x.branch_name||'المنشأة الرئيسية'],
+        ['وقت الفتح',x=>x.opened_at?new Date(x.opened_at).toLocaleString('ar-YE'):'—']
+      ],openShifts);
+    }else{
+      hint(status,'لا توجد وردية مفتوحة الآن. يجب فتح الوردية من جهاز POS قبل بدء تحصيل النقد.');
+    }
+
+    if(profiles.length){
+      status.append(node('h3','صحة الطابعات المرتبطة'));
+      table(status,[
+        ['الطابعة',x=>x.name],['الجهاز',x=>x.device_name||'—'],
+        ['الموقع',x=>x.branch_name||'المنشأة الرئيسية'],
+        ['الاتصال',x=>x.connection_type||'—'],
+        ['الحالة',x=>x.status==='degraded'?'تحتاج فحص':x.status==='active'?'سليمة':x.status||'—'],
+        ['آخر نجاح',x=>x.last_success_at?new Date(x.last_success_at).toLocaleString('ar-YE'):'—'],
+        ['آخر فشل',x=>x.last_failure_at?new Date(x.last_failure_at).toLocaleString('ar-YE'):'—']
+      ],profiles.slice(0,12));
+      if(Number(printStats.failure_rate||0)>0)hint(status,'نسبة فشل الطباعة خلال الفترة المرصودة: '+Number(printStats.failure_rate||0).toFixed(2)+'%. افتح «المستندات والطباعة» لمعرفة المهمة والفاتورة ورمز الخطأ.');
+    }
+
     const panel=box('إعداد نقطة بيع جديدة');
     hint(panel,canUseBranches
       ?'اربط نقطة البيع بفرع أو بالمنشأة الرئيسية، ثم الموظف والجهاز. الجهاز أصل للمنشأة وليس ملكاً دائماً للموظف.'
