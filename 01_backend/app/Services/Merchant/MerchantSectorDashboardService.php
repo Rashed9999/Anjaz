@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\WholesaleBusiness;
 use App\Models\WholesaleInvoice;
 use App\Services\SalesBreakdownService;
+use App\Services\Retail\StockService;
 use App\Support\Access\AccessConstants as A;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ final class MerchantSectorDashboardService
 {
     public function __construct(
         private readonly SalesBreakdownService $salesBreakdown,
+        private readonly StockService $stock,
     ) {}
 
     public function build(User $merchant, int $days = 14): array
@@ -57,31 +59,44 @@ final class MerchantSectorDashboardService
         $from = now()->subDays($days - 1)->toDateString();
         $breakdown = $this->salesBreakdown->report($merchant, $from, $to);
 
-        $products = MerchantProduct::where('merchant_user_id', $merchant->id)
-            ->where('is_active', true)
-            ->get(['id', 'name', 'quantity', 'reorder_level', 'track_stock']);
+        // المخزون قطاعيّ، لكن مصدر الحقيقة مشترك: رصيد الموقع لا مرآة
+        // merchant_products.quantity. فالمستودع الممتلئ لا يجعل فرعاً
+        // نافداً «سليماً»، والمحجوز لا يُعد متاحاً للبيع.
+        $low = $this->stock->lowStock($merchant->id);
+        $out = $this->stock->outOfStock($merchant->id);
+        $negative = $this->stock->negativeStock($merchant->id);
 
-        $low = $products->filter(fn ($p) => (bool) $p->track_stock
-            && (float) $p->quantity <= (float) $p->reorder_level);
-        $out = $products->filter(fn ($p) => (bool) $p->track_stock
-            && (float) $p->quantity <= 0);
+        $stockAttention = collect($out)
+            ->map(fn (array $row) => [
+                ...$row,
+                'state' => bccomp((string) $row['available'], '0', 3) < 0 ? 'negative' : 'out',
+            ])
+            ->concat(
+                collect($low)
+                    ->filter(fn (array $row) => bccomp((string) $row['available'], '0', 3) > 0)
+                    ->map(fn (array $row) => [...$row, 'state' => 'low'])
+            )
+            ->take(8)->values()->all();
 
         return [
             'vertical' => $vertical,
             'kind' => 'retail',
             'cards' => [
-                ['code' => 'low_stock', 'label' => 'مخزون منخفض', 'value' => $low->count(), 'tone' => $low->count() ? 'warning' : 'ok'],
-                ['code' => 'out_of_stock', 'label' => 'نفد من المخزون', 'value' => $out->count(), 'tone' => $out->count() ? 'danger' : 'ok'],
+                ['code' => 'low_stock', 'label' => 'مواقع تحت حد إعادة الطلب', 'value' => count($low), 'tone' => count($low) ? 'warning' : 'ok'],
+                ['code' => 'out_of_stock', 'label' => 'مواقع نافدة للبيع', 'value' => count($out), 'tone' => count($out) ? 'danger' : 'ok'],
+                ['code' => 'negative_stock', 'label' => 'أرصدة سالبة تحتاج جرداً', 'value' => count($negative), 'tone' => count($negative) ? 'danger' : 'ok'],
                 ['code' => 'sold_qty', 'label' => 'صافي الوحدات المباعة', 'value' => $breakdown['totals']['qty'], 'tone' => 'neutral'],
                 ['code' => 'cost_coverage', 'label' => 'أسطر بتكلفة مجهولة', 'value' => $breakdown['cost_coverage']['unknown_cost_lines'], 'tone' => $breakdown['cost_coverage']['unknown_cost_lines'] ? 'warning' : 'ok'],
             ],
             'lists' => [
+                'stock_attention' => $stockAttention,
                 'top_products' => array_slice($breakdown['items'], 0, 5),
                 'top_categories' => array_slice($breakdown['categories'], 0, 5),
             ],
             'meta' => [
                 'range' => $breakdown['range'],
-                'source' => 'merchant_sale_items + merchant_products',
+                'source' => 'product_stocks + stock_movements + merchant_sale_items',
+                'stock_scope' => 'active_locations',
                 'cost_note' => $breakdown['cost_coverage']['note'],
             ],
         ];
