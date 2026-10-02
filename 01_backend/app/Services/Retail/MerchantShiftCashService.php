@@ -157,10 +157,12 @@ class MerchantShiftCashService
             ->orderBy('id')->get()
             ->map(fn (ShiftCashMovement $m) => [
                 'id' => (int) $m->id,
+                'uuid' => (string) $m->uuid,
                 'direction' => $m->direction,
                 'reason' => $m->reason,
                 'reason_ar' => self::REASON_AR[$m->reason] ?? $m->reason,
                 'amount' => (string) $m->amount,
+                'reference' => $m->reference,
                 'note' => $m->note,
                 'actor' => trim(($m->actor->f_name ?? '') . ' ' . ($m->actor->l_name ?? '')) ?: null,
                 'created_at' => $m->created_at?->toIso8601String(),
