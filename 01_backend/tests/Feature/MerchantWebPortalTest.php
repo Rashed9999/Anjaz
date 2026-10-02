@@ -325,6 +325,35 @@ class MerchantWebPortalTest extends TestCase
             ->assertJsonPath('meta.source', 'merchant_products');
     }
 
+    public function test_enterprise_owner_manages_api_keys_from_web_without_exposing_old_secrets(): void
+    {
+        $owner = $this->owner();
+        $this->actingAs($owner, 'merchant_web');
+
+        $created = $this->postJson('/merchant/data/integrations/api-keys', [
+            'label' => 'نظام محاسبة',
+        ])->assertCreated()
+            ->assertJsonPath('code', 'CREATED');
+
+        $secret = (string) $created->json('meta.api_key');
+        $this->assertStringStartsWith('amk_', $secret);
+
+        $index = $this->getJson('/merchant/data/integrations/api-keys')
+            ->assertOk()
+            ->assertJsonPath('meta.count', 1)
+            ->assertJsonPath('meta.keys.0.label', 'نظام محاسبة');
+
+        $this->assertNull($index->json('meta.keys.0.api_key'),
+            'قائمة المفاتيح لا يجوز أن تعيد السر الكامل بعد الإنشاء');
+        $this->assertStringNotContainsString($secret, json_encode($index->json(), JSON_UNESCAPED_UNICODE));
+
+        $this->get('/merchant')->assertOk()
+            ->assertSee('التكاملات والتطبيقات')
+            ->assertSee('Webhooks للتاجر')
+            ->assertSee('غير متاح حالياً')
+            ->assertSee('GET /api/v1/amial/partner/sales', false);
+    }
+
     public function test_owner_wallet_and_staff_data_remain_scoped_to_own_account(): void
     {
         $owner = $this->owner();
@@ -337,7 +366,7 @@ class MerchantWebPortalTest extends TestCase
 
     public function test_all_merchant_data_routes_require_owner_and_writes_keep_plan_gates(): void
     {
-        foreach (['overview', 'dashboard-v2', 'sales-v2', 'products-v2', 'sector.customers', 'sector.sales', 'sector.sales.show', 'sector.sales.invoice', 'stats', 'profit-report', 'wallet', 'ledger', 'wallet.origins', 'products',
+        foreach (['overview', 'dashboard-v2', 'sales-v2', 'products-v2', 'integrations.api-keys.index', 'sector.customers', 'sector.returns', 'sector.sales', 'sector.sales.show', 'sector.sales.invoice', 'stats', 'profit-report', 'wallet', 'ledger', 'wallet.origins', 'products',
                   'branches', 'roles', 'staff', 'staff.performance', 'devices', 'receipts'] as $endpoint) {
             $route = Route::getRoutes()->getByName('merchant.web.data.' . $endpoint);
             $this->assertNotNull($route, $endpoint . ' not registered');
