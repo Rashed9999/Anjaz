@@ -168,6 +168,13 @@ class CustomerCreditViewTest extends TestCase
         $this->assertSame('2026-12-31', $first['due_date']);
         $firstKey = $pdfSvc->cacheKey($sale->fresh());
 
+        // افصل Blade عن HTTP حتى يظهر أي خطأ تصيير بنصه الحقيقي في CI.
+        $html = $pdfSvc->renderHtml($sale->fresh());
+        $this->assertStringContainsString('عميل فاتورة صيدلية', $html);
+        $this->assertStringContainsString('1,200.00', $html);
+        $directPdf = $pdfSvc->generate($sale->fresh());
+        $this->assertStringStartsWith('%PDF', $directPdf);
+
         Passport::actingAs($this->customer->fresh(), [], 'api');
         $pdf = $this->get(
             "/api/v1/amial/customer/credits/{$account->id}/invoices/{$movement->movement_ulid}/pdf"
