@@ -193,6 +193,8 @@ Route::middleware('merchant.web')->group(function () {
             ->whereNumber('id')->middleware('throttle:30,1')->name('approvals.reject');
 
         Route::get('/staff', [Staff::class, 'index'])->middleware('capability:employees')->name('staff');
+        Route::get('/staff-performance', [Staff::class, 'performance'])
+            ->middleware('capability:employees')->name('staff.performance');
         Route::post('/staff', [Staff::class, 'store'])
             ->middleware(['capability:employees', 'throttle:20,1'])->name('staff.create');
         Route::post('/staff/{id}/toggle', [Staff::class, 'toggle'])
