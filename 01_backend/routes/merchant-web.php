@@ -5,6 +5,7 @@ use App\Http\Controllers\Merchant\WebPortalController as Portal;
 use App\Http\Controllers\Merchant\WebDashboardController as Dashboard;
 use App\Http\Controllers\Merchant\WebSalesController as SalesDirectory;
 use App\Http\Controllers\Merchant\WebProductsController as ProductsDirectory;
+use App\Http\Controllers\Merchant\WebBulkDataController as Bulk;
 use App\Http\Controllers\Api\V1\Amial\CreditCollectionController as Collections;
 use App\Http\Controllers\Merchant\WebPlansController as Plans;
 use App\Http\Controllers\Merchant\WebSectorController as Sector;
@@ -82,6 +83,12 @@ Route::middleware('merchant.web')->group(function () {
             ->whereNumber('id')->middleware('throttle:30,1')->name('sector.products.barcodes.add');
         Route::post('/sector/products', [Sector::class, 'createProduct'])
             ->middleware(['amial.usage:add_product', 'throttle:30,1'])->name('sector.products.create');
+        Route::get('/sector/products/template.csv', [Bulk::class, 'productTemplate'])
+            ->middleware('throttle:20,1')->name('sector.products.template');
+        Route::get('/sector/products/export.csv', [Bulk::class, 'exportProducts'])
+            ->middleware('throttle:10,1')->name('sector.products.export');
+        Route::post('/sector/products/import', [Bulk::class, 'importProducts'])
+            ->middleware('throttle:5,1')->name('sector.products.import');
         Route::get('/sector/operations', [Sector::class, 'operations'])->name('sector.operations');
         Route::get('/sector/customers', [Sector::class, 'customers'])->name('sector.customers');
         Route::get('/sector/customers/{id}/profile', [Sector::class, 'customerProfile'])
@@ -91,6 +98,12 @@ Route::middleware('merchant.web')->group(function () {
         Route::put('/sector/customers/{id}', [Sector::class, 'updateCustomer'])
             ->whereNumber('id')->middleware(['capability:customers', 'throttle:30,1'])
             ->name('sector.customers.update');
+        Route::get('/sector/customers/template.csv', [Bulk::class, 'customerTemplate'])
+            ->middleware(['capability:customers', 'throttle:20,1'])->name('sector.customers.template');
+        Route::get('/sector/customers/export.csv', [Bulk::class, 'exportCustomers'])
+            ->middleware(['capability:customers', 'throttle:10,1'])->name('sector.customers.export');
+        Route::post('/sector/customers/import', [Bulk::class, 'importCustomers'])
+            ->middleware(['capability:customers', 'throttle:5,1'])->name('sector.customers.import');
         Route::get('/sector/returns', [Sector::class, 'returns'])->name('sector.returns');
         Route::get('/sector/sales/{id}/return-info', [Sector::class, 'returnInfo'])
             ->name('sector.returns.info');
