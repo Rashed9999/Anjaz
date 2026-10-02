@@ -36,11 +36,43 @@ class StockService
      */
     public function defaultLocation(int $merchantUserId): MerchantLocation
     {
+        $branch = Branch::where('merchant_user_id', $merchantUserId)
+            ->where('is_active', true)
+            ->where('is_default', true)
+            ->first();
+
+        if ($branch) {
+            return $this->syncBranchLocation($branch);
+        }
+
         $loc = MerchantLocation::where('merchant_user_id', $merchantUserId)
-            ->where('is_default', true)->first();
+            ->where('kind', 'store')
+            ->where('is_active', true)
+            ->where('is_default', true)
+            ->first();
 
         if ($loc) {
             return $loc;
+        }
+
+        $legacy = MerchantLocation::withTrashed()
+            ->where('merchant_user_id', $merchantUserId)
+            ->where('kind', 'store')
+            ->where('code', 'MAIN')
+            ->first();
+
+        if ($legacy) {
+            if ($legacy->trashed()) {
+                $legacy->restore();
+            }
+            $legacy->update([
+                'branch_id' => null,
+                'name' => $legacy->name ?: 'الفرع الرئيسي',
+                'is_active' => true,
+                'is_default' => true,
+            ]);
+
+            return $legacy->fresh();
         }
 
         return MerchantLocation::create([
@@ -51,6 +83,121 @@ class StockService
             'is_active' => true,
             'is_default' => true,
         ]);
+    }
+
+    /**
+     * الموقع التشغيلي للبيع يخرج من branch_id نفسه.
+     *
+     * لا يجوز لبيع فرع ثان أن يخصم من MAIN لمجرد أن MAIN هو الافتراضي.
+     * وإذا كان التاجر قديماً وله موقع MAIN بلا branch_id نتبنّاه للفرع
+     * الافتراضي بدلاً من إنشاء مخزون موازٍ.
+     */
+    public function locationForBranch(int $merchantUserId, ?int $branchId): MerchantLocation
+    {
+        if ($branchId === null) {
+            return $this->defaultLocation($merchantUserId);
+        }
+
+        $branch = Branch::whereKey($branchId)
+            ->where('merchant_user_id', $merchantUserId)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $branch) {
+            throw new DomainException('الفرع التشغيلي غير صالح لهذه المنشأة');
+        }
+
+        return $this->syncBranchLocation($branch);
+    }
+
+    /**
+     * مزامنة هوية الفرع مع موقع المخزون من غير تحريك أي كمية.
+     * تغيير الاسم أو جعل فرع افتراضياً لا ينقل البضاعة بين المواقع.
+     */
+    public function syncBranchLocation(Branch $branch): MerchantLocation
+    {
+        $merchantUserId = (int) $branch->merchant_user_id;
+
+        return DB::transaction(function () use ($branch, $merchantUserId) {
+            $base = MerchantLocation::withTrashed()
+                ->where('merchant_user_id', $merchantUserId)
+                ->where('kind', 'store');
+
+            $location = (clone $base)
+                ->where('branch_id', $branch->id)
+                ->first();
+
+            // جسر الترقية: MAIN القديم كان بلا branch_id.
+            if (! $location && $branch->is_default) {
+                $location = (clone $base)
+                    ->whereNull('branch_id')
+                    ->where('is_default', true)
+                    ->first();
+            }
+
+            $preferredCode = $branch->is_default ? 'MAIN' : 'BR-' . $branch->id;
+
+            if (! $location) {
+                $sameCode = MerchantLocation::withTrashed()
+                    ->where('merchant_user_id', $merchantUserId)
+                    ->where('code', $preferredCode)
+                    ->first();
+
+                if ($sameCode
+                    && $sameCode->kind === 'store'
+                    && ($sameCode->branch_id === null || (int) $sameCode->branch_id === (int) $branch->id)) {
+                    $location = $sameCode;
+                } elseif ($sameCode) {
+                    $preferredCode = 'STORE-' . $branch->id;
+                }
+            }
+
+            if ($branch->is_default) {
+                $others = MerchantLocation::where('merchant_user_id', $merchantUserId)
+                    ->where('kind', 'store');
+                if ($location) {
+                    $others->where('id', '!=', $location->id);
+                }
+                $others->update(['is_default' => false]);
+            }
+
+            $attrs = [
+                'branch_id' => $branch->id,
+                'name' => $branch->name ?: 'فرع ' . $branch->id,
+                'city' => $branch->city,
+                'address' => $branch->address,
+                'is_active' => (bool) $branch->is_active,
+                'is_default' => (bool) $branch->is_default,
+            ];
+
+            if ($location) {
+                if ($location->trashed()) {
+                    $location->restore();
+                }
+                $location->update($attrs);
+
+                return $location->fresh();
+            }
+
+            return MerchantLocation::create($attrs + [
+                'merchant_user_id' => $merchantUserId,
+                'kind' => 'store',
+                'code' => $preferredCode,
+                'created_by' => $merchantUserId,
+            ]);
+        });
+    }
+
+    /** يبقى تاريخ المخزون محفوظاً عند إيقاف/حذف الفرع، لكنه لا يعود موقع بيع حي. */
+    public function deactivateBranchLocation(Branch $branch): void
+    {
+        MerchantLocation::where('merchant_user_id', $branch->merchant_user_id)
+            ->where('branch_id', $branch->id)
+            ->where('kind', 'store')
+            ->update([
+                'is_active' => false,
+                'is_default' => false,
+            ]);
     }
 
     public function addLocation(User $merchant, array $data): MerchantLocation

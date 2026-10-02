@@ -10,6 +10,7 @@ use App\Models\PosUser;
 use App\Models\MerchantProfile;
 use App\Models\User;
 use App\Support\Access\AccessConstants as A;
+use App\Services\Retail\StockService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -23,6 +24,8 @@ use Illuminate\Support\Facades\DB;
  */
 class BranchService
 {
+    public function __construct(private readonly StockService $stock) {}
+
     /**
      * إنشاء فرع جديد مع فحص حدّ الخطّة.
      *
@@ -47,7 +50,7 @@ class BranchService
             // هل هذا أوّل فرع؟ → اجعله الافتراضي
             $hasAny = Branch::where('merchant_user_id', $merchant->id)->exists();
 
-            return Branch::create([
+            $branch = Branch::create([
                 'merchant_user_id' => $merchant->id,
                 'name' => $name,
                 'code' => $data['code'] ?? null,
@@ -58,6 +61,10 @@ class BranchService
                 'is_default' => !$hasAny, // الأوّل يصبح افتراضياً
                 'settings' => $data['settings'] ?? null,
             ]);
+
+            $this->syncInventoryLocation($merchant, $branch);
+
+            return $branch->fresh();
         });
     }
 
@@ -114,6 +121,8 @@ class BranchService
                 ->whereNull('branch_id')
                 ->update(['branch_id' => $branch->id]);
 
+            $this->syncInventoryLocation($merchant, $branch);
+
             return $branch->fresh();
         });
     }
@@ -136,6 +145,12 @@ class BranchService
             'manager_pos_user_id', 'is_active', 'settings',
         ])));
         $branch->save();
+
+        $merchant = User::find($branch->merchant_user_id);
+        if ($merchant) {
+            $this->syncInventoryLocation($merchant, $branch);
+        }
+
         return $branch->fresh();
     }
 
@@ -149,7 +164,13 @@ class BranchService
             throw new \LogicException('لا يمكن حذف الفرع الافتراضي');
         }
         // ملاحظة: لاحقاً نضيف فحص أنّ الفرع لا يحوي عمليات نشطة
-        return (bool) $branch->delete();
+        $deleted = (bool) $branch->delete();
+
+        if ($deleted && $this->usesSharedRetailStock((int) $branch->merchant_user_id)) {
+            $this->stock->deactivateBranchLocation($branch);
+        }
+
+        return $deleted;
     }
 
     /**
@@ -167,6 +188,12 @@ class BranchService
                 ->update(['is_default' => false]);
             $branch->is_default = true;
             $branch->save();
+
+            $merchant = User::find($branch->merchant_user_id);
+            if ($merchant) {
+                $this->syncInventoryLocation($merchant, $branch);
+            }
+
             return $branch->fresh();
         });
     }
@@ -209,6 +236,31 @@ class BranchService
     }
 
     // ============ Helpers ============
+
+    /**
+     * التجزئة والبيع السريع والمطعم تشترك في MerchantProduct/StockService.
+     * القطاعات ذات محركات مخزون مستقلة لا ننشئ لها مواقع مخزون موازية.
+     */
+    private function usesSharedRetailStock(int $merchantUserId): bool
+    {
+        $vertical = MerchantProfile::where('user_id', $merchantUserId)
+            ->value('business_type');
+
+        return in_array($vertical, [
+            A::BIZ_RETAIL,
+            A::BIZ_QUICK_SALE,
+            A::BIZ_RESTAURANT,
+        ], true);
+    }
+
+    private function syncInventoryLocation(User $merchant, Branch $branch): void
+    {
+        if (! $this->usesSharedRetailStock($merchant->id)) {
+            return;
+        }
+
+        $this->stock->syncBranchLocation($branch);
+    }
 
     private function planFor(User $merchant): string
     {

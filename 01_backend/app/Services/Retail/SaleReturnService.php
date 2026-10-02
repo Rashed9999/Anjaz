@@ -47,11 +47,23 @@ class SaleReturnService
         }
 
         return DB::transaction(function () use ($merchant, $sale, $lines, $opts) {
-            $location = ! empty($opts['location_id'])
-                ? MerchantLocation::where('id', $opts['location_id'])
-                    ->where('merchant_user_id', $merchant->id)->first()
-                : null;
-            $location ??= $this->stock->defaultLocation($merchant->id);
+            if (! empty($opts['location_id'])) {
+                $location = MerchantLocation::where('id', $opts['location_id'])
+                    ->where('merchant_user_id', $merchant->id)
+                    ->where('is_active', true)
+                    ->first();
+
+                if (! $location) {
+                    throw new DomainException('موقع إعادة المخزون غير صالح لهذه المنشأة');
+                }
+            } else {
+                // المرتجع يعود إلى موقع الفرع الذي خرجت منه البضاعة،
+                // لا إلى MAIN لمجرد أنه الموقع الافتراضي.
+                $location = $this->stock->locationForBranch(
+                    $merchant->id,
+                    $sale->branch_id !== null ? (int) $sale->branch_id : null,
+                );
+            }
 
             $return = SaleReturn::create([
                 'uuid' => (string) Str::uuid(),

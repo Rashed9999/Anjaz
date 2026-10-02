@@ -466,6 +466,14 @@ class CashierService
                 throw new RuntimeException('الوردية المفتوحة لا تتبع الفرع التشغيلي.');
             }
 
+            // الفرع الفعلي هو ما حُلّ من الجهاز/الموظف، أو فرع الوردية إن
+            // كان النداء الداخلي قديماً ولم يمرره. ومنه وحده يخرج موقع
+            // المخزون؛ فلا بيعُ فرعٍ ثانٍ يخصم من MAIN.
+            $effectiveBranchId = $branchId
+                ?? ($openShift?->branch_id !== null ? (int) $openShift->branch_id : null);
+            $stockLocation = app(\App\Services\Retail\StockService::class)
+                ->locationForBranch($merchant->id, $effectiveBranchId);
+
             // AMIAL-SHIFT-DEVICE-001 — **والصندوقُ يُقرأ من الورديّة لا
             // من الطلب.**
             //
@@ -482,7 +490,7 @@ class CashierService
                 'invoice_number' => $this->invoiceNumbers->nextForMerchant($merchant),
                 'client_uuid' => $clientUuid ?: null,
                 'merchant_user_id' => $merchant->id,
-                'branch_id' => $branchId,
+                'branch_id' => $effectiveBranchId,
                 'pos_user_id' => $posUserId,
                 'shift_id' => $shiftId,
                 'pos_device_id' => $saleDeviceId,
@@ -516,8 +524,8 @@ class CashierService
             $fresh = $sale->fresh();
 
             if ($status !== 'pending_payment') {
-                // خصم المخزون للعناصر المرتبطة بمنتج (product_id)
-                $this->decrementStockForSale($fresh);
+                // خصم المخزون من موقع الفرع الذي حدثت فيه البيعة.
+                $this->decrementStockForSale($fresh, $stockLocation->id);
             } else {
                 // AMIAL-RETAIL-VERTICAL-001 · المرحلة ٩ — **حجزٌ لا خصم**.
                 //
@@ -526,7 +534,7 @@ class CashierService
                 // آخرُ حبّةٍ لزبونين معاً. والحجزُ يُبقيها موجودةً وغيرَ
                 // متاحة، حتّى ينجح الدفعُ أو تنتهي المهلة.
                 app(\App\Services\Retail\StockReservationService::class)
-                    ->holdForSale($fresh);
+                    ->holdForSale($fresh, $stockLocation);
             }
 
             // AMIAL-CUSTOMER-CREDIT-001 — ربط بيع الأجل بحساب العميل الائتماني
@@ -667,10 +675,22 @@ class CashierService
     private function decrementStockForSale(MerchantSale $sale, ?int $locationId = null): void
     {
         $stock = app(\App\Services\Retail\StockService::class);
-        $location = $locationId
-            ? \App\Models\Retail\MerchantLocation::find($locationId)
-            : null;
-        $location ??= $stock->defaultLocation($sale->merchant_user_id);
+
+        if ($locationId !== null) {
+            $location = \App\Models\Retail\MerchantLocation::whereKey($locationId)
+                ->where('merchant_user_id', $sale->merchant_user_id)
+                ->where('is_active', true)
+                ->first();
+
+            if (! $location) {
+                throw new RuntimeException('موقع مخزون الفرع غير صالح لهذه البيعة');
+            }
+        } else {
+            $location = $stock->locationForBranch(
+                $sale->merchant_user_id,
+                $sale->branch_id !== null ? (int) $sale->branch_id : null,
+            );
+        }
 
         // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — **يُقرأ السطرُ لا الـJSON**.
         // فالكمّيّةُ طُبّعت مرّةً عند الكتابة، ولا تُقرأ هنا بمفتاحين.
@@ -740,7 +760,12 @@ class CashierService
             // **ولا حجزَ = بيعةٌ قديمةٌ سبقت المرحلة ٩** — تُخصم كما كانت،
             // فلا يمرّ دفعٌ بلا خصمِ مخزون.
             if ($consumed === 0) {
-                $this->decrementStockForSale($sale);
+                $location = app(\App\Services\Retail\StockService::class)
+                    ->locationForBranch(
+                        $sale->merchant_user_id,
+                        $sale->branch_id !== null ? (int) $sale->branch_id : null,
+                    );
+                $this->decrementStockForSale($sale, $location->id);
             }
 
             return $sale->fresh();
