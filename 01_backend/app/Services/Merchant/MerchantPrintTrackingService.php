@@ -69,8 +69,8 @@ final class MerchantPrintTrackingService
                     'endpoint_hint' => $hint,
                     'is_default' => true,
                     'status' => 'active',
-                    'capabilities' => $printer['capabilities'] ?? [],
-                    'settings' => $printer['settings'] ?? [],
+                    'capabilities' => $this->safeCapabilities($printer['capabilities'] ?? []),
+                    'settings' => $this->safePrinterSettings($printer['settings'] ?? []),
                     'last_seen_at' => now(),
                 ]);
             } else {
@@ -81,8 +81,12 @@ final class MerchantPrintTrackingService
                     'connection_type' => (string) ($printer['connection_type'] ?? $profile->connection_type),
                     'paper_size' => (string) ($printer['paper_size'] ?? $profile->paper_size),
                     'endpoint_hint' => $hint,
-                    'capabilities' => $printer['capabilities'] ?? $profile->capabilities,
-                    'settings' => $printer['settings'] ?? $profile->settings,
+                    'capabilities' => array_key_exists('capabilities', $printer)
+                        ? $this->safeCapabilities($printer['capabilities'])
+                        : $profile->capabilities,
+                    'settings' => array_key_exists('settings', $printer)
+                        ? $this->safePrinterSettings($printer['settings'])
+                        : $profile->settings,
                     'last_seen_at' => now(),
                 ]);
             }
@@ -130,7 +134,7 @@ final class MerchantPrintTrackingService
                 'started_at' => $startedAt,
                 'completed_at' => $status === 'completed' ? $finishedAt : null,
                 'failed_at' => $status === 'failed' ? $finishedAt : null,
-                'metadata' => $payload['metadata'] ?? [],
+                'metadata' => $this->safeMetadata($payload['metadata'] ?? []),
             ]);
 
             $this->audit->record([
@@ -271,7 +275,61 @@ final class MerchantPrintTrackingService
             return '••••'.mb_substr($identity, -5);
         }
 
-        return mb_substr($identity, 0, 120);
+        if ($connection === 'network') {
+            [$host, $port] = array_pad(explode(':', $identity, 2), 2, null);
+            if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                $parts = explode('.', $host);
+                $masked = '•••.•••.'.$parts[2].'.'.$parts[3];
+                return $port ? $masked.':'.$port : $masked;
+            }
+
+            $host = trim((string) $host);
+            $masked = mb_strlen($host) > 6
+                ? mb_substr($host, 0, 2).'…'.mb_substr($host, -4)
+                : '••••';
+            return $port ? $masked.':'.$port : $masked;
+        }
+
+        return '••••';
+    }
+
+    /** Client-reported print metadata is operational telemetry, not a bag for arbitrary data. */
+    private function safeMetadata(array $metadata): array
+    {
+        return collect($metadata)->only([
+            'source', 'open_cash_drawer', 'payment_method', 'pump',
+            'receipt_id', 'status', 'purpose',
+        ])->map(function ($value) {
+            if (is_bool($value) || is_int($value) || is_float($value) || $value === null) {
+                return $value;
+            }
+            return mb_substr((string) $value, 0, 160);
+        })->all();
+    }
+
+    private function safeCapabilities(array $capabilities): array
+    {
+        $out = [];
+        foreach (['cut', 'cash_drawer', 'qr', 'raster_arabic'] as $key) {
+            if (array_key_exists($key, $capabilities)) {
+                $out[$key] = (bool) $capabilities[$key];
+            }
+        }
+        return $out;
+    }
+
+    private function safePrinterSettings(array $settings): array
+    {
+        $out = [];
+        if (isset($settings['paper_mm'])) {
+            $paper = (int) $settings['paper_mm'];
+            if (in_array($paper, [58, 80], true)) $out['paper_mm'] = $paper;
+        }
+        if (isset($settings['port'])) {
+            $port = (int) $settings['port'];
+            if ($port >= 1 && $port <= 65535) $out['port'] = $port;
+        }
+        return $out;
     }
 
     private function errorCodeFrom(?string $message): ?string
