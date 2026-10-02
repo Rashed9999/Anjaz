@@ -141,6 +141,7 @@ class WebPortalController extends Controller
             'deviceUpdate' => route('merchant.web.data.devices.update', ['id' => '__ID__']),
             'deviceDestroy' => route('merchant.web.data.devices.destroy', ['id' => '__ID__']),
             'receipts' => route('merchant.web.data.receipts'),
+            'printMonitor' => route('merchant.web.data.printing'),
             'receiptsSave' => route('merchant.web.data.receipts.save'),
             'login' => route('merchant.web.login')
         ];
