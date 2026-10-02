@@ -1311,6 +1311,7 @@
       ['طريقة الدفع',x=>paymentLabel(x.payment_method)],
       ['الحالة',x=>saleStatusLabel(x.status)],
       ['الإجمالي',x=>money(x.amount)],
+      ['المرتجع',x=>x.refunded_total===null||x.refunded_total===undefined?'غير متاح':money(x.refunded_total)],
       ['التفاصيل',x=>saleDetailButton({...x,id:x.detail_id, sale_ulid:actualSector==='wholesale'||actualSector==='restaurant'?undefined:x.detail_id})]
     ],rows);
     if(!rows.length)p.append(node('div','لا توجد مبيعات مطابقة للفلاتر الحالية.','dashboard-empty'));
