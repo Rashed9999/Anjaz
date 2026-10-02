@@ -20,7 +20,8 @@ class MerchantPortalNavigationServiceTest extends TestCase
         ]);
 
         $tabs = array_column($items, 'tab');
-        $this->assertSame('sector', $tabs[0]);
+        $this->assertSame('overview', $tabs[0], 'بوابة V2 تبدأ بلوحة القيادة الموحدة');
+        $this->assertContains('sector', $tabs);
         $this->assertContains('sales', $tabs);
         $this->assertNotContains('products', $tabs);
         $this->assertNotContains('debts', $tabs);
@@ -55,9 +56,12 @@ class MerchantPortalNavigationServiceTest extends TestCase
             ],
         ]);
 
-        $workspace = $items[0];
-        $this->assertSame('sector', $workspace['tab']);
+        $this->assertSame('overview', $items[0]['tab']);
+        $workspace = collect($items)->firstWhere('tab', 'sector');
+        $sales = collect($items)->firstWhere('tab', 'sales');
+        $this->assertNotNull($workspace);
+        $this->assertNotNull($sales);
         $this->assertSame(EntitlementService::COMING_SOON, $workspace['state']);
-        $this->assertSame(EntitlementService::COMING_SOON, $items[1]['state']);
+        $this->assertSame(EntitlementService::COMING_SOON, $sales['state']);
     }
 }
