@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SHIFT-CLOSE-001 — «إقفال الوردية» (باقة الأعمال فأعلى).
@@ -20,6 +21,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
   String? _error;
   Map<String, dynamic>? _shift;
   Map<String, dynamic>? _x;
+  final List<Map<String, dynamic>> _movements = [];
 
   /// AMIAL-SHIFT-GATE-001 — ساعاتُ العمل: اليومَ وهذا الشهر.
   /// `null` تعني «لم تُقرأ» لا «صفرُ ساعات» — والفرقُ يُعرَض.
@@ -53,7 +55,14 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
   Future<void> _loadX() async {
     final r = await _api.getData('/api/v1/amial/cashier/shift/x');
     if (r.statusCode == 200 && r.body is Map) {
-      _x = ((r.body['meta'] ?? {})['report']) as Map<String, dynamic>?;
+      final meta = (r.body['meta'] ?? {}) as Map;
+      final report = meta['report'];
+      _x = report is Map ? Map<String, dynamic>.from(report) : null;
+      _movements
+        ..clear()
+        ..addAll(((meta['movements'] ?? []) as List)
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e)));
     }
   }
 
@@ -182,10 +191,8 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
     });
 
     if (r.statusCode == 200 && r.body is Map) {
-      final raw = (r.body['meta'] ?? {})['report'];
-      if (raw is Map && mounted) {
-        setState(() => _x = Map<String, dynamic>.from(raw));
-      }
+      await _loadX();
+      if (mounted) setState(() {});
       _snack('سُجّل تسليم النقد وخصم من المتوقّع في الدرج', ok: true);
     } else {
       _snack(_messageOf(r) ?? 'تعذّر تسجيل تسليم النقد');
@@ -264,6 +271,58 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
     ));
   }
 
+  String _movementTime(dynamic iso) {
+    final d = DateConverterHelper.tryFromApi(iso?.toString());
+    if (d == null) return '';
+    return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
+  List<Widget> _cashMovementTrail() {
+    if (_movements.isEmpty) return const [];
+
+    final recent = _movements.reversed.take(8);
+    return [
+      const SizedBox(height: 14),
+      const Row(children: [
+        Icon(Icons.receipt_long_outlined, size: 18, color: AmialColors.primary),
+        SizedBox(width: 7),
+        Text('سجل حركة عهدة الدرج',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      ]),
+      const SizedBox(height: 6),
+      ...recent.map((m) {
+        final outgoing = m['direction'] == 'out';
+        final ref = (m['reference'] ?? '').toString().trim();
+        final note = (m['note'] ?? '').toString().trim();
+        final actor = (m['actor'] ?? '').toString().trim();
+        final time = _movementTime(m['created_at']);
+
+        final subtitle = <String>[
+          if (ref.isNotEmpty) 'المرجع: $ref',
+          if (actor.isNotEmpty) 'بواسطة: $actor',
+          if (note.isNotEmpty) note,
+          if (time.isNotEmpty) time,
+        ].join(' · ');
+
+        return Card(
+          color: AmialColors.cardSurface,
+          child: ListTile(
+            dense: true,
+            leading: Icon(
+              outgoing ? Icons.north_east_rounded : Icons.south_west_rounded,
+              color: outgoing ? AmialColors.red : AmialColors.success,
+            ),
+            title: Text(
+              '${m['reason_ar'] ?? m['reason'] ?? 'حركة نقد'} — ${m['amount'] ?? '0'} ر.ي',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: subtitle.isEmpty ? null : Text(subtitle),
+          ),
+        );
+      }),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -325,6 +384,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
             ),
           ]),
         ),
+        ..._cashMovementTrail(),
         const SizedBox(height: 16),
         OutlinedButton.icon(
           onPressed: _cashDrop,
