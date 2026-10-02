@@ -294,6 +294,9 @@ class ThermalPrintService extends GetxService {
     return m?.group(1);
   }
 
+  @visibleForTesting
+  String? printErrorCodeForTest(String message) => _printErrorCode(message);
+
   Future<void> _queuePrintReport(Map<String, dynamic> payload) async {
     final prefs = await SharedPreferences.getInstance();
     final current = prefs.getStringList(_kPendingReports) ?? <String>[];
