@@ -163,6 +163,9 @@ class CustomerCreditViewTest extends TestCase
         $first = $pdfSvc->creditSnapshot($sale->fresh());
         $this->assertSame('unpaid', $first['state']);
         $this->assertSame('1200.0000', $first['remaining']);
+        $this->assertSame('عميل فاتورة صيدلية', $first['customer_name']);
+        $this->assertSame($this->customer->phone, $first['customer_phone']);
+        $this->assertSame('2026-12-31', $first['due_date']);
         $firstKey = $pdfSvc->cacheKey($sale->fresh());
 
         Passport::actingAs($this->customer->fresh(), [], 'api');
