@@ -206,12 +206,12 @@
   }
   function buildNavigation(){
     const nav=document.getElementById('portal-nav');nav.replaceChildren();
-    const symbols={dashboard_customize:'⌁',insights:'⌂',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌘',groups:'♙',people:'♟',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨',business_center:'▣'};
+    const symbols={dashboard_customize:'⌁',insights:'⌂',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌘',groups:'♙',people:'♟',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',print:'▰',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨',business_center:'▣'};
     const groups=[
       ['نظرة عامة',['overview']],
       ['التشغيل والمبيعات',['sector','sales','products','customers','debts','suppliers','expenses','assets']],
       ['الفريق ونقاط البيع',['branches','posSetup','staff','devices']],
-      ['المالية والتقارير',['wallet','reports']],
+      ['المالية والتقارير',['wallet','reports','documents']],
       ['إعدادات المنشأة',['settings','plans']],
     ];
     const byTab=new Map(navigation.map(item=>[item.tab,item])),seen=new Set();
@@ -1317,7 +1317,43 @@
   }
   function saleIdentifier(row){return String((actualSector==='wholesale'||actualSector==='restaurant'?row.id:(row.sale_ulid||row.ulid||row.id))||'')}
   function saleDetailButton(row){const id=saleIdentifier(row),button=node('button','عرض','action secondary');button.type='button';button.disabled=!id;button.addEventListener('click',()=>showSaleDetail(id));return button}
-  function invoiceButton(id){if(!['quick_sale','retail','pharmacy','fuel','wholesale','restaurant'].includes(actualSector))return null;const button=node('button','تنزيل الفاتورة','action secondary');button.type='button';button.addEventListener('click',()=>window.open(routes.sectorSaleInvoice.replace('__ID__',encodeURIComponent(id)),'_blank','noopener'));return button}
+  function invoiceUrl(id,inline=false){
+    const raw=routes.sectorSaleInvoice.replace('__ID__',encodeURIComponent(id));
+    if(!inline)return raw;
+    const url=new URL(raw,window.location.href);url.searchParams.set('inline','1');return url.toString();
+  }
+  function invoiceActions(id,record={}){
+    if(!['quick_sale','retail','pharmacy','fuel','wholesale','restaurant'].includes(actualSector))return null;
+    const actions=node('div',null,'buttons');
+
+    const preview=node('button','معاينة / طباعة','action secondary');preview.type='button';
+    preview.onclick=()=>window.open(invoiceUrl(id,true),'_blank','noopener');
+
+    const download=node('button','تنزيل PDF','action secondary');download.type='button';
+    download.onclick=()=>window.open(invoiceUrl(id,false),'_blank','noopener');
+
+    const share=node('button','مشاركة الفاتورة','action secondary');share.type='button';
+    share.onclick=async()=>{
+      share.disabled=true;
+      try{
+        const response=await fetch(invoiceUrl(id,false),{credentials:'same-origin',headers:{Accept:'application/pdf'}});
+        if(!response.ok)throw Error('تعذّر تجهيز ملف الفاتورة للمشاركة');
+        const blob=await response.blob();
+        const number=record.invoice_number||record.order_number||record.sale_ulid||id;
+        const file=new File([blob],'amial_invoice_'+String(number).replace(/[^A-Za-z0-9_-]+/g,'_')+'.pdf',{type:'application/pdf'});
+        if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
+          await navigator.share({title:'فاتورة أميال باي '+number,text:'فاتورة من '+@json($storeName),files:[file]});
+        }else{
+          const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=file.name;a.click();
+          setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+          message('المتصفح لا يدعم المشاركة المباشرة؛ تم تنزيل PDF لتشاركه عبر واتساب أو أي تطبيق.');
+        }
+      }catch(e){
+        if(e?.name!=='AbortError')message(e.message||'تعذّرت مشاركة الفاتورة');
+      }finally{share.disabled=false}
+    };
+    actions.append(preview,download,share);return actions
+  }
   async function showSaleDetail(id){
     const data=await api('sectorSaleDetail',undefined,routes.sectorSaleDetail.replace('__ID__',encodeURIComponent(id)));
     const detail=data.result||{},record=detail.sale||detail.invoice||detail.order||{};
@@ -1331,7 +1367,8 @@
     const lines=detail.lines||detail.items||record.items||[];
     if(lines.length)table(p,[['الصنف',x=>x.name||x.product?.name||x.product_name||'—'],['الكمية',x=>x.quantity??x.qty??'—'],['السعر',x=>money(x.unit_price??x.price)],['الإجمالي',x=>money(x.line_total??x.total_amount??x.total)]],lines);
     else hint(p,'لا يعلن محرك هذا القطاع أسطر الفاتورة في هذا السجل بعد؛ تُعرض بيانات العملية المتاحة فقط.');
-    const invoice=invoiceButton(id);if(invoice){const actions=node('div',null,'buttons');actions.append(invoice);p.append(actions)}
+    const docs=invoiceActions(id,record);if(docs)p.append(docs);
+    hint(p,'«معاينة / طباعة» يفتح PDF الرسمي في عارض المتصفح. الطباعة الحرارية المباشرة عبر Bluetooth/USB تبقى من تطبيق نقطة البيع لأنها تعتمد قدرات الجهاز الفعلية.');
   }
   function limitText(v){return v===-1?'بلا حد':v===0?'غير متاح':v??'—'}
   function capabilityStatus(row){
@@ -2090,6 +2127,78 @@
     hint(movement,'يفصل هذا التقرير المبيعات عن التحصيلات وعن حركة المحفظة؛ التحويلات الشخصية والأرصدة الافتتاحية لا تتحول إلى مبيعات.');
     table(movement,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['رصيد مورد',x=>x.available?money(x.supplier_credit):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[]);
   }
+  async function documents(){
+    const [receiptData,salesData,devicesData]=await Promise.all([
+      api('receipts'),
+      api('salesV2').catch(()=>({rows:[],summary:{},pagination:{}})),
+      api('devices').catch(()=>({devices:[]}))
+    ]);
+    const settings=receiptData.settings||{},rows=salesData.rows||[],devices=devicesData.devices||[];
+    const autoPrint=settings.auto_print_receipts===true||settings.auto_print_receipts===1;
+
+    dashboardKpis([
+      ['مقاس الإيصال الحراري',(settings.paper_width||80)+' مم','▰','إعداد المنشأة الحالي'],
+      ['الطباعة التلقائية',autoPrint?'مفعّلة':'متوقفة','◎','تطبق داخل تطبيق POS المؤهل',autoPrint?'gold':''],
+      ['أجهزة POS',String(devices.filter(x=>x.is_active).length),'▣','أجهزة يمكنها تشغيل طباعة محلية','blue'],
+      ['فواتير حديثة',String(rows.length),'▧','PDF رسمي قابل لإعادة التنزيل']
+    ]);
+
+    const architecture=box('مركز المستندات والطباعة');
+    hint(architecture,'المستند المالي يُنشأ من بيانات البيع المسجلة، وليس من لقطة شاشة. إعادة التنزيل أو الطباعة لا تنشئ بيعة ثانية ولا تغيّر المحفظة أو الدفتر.');
+    const cards=node('div',null,'roles-grid');
+    [
+      ['PDF رسمي','فاتورة القطاع مع رقمها وQR للتحقق وإعادة التنزيل.','متاح'],
+      ['طباعة المتصفح','معاينة PDF ثم الطباعة إلى طابعة المكتب أو طابعة النظام.','متاح على الويب'],
+      ['طباعة حرارية 58/80 مم','Bluetooth / USB / شبكة عبر تطبيق POS وقدرات الجهاز.','من تطبيق نقطة البيع'],
+      ['مشاركة','مشاركة ملف PDF مباشرة من المتصفح المدعوم أو تنزيله للمشاركة.','متاح'],
+    ].forEach(([title,desc,state])=>{
+      const card=node('article',null,'role-card'),head=node('div',null,'role-card-head');
+      head.append(node('h4',title),node('span',state,'source-chip'));card.append(head,node('p',desc));cards.append(card)
+    });
+    architecture.append(cards);
+
+    const recent=box('الفواتير الحديثة');
+    hint(recent,'هذه نفس عمليات البيع في سجل القطاع؛ زر المستند لا يعيد حساب الإجمالي.');
+    table(recent,[
+      ['التاريخ',x=>x.occurred_at?new Date(x.occurred_at).toLocaleString('ar-YE'):'—'],
+      ['الفاتورة',x=>x.document_number||x.reference],
+      ['العميل',x=>x.customer_name||'—'],
+      ['طريقة الدفع',x=>paymentLabel(x.payment_method)],
+      ['الإجمالي',x=>money(x.amount)],
+      ['المستند',x=>invoiceActions(String(x.detail_id??x.id),x)]
+    ],rows.slice(0,12));
+    if(!rows.length)recent.append(node('div','لا توجد مبيعات حديثة لها مستندات بعد.','dashboard-empty'));
+
+    const setup=box('إعدادات الفاتورة والطباعة');
+    hint(setup,'هوية الفاتورة مشتركة بين الويب ونقاط البيع. خيار الطباعة التلقائية لا يعني أن المتصفح يستطيع التحكم بطابعة Bluetooth؛ تنفذه طبقة الطباعة في الجهاز المؤهل.');
+    form(setup,[
+      ['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],
+      ['phone','هاتف المنشأة'],['address','عنوان المنشأة'],
+      ['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]],
+      ['auto_print_receipts','طباعة الإيصال تلقائياً في POS','select',[{value:'0',label:'لا'},{value:'1',label:'نعم'}]]
+    ],'حفظ إعدادات المستندات',d=>{
+      if('auto_print_receipts' in d)d.auto_print_receipts=d.auto_print_receipts==='1';
+      if('paper_width' in d)d.paper_width=Number(d.paper_width);
+      return api('receiptsSave',d)
+    });
+    setup.querySelectorAll('input,select').forEach(input=>{
+      if(input.name==='store_name')input.value=@json($storeName);
+      else if(input.name==='auto_print_receipts')input.value=autoPrint?'1':'0';
+      else if(settings[input.name]!==undefined&&settings[input.name]!==null)input.value=String(settings[input.name]);
+    });
+
+    const pos=box('الطباعة الحرارية والأجهزة');
+    hint(pos,'الويب لا يدّعي نجاح USB/Bluetooth من دون جهاز. اختبر الطابعة من تطبيق نقطة البيع؛ هنا ندير الأجهزة وهوية المستند فقط.');
+    const actions=node('div',null,'buttons');
+    if(navigation.some(x=>x.tab==='devices'&&x.state==='available')){
+      const d=action('إدارة أجهزة POS',()=>load('devices'));actions.append(d);
+    }
+    if(navigation.some(x=>x.tab==='posSetup'&&x.state==='available')){
+      const p=action('إعداد نقطة بيع',()=>load('posSetup'));actions.append(p);
+    }
+    pos.append(actions);
+  }
+
   async function settings(){
     const data=await api('receipts'),s=data.settings||{};
     const hub=box('إعدادات المنشأة');
@@ -2115,7 +2224,7 @@
     form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));
     p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});
   }
-  const pages={overview,sector,sales,customers,wallet,debts,products,suppliers,expenses,assets,branches,posSetup,staff,devices,reports,settings,plans};
+  const pages={overview,sector,sales,customers,wallet,debts,products,suppliers,expenses,assets,branches,posSetup,staff,devices,reports,documents,settings,plans};
   async function load(tab){if(stopScanner){stopScanner();stopScanner=null;}active=tab;document.getElementById('page-title').textContent=titles[tab]||'بوابة المنشأة';document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();if(!pages[tab])throw Error('هذا القسم غير معروف');await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
   const sidebar=document.getElementById('merchant-side');
   const menuToggle=document.getElementById('menu-toggle');
