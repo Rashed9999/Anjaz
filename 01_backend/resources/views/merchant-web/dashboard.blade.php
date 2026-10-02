@@ -248,6 +248,51 @@
     panel.append(node('h3','إجراءات هذه المساحة'),actions);
   }
   async function api(key,body,url,method){const init={credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-TOKEN':csrf}};if(body!==undefined){init.method=method||'POST';init.headers['Content-Type']='application/json';init.headers['Idempotency-Key']='mw-'+Date.now()+'-'+Math.random().toString(36).slice(2);init.body=JSON.stringify(body)}const res=await fetch(url||routes[key],init);if(res.status===401){window.location.href=routes.login;throw Error('انتهت الجلسة')}const json=await res.json();if(!res.ok||json.success===false)throw Error(json.message||'لم ينجح تحميل البيانات');const meta=json.meta;if(meta&&typeof meta==='object'&&!Array.isArray(meta)&&Object.keys(meta).length)return meta;return json.data&&typeof json.data==='object'?json.data:{}}
+  async function uploadCsv(key,file){
+    const data=new FormData();data.append('file',file);
+    const res=await fetch(routes[key],{
+      method:'POST',credentials:'same-origin',
+      headers:{Accept:'application/json','X-CSRF-TOKEN':csrf,'Idempotency-Key':'mw-csv-'+Date.now()+'-'+Math.random().toString(36).slice(2)},
+      body:data
+    });
+    if(res.status===401){window.location.href=routes.login;throw Error('انتهت الجلسة')}
+    let json={};try{json=await res.json()}catch(_){throw Error('وصل رد غير صالح من خادم الاستيراد')}
+    if(!res.ok||json.success===false)throw Error(json.message||'لم ينجح الاستيراد');
+    return json.meta&&typeof json.meta==='object'?json.meta:json
+  }
+  function downloadRoute(key){window.open(routes[key],'_blank','noopener')}
+  function bulkCsvControls(panel,kind,onDone){
+    const row=node('div',null,'buttons');
+    const template=action('تنزيل قالب CSV',()=>downloadRoute(kind==='products'?'sectorProductsTemplate':'sectorCustomersTemplate'));
+    const exportBtn=action('تصدير CSV',()=>downloadRoute(kind==='products'?'sectorProductsExport':'sectorCustomersExport'));
+    const importBtn=action('استيراد CSV',()=>input.click(),false),input=node('input');
+    input.type='file';input.accept='.csv,text/csv,text/plain';input.hidden=true;
+    const result=node('div');result.setAttribute('aria-live','polite');
+    importBtn.type='button';
+    input.onchange=async()=>{
+      const file=input.files?.[0];if(!file)return;
+      if(file.size>5*1024*1024){message('الملف أكبر من 5MB');input.value='';return}
+      if(!window.confirm('سيتم فحص الملف صفاً صفاً وتطبيق قواعد القطاع والباقة. هل تريد المتابعة؟')){input.value='';return}
+      importBtn.disabled=true;result.replaceChildren(node('p','جارٍ فحص واستيراد الملف…','note'));
+      try{
+        const data=await uploadCsv(kind==='products'?'sectorProductsImport':'sectorCustomersImport',file);
+        const summary=node('div',null,'note');
+        summary.append(node('strong','نتيجة الاستيراد: '),
+          node('span','أضيف '+(data.added||0)+' · موجود من محاولة سابقة '+(data.already_done||0)+' · مرفوض '+(data.skipped||0)));
+        result.replaceChildren(summary);
+        const errors=data.row_errors||[];
+        if(errors.length){
+          table(result,[['صف',x=>x.line],['سبب الرفض',x=>x.reason]],errors);
+          hint(result,'يُعرض أول 50 خطأ صفّي فقط. أصلح الملف وأعد رفعه؛ الصفوف الناجحة سابقاً لن تتكرر.');
+        }else{
+          hint(result,'اكتمل الاستيراد دون صفوف مرفوضة. إعادة نفس الملف آمنة ولن تنشئ نسخاً مكررة من الصفوف التي اكتملت.');
+        }
+        if(onDone)await onDone();
+      }catch(e){result.replaceChildren(node('p',e.message||'تعذّر الاستيراد','error'))}
+      finally{importBtn.disabled=false;input.value=''}
+    };
+    row.append(template,exportBtn,importBtn,input);panel.append(row,result);
+  }
   function form(p,fields,button,submit){const f=node('form',null,'editor');fields.forEach(([key,label,type,options])=>{const l=node('label',label,'field');let inp;if(options){inp=node('select');options.forEach(o=>{const op=node('option',o.label);op.value=o.value;inp.append(op)})}else{inp=node('input');inp.type=type||'text';if(type==='number'){inp.step='any';inp.min='0'}if(type==='password')inp.autocomplete='new-password'}inp.name=key;inp.required=['name','price','trade_name','sale_price','base_price','price_per_liter','display_name','employee_code','password'].includes(key);l.append(inp);f.append(l)});const btn=node('button',button,'action');btn.type='submit';f.append(btn);f.addEventListener('submit',async ev=>{ev.preventDefault();btn.disabled=true;try{const data=Object.fromEntries(new FormData(f).entries());Object.keys(data).forEach(k=>{if(data[k]==='')delete data[k]});const result=await submit(data);if(result.activation_code){f.replaceChildren();const code=node('strong',result.activation_code);code.style.fontSize='29px';code.style.letterSpacing='5px';const secret=node('div',null,'note');secret.append(node('p','رمز التفعيل (صالح لمرة واحدة، حتى '+result.expires_at+')'),code);const copy=node('button','نسخ الرمز','action secondary');copy.type='button';copy.addEventListener('click',()=>navigator.clipboard.writeText(result.activation_code).then(()=>message('تم نسخ الرمز')));secret.append(copy);p.append(secret);message('تم إنشاء رمز التفعيل؛ انسخه قبل مغادرة الصفحة')}else{message(result.message||'تم الحفظ');await load(active)}}catch(e){message(e.message)}finally{btn.disabled=false}});p.append(f)}
   function svgNode(tag,attrs={}){
     const e=document.createElementNS('http://www.w3.org/2000/svg',tag);
