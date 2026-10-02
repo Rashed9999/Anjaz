@@ -36,6 +36,13 @@ Route::middleware('merchant.web')->group(function () {
     Route::prefix('data')->name('data.')->group(function () {
         Route::get('/overview', [Operations::class, 'summary'])->name('overview');
         Route::get('/dashboard-v2', [Dashboard::class, 'show'])->name('dashboard-v2');
+        Route::prefix('/report-exports')->name('report-exports.')->group(function () {
+            $reports = \App\Http\Controllers\Api\V1\Amial\ReportController::class;
+            Route::get('/', [$reports, 'index'])->name('index');
+            Route::post('/', [$reports, 'request'])->middleware('throttle:15,1')->name('request');
+            Route::get('/{ulid}/status', [$reports, 'status'])->where('ulid', '[A-Z0-9]{26}')->name('status');
+            Route::get('/{ulid}/download', [$reports, 'download'])->where('ulid', '[A-Z0-9]{26}')->name('download');
+        });
         Route::prefix('/integrations/api-keys')->name('integrations.api-keys.')->group(function () {
             $apiKeys = \App\Http\Controllers\Api\V1\Amial\MerchantApiKeyController::class;
             Route::get('/', [$apiKeys, 'index'])->name('index');
