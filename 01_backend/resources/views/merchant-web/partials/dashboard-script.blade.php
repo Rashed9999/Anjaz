@@ -837,6 +837,29 @@
     function blankPanel(text,warning=false){
       feedback.replaceChildren(node('p',text,'note'+(warning?' warning-note':'')));
     }
+    function showStockLocations(p){
+      feedback.replaceChildren();
+      const panel=node('section',null,'panel');
+      panel.append(node('h3','المخزون حسب الموقع · '+(p.display_name||p.name||'الصنف')));
+      if(p.stock_source==='legacy_unallocated'){
+        panel.append(node('p','هذا رصيد تاريخي لم يُوزع على موقع بعد. سيبقى ظاهراً كرصيد انتقالي، لكنه لا يُنسب إلى فرع أو مستودع من دون حركة مخزون موثقة.','note warning-note'));
+        const legacy=node('div',null,'grid');
+        legacy.append(metric('الموجود',String(p.stock_value??0)),metric('المتاح',String(p.available_stock??p.stock_value??0)));
+        panel.append(legacy);
+      }else{
+        hint(panel,'المتاح = الموجود ناقص المحجوز. هذه الأرقام من product_stocks وليست من مرآة quantity القديمة.');
+        table(panel,[
+          ['الموقع',x=>x.location],['الموجود',x=>x.on_hand],['المحجوز',x=>x.reserved],
+          ['المتاح',x=>x.available],['حد إعادة الطلب',x=>x.reorder_level],
+          ['الحالة',x=>x.state==='out'?'نافد للبيع':x.state==='low'?'تحت حد الطلب':'سليم']
+        ],p.stock_locations||[]);
+        if(Number(p.stock_location_count||0)>(p.stock_locations||[]).length){
+          hint(panel,'يُعرض أول 12 موقعاً هنا؛ افتح مركز المخزون للقائمة الكاملة.');
+        }
+      }
+      feedback.append(panel);
+      panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+    }
     const amount=x=>x===null||x===undefined?'—':money(x);
     function field(form,key,caption,type='text',value='',choices=null){
       const label=node('label',null,'field');label.append(node('span',caption));
@@ -900,18 +923,24 @@
       const summary=node('p',(pg.total??items.length)+' نتيجة · الصفحة '+(pg.current_page||1)+' من '+(pg.last_page||1)+' · البحث والتصفية من الخادم','muted');
       results.append(summary);
       const wrap=node('div',null,'table-wrap'),tableEl=node('table'),thead=node('thead'),h=node('tr'),body=node('tbody');
-      ['المنتج','SKU / الرمز','الباركود','السعر','الرصيد','الحالة','الإجراءات'].forEach(x=>h.append(node('th',x)));
+      ['المنتج','SKU / الرمز','الباركود','السعر','المتاح / الموجود','الحالة','الإجراءات'].forEach(x=>h.append(node('th',x)));
       thead.append(h);tableEl.append(thead);
       items.forEach(p=>{
         const tr=node('tr'),name=p.display_name||p.trade_name||p.name||'—';
         const low=p.low_stock===true,stock=p.stock_value??p.quantity??p.current_stock;
+        const available=p.available_stock??stock;
+        const stockText=stock===null||stock===undefined
+          ?'غير مطبق'
+          :(generic
+            ?String(available)+' / '+String(stock)+(p.stock_source==='legacy_unallocated'?' · غير موزع':'')
+            :String(stock));
         tr.append(
           node('td',name),
           node('td',p.sku||p.product_code||'—'),
           node('td',p.barcode||'—'),
           node('td',amount(p.price??p.sale_price??p.base_price??p.price_per_liter)),
-          node('td',stock===null||stock===undefined?'غير مطبق':String(stock)),
-          node('td',p.is_active===false?'موقوف':low?'منخفض':'نشط')
+          node('td',stockText),
+          node('td',p.is_active===false?'موقوف':p.out_of_stock===true?'نافد':low?'منخفض':'نشط')
         );
         const td=node('td'),actions=node('div',null,'product-actions');
         if(editable){const edit=node('button',actualSector==='fuel'?'تعديل السعر':'تعديل','action secondary');edit.type='button';edit.onclick=()=>showEditor(p);actions.append(edit)}
@@ -921,6 +950,10 @@
         }
         if(generic&&!p.is_variant_parent){
           const alias=node('button','باركودات / عبوات','action secondary');alias.type='button';alias.onclick=()=>showAliases(p);actions.append(alias);
+        }
+        if(generic){
+          const stockLocations=node('button','المخزون حسب الموقع','action secondary');
+          stockLocations.type='button';stockLocations.onclick=()=>showStockLocations(p);actions.append(stockLocations);
         }
         td.append(actions);tr.append(td);body.append(tr);
       });
