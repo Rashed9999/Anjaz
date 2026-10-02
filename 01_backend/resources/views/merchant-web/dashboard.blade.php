@@ -1241,7 +1241,27 @@
       table(live,[['الميزة',x=>x.capability?.name||'—'],['الحالة',x=>capabilityStatus(x)],['ما تتيحه',x=>x.capability?.description||'—']],items);
     }
   }
-  async function branches(){const data=await api('branches');const p=box('الفروع التابعة لمنشأتك');table(p,[['اسم الفرع',x=>x.name],['المدينة',x=>x.city||'—'],['العنوان',x=>x.address||'—'],['الحالة',x=>x.is_active?'نشط':'متوقف']],data.branches||[]);const create=box('إضافة فرع');form(create,[['name','اسم الفرع'],['address','العنوان'],['city','المدينة']], 'إنشاء الفرع',d=>api('branchesCreate',d))}
+  async function branches(){
+    const [data,staffData,devicesData]=await Promise.all([api('branches'),api('staff').catch(()=>({staff:[]})),api('devices').catch(()=>({devices:[]}))]);
+    const rows=data.branches||[],staff=staffData.staff||[],devices=devicesData.devices||[],active=rows.filter(x=>x.is_active).length;
+    dashboardKpis([
+      ['الفروع',String(rows.length),'⌘',active+' نشط'],
+      ['الموظفون المرتبطون',String(staff.filter(x=>x.branch_id).length),'♙','موظفون بنطاق فرع','blue'],
+      ['الأجهزة المرتبطة',String(devices.filter(x=>x.branch_id).length),'▣','أجهزة مسندة لفروع','gold'],
+      ['المدن',String(new Set(rows.map(x=>x.city).filter(Boolean)).size),'◇','تغطية الفروع الحالية']
+    ]);
+    const p=box('الفروع التابعة لمنشأتك');
+    hint(p,'الفرع نطاق تشغيلي للموظف والجهاز والتقارير؛ لا ينشئ محفظة مالية مستقلة ولا ينقل الأموال تلقائياً.');
+    table(p,[
+      ['اسم الفرع',x=>x.name],['المدينة',x=>x.city||'—'],['العنوان',x=>x.address||'—'],
+      ['الموظفون',x=>staff.filter(s=>String(s.branch_id||'')===String(x.id)).length],
+      ['الأجهزة',x=>devices.filter(d=>String(d.branch_id||'')===String(x.id)).length],
+      ['الحالة',x=>{const s=node('span',x.is_active?'نشط':'متوقف','staff-status '+(x.is_active?'on':'off'));return s}]
+    ],rows);
+    const create=box('إضافة فرع');
+    hint(create,'بعد الإنشاء اربط الموظف والجهاز بالفرع من «إعداد نقطة بيع».');
+    form(create,[['name','اسم الفرع'],['address','العنوان'],['city','المدينة']],'إنشاء الفرع',d=>api('branchesCreate',d));
+  }
   async function posSetup(){
     const [branchesData,staffData,devicesData,rolesData]=await Promise.all([api('branches'),api('staff'),api('devices'),api('roles')]);
     const canUseBranches=navigation.some(item=>item.tab==='branches'&&item.state==='available');
@@ -1846,45 +1866,100 @@
     form(create,[['name','اسم الأصل'],['category','الفئة','select',Object.entries(assetCategoryLabels).map(([value,label])=>({value,label}))],['quantity','الكمية','number'],['acquisition_cost','تكلفة الاقتناء','number'],['salvage_value','القيمة المتبقية','number'],['useful_life_months','العمر الإنتاجي بالأشهر','number'],['acquired_on','تاريخ الاقتناء','date'],['depreciation_starts_on','بدء الإهلاك','date']],'تسجيل الأصل',d=>api('assetOpening',d));
   }
 
-  async function devices(){const data=await api('devices');const p=box('الأجهزة المرخصة');table(p,[['الجهاز',x=>x.display_name],['الفرع',x=>x.branch_name||'—'],['الحالة',x=>x.is_active?'نشط':'غير نشط'],['الجلسات',x=>x.live_sessions??0]],data.devices||[]);const create=box('تفعيل جهاز بيع جديد');hint(create,'ينشئ مالك المنشأة رمزًا مؤقتًا صالحًا لمرة واحدة. أدخله في تطبيق نقطة البيع على الجهاز الجديد.');form(create,[['display_name','اسم الجهاز']], 'إنشاء رمز التفعيل',async d=>{return api('deviceActivation',d)})}
-  async function reports(){
-    const [financial,profitData]=await Promise.all([
-      api('wallet'),
-      api('profitReport').catch(()=>null)
+  async function devices(){
+    const data=await api('devices'),rows=data.devices||[],active=rows.filter(x=>x.is_active).length,live=rows.reduce((s,x)=>s+Number(x.live_sessions||0),0);
+    dashboardKpis([
+      ['المقاعد المستخدمة',String(data.used??active),'▣',data.unlimited?'دون حد':('من '+(data.max??'—'))],
+      ['الأجهزة النشطة',String(active),'✓','أجهزة صالحة للتشغيل'],
+      ['الجلسات المفتوحة',String(live),'◉','جلسات نقطة بيع حالية','gold'],
+      ['أجهزة غير نشطة',String(rows.length-active),'○','تبقى محفوظة للتدقيق']
     ]);
-    const r=financial.report||{},sales=r.sales||{},methods=sales.by_payment_method||{};
-    const metrics=[['إجمالي المبيعات',money(sales.gross)],['عدد المبيعات',sales.count],['نقدًا',money(methods.cash)],['عبر أميال',money(methods.amial_pay)],['آجل',money(methods.credit)]];
+    const p=box('أجهزة نقاط البيع');
+    hint(p,'الجهاز أصل للمنشأة وليس موظفاً. الجلسة تربط الموظف بالجهاز أثناء العمل، وإلغاء الجهاز لا يمحو تاريخه.');
+    table(p,[
+      ['الجهاز',x=>x.display_name],['الفرع',x=>x.branch_name||'المنشأة الرئيسية'],
+      ['آخر ظهور',x=>x.last_seen_at||'—'],['الجلسات',x=>x.live_sessions??0],
+      ['البصمة',x=>x.fingerprint_suffix?('•••• '+x.fingerprint_suffix):'—'],
+      ['الحالة',x=>{const s=node('span',x.is_active?'نشط':'غير نشط','staff-status '+(x.is_active?'on':'off'));return s}]
+    ],rows);
+    const create=box('تفعيل جهاز بيع جديد');
+    hint(create,'ينشئ المالك رمزاً مؤقتاً صالحاً لمرة واحدة. أدخله في تطبيق نقطة البيع على الجهاز الفعلي؛ المقعد لا يُستهلك حتى يتم التفعيل.');
+    form(create,[['display_name','اسم الجهاز']], 'إنشاء رمز التفعيل',d=>api('deviceActivation',d));
+  }
+  async function reports(days=30){
+    const dashUrl=new URL(routes.dashboardV2,window.location.href);dashUrl.searchParams.set('days',String(Math.min(30,Math.max(7,days))));
+    const profitUrl=new URL(routes.profitReport,window.location.href);profitUrl.searchParams.set('days',String(Math.min(90,Math.max(1,days))));
+    const [financial,dashboard,profitData]=await Promise.all([
+      api('wallet'),
+      api('dashboardV2',undefined,dashUrl.toString()),
+      api('profitReport',undefined,profitUrl.toString()).catch(()=>null)
+    ]);
+    const r=financial.report||{},sales=r.sales||{},methods=sales.by_payment_method||{},d=dashboard.dashboard||dashboard;
+    const toolbar=box('نطاق التقرير');
+    hint(toolbar,'الاتجاه أدناه من مبيعات القطاع الفعلية، بينما بطاقات طرق الدفع والمحفظة من تقرير اليوم المالي.');
+    const periods=node('div',null,'buttons');
+    [7,14,30].forEach(n=>{const b=action(n+' أيام',()=>{content.replaceChildren();reports(n).catch(e=>message(e.message))},n!==days);if(n===days)b.disabled=true;periods.append(b)});
+    const goSales=action('فتح سجل المبيعات المفصل',()=>load('sales'),false);periods.append(goSales);toolbar.append(periods);
+
+    dashboardKpis([
+      ['مبيعات اليوم',money(sales.gross),'↗',(sales.count||0)+' عملية'],
+      ['نقد اليوم',money(methods.cash),'▣','من طرق الدفع الفعلية'],
+      ['أميال اليوم',money(methods.amial_pay),'◉','مدفوعات المحفظة','gold'],
+      ['آجل اليوم',money(methods.credit),'◫','ليس رصيد محفظة','blue']
+    ]);
+    const charts=node('div',null,'dash-grid');
+    charts.append(salesTrendCard(d.series||[],d.period_total,d.today_change_percent),paymentMixCard(methods));content.append(charts);
+
     if(profitData?.totals){
       const t=profitData.totals;
-      metrics.push(['الربح الإجمالي',money(t.gross_profit??t.profit)]);
-      if(t.cash_operating_expenses!==null&&t.cash_operating_expenses!==undefined)metrics.push(['مصروفات نقدية',money(t.cash_operating_expenses)]);
-      if(t.depreciation_expense!==null&&t.depreciation_expense!==undefined)metrics.push(['إهلاك أصول',money(t.depreciation_expense)]);
-      if(t.expense_reversals!==null&&t.expense_reversals!==undefined&&Number(t.expense_reversals)!==0)metrics.push(['عكس مصروفات',money(t.expense_reversals)]);
-      if(t.depreciation_reversals!==null&&t.depreciation_reversals!==undefined&&Number(t.depreciation_reversals)!==0)metrics.push(['عكس إهلاك مرتجعات أصول',money(t.depreciation_reversals)]);
-      if(t.operating_expenses!==null&&t.operating_expenses!==undefined)metrics.push(['إجمالي مصروفات التشغيل',money(t.operating_expenses)]);
-      if(t.net_profit!==null&&t.net_profit!==undefined)metrics.push(['الربح التشغيلي',money(t.net_profit)]);
-      if(t.asset_disposal_gain_loss!==null&&t.asset_disposal_gain_loss!==undefined&&Number(t.asset_disposal_gain_loss)!==0)metrics.push(['ربح/خسارة استبعاد أصول',money(t.asset_disposal_gain_loss)]);
-      if(t.net_result!==null&&t.net_result!==undefined)metrics.push(['النتيجة النهائية',money(t.net_result)]);
-    }
-    grid(metrics);
-    if(profitData?.totals){
-      const p=box('الربحية');
-      hint(p,'الربح الإجمالي = المبيعات ناقص تكلفة البضاعة المحفوظة لحظة البيع. صافي الربح يخصم المصروفات التشغيلية المسجلة، ولا يعامل شراء أصل ثابت كمصروف.');
-      table(p,[['المؤشر',x=>x.label],['القيمة',x=>money(x.value)]],[
-        {label:'الربح الإجمالي',value:profitData.totals.gross_profit??profitData.totals.profit},
-        {label:'المصروفات النقدية',value:profitData.totals.cash_operating_expenses},
-        {label:'إهلاك الأصول',value:profitData.totals.depreciation_expense},
-        {label:'إجمالي مصروفات التشغيل',value:profitData.totals.operating_expenses},
-        {label:'الربح التشغيلي',value:profitData.totals.net_profit},
-        {label:'ربح/خسارة استبعاد الأصول',value:profitData.totals.asset_disposal_gain_loss},
-        {label:'النتيجة النهائية',value:profitData.totals.net_result},
+      const profit=box('الربحية · '+days+' يوم');
+      hint(profit,'الربح الإجمالي يعتمد تكلفة البضاعة المحفوظة لحظة البيع. صافي الربح يخصم المصروفات التشغيلية المسجلة، ولا يعامل شراء الأصل الثابت كمصروف.');
+      const pg=node('div',null,'kpi-grid');
+      pg.append(
+        kpiCard('الإيراد',money(t.revenue),'↗','الفترة المختارة'),
+        kpiCard('الربح الإجمالي',money(t.gross_profit??t.profit),'◇','قبل مصروفات التشغيل','gold'),
+        kpiCard('مصروفات التشغيل',t.operating_expenses===null||t.operating_expenses===undefined?'غير موزعة':money(t.operating_expenses),'◫','نقد + إهلاك','blue'),
+        kpiCard('النتيجة النهائية',t.net_result===null||t.net_result===undefined?'غير متاحة':money(t.net_result),'◎','بعد المصروفات والاستبعادات',Number(t.net_result||0)<0?'red':'')
+      );profit.append(pg);
+      table(profit,[['المؤشر',x=>x.label],['القيمة',x=>x.value===null||x.value===undefined?'غير متاح':money(x.value)]],[
+        {label:'تكلفة البضاعة',value:t.cost},{label:'مصروفات نقدية',value:t.cash_operating_expenses},
+        {label:'إهلاك الأصول',value:t.depreciation_expense},{label:'ربح/خسارة استبعاد أصل',value:t.asset_disposal_gain_loss},
+        {label:'صافي الربح التشغيلي',value:t.net_profit},{label:'النتيجة النهائية',value:t.net_result}
       ]);
+    }else{
+      const p=box('الربحية');
+      hint(p,'محرك الربحية التفصيلي غير متاح لهذا القطاع أو الباقة حالياً؛ لا نستبدله برقم تقديري. المبيعات والطرق والحركة المالية أعلاه تظل من مصادرها الصحيحة.');
     }
-    const p=box('الحركة اليومية');
-    hint(p,'التقرير يفصل المبيعات عن التحصيلات وعن حركة المحفظة؛ لا تُحسب التحويلات الشخصية مبيعات.');
-    table(p,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['رصيد مورد',x=>x.available?money(x.supplier_credit):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[]);
+
+    const movement=box('الحركة المالية اليومية');
+    hint(movement,'يفصل هذا التقرير المبيعات عن التحصيلات وعن حركة المحفظة؛ التحويلات الشخصية والأرصدة الافتتاحية لا تتحول إلى مبيعات.');
+    table(movement,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['رصيد مورد',x=>x.available?money(x.supplier_credit):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[]);
   }
-  async function settings(){const data=await api('receipts'),s=data.settings||{};const p=box('هوية فاتورة منشأتك');form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});hint(p,'إعدادات الفاتورة موحدة بين الويب وكل نقاط البيع. صلاحية طباعة السند متاحة بحسب خصائص القطاع.')}
+  async function settings(){
+    const data=await api('receipts'),s=data.settings||{};
+    const hub=box('إعدادات المنشأة');
+    hint(hub,'الإعدادات موزعة بحسب مصدرها الفعلي. لا نكرر إعداد الموظفين أو الأجهزة داخل نموذج آخر؛ افتح القسم المختص لتبقى الحقيقة في مكان واحد.');
+    const cards=node('div',null,'roles-grid');
+    [
+      ['هوية الفاتورة','اسم المنشأة، الترويسة، التذييل وعرض الورق','receipt',null],
+      ['الموظفون والصلاحيات','الأدوار وحسابات الدخول والموافقات','staff','staff'],
+      ['نقاط البيع والأجهزة','تفعيل الجهاز وربطه بالتشغيل','devices','devices'],
+      ['الفروع','مواقع التشغيل ونطاق الموظفين','branches','branches'],
+      ['الباقة والمميزات','الحدود والمزايا المتاحة للقطاع','plans','plans'],
+    ].forEach(([title,desc,icon,tab])=>{
+      if(tab&&!navigation.some(x=>x.tab===tab&&x.state==='available'))return;
+      const card=node('article',null,'role-card'),head=node('div',null,'role-card-head');
+      head.append(node('h4',title),node('span',icon==='receipt'?'الحالي':'فتح','source-chip'));card.append(head,node('p',desc));
+      if(tab){const b=action('إدارة '+title,()=>load(tab));card.append(b)}
+      cards.append(card)
+    });
+    hub.append(cards);
+
+    const p=box('هوية الفاتورة والطباعة');
+    hint(p,'هذه الإعدادات موحدة بين الويب وكل نقاط البيع. الفاتورة نفسها تبقى قابلة للطباعة وPDF بحسب مسار البيع والقطاع.');
+    form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));
+    p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});
+  }
   const pages={overview,sector,sales,customers,wallet,debts,products,suppliers,expenses,assets,branches,posSetup,staff,devices,reports,settings,plans};
   async function load(tab){if(stopScanner){stopScanner();stopScanner=null;}active=tab;document.getElementById('page-title').textContent=titles[tab]||'بوابة المنشأة';document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();if(!pages[tab])throw Error('هذا القسم غير معروف');await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
   const sidebar=document.getElementById('merchant-side');
