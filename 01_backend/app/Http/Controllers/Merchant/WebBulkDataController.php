@@ -421,7 +421,10 @@ final class WebBulkDataController extends Controller
 
             return [
                 MerchantProduct::where('merchant_user_id', $merchantId)
-                    ->whereNull('parent_product_id')->orderBy('id'),
+                    ->where(function ($q) {
+                        $q->where('is_variant_parent', false)
+                            ->orWhereNull('is_variant_parent');
+                    })->orderBy('id'),
                 fn ($r) => $this->values($columns, [
                     ...$r->toArray(),
                     'track_stock' => $r->track_stock ? 1 : 0,
