@@ -64,16 +64,32 @@ class MerchantStaffController extends Controller
         $m = $this->guardMerchant($request);
         if ($m instanceof JsonResponse) return $m;
 
-        $staff = PosUser::with('branch:id,name')
+        $staffRows = PosUser::with('branch:id,name')
             ->where('merchant_user_id', $m->id)
             ->orderBy('pos_number')
+            ->get();
+
+        $roleAssignments = DB::table('merchant_user_roles as mur')
+            ->join('merchant_roles as mr', 'mr.id', '=', 'mur.merchant_role_id')
+            ->where('mur.merchant_user_id', $m->id)
+            ->whereIn('mur.user_id', $staffRows->pluck('user_id'))
+            ->where('mur.is_active', true)
+            ->select('mur.user_id', 'mr.id as role_id', 'mr.code', 'mr.name_ar')
             ->get()
-            ->map(fn (PosUser $p) => [
+            ->groupBy('user_id');
+
+        $staff = $staffRows->map(fn (PosUser $p) => [
                 'id' => $p->id,
                 'employee_code' => $p->pos_number,
                 'display_name' => $p->display_name,
                 'is_active' => (bool) $p->is_active,
                 'permissions' => $p->permissions ?? [],
+                'roles' => collect($roleAssignments->get($p->user_id, collect()))
+                    ->map(fn ($r) => [
+                        'id' => (int) $r->role_id,
+                        'code' => $r->code,
+                        'name_ar' => $r->name_ar,
+                    ])->values()->all(),
                 'is_operations_manager' => in_array('operations_manager', $p->permissions ?? [], true),
                 'is_financial_manager' => in_array('financial_manager', $p->permissions ?? [], true),
                 'last_login_at' => $p->last_login_at?->toIso8601String(),
