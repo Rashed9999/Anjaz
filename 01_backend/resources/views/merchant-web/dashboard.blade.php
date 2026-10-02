@@ -776,8 +776,8 @@
   }
   async function products(){
     const generic=['retail','quick_sale','restaurant'].includes(actualSector);
-    const editable=generic||['pharmacy','wholesale'].includes(actualSector);
-    let items=[],options={categories:[],brands:[],units:[]},search='',lowOnly=false;
+    const editable=generic||['pharmacy','wholesale','fuel'].includes(actualSector);
+    let items=[],options={categories:[],brands:[],units:[]},search='',lowOnly=false,productStatus='active',productPage=1,productMeta={};
     const page=box('المنتجات والباركود · '+actualSectorName);
     hint(page,generic
       ?'تُضاف الأصناف والتصنيفات والعلامات والوحدات إلى كتالوج المنشأة نفسه الذي تقرؤه نقاط البيع. الباركود الأساسي والبديل وحجم العبوة مرتبطان بالمخزون نفسه.'
@@ -787,13 +787,17 @@
     code.type='search';code.placeholder='امسح الباركود بقارئ USB أو أدخله يدوياً';
     code.setAttribute('aria-label','بحث أو مسح باركود المنتج');code.autocomplete='off';
     codeLabel.append(code);tools.append(codeLabel);
-    const searchButton=node('button','بحث بالباركود','action secondary'),cameraButton=node('button','فتح كاميرا الباركود','action secondary');
-    searchButton.type='button';cameraButton.type='button';
-    tools.append(searchButton,cameraButton);
+    const searchButton=node('button','بحث','action secondary'),exactButton=node('button','مطابقة الباركود','action secondary'),cameraButton=node('button','فتح كاميرا الباركود','action secondary');
+    searchButton.type='button';exactButton.type='button';cameraButton.type='button';
+    tools.append(searchButton,exactButton,cameraButton);
+    const statusLabel=node('label',null,'field'),statusSelect=node('select');
+    statusLabel.append(node('span','حالة الصنف'));
+    [['active','النشطة'],['inactive','الموقوفة'],['all','الكل']].forEach(([v,l])=>statusSelect.append(new Option(l,v)));
+    statusLabel.append(statusSelect);tools.append(statusLabel);
     const lowCheck=node('label',null,'field'),lowInput=node('input');lowInput.type='checkbox';lowInput.style.width='20px';lowInput.style.minHeight='20px';
     lowCheck.append(lowInput,node('span','المخزون المنخفض فقط'));tools.append(lowCheck);page.append(tools);
-    const feedback=node('div',null,'product-lookup'),results=node('div'),editor=node('div'),catalogue=node('div');
-    page.append(feedback,results,editor,catalogue);
+    const stats=node('div'),feedback=node('div',null,'product-lookup'),results=node('div'),editor=node('div'),catalogue=node('div');
+    page.append(stats,feedback,results,editor,catalogue);
     function blankPanel(text,warning=false){
       feedback.replaceChildren(node('p',text,'note'+(warning?' warning-note':'')));
     }
@@ -826,42 +830,65 @@
     }:{
       name:p?.name||'',product_code:p?.product_code||'',price_per_liter:p?.price_per_liter??'',
     };
-    async function refresh(){
+    async function refresh(pageNo=1){
+      productPage=pageNo;
+      const url=new URL(routes.productsV2,window.location.href);
+      if(search)url.searchParams.set('search',search);
+      url.searchParams.set('status',productStatus);
+      if(lowOnly)url.searchParams.set('low_stock_only','1');
+      url.searchParams.set('page',String(productPage));
       const [r,opts]=await Promise.all([
-        api('sectorProducts'),
+        api('productsV2',undefined,url.toString()),
         generic?api('sectorCatalogOptions').catch(e=>({unavailable:e.message})):Promise.resolve({})
       ]);
-      items=(r.result?.products||[]);options=opts||{categories:[],brands:[],units:[]};
+      items=r.rows||[];productMeta=r;options=opts||{categories:[],brands:[],units:[]};
       render();
     }
     function render(){
-      results.replaceChildren();
-      const visible=items.filter(p=>{
-        const stock=Number(p.quantity??p.current_stock??0);
-        const limit=Number(p.reorder_level??p.low_stock_threshold??0);
-        const hay=[p.name,p.trade_name,p.sku,p.barcode,
-          ...(p.barcodes||[]).map(b=>b.barcode)].join(' ').toLocaleLowerCase();
-        return (!search||hay.includes(search.toLocaleLowerCase()))
-          &&(!lowOnly||stock<=limit);
-      });
-      const summary=node('p',visible.length+' صنف من '+items.length+' · البحث محلي وتُطابَق الرموز عند المسح من الخادم','muted');
+      results.replaceChildren();stats.replaceChildren();
+      const s=productMeta.summary||{},pg=productMeta.pagination||{};
+      const kpis=node('div',null,'kpi-grid');
+      kpis.append(
+        kpiCard('إجمالي الأصناف',String(s.total??0),'▤',(s.active??0)+' نشط'),
+        kpiCard('أصناف موقوفة',String(s.inactive??0),'○','لا تظهر في نقطة البيع','blue'),
+        kpiCard('مخزون منخفض',s.low_stock===null?'غير مطبق':String(s.low_stock),'!','حسب حد التنبيه لكل صنف',Number(s.low_stock||0)>0?'red':''),
+        kpiCard('نفد من المخزون',s.out_of_stock===null?'غير مطبق':String(s.out_of_stock),'×','أصناف متتبعة وصلت للصفر',Number(s.out_of_stock||0)>0?'red':'')
+      );
+      stats.append(kpis);
+
+      const summary=node('p',(pg.total??items.length)+' نتيجة · الصفحة '+(pg.current_page||1)+' من '+(pg.last_page||1)+' · البحث والتصفية من الخادم','muted');
       results.append(summary);
-      const wrap=node('div',null,'table-wrap'),table=node('table'),thead=node('thead'),h=node('tr'),body=node('tbody');
-      ['المنتج','الباركود الأساسي','السعر','الرصيد','الإجراءات'].forEach(x=>h.append(node('th',x)));
-      thead.append(h);table.append(thead);
-      visible.forEach(p=>{
+      const wrap=node('div',null,'table-wrap'),tableEl=node('table'),thead=node('thead'),h=node('tr'),body=node('tbody');
+      ['المنتج','SKU / الرمز','الباركود','السعر','الرصيد','الحالة','الإجراءات'].forEach(x=>h.append(node('th',x)));
+      thead.append(h);tableEl.append(thead);
+      items.forEach(p=>{
         const tr=node('tr'),name=p.display_name||p.trade_name||p.name||'—';
-        tr.append(node('td',name),node('td',p.barcode||p.product_code||'—'),
+        const low=p.low_stock===true,stock=p.stock_value??p.quantity??p.current_stock;
+        tr.append(
+          node('td',name),
+          node('td',p.sku||p.product_code||'—'),
+          node('td',p.barcode||'—'),
           node('td',amount(p.price??p.sale_price??p.base_price??p.price_per_liter)),
-          node('td',p.quantity??p.current_stock??'—'));
+          node('td',stock===null||stock===undefined?'غير مطبق':String(stock)),
+          node('td',p.is_active===false?'موقوف':low?'منخفض':'نشط')
+        );
         const td=node('td'),actions=node('div',null,'product-actions');
-        if(editable){const edit=node('button','تعديل','action secondary');edit.type='button';edit.onclick=()=>showEditor(p);actions.append(edit)}
+        if(editable){const edit=node('button',actualSector==='fuel'?'تعديل السعر':'تعديل','action secondary');edit.type='button';edit.onclick=()=>showEditor(p);actions.append(edit)}
         if(generic&&!p.is_variant_parent){
           const alias=node('button','باركودات / عبوات','action secondary');alias.type='button';alias.onclick=()=>showAliases(p);actions.append(alias);
         }
         td.append(actions);tr.append(td);body.append(tr);
-      });table.append(body);wrap.append(table);results.append(wrap);
-      if(visible.length===0)results.append(node('p','لا توجد منتجات تطابق البحث. جرّب رمزاً آخر أو أضف صنفاً جديداً.','note'));
+      });
+      tableEl.append(body);wrap.append(tableEl);results.append(wrap);
+      if(items.length===0)results.append(node('p','لا توجد منتجات تطابق البحث أو التصفية الحالية.','note'));
+
+      if((pg.last_page||1)>1){
+        const pager=node('div',null,'pager'),info=node('span','صفحة '+pg.current_page+' من '+pg.last_page+' · '+pg.total+' صنف','muted'),actions=node('div',null,'pager-actions');
+        const prev=action('السابق',()=>refresh(pg.current_page-1).catch(e=>blankPanel(e.message,true)));
+        const next=action('التالي',()=>refresh(pg.current_page+1).catch(e=>blankPanel(e.message,true)));
+        prev.disabled=pg.current_page<=1;next.disabled=pg.current_page>=pg.last_page;
+        actions.append(prev,next);pager.append(info,actions);results.append(pager);
+      }
     }
     function showEditor(product=null,prefill=''){
       editor.replaceChildren();
@@ -975,8 +1002,10 @@
     }
     const add=node('button','+ إضافة منتج جديد','action');add.type='button';add.onclick=()=>showEditor();
     page.insertBefore(add,editor);
-    code.addEventListener('input',()=>{search=code.value.trim();render()});
-    lowInput.addEventListener('change',()=>{lowOnly=lowInput.checked;render()});
+    searchButton.onclick=()=>{search=code.value.trim();refresh(1).catch(e=>blankPanel(e.message,true))};
+    code.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();search=code.value.trim();refresh(1).catch(e=>blankPanel(e.message,true))}});
+    lowInput.addEventListener('change',()=>{lowOnly=lowInput.checked;refresh(1).catch(e=>blankPanel(e.message,true))});
+    statusSelect.addEventListener('change',()=>{productStatus=statusSelect.value;refresh(1).catch(e=>blankPanel(e.message,true))});
     async function lookup(){
       const barcode=code.value.trim();
       if(!barcode){blankPanel('أدخل رقم الباركود أو امسحه في الحقل.');return}
@@ -985,15 +1014,14 @@
       try{
         const hit=await api('sectorBarcodeLookup',undefined,url.toString());
         const p=hit.product||{};
-        search=barcode;render();
+        search=barcode;code.value=barcode;await refresh(1);
         blankPanel('الصنف: '+(p.trade_name||p.name||'—')+' · رمز: '+barcode+' · حجم العبوة: '+(hit.pack_size||1));
       }catch(e){
         blankPanel('لا يوجد صنف بهذا الرمز في كتالوج منشأتك. '+(editable?'يمكنك إضافته أدناه.':'')+' '+e.message,true);
         if(!items.some(p=>p.barcode===barcode)&&generic)showEditor(null,barcode);
       }
     }
-    searchButton.onclick=()=>lookup().catch(e=>blankPanel(e.message,true));
-    code.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();lookup().catch(e=>blankPanel(e.message,true))}});
+    exactButton.onclick=()=>lookup().catch(e=>blankPanel(e.message,true));
     cameraButton.onclick=async()=>{
       if(!('BarcodeDetector' in window)||!navigator.mediaDevices?.getUserMedia){
         blankPanel('ماسح الكاميرا غير مدعوم في هذا المتصفح. استخدم قارئ USB أو تطبيق نقطة البيع على الهاتف.',true);return;
