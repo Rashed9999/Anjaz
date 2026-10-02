@@ -81,6 +81,8 @@ Route::middleware('merchant.web')->group(function () {
             ->middleware(['amial.usage:add_product', 'throttle:30,1'])->name('sector.products.create');
         Route::get('/sector/operations', [Sector::class, 'operations'])->name('sector.operations');
         Route::get('/sector/customers', [Sector::class, 'customers'])->name('sector.customers');
+        Route::get('/sector/customers/{id}/profile', [Sector::class, 'customerProfile'])
+            ->whereNumber('id')->name('sector.customers.profile');
         Route::post('/sector/customers', [Sector::class, 'createCustomer'])
             ->middleware(['capability:customers', 'throttle:30,1'])->name('sector.customers.create');
         Route::put('/sector/customers/{id}', [Sector::class, 'updateCustomer'])
