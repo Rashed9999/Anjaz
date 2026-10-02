@@ -439,6 +439,62 @@ class CashierShiftService
         ];
     }
 
+    /**
+     * AMIAL-CASH-DROP-001 — إخراج نقدٍ فعلي من درج الوردية إلى الخزنة.
+     *
+     * هذا ليس «تصفير محفظة» ولا تعديلاً على البيع: هو حدث عهدةٍ مستقل
+     * يُنقص المتوقع في الدرج فقط. السجل يبقى في merchant_shift_cash_movements
+     * باسم المنفذ والمرجع، فيستطيع تقرير Z تفسير لماذا صار الدرج أقل من
+     * المبيعات النقدية دون تسجيل عجز وهمي على الكاشير.
+     *
+     * @return array{movement:\App\Models\Retail\ShiftCashMovement,report:array}
+     */
+    public function cashDrop(
+        CashierShift $shift,
+        string $amount,
+        User $actor,
+        ?string $note = null,
+        ?string $reference = null,
+    ): array {
+        $amount = MoneyService::normalize($amount);
+        if (! MoneyService::isPositive($amount)) {
+            throw new RuntimeException('مبلغ التسليم يجب أن يكون أكبر من صفر');
+        }
+
+        return DB::transaction(function () use ($shift, $amount, $actor, $note, $reference) {
+            // تسليمان متزامنان على الوردية نفسها يجب أن يَرَيا بعضهما.
+            $locked = CashierShift::whereKey($shift->id)->lockForUpdate()->first();
+            if (! $locked || $locked->status !== 'open') {
+                throw new RuntimeException('لا يمكن تسليم نقد من وردية مغلقة');
+            }
+
+            $before = $this->snapshot($locked);
+            if (MoneyService::gt($amount, $before['expected_cash'])) {
+                throw new RuntimeException(
+                    'مبلغ التسليم أكبر من النقد المتوقع في الدرج ('
+                    .MoneyService::display($before['expected_cash'], 2).' ر.ي)'
+                );
+            }
+
+            $movement = app(MerchantShiftCashService::class)->record(
+                ShiftCashMovement::CASHIER,
+                (int) $locked->id,
+                $actor,
+                'out',
+                'cash_drop',
+                $amount,
+                $note,
+                $reference,
+                (int) $locked->merchant_user_id,
+            );
+
+            return [
+                'movement' => $movement,
+                'report' => $this->snapshot($locked),
+            ];
+        });
+    }
+
     /** تقرير Z — إقفال الوردية وجرد الدرج. */
     public function close(
         CashierShift $shift,
