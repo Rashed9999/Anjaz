@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_refund_screen.dart';
@@ -17,12 +18,33 @@ class CashierReportScreen extends StatefulWidget {
 class _CashierReportScreenState extends State<CashierReportScreen> {
   CashierController get c => Get.find<CashierController>();
 
+  bool get _hasGenericSaleDrilldown {
+    if (!Get.isRegistered<AccessController>()) return true;
+    final access = Get.find<AccessController>();
+    return !access.isFuel && !access.isPharmacy && !access.isWholesale;
+  }
+
+  String _sourceLabel(dynamic source) => switch (source?.toString()) {
+        'merchant_sales' => 'مبيعات الكاشير',
+        'pharmacy_sales' => 'مبيعات الصيدلية',
+        'fuel_sales' => 'مبيعات الوقود',
+        'wholesale_invoices' => 'فواتير الجملة',
+        _ => 'المصدر التشغيلي',
+      };
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       c.loadReport();
-      c.loadSales(); // AMIAL-CASHIER-REFUND-001 — مبيعات اليوم (مدخل الاسترجاع)
+      // السجل العام مبنيّ على merchant_sales. قطاعات الصيدلية/الوقود/
+      // الجملة لها سجلات مستقلة؛ استدعاؤه هناك إمّا 403 أو قائمة كاذبة
+      // فارغة. ملخّص التقرير نفسه يأتي من مصدر القطاع المقيّد بهذا POS.
+      if (_hasGenericSaleDrilldown) {
+        c.loadSales(); // مدخل التفصيل/الاسترجاع للكاشير العام فقط.
+      } else {
+        c.sales.clear();
+      }
     });
   }
 
@@ -232,7 +254,7 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
       body: RefreshIndicator(
         onRefresh: () async {
           await c.loadReport();
-          await c.loadSales();
+          if (_hasGenericSaleDrilldown) await c.loadSales();
         },
         child: Obx(() {
           if (c.isLoadingReport.value && c.report.value == null) {
@@ -248,7 +270,10 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
           return ListView(
             padding: const EdgeInsets.all(12),
             children: [
-              Text('تاريخ: ${r['date'] ?? ''}', style: const TextStyle(color: AmialColors.textSecondary)),
+              Text(
+                'تاريخ: ${r['date'] ?? ''} · ${_sourceLabel(r['source'])}',
+                style: const TextStyle(color: AmialColors.textSecondary),
+              ),
               const SizedBox(height: 8),
               Row(children: [
                 _card('الإيراد الفعلي', '${_n(r['realized_revenue'])} ر.ي', AmialColors.primary),
@@ -260,7 +285,13 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
               ]),
               Row(children: [
                 _card('أجل اليوم', '${_n(byMethod['credit'])} ر.ي', AmialColors.textSecondary),
-                _card('إجمالي الأجل المستحق', '${_n(r['outstanding_credit_total'])} ر.ي', AmialColors.red),
+                _card(
+                  'إجمالي الأجل المستحق',
+                  r['outstanding_credit_total'] == null
+                      ? 'غير معروض للموظف'
+                      : '${_n(r['outstanding_credit_total'])} ر.ي',
+                  AmialColors.red,
+                ),
               ]),
               const SizedBox(height: 16),
               if (top.isNotEmpty) ...[
@@ -280,26 +311,41 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
               // AMIAL-REPORTS-HOURLY-001 — تفصيل المبيعات بالساعة + ساعة الذروة
               _hourlySection(r),
 
-              // AMIAL-CASHIER-REFUND-001 — قائمة مبيعات اليوم مع مدخل الاسترجاع
+              // تفصيل merchant_sales صالح للكاشير العام فقط. القطاعات
+              // المستقلة تُعرض أرقام يومها هنا من مصدرها الحقيقي، ولا
+              // نستبدل غيابَ «تفصيل موحّد» بقائمة من جدولٍ آخر.
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('مبيعات اليوم', style: TextStyle(fontWeight: FontWeight.bold)),
-                  if (c.isLoadingSales.value)
-                    const SizedBox(
-                        width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (c.sales.isEmpty && !c.isLoadingSales.value)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('لا مبيعات مسجّلة لهذا اليوم',
-                      style: TextStyle(color: AmialColors.textSecondary, fontSize: 13)),
-                )
-              else
-                ...c.sales.map(_saleRow),
+              if (_hasGenericSaleDrilldown) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('مبيعات اليوم', style: TextStyle(fontWeight: FontWeight.bold)),
+                    if (c.isLoadingSales.value)
+                      const SizedBox(
+                          width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (c.sales.isEmpty && !c.isLoadingSales.value)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('لا مبيعات مسجّلة لهذا اليوم',
+                        style: TextStyle(color: AmialColors.textSecondary, fontSize: 13)),
+                  )
+                else
+                  ...c.sales.map(_saleRow),
+              ] else
+                Card(
+                  color: AmialColors.cardSurface,
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text(
+                      'هذا الملخّص مقيّد بمبيعات موظف نقطة البيع من سجل القطاع الحقيقي. '
+                      'تفاصيل الفواتير القطاعية وإعادة الطباعة تُفتح من «إيصالاتي» دون كشف مبيعات الزملاء.',
+                      style: TextStyle(fontSize: 12, color: AmialColors.textSecondary, height: 1.5),
+                    ),
+                  ),
+                ),
             ],
           );
         }),
