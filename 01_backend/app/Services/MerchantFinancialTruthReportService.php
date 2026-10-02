@@ -385,22 +385,38 @@ class MerchantFinancialTruthReportService
                     ['cash' => $z, 'amial_pay' => $z, 'credit' => $z], 0, 'wholesale_returns');
             }
 
-            $rows = \App\Models\WholesaleReturn::where('business_id', $businessId)
+            // إشعار الخصم يتحقق عند اعتماد المرتجع، لذلك يُقرأ من
+            // resolved_at. أما refund_due_amount فهو **التزام فقط** ولا
+            // يصبح خروجاً نقدياً بمجرد ظهوره على المرتجع.
+            $returns = \App\Models\WholesaleReturn::where('business_id', $businessId)
                 ->where('status', 'approved')
-                ->whereBetween('updated_at', [$start, $end])
-                ->get(['credited_amount', 'refund_due_amount']);
+                ->whereBetween('resolved_at', [$start, $end])
+                ->get(['id', 'credited_amount']);
 
-            $credit = '0'; $cash = '0';
-            foreach ($rows as $r) {
-                // **إشعارُ الخصم يُنقص الذمّة، والاستردادُ يخرج نقداً** —
-                // وهما في الصفّ نفسِه بعمودين مختلفين لا بمجموعٍ واحد.
+            $credit = '0';
+            foreach ($returns as $r) {
                 $credit = MoneyService::add($credit, (string) ($r->credited_amount ?: '0'));
-                $cash = MoneyService::add($cash, (string) ($r->refund_due_amount ?: '0'));
+            }
+
+            // المال الخارج يُقرأ حصراً من سجل التسويات الذي لا يُنشأ إلا
+            // بعد نجاح حركة الدرج أو المحفظة.
+            $settlements = \App\Models\WholesaleReturnSettlement::where('business_id', $businessId)
+                ->whereBetween('created_at', [$start, $end])
+                ->get(['amount', 'method']);
+
+            $cash = '0'; $wallet = '0';
+            foreach ($settlements as $s) {
+                if ($s->method === 'cash') {
+                    $cash = MoneyService::add($cash, (string) $s->amount);
+                } elseif ($s->method === 'amial_pay') {
+                    $wallet = MoneyService::add($wallet, (string) $s->amount);
+                }
             }
 
             return $this->row('sale_return', 'مرتجع المبيع', 'out',
-                ['cash' => $cash, 'amial_pay' => $z, 'credit' => $credit],
-                $rows->count(), 'wholesale_returns');
+                ['cash' => $cash, 'amial_pay' => $wallet, 'credit' => $credit],
+                $returns->count() + $settlements->count(),
+                'wholesale_returns + wholesale_return_settlements');
         }
 
         $refunds = \App\Models\MerchantRefund::where('merchant_user_id', $merchant->id)
