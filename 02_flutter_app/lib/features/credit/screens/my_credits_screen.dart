@@ -5,6 +5,7 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/helper/date_converter_helper.dart';
+import 'package:amial_pay/features/receipts/screens/receipt_detail_screen.dart';
 
 /// AMIAL-CUSTOMER-CREDIT-VIEW-001 — «فواتيري الآجلة».
 ///
@@ -288,8 +289,56 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
     );
     if (!mounted) return;
     if (r.statusCode == 200) {
-      _snack('تم السداد بنجاح ✓', ok: true);
-      _load();
+      final body = r.body is Map ? r.body as Map : const {};
+      final meta = body['meta'] is Map ? body['meta'] as Map : const {};
+      final receiptId = int.tryParse('${meta['receipt_id'] ?? ''}');
+      final receiptNumber = '${meta['receipt_number'] ?? ''}';
+      final newBalance = _fmt(meta['new_balance']);
+
+      await _load();
+      if (!mounted) return;
+
+      if (receiptId == null) {
+        _snack('تم السداد بنجاح ✓', ok: true);
+        return;
+      }
+
+      final openReceipt = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.check_circle, color: AmialColors.success, size: 46),
+          title: const Text('تم سداد الآجل بنجاح'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (receiptNumber.isNotEmpty)
+              Text('سند السداد: $receiptNumber',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('المتبقي على الحساب: $newBalance ر.ي',
+                style: const TextStyle(color: AmialColors.textSecondary)),
+            const SizedBox(height: 10),
+            const Text(
+              'تم إنشاء سند رسمي للعملية ويمكن فتحه أو تنزيله وطباعته من شاشة السند.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12),
+            ),
+          ]),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إغلاق'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(ctx, true),
+              icon: const Icon(Icons.receipt_long),
+              label: const Text('عرض سند السداد'),
+            ),
+          ],
+        ),
+      );
+
+      if (openReceipt == true && mounted) {
+        Get.to(() => ReceiptDetailScreen(receiptId: receiptId));
+      }
     } else {
       final msg = (r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر السداد';
       _snack(msg);
