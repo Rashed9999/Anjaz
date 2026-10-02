@@ -111,8 +111,14 @@ final class MerchantPortalNavigationService
         if ($vertical['product_capability'] !== null && $this->available($states, $vertical['product_capability'])) {
             $items[] = $this->item('products', $vertical['products'], 'inventory_2', EntitlementService::AVAILABLE);
         }
+        // قاعدة العملاء مستقلة عن «الديون»: العميل قد يكون نقدياً فقط
+        // ومع ذلك يحتاج المالك بحثاً وملفاً وتشغيلاً. الوقود له حسابات شركات
+        // مخصصة ولا نخترع له دفتر عملاء تجزئة من مصدر آخر.
+        if ($businessType !== A::BIZ_FUEL && $this->available($states, A::F_CUSTOMERS)) {
+            $items[] = $this->item('customers', 'العملاء', 'people', EntitlementService::AVAILABLE);
+        }
         if ($businessType !== A::BIZ_WHOLESALE && $this->available($states, A::F_DEBTS)) {
-            $items[] = $this->item('debts', $businessType === A::BIZ_WHOLESALE ? 'الذمم والتحصيلات' : 'الديون والدفع بالآجل', 'payments', EntitlementService::AVAILABLE);
+            $items[] = $this->item('debts', 'الديون والدفع بالآجل', 'payments', EntitlementService::AVAILABLE);
         }
         if ($this->available($states, A::F_SUPPLIERS) || $this->available($states, A::F_PURCHASES)) {
             $items[] = $this->item(
