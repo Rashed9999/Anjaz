@@ -269,6 +269,75 @@ class WebSectorController extends Controller
         return $this->invoke([RetailVerticalController::class, 'addBarcode'], $request, $sector, $id);
     }
 
+    /**
+     * تفاصيل المخزون القطاعي للصنف نفسه.
+     * الصيدلية: دفعات وصلاحيات. الجملة: وحدات تحويل + Lots.
+     * الوقود: سجل تغيّر السعر. التجزئة تملك حركة مخزونها في محركها العام.
+     */
+    public function productInventory(Request $request, int $id): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, $this->productCapability($sector))) return $deny;
+
+        if ($sector === A::BIZ_PHARMACY) {
+            return $this->invoke([PharmacyController::class, 'listBatches'], $request, $sector, $id);
+        }
+
+        if ($sector === A::BIZ_WHOLESALE) {
+            $units = app(WholesaleController::class)->listProductUnits($request, $id);
+            if ($units->getStatusCode() >= 400) return $units;
+            $lots = app(WholesaleController::class)->listProductLots($request, $id);
+            if ($lots->getStatusCode() >= 400) return $lots;
+
+            $ub = $units->getData(true);
+            $lb = $lots->getData(true);
+
+            return response()->json([
+                'success' => true,
+                'code' => 'OK',
+                'message' => '',
+                'meta' => [
+                    'sector' => $sector,
+                    'result' => [
+                        'product' => ($ub['meta']['product'] ?? $ub['data']['product'] ?? null),
+                        'units' => ($ub['meta']['units'] ?? $ub['data']['units'] ?? []),
+                        'lots' => ($lb['meta']['lots'] ?? $lb['data']['lots'] ?? []),
+                    ],
+                ],
+            ]);
+        }
+
+        if ($sector === A::BIZ_FUEL) {
+            return $this->invoke([FuelStationController::class, 'priceHistory'], $request, $sector);
+        }
+
+        return $this->unsupported($sector);
+    }
+
+    public function receiveProductInventory(Request $request, int $id): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, $this->productCapability($sector))) return $deny;
+
+        $target = match ($sector) {
+            A::BIZ_PHARMACY => [PharmacyController::class, 'addBatch'],
+            A::BIZ_WHOLESALE => [WholesaleController::class, 'receiveProductLot'],
+            default => null,
+        };
+
+        if (! $target) return $this->unsupported($sector);
+        return $this->invoke($target, $request, $sector, $id);
+    }
+
+    public function saveWholesaleProductUnit(Request $request, int $id): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($sector !== A::BIZ_WHOLESALE) return $this->unsupported($sector);
+        if ($deny = $this->requireCapability($request, A::F_PRODUCTS)) return $deny;
+
+        return $this->invoke([WholesaleController::class, 'saveProductUnit'], $request, $sector, $id);
+    }
+
     /** عناصر التشغيل تختلف: مضخّات، دفعات، فواتير جملة، تصنيفات أو طاولات. */
     public function operations(Request $request): JsonResponse
     {
