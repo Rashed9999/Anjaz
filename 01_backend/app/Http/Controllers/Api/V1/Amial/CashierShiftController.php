@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Validator;
  *   GET  /cashier/shift            الوردية المفتوحة (إن وُجدت)
  *   POST /cashier/shift/open       بدء وردية (opening_float)
  *   GET  /cashier/shift/x          تقرير X (لحظي)
+ *   POST /cashier/shift/cash-drop  تسجيل تسليم نقد من الدرج للخزنة
  *   POST /cashier/shift/close      تقرير Z (إقفال + جرد counted_cash)
  *   GET  /cashier/shift/history    آخر الورديات المُقفلة
  */
@@ -86,6 +87,47 @@ class CashierShiftController extends Controller
         $shift = $this->svc->current($merchant, $posId, $branch?->id);
         if (!$shift) return $this->err('NO_SHIFT', 'لا توجد وردية مفتوحة', 404);
         return $this->ok(['report' => $this->svc->snapshot($shift)]);
+    }
+
+    /**
+     * AMIAL-CASH-DROP-001 — تسليم نقدٍ فعلي من الدرج قبل الإقفال.
+     *
+     * المبلغ والمرجع من الطلب؛ أما الوردية والمنشأة والفرع فمن الجلسة.
+     * بذلك لا يستطيع جهازٌ أن يكتب تسليماً على درج جهازٍ آخر.
+     */
+    public function cashDrop(Request $request): JsonResponse
+    {
+        $ctx = $this->resolve($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posId, $branch] = $ctx;
+
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|gt:0',
+            'reference' => 'sometimes|nullable|string|max:64',
+            'note' => 'sometimes|nullable|string|max:255',
+        ]);
+        if ($v->fails()) return $this->err('VALIDATION', $v->errors()->first(), 422);
+
+        $shift = $this->svc->current($merchant, $posId, $branch?->id);
+        if (! $shift) return $this->err('NO_SHIFT', 'لا توجد وردية مفتوحة', 404);
+
+        try {
+            $result = $this->svc->cashDrop(
+                $shift,
+                (string) $request->input('amount'),
+                $request->user(),
+                $request->input('note'),
+                $request->input('reference'),
+            );
+        } catch (\DomainException|\RuntimeException $e) {
+            return $this->err('CASH_DROP_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok([
+            'movement_id' => (int) $result['movement']->id,
+            'movement_uuid' => (string) $result['movement']->uuid,
+            'report' => $result['report'],
+        ], 'CASH_DROPPED', 'سُجّل تسليم النقد للخزنة');
     }
 
     public function close(Request $request): JsonResponse
