@@ -961,7 +961,7 @@ class WholesaleController extends Controller
             $settlement = $this->returnSettlementSvc->settle(
                 merchant: $merchant,
                 return: $return,
-                actor: $request->user(),
+                actor: $request->user('merchant_web') ?? $request->user(),
                 amount: (string) $request->input('amount'),
                 method: (string) $request->input('method'),
                 idempotencyKey: $idempotencyKey,
