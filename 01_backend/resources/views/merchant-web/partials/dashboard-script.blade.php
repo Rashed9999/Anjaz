@@ -196,14 +196,25 @@
     section.append(g);
 
     const lists=sector.lists||{};
-    if(sector.kind==='retail'&&(lists.top_products||[]).length){
-      const title=node('h3','الأصناف الأعلى أداءً');section.append(title);
-      table(section,[
-        ['الصنف',x=>x.name],['صافي الكمية',x=>x.qty],['الإيراد',x=>money(x.revenue)],
-        ['المرتجع',x=>x.returned_qty||'0'],['الربح المعروف',x=>money(x.profit)],
-        ['الهامش',x=>x.margin_percent===null?'غير متاح':x.margin_percent+'%']
-      ],lists.top_products);
-      if(sector.meta?.cost_note)hint(section,sector.meta.cost_note);
+    if(sector.kind==='retail'){
+      if((lists.stock_attention||[]).length){
+        const stockTitle=node('h3','تنبيهات المخزون حسب الموقع');section.append(stockTitle);
+        hint(section,'المتاح = الموجود ناقص المحجوز. امتلاء المستودع لا يخفي نفاد فرع البيع.');
+        table(section,[
+          ['الصنف',x=>x.product],['الموقع',x=>x.location],
+          ['الموجود',x=>x.on_hand],['المحجوز',x=>x.reserved||'0'],['المتاح',x=>x.available],
+          ['الحالة',x=>x.state==='negative'?'رصيد سالب':x.state==='out'?'نافد للبيع':'تحت حد الطلب']
+        ],lists.stock_attention);
+      }
+      if((lists.top_products||[]).length){
+        const title=node('h3','الأصناف الأعلى أداءً');section.append(title);
+        table(section,[
+          ['الصنف',x=>x.name],['صافي الكمية',x=>x.qty],['الإيراد',x=>money(x.revenue)],
+          ['المرتجع',x=>x.returned_qty||'0'],['الربح المعروف',x=>money(x.profit)],
+          ['الهامش',x=>x.margin_percent===null?'غير متاح':x.margin_percent+'%']
+        ],lists.top_products);
+        if(sector.meta?.cost_note)hint(section,sector.meta.cost_note);
+      }
     }else if(sector.kind==='pharmacy'&&(lists.expiring_batches||[]).length){
       const title=node('h3','الدفعات الأقرب للصلاحية');section.append(title);
       table(section,[
