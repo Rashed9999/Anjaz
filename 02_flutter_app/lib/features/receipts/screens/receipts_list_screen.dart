@@ -160,6 +160,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                   DropdownMenuItem(value: 'cash_in', child: Text('إيداع نقدي')),
                   DropdownMenuItem(value: 'cash_out', child: Text('سحب نقدي')),
                   DropdownMenuItem(value: 'merchant_pay', child: Text('دفع لتاجر')),
+                  DropdownMenuItem(value: 'debt_payment', child: Text('سداد دين آجل')),
                   DropdownMenuItem(value: 'safe_payment', child: Text('دفع آمن')),
                 ],
                 onChanged: (v) => setSheet(() => type = v ?? ''),
