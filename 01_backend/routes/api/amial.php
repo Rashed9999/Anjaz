@@ -1190,6 +1190,9 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
         Route::get('/', [$c, 'current'])->name('current');
         Route::post('/open', [$c, 'open'])->name('open');
         Route::get('/x', [$c, 'xReport'])->name('x');
+        Route::post('/cash-drop', [$c, 'cashDrop'])
+            ->middleware(['amial.idempotency', 'amial.rate-limit:cash_drop,30,1'])
+            ->name('cash-drop');
         Route::post('/close', [$c, 'close'])->name('close');
         Route::get('/history', [$c, 'history'])->name('history');
         Route::get('/work-time', [$c, 'workTime'])->name('work-time');
