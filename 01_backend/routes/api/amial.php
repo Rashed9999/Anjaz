@@ -1277,6 +1277,13 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
         Route::post('/logo', [\App\Http\Controllers\Api\V1\Amial\MerchantReceiptSettingsController::class, 'uploadLogo'])->name('logo');
     });
 
+    // -------- AMIAL-PRINT-TRACKING-001 — صحة الطابعة ونتيجة كل محاولة --------
+    Route::prefix('merchant/printing')->name('amial.merchant.printing.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\MerchantPrintController::class;
+        Route::get('/', [$c, 'index'])->middleware('throttle:60,1')->name('index');
+        Route::post('/report', [$c, 'report'])->middleware('throttle:180,1')->name('report');
+    });
+
     // -------- AMIAL-MERCHANT-AUDIT-001 — سجلّ التدقيق للتاجر (برو فأعلى) --------
     Route::get('merchant/audit-log', [\App\Http\Controllers\Api\V1\Amial\MerchantAuditController::class, 'index'])
         ->name('amial.merchant.audit-log');
