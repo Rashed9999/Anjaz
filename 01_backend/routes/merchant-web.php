@@ -257,6 +257,8 @@ Route::middleware('merchant.web')->group(function () {
             ->whereNumber('id')->middleware(['capability:multi_pos', 'throttle:20,1'])->name('devices.destroy');
 
         Route::get('/receipt-settings', [Receipts::class, 'show'])->name('receipts');
+        Route::get('/printing', [\App\Http\Controllers\Api\V1\Amial\MerchantPrintController::class, 'index'])
+            ->name('printing');
         Route::post('/receipt-settings', [Receipts::class, 'save'])
             ->middleware('throttle:20,1')->name('receipts.save');
     });
