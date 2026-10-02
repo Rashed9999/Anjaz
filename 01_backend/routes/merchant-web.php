@@ -36,6 +36,15 @@ Route::middleware('merchant.web')->group(function () {
     Route::prefix('data')->name('data.')->group(function () {
         Route::get('/overview', [Operations::class, 'summary'])->name('overview');
         Route::get('/dashboard-v2', [Dashboard::class, 'show'])->name('dashboard-v2');
+        Route::prefix('/integrations/api-keys')->name('integrations.api-keys.')->group(function () {
+            $apiKeys = \App\Http\Controllers\Api\V1\Amial\MerchantApiKeyController::class;
+            Route::get('/', [$apiKeys, 'index'])->name('index');
+            Route::post('/', [$apiKeys, 'store'])->middleware('throttle:20,1')->name('store');
+            Route::post('/{id}/toggle', [$apiKeys, 'toggle'])->whereNumber('id')
+                ->middleware('throttle:30,1')->name('toggle');
+            Route::delete('/{id}', [$apiKeys, 'destroy'])->whereNumber('id')
+                ->middleware('throttle:20,1')->name('destroy');
+        });
         Route::get('/sales-v2', [SalesDirectory::class, 'index'])->name('sales-v2');
         Route::get('/products-v2', [ProductsDirectory::class, 'index'])->name('products-v2');
         Route::get('/plans', [Plans::class, 'show'])->name('plans');
