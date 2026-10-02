@@ -193,6 +193,7 @@
   function saleStatusLabel(v){return {completed:'مكتملة',credit_unpaid:'آجلة — غير مسددة',credit_paid:'آجلة — مسددة',pending_payment:'بانتظار الدفع',paid:'مدفوعة',pending:'معلّقة',approved:'معتمدة',rejected:'مرفوضة',cancelled:'ملغاة',canceled:'ملغاة',voided:'ملغاة',closed:'مغلقة',open:'مفتوحة'}[v]||v||'—'}
   function refundMethodLabel(v){return {cash:'نقد',wallet:'إلى محفظة العميل',credit_account:'خصم من ذمة العميل'}[v]||v||'—'}
   function returnStatusLabel(v){return {requested:'بانتظار المراجعة',approved:'معتمد',rejected:'مرفوض',completed:'مكتمل',pending_approval:'بانتظار اعتماد الإدارة'}[v]||v||'—'}
+  function returnSettlementLabel(v){return {credit_note:'خصم من الذمة',refund_pending:'رد مالي مستحق',refund_partial:'رد مالي جزئي',refund_paid:'تم رد المال'}[v]||v||'—'}
 
   function grid(items){const g=node('div',null,'grid');items.forEach(x=>g.append(metric(x[0],x[1])));content.append(g)}
   function hint(p,msg){p.append(node('p',msg,'note'))}
@@ -1630,32 +1631,46 @@
   }
 
   async function returns(){
-    const data=await api('sectorReturns');
+    const [data,ops]=await Promise.all([
+      api('sectorReturns'),
+      actualSector==='wholesale'?api('overview').catch(()=>({open_shifts:[]})):Promise.resolve({open_shifts:[]})
+    ]);
     const rows=data.refunds||data.returns||[];
 
     if(actualSector==='wholesale'){
       const approved=rows.filter(x=>x.status==='approved');
-      const due=approved.reduce((s,x)=>s+Number(x.refund_due_amount||0),0);
+      const paidFor=x=>Number(x.refund_paid_amount??(x.settlements||[]).reduce((s,m)=>s+Number(m.amount||0),0));
+      const remainingFor=x=>Math.max(0,Number(x.refund_due_amount||0)-paidFor(x));
+      const due=approved.reduce((s,x)=>s+remainingFor(x),0);
+      const paid=approved.reduce((s,x)=>s+paidFor(x),0);
       const credited=approved.reduce((s,x)=>s+Number(x.credited_amount||0),0);
+      const openShifts=ops.open_shifts||[];
       dashboardKpis([
         ['طلبات المرتجع',String(rows.length),'↶',rows.filter(x=>x.status==='requested').length+' بانتظار المراجعة'],
         ['مرتجعات معتمدة',String(approved.length),'✓','أعيد مخزونها واعتمد إشعارها','blue'],
         ['خُصم من الذمم',money(credited),'◫','إشعارات دائنة حقيقية'],
-        ['مستحق رد مالي',money(due),'!','مسجل كمستحق ولم يُعتبر مصروفاً',due>0?'red':'']
+        ['تم رده فعلياً',money(paid),'✓','نقد من وردية أو أميال من المحفظة','gold'],
+        ['متبقي للعملاء',money(due),'!','التزام لم يتحرك منه المال بعد',due>0?'red':'']
       ]);
       const p=box('مرتجعات الجملة');
-      hint(p,'مهم: «مستحق رد مالي» لا يعني أن العميل استلم المال. المشروع يسجله كالتزام ظاهر حتى يكتمل مسار صرف موثق؛ لا نحوله إلى نقد أو محفظة بمجرد الضغط.');
+      hint(p,'الآن يوجد فصل كامل بين «المستحق» و«المدفوع»: اعتماد المرتجع يعيد المخزون ويخفض الذمة، ثم صرف المستحق وحده هو الذي يخرج نقداً من وردية محددة أو أميال من محفظة المنشأة.');
       table(p,[
         ['المرجع',x=>x.return_ulid],['الفاتورة',x=>x.invoice?.invoice_number||x.invoice_id],
         ['العميل',x=>x.customer?.full_name||'—'],['الإجمالي',x=>money(x.total_amount)],
         ['الحالة',x=>returnStatusLabel(x.status)],['خُصم من الذمة',x=>money(x.credited_amount||0)],
-        ['مستحق رد',x=>money(x.refund_due_amount||0)],
-        ['القرار',x=>{
-          if(x.status!=='requested')return '—';
-          return buttons([
+        ['أصل المستحق',x=>money(x.refund_due_amount||0)],
+        ['المدفوع',x=>money(paidFor(x))],
+        ['المتبقي',x=>money(remainingFor(x))],
+        ['التسوية',x=>returnSettlementLabel(x.settlement_type)],
+        ['الإجراء',x=>{
+          if(x.status==='requested')return buttons([
             action('اعتماد',()=>resolveWholesaleReturn(x.id,true)),
             action('رفض',()=>resolveWholesaleReturn(x.id,false))
-          ])
+          ]);
+          if(x.status==='approved'&&remainingFor(x)>0){
+            return action('صرف المستحق',()=>settleWholesaleReturn(x,remainingFor(x),openShifts),false)
+          }
+          return remainingFor(x)<=0&&Number(x.refund_due_amount||0)>0?'مكتمل':'—'
         }]
       ],rows);
       return;
@@ -1678,6 +1693,67 @@
       ['الطريقة',x=>refundMethodLabel(x.refund_method)],['المبلغ',x=>money(x.refund_amount)],
       ['الحالة',x=>returnStatusLabel(x.status)],['السبب',x=>x.reason||'—']
     ],rows);
+  }
+
+  async function settleWholesaleReturn(row,remaining,openShifts){
+    document.getElementById('wholesale-return-settlement')?.remove();
+    const p=box('صرف مستحق المرتجع · '+row.return_ulid);p.id='wholesale-return-settlement';
+    hint(p,'لن تُغلق هذه الذمة بمجرد حفظ نموذج: النقد يجب أن يخرج من وردية مفتوحة، وأميال يجب أن ينجح قيدها المتوازن من محفظة المنشأة إلى حساب العميل.');
+
+    const history=row.settlements||[];
+    if(history.length){
+      table(p,[['التاريخ',x=>x.created_at?new Date(x.created_at).toLocaleString('ar-YE'):'—'],
+        ['الطريقة',x=>x.method==='cash'?'نقد':'أميال باي'],['المبلغ',x=>money(x.amount)],
+        ['المرجع',x=>x.reference||x.settlement_ulid],['ملاحظة',x=>x.note||'—']],history);
+    }
+
+    const frm=node('form',null,'editor');
+    const amountLabel=node('label','المبلغ — المتبقي '+money(remaining),'field'),amount=node('input');
+    amount.type='number';amount.step='0.01';amount.min='0.01';amount.max=String(remaining);amount.value=String(remaining);amount.required=true;amountLabel.append(amount);
+
+    const methodLabel=node('label','طريقة الصرف','field'),method=node('select');
+    method.append(new Option('نقد من درج وردية POS','cash'),new Option('إلى محفظة العميل في أميال','amial_pay'));methodLabel.append(method);
+
+    const shiftLabel=node('label','الوردية التي سيخرج منها النقد','field'),shift=node('select');
+    shift.append(new Option('اختر وردية مفتوحة',''));
+    openShifts.forEach(s=>shift.append(new Option((s.opened_by_name||'وردية')+(s.branch_name?' · '+s.branch_name:'')+' — #'+s.id,String(s.id))));
+    shiftLabel.append(shift);
+
+    const refLabel=node('label','مرجع خارجي / سند (اختياري)','field'),reference=node('input');reference.maxLength=100;refLabel.append(reference);
+    const noteLabel=node('label','ملاحظة الصرف','field'),note=node('input');note.maxLength=500;noteLabel.append(note);
+    const save=action('تنفيذ صرف المستحق',()=>{},false);save.type='submit';
+    const cancel=action('إلغاء',()=>p.remove());
+    frm.append(amountLabel,methodLabel,shiftLabel,refLabel,noteLabel,buttons([save,cancel]));p.append(frm);
+
+    const syncShift=()=>{
+      shiftLabel.style.display=method.value==='cash'?'grid':'none';
+      shift.required=method.value==='cash';
+    };method.onchange=syncShift;syncShift();
+
+    frm.onsubmit=async ev=>{
+      ev.preventDefault();
+      const value=Number(amount.value||0);
+      if(!(value>0)||value>remaining){message('مبلغ الصرف يجب أن يكون موجباً ولا يتجاوز المتبقي');return}
+      if(method.value==='cash'&&!shift.value){message('اختر الوردية التي سيخرج منها النقد');return}
+      const channel=method.value==='cash'?'درج الوردية #'+shift.value:'محفظة العميل في أميال';
+      if(!window.confirm('تأكيد صرف '+money(value)+' عبر '+channel+'؟ هذا إجراء مالي حقيقي.'))return;
+
+      save.disabled=true;
+      try{
+        const idem='mw-wret-'+row.id+'-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+        const result=await api('sectorReturnSettle',{
+          amount:amount.value,
+          method:method.value,
+          cashier_shift_id:method.value==='cash'?Number(shift.value):null,
+          reference:reference.value.trim()||null,
+          note:note.value.trim()||null,
+          idempotency_key:idem
+        },returnRoute('sectorReturnSettle',row.id),undefined,{'Idempotency-Key':idem});
+        message('تم الصرف فعلياً. المتبقي '+money(result.refund_remaining_amount||0));
+        await load('returns');
+      }catch(e){message(e.message);save.disabled=false}
+    };
+    p.scrollIntoView({behavior:'smooth',block:'start'});
   }
 
   async function resolveWholesaleReturn(id,approve){
