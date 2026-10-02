@@ -39,25 +39,34 @@ final class MerchantSalesDirectoryService
 
         $page = $query->orderByDesc('occurred_at')->paginate(20);
 
+        $pageRows = collect($page->items());
+        $refunds = $this->refundTotals($merchant, $vertical, $pageRows);
+
         return [
             'vertical' => $vertical,
             'source' => $source,
-            'rows' => collect($page->items())->map(fn ($row) => [
-                'id' => $row->id,
-                'detail_id' => $row->detail_id ?? $row->id,
-                'reference' => (string) ($row->reference ?: $row->id),
-                'document_number' => $row->document_number ?: null,
-                'customer_name' => $row->customer_name ?: null,
-                'amount' => bcadd((string) ($row->amount ?? '0'), '0', 4),
-                'payment_method' => $row->payment_method ?: null,
-                'status' => $row->status ?: null,
-                'employee_id' => $row->employee_id !== null ? (int) $row->employee_id : null,
-                'employee_name' => $row->employee_name ?: null,
-                'branch_name' => $row->branch_name ?: null,
-                'occurred_at' => $row->occurred_at
-                    ? \Carbon\Carbon::parse($row->occurred_at)->toIso8601String()
-                    : null,
-            ])->values()->all(),
+            'rows' => $pageRows->map(function ($row) use ($refunds) {
+                $key = (string) ($row->reference ?: $row->id);
+                $refunded = $refunds[$key] ?? null;
+
+                return [
+                    'id' => $row->id,
+                    'detail_id' => $row->detail_id ?? $row->id,
+                    'reference' => $key,
+                    'document_number' => $row->document_number ?: null,
+                    'customer_name' => $row->customer_name ?: null,
+                    'amount' => bcadd((string) ($row->amount ?? '0'), '0', 4),
+                    'refunded_total' => $refunded !== null ? bcadd((string) $refunded, '0', 4) : null,
+                    'payment_method' => $row->payment_method ?: null,
+                    'status' => $row->status ?: null,
+                    'employee_id' => $row->employee_id !== null ? (int) $row->employee_id : null,
+                    'employee_name' => $row->employee_name ?: null,
+                    'branch_name' => $row->branch_name ?: null,
+                    'occurred_at' => $row->occurred_at
+                        ? \Carbon\Carbon::parse($row->occurred_at)->toIso8601String()
+                        : null,
+                ];
+            })->values()->all(),
             'summary' => [
                 'count' => $count,
                 'total' => bcadd($total, '0', 4),
@@ -69,6 +78,50 @@ final class MerchantSalesDirectoryService
                 'total' => $page->total(),
             ],
         ];
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    private function refundTotals(User $merchant, string $vertical, $rows): array
+    {
+        if ($rows->isEmpty()) return [];
+
+        if (in_array($vertical, [A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_RESTAURANT], true)) {
+            $refs = $rows->pluck('reference')->filter()->map(fn ($v) => (string) $v)->all();
+
+            return DB::table('merchant_refunds')
+                ->where('merchant_user_id', $merchant->id)
+                ->where('status', 'completed')
+                ->whereIn('original_sale_ulid', $refs)
+                ->selectRaw('original_sale_ulid, SUM(refund_amount) as refunded_total')
+                ->groupBy('original_sale_ulid')
+                ->get()
+                ->mapWithKeys(fn ($r) => [(string) $r->original_sale_ulid => (string) $r->refunded_total])
+                ->all();
+        }
+
+        if ($vertical === A::BIZ_WHOLESALE) {
+            $ids = $rows->pluck('id')->map(fn ($v) => (int) $v)->all();
+            $byInvoice = DB::table('wholesale_returns')
+                ->where('status', 'approved')
+                ->whereIn('invoice_id', $ids)
+                ->selectRaw('invoice_id, SUM(total_amount) as refunded_total')
+                ->groupBy('invoice_id')->get()->keyBy('invoice_id');
+
+            $out = [];
+            foreach ($rows as $row) {
+                $ret = $byInvoice->get((int) $row->id);
+                $out[(string) ($row->reference ?: $row->id)] =
+                    (string) ($ret->refunded_total ?? '0');
+            }
+
+            return $out;
+        }
+
+        // لا محرك مرتجع مالي للصيدلية/الوقود في هذا الدليل حتى الآن.
+        // null في العرض أهم من صفرٍ كاذب.
+        return [];
     }
 
     private function merchantSales(User $merchant, string $vertical): Builder
