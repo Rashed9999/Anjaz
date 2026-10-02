@@ -40,6 +40,11 @@ class PharmacySaleInvoicePdfService
             'items' => $items,
             'paymentLabel' => $this->paymentLabel((string) $sale->payment_method),
             'creditState' => $creditState,
+            'displayCustomerName' => $sale->customer?->full_name
+                ?: ($creditState['customer_name'] ?? null)
+                ?: ($sale->payment_method === 'credit' ? 'عميل آجل' : 'عميل نقدي'),
+            'displayCustomerPhone' => $sale->customer?->phone
+                ?: ($creditState['customer_phone'] ?? null),
             'verificationUrl' => $qr->url($verificationCode),
             'qrDataUri' => $qr->dataUri($verificationCode),
         ])->render();
@@ -47,7 +52,7 @@ class PharmacySaleInvoicePdfService
         return ArabicPdf::render($html, ['format' => 'A4', 'margin' => 12]);
     }
 
-    /** @return array{state:string,label:string,remaining:string} */
+    /** @return array{state:string,label:string,remaining:string,customer_name:?string,customer_phone:?string,due_date:?string} */
     public function creditSnapshot(PharmacySale $sale): array
     {
         if ($sale->payment_method !== 'credit') {
@@ -55,6 +60,9 @@ class PharmacySaleInvoicePdfService
                 'state' => 'paid',
                 'label' => 'مكتملة',
                 'remaining' => MoneyService::normalize('0'),
+                'customer_name' => null,
+                'customer_phone' => null,
+                'due_date' => null,
             ];
         }
 
@@ -65,15 +73,23 @@ class PharmacySaleInvoicePdfService
             ->orderBy('id')
             ->first();
 
-        if (!$movement || !$movement->account) {
+        $account = $movement?->account;
+        $identity = [
+            'customer_name' => $account?->customer_name,
+            'customer_phone' => $account?->customer_phone,
+            'due_date' => $movement?->due_date?->format('Y-m-d'),
+        ];
+
+        if (!$movement || !$account) {
             return [
                 'state' => 'unknown',
                 'label' => 'آجلة — حالة السداد غير متاحة',
                 'remaining' => MoneyService::normalize((string) $sale->total_amount),
+                ...$identity,
             ];
         }
 
-        $open = app(CreditSourceSettlementService::class)->openInvoices($movement->account);
+        $open = app(CreditSourceSettlementService::class)->openInvoices($account);
         $entry = collect($open)->first(
             fn (array $row) => ($row['movement_ulid'] ?? null) === $movement->movement_ulid
         );
@@ -83,14 +99,14 @@ class PharmacySaleInvoicePdfService
         $total = MoneyService::normalize((string) $sale->total_amount);
 
         if (!MoneyService::isPositive($remaining)) {
-            return ['state' => 'paid', 'label' => 'آجلة — مسددة', 'remaining' => $remaining];
+            return ['state' => 'paid', 'label' => 'آجلة — مسددة', 'remaining' => $remaining, ...$identity];
         }
 
         if (MoneyService::compare($remaining, $total) < 0) {
-            return ['state' => 'partial', 'label' => 'آجلة — مدفوعة جزئياً', 'remaining' => $remaining];
+            return ['state' => 'partial', 'label' => 'آجلة — مدفوعة جزئياً', 'remaining' => $remaining, ...$identity];
         }
 
-        return ['state' => 'unpaid', 'label' => 'آجلة — غير مسددة', 'remaining' => $remaining];
+        return ['state' => 'unpaid', 'label' => 'آجلة — غير مسددة', 'remaining' => $remaining, ...$identity];
     }
 
     public function cacheKey(PharmacySale $sale): string
@@ -101,6 +117,9 @@ class PharmacySaleInvoicePdfService
             (string) $sale->total_amount,
             $credit['state'],
             $credit['remaining'],
+            (string) ($credit['customer_name'] ?? ''),
+            (string) ($credit['customer_phone'] ?? ''),
+            (string) ($credit['due_date'] ?? ''),
             (string) ($sale->updated_at?->format('YmdHis.u') ?? '0'),
         ]);
 
