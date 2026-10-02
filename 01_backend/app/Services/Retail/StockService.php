@@ -440,6 +440,30 @@ class StockService
             ])->all();
     }
 
+    /**
+     * عدادات بلا حدّ عرض؛ القوائم تُقصّ للواجهة، أمّا KPI فلا يجوز أن
+     * يتحول 200+ تنبيه إلى «200» لأن القائمة حُدّت للأداء.
+     *
+     * @return array{low_locations:int,out_locations:int,negative_locations:int}
+     */
+    public function healthCounts(int $merchantUserId): array
+    {
+        $base = $this->activeSellableStockQuery($merchantUserId);
+
+        return [
+            'low_locations' => (clone $base)
+                ->where('product_stocks.reorder_level', '>', 0)
+                ->whereRaw('(product_stocks.on_hand - product_stocks.reserved) <= product_stocks.reorder_level')
+                ->count(),
+            'out_locations' => (clone $base)
+                ->whereRaw('(product_stocks.on_hand - product_stocks.reserved) <= 0')
+                ->count(),
+            'negative_locations' => (clone $base)
+                ->where('product_stocks.on_hand', '<', 0)
+                ->count(),
+        ];
+    }
+
     /** أساس مؤشرات المخزون التشغيلية: منتجات ومواقع فعالة ومخزون متعقب. */
     private function activeSellableStockQuery(int $merchantUserId)
     {
