@@ -306,6 +306,25 @@ class MerchantWebPortalTest extends TestCase
             ->assertSee('إنشاء دور مخصص');
     }
 
+    public function test_owner_portal_exposes_documents_printing_and_server_product_directory(): void
+    {
+        $owner = $this->owner();
+
+        $this->actingAs($owner, 'merchant_web')
+            ->get('/merchant')
+            ->assertOk()
+            ->assertSee('المستندات والطباعة')
+            ->assertSee('async function documents()', false)
+            ->assertSee('معاينة / طباعة')
+            ->assertSee('productsV2')
+            ->assertSee('الدفعات والصلاحية')
+            ->assertSee('الوحدات والتشغيلات');
+
+        $this->getJson('/merchant/data/products-v2')
+            ->assertOk()
+            ->assertJsonPath('meta.source', 'merchant_products');
+    }
+
     public function test_owner_wallet_and_staff_data_remain_scoped_to_own_account(): void
     {
         $owner = $this->owner();
@@ -318,7 +337,7 @@ class MerchantWebPortalTest extends TestCase
 
     public function test_all_merchant_data_routes_require_owner_and_writes_keep_plan_gates(): void
     {
-        foreach (['overview', 'dashboard-v2', 'sales-v2', 'sector.customers', 'sector.sales', 'sector.sales.show', 'sector.sales.invoice', 'stats', 'profit-report', 'wallet', 'ledger', 'wallet.origins', 'products',
+        foreach (['overview', 'dashboard-v2', 'sales-v2', 'products-v2', 'sector.customers', 'sector.sales', 'sector.sales.show', 'sector.sales.invoice', 'stats', 'profit-report', 'wallet', 'ledger', 'wallet.origins', 'products',
                   'branches', 'roles', 'staff', 'staff.performance', 'devices', 'receipts'] as $endpoint) {
             $route = Route::getRoutes()->getByName('merchant.web.data.' . $endpoint);
             $this->assertNotNull($route, $endpoint . ' not registered');
