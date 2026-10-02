@@ -236,6 +236,24 @@ final class MerchantSectorDashboardService
         $dueSoon = (clone $open)->where('balance_due', '>', 0)
             ->whereBetween('due_date', [now()->toDateString(), now()->addDays(7)->toDateString()]);
 
+        $pendingRefundRows = \App\Models\WholesaleReturn::where('business_id', $businessId)
+            ->where('status', 'approved')
+            ->where('refund_due_amount', '>', 0)
+            ->withSum('settlements as refund_paid_amount', 'amount')
+            ->get(['id', 'refund_due_amount']);
+
+        $pendingRefund = '0';
+        foreach ($pendingRefundRows as $ret) {
+            $remaining = bcsub(
+                (string) $ret->refund_due_amount,
+                (string) ($ret->refund_paid_amount ?? '0'),
+                4
+            );
+            if (bccomp($remaining, '0', 4) > 0) {
+                $pendingRefund = bcadd($pendingRefund, $remaining, 4);
+            }
+        }
+
         $overdueRows = (clone $overdue)
             ->with('customer:id,full_name,company_name')
             ->orderBy('due_date')
@@ -258,6 +276,7 @@ final class MerchantSectorDashboardService
                 ['code' => 'overdue_invoices', 'label' => 'فواتير متأخرة', 'value' => (clone $overdue)->count(), 'tone' => (clone $overdue)->exists() ? 'danger' : 'ok'],
                 ['code' => 'overdue_amount', 'label' => 'مبلغ متأخر', 'value' => bcadd((string) ((clone $overdue)->sum('balance_due') ?: '0'), '0', 4), 'money' => true, 'tone' => 'danger'],
                 ['code' => 'due_7_days', 'label' => 'يستحق خلال 7 أيام', 'value' => (clone $dueSoon)->count(), 'tone' => 'warning'],
+                ['code' => 'return_refund_liability', 'label' => 'مستحقات مرتجعات للعملاء', 'value' => bcadd($pendingRefund, '0', 4), 'money' => true, 'tone' => bccomp($pendingRefund, '0', 4) > 0 ? 'danger' : 'ok'],
             ],
             'lists' => ['overdue_invoices' => $overdueRows],
             'meta' => ['configured' => true, 'source' => 'wholesale_invoices'],
