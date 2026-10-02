@@ -106,6 +106,92 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
     else { _snack(_messageOf(r) ?? 'تعذّر بدء الوردية. أعد المحاولة أو تواصل مع الدعم.'); }
   }
 
+  /// AMIAL-CASH-DROP-001 — يسجّل خروج النقد من الدرج، لا من محفظة أميال.
+  Future<void> _cashDrop() async {
+    final amount = TextEditingController();
+    final reference = TextEditingController();
+    final note = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تسليم نقد للخزنة'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (_x != null)
+              Text(
+                'المتوقّع في الدرج الآن: ${_x!['expected_cash']} ر.ي',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            const SizedBox(height: 8),
+            const Text(
+              'يسجّل هذا أن النقد خرج فعلياً من درج نقطة البيع. لا يغيّر رصيد محفظة التاجر الإلكترونية.',
+              style: TextStyle(fontSize: 12, color: AmialColors.textSecondary, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amount,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'المبلغ المسلّم',
+                suffixText: 'ر.ي',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reference,
+              decoration: const InputDecoration(
+                labelText: 'مرجع التسليم (اختياري)',
+                hintText: 'رقم سند / اسم مستلم مختصر',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: note,
+              decoration: const InputDecoration(
+                labelText: 'ملاحظة (اختياري)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('تسجيل التسليم'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+    final value = double.tryParse(amount.text.trim());
+    if (value == null || value <= 0) {
+      _snack('أدخل مبلغ تسليم صحيحاً أكبر من صفر');
+      return;
+    }
+
+    final r = await _api.postData('/api/v1/amial/cashier/shift/cash-drop', {
+      'amount': amount.text.trim(),
+      if (reference.text.trim().isNotEmpty) 'reference': reference.text.trim(),
+      if (note.text.trim().isNotEmpty) 'note': note.text.trim(),
+    });
+
+    if (r.statusCode == 200 && r.body is Map) {
+      final raw = (r.body['meta'] ?? {})['report'];
+      if (raw is Map && mounted) {
+        setState(() => _x = Map<String, dynamic>.from(raw));
+      }
+      _snack('سُجّل تسليم النقد وخصم من المتوقّع في الدرج', ok: true);
+    } else {
+      _snack(_messageOf(r) ?? 'تعذّر تسجيل تسليم النقد');
+    }
+  }
+
   Future<void> _close() async {
     final countCtrl = TextEditingController();
     final notes = TextEditingController();
@@ -159,6 +245,12 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         _row('الرصيد الافتتاحي', '${s['opening_float']} ر.ي'),
         _row('مبيعات نقدية', '${s['cash_sales']} ر.ي'),
+        if (_x != null)
+          _row('تحصيلات نقدية', '${_x!['cash_collections'] ?? '0'} ر.ي'),
+        if (_x != null)
+          _row('حركة نقد داخلة', '${_x!['cash_movements_in'] ?? '0'} ر.ي'),
+        if (_x != null)
+          _row('حركة نقد خارجة / تسليمات', '${_x!['cash_movements_out'] ?? '0'} ر.ي'),
         _row('المتوقّع', '${s['expected_cash']} ر.ي'),
         _row('المجرود', '${s['counted_cash']} ر.ي'),
         const Divider(),
@@ -222,6 +314,9 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
               _row('فتح الوردية', '${_shift!['opened_by_name']}'),
             _row('الرصيد الافتتاحي', '${_shift!['opening_float']} ر.ي'),
             _row('مبيعات نقدية (${_x?['sales_count'] ?? 0})', '${_x?['cash_sales'] ?? '0'} ر.ي'),
+            _row('تحصيلات نقدية', '${_x?['cash_collections'] ?? '0'} ر.ي'),
+            _row('حركة نقد داخلة', '${_x?['cash_movements_in'] ?? '0'} ر.ي'),
+            _row('حركة نقد خارجة / تسليمات', '${_x?['cash_movements_out'] ?? '0'} ر.ي'),
             const SizedBox(height: 6),
             Container(
               padding: const EdgeInsets.all(12),
@@ -231,6 +326,19 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
           ]),
         ),
         const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: _cashDrop,
+          icon: const Icon(Icons.account_balance_outlined),
+          label: const Text('تسليم نقد للخزنة'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'إن خرج نقد من الدرج قبل الإقفال فسجّله هنا أولاً؛ عندها يحسب تقرير Z المتبقي الفعلي ولا يسجّل التسليم كعجز.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 11, color: AmialColors.textMuted, height: 1.4),
+        ),
+        const SizedBox(height: 12),
         FilledButton.icon(onPressed: _close, icon: const Icon(Icons.lock),
             label: const Text('إقفال الوردية (Z)'),
             style: FilledButton.styleFrom(backgroundColor: AmialColors.success, minimumSize: const Size.fromHeight(52))),
