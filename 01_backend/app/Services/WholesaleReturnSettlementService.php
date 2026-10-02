@@ -8,6 +8,7 @@ use App\Models\Retail\ShiftCashMovement;
 use App\Models\User;
 use App\Models\WholesaleBusiness;
 use App\Models\WholesaleCustomer;
+use App\Models\WholesaleInvoice;
 use App\Models\WholesaleReturn;
 use App\Models\WholesaleReturnSettlement;
 use App\Services\Retail\MerchantShiftCashService;
@@ -47,6 +48,7 @@ final class WholesaleReturnSettlementService
     ): WholesaleReturnSettlement {
         $amount = MoneyService::normalize($amount);
         $idempotencyKey = trim($idempotencyKey);
+        $storedIdempotencyKey = hash('sha256', $merchant->id.'|'.$idempotencyKey);
 
         if (! MoneyService::isPositive($amount)) {
             throw new InvalidArgumentException('مبلغ رد العميل يجب أن يكون موجباً');
@@ -60,9 +62,9 @@ final class WholesaleReturnSettlementService
 
         return DB::transaction(function () use (
             $merchant, $return, $actor, $amount, $method, $idempotencyKey,
-            $cashierShiftId, $note, $reference,
+            $storedIdempotencyKey, $cashierShiftId, $note, $reference,
         ): WholesaleReturnSettlement {
-            $existing = WholesaleReturnSettlement::where('idempotency_key', $idempotencyKey)
+            $existing = WholesaleReturnSettlement::where('idempotency_key', $storedIdempotencyKey)
                 ->where('merchant_user_id', $merchant->id)
                 ->first();
             if ($existing) {
@@ -77,6 +79,14 @@ final class WholesaleReturnSettlementService
             if (! $business) {
                 throw new RuntimeException('هذا المرتجع لا يخص منشأتك');
             }
+
+            $invoice = WholesaleInvoice::whereKey($locked->invoice_id)
+                ->where('business_id', $locked->business_id)
+                ->first(['id', 'branch_id']);
+            if (! $invoice) {
+                throw new RuntimeException('فاتورة المرتجع الأصلية غير موجودة؛ أوقف الصرف وراجع سلامة البيانات');
+            }
+
             if ($locked->status !== 'approved') {
                 throw new RuntimeException('لا يمكن صرف مستحق مرتجع قبل اعتماده');
             }
@@ -117,6 +127,14 @@ final class WholesaleReturnSettlementService
 
                 if (! $shift || $shift->status !== 'open') {
                     throw new RuntimeException('الوردية المختارة غير مفتوحة أو لا تخص منشأتك');
+                }
+
+                $invoiceBranchId = $invoice->branch_id !== null ? (int) $invoice->branch_id : null;
+                $shiftBranchId = $shift->branch_id !== null ? (int) $shift->branch_id : null;
+                if ($invoiceBranchId !== $shiftBranchId) {
+                    throw new RuntimeException(
+                        'لا يمكن صرف مرتجع فرع من درج فرع آخر؛ اختر وردية موقع الفاتورة الأصلية'
+                    );
                 }
 
                 $snapshot = $this->shifts->snapshot($shift);
@@ -196,7 +214,7 @@ final class WholesaleReturnSettlementService
                 'customer_user_id' => $customerUserId,
                 'ledger_entry_ulid' => $ledgerEntryUlid,
                 'reference' => $reference,
-                'idempotency_key' => $idempotencyKey,
+                'idempotency_key' => $storedIdempotencyKey,
                 'note' => $note,
             ]);
 
