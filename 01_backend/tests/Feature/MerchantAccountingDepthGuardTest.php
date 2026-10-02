@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\EMoney;
+use App\Models\FeeScheme;
 use App\Models\Merchant;
 use App\Models\MerchantAssetDepreciation;
 use App\Models\MerchantAssetAdjustment;
@@ -70,7 +71,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
 
         $this->actingAs($owner, 'merchant_web');
 
-        $created = $this->withHeader('Idempotency-Key', 'asset-po-create')
+        $created = $this->withHeader('Idempotency-Key', 'guard-asset-po-create-2026')
             ->postJson('/merchant/data/purchase-orders', [
                 'supplier_id' => $supplier->id,
                 'items' => [[
@@ -88,7 +89,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
         $this->assertDatabaseCount('merchant_fixed_assets', 0,
             'إنشاء أمر شراء وحده أنشأ أصلاً قبل أن يصل شيء إلى المنشأة');
 
-        $this->withHeader('Idempotency-Key', 'asset-po-approve')
+        $this->withHeader('Idempotency-Key', 'guard-asset-po-approve-2026')
             ->postJson("/merchant/data/purchase-orders/{$poId}/approve")
             ->assertOk();
         $this->assertDatabaseCount('merchant_fixed_assets', 0,
@@ -96,7 +97,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
 
         $itemId = (int) PurchaseOrder::with('items')->findOrFail($poId)->items->first()->id;
 
-        $this->withHeader('Idempotency-Key', 'asset-po-receive')
+        $this->withHeader('Idempotency-Key', 'guard-asset-po-receive-2026')
             ->postJson("/merchant/data/purchase-orders/{$poId}/receive", [
                 'items' => [['item_id' => $itemId, 'received_quantity' => '1']],
                 'paid_now' => '30000',
@@ -155,7 +156,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
         ]);
 
         $this->actingAs($owner, 'merchant_web');
-        $created = $this->withHeader('Idempotency-Key', 'asset-return-po')
+        $created = $this->withHeader('Idempotency-Key', 'guard-asset-return-po-2026')
             ->postJson('/merchant/data/purchase-orders', [
                 'supplier_id' => $supplier->id,
                 'items' => [[
@@ -170,11 +171,11 @@ class MerchantAccountingDepthGuardTest extends TestCase
             ])->assertCreated();
 
         $poId = (int) $created->json('meta.order.id');
-        $this->withHeader('Idempotency-Key', 'asset-return-approve')
+        $this->withHeader('Idempotency-Key', 'guard-asset-return-approve-2026')
             ->postJson("/merchant/data/purchase-orders/{$poId}/approve")->assertOk();
         $item = PurchaseOrder::with('items')->findOrFail($poId)->items->first();
 
-        $this->withHeader('Idempotency-Key', 'asset-return-receive')
+        $this->withHeader('Idempotency-Key', 'guard-asset-return-receive-2026')
             ->postJson("/merchant/data/purchase-orders/{$poId}/receive", [
                 'items' => [['item_id' => $item->id, 'received_quantity' => '2']],
             ])->assertOk();
@@ -192,7 +193,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
         $this->assertSame('1000.0000',
             (string) MerchantAssetDepreciation::where('asset_id', $asset->id)->value('amount'));
 
-        $ret = $this->withHeader('Idempotency-Key', 'asset-return-create')
+        $ret = $this->withHeader('Idempotency-Key', 'guard-asset-return-create-2026')
             ->postJson('/merchant/data/purchase-returns', [
                 'supplier_id' => $supplier->id,
                 'purchase_order_id' => $poId,
@@ -205,7 +206,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
             ])->assertCreated();
 
         $returnId = (int) $ret->json('meta.return.id');
-        $this->withHeader('Idempotency-Key', 'asset-return-finalize')
+        $this->withHeader('Idempotency-Key', 'guard-asset-return-finalize-2026')
             ->postJson("/merchant/data/purchase-returns/{$returnId}/approve")
             ->assertOk();
 
@@ -257,13 +258,13 @@ class MerchantAccountingDepthGuardTest extends TestCase
         };
 
         [$po1, $item1] = $makeOrder('credit-po1', '80000');
-        $this->withHeader('Idempotency-Key', 'credit-receive1')
+        $this->withHeader('Idempotency-Key', 'guard-credit-receive1-2026')
             ->postJson("/merchant/data/purchase-orders/{$po1}/receive", [
                 'items' => [['item_id' => $item1->id, 'received_quantity' => '1']],
                 'paid_now' => '30000',
             ])->assertOk();
 
-        $ret = $this->withHeader('Idempotency-Key', 'credit-return')
+        $ret = $this->withHeader('Idempotency-Key', 'guard-credit-return-2026')
             ->postJson('/merchant/data/purchase-returns', [
                 'supplier_id' => $supplier->id,
                 'purchase_order_id' => $po1,
@@ -275,7 +276,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
                 ]],
             ])->assertCreated();
 
-        $this->withHeader('Idempotency-Key', 'credit-return-approve')
+        $this->withHeader('Idempotency-Key', 'guard-credit-return-approve-2026')
             ->postJson('/merchant/data/purchase-returns/'.$ret->json('meta.return.id').'/approve')
             ->assertOk();
 
@@ -285,7 +286,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
             'فائض المرتجع ضاع بدل أن يصبح حقاً للتاجر عند المورد');
 
         [$po2, $item2] = $makeOrder('credit-po2', '20000');
-        $this->withHeader('Idempotency-Key', 'credit-receive2')
+        $this->withHeader('Idempotency-Key', 'guard-credit-receive2-2026')
             ->postJson("/merchant/data/purchase-orders/{$po2}/receive", [
                 'items' => [['item_id' => $item2->id, 'received_quantity' => '1']],
             ])->assertOk();
@@ -308,7 +309,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
         $shift = app(\App\Services\CashierShiftService::class)
             ->open($owner, null, '1000');
 
-        $this->withHeader('Idempotency-Key', 'collect-credit')
+        $this->withHeader('Idempotency-Key', 'guard-collect-credit-2026')
             ->postJson("/merchant/data/suppliers/{$supplier->id}/credit-refund", [
                 'amount' => '10000',
                 'cashier_shift_id' => $shift->id,
@@ -332,7 +333,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
         $owner = $this->merchant('967771240042');
         $this->actingAs($owner, 'merchant_web');
 
-        $created = $this->withHeader('Idempotency-Key', 'expense-create')
+        $created = $this->withHeader('Idempotency-Key', 'guard-expense-create-2026')
             ->postJson('/merchant/data/expenses', [
                 'title' => 'كهرباء المكتب',
                 'amount' => '12000',
@@ -342,7 +343,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
 
         $expenseId = (int) $created->json('meta.expense.id');
 
-        $this->withHeader('Idempotency-Key', 'expense-void')
+        $this->withHeader('Idempotency-Key', 'guard-expense-void-2026')
             ->deleteJson("/merchant/data/expenses/{$expenseId}", [
                 'reason' => 'قيد مكرر بالخطأ',
             ])->assertOk();
@@ -356,7 +357,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
         $this->assertSame('12000.0000', (string) $reversal->amount);
 
         // إعادة الإلغاء لا تخلق عكساً ثانياً.
-        $this->withHeader('Idempotency-Key', 'expense-void-again')
+        $this->withHeader('Idempotency-Key', 'guard-expense-void-again-2026')
             ->deleteJson("/merchant/data/expenses/{$expenseId}", [
                 'reason' => 'إعادة إرسال نفس قرار الإلغاء',
             ])->assertOk();
@@ -391,7 +392,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
             ->open($owner, null, '500');
 
         $this->actingAs($owner, 'merchant_web')
-            ->withHeader('Idempotency-Key', 'asset-dispose')
+            ->withHeader('Idempotency-Key', 'guard-asset-dispose-2026')
             ->postJson("/merchant/data/assets/{$asset->id}/dispose", [
                 'disposed_on' => now()->toDateString(),
                 'disposal_proceeds' => '9000',
@@ -437,9 +438,40 @@ class MerchantAccountingDepthGuardTest extends TestCase
             'zone_code' => 'SOUTH', 'version' => 0,
         ]);
 
-        // نجعل الدفتر يقرأ نفس الرصيد التشغيلي قبل الحركة؛ لا اختبار فوق drift.
-        app(LedgerService::class)->openWalletBalance($owner->id, 'رصيد اختبار سداد المورد');
-        app(LedgerService::class)->openWalletBalance($recipient->id, 'رصيد اختبار مستلم المورد');
+        // نمول الدفتر نفسه أولاً ثم نجعل المحفظة التشغيلية تطابقه؛
+        // لا Opening فوق حساب له تاريخ ولا تعديل مباشر لدفتر قائم.
+        $ledger = app(LedgerService::class);
+        $ownerWallet = $ledger->getOrCreateUserWallet($owner->id);
+        $recipientWallet = $ledger->getOrCreateUserWallet($recipient->id);
+        $funding = $ledger->getOrCreateSystemAccount(
+            'TEST_SUPPLIER_FUNDING', 'asset', 'تمويل اختبار سداد المورد', 'debit'
+        );
+        $ledger->post(
+            sourceType: 'test_supplier_funding',
+            sourceId: 'SUPPLIER-WALLET-FUND-001',
+            description: 'تمويل اختبار سداد المورد',
+            lines: [
+                ['account' => $funding->account_code, 'direction' => 'debit', 'amount' => '1000'],
+                ['account' => $ownerWallet->account_code, 'direction' => 'credit', 'amount' => '1000'],
+            ],
+            allowNegative: true,
+        );
+
+        FeeScheme::create([
+            'code' => 'SUPPLIER_PAYMENT',
+            'label' => 'سداد مورد من المحفظة',
+            'zone_code' => 'SOUTH',
+            'applies_to' => 'merchant',
+            'fee_type' => 'fixed',
+            'percent_rate' => '0',
+            'fixed_amount' => '0',
+            'agent_commission_percent' => '0',
+            'agent_commission_fixed' => '0',
+            'bearer' => 'merchant',
+            'version' => 1,
+            'is_active' => true,
+            'effective_from' => now()->subMinute(),
+        ]);
 
         $supplier = Supplier::create([
             'merchant_user_id' => $owner->id,
