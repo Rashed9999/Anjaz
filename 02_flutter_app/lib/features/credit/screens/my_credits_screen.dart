@@ -267,15 +267,15 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, amtCtrl.text.trim()), child: const Text('متابعة')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, amtCtrl.text.trim()), child: Text('credit_settle_continue'.tr)),
         ],
       ),
     );
     if (amount == null || amount.isEmpty || !mounted) return;
     final val = double.tryParse(amount) ?? 0;
-    if (val <= 0 || val > balance) { _snack('مبلغ غير صحيح'); return; }
+    if (val <= 0 || val > balance) { _snack('credit_settle_invalid_amount'.tr); return; }
 
-    final pin = await askAmialPinInput(title: 'أدخل رمز الدخول لتأكيد السداد');
+    final pin = await askAmialPinInput(title: 'credit_settle_pin_title'.tr);
     if (pin == null || pin.isEmpty || !mounted) return;
 
     final r = await _api.postData(
@@ -299,7 +299,7 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
       if (!mounted) return;
 
       if (receiptId == null) {
-        _snack('تم السداد بنجاح ✓', ok: true);
+        _snack('credit_settle_success'.tr, ok: true);
         return;
       }
 
@@ -307,17 +307,17 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           icon: const Icon(Icons.check_circle, color: AmialColors.success, size: 46),
-          title: const Text('تم سداد الآجل بنجاح'),
+          title: Text('credit_settle_success_title'.tr),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             if (receiptNumber.isNotEmpty)
-              Text('سند السداد: $receiptNumber',
+              Text('credit_settle_receipt_number'.trParams({'number': receiptNumber}),
                   style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text('المتبقي على الحساب: $newBalance ر.ي',
+            Text('credit_settle_remaining'.trParams({'balance': newBalance}),
                 style: const TextStyle(color: AmialColors.textSecondary)),
             const SizedBox(height: 10),
-            const Text(
-              'تم إنشاء سند رسمي للعملية ويمكن فتحه أو تنزيله وطباعته من شاشة السند.',
+            Text(
+              'credit_settle_receipt_note'.tr,
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12),
             ),
@@ -325,12 +325,12 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إغلاق'),
+              child: Text('credit_collect_close'.tr),
             ),
             FilledButton.icon(
               onPressed: () => Navigator.pop(ctx, true),
               icon: const Icon(Icons.receipt_long),
-              label: const Text('عرض سند السداد'),
+              label: Text('credit_settle_open_receipt'.tr),
             ),
           ],
         ),
@@ -340,7 +340,7 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
         Get.to(() => ReceiptDetailScreen(receiptId: receiptId));
       }
     } else {
-      final msg = (r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر السداد';
+      final msg = (r.body is Map ? r.body['message']?.toString() : null) ?? 'credit_settle_failed'.tr;
       _snack(msg);
     }
   }
