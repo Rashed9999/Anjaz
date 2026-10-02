@@ -2259,10 +2259,11 @@
   async function reports(days=30){
     const dashUrl=new URL(routes.dashboardV2,window.location.href);dashUrl.searchParams.set('days',String(Math.min(30,Math.max(7,days))));
     const profitUrl=new URL(routes.profitReport,window.location.href);profitUrl.searchParams.set('days',String(Math.min(90,Math.max(1,days))));
-    const [financial,dashboard,profitData]=await Promise.all([
+    const [financial,dashboard,profitData,exportData]=await Promise.all([
       api('wallet'),
       api('dashboardV2',undefined,dashUrl.toString()),
-      api('profitReport',undefined,profitUrl.toString()).catch(()=>null)
+      api('profitReport',undefined,profitUrl.toString()).catch(()=>null),
+      api('reportExports').catch(()=>({reports:[]}))
     ]);
     const r=financial.report||{},sales=r.sales||{},methods=sales.by_payment_method||{},d=dashboard.dashboard||dashboard;
     const toolbar=box('نطاق التقرير');
@@ -2304,6 +2305,81 @@
     const movement=box('الحركة المالية اليومية');
     hint(movement,'يفصل هذا التقرير المبيعات عن التحصيلات وعن حركة المحفظة؛ التحويلات الشخصية والأرصدة الافتتاحية لا تتحول إلى مبيعات.');
     table(movement,[['الحركة',x=>x.label_ar],['نقدًا',x=>x.available?money(x.cash):'غير متاح'],['أميال',x=>x.available?money(x.amial_pay):'غير متاح'],['رصيد مورد',x=>x.available?money(x.supplier_credit):'غير متاح'],['آجل',x=>x.available?money(x.credit):'غير متاح']],r.movement?.rows||[]);
+
+    const exports=box('تصدير التقرير');
+    hint(exports,'التصدير يستخدم محرك التقارير الخلفي نفسه؛ الملف يُجهّز في Queue ثم يصبح قابلاً للتنزيل. لا يعاد حساب أرقام مختلفة عن التقارير الأصلية.');
+    const exportButtons=node('div',null,'buttons');
+    [
+      ['CSV','csv'],
+      ['PDF','pdf'],
+      ['Excel متوافق','excel']
+    ].forEach(([label,format])=>{
+      const b=action('تصدير '+label,()=>requestMerchantReportExport(format,days,b));
+      exportButtons.append(b);
+    });
+    exports.append(exportButtons);
+
+    const recentExports=(exportData.reports||[]).filter(x=>x.report_type==='merchant_ledger').slice(0,10);
+    table(exports,[
+      ['التاريخ',x=>x.created_at?new Date(x.created_at).toLocaleString('ar-YE'):'—'],
+      ['الصيغة',x=>x.format==='excel'?'Excel متوافق':String(x.format||'').toUpperCase()],
+      ['الحالة',x=>({queued:'بانتظار التجهيز',processing:'جارٍ التجهيز',ready:'جاهز',failed:'فشل'}[x.status]||x.status||'—')],
+      ['الصفوف',x=>x.row_count??'—'],
+      ['التنزيل',x=>{
+        if(x.status!=='ready')return '—';
+        return action('تنزيل',()=>window.open(
+          routes.reportExportDownload.replace('__ULID__',encodeURIComponent(x.export_ulid)),
+          '_blank','noopener'
+        ))
+      }]
+    ],recentExports);
+    if(!recentExports.length)hint(exports,'لا توجد تصديرات سابقة لدفتر التاجر.');
+  }
+
+  function localDateString(date){
+    const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,'0'),d=String(date.getDate()).padStart(2,'0');
+    return y+'-'+m+'-'+d
+  }
+
+  async function requestMerchantReportExport(format,days,button){
+    button.disabled=true;
+    const to=new Date(),from=new Date();from.setDate(from.getDate()-Math.max(0,Number(days||30)-1));
+    try{
+      const result=await api('reportExportRequest',{
+        report_type:'merchant_ledger',
+        format,
+        from:localDateString(from),
+        to:localDateString(to)
+      });
+      const ulid=result.export_ulid;
+      if(!ulid)throw Error('لم يصل معرّف التصدير من الخادم');
+      message('بدأ تجهيز التقرير. سأتابع حالته حتى يصبح جاهزاً.');
+      await waitForReportExport(ulid,button);
+    }catch(e){
+      message(e.message||'تعذّر طلب التصدير');
+      button.disabled=false;
+    }
+  }
+
+  async function waitForReportExport(ulid,button){
+    const started=Date.now();
+    const statusUrl=routes.reportExportStatus.replace('__ULID__',encodeURIComponent(ulid));
+    while(Date.now()-started<65000){
+      await new Promise(resolve=>setTimeout(resolve,1800));
+      const status=await api('reportExportStatus',undefined,statusUrl);
+      if(status.status==='ready'&&status.is_ready){
+        message('التقرير جاهز للتنزيل');
+        window.open(routes.reportExportDownload.replace('__ULID__',encodeURIComponent(ulid)),'_blank','noopener');
+        button.disabled=false;
+        return
+      }
+      if(status.status==='failed'){
+        button.disabled=false;
+        throw Error(status.error||'فشل تجهيز التقرير')
+      }
+    }
+    button.disabled=false;
+    message('التقرير ما زال يُجهّز في الخلفية؛ سيظهر في قائمة التصديرات عند فتح التقارير مرة أخرى.');
   }
   async function documents(){
     const [receiptData,salesData,devicesData]=await Promise.all([
