@@ -285,6 +285,27 @@ class MerchantWebPortalTest extends TestCase
         }
     }
 
+    public function test_owner_portal_exposes_customer_directory_separate_from_debts(): void
+    {
+        $owner = $this->owner();
+        app(\App\Services\CustomerCreditService::class)->findOrCreateAccount(
+            $owner->id, '967777123456', 'عميل نقدي وآجل', '10000'
+        );
+
+        $this->actingAs($owner, 'merchant_web')
+            ->getJson('/merchant/data/sector/customers')
+            ->assertOk()
+            ->assertJsonPath('meta.sector', A::BIZ_RETAIL)
+            ->assertJsonPath('meta.result.customers.0.customer_name', 'عميل نقدي وآجل');
+
+        $this->get('/merchant')
+            ->assertOk()
+            ->assertSee('async function customers()', false)
+            ->assertSee('قاعدة بيانات العملاء')
+            ->assertSee('staffPerformance')
+            ->assertSee('إنشاء دور مخصص');
+    }
+
     public function test_owner_wallet_and_staff_data_remain_scoped_to_own_account(): void
     {
         $owner = $this->owner();
@@ -297,8 +318,8 @@ class MerchantWebPortalTest extends TestCase
 
     public function test_all_merchant_data_routes_require_owner_and_writes_keep_plan_gates(): void
     {
-        foreach (['overview', 'dashboard-v2', 'sector.sales', 'sector.sales.show', 'sector.sales.invoice', 'stats', 'profit-report', 'wallet', 'ledger', 'wallet.origins', 'products',
-                  'branches', 'roles', 'staff', 'devices', 'receipts'] as $endpoint) {
+        foreach (['overview', 'dashboard-v2', 'sector.customers', 'sector.sales', 'sector.sales.show', 'sector.sales.invoice', 'stats', 'profit-report', 'wallet', 'ledger', 'wallet.origins', 'products',
+                  'branches', 'roles', 'staff', 'staff.performance', 'devices', 'receipts'] as $endpoint) {
             $route = Route::getRoutes()->getByName('merchant.web.data.' . $endpoint);
             $this->assertNotNull($route, $endpoint . ' not registered');
             $this->assertContains('merchant.web', $route->gatherMiddleware());
