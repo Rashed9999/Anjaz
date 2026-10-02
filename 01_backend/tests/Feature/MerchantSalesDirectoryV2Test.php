@@ -27,10 +27,11 @@ class MerchantSalesDirectoryV2Test extends TestCase
             'user_id' => $owner->id, 'business_type' => A::BIZ_RETAIL,
             'subscription_plan' => A::PLAN_ENTERPRISE, 'verification_status' => 'verified',
         ]);
-        Merchant::create([
-            'user_id' => $owner->id, 'merchant_number' => 'SALES-V2-001',
-            'store_name' => 'متجر مبيعات V2',
-        ]);
+        $merchant = new Merchant();
+        $merchant->user_id = $owner->id;
+        $merchant->merchant_number = 'SALES-V2-001';
+        $merchant->store_name = 'متجر مبيعات V2';
+        $merchant->save();
 
         $staffUser = User::factory()->create(['type' => 4, 'role' => 'pos', 'is_active' => 1]);
         $pos = PosUser::create([
