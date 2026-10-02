@@ -48,8 +48,13 @@ class MerchantPrintTrackingTest extends TestCase
                 'connection_type' => 'network',
                 'connection_identity' => '192.168.1.50:9100',
                 'paper_size' => '80mm',
-                'capabilities' => ['cut' => true, 'qr' => true],
-                'settings' => ['paper_mm' => 80],
+                'capabilities' => ['cut' => true, 'qr' => true, 'secret_capability' => 'do-not-store'],
+                'settings' => ['paper_mm' => 80, 'port' => 9100, 'api_secret' => 'do-not-store'],
+            ],
+            'metadata' => [
+                'source' => 'flutter_thermal_service',
+                'payment_method' => 'cash',
+                'access_token' => 'do-not-store',
             ],
         ];
 
@@ -66,6 +71,15 @@ class MerchantPrintTrackingTest extends TestCase
         $this->assertSame('active', $profile->status);
         $this->assertSame('80mm', $profile->paper_size);
         $this->assertStringNotContainsString('192.168.1.50', $profile->endpoint_hash);
+        $this->assertStringNotContainsString('192.168.1.50', (string) $profile->endpoint_hint);
+        $this->assertSame(['cut' => true, 'qr' => true], $profile->capabilities);
+        $this->assertSame(['paper_mm' => 80, 'port' => 9100], $profile->settings);
+        $this->assertSame([
+            'source' => 'flutter_thermal_service',
+            'payment_method' => 'cash',
+        ], $first->metadata);
+        $this->assertArrayNotHasKey('access_token', $first->metadata);
+        $this->assertArrayNotHasKey('api_secret', $profile->settings);
     }
 
     /** @test */
