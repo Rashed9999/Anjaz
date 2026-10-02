@@ -162,6 +162,10 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
             : const [],
         invoiceNo: '${payload['document_number'] ?? ''}',
         dateTime: issuedAt,
+        documentType: 'receipt_center_invoice',
+        documentId: '${widget.receiptId}',
+        documentNumber: '${payload['document_number'] ?? widget.receiptId}',
+        metadata: {'receipt_id': widget.receiptId},
       );
     } else {
       result = await service.printWidget(ThermalVoucherWidget(
