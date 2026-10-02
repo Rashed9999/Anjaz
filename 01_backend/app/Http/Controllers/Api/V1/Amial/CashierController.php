@@ -661,6 +661,40 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
     public function report(Request $request): JsonResponse
     {
+        // AMIAL-POS-DAILY-REPORT-001 — تقرير الموظف يختلف عن تقرير المالك:
+        // يُقيَّد بحساب POS نفسه ويقرأ جدول القطاع الحقيقي. ولا نمرره عبر
+        // resolveMerchantPos() أولاً لأن ذلك يرفض الصيدلية عمداً لمسار
+        // «الكاشير العام»، بينما تقرير الصيدلية هنا لا يبيع شيئاً.
+        $authUser = $request->user();
+        $pos = PosUser::where('user_id', $authUser->id)
+            ->where('is_active', true)->first();
+
+        if ($pos) {
+            $merchant = User::find($pos->merchant_user_id);
+            if (! $merchant) {
+                return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
+            }
+
+            try {
+                $branch = $this->branches->resolveOperational($request, $merchant, $pos);
+                $this->branches->assertDeviceMatches(
+                    \App\Http\Middleware\EnsurePosDevice::deviceOf($request),
+                    $merchant,
+                    $branch,
+                );
+            } catch (\LogicException $e) {
+                return $this->error('BRANCH_SCOPE_INVALID', $e->getMessage(), 403);
+            }
+
+            return $this->ok($this->cashier->dailyReportForPos(
+                $merchant,
+                (int) $pos->id,
+                (int) $authUser->id,
+                $request->query('date'),
+                $branch?->id,
+            ));
+        }
+
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant, , , $branch] = $ctx;
