@@ -34,6 +34,7 @@ class WebPortalController extends Controller
         // whose parser can close on the first nested function call and cause a 500.
         $merchantRoutes = [
             'overview' => route('merchant.web.data.overview'),
+            'dashboardV2' => route('merchant.web.data.dashboard-v2'),
             'sector' => route('merchant.web.data.sector'),
             'sectorTypes' => route('merchant.web.data.sector.types'),
             'sectorTypeSave' => route('merchant.web.data.sector.type.update'),
