@@ -9,12 +9,15 @@ use App\Models\PharmacyProduct;
 use App\Models\User;
 use App\Models\WholesaleProduct;
 use App\Support\Access\AccessConstants as A;
+use App\Services\Retail\StockService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 final class MerchantProductDirectoryService
 {
+    public function __construct(private readonly StockService $stock) {}
+
     public function search(User $merchant, array $filters): array
     {
         $vertical = (string) (MerchantProfile::where('user_id', $merchant->id)
@@ -37,9 +40,7 @@ final class MerchantProductDirectoryService
             match ($vertical) {
                 A::BIZ_PHARMACY, A::BIZ_WHOLESALE
                     => $query->whereColumn('current_stock', '<=', 'low_stock_threshold'),
-                default
-                    => $query->where('track_stock', true)
-                        ->whereColumn('quantity', '<=', 'reorder_level'),
+                default => $this->applyGenericLowStockFilter($query, $merchant),
             };
         }
 
@@ -65,7 +66,10 @@ final class MerchantProductDirectoryService
     {
         return MerchantProduct::query()
             ->where('merchant_user_id', $merchant->id)
-            ->with(['barcodes:id,product_id,barcode,pack_size,is_primary']);
+            ->with([
+                'barcodes:id,product_id,barcode,pack_size,is_primary',
+                'stocks.location:id,merchant_user_id,name,is_active',
+            ]);
     }
 
     private function pharmacy(User $merchant): Builder
@@ -138,19 +142,122 @@ final class MerchantProductDirectoryService
                 : (method_exists($model, 'displayName') ? $model->displayName() : (string) $model->name);
         }
 
+        if (in_array($vertical, [A::BIZ_RETAIL, A::BIZ_QUICK_SALE, A::BIZ_RESTAURANT], true)) {
+            $stock = $this->genericStockSnapshot($model);
+            $row['stock_value'] = $stock['on_hand'];
+            $row['available_stock'] = $stock['available'];
+            $row['reserved_stock'] = $stock['reserved'];
+            $row['stock_location_count'] = $stock['location_count'];
+            $row['stock_locations'] = $stock['locations'];
+            $row['stock_source'] = $stock['source'];
+            $row['low_stock'] = $stock['low'];
+            $row['out_of_stock'] = $stock['out'];
+
+            return $row;
+        }
+
         $row['stock_value'] = match ($vertical) {
             A::BIZ_PHARMACY, A::BIZ_WHOLESALE => $model->current_stock,
             A::BIZ_FUEL => null,
-            default => $model->quantity,
+            default => null,
         };
         $row['low_stock'] = match ($vertical) {
             A::BIZ_PHARMACY, A::BIZ_WHOLESALE => (float) $model->current_stock <= (float) $model->low_stock_threshold,
             A::BIZ_FUEL => null,
-            default => (bool) $model->track_stock
-                && (float) $model->quantity <= (float) $model->reorder_level,
+            default => null,
         };
 
         return $row;
+    }
+
+    /**
+     * لقطة دليل المنتجات: الموقع هو الحقيقة، والكمية القديمة fallback فقط
+     * للصنف الذي لم يُوزع بعد على أي موقع فعال.
+     */
+    private function genericStockSnapshot(MerchantProduct $product): array
+    {
+        $stocks = $product->stocks
+            ->filter(fn ($s) => $s->location && (bool) $s->location->is_active);
+
+        if ($stocks->isEmpty()) {
+            $legacy = bcadd((string) ($product->quantity ?? '0'), '0', 3);
+            $reorder = (string) ($product->reorder_level ?? '0');
+
+            return [
+                'on_hand' => $legacy,
+                'reserved' => '0.000',
+                'available' => $legacy,
+                'location_count' => 0,
+                'locations' => [],
+                'source' => 'legacy_unallocated',
+                'low' => (bool) $product->track_stock
+                    && bccomp($reorder, '0', 3) > 0
+                    && bccomp($legacy, $reorder, 3) <= 0,
+                'out' => (bool) $product->track_stock && bccomp($legacy, '0', 3) <= 0,
+            ];
+        }
+
+        $onHand = '0.000';
+        $reserved = '0.000';
+        $available = '0.000';
+        $low = false;
+        $out = false;
+        $locations = [];
+
+        foreach ($stocks as $stock) {
+            $sellable = $stock->available();
+            $onHand = bcadd($onHand, (string) $stock->on_hand, 3);
+            $reserved = bcadd($reserved, (string) $stock->reserved, 3);
+            $available = bcadd($available, $sellable, 3);
+            $low = $low || $stock->isLow();
+            $out = $out || bccomp($sellable, '0', 3) <= 0;
+
+            if (count($locations) < 12) {
+                $locations[] = [
+                    'location_id' => (int) $stock->location_id,
+                    'location' => $stock->location->name,
+                    'on_hand' => (string) $stock->on_hand,
+                    'reserved' => (string) $stock->reserved,
+                    'available' => $sellable,
+                    'reorder_level' => (string) $stock->reorder_level,
+                    'state' => bccomp($sellable, '0', 3) <= 0
+                        ? 'out'
+                        : ($stock->isLow() ? 'low' : 'ok'),
+                ];
+            }
+        }
+
+        return [
+            'on_hand' => $onHand,
+            'reserved' => $reserved,
+            'available' => $available,
+            'location_count' => $stocks->count(),
+            'locations' => $locations,
+            'source' => 'product_stocks',
+            'low' => $low,
+            'out' => $out,
+        ];
+    }
+
+    private function applyGenericLowStockFilter(Builder $query, User $merchant): void
+    {
+        $query->where('track_stock', true)
+            ->where(function (Builder $q) use ($merchant) {
+                $q->whereHas('stocks', fn (Builder $stocks) => $stocks
+                    ->where('reorder_level', '>', 0)
+                    ->whereRaw('(product_stocks.on_hand - product_stocks.reserved) <= product_stocks.reorder_level')
+                    ->whereHas('location', fn (Builder $location) => $location
+                        ->where('merchant_user_id', $merchant->id)
+                        ->where('is_active', true)))
+                ->orWhere(function (Builder $legacy) use ($merchant) {
+                    $legacy->whereDoesntHave('stocks', fn (Builder $stocks) => $stocks
+                        ->whereHas('location', fn (Builder $location) => $location
+                            ->where('merchant_user_id', $merchant->id)
+                            ->where('is_active', true)))
+                        ->where('reorder_level', '>', 0)
+                        ->whereColumn('quantity', '<=', 'reorder_level');
+                });
+            });
     }
 
     private function summary(User $merchant, string $vertical): array
@@ -175,10 +282,22 @@ final class MerchantProductDirectoryService
                 ->whereColumn('current_stock', '<=', 'low_stock_threshold')->count();
             $out = (clone $q)->where('is_active', true)->where('current_stock', '<=', 0)->count();
         } else {
-            $low = (clone $q)->where('is_active', true)->where('track_stock', true)
+            $health = $this->stock->healthCounts($merchant->id);
+
+            // سجلات ما قبل المخزون بالموقع لا تختفي: تُحسب كتنبيهات
+            // انتقالية فقط إذا لم يوجد للصنف أي رصيد في موقع فعال.
+            $legacy = (clone $q)->where('is_active', true)->where('track_stock', true)
+                ->whereDoesntHave('stocks', fn (Builder $stocks) => $stocks
+                    ->whereHas('location', fn (Builder $location) => $location
+                        ->where('merchant_user_id', $merchant->id)
+                        ->where('is_active', true)));
+
+            $legacyLow = (clone $legacy)->where('reorder_level', '>', 0)
                 ->whereColumn('quantity', '<=', 'reorder_level')->count();
-            $out = (clone $q)->where('is_active', true)->where('track_stock', true)
-                ->where('quantity', '<=', 0)->count();
+            $legacyOut = (clone $legacy)->where('quantity', '<=', 0)->count();
+
+            $low = $health['low_locations'] + $legacyLow;
+            $out = $health['out_locations'] + $legacyOut;
         }
 
         return compact('total', 'active', 'inactive') + ['low_stock' => $low, 'out_of_stock' => $out];
