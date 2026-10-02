@@ -14,8 +14,8 @@ use App\Models\WholesaleCustomer;
 use App\Models\WholesaleInvoice;
 use App\Services\CustomerCreditService;
 use App\Support\Access\AccessConstants as A;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -40,7 +40,7 @@ final class MerchantCustomerProfileService
             A::BIZ_WHOLESALE => $this->wholesale($merchant, $customerId),
             A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_RESTAURANT
                 => $this->generic($merchant, $customerId, $vertical),
-            default => throw new DomainException('ملف العميل غير متاح لهذا القطاع'),
+            default => throw new \DomainException('ملف العميل غير متاح لهذا القطاع'),
         };
     }
 
@@ -284,7 +284,7 @@ final class MerchantCustomerProfileService
             'sales_count' => $count,
             'sales_total' => bcadd($total, '0', 4),
             'average_ticket' => $count > 0 ? bcdiv(bcadd($total, '0', 4), (string) $count, 4) : '0.0000',
-            'last_visit_at' => $last ? CarbonCarbon::parse($last)->toIso8601String() : null,
+            'last_visit_at' => $last ? Carbon::parse($last)->toIso8601String() : null,
         ];
     }
 }
