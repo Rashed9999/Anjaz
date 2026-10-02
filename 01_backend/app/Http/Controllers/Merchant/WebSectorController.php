@@ -184,6 +184,7 @@ class WebSectorController extends Controller
     {
         $sector = $this->sector($request);
         $cap = match ($sector) {
+            A::BIZ_FUEL => A::F_FUEL_PRODUCTS,
             A::BIZ_PHARMACY => A::F_PHARMACY_PRODUCTS,
             A::BIZ_RETAIL, A::BIZ_QUICK_SALE, A::BIZ_WHOLESALE, A::BIZ_RESTAURANT => A::F_PRODUCTS,
             default => null,
@@ -198,6 +199,9 @@ class WebSectorController extends Controller
                 'message' => 'تعديل أصناف هذا النشاط غير متاح لباقتك.', 'meta' => ['entitlement' => $gate]], 403);
         }
         $target = match ($sector) {
+            // الوقود يملك سياسة تسعير وسجل تغييرات مستقل؛ بوابة المالك
+            // تستعمله بدلاً من تعديل صف الوقود مباشرة.
+            A::BIZ_FUEL => [FuelStationController::class, 'updateProductPrice'],
             A::BIZ_PHARMACY => [PharmacyController::class, 'updateProduct'],
             A::BIZ_WHOLESALE => [WholesaleController::class, 'updateProduct'],
             default => [CashierController::class, 'updateProduct'],
