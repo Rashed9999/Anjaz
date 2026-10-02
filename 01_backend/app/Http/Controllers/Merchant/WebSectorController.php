@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Api\V1\Amial\CashierController;
 use App\Http\Controllers\Api\V1\Amial\CustomerCreditController;
+use App\Http\Controllers\Api\V1\Amial\CashierRefundController;
 use App\Http\Controllers\Api\V1\Amial\BarcodeLookupController;
 use App\Http\Controllers\Api\V1\Amial\ProductCatalogController;
 use App\Models\MerchantProduct;
@@ -419,6 +420,119 @@ class WebSectorController extends Controller
         }
 
         return $this->invoke($target, $request, $sector, $id);
+    }
+
+    /**
+     * قائمة المرتجعات من محرك القطاع نفسه.
+     * التجزئة/السريع/المطعم = MerchantRefund، والجملة = WholesaleReturn.
+     */
+    public function returns(Request $request): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, A::F_REFUNDS)) return $deny;
+
+        return match ($sector) {
+            A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_RESTAURANT
+                => app(CashierRefundController::class)->index($request),
+            A::BIZ_WHOLESALE
+                => app(WholesaleController::class)->listReturns($request),
+            default => $this->unsupported($sector),
+        };
+    }
+
+    /** ما يمكن إرجاعه من بيع/فاتورة محددة، قبل لمس المال أو المخزون. */
+    public function returnInfo(Request $request, string $id): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, A::F_REFUNDS)) return $deny;
+
+        if (in_array($sector, [A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_RESTAURANT], true)) {
+            $ulid = $this->refundSaleUlid($request, $sector, $id);
+            if ($ulid instanceof JsonResponse) return $ulid;
+
+            return app(CashierRefundController::class)->refundable($request, $ulid);
+        }
+
+        if ($sector === A::BIZ_WHOLESALE) {
+            $invoiceResponse = app(WholesaleController::class)->showInvoice($request, (int) $id);
+            if ($invoiceResponse->getStatusCode() >= 400) return $invoiceResponse;
+            $invoiceBody = $invoiceResponse->getData(true);
+            $invoice = $invoiceBody['meta']['invoice'] ?? $invoiceBody['data']['invoice'] ?? null;
+
+            $returnsResponse = app(WholesaleController::class)->listReturns($request);
+            if ($returnsResponse->getStatusCode() >= 400) return $returnsResponse;
+            $returnsBody = $returnsResponse->getData(true);
+            $all = $returnsBody['meta']['returns'] ?? $returnsBody['data']['returns'] ?? [];
+            $existing = collect($all)
+                ->filter(fn ($row) => (int) ($row['invoice_id'] ?? 0) === (int) $id)
+                ->values()->all();
+
+            return response()->json([
+                'success' => true, 'code' => 'OK', 'message' => '',
+                'errors' => (object) [],
+                'meta' => [
+                    'sector' => $sector,
+                    'invoice' => $invoice,
+                    'returns' => $existing,
+                ],
+            ]);
+        }
+
+        return $this->unsupported($sector);
+    }
+
+    /** إنشاء المرتجع عبر محرك القطاع؛ لا تحديث رصيد مباشر في بوابة الويب. */
+    public function createSaleReturn(Request $request, string $id): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, A::F_REFUNDS)) return $deny;
+
+        if (in_array($sector, [A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_RESTAURANT], true)) {
+            $ulid = $this->refundSaleUlid($request, $sector, $id);
+            if ($ulid instanceof JsonResponse) return $ulid;
+
+            return app(CashierRefundController::class)->create($request, $ulid);
+        }
+
+        if ($sector === A::BIZ_WHOLESALE) {
+            return app(WholesaleController::class)->requestReturn($request, (int) $id);
+        }
+
+        return $this->unsupported($sector);
+    }
+
+    /** قرار مرتجع الجملة. المرتجع العام الكبير يبقى في مسار اعتماد الإدارة القائم. */
+    public function resolveSaleReturn(Request $request, int $id): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($sector !== A::BIZ_WHOLESALE) return $this->unsupported($sector);
+        if ($deny = $this->requireCapability($request, A::F_REFUNDS)) return $deny;
+
+        return app(WholesaleController::class)->resolveReturn($request, $id);
+    }
+
+    private function refundSaleUlid(
+        Request $request,
+        ?string $sector,
+        string $id,
+    ): string|JsonResponse {
+        if ($sector !== A::BIZ_RESTAURANT) {
+            return $id;
+        }
+
+        $owner = $request->user('merchant_web');
+        $order = RestaurantOrder::where('merchant_user_id', $owner->id)
+            ->whereKey((int) $id)->first();
+
+        if (! $order || ! $order->sale_ulid) {
+            return response()->json([
+                'success' => false, 'code' => 'SALE_NOT_CLOSED',
+                'message' => 'لا يمكن الاسترداد قبل إغلاق الطلب إلى فاتورة بيع.',
+                'errors' => (object) [], 'meta' => ['sector' => $sector],
+            ], 409);
+        }
+
+        return (string) $order->sale_ulid;
     }
 
     /**
