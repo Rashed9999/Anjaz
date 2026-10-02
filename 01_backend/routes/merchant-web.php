@@ -70,6 +70,15 @@ Route::middleware('merchant.web')->group(function () {
         Route::put('/sector/customers/{id}', [Sector::class, 'updateCustomer'])
             ->whereNumber('id')->middleware(['capability:customers', 'throttle:30,1'])
             ->name('sector.customers.update');
+        Route::get('/sector/returns', [Sector::class, 'returns'])->name('sector.returns');
+        Route::get('/sector/sales/{id}/return-info', [Sector::class, 'returnInfo'])
+            ->name('sector.returns.info');
+        Route::post('/sector/sales/{id}/returns', [Sector::class, 'createSaleReturn'])
+            ->middleware(['amial.idempotency', 'amial.rate-limit:merchant_web_return,30,1'])
+            ->name('sector.returns.create');
+        Route::post('/sector/returns/{id}/resolve', [Sector::class, 'resolveSaleReturn'])
+            ->whereNumber('id')->middleware(['amial.idempotency', 'amial.rate-limit:merchant_web_return_resolve,30,1'])
+            ->name('sector.returns.resolve');
         Route::get('/sector/sales', [Sector::class, 'sales'])->name('sector.sales');
         Route::get('/sector/sales/{id}', [Sector::class, 'sale'])
             ->where('id', '[A-Za-z0-9-]+')->name('sector.sales.show');
