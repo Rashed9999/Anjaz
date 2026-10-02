@@ -191,6 +191,9 @@
   function money(v){if(v===undefined||v===null||v==='')return'غير متاح';const bits=String(v).split('.');return bits[0].replace(/\B(?=(\d{3})+(?!\d))/g,',')+(bits[1]?'.'+bits[1].slice(0,2):'')+' ر.ي'}
   function paymentLabel(v){return {cash:'نقد',credit:'أجل',amial_pay:'أميال باي',customer_wallet:'أميال باي',mixed:'مختلط',corporate:'حساب شركة',company_card:'حساب شركة'}[v]||v||'—'}
   function saleStatusLabel(v){return {completed:'مكتملة',credit_unpaid:'آجلة — غير مسددة',credit_paid:'آجلة — مسددة',pending_payment:'بانتظار الدفع',paid:'مدفوعة',pending:'معلّقة',approved:'معتمدة',rejected:'مرفوضة',cancelled:'ملغاة',canceled:'ملغاة',voided:'ملغاة',closed:'مغلقة',open:'مفتوحة'}[v]||v||'—'}
+  function refundMethodLabel(v){return {cash:'نقد',wallet:'إلى محفظة العميل',credit_account:'خصم من ذمة العميل'}[v]||v||'—'}
+  function returnStatusLabel(v){return {requested:'بانتظار المراجعة',approved:'معتمد',rejected:'مرفوض',completed:'مكتمل',pending_approval:'بانتظار اعتماد الإدارة'}[v]||v||'—'}
+
   function grid(items){const g=node('div',null,'grid');items.forEach(x=>g.append(metric(x[0],x[1])));content.append(g)}
   function hint(p,msg){p.append(node('p',msg,'note'))}
   function table(p,cols,rows){const wrap=node('div',null,'table-wrap'),t=node('table'),thead=node('thead'),h=node('tr'),body=node('tbody');cols.forEach(x=>h.append(node('th',x[0])));thead.append(h);t.append(thead);(rows||[]).forEach(row=>{const tr=node('tr');cols.forEach(c=>{const cell=node('td'),value=c[1](row);if(value instanceof Node)cell.append(value);else cell.textContent=value===undefined||value===null?'—':String(value);tr.append(cell)});body.append(tr)});t.append(body);wrap.append(t);wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label','جدول قابل للتمرير أفقياً');p.append(node('p','اسحب الجدول أفقياً لمشاهدة جميع الأعمدة','table-help'),wrap);if(!rows||rows.length===0)p.append(node('p','لا توجد سجلات لهذه المنشأة حاليًا.','muted'))}
@@ -206,10 +209,10 @@
   }
   function buildNavigation(){
     const nav=document.getElementById('portal-nav');nav.replaceChildren();
-    const symbols={dashboard_customize:'⌁',insights:'⌂',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌘',groups:'♙',people:'♟',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',print:'▰',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨',business_center:'▣'};
+    const symbols={dashboard_customize:'⌁',insights:'⌂',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌘',groups:'♙',people:'♟',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',undo:'↶',print:'▰',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨',business_center:'▣'};
     const groups=[
       ['نظرة عامة',['overview']],
-      ['التشغيل والمبيعات',['sector','sales','products','customers','debts','suppliers','expenses','assets']],
+      ['التشغيل والمبيعات',['sector','sales','returns','products','customers','debts','suppliers','expenses','assets']],
       ['الفريق ونقاط البيع',['branches','posSetup','staff','devices']],
       ['المالية والتقارير',['wallet','reports','documents']],
       ['إعدادات المنشأة',['settings','plans']],
@@ -334,6 +337,7 @@
     const [bundle,o]=await Promise.all([api('dashboardV2'),api('overview')]);
     const r=bundle.financial||{},d=bundle.dashboard||{},counts=o.counts||{},sales=r.sales||{},methods=sales.by_payment_method||{},movement=r.movement||{};
     const todayCount=Number(sales.count||0),todayGross=Number(sales.gross||0),todayAvg=todayCount>0?todayGross/todayCount:0;
+    const saleReturn=(movement.rows||[]).find(x=>x.code==='sale_return'),returnToday=saleReturn?.available?Number(saleReturn.total||0):null;
 
     content.append(quickHero(d));
     dashboardKpis([
@@ -344,6 +348,7 @@
       ['المبيعات الآجلة',money(methods.credit),'◫','تُسجل في ذمم العملاء','blue'],
       ['رصيد المحفظة',money(r.wallet?.balance),'◎','محفظة أميال الإلكترونية فقط','gold'],
       ['إجمالي الذمم',money(r.receivables?.amount),'◌','لا يُعدّ نقدًا أو رصيد محفظة',Number(r.receivables?.amount||0)>0?'red':''],
+      ['مرتجعات اليوم',returnToday===null?'غير متاحة':money(returnToday),'↶',saleReturn?.available?(saleReturn.count+' مرتجع من '+saleReturn.source):'لا يملك هذا القطاع مصدر مرتجع','red'],
       ['متوسط '+(d.days||14)+' يوم',money(d.average_ticket),'◇',(d.period_count||0)+' عملية خلال الفترة'],
     ]);
 
@@ -1368,8 +1373,180 @@
     if(lines.length)table(p,[['الصنف',x=>x.name||x.product?.name||x.product_name||'—'],['الكمية',x=>x.quantity??x.qty??'—'],['السعر',x=>money(x.unit_price??x.price)],['الإجمالي',x=>money(x.line_total??x.total_amount??x.total)]],lines);
     else hint(p,'لا يعلن محرك هذا القطاع أسطر الفاتورة في هذا السجل بعد؛ تُعرض بيانات العملية المتاحة فقط.');
     const docs=invoiceActions(id,record);if(docs)p.append(docs);
+    if(navigation.some(x=>x.tab==='returns'&&x.state==='available')){
+      const returnActions=node('div',null,'buttons');
+      const startReturn=action('بدء مرتجع / استرداد',()=>showReturnEditor(id,record));
+      returnActions.append(startReturn);p.append(returnActions);
+    }
     hint(p,'«معاينة / طباعة» يفتح PDF الرسمي في عارض المتصفح. الطباعة الحرارية المباشرة عبر Bluetooth/USB تبقى من تطبيق نقطة البيع لأنها تعتمد قدرات الجهاز الفعلية.');
   }
+  function returnRoute(key,id){return routes[key].replace('__ID__',encodeURIComponent(String(id)))}
+
+  async function showReturnEditor(id,record={}){
+    const data=await api('sectorReturnInfo',undefined,returnRoute('sectorReturnInfo',id));
+    const panel=box('مرتجع / استرداد · '+(record.invoice_number||record.order_number||record.sale_ulid||id));
+
+    if(actualSector==='wholesale'){
+      const invoice=data.invoice||{},lines=invoice.items||[],previous=data.returns||[];
+      hint(panel,'مرتجع الجملة = طلب ثم مراجعة. عند الاعتماد يعود المخزون ويُنشأ إشعار دائن. إن كانت الفاتورة مدفوعة، يظهر أي مبلغ مستحق للرد صراحةً ولا يُعتبر مدفوعاً حتى يوجد صرف حقيقي.');
+      if(previous.length)table(panel,[
+        ['المرجع',x=>x.return_ulid],['الحالة',x=>returnStatusLabel(x.status)],
+        ['الإجمالي',x=>money(x.total_amount)],['خُصم من الذمة',x=>money(x.credited_amount||0)],
+        ['مستحق رد مالي',x=>money(x.refund_due_amount||0)]
+      ],previous);
+
+      if(!lines.length){hint(panel,'لا تعلن الفاتورة أسطرًا قابلة للمرتجع.');return}
+      const frm=node('form'),list=node('div',null,'permission-groups'),inputs=[];
+      lines.forEach(line=>{
+        const row=node('div',null,'permission-option'),check=node('input');check.type='checkbox';
+        const qty=node('input');qty.type='number';qty.step='0.001';qty.min='0.001';qty.max=String(line.quantity||0);qty.value=String(line.quantity||0);qty.disabled=true;
+        check.onchange=()=>qty.disabled=!check.checked;
+        const copy=node('span',(line.product_name||line.name||'صنف')+' · المباع '+(line.quantity||0)+' · '+money(line.line_total||0));
+        row.append(check,copy,qty);list.append(row);inputs.push({line,check,qty});
+      });
+      const reasonLabel=node('label','سبب المرتجع','field'),reason=node('input');reason.required=true;reason.maxLength=500;reasonLabel.append(reason);
+      const save=action('إرسال طلب المرتجع');save.type='submit';frm.append(list,reasonLabel,save);panel.append(frm);
+      frm.onsubmit=async ev=>{
+        ev.preventDefault();
+        const items=inputs.filter(x=>x.check.checked).map(x=>({invoice_item_id:x.line.id,quantity:x.qty.value}));
+        if(!items.length){message('اختر صنفاً واحداً على الأقل');return}
+        save.disabled=true;
+        try{
+          await api('sectorReturnCreate',{reason:reason.value.trim(),items},returnRoute('sectorReturnCreate',id));
+          message('تم إرسال طلب المرتجع للمراجعة');await load('returns');
+        }catch(e){message(e.message)}finally{save.disabled=false}
+      };
+      return;
+    }
+
+    const sale=data.sale||{},lines=data.lines||[],remaining=Number(data.remaining||0),methods=data.available_methods||[];
+    if(data.fully_refunded||remaining<=0){hint(panel,'تم استرداد كامل قيمة هذه العملية ولا يوجد مبلغ متبقٍ للاسترداد.');return}
+
+    hint(panel,'«مرتجع أصناف» يربط حركة المال بالمخزون ويمنع إرجاع كمية أكثر مما بيع. «استرداد مالي فقط» لا يغيّر المخزون ويستخدم للحالات التي لا تعود فيها بضاعة.');
+    const frm=node('form'),modeLabel=node('label','نوع العملية','field'),mode=node('select');
+    mode.append(new Option('مرتجع أصناف + استرداد مالي','goods'),new Option('استرداد مالي فقط','money'));modeLabel.append(mode);
+    const methodLabel=node('label','طريقة رد المال','field'),method=node('select');
+    methods.forEach(m=>method.append(new Option(refundMethodLabel(m),m)));methodLabel.append(method);
+    const amountLabel=node('label','مبلغ الاسترداد','field'),amount=node('input');amount.type='number';amount.step='0.01';amount.min='0.01';amount.max=String(remaining);amountLabel.append(amount);
+    const reasonLabel=node('label','سبب الاسترداد','field'),reason=node('input');reason.maxLength=500;reasonLabel.append(reason);
+    frm.append(modeLabel,methodLabel,amountLabel,reasonLabel);
+
+    const lineBox=node('div',null,'permission-groups'),entries=[];
+    lines.forEach(line=>{
+      const available=Number(line.refundable_quantity||0);
+      if(available<=0)return;
+      const row=node('div',null,'permission-option'),check=node('input');check.type='checkbox';
+      const qty=node('input');qty.type='number';qty.step='0.001';qty.min='0.001';qty.max=String(available);qty.value=String(available);qty.disabled=true;
+      const condition=node('select');
+      [['good','سليم — يعود للمخزون'],['damaged','تالف — لا يعود للمخزون'],['expired','منتهي — لا يعود للمخزون']].forEach(([v,l])=>condition.append(new Option(l,v)));
+      condition.disabled=true;
+      check.onchange=()=>{qty.disabled=!check.checked;condition.disabled=!check.checked;recalc()};
+      qty.oninput=recalc;condition.onchange=recalc;
+      const copy=node('span',(line.name||'صنف')+' · المتاح '+line.refundable_quantity+' × '+money(line.unit_price));
+      row.append(check,copy,qty,condition);lineBox.append(row);entries.push({line,check,qty,condition});
+    });
+    frm.append(lineBox);
+
+    function recalc(){
+      const goods=mode.value==='goods';
+      lineBox.style.display=goods?'grid':'none';
+      amount.readOnly=goods;
+      if(goods){
+        const total=entries.filter(x=>x.check.checked).reduce((s,x)=>s+Number(x.qty.value||0)*Number(x.line.unit_price||0),0);
+        amount.value=total>0?total.toFixed(2):'';
+      }
+    }
+    mode.onchange=recalc;recalc();
+
+    if(methods.includes('cash')){
+      hint(panel,'الاسترداد النقدي يخرج من درج وردية مفتوحة ويُسجل كحركة نقد خارجة؛ لا يخصم من محفظة أميال.');
+    }
+    const save=action('تنفيذ الاسترداد');save.type='submit';frm.append(save);panel.append(frm);
+    frm.onsubmit=async ev=>{
+      ev.preventDefault();
+      const value=Number(amount.value||0);
+      if(value<=0||value>remaining){message('مبلغ الاسترداد غير صحيح أو يتجاوز المتبقي');return}
+      const payload={amount:amount.value,refund_method:method.value};
+      if(reason.value.trim())payload.reason=reason.value.trim();
+      if(mode.value==='goods'){
+        const selected=entries.filter(x=>x.check.checked);
+        if(!selected.length){message('اختر صنفاً واحداً على الأقل');return}
+        payload.items=selected.map(x=>({
+          sale_item_id:x.line.id,quantity:x.qty.value,condition:x.condition.value,
+          restock:x.condition.value==='good'
+        }));
+      }
+      save.disabled=true;
+      try{
+        const result=await api('sectorReturnCreate',payload,returnRoute('sectorReturnCreate',id));
+        if(result.approval)message('تم إرسال طلب الاعتماد إلى الجهة المخولة؛ لا يتحرك المال حتى الموافقة.');
+        else message('تم تسجيل الاسترداد وربط أثره المالي والتشغيلي.');
+        await load('returns');
+      }catch(e){message(e.message)}finally{save.disabled=false}
+    };
+  }
+
+  async function returns(){
+    const data=await api('sectorReturns');
+    const rows=data.refunds||data.returns||[];
+
+    if(actualSector==='wholesale'){
+      const approved=rows.filter(x=>x.status==='approved');
+      const due=approved.reduce((s,x)=>s+Number(x.refund_due_amount||0),0);
+      const credited=approved.reduce((s,x)=>s+Number(x.credited_amount||0),0);
+      dashboardKpis([
+        ['طلبات المرتجع',String(rows.length),'↶',rows.filter(x=>x.status==='requested').length+' بانتظار المراجعة'],
+        ['مرتجعات معتمدة',String(approved.length),'✓','أعيد مخزونها واعتمد إشعارها','blue'],
+        ['خُصم من الذمم',money(credited),'◫','إشعارات دائنة حقيقية'],
+        ['مستحق رد مالي',money(due),'!','مسجل كمستحق ولم يُعتبر مصروفاً',due>0?'red':'']
+      ]);
+      const p=box('مرتجعات الجملة');
+      hint(p,'مهم: «مستحق رد مالي» لا يعني أن العميل استلم المال. المشروع يسجله كالتزام ظاهر حتى يكتمل مسار صرف موثق؛ لا نحوله إلى نقد أو محفظة بمجرد الضغط.');
+      table(p,[
+        ['المرجع',x=>x.return_ulid],['الفاتورة',x=>x.invoice?.invoice_number||x.invoice_id],
+        ['العميل',x=>x.customer?.full_name||'—'],['الإجمالي',x=>money(x.total_amount)],
+        ['الحالة',x=>returnStatusLabel(x.status)],['خُصم من الذمة',x=>money(x.credited_amount||0)],
+        ['مستحق رد',x=>money(x.refund_due_amount||0)],
+        ['القرار',x=>{
+          if(x.status!=='requested')return '—';
+          return buttons([
+            action('اعتماد',()=>resolveWholesaleReturn(x.id,true)),
+            action('رفض',()=>resolveWholesaleReturn(x.id,false))
+          ])
+        }]
+      ],rows);
+      return;
+    }
+
+    const completed=rows.filter(x=>x.status==='completed'),pending=rows.filter(x=>x.status==='pending_approval');
+    const total=completed.reduce((s,x)=>s+Number(x.refund_amount||0),0);
+    dashboardKpis([
+      ['المرتجعات',String(rows.length),'↶',completed.length+' مكتمل'],
+      ['المبلغ المسترد',money(total),'◇','فقط المرتجعات المكتملة','gold'],
+      ['بانتظار اعتماد',String(pending.length),'!','لا يتحرك المال قبل الاعتماد',pending.length?'red':''],
+      ['آخر سجل',rows[0]?.created_at?new Date(rows[0].created_at).toLocaleDateString('ar-YE'):'—','▧','مرتبط بالفاتورة الأصلية']
+    ]);
+    const p=box('سجل المرتجعات والاسترداد');
+    hint(p,'النقد يُسجل في عهدة الوردية، المحفظة تمر بقيد متوازن، والآجل يخفض ذمة العميل. لا يوجد تعديل يدوي لرصيد التاجر.');
+    table(p,[
+      ['التاريخ',x=>x.created_at?new Date(x.created_at).toLocaleString('ar-YE'):'—'],
+      ['مرجع المرتجع',x=>x.refund_ulid],['البيع الأصلي',x=>x.original_sale_ulid],
+      ['العميل',x=>x.customer_name||x.customer_phone||'—'],
+      ['الطريقة',x=>refundMethodLabel(x.refund_method)],['المبلغ',x=>money(x.refund_amount)],
+      ['الحالة',x=>returnStatusLabel(x.status)],['السبب',x=>x.reason||'—']
+    ],rows);
+  }
+
+  async function resolveWholesaleReturn(id,approve){
+    const note=window.prompt(approve?'ملاحظة الاعتماد (اختيارية)':'سبب الرفض');
+    if(note===null)return;
+    try{
+      await api('sectorReturnResolve',{approve:Boolean(approve),decision_note:note||null},returnRoute('sectorReturnResolve',id));
+      message(approve?'تم اعتماد المرتجع وتحديث المخزون والذمة.':'تم رفض طلب المرتجع.');
+      await load('returns');
+    }catch(e){message(e.message)}
+  }
+
   function limitText(v){return v===-1?'بلا حد':v===0?'غير متاح':v??'—'}
   function capabilityStatus(row){
     if(row.capability?.status==='coming_soon'||row.state==='coming_soon')return'قريباً';
@@ -2224,7 +2401,7 @@
     form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));
     p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});
   }
-  const pages={overview,sector,sales,customers,wallet,debts,products,suppliers,expenses,assets,branches,posSetup,staff,devices,reports,documents,settings,plans};
+  const pages={overview,sector,sales,returns,customers,wallet,debts,products,suppliers,expenses,assets,branches,posSetup,staff,devices,reports,documents,settings,plans};
   async function load(tab){if(stopScanner){stopScanner();stopScanner=null;}active=tab;document.getElementById('page-title').textContent=titles[tab]||'بوابة المنشأة';document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();if(!pages[tab])throw Error('هذا القسم غير معروف');await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
   const sidebar=document.getElementById('merchant-side');
   const menuToggle=document.getElementById('menu-toggle');
