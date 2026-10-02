@@ -297,7 +297,7 @@ class MerchantWebPortalTest extends TestCase
 
     public function test_all_merchant_data_routes_require_owner_and_writes_keep_plan_gates(): void
     {
-        foreach (['overview', 'sector.sales', 'sector.sales.show', 'sector.sales.invoice', 'stats', 'profit-report', 'wallet', 'ledger', 'wallet.origins', 'products',
+        foreach (['overview', 'dashboard-v2', 'sector.sales', 'sector.sales.show', 'sector.sales.invoice', 'stats', 'profit-report', 'wallet', 'ledger', 'wallet.origins', 'products',
                   'branches', 'roles', 'staff', 'devices', 'receipts'] as $endpoint) {
             $route = Route::getRoutes()->getByName('merchant.web.data.' . $endpoint);
             $this->assertNotNull($route, $endpoint . ' not registered');
