@@ -879,6 +879,10 @@
         );
         const td=node('td'),actions=node('div',null,'product-actions');
         if(editable){const edit=node('button',actualSector==='fuel'?'تعديل السعر':'تعديل','action secondary');edit.type='button';edit.onclick=()=>showEditor(p);actions.append(edit)}
+        if(['pharmacy','wholesale','fuel'].includes(actualSector)){
+          const inventory=node('button',actualSector==='pharmacy'?'الدفعات والصلاحية':actualSector==='wholesale'?'الوحدات والتشغيلات':'سجل السعر','action secondary');
+          inventory.type='button';inventory.onclick=()=>showSectorInventory(p);actions.append(inventory);
+        }
         if(generic&&!p.is_variant_parent){
           const alias=node('button','باركودات / عبوات','action secondary');alias.type='button';alias.onclick=()=>showAliases(p);actions.append(alias);
         }
@@ -968,6 +972,117 @@
       editor.append(panel);
       editor.scrollIntoView({behavior:'smooth',block:'start'});
     }
+    async function showSectorInventory(product){
+      editor.replaceChildren();
+      const panel=node('section',null,'product-editor');
+      panel.append(node('h3',
+        actualSector==='pharmacy'
+          ?'الدفعات والصلاحية · '+(product.trade_name||product.name||'')
+          :actualSector==='wholesale'
+            ?'الوحدات والتشغيلات · '+(product.name||'')
+            :'سجل تغيّر السعر · '+(product.name||'')
+      ));
+      hint(panel,actualSector==='pharmacy'
+        ?'رصيد الدواء لا يُعدّل كرقم حر؛ الدفعة هي مصدر الكمية وتاريخ الصلاحية والتكلفة.'
+        :actualSector==='wholesale'
+          ?'الاستلام يتم كتَشغيلة قابلة للتتبع، ووحدات البيع تتحول إلى الوحدة الأساسية بعامل صريح.'
+          :'تغيير سعر الوقود يمر بمحرك التسعير ويحفظ السعر السابق والجديد والمنفذ.');
+
+      try{
+        const data=await api('sectorProductInventory',undefined,routes.sectorProductInventory.replace('__ID__',String(product.id)));
+        const r=data.result||{};
+
+        if(actualSector==='pharmacy'){
+          const batches=r.batches||[];
+          table(panel,[
+            ['التشغيلة',x=>x.batch_number],['الصلاحية',x=>x.expiry_date||'—'],
+            ['المستلم',x=>x.quantity_received],['المتبقي',x=>x.quantity_remaining],
+            ['التكلفة',x=>x.cost_per_unit===null?'—':money(x.cost_per_unit)],
+            ['المورد',x=>x.supplier_name||'—'],['الحالة',x=>x.status||'—']
+          ],batches);
+
+          const formEl=node('form',null,'editor');
+          field(formEl,'batch_number','رقم التشغيلة *');
+          field(formEl,'expiry_date','تاريخ الصلاحية *','date');
+          field(formEl,'manufactured_at','تاريخ الإنتاج','date');
+          field(formEl,'quantity_received','الكمية المستلمة *','number');
+          field(formEl,'cost_per_unit','تكلفة الوحدة','number');
+          field(formEl,'supplier_name','اسم المورد');
+          field(formEl,'supplier_invoice','رقم فاتورة المورد');
+          const save=node('button','استلام الدفعة','action');save.type='submit';formEl.append(save);
+          formEl.addEventListener('submit',async ev=>{
+            ev.preventDefault();save.disabled=true;
+            try{
+              const payload=Object.fromEntries(new FormData(formEl).entries());
+              Object.keys(payload).forEach(k=>{if(payload[k]==='')delete payload[k]});
+              await api('sectorProductInventoryReceive',payload,routes.sectorProductInventoryReceive.replace('__ID__',String(product.id)));
+              message('تم استلام الدفعة وتحديث مخزون الدواء');
+              await refresh(productPage);await showSectorInventory(product);
+            }catch(e){blankPanel(e.message,true)}finally{save.disabled=false}
+          });
+          panel.append(node('h3','استلام دفعة جديدة'),formEl);
+        }else if(actualSector==='wholesale'){
+          const units=r.units||[],lots=r.lots||[];
+          panel.append(node('h3','وحدات البيع والتحويل'));
+          table(panel,[
+            ['الرمز',x=>x.code],['الوحدة',x=>x.name],
+            ['عامل التحويل',x=>x.factor_to_base],['الأساسية',x=>x.is_base?'نعم':'لا']
+          ],units);
+          const uf=node('form',null,'editor');
+          field(uf,'code','رمز الوحدة *');field(uf,'name','اسم الوحدة *');
+          field(uf,'factor_to_base','كم تساوي من الوحدة الأساسية *','number');
+          field(uf,'is_base','هل هي الوحدة الأساسية','select','0',[{id:0,name:'لا'},{id:1,name:'نعم'}]);
+          const us=node('button','حفظ الوحدة','action secondary');us.type='submit';uf.append(us);
+          uf.addEventListener('submit',async ev=>{
+            ev.preventDefault();us.disabled=true;
+            try{
+              const payload=Object.fromEntries(new FormData(uf).entries());
+              await api('sectorProductUnitSave',payload,routes.sectorProductUnitSave.replace('__ID__',String(product.id)));
+              message('تم حفظ وحدة التحويل');await showSectorInventory(product);
+            }catch(e){blankPanel(e.message,true)}finally{us.disabled=false}
+          });
+          panel.append(uf,node('h3','التشغيلات / Lots'));
+          table(panel,[
+            ['رقم التشغيلة',x=>x.lot_number],['الموقع',x=>x.location||'—'],
+            ['المتبقي',x=>x.quantity_remaining],['الصلاحية',x=>x.expiry_date||'—'],
+            ['تكلفة الوحدة',x=>x.cost_per_unit===null?'—':money(x.cost_per_unit)],
+            ['مرجع المورد',x=>x.supplier_reference||'—']
+          ],lots);
+          const lf=node('form',null,'editor');
+          field(lf,'lot_number','رقم التشغيلة *');field(lf,'quantity','الكمية المستلمة *','number');
+          field(lf,'unit_id','الوحدة','select','',units.map(u=>({id:u.id,name:u.name})));
+          field(lf,'location','موقع التخزين');field(lf,'received_at','تاريخ الاستلام','date');
+          field(lf,'expiry_date','تاريخ الصلاحية','date');field(lf,'cost_per_unit','تكلفة الوحدة','number');
+          field(lf,'supplier_reference','مرجع المورد');
+          const ls=node('button','استلام التشغيلة','action');ls.type='submit';lf.append(ls);
+          lf.addEventListener('submit',async ev=>{
+            ev.preventDefault();ls.disabled=true;
+            try{
+              const payload=Object.fromEntries(new FormData(lf).entries());
+              Object.keys(payload).forEach(k=>{if(payload[k]==='')delete payload[k]});
+              await api('sectorProductInventoryReceive',payload,routes.sectorProductInventoryReceive.replace('__ID__',String(product.id)));
+              message('تم استلام التشغيلة وتحديث مخزون الجملة');
+              await refresh(productPage);await showSectorInventory(product);
+            }catch(e){blankPanel(e.message,true)}finally{ls.disabled=false}
+          });
+          panel.append(lf);
+        }else if(actualSector==='fuel'){
+          const history=(r.history||[]).filter(x=>!x.product||x.product===product.name);
+          table(panel,[
+            ['التاريخ',x=>x.created_at?new Date(x.created_at).toLocaleString('ar-YE'):'—'],
+            ['السعر السابق',x=>money(x.old_price)],['السعر الجديد',x=>money(x.new_price)],
+            ['الفرق',x=>money(x.delta)],['بواسطة',x=>x.changed_by||'—'],['الملاحظة',x=>x.note||'—']
+          ],history);
+          if(!history.length)hint(panel,'لا توجد تغييرات سعر مسجلة لهذا النوع حتى الآن.');
+        }
+      }catch(e){
+        hint(panel,e.message||'تعذّر تحميل تفاصيل المخزون.');
+      }
+
+      const close=node('button','إغلاق','action secondary');close.type='button';close.onclick=()=>editor.replaceChildren();panel.append(close);
+      editor.append(panel);editor.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+
     function showAliases(product){
       editor.replaceChildren();
       const panel=node('section',null,'product-editor');
