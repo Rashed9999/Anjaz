@@ -383,27 +383,73 @@ class StockService
 
     public function lowStock(int $merchantUserId, ?int $locationId = null): array
     {
-        $q = ProductStock::query()
-            ->whereHas('product', fn ($w) => $w->where('merchant_user_id', $merchantUserId))
-            ->where('reorder_level', '>', 0)
-            ->whereColumn('on_hand', '<=', 'reorder_level')
+        $q = $this->activeSellableStockQuery($merchantUserId)
+            ->where('product_stocks.reorder_level', '>', 0)
+            // المتاح لا الموجود: الموجود المحجوز ليس قابلاً للبيع.
+            ->whereRaw('(product_stocks.on_hand - product_stocks.reserved) <= product_stocks.reorder_level')
             ->with(['product:id,name,barcode', 'location:id,name']);
 
         if ($locationId) {
-            $q->where('location_id', $locationId);
+            $q->where('product_stocks.location_id', $locationId);
         }
 
         return $q->limit(200)->get()
             ->map(fn (ProductStock $s) => [
                 'product_id' => (int) $s->product_id,
                 'product' => $s->product->name ?? '—',
+                'barcode' => $s->product->barcode ?? null,
                 'location' => $s->location->name ?? '—',
+                'location_id' => (int) $s->location_id,
                 'on_hand' => (string) $s->on_hand,
+                'reserved' => (string) $s->reserved,
+                'available' => $s->available(),
                 'reorder_level' => (string) $s->reorder_level,
-                // كم يُطلب ليبلغ الحدَّ الأقصى — اقتراحٌ لا أمرُ شراء.
                 'suggested_order' => bccomp((string) $s->max_level, '0', 3) > 0
-                    ? bcsub((string) $s->max_level, (string) $s->on_hand, 3)
+                    ? bcsub((string) $s->max_level, $s->available(), 3)
                     : null,
             ])->all();
+    }
+
+    /**
+     * النافد في موقع بعينه، لا مجموع المنشأة.
+     * الموجود المحجوز بالكامل يعد صفراً قابلاً للبيع.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function outOfStock(int $merchantUserId, ?int $locationId = null): array
+    {
+        $q = $this->activeSellableStockQuery($merchantUserId)
+            ->whereRaw('(product_stocks.on_hand - product_stocks.reserved) <= 0')
+            ->with(['product:id,name,barcode', 'location:id,name']);
+
+        if ($locationId) {
+            $q->where('product_stocks.location_id', $locationId);
+        }
+
+        return $q->orderByRaw('(product_stocks.on_hand - product_stocks.reserved) asc')
+            ->limit(200)->get()
+            ->map(fn (ProductStock $s) => [
+                'product_id' => (int) $s->product_id,
+                'product' => $s->product->name ?? '—',
+                'barcode' => $s->product->barcode ?? null,
+                'location' => $s->location->name ?? '—',
+                'location_id' => (int) $s->location_id,
+                'on_hand' => (string) $s->on_hand,
+                'reserved' => (string) $s->reserved,
+                'available' => $s->available(),
+            ])->all();
+    }
+
+    /** أساس مؤشرات المخزون التشغيلية: منتجات ومواقع فعالة ومخزون متعقب. */
+    private function activeSellableStockQuery(int $merchantUserId)
+    {
+        return ProductStock::query()
+            ->whereHas('product', fn ($w) => $w
+                ->where('merchant_user_id', $merchantUserId)
+                ->where('is_active', true)
+                ->where('track_stock', true))
+            ->whereHas('location', fn ($w) => $w
+                ->where('merchant_user_id', $merchantUserId)
+                ->where('is_active', true));
     }
 }
