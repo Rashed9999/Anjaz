@@ -97,30 +97,107 @@ class MerchantStaffController extends Controller
         $days = max(1, min(90, (int) $request->query('days', 7)));
         $from = now()->subDays($days - 1)->startOfDay();
         $todayFrom = now()->startOfDay();
-        $financialStatuses = ['completed', 'credit_unpaid', 'credit_paid'];
+        $vertical = MerchantProfile::where('user_id', $m->id)->value('business_type') ?: A::BIZ_RETAIL;
 
-        $staff = PosUser::where('merchant_user_id', $m->id)->orderBy('pos_number')->get();
+        $staff = PosUser::where('merchant_user_id', $m->id)
+            ->orderBy('pos_number')->get();
 
-        $agg = MerchantSale::where('merchant_user_id', $m->id)
-            ->whereIn('status', $financialStatuses)
-            ->whereNotNull('pos_user_id')
-            ->where('created_at', '>=', $from)
-            ->selectRaw('pos_user_id, COUNT(*) as cnt, SUM(COALESCE(base_amount, total_amount)) as total')
-            ->groupBy('pos_user_id')->get()->keyBy('pos_user_id');
+        /**
+         * مصدر أداء الموظف هو **مصدر بيع القطاع نفسه**.
+         * merchant_sales لقطاعات الكاشير العام، fuel_sales للمحطة،
+         * pharmacy_sales للصيدلية، وفواتير الجملة الصادرة للجملة.
+         *
+         * @return array{0:\Illuminate\Support\Collection,1:\Illuminate\Support\Collection,2:string,3:string}
+         */
+        $aggregate = function () use ($m, $vertical, $from, $todayFrom) {
+            if ($vertical === A::BIZ_FUEL) {
+                $base = fn () => DB::table('fuel_sales')
+                    ->where('merchant_user_id', $m->id)
+                    ->where('status', 'completed');
 
-        $todayAgg = MerchantSale::where('merchant_user_id', $m->id)
-            ->whereIn('status', $financialStatuses)
-            ->whereNotNull('pos_user_id')
-            ->where('created_at', '>=', $todayFrom)
-            ->selectRaw('pos_user_id, COUNT(*) as cnt, SUM(COALESCE(base_amount, total_amount)) as total')
-            ->groupBy('pos_user_id')->get()->keyBy('pos_user_id');
+                $all = $base()->where('created_at', '>=', $from)
+                    ->selectRaw('pos_user_id as scope_id, COUNT(*) as cnt, SUM(total_amount) as total')
+                    ->groupBy('pos_user_id')->get()->keyBy('scope_id');
+                $today = $base()->where('created_at', '>=', $todayFrom)
+                    ->selectRaw('pos_user_id as scope_id, COUNT(*) as cnt, SUM(total_amount) as total')
+                    ->groupBy('pos_user_id')->get()->keyBy('scope_id');
+                $grand = (string) $base()->where('created_at', '>=', $from)->sum('total_amount');
 
-        $rows = $staff->map(function (PosUser $p) use ($agg, $todayAgg) {
-            $a = $agg->get($p->id);
-            $t = $todayAgg->get($p->id);
+                return [$all, $today, $grand ?: '0', 'fuel_sales'];
+            }
+
+            if ($vertical === A::BIZ_PHARMACY) {
+                $base = fn () => DB::table('pharmacy_sales')
+                    ->where('merchant_user_id', $m->id)
+                    ->where('status', 'completed');
+
+                $all = $base()->where('created_at', '>=', $from)
+                    ->selectRaw('pos_user_id as scope_id, COUNT(*) as cnt, SUM(total_amount) as total')
+                    ->groupBy('pos_user_id')->get()->keyBy('scope_id');
+                $today = $base()->where('created_at', '>=', $todayFrom)
+                    ->selectRaw('pos_user_id as scope_id, COUNT(*) as cnt, SUM(total_amount) as total')
+                    ->groupBy('pos_user_id')->get()->keyBy('scope_id');
+                $grand = (string) $base()->where('created_at', '>=', $from)->sum('total_amount');
+
+                return [$all, $today, $grand ?: '0', 'pharmacy_sales'];
+            }
+
+            if ($vertical === A::BIZ_WHOLESALE) {
+                $businessId = DB::table('wholesale_businesses')
+                    ->where('merchant_user_id', $m->id)->value('id');
+
+                if (! $businessId) {
+                    return [collect(), collect(), '0', 'wholesale_invoices'];
+                }
+
+                $base = fn () => DB::table('wholesale_invoices')
+                    ->where('business_id', $businessId)
+                    ->whereNotIn('status', ['draft', 'voided']);
+
+                // في الجملة منشئ الفاتورة هو users.id، لا pos_users.id.
+                $all = $base()->whereDate('invoice_date', '>=', $from->toDateString())
+                    ->selectRaw('created_by_user_id as scope_id, COUNT(*) as cnt, SUM(total_amount) as total')
+                    ->groupBy('created_by_user_id')->get()->keyBy('scope_id');
+                $today = $base()->whereDate('invoice_date', '>=', $todayFrom->toDateString())
+                    ->selectRaw('created_by_user_id as scope_id, COUNT(*) as cnt, SUM(total_amount) as total')
+                    ->groupBy('created_by_user_id')->get()->keyBy('scope_id');
+                $grand = (string) $base()->whereDate('invoice_date', '>=', $from->toDateString())
+                    ->sum('total_amount');
+
+                return [$all, $today, $grand ?: '0', 'wholesale_invoices'];
+            }
+
+            $financialStatuses = ['completed', 'credit_unpaid', 'credit_paid'];
+            $base = fn () => DB::table('merchant_sales')
+                ->where('merchant_user_id', $m->id)
+                ->whereIn('status', $financialStatuses);
+
+            $all = $base()->where('created_at', '>=', $from)
+                ->selectRaw('pos_user_id as scope_id, COUNT(*) as cnt, SUM(COALESCE(base_amount, total_amount)) as total')
+                ->groupBy('pos_user_id')->get()->keyBy('scope_id');
+            $today = $base()->where('created_at', '>=', $todayFrom)
+                ->selectRaw('pos_user_id as scope_id, COUNT(*) as cnt, SUM(COALESCE(base_amount, total_amount)) as total')
+                ->groupBy('pos_user_id')->get()->keyBy('scope_id');
+            $grand = (string) $base()->where('created_at', '>=', $from)
+                ->sum(DB::raw('COALESCE(base_amount, total_amount)'));
+
+            return [$all, $today, $grand ?: '0', 'merchant_sales'];
+        };
+
+        [$agg, $todayAgg, $grandTotalRaw, $source] = $aggregate();
+        $attributedTotal = '0';
+
+        $rows = $staff->map(function (PosUser $p) use (
+            $agg, $todayAgg, $vertical, &$attributedTotal
+        ) {
+            $scopeId = $vertical === A::BIZ_WHOLESALE ? $p->user_id : $p->id;
+            $a = $agg->get($scopeId);
+            $t = $todayAgg->get($scopeId);
             $cnt = $a ? (int) $a->cnt : 0;
-            $total = $a ? (string) $a->total : '0';
-            $avg = $cnt > 0 ? bcdiv($total, (string) $cnt, 2) : '0';
+            $total = bcadd((string) ($a->total ?? '0'), '0', 4);
+            $attributedTotal = bcadd($attributedTotal, $total, 4);
+            $avg = $cnt > 0 ? bcdiv($total, (string) $cnt, 2) : '0.00';
+
             return [
                 'id' => $p->id,
                 'employee_code' => $p->pos_number,
@@ -130,21 +207,21 @@ class MerchantStaffController extends Controller
                 'sales_total' => $total,
                 'avg_ticket' => $avg,
                 'today_count' => $t ? (int) $t->cnt : 0,
-                'today_total' => $t ? (string) $t->total : '0',
+                'today_total' => bcadd((string) ($t->total ?? '0'), '0', 4),
             ];
         })->sortByDesc(fn ($r) => (float) $r['sales_total'])->values();
 
-        // مبيعات غير منسوبة لموظف (سجّلها التاجر نفسه) + الإجمالي العام
-        $unattributed = (string) MerchantSale::where('merchant_user_id', $m->id)
-            ->whereIn('status', $financialStatuses)
-            ->whereNull('pos_user_id')
-            ->where('created_at', '>=', $from)->sum(\DB::raw('COALESCE(base_amount, total_amount)'));
-        $grandTotal = (string) MerchantSale::where('merchant_user_id', $m->id)
-            ->whereIn('status', $financialStatuses)
-            ->where('created_at', '>=', $from)->sum(\DB::raw('COALESCE(base_amount, total_amount)'));
+        $grandTotal = bcadd($grandTotalRaw, '0', 4);
+        $unattributed = bcsub($grandTotal, $attributedTotal, 4);
+        if (bccomp($unattributed, '0', 4) < 0) {
+            // لا نخترع عجزاً بسبب سجل تاريخي غير متوقع.
+            $unattributed = '0.0000';
+        }
 
         return $this->ok([
             'days' => $days,
+            'vertical' => $vertical,
+            'source' => $source,
             'staff' => $rows,
             'unattributed_total' => $unattributed,
             'grand_total' => $grandTotal,
