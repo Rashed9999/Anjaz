@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Controller;
 use App\Services\MerchantFinancialTruthReportService;
+use App\Services\Merchant\MerchantSectorDashboardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -20,6 +21,7 @@ class WebDashboardController extends Controller
     public function show(
         Request $request,
         MerchantFinancialTruthReportService $financialTruth,
+        MerchantSectorDashboardService $sectorDashboard,
     ): JsonResponse {
         $validator = Validator::make($request->query(), [
             'days' => 'sometimes|integer|min:7|max:30',
@@ -46,6 +48,7 @@ class WebDashboardController extends Controller
             'meta' => [
                 'financial' => $financialTruth->report($owner),
                 'dashboard' => $financialTruth->dashboard($owner, $days),
+                'sector' => $sectorDashboard->build($owner, $days),
             ],
         ]);
     }
