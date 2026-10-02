@@ -129,10 +129,14 @@ class WebPortalController extends Controller
             'staff' => route('merchant.web.data.staff'),
             'staffPerformance' => route('merchant.web.data.staff.performance'),
             'staffToggle' => route('merchant.web.data.staff.toggle', ['id' => '__ID__']),
+            'staffBranch' => route('merchant.web.data.staff.branch', ['id' => '__ID__']),
+            'staffRole' => route('merchant.web.data.staff.role', ['id' => '__ID__']),
 
             'staffCreate' => route('merchant.web.data.staff.create'),
             'devices' => route('merchant.web.data.devices'),
             'deviceActivation' => route('merchant.web.data.devices.activate'),
+            'deviceUpdate' => route('merchant.web.data.devices.update', ['id' => '__ID__']),
+            'deviceDestroy' => route('merchant.web.data.devices.destroy', ['id' => '__ID__']),
             'receipts' => route('merchant.web.data.receipts'),
             'receiptsSave' => route('merchant.web.data.receipts.save'),
             'login' => route('merchant.web.login')
