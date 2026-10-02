@@ -789,7 +789,6 @@ class CashierService
 
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($posUserId !== null, fn ($q) => $q->where('pos_user_id', $posUserId))
             ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
             ->where('created_at', '>=', $from)
             ->with('lines')
@@ -1188,6 +1187,7 @@ class CashierService
 
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($posUserId !== null, fn ($q) => $q->where('pos_user_id', $posUserId))
             // البيع المعلّق عبر QR ليس بيعاً مالياً بعد. إبقاؤه هنا كان
             // يجعل تقرير نقطة البيع أعلى من تقرير لوحة التاجر لنفس اليوم.
             ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
