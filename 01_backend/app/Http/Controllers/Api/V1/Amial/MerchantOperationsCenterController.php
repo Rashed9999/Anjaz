@@ -75,6 +75,7 @@ class MerchantOperationsCenterController extends AmialApiController
                             (string) ($opener?->l_name ?? '')
                         ) ?: null,
                         'employee_code' => null,
+                        'branch_id' => null,
                         // نحافظ على عقد الواجهة الحالي ونضع موقع التشغيل
                         // في الحقل نفسه؛ في الوقود هو المحطة لا «فرع متجر».
                         'branch_name' => $shift->station?->station_name,
@@ -102,6 +103,7 @@ class MerchantOperationsCenterController extends AmialApiController
                     'opened_at' => $shift->opened_at?->toIso8601String(),
                     'opened_by_name' => $shift->opened_by_name ?: $employee?->display_name,
                     'employee_code' => $employee?->pos_number,
+                    'branch_id' => $shift->branch_id,
                     'branch_name' => $employee?->branch?->name,
                 ];
             })->values();
