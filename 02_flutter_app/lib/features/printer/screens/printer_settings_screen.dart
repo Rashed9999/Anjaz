@@ -120,6 +120,10 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       paid: 4000,
       change: 750,
       verificationUrl: 'https://amialpay.com/verify',
+      documentType: 'printer_test',
+      documentId: 'TEST-0001',
+      documentNumber: 'TEST-0001',
+      metadata: const {'purpose': 'printer_diagnostics'},
     );
     if (!mounted) return;
     setState(() => _testing = false);
