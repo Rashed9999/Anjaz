@@ -4,7 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
+use App\Models\MerchantProduct;
 use App\Models\MerchantSale;
+use App\Models\Retail\MerchantLocation;
+use App\Models\Retail\ProductStock;
 use App\Models\User;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -101,6 +104,99 @@ class MerchantDashboardV2Test extends TestCase
             '1500.0000',
             $series->firstWhere('date', now()->subDay()->toDateString())['total']
         );
+    }
+
+    /** @test */
+    public function retail_dashboard_reads_sellable_stock_per_location_not_legacy_global_quantity(): void
+    {
+        $owner = $this->owner();
+
+        $branchStore = MerchantLocation::create([
+            'merchant_user_id' => $owner->id,
+            'kind' => 'store',
+            'name' => 'فرع التحرير',
+            'code' => 'TAHRIR',
+            'is_active' => true,
+            'is_default' => true,
+            'created_by' => $owner->id,
+        ]);
+        $warehouse = MerchantLocation::create([
+            'merchant_user_id' => $owner->id,
+            'kind' => 'warehouse',
+            'name' => 'المستودع المركزي',
+            'code' => 'WH-01',
+            'is_active' => true,
+            'is_default' => false,
+            'created_by' => $owner->id,
+        ]);
+
+        $lowProduct = MerchantProduct::create([
+            'merchant_user_id' => $owner->id,
+            'name' => 'مياه اختبار المواقع',
+            'price' => '500',
+            // المرآة القديمة تبدو سليمة عمداً؛ لا يجوز أن تتحكم باللوحة.
+            'quantity' => '500',
+            'track_stock' => true,
+            'is_active' => true,
+        ]);
+        ProductStock::create([
+            'product_id' => $lowProduct->id,
+            'location_id' => $branchStore->id,
+            'on_hand' => '4',
+            'reserved' => '1',
+            'reorder_level' => '5',
+            'max_level' => '20',
+        ]);
+        ProductStock::create([
+            'product_id' => $lowProduct->id,
+            'location_id' => $warehouse->id,
+            'on_hand' => '100',
+            'reserved' => '0',
+            'reorder_level' => '5',
+            'max_level' => '150',
+        ]);
+
+        $reservedProduct = MerchantProduct::create([
+            'merchant_user_id' => $owner->id,
+            'name' => 'صنف محجوز بالكامل',
+            'price' => '750',
+            'quantity' => '999',
+            'track_stock' => true,
+            'is_active' => true,
+        ]);
+        ProductStock::create([
+            'product_id' => $reservedProduct->id,
+            'location_id' => $branchStore->id,
+            'on_hand' => '3',
+            'reserved' => '3',
+            'reorder_level' => '0',
+            'max_level' => '0',
+        ]);
+
+        $this->actingAs($owner, 'merchant_web');
+        $response = $this->getJson('/merchant/data/dashboard-v2?days=7')
+            ->assertOk()
+            ->assertJsonPath(
+                'meta.sector.meta.source',
+                'product_stocks + stock_movements + merchant_sale_items'
+            );
+
+        $cards = collect($response->json('meta.sector.cards'))->keyBy('code');
+        $this->assertSame(1, $cards['low_stock']['value']);
+        $this->assertSame(1, $cards['out_of_stock']['value']);
+        $this->assertSame(0, $cards['negative_stock']['value']);
+
+        $attention = collect($response->json('meta.sector.lists.stock_attention'));
+        $low = $attention->firstWhere('product', 'مياه اختبار المواقع');
+        $this->assertSame('فرع التحرير', $low['location']);
+        $this->assertSame('3.000', $low['available']);
+        $this->assertSame('low', $low['state']);
+
+        $out = $attention->firstWhere('product', 'صنف محجوز بالكامل');
+        $this->assertSame('3.000', $out['on_hand']);
+        $this->assertSame('3.000', $out['reserved']);
+        $this->assertSame('0.000', $out['available']);
+        $this->assertSame('out', $out['state']);
     }
 
     /** @test */
