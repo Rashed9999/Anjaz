@@ -61,6 +61,7 @@ class WebPortalController extends Controller
             'sectorProductsCreate' => route('merchant.web.data.sector.products.create'),
             'sectorOperations' => route('merchant.web.data.sector.operations'),
             'sectorCustomers' => route('merchant.web.data.sector.customers'),
+            'sectorCustomerProfile' => route('merchant.web.data.sector.customers.profile', ['id' => '__ID__']),
             'sectorCustomersCreate' => route('merchant.web.data.sector.customers.create'),
             'sectorCustomersUpdate' => route('merchant.web.data.sector.customers.update', ['id' => '__ID__']),
             'sectorReturns' => route('merchant.web.data.sector.returns'),
