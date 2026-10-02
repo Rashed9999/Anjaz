@@ -151,6 +151,13 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
           invoiceNo: _ref,
           dateTime: _meccaNow,
           verificationUrl: _verificationUrl,
+          documentType: 'fuel_sale_receipt',
+          documentId: _ref,
+          documentNumber: '${widget.sale['invoice_number'] ?? _ref}',
+          metadata: {
+            'payment_method': '${widget.sale['payment_method'] ?? ''}',
+            if (widget.pumpLabel != null) 'pump': widget.pumpLabel,
+          },
         );
         if (mounted) _snack(r.message, ok: r.ok);
       } else {
