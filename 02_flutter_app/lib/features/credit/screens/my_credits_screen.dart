@@ -206,7 +206,7 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
   }
 
   bool _hasInvoicePdf(Map<String, dynamic> row) =>
-      row['reference_type'] == 'merchant_sale' &&
+      const {'merchant_sale', 'wholesale_invoice'}.contains(row['reference_type']) &&
       '${row['movement_ulid'] ?? ''}'.isNotEmpty;
 
   Future<void> _downloadInvoicePdf(Map<String, dynamic> invoice) async {

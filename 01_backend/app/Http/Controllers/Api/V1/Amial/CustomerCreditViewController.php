@@ -7,8 +7,10 @@ use App\Http\Controllers\Controller;
 use App\Models\CustomerCreditAccount;
 use App\Models\CustomerCreditMovement;
 use App\Models\MerchantSale;
+use App\Models\WholesaleInvoice;
 use App\Models\User;
 use App\Services\CashierSaleInvoicePdfService;
+use App\Services\WholesaleInvoicePdfService;
 use App\Services\CustomerCreditSettleService;
 use App\Services\CreditSourceSettlementService;
 use Illuminate\Http\JsonResponse;
@@ -151,32 +153,51 @@ class CustomerCreditViewController extends Controller
             ->where('type', 'sale')
             ->first();
 
-        if (!$movement
-            || $movement->reference_type !== 'merchant_sale'
-            || empty($movement->reference_id)) {
+        if (!$movement || empty($movement->reference_id)) {
             return $this->error('NOT_FOUND', 'لا توجد فاتورة PDF لهذا القيد', 404);
         }
 
-        $sale = MerchantSale::where('sale_ulid', $movement->reference_id)
-            ->where('merchant_user_id', $account->merchant_user_id)
-            ->first();
-
-        if (!$sale) {
-            return $this->error('NOT_FOUND', 'الفاتورة الأصلية غير موجودة', 404);
-        }
-
         try {
-            $pdfSvc = app(CashierSaleInvoicePdfService::class);
-            $pdf = app(\App\Services\PdfCacheService::class)->remember(
-                $pdfSvc->cacheKey($sale),
-                fn () => $pdfSvc->generate($sale),
-            );
+            if ($movement->reference_type === 'merchant_sale') {
+                $document = MerchantSale::where('sale_ulid', $movement->reference_id)
+                    ->where('merchant_user_id', $account->merchant_user_id)
+                    ->first();
+
+                if (!$document) {
+                    return $this->error('NOT_FOUND', 'الفاتورة الأصلية غير موجودة', 404);
+                }
+
+                $pdfSvc = app(CashierSaleInvoicePdfService::class);
+                $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                    $pdfSvc->cacheKey($document),
+                    fn () => $pdfSvc->generate($document),
+                );
+                $filename = $pdfSvc->suggestedFilename($document);
+            } elseif ($movement->reference_type === 'wholesale_invoice') {
+                $document = WholesaleInvoice::where('invoice_ulid', $movement->reference_id)
+                    ->whereHas('business', fn ($q) => $q->where(
+                        'merchant_user_id', $account->merchant_user_id
+                    ))
+                    ->first();
+
+                if (!$document) {
+                    return $this->error('NOT_FOUND', 'فاتورة الجملة الأصلية غير موجودة', 404);
+                }
+
+                $pdfSvc = app(WholesaleInvoicePdfService::class);
+                $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                    $pdfSvc->cacheKey($document),
+                    fn () => $pdfSvc->generate($document),
+                );
+                $filename = $pdfSvc->suggestedFilename($document);
+            } else {
+                return $this->error('NOT_FOUND', 'لا توجد فاتورة PDF لهذا القيد', 404);
+            }
 
             return response($pdf, 200, [
                 'Content-Type' => 'application/pdf',
                 'Content-Length' => (string) strlen($pdf),
-                'Content-Disposition' => 'attachment; filename="'
-                    . $pdfSvc->suggestedFilename($sale) . '"',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
                 'Cache-Control' => 'private, max-age=900',
                 'Content-Encoding' => 'identity',
             ]);
@@ -185,7 +206,8 @@ class CustomerCreditViewController extends Controller
                 'customer_user_id' => $request->user()->id,
                 'credit_account_id' => $account->id,
                 'movement_ulid' => $movementUlid,
-                'sale_ulid' => $sale->sale_ulid,
+                'reference_type' => $movement->reference_type,
+                'reference_id' => $movement->reference_id,
                 'error' => $e->getMessage(),
             ]);
 

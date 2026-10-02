@@ -1126,7 +1126,7 @@ class WholesaleController extends Controller
             // للقطع على شبكة جوّال. updated_at في المفتاح: تعديل الفاتورة
             // يُنتج مفتاحاً جديداً، فلا تُخدَم نسخةٌ قديمة بأرقام قديمة.
             $pdfBytes = app(\App\Services\PdfCacheService::class)->remember(
-                "wholesale_invoice_{$inv->id}_{$inv->updated_at?->timestamp}",
+                $this->pdfSvc->cacheKey($inv),
                 fn () => $this->pdfSvc->generate($inv),
             );
         } catch (\Throwable $e) {

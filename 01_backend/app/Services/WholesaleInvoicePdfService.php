@@ -49,6 +49,23 @@ class WholesaleInvoicePdfService
         return ArabicPdf::render($html, ['format' => 'A4', 'margin' => 0]);
     }
 
+    /**
+     * كل رقم يغيّر محتوى الفاتورة يدخل البصمة، لا updated_at وحده.
+     * تحصيل/مرتجع داخل الثانية نفسها لا يجوز أن يخدم PDF قديم.
+     */
+    public function cacheKey(WholesaleInvoice $invoice): string
+    {
+        $fingerprint = implode('|', [
+            (string) $invoice->status,
+            (string) $invoice->total_amount,
+            (string) $invoice->paid_amount,
+            (string) $invoice->balance_due,
+            (string) ($invoice->updated_at?->format('YmdHis.u') ?? '0'),
+        ]);
+
+        return "wholesale_invoice_{$invoice->id}_" . sha1($fingerprint);
+    }
+
     public function suggestedFilename(WholesaleInvoice $invoice): string
     {
         $safe = str_replace(['/', '\\'], '-', $invoice->invoice_number);

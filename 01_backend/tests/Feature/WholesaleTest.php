@@ -17,6 +17,7 @@ use App\Services\WholesaleReportsService;
 use App\Services\WholesaleReturnService;
 use App\Services\WholesaleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 /**
@@ -189,6 +190,18 @@ class WholesaleTest extends TestCase
             ['customer_id' => $customer->id, 'payment_type' => 'credit'],
         );
         $account = CustomerCreditAccount::where('merchant_user_id', $this->merchant->id)->firstOrFail();
+
+        $movement = $account->movements()
+            ->where('type', 'sale')
+            ->where('reference_type', 'wholesale_invoice')
+            ->where('reference_id', $invoice->invoice_ulid)
+            ->firstOrFail();
+        Passport::actingAs($appCustomer->fresh(), [], 'api');
+        $pdf = $this->get(
+            "/api/v1/amial/customer/credits/{$account->id}/invoices/{$movement->movement_ulid}/pdf"
+        );
+        $pdf->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
 
         app(CustomerCreditSettleService::class)->settle($appCustomer, $account, '2000');
 
