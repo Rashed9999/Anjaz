@@ -221,6 +221,9 @@ class StockService
             'location_id' => $location->id,
             'on_hand' => $adopt ? $legacy : '0',
             'reserved' => '0',
+            // حد المنتج هو الافتراضي لأي موقع جديد. يمكن للموقع لاحقاً
+            // امتلاك حد مستقل من شاشة المخزون دون تغيير بقية المواقع.
+            'reorder_level' => (string) ($product->reorder_level ?? '0'),
         ]);
 
         if ($adopt) {
