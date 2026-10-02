@@ -16,6 +16,18 @@ class PharmacySaleInvoicePdfService
 {
     public function generate(PharmacySale $sale): string
     {
+        return ArabicPdf::render(
+            $this->renderHtml($sale),
+            ['format' => 'A4', 'margin' => 12],
+        );
+    }
+
+    /**
+     * يفصل بناء HTML عن mPDF حتى يمكن اختبار القالب وحده، وتظهر أخطاء
+     * Blade كأخطاء صريحة بدلاً من الاختباء خلف استجابة PDF_FAILED.
+     */
+    public function renderHtml(PharmacySale $sale): string
+    {
         $sale->loadMissing(['items.batch', 'customer']);
         $merchant = Merchant::where('user_id', $sale->merchant_user_id)->first();
         $qr = app(DocumentQrService::class);
@@ -31,25 +43,28 @@ class PharmacySaleInvoicePdfService
             'requires_prescription' => (bool) $item->required_prescription,
         ])->values()->all();
 
-        $creditState = $this->creditSnapshot($sale);
+        $credit = $this->creditSnapshot($sale);
+        $customerName = $sale->customer?->full_name
+            ?: ($credit['customer_name'] ?? null)
+            ?: ($sale->payment_method === 'credit' ? 'عميل آجل' : 'عميل نقدي');
+        $customerPhone = $sale->customer?->phone
+            ?: ($credit['customer_phone'] ?? null);
 
-        $html = view('pdf.pharmacy-sale-invoice', [
+        return view('pdf.pharmacy-sale-invoice', [
             'sale' => $sale,
             'merchant' => $merchant,
             'merchantLogoData' => app(MerchantLogoService::class)->dataUri($merchant),
             'items' => $items,
             'paymentLabel' => $this->paymentLabel((string) $sale->payment_method),
-            'creditState' => $creditState,
-            'displayCustomerName' => $sale->customer?->full_name
-                ?: ($creditState['customer_name'] ?? null)
-                ?: ($sale->payment_method === 'credit' ? 'عميل آجل' : 'عميل نقدي'),
-            'displayCustomerPhone' => $sale->customer?->phone
-                ?: ($creditState['customer_phone'] ?? null),
+            'creditStateCode' => (string) $credit['state'],
+            'creditLabel' => (string) $credit['label'],
+            'creditRemaining' => (string) $credit['remaining'],
+            'creditDueDate' => $credit['due_date'] ?? null,
+            'displayCustomerName' => $customerName,
+            'displayCustomerPhone' => $customerPhone,
             'verificationUrl' => $qr->url($verificationCode),
             'qrDataUri' => $qr->dataUri($verificationCode),
         ])->render();
-
-        return ArabicPdf::render($html, ['format' => 'A4', 'margin' => 12]);
     }
 
     /** @return array{state:string,label:string,remaining:string,customer_name:?string,customer_phone:?string,due_date:?string} */
