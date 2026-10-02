@@ -88,6 +88,168 @@ class MerchantFinancialTruthReportService
         ];
     }
 
+    /**
+     * AMIAL-MERCHANT-DASHBOARD-V2 — سلسلة مبيعات موحّدة للوحة المالك.
+     *
+     * لا يعيد هذا بناء تعريف «المبيعات» خارج خدمة الحقيقة المالية؛ بل
+     * يقرأ نفس جدول القطاع وبنفس حالات البيع المعتمدة ثم يحوله إلى نقاط
+     * يومية وسجل حديث. الغرض عرضٌ بصري، لا إنشاء رصيد أو رقم مالي موازٍ.
+     */
+    public function dashboard(User $merchant, int $days = 14, int $recentLimit = 8): array
+    {
+        $days = max(7, min(30, $days));
+        $recentLimit = max(1, min(20, $recentLimit));
+        $end = now()->endOfDay();
+        $start = now()->subDays($days - 1)->startOfDay();
+        $vertical = MerchantProfile::where('user_id', $merchant->id)->value('business_type') ?: 'retail';
+        $zero = MoneyService::normalize('0');
+
+        $buckets = [];
+        for ($i = 0; $i < $days; $i++) {
+            $date = $start->copy()->addDays($i)->toDateString();
+            $buckets[$date] = ['date' => $date, 'total' => $zero, 'count' => 0];
+        }
+
+        $rows = collect();
+        $source = 'merchant_sales';
+
+        if ($vertical === 'wholesale') {
+            $businessId = WholesaleBusiness::where('merchant_user_id', $merchant->id)->value('id');
+            $source = 'wholesale_invoices';
+            if ($businessId) {
+                $rows = WholesaleInvoice::where('business_id', $businessId)
+                    ->where('status', '!=', 'voided')
+                    ->whereBetween('invoice_date', [$start->toDateString(), $end->toDateString()])
+                    ->get([
+                        'id', 'invoice_ulid', 'invoice_number', 'invoice_date', 'total_amount',
+                        'payment_type', 'status', 'created_at',
+                    ])
+                    ->map(fn ($row) => (object) [
+                        'id' => $row->id,
+                        'reference' => $row->invoice_ulid,
+                        'document_number' => $row->invoice_number,
+                        'sale_date' => $row->invoice_date?->toDateString(),
+                        'amount' => (string) $row->total_amount,
+                        'method' => $row->payment_type,
+                        'status' => $row->status,
+                        'created_at' => $row->created_at,
+                    ]);
+            }
+        } elseif ($vertical === 'fuel') {
+            $source = 'fuel_sales';
+            $rows = FuelSale::where('merchant_user_id', $merchant->id)
+                ->where('status', 'completed')
+                ->whereBetween('created_at', [$start, $end])
+                ->get([
+                    'id', 'sale_ulid', 'invoice_number', 'total_amount',
+                    'payment_method', 'status', 'created_at',
+                ])
+                ->map(fn ($row) => (object) [
+                    'id' => $row->id,
+                    'reference' => $row->sale_ulid,
+                    'document_number' => $row->invoice_number,
+                    'sale_date' => $row->created_at?->toDateString(),
+                    'amount' => (string) $row->total_amount,
+                    'method' => $row->payment_method,
+                    'status' => $row->status,
+                    'created_at' => $row->created_at,
+                ]);
+        } elseif ($vertical === 'pharmacy') {
+            $source = 'pharmacy_sales';
+            $rows = PharmacySale::where('merchant_user_id', $merchant->id)
+                ->where('status', 'completed')
+                ->whereBetween('created_at', [$start, $end])
+                ->get([
+                    'id', 'sale_ulid', 'invoice_number', 'total_amount',
+                    'payment_method', 'status', 'created_at',
+                ])
+                ->map(fn ($row) => (object) [
+                    'id' => $row->id,
+                    'reference' => $row->sale_ulid,
+                    'document_number' => $row->invoice_number,
+                    'sale_date' => $row->created_at?->toDateString(),
+                    'amount' => (string) $row->total_amount,
+                    'method' => $row->payment_method,
+                    'status' => $row->status,
+                    'created_at' => $row->created_at,
+                ]);
+        } else {
+            $rows = MerchantSale::where('merchant_user_id', $merchant->id)
+                ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
+                ->whereBetween('created_at', [$start, $end])
+                ->get([
+                    'id', 'sale_ulid', 'invoice_number', 'total_amount',
+                    'payment_method', 'status', 'created_at',
+                ])
+                ->map(fn ($row) => (object) [
+                    'id' => $row->id,
+                    'reference' => $row->sale_ulid,
+                    'document_number' => $row->invoice_number,
+                    'sale_date' => $row->created_at?->toDateString(),
+                    'amount' => (string) $row->total_amount,
+                    'method' => $row->payment_method,
+                    'status' => $row->status,
+                    'created_at' => $row->created_at,
+                ]);
+        }
+
+        $periodTotal = $zero;
+        foreach ($rows as $row) {
+            $date = (string) ($row->sale_date ?? '');
+            if (! isset($buckets[$date])) continue;
+            $amount = MoneyService::normalize((string) ($row->amount ?? '0'));
+            $buckets[$date]['total'] = MoneyService::add($buckets[$date]['total'], $amount);
+            $buckets[$date]['count']++;
+            $periodTotal = MoneyService::add($periodTotal, $amount);
+        }
+
+        $today = now()->toDateString();
+        $yesterday = now()->subDay()->toDateString();
+        $todayTotal = $buckets[$today]['total'] ?? $zero;
+        $yesterdayTotal = $buckets[$yesterday]['total'] ?? $zero;
+        $changePercent = null;
+        if (MoneyService::gt($yesterdayTotal, '0')) {
+            $changePercent = bcmul(
+                bcdiv(MoneyService::sub($todayTotal, $yesterdayTotal), $yesterdayTotal, 6),
+                '100',
+                2
+            );
+        }
+
+        $recent = $rows
+            ->sortByDesc(fn ($row) => optional($row->created_at)->getTimestamp() ?? 0)
+            ->take($recentLimit)
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'reference' => (string) ($row->reference ?: $row->id),
+                'document_number' => $row->document_number ?: null,
+                'amount' => MoneyService::normalize((string) $row->amount),
+                'payment_method' => (string) ($row->method ?? ''),
+                'status' => (string) ($row->status ?? ''),
+                'occurred_at' => $row->created_at?->toIso8601String()
+                    ?? ($row->sale_date ? Carbon::parse($row->sale_date)->toIso8601String() : null),
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'contract_version' => 'merchant-dashboard/v2',
+            'vertical' => $vertical,
+            'source' => $source,
+            'days' => $days,
+            'series' => array_values($buckets),
+            'period_total' => $periodTotal,
+            'period_count' => $rows->count(),
+            'average_ticket' => $rows->count() > 0
+                ? MoneyService::div($periodTotal, (string) $rows->count())
+                : $zero,
+            'today_total' => $todayTotal,
+            'yesterday_total' => $yesterdayTotal,
+            'today_change_percent' => $changePercent,
+            'recent_sales' => $recent,
+        ];
+    }
+
     // ══════════════════════════════════════════════════════════════════
     //  AMIAL-DAILY-MOVEMENT-001 — الحركةُ اليوميّة الكاملة
     // ══════════════════════════════════════════════════════════════════
