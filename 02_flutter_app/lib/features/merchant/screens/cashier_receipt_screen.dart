@@ -204,6 +204,12 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
           invoiceNo: _ref,
           dateTime: _meccaNow,
           verificationUrl: _verificationUrl,
+          documentType: 'merchant_sale_receipt',
+          documentId: _ref,
+          documentNumber: '${widget.sale['invoice_number'] ?? _ref}',
+          metadata: {
+            'payment_method': widget.method,
+          },
         );
         if (mounted) _snack(r.message, ok: r.ok);
       } else {
