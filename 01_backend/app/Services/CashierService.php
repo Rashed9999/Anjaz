@@ -42,6 +42,10 @@ class CashierService
         return DB::transaction(function () use ($merchant, $data) {
             $this->assertMerchantProductFields($merchant, $data);
             $barcode = trim((string) ($data['barcode'] ?? ''));
+            $tracksStock = (bool) ($data['track_stock'] ?? true);
+            $initialQuantity = isset($data['quantity']) && $data['quantity'] !== ''
+                ? bcadd((string) $data['quantity'], '0', 3)
+                : '0.000';
             $product = MerchantProduct::create([
                 'merchant_user_id' => $merchant->id,
                 'name' => $data['name'],
@@ -49,7 +53,8 @@ class CashierService
                 'cost_price' => MoneyService::normalize((string) ($data['cost_price'] ?? 0)),
                 'offer_price' => isset($data['offer_price']) && $data['offer_price'] !== ''
                     ? MoneyService::normalize((string) $data['offer_price']) : null,
-                'quantity' => (string) ($data['quantity'] ?? 0),
+                // المرآة تبدأ صفراً؛ الرصيد الافتتاحي يُكتب لاحقاً كحركة في موقع.
+                'quantity' => $tracksStock ? '0.000' : $initialQuantity,
                 'production_date' => $data['production_date'] ?? null,
                 'expiry_date' => $data['expiry_date'] ?? null,
                 'category' => !empty($data['category_id'])
@@ -67,7 +72,24 @@ class CashierService
                 app(MerchantProductBarcodeService::class)->ensurePrimary($merchant, $product, $barcode);
             }
             app(\App\Services\Retail\ProductCatalogService::class)->ensureSku($product);
-            return $product->fresh()->load('barcodes');
+
+            if ($tracksStock) {
+                $stock = app(\App\Services\Retail\StockService::class);
+                $location = $stock->defaultLocation($merchant->id);
+                // حتى رصيد الصفر يبدأ من موقع معلوم، فلا يبقى الصنف
+                // «غير موزع» إلى أن تقع أول بيعة.
+                $stock->ensureLocationStock($product, $location);
+
+                if (bccomp($initialQuantity, '0', 3) > 0) {
+                    $stock->move(
+                        $product, $location, $initialQuantity,
+                        'opening_balance', $merchant,
+                        note: 'الرصيد الافتتاحي عند إنشاء المنتج'
+                    );
+                }
+            }
+
+            return $product->fresh()->load(['barcodes', 'stocks.location']);
         }, 3);
     }
 
@@ -78,7 +100,10 @@ class CashierService
                 ->where('merchant_user_id', $merchant->id)->lockForUpdate()->firstOrFail();
             $this->assertMerchantProductFields($merchant, $data, $productId);
             $requestedQuantity = array_key_exists('quantity', $data)
-                ? (string) $data['quantity'] : null;
+                && $data['quantity'] !== null && $data['quantity'] !== ''
+                    ? bcadd((string) $data['quantity'], '0', 3)
+                    : null;
+            $previousReorder = bcadd((string) ($product->reorder_level ?? '0'), '0', 3);
             $product->fill([
                 'name' => $data['name'] ?? $product->name,
                 'price' => isset($data['price']) ? MoneyService::normalize((string) $data['price']) : $product->price,
@@ -101,6 +126,20 @@ class CashierService
                 'is_active' => $data['is_active'] ?? $product->is_active,
             ]);
             $product->save();
+
+            if (array_key_exists('reorder_level', $data)
+                && $data['reorder_level'] !== null && $data['reorder_level'] !== '') {
+                $newReorder = bcadd((string) $data['reorder_level'], '0', 3);
+                // حدّ المنتج هو الافتراضي. نحدّث المواقع التي ما زالت ترث
+                // الافتراضي القديم أو لم يُضبط لها حد، ونترك الحد المخصص.
+                \App\Models\Retail\ProductStock::where('product_id', $product->id)
+                    ->where(function ($q) use ($previousReorder) {
+                        $q->where('reorder_level', '0')
+                            ->orWhere('reorder_level', $previousReorder);
+                    })
+                    ->update(['reorder_level' => $newReorder]);
+            }
+
             if ($requestedQuantity !== null
                 && bccomp($requestedQuantity, (string) $product->quantity, 3) !== 0) {
                 $stock = app(\App\Services\Retail\StockService::class);
