@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Api\V1\Amial\CashierController;
+use App\Http\Controllers\Api\V1\Amial\CustomerCreditController;
 use App\Http\Controllers\Api\V1\Amial\BarcodeLookupController;
 use App\Http\Controllers\Api\V1\Amial\ProductCatalogController;
 use App\Models\MerchantProduct;
@@ -280,6 +281,71 @@ class WebSectorController extends Controller
         };
         if (!$target) return $this->unsupported($sector);
         return $this->invoke($target, $request, $sector);
+    }
+
+    /**
+     * AMIAL-MERCHANT-CUSTOMERS-001 — قاعدة العملاء من محرك القطاع نفسه.
+     *
+     * التجزئة/البيع السريع/المطعم تستعمل دفتر العميل الموحد الذي يغذي
+     * الآجل أيضاً، بينما الصيدلية والجملة تحتفظان بملف عميل متخصص.
+     * الوقود له حسابات شركات مستقلة، لذلك لا نعرض له قاعدة عملاء مزيفة.
+     */
+    public function customers(Request $request): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, A::F_CUSTOMERS)) return $deny;
+
+        $target = match ($sector) {
+            A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_RESTAURANT
+                => [CustomerCreditController::class, 'listCustomers'],
+            A::BIZ_PHARMACY => [PharmacyController::class, 'listCustomers'],
+            A::BIZ_WHOLESALE => [WholesaleController::class, 'listCustomers'],
+            default => null,
+        };
+
+        if (!$target) return $this->unsupported($sector);
+        return $this->invoke($target, $request, $sector);
+    }
+
+    public function createCustomer(Request $request): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, A::F_CUSTOMERS)) return $deny;
+
+        $target = match ($sector) {
+            A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_RESTAURANT
+                => [CustomerCreditController::class, 'upsertCustomer'],
+            A::BIZ_PHARMACY => [PharmacyController::class, 'addCustomer'],
+            A::BIZ_WHOLESALE => [WholesaleController::class, 'addCustomer'],
+            default => null,
+        };
+
+        if (!$target) return $this->unsupported($sector);
+        return $this->invoke($target, $request, $sector);
+    }
+
+    public function updateCustomer(Request $request, int $id): JsonResponse
+    {
+        $sector = $this->sector($request);
+        if ($deny = $this->requireCapability($request, A::F_CUSTOMERS)) return $deny;
+
+        // دفتر العملاء الموحد في التجزئة يُحدّث عبر upsert بالهاتف، ولا
+        // نقبل id لا يستعمله المصدر. الصيدلية والجملة لديهما هوية صف.
+        $target = match ($sector) {
+            A::BIZ_PHARMACY => [PharmacyController::class, 'updateCustomer'],
+            A::BIZ_WHOLESALE => [WholesaleController::class, 'updateCustomer'],
+            default => null,
+        };
+
+        if (!$target) {
+            return response()->json([
+                'success' => false, 'code' => 'CUSTOMER_UPDATE_BY_ID_NOT_SUPPORTED',
+                'message' => 'تحديث هذا النوع من العملاء يتم بالحفظ برقم الهاتف.',
+                'meta' => ['sector' => $sector],
+            ], 422);
+        }
+
+        return $this->invoke($target, $request, $sector, $id);
     }
 
     /**
