@@ -53,6 +53,12 @@ Route::middleware('merchant.web')->group(function () {
             ->where('kind', 'categories|brands|units')->middleware('throttle:30,1')->name('sector.catalog.add');
         Route::put('/sector/products/{id}', [Sector::class, 'updateProduct'])
             ->whereNumber('id')->middleware('throttle:30,1')->name('sector.products.update');
+        Route::get('/sector/products/{id}/inventory', [Sector::class, 'productInventory'])
+            ->whereNumber('id')->name('sector.products.inventory');
+        Route::post('/sector/products/{id}/inventory', [Sector::class, 'receiveProductInventory'])
+            ->whereNumber('id')->middleware('throttle:30,1')->name('sector.products.inventory.receive');
+        Route::post('/sector/products/{id}/units', [Sector::class, 'saveWholesaleProductUnit'])
+            ->whereNumber('id')->middleware('throttle:30,1')->name('sector.products.units.save');
         Route::post('/sector/products/{id}/barcodes', [Sector::class, 'addProductBarcode'])
             ->whereNumber('id')->middleware('throttle:30,1')->name('sector.products.barcodes.add');
         Route::post('/sector/products', [Sector::class, 'createProduct'])
