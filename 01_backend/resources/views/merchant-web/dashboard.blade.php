@@ -209,13 +209,13 @@
   }
   function buildNavigation(){
     const nav=document.getElementById('portal-nav');nav.replaceChildren();
-    const symbols={dashboard_customize:'⌁',insights:'⌂',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌘',groups:'♙',people:'♟',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',undo:'↶',print:'▰',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨',business_center:'▣'};
+    const symbols={dashboard_customize:'⌁',insights:'⌂',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌘',groups:'♙',people:'♟',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',undo:'↶',print:'▰',extension:'✚',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨',business_center:'▣'};
     const groups=[
       ['نظرة عامة',['overview']],
       ['التشغيل والمبيعات',['sector','sales','returns','products','customers','debts','suppliers','expenses','assets']],
       ['الفريق ونقاط البيع',['branches','posSetup','staff','devices']],
       ['المالية والتقارير',['wallet','reports','documents']],
-      ['إعدادات المنشأة',['settings','plans']],
+      ['إعدادات المنشأة',['settings','integrations','plans']],
     ];
     const byTab=new Map(navigation.map(item=>[item.tab,item])),seen=new Set();
     const appendItem=item=>{
@@ -2377,6 +2377,79 @@
     pos.append(actions);
   }
 
+  async function integrations(){
+    const hub=box('التكاملات والتطبيقات');
+    hint(hub,'هذه الصفحة تعرض فقط التكاملات التي لها مسار فعلي في المشروع. «غير متاح» تعني أنه لا يوجد محرك خادم مكتمل بعد، لا أن الزر معطل.');
+    const cards=node('div',null,'roles-grid');
+
+    const card=(title,desc,state,tone='')=>{
+      const x=node('article',null,'role-card'),head=node('div',null,'role-card-head');
+      const chip=node('span',state,'source-chip');if(tone==='warn')chip.style.cssText='background:#fff5e4;color:#9a6918';
+      head.append(node('h4',title),chip);x.append(head,node('p',desc));cards.append(x);return x
+    };
+
+    const share=card('مشاركة الفواتير','PDF الرسمي يمكن مشاركته من مركز المستندات عبر Web Share على الأجهزة المدعومة، مع تنزيل آمن كبديل.','متاح');
+    const bShare=action('فتح المستندات والطباعة',()=>load('documents'));share.append(bShare);
+
+    const print=card('الطباعة الحرارية','الطباعة عبر Bluetooth / USB / الشبكة تنفذ من تطبيق POS باستخدام قدرات الجهاز، وليست ادعاء طباعة مباشر من المتصفح.','متاح عبر POS');
+    if(navigation.some(x=>x.tab==='devices'&&x.state==='available'))print.append(action('إدارة أجهزة POS',()=>load('devices')));
+
+    let apiData=null,apiLocked=null;
+    try{apiData=await api('integrationApiKeys')}catch(e){apiLocked=e.message}
+    const apiCard=card('واجهة الشركاء API','وصول خارجي مقيد بمفتاح تاجر. المفتاح الكامل يظهر مرة واحدة فقط ولا يُخزّن كنص قابل للاسترجاع.',apiData?'متاح':'حسب الباقة',apiData?'':'warn');
+    const endpoint=node('code','GET /api/v1/amial/partner/sales');endpoint.style.cssText='display:block;direction:ltr;text-align:left;background:#f4f7f6;padding:9px;border-radius:8px;margin:9px 0;font-size:11px';apiCard.append(endpoint);
+    if(apiLocked)apiCard.append(node('p',apiLocked,'muted'));
+
+    const webhooks=card('Webhooks للتاجر','لا يوجد حالياً عقد Webhook عام للتاجر في الخادم. لن نعرض عنواناً أو Secret غير موجودين.','غير متاح حالياً','warn');
+    webhooks.append(node('p','عند بنائه يجب أن يشمل توقيعاً، Idempotency، حماية Replay وسجل تسليم.','muted'));
+
+    hub.append(cards);
+
+    if(!apiData)return;
+
+    const keys=box('مفاتيح API');
+    hint(keys,'المفاتيح المقنّعة أدناه لا يمكن تحويلها إلى السر الكامل. عند فقد المفتاح أنشئ واحداً جديداً ثم عطّل القديم.');
+    table(keys,[
+      ['الوصف',x=>x.label],['المفتاح',x=>x.masked],['الحالة',x=>x.is_active?'نشط':'موقوف'],
+      ['آخر استخدام',x=>x.last_used_at?new Date(x.last_used_at).toLocaleString('ar-YE'):'لم يُستخدم'],
+      ['تاريخ الإنشاء',x=>x.created_at?new Date(x.created_at).toLocaleDateString('ar-YE'):'—'],
+      ['الإجراء',x=>buttons([
+        action(x.is_active?'تعطيل':'تفعيل',async()=>{
+          try{
+            await api('integrationApiKeyToggle',{},routes.integrationApiKeyToggle.replace('__ID__',String(x.id)));
+            message('تم تحديث حالة المفتاح');await load('integrations');
+          }catch(e){message(e.message)}
+        }),
+        action('حذف',async()=>{
+          if(!window.confirm('حذف هذا المفتاح نهائياً؟ أي تكامل يستخدمه سيتوقف فوراً.'))return;
+          try{
+            await api('integrationApiKeyDelete',{},routes.integrationApiKeyDelete.replace('__ID__',String(x.id)),'DELETE');
+            message('تم حذف المفتاح');await load('integrations');
+          }catch(e){message(e.message)}
+        })
+      ])]
+    ],apiData.keys||[]);
+
+    const create=box('إنشاء مفتاح API جديد');
+    hint(create,'بعد الإنشاء سيظهر السر الكامل مرة واحدة فقط. انسخه إلى النظام الخارجي ولا ترسله في رسائل أو صور.');
+    const frm=node('form',null,'editor'),labelHolder=node('label','وصف المفتاح','field'),label=node('input');
+    label.maxLength=60;label.placeholder='مثال: نظام المحاسبة';labelHolder.append(label);
+    const save=action('توليد المفتاح');save.type='submit';frm.append(labelHolder,save);create.append(frm);
+    frm.onsubmit=async ev=>{
+      ev.preventDefault();save.disabled=true;
+      try{
+        const result=await api('integrationApiKeysCreate',{label:label.value.trim()||null});
+        const secret=result.api_key;
+        frm.replaceChildren();
+        const notice=node('div',null,'note');
+        notice.append(node('strong','احفظ المفتاح الآن — لن يظهر مجدداً'));
+        const code=node('code',secret);code.style.cssText='display:block;direction:ltr;text-align:left;word-break:break-all;background:#fff;padding:11px;border-radius:8px;margin:9px 0';
+        const copy=action('نسخ المفتاح');copy.type='button';copy.onclick=()=>navigator.clipboard.writeText(secret).then(()=>message('تم نسخ المفتاح'));
+        notice.append(code,copy);create.append(notice);
+      }catch(e){message(e.message);save.disabled=false}
+    };
+  }
+
   async function settings(){
     const data=await api('receipts'),s=data.settings||{};
     const hub=box('إعدادات المنشأة');
@@ -2402,7 +2475,7 @@
     form(p,[['store_name','اسم المنشأة'],['header_note','ترويسة الفاتورة'],['footer_note','تذييل الفاتورة'],['phone','هاتف المنشأة'],['address','عنوان المنشأة'],['paper_width','عرض الطابعة','select',[{value:'58',label:'58 مم'},{value:'80',label:'80 مم'}]]], 'حفظ إعدادات الفاتورة',d=>api('receiptsSave',d));
     p.querySelectorAll('input,select').forEach(input=>{if(s[input.name]!==undefined&&s[input.name]!==null)input.value=s[input.name];if(input.name==='store_name')input.value=@json($storeName)});
   }
-  const pages={overview,sector,sales,returns,customers,wallet,debts,products,suppliers,expenses,assets,branches,posSetup,staff,devices,reports,documents,settings,plans};
+  const pages={overview,sector,sales,returns,customers,wallet,debts,products,suppliers,expenses,assets,branches,posSetup,staff,devices,reports,documents,integrations,settings,plans};
   async function load(tab){if(stopScanner){stopScanner();stopScanner=null;}active=tab;document.getElementById('page-title').textContent=titles[tab]||'بوابة المنشأة';document.querySelectorAll('[data-tab]').forEach(e=>{e.classList.toggle('active',e.dataset.tab===tab);e.setAttribute('aria-current',e.dataset.tab===tab?'page':'false')});content.replaceChildren(node('div','جارٍ تحميل بيانات المنشأة…','panel'));try{content.replaceChildren();if(!pages[tab])throw Error('هذا القسم غير معروف');await pages[tab]()}catch(e){content.replaceChildren();content.append(node('div',e.message||'تعذّر تحميل البيانات','error'))}}
   const sidebar=document.getElementById('merchant-side');
   const menuToggle=document.getElementById('menu-toggle');
