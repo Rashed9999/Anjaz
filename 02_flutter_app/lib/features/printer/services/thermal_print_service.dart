@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -8,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 
 /// AMIAL-THERMAL-PRINT-001 — إعداد الطابعة الحرارية المحفوظ.
 class ThermalPrinterConfig {
@@ -45,13 +47,14 @@ class ThermalPrintService extends GetxService {
   static const _kHost = 'amial_printer_host';
   static const _kPort = 'amial_printer_port';
   static const _kOpenCashDrawer = 'amial_printer_open_cash_drawer';
+  static const _kPendingReports = 'amial_pending_print_reports_v1';
 
   final Rxn<ThermalPrinterConfig> config = Rxn<ThermalPrinterConfig>();
 
   @override
   void onInit() {
     super.onInit();
-    loadConfig();
+    loadConfig().then((_) => flushPendingPrintReports());
   }
 
   Future<void> loadConfig() async {
@@ -158,9 +161,15 @@ class ThermalPrintService extends GetxService {
     List<String> contextLines = const [],
     DateTime? dateTime,
     String? verificationUrl,
+    String documentType = 'sale_receipt',
+    String? documentId,
+    String? documentNumber,
+    int copies = 1,
+    Map<String, dynamic> metadata = const {},
   }) async {
+    final startedAt = DateTime.now().toUtc();
     final logo = await fetchLogoBytes(settings['logo_url']?.toString());
-    return printWidget(ThermalReceiptWidget.fromSettings(
+    final result = await printWidget(ThermalReceiptWidget.fromSettings(
       settings: settings,
       lines: lines,
       total: total,
@@ -176,6 +185,144 @@ class ThermalPrintService extends GetxService {
       dateTime: dateTime,
       verificationUrl: verificationUrl,
     ));
+
+    // AMIAL-PRINT-TRACKING-001 — لا نجعل نجاح البيع أو رجوع شاشة
+    // الكاشير ينتظر الشبكة. نحفظ النتيجة محلياً أولاً ثم نحاول رفعها.
+    final cfg = config.value;
+    if (cfg != null) {
+      final finishedAt = DateTime.now().toUtc();
+      final id = _newClientJobId(documentType, documentId ?? invoiceNo);
+      final payload = <String, dynamic>{
+        'client_job_id': id,
+        'document_type': documentType,
+        if ((documentId ?? '').isNotEmpty) 'document_id': documentId,
+        if ((documentNumber ?? invoiceNo ?? '').isNotEmpty)
+          'document_number': documentNumber ?? invoiceNo,
+        'status': result.ok ? 'completed' : 'failed',
+        'copies': copies.clamp(1, 20),
+        if (!result.ok) 'error_code': _printErrorCode(result.message),
+        if (!result.ok) 'error_message': result.message,
+        if (result.ok) 'result_message': result.message,
+        'queued_at': startedAt.toIso8601String(),
+        'started_at': startedAt.toIso8601String(),
+        'finished_at': finishedAt.toIso8601String(),
+        'metadata': <String, dynamic>{
+          'source': 'flutter_thermal_service',
+          'open_cash_drawer': cfg.openCashDrawer,
+          ...metadata,
+        },
+        'printer': <String, dynamic>{
+          'name': cfg.name,
+          'printer_type': 'thermal',
+          'connection_type': cfg.connection,
+          'connection_identity': cfg.connection == 'network'
+              ? '${cfg.host ?? ''}:${cfg.port}'
+              : cfg.mac,
+          'paper_size': '${cfg.paperMm}mm',
+          'capabilities': <String, dynamic>{
+            'cut': true,
+            'cash_drawer': cfg.openCashDrawer,
+            'qr': true,
+            'raster_arabic': true,
+          },
+          'settings': <String, dynamic>{
+            'paper_mm': cfg.paperMm,
+            'port': cfg.connection == 'network' ? cfg.port : null,
+          },
+        },
+      };
+
+      await _queuePrintReport(payload);
+      // لا ننتظر الشبكة: إن فشل الرفع تبقى المهمة في SharedPreferences.
+      Future<void>.microtask(flushPendingPrintReports);
+    }
+
+    return result;
+  }
+
+  String _newClientJobId(String type, String? documentId) {
+    final now = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+    final safeType = type.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    final safeDoc = (documentId ?? '').replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    final suffix = safeDoc.length > 24 ? safeDoc.substring(safeDoc.length - 24) : safeDoc;
+    return '$safeType-$now${suffix.isEmpty ? '' : '-$suffix'}';
+  }
+
+  String? _printErrorCode(String message) {
+    final m = RegExp(r'\\b(PRINT_\\d{4})\\b').firstMatch(message);
+    return m?.group(1);
+  }
+
+  Future<void> _queuePrintReport(Map<String, dynamic> payload) async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(_kPendingReports) ?? <String>[];
+    final id = payload['client_job_id']?.toString();
+    final next = <String>[
+      ...current.where((raw) {
+        try {
+          final item = jsonDecode(raw);
+          return item is! Map || item['client_job_id']?.toString() != id;
+        } catch (_) {
+          return false;
+        }
+      }),
+      jsonEncode(payload),
+    ];
+    // حد دفاعي: سجل التشغيل وليس أرشيفاً دائماً على الهاتف.
+    final bounded = next.length > 200 ? next.sublist(next.length - 200) : next;
+    await prefs.setStringList(_kPendingReports, bounded);
+  }
+
+  Future<void> flushPendingPrintReports() async {
+    if (!Get.isRegistered<ApiClient>()) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(_kPendingReports) ?? <String>[];
+    if (current.isEmpty) return;
+
+    final api = Get.find<ApiClient>();
+    final remaining = <String>[];
+
+    // نرفع بالتسلسل كي لا نحول عودة الشبكة إلى burst على API.
+    for (final raw in current) {
+      Map<String, dynamic>? payload;
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) payload = Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        continue;
+      }
+      if (payload == null) continue;
+
+      try {
+        final id = payload['client_job_id']?.toString() ?? '';
+        final response = await api.postData(
+          '/api/v1/amial/merchant/printing/report',
+          payload,
+          idempotencyKey: id.isEmpty ? null : 'print_$id',
+        );
+        final ok = response.statusCode != null &&
+            response.statusCode! >= 200 && response.statusCode! < 300;
+        if (!ok) {
+          remaining.add(raw);
+          // إن كانت الجلسة أو الشبكة غير متاحة، لا نكرر 200 طلب.
+          if (response.statusCode == 1 ||
+              response.statusCode == 401 ||
+              response.statusCode == 403) {
+            final index = current.indexOf(raw);
+            remaining.addAll(current.skip(index + 1));
+            break;
+          }
+        }
+      } catch (_) {
+        remaining.add(raw);
+        final index = current.indexOf(raw);
+        remaining.addAll(current.skip(index + 1));
+        break;
+      }
+    }
+
+    await prefs.setStringList(_kPendingReports, remaining);
   }
 
   /// يطبع صورة PNG جاهزة (raster) على الطابعة المحفوظة.
