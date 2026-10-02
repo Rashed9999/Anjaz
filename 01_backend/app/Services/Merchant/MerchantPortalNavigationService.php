@@ -121,6 +121,14 @@ final class MerchantPortalNavigationService
         if ($businessType !== A::BIZ_WHOLESALE && $this->available($states, A::F_DEBTS)) {
             $items[] = $this->item('debts', 'الديون والدفع بالآجل', 'payments', EntitlementService::AVAILABLE);
         }
+
+        // المرتجعات تُفتح فقط للقطاعات التي تملك محركاً حقيقياً في الخادم.
+        // الصيدلية والوقود لا يُعطيان زر استرداد عام يلمس جدولاً آخر.
+        if (in_array($businessType, [
+            A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_RESTAURANT, A::BIZ_WHOLESALE,
+        ], true) && $this->available($states, A::F_REFUNDS)) {
+            $items[] = $this->item('returns', 'المرتجعات والاسترداد', 'undo', EntitlementService::AVAILABLE);
+        }
         if ($this->available($states, A::F_SUPPLIERS) || $this->available($states, A::F_PURCHASES)) {
             $items[] = $this->item(
                 'suppliers',
