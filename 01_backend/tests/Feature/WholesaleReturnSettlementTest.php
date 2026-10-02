@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
+use App\Models\CashierShift;
 use App\Models\MerchantProfile;
 use App\Models\Retail\ShiftCashMovement;
 use App\Models\User;
@@ -99,6 +101,64 @@ class WholesaleReturnSettlementTest extends TestCase
         ]);
 
         return [$merchant, $business, $customer, $return];
+    }
+
+    /** @test */
+    public function cash_refund_cannot_leave_a_different_branch_till(): void
+    {
+        [$merchant, , , $return] = $this->fixture();
+
+        $saleBranch = Branch::create([
+            'merchant_user_id' => $merchant->id,
+            'name' => 'فرع البيع',
+            'code' => 'SALE-BR',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+        $otherBranch = Branch::create([
+            'merchant_user_id' => $merchant->id,
+            'name' => 'فرع آخر',
+            'code' => 'OTHER-BR',
+            'is_active' => true,
+            'is_default' => false,
+        ]);
+
+        WholesaleInvoice::whereKey($return->invoice_id)
+            ->update(['branch_id' => $saleBranch->id]);
+
+        $wrongTill = CashierShift::create([
+            'merchant_user_id' => $merchant->id,
+            'branch_id' => $otherBranch->id,
+            'pos_user_id' => null,
+            'opening_float' => '1500',
+            'expected_cash' => '1500',
+            'cash_sales' => '0',
+            'sales_count' => 0,
+            'status' => 'open',
+            'opened_by' => $merchant->id,
+            'opened_by_name' => 'مالك المنشأة',
+            'opened_by_role' => 'merchant',
+            'opened_at' => now(),
+            'zone_code' => 'SOUTH',
+        ]);
+
+        try {
+            app(WholesaleReturnSettlementService::class)->settle(
+                merchant: $merchant,
+                return: $return,
+                actor: $merchant,
+                amount: '1000',
+                method: 'cash',
+                idempotencyKey: 'wrong-branch-refund-001',
+                cashierShiftId: $wrongTill->id,
+            );
+            $this->fail('كان يجب رفض إخراج النقد من درج فرع آخر');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('فرع آخر', $e->getMessage());
+        }
+
+        $this->assertSame(0, WholesaleReturnSettlement::where('return_id', $return->id)->count());
+        $this->assertSame(0, ShiftCashMovement::where('shift_id', $wrongTill->id)->count());
     }
 
     /** @test */
