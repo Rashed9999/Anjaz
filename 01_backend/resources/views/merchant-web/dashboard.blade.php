@@ -2785,6 +2785,12 @@
     const endpoint=node('code','GET /api/v1/amial/partner/sales');endpoint.style.cssText='display:block;direction:ltr;text-align:left;background:#f4f7f6;padding:9px;border-radius:8px;margin:9px 0;font-size:11px';apiCard.append(endpoint);
     if(apiLocked)apiCard.append(node('p',apiLocked,'muted'));
 
+    const backup=card('نسخة احتياطية قطاعية','تنزيل JSON من مصدر قطاعك الحقيقي: منتجات ومبيعات القطاع، ومعها دفاتر الآجل والبيانات المشتركة. قد يتضمن بيانات عملاء حساسة.','حسب الباقة');
+    const backupButton=action('إنشاء وتنزيل النسخة',()=>{
+      if(!window.confirm('قد تحتوي النسخة على بيانات عملاء وذمم ومبيعات حساسة. هل تريد تنزيلها على هذا الجهاز؟'))return;
+      window.open(routes.backupDownload,'_blank','noopener');
+    });backup.append(backupButton);
+
     const webhooks=card('Webhooks للتاجر','لا يوجد حالياً عقد Webhook عام للتاجر في الخادم. لن نعرض عنواناً أو Secret غير موجودين.','غير متاح حالياً','warn');
     webhooks.append(node('p','عند بنائه يجب أن يشمل توقيعاً، Idempotency، حماية Replay وسجل تسليم.','muted'));
 
