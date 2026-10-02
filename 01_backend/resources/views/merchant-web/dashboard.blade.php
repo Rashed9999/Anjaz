@@ -820,15 +820,20 @@
       track_stock:p?.track_stock===false?'0':'1',is_active:p?.is_active===false?'0':'1',
     }:actualSector==='pharmacy'?{
       trade_name:p?.trade_name||'',generic_name:p?.generic_name||'',
+      active_ingredient:p?.active_ingredient||'',strength:p?.strength||'',
+      dosage_form:p?.dosage_form||'',manufacturer:p?.manufacturer||'',
       sale_price:p?.sale_price??'',cost_price:p?.cost_price??'',
       barcode:p?.barcode||'',sku:p?.sku||'',unit:p?.unit||'',
       low_stock_threshold:p?.low_stock_threshold??0,
+      requires_prescription:p?.requires_prescription?'1':'0',
+      dosage_instructions:p?.dosage_instructions||'',description:p?.description||'',
+      is_active:p?.is_active===false?'0':'1',
     }:actualSector==='wholesale'?{
       name:p?.name||'',sku:p?.sku||'',barcode:p?.barcode||'',
       base_price:p?.base_price??'',cost_price:p?.cost_price??'',
       initial_stock:p?null:0,unit:p?.unit||'',low_stock_threshold:p?.low_stock_threshold??0,
     }:{
-      name:p?.name||'',product_code:p?.product_code||'',price_per_liter:p?.price_per_liter??'',
+      name:p?.name||'',product_code:p?.product_code||'',price_per_liter:p?.price_per_liter??'',note:'',
     };
     async function refresh(pageNo=1){
       productPage=pageNo;
@@ -907,15 +912,22 @@
         ['is_active','حالة الصنف','select',[{id:1,name:'نشط'},{id:0,name:'موقوف'}]],
       ]:actualSector==='pharmacy'?[
         ['trade_name','الاسم التجاري *'],['generic_name','الاسم العلمي'],
+        ['active_ingredient','المادة الفعالة'],['strength','التركيز / القوة'],
+        ['dosage_form','الشكل الدوائي'],['manufacturer','الشركة المصنعة'],
         ['sale_price','سعر البيع *','number'],['cost_price','سعر الشراء','number'],
         ['barcode','الباركود'],['sku','رمز SKU'],['unit','وحدة القياس'],
         ['low_stock_threshold','حد تنبيه المخزون','number'],
+        ['requires_prescription','يتطلب وصفة','select',[{id:1,name:'نعم'},{id:0,name:'لا'}]],
+        ['dosage_instructions','تعليمات الجرعة'],['description','ملاحظات الصنف'],
+        ['is_active','حالة الصنف','select',[{id:1,name:'نشط'},{id:0,name:'موقوف'}]],
       ]:actualSector==='wholesale'?[
         ['name','اسم المنتج *'],['base_price','سعر البيع *','number'],
         ['cost_price','سعر الشراء','number'],['sku','رمز SKU'],['barcode','الباركود'],
         ['unit','وحدة القياس'],...(product?[]:[['initial_stock','مخزون البداية','number']]),
         ['low_stock_threshold','حد التنبيه','number'],
-      ]:[['name','اسم الوقود *'],['product_code','رمز المنتج'],['price_per_liter','سعر اللتر *','number']];
+      ]:product
+        ?[['price_per_liter','سعر اللتر الجديد *','number'],['note','سبب / ملاحظة تغيير السعر']]
+        :[['name','اسم الوقود *'],['product_code','رمز المنتج'],['price_per_liter','سعر اللتر *','number']];
       for(const [key,title,type,choices]of definitions)field(form,key,title,type==='select'?'text':type||'text',values[key],choices||null);
       const buttons=node('div',null,'buttons'),save=node('button',product?'حفظ التعديلات':'إضافة المنتج','action');
       const cancel=node('button','إلغاء','action secondary');cancel.type='button';cancel.onclick=()=>editor.replaceChildren();
