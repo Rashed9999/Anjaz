@@ -22,7 +22,10 @@
     .summary td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
     .summary .grand td { background: #eaf1ff; border-top: 2px solid #053391; font-size: 13pt; color: #053391; font-weight: bold; }
     .notice { margin-top: 20px; padding: 10px; background: #f7f9fc; border-right: 3px solid #f4b223; color: #475467; }
-    .verify { margin-top: 18px; padding: 10px; border: 1px solid #d9e0ec; text-align: center; }\n    .verify img { width: 105px; height: 105px; }\n    .verify .code { direction: ltr; font-family: monospace; font-size: 8pt; word-break: break-all; }\n    .footer { margin-top: 22px; border-top: 1px solid #d9e0ec; padding-top: 8px; color: #667085; text-align: center; font-size: 8.5pt; }
+    .verify { margin-top: 18px; padding: 10px; border: 1px solid #d9e0ec; text-align: center; }
+    .verify img { width: 105px; height: 105px; }
+    .verify .code { direction: ltr; font-family: monospace; font-size: 8pt; word-break: break-all; }
+    .footer { margin-top: 22px; border-top: 1px solid #d9e0ec; padding-top: 8px; color: #667085; text-align: center; font-size: 8.5pt; }
   </style>
 </head>
 <body>
@@ -81,5 +84,17 @@
 
   @if($sale->status === 'credit_unpaid')<div class="notice">هذه فاتورة بيع آجل. يبقى السداد والتسوية مرتبطين بسجل الدين ولا تنشئ إعادة طباعة الفاتورة التزاماً جديداً.</div>@endif
   @if($sale->status === 'pending_payment')<div class="notice">هذه العملية بانتظار إتمام دفع أميال باي، وليست إيصال قبض مكتملًا بعد.</div>@endif
+
+  <div class="verify">
+    @if(!empty($qrDataUri))
+      <img src="{{ $qrDataUri }}" alt="QR تحقق">
+    @endif
+    <div><strong>تحقق من أصالة الفاتورة</strong></div>
+    <div class="code">{{ $sale->sale_ulid }}</div>
+    @if(!empty($verificationUrl))
+      <div class="code">{{ $verificationUrl }}</div>
+    @endif
+  </div>
+
   <div class="footer">فاتورة إلكترونية محفوظة في سجل المنشأة. إعادة التنزيل أو الطباعة لا تنشئ عملية بيع أو دفع جديدة.</div>
 </body></html>
