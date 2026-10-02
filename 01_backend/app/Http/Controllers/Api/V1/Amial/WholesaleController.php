@@ -25,6 +25,7 @@ use App\Services\WholesaleInvoiceService;
 use App\Services\PaymentRequestService;
 use App\Services\WholesaleReportsService;
 use App\Services\WholesaleReturnService;
+use App\Services\WholesaleReturnSettlementService;
 use App\Services\WholesaleService;
 use App\Support\Merchant\MerchantPermissions as P;
 use DomainException;
@@ -58,6 +59,7 @@ class WholesaleController extends Controller
         private readonly WholesaleCollectionService $colSvc,
         private readonly WholesaleReportsService $reportsSvc,
         private readonly WholesaleReturnService $returnSvc,
+        private readonly WholesaleReturnSettlementService $returnSettlementSvc,
         private readonly WholesaleInvoicePdfService $pdfSvc,
         private readonly PaymentRequestService $paymentRequestSvc,
         private readonly MerchantPermissionService $perm,
@@ -861,7 +863,13 @@ class WholesaleController extends Controller
         [$merchant] = $ctx;
         $biz = $this->svc->getOrCreateBusiness($merchant);
         $q = WholesaleReturn::where('business_id', $biz->id)
-            ->with(['invoice:id,invoice_number', 'customer:id,full_name', 'items']);
+            ->with([
+                'invoice:id,invoice_number,branch_id',
+                'customer:id,full_name,company_name,phone',
+                'items',
+                'settlements',
+            ])
+            ->withSum('settlements as refund_paid_amount', 'amount');
         if ($request->filled('status') && in_array($request->query('status'), WholesaleReturn::STATUSES, true)) {
             $q->where('status', $request->query('status'));
         }
@@ -912,6 +920,73 @@ class WholesaleController extends Controller
             return $this->error('INVALID_RETURN', $e->getMessage(), 422);
         }
         return $this->ok(['return' => $resolved], 'RETURN_RESOLVED', 'تم حفظ قرار المرتجع');
+    }
+
+    /**
+     * صرفُ المبلغ الذي صار مستحقاً للعميل بعد اعتماد مرتجعٍ مدفوع.
+     *
+     * refund_due_amount لا يُعتبر مدفوعاً هنا إلا إذا نجح نقدُ الوردية
+     * أو قيدُ المحفظة، ثم سُجّل settlement append-only في المعاملة نفسها.
+     */
+    public function settleReturn(Request $request, int $returnId): JsonResponse
+    {
+        $amount = $request->filled('amount') ? (string) $request->input('amount') : null;
+        if ($deny = $this->guard($request, P::WHOLESALE_RETURN_APPROVE, $amount)) return $deny;
+
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:0.01',
+            'method' => 'required|in:cash,amial_pay',
+            'cashier_shift_id' => 'required_if:method,cash|nullable|integer|min:1',
+            'reference' => 'sometimes|nullable|string|max:100',
+            'note' => 'sometimes|nullable|string|max:500',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $return = WholesaleReturn::whereKey($returnId)
+            ->where('business_id', $biz->id)
+            ->first();
+        if (! $return) return $this->error('NOT_FOUND', 'طلب المرتجع غير موجود', 404);
+
+        $idempotencyKey = trim((string) $request->header('Idempotency-Key', ''));
+        if ($idempotencyKey === '') {
+            return $this->error('IDEMPOTENCY_REQUIRED', 'مفتاح منع التكرار مطلوب لصرف المال', 422);
+        }
+
+        try {
+            $settlement = $this->returnSettlementSvc->settle(
+                merchant: $merchant,
+                return: $return,
+                actor: $request->user(),
+                amount: (string) $request->input('amount'),
+                method: (string) $request->input('method'),
+                idempotencyKey: $idempotencyKey,
+                cashierShiftId: $request->filled('cashier_shift_id')
+                    ? (int) $request->input('cashier_shift_id')
+                    : null,
+                note: $request->input('note'),
+                reference: $request->input('reference'),
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->error('RETURN_SETTLEMENT_FAILED', $e->getMessage(), 422);
+        }
+
+        $fresh = $return->fresh()->load('settlements');
+        $paid = MoneyService::normalize((string) $fresh->settlements->sum('amount'));
+        $remaining = $this->returnSettlementSvc->remaining($fresh);
+
+        return $this->ok([
+            'settlement' => $settlement,
+            'return_id' => $fresh->id,
+            'refund_due_amount' => (string) $fresh->refund_due_amount,
+            'refund_paid_amount' => $paid,
+            'refund_remaining_amount' => $remaining,
+            'settlement_type' => $fresh->settlement_type,
+        ], 'RETURN_SETTLED', 'تم صرف مستحق المرتجع', 201);
     }
 
     // ============ Collections ============
