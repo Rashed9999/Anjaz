@@ -133,6 +133,13 @@
         .staff-status{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:800}.staff-status.on{background:#eaf7f1;color:#177052}.staff-status.off{background:#f6eeee;color:#9b4b42}
         @media(max-width:650px){.permission-options{grid-template-columns:1fr}.roles-grid{grid-template-columns:1fr}}
 
+    
+        .filter-bar{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:8px;align-items:end;margin-bottom:14px}
+        .filter-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+        .pager{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:13px;padding-top:12px;border-top:1px solid #e6ece9}.pager-actions{display:flex;gap:6px}.pager button{min-width:42px}
+        @media(max-width:1000px){.filter-bar{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        @media(max-width:650px){.filter-bar{grid-template-columns:1fr 1fr}.filter-actions{grid-column:1/-1}}
+
     </style>
 </head>
 <body>
@@ -1068,25 +1075,90 @@
     }
     hint(p,'هذه البيانات من وحدة قطاع منشأتك المسجّل؛ القطاعات الأخرى لا تمنح وصولًا إلى أعمالها.');
   }
-  async function sales(){
+  function isoDate(d){return d.toISOString().slice(0,10)}
+  function defaultSalesFilters(){
+    const to=new Date(),from=new Date();from.setDate(from.getDate()-29);
+    return {from:isoDate(from),to:isoDate(to),payment_method:'',status:'',employee_id:'',search:''};
+  }
+  async function sales(filters=null,page=1){
     const state=(navigation.find(item=>item.tab==='sales')||{}).state;
     if(state&&state!=='available'){
       const p=box('سجل '+actualSectorName);hint(p,navigationNote(state));return;
     }
-    const data=await api('sectorSales'),r=data.result||{};
+
+    filters=filters||defaultSalesFilters();
+    const url=new URL(routes.salesV2,window.location.href);
+    Object.entries(filters).forEach(([k,v])=>{if(v!==''&&v!==null&&v!==undefined)url.searchParams.set(k,v)});
+    url.searchParams.set('page',String(page));
+
+    const staffPromise=navigation.some(item=>item.tab==='staff'&&item.state==='available')
+      ? api('staff').catch(()=>({staff:[]})):Promise.resolve({staff:[]});
+    const [data,staffData]=await Promise.all([api('salesV2',undefined,url.toString()),staffPromise]);
+    const rows=data.rows||[],summary=data.summary||{},pagination=data.pagination||{},staff=staffData.staff||[];
+    const avg=Number(summary.count||0)>0?Number(summary.total||0)/Number(summary.count):0;
+
+    dashboardKpis([
+      ['إجمالي الفترة',money(summary.total||0),'↗',(summary.count||0)+' عملية'],
+      ['عدد المبيعات',String(summary.count||0),'▧','حسب الفلاتر الحالية','blue'],
+      ['متوسط الفاتورة',money(avg),'◇','إجمالي الفترة ÷ عدد العمليات'],
+      ['مصدر السجل',data.source||'—','◎','مصدر قطاع المنشأة الحقيقي','gold'],
+    ]);
+
     const p=box('سجل '+actualSectorName);
-    hint(p,'يعرض هذا السجل المصدر التشغيلي الحقيقي لقطاع منشأتك. لا يُستبدل بسجل قطاع آخر ولا يخلط بين طرق الدفع.');
-    if(actualSector==='fuel'){
-      table(p,[['المرجع',x=>x.sale_number||x.reference_number||x.id],['الكمية',x=>x.liters??x.quantity??'—'],['المبلغ',x=>money(x.total_amount??x.amount)],['طريقة الدفع',x=>paymentLabel(x.payment_method)],['الحالة',x=>saleStatusLabel(x.status)],['التفاصيل',saleDetailButton]],r.sales||[]);
-    }else if(actualSector==='pharmacy'){
-      table(p,[['المرجع',x=>x.invoice_number||x.sale_number||x.id],['المبلغ',x=>money(x.total_amount??x.amount)],['طريقة الدفع',x=>paymentLabel(x.payment_method)],['الحالة',x=>saleStatusLabel(x.status)],['التاريخ',x=>x.created_at||'—'],['التفاصيل',saleDetailButton]],r.sales||[]);
-    }else if(actualSector==='wholesale'){
-      table(p,[['الفاتورة',x=>x.invoice_number||x.id],['العميل',x=>x.customer?.name||x.customer_name||'—'],['الإجمالي',x=>money(x.total_amount)],['المتبقي',x=>money(x.balance_due)],['الحالة',x=>saleStatusLabel(x.status)],['التفاصيل',saleDetailButton]],r.invoices||[]);
-    }else if(actualSector==='restaurant'){
-      table(p,[['الطلب',x=>x.order_number||x.id],['الطاولة',x=>x.table?.label||x.table_label||'—'],['الإجمالي',x=>money(x.total_amount??x.amount)],['الدفع',x=>paymentLabel(x.payment_method)],['الحالة',x=>saleStatusLabel(x.status)],['التفاصيل',saleDetailButton]],r.orders||[]);
-    }else{
-      table(p,[['المرجع',x=>x.invoice_number||x.sale_number||x.sale_ulid||x.ulid||x.id],['الإجمالي',x=>money(x.total_amount??x.grand_total??x.amount)],['طريقة الدفع',x=>paymentLabel(x.payment_method)],['الحالة',x=>saleStatusLabel(x.status)],['التاريخ',x=>x.created_at||'—'],['التفاصيل',saleDetailButton]],r.sales||[]);
-    }
+    hint(p,'الفلاتر تعمل على الخادم قبل الترقيم. نتائج الوقود والصيدلية والجملة لا تُقرأ من merchant_sales، وتفاصيل العملية تظل من محرك قطاعها الأصلي.');
+
+    const ff=node('form',null,'filter-bar');
+    const makeField=(label,name,type='text',options=null)=>{
+      const holder=node('label',label,'field'),input=options?node('select'):node('input');
+      input.name=name;
+      if(options){options.forEach(o=>{const op=node('option',o.label);op.value=o.value;input.append(op)})}
+      else input.type=type;
+      input.value=filters[name]??'';holder.append(input);return [holder,input]
+    };
+    const [fromL,from]=makeField('من','from','date'),[toL,to]=makeField('إلى','to','date');
+    const methods=[
+      {value:'',label:'كل طرق الدفع'},{value:'cash',label:'نقد'},
+      {value:'amial_pay',label:'أميال باي'},{value:'credit',label:'آجل'},
+      {value:'mixed',label:'مختلط'},{value:'company_card',label:'حساب شركة'},
+      {value:'corporate',label:'حساب مؤسسي'}
+    ];
+    const [methodL,method]=makeField('طريقة الدفع','payment_method','select',methods);
+    const statusOptions=[
+      {value:'',label:'كل الحالات'},{value:'completed',label:'مكتملة'},
+      {value:'credit_unpaid',label:'آجل غير مسدد'},{value:'credit_paid',label:'آجل مسدد'},
+      {value:'issued',label:'صادرة'},{value:'partial_paid',label:'مسددة جزئياً'},
+      {value:'paid',label:'مسددة'}
+    ];
+    const [statusL,status]=makeField('الحالة','status','select',statusOptions);
+    const employeeOptions=[{value:'',label:'كل الموظفين'},...staff.map(x=>({value:x.id,label:x.display_name+' — '+x.employee_code}))];
+    const [employeeL,employee]=makeField('الموظف','employee_id','select',employeeOptions);
+    const [searchL,search]=makeField('بحث','search','search');search.placeholder='فاتورة، مرجع أو عميل';
+    const actions=node('div',null,'filter-actions'),apply=node('button','تطبيق','action'),reset=node('button','آخر 30 يوماً','action secondary');
+    apply.type='submit';reset.type='button';reset.onclick=()=>{content.replaceChildren();sales(defaultSalesFilters(),1).catch(e=>message(e.message))};
+    actions.append(apply,reset);ff.append(fromL,toL,methodL,statusL,employeeL,searchL,actions);p.append(ff);
+    ff.addEventListener('submit',ev=>{
+      ev.preventDefault();
+      const next=Object.fromEntries(new FormData(ff).entries());
+      content.replaceChildren();sales(next,1).catch(e=>{content.replaceChildren(node('div',e.message,'error'))});
+    });
+
+    table(p,[
+      ['الوقت',x=>x.occurred_at?new Date(x.occurred_at).toLocaleString('ar-YE'):'—'],
+      ['الفاتورة',x=>x.document_number||x.reference],
+      ['العميل',x=>x.customer_name||'—'],
+      ['الموظف',x=>x.employee_name||'المالك / غير منسوب'],
+      ['الفرع',x=>x.branch_name||'—'],
+      ['طريقة الدفع',x=>paymentLabel(x.payment_method)],
+      ['الحالة',x=>saleStatusLabel(x.status)],
+      ['الإجمالي',x=>money(x.amount)],
+      ['التفاصيل',x=>saleDetailButton({...x,id:x.detail_id, sale_ulid:actualSector==='wholesale'||actualSector==='restaurant'?undefined:x.detail_id})]
+    ],rows);
+    if(!rows.length)p.append(node('div','لا توجد مبيعات مطابقة للفلاتر الحالية.','dashboard-empty'));
+
+    const pager=node('div',null,'pager'),info=node('span','صفحة '+(pagination.current_page||1)+' من '+(pagination.last_page||1)+' · '+(pagination.total||0)+' سجل','muted'),pa=node('div',null,'pager-actions');
+    const prev=action('السابق',()=>{if((pagination.current_page||1)>1){content.replaceChildren();sales(filters,(pagination.current_page||1)-1)}});
+    const next=action('التالي',()=>{if((pagination.current_page||1)<(pagination.last_page||1)){content.replaceChildren();sales(filters,(pagination.current_page||1)+1)}});
+    prev.disabled=(pagination.current_page||1)<=1;next.disabled=(pagination.current_page||1)>=(pagination.last_page||1);pa.append(prev,next);pager.append(info,pa);p.append(pager);
   }
   function saleIdentifier(row){return String((actualSector==='wholesale'||actualSector==='restaurant'?row.id:(row.sale_ulid||row.ulid||row.id))||'')}
   function saleDetailButton(row){const id=saleIdentifier(row),button=node('button','عرض','action secondary');button.type='button';button.disabled=!id;button.addEventListener('click',()=>showSaleDetail(id));return button}
