@@ -154,7 +154,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                 initialValue: type.isEmpty ? null : type,
                 decoration: InputDecoration(
                     labelText: 'receipts_filter_type'.tr, isDense: true),
-                items: const [
+                items: [
                   DropdownMenuItem(value: '', child: Text('receipts_filter_all_types'.tr)),
                   DropdownMenuItem(value: 'send_money', child: Text('receipts_filter_send_money'.tr)),
                   DropdownMenuItem(value: 'cash_in', child: Text('receipts_filter_cash_in'.tr)),
@@ -196,7 +196,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                     key: const Key('receipts-filter-min'),
                     controller: minCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                         labelText: 'receipts_filter_min_amount'.tr, isDense: true),
                   ),
                 ),
@@ -206,7 +206,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
                     key: const Key('receipts-filter-max'),
                     controller: maxCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                         labelText: 'receipts_filter_max_amount'.tr, isDense: true),
                   ),
                 ),
