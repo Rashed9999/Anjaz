@@ -123,6 +123,16 @@
         @media(max-width:1180px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-grid,.dash-grid.equal{grid-template-columns:1fr}.side{width:min(88vw,340px)}}
         @media(max-width:600px){.dashboard-hero{padding:20px 17px;border-radius:18px}.dashboard-hero h2{font-size:21px}.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.kpi-card{padding:13px}.kpi-value{font-size:18px}.kpi-icon{width:32px;height:32px}.ops-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.chart-card{padding:15px}.trend-svg{height:185px}.mix-row{grid-template-columns:75px 1fr auto}}
 
+    
+        .roles-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:11px;margin-top:12px}
+        .role-card{border:1px solid #e0eae5;background:#fbfdfc;border-radius:14px;padding:14px}
+        .role-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.role-card h4{margin:0;font-size:14px}.role-card p{font-size:11px;color:#758780;line-height:1.6;margin:6px 0 0}
+        .role-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.role-meta span{font-size:10px;background:#eef6f2;color:#4d7164;border-radius:999px;padding:5px 8px}
+        .permission-groups{display:grid;gap:8px;max-height:430px;overflow:auto;padding-inline-end:4px}.permission-group{border:1px solid #e2ebe7;border-radius:12px;background:#fbfdfc}.permission-group summary{cursor:pointer;padding:11px 12px;font-size:12px;font-weight:800}.permission-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:0 12px 12px}
+        .permission-option{display:flex;align-items:flex-start;gap:8px;border:1px solid #e7eeeb;background:#fff;border-radius:9px;padding:8px;font-size:11px;line-height:1.5}.permission-option input{width:auto;min-height:auto;margin-top:2px}.permission-option.sensitive{border-color:#f1ddc0;background:#fffaf2}
+        .staff-status{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:800}.staff-status.on{background:#eaf7f1;color:#177052}.staff-status.off{background:#f6eeee;color:#9b4b42}
+        @media(max-width:650px){.permission-options{grid-template-columns:1fr}.roles-grid{grid-template-columns:1fr}}
+
     </style>
 </head>
 <body>
@@ -1305,10 +1315,20 @@
     actions.append(grant,reject);return actions;
   }
   async function staff(){
-    const [data,roles,approvalData]=await Promise.all([
-      api('staff'),api('roles'),api('approvals')
+    const [data,rolesData,approvalData,performance]=await Promise.all([
+      api('staff'),api('roles'),api('approvals'),api('staffPerformance').catch(()=>({staff:[],grand_total:0,unattributed_total:0,source:'غير متاح'}))
     ]);
-    const approvals=approvalData.approvals||[];
+    const staffRows=data.staff||[],roles=rolesData.roles||[],catalogue=rolesData.permission_catalogue||[],approvals=approvalData.approvals||[];
+    const activeStaff=staffRows.filter(x=>x.is_active).length;
+    const perfById=new Map((performance.staff||[]).map(x=>[String(x.id),x]));
+
+    dashboardKpis([
+      ['الموظفون',String(staffRows.length),'♙',activeStaff+' نشط'],
+      ['الأدوار',String(roles.filter(x=>x.is_active).length),'◎','حزم صلاحيات فعلية من الخادم','blue'],
+      ['مبيعات الموظفين · '+(performance.days||7)+' أيام',money(performance.grand_total||0),'↗','المصدر: '+(performance.source||'سجل القطاع'),'gold'],
+      ['طلبات الاعتماد',String(approvals.filter(x=>x.status==='pending').length),'!',approvals.length?'تحتاج قرار المالك':'لا توجد طلبات معلقة',approvals.some(x=>x.status==='pending')?'red':'']
+    ]);
+
     if(approvals.length){
       const a=box('طلبات اعتماد نقاط البيع');
       hint(a,'هذه أفعال بدأها موظف نقطة البيع وتحتاج إذن المالك. الموافقة لا تنفذ العملية عن الموظف؛ تمنحه إذناً لمرة واحدة ثم يعيد التنفيذ بنفسه.');
@@ -1322,11 +1342,92 @@
         ['القرار',approvalAction]
       ],approvals);
     }
-    const p=box('الموظفون');
-    table(p,[['الموظف',x=>x.display_name],['الرمز',x=>x.employee_code],['الفرع',x=>x.branch_name||'المنشأة'],['الحالة',x=>x.is_active?'نشط':'موقوف']],data.staff||[]);
+
+    const p=box('الموظفون وأداء نقاط البيع');
+    hint(p,'الحساب، الفرع، الدور، الحالة وأداء البيع في مكان واحد. الأداء يُقرأ من سجل قطاع المنشأة نفسه، وليس من جدول تجزئة عام.');
+    table(p,[
+      ['الموظف',x=>x.display_name],
+      ['رمز الدخول',x=>x.employee_code],
+      ['الدور',x=>(x.roles||[]).map(r=>r.name_ar).join('، ')||'الدور الافتراضي'],
+      ['الفرع',x=>x.branch_name||'المنشأة الرئيسية'],
+      ['مبيعات الفترة',x=>money(perfById.get(String(x.id))?.sales_total||0)],
+      ['عمليات اليوم',x=>perfById.get(String(x.id))?.today_count||0],
+      ['الحالة',x=>{const s=node('span',x.is_active?'نشط':'موقوف','staff-status '+(x.is_active?'on':'off'));return s}],
+      ['الإجراء',x=>{const b=action(x.is_active?'إيقاف':'تفعيل',async()=>{
+        if(!window.confirm((x.is_active?'إيقاف':'تفعيل')+' حساب «'+x.display_name+'»؟'+(x.is_active?' سيتم قطع جلسات العمل المفتوحة فوراً.':'')))return;
+        b.disabled=true;
+        try{
+          const result=await api('staffToggle',{},routes.staffToggle.replace('__ID__',String(x.id)));
+          message(result.message||(x.is_active?'تم الإيقاف':'تم التفعيل'));await load('staff');
+        }catch(e){message(e.message);b.disabled=false}
+      });return b}]
+    ],staffRows);
+
+    if(Number(performance.unattributed_total||0)>0){
+      hint(p,'يوجد '+money(performance.unattributed_total)+' من مبيعات الفترة غير منسوب لموظف POS (مثل مبيعات نفذها المالك مباشرة).');
+    }
+
+    const rolesPanel=box('الأدوار والصلاحيات');
+    hint(rolesPanel,'الدور حزمة صلاحيات حقيقية يقرأها الخادم عند تنفيذ الفعل. الصلاحيات الحساسة مميزة، ولا يكفي إخفاء زر في الواجهة.');
+    const roleGrid=node('div',null,'roles-grid'),catalogueMap=new Map(catalogue.map(x=>[x.code,x]));
+    roles.forEach(role=>{
+      const card=node('article',null,'role-card'),head=node('div',null,'role-card-head');
+      head.append(node('h4',role.name_ar),node('span',role.is_system?'دور جاهز':'مخصص','source-chip'));card.append(head);
+      if(role.description_ar)card.append(node('p',role.description_ar));
+      const meta=node('div',null,'role-meta');
+      meta.append(node('span',(role.permissions_count||0)+' صلاحية'),node('span',(role.assignments_count||0)+' موظف'));
+      card.append(meta);
+      const details=node('details'),summary=node('summary','عرض الصلاحيات ('+(role.permissions_count||0)+')');
+      details.append(summary);
+      const names=(role.permissions||[]).map(code=>catalogueMap.get(code)?.name||code);
+      details.append(node('p',names.join(' · ')||'لا توجد صلاحيات','muted'));card.append(details);roleGrid.append(card)
+    });
+    rolesPanel.append(roleGrid);
+
+    const roleCreate=box('إنشاء دور مخصص');
+    hint(roleCreate,'مثال: «مشرف فرع» أو «محاسب». اختر فقط ما يحتاجه هذا الدور؛ يمكنك استخدام الأدوار الجاهزة بدلاً من إنشاء نسخة منها.');
+    const rf=node('form',null,'editor'),nameLabel=node('label','اسم الدور','field'),nameInput=node('input');
+    nameInput.name='name_ar';nameInput.required=true;nameInput.maxLength=80;nameLabel.append(nameInput);
+    const descLabel=node('label','وصف مختصر','field'),descInput=node('input');descInput.name='description_ar';descInput.maxLength=240;descLabel.append(descInput);
+    rf.append(nameLabel,descLabel);
+    const grouped=new Map();
+    catalogue.forEach(item=>{if(!grouped.has(item.group))grouped.set(item.group,[]);grouped.get(item.group).push(item)});
+    const permissionBox=node('div',null,'permission-groups');
+    grouped.forEach((items,group)=>{
+      const details=node('details',null,'permission-group');details.open=['الموظفون','الصندوق'].includes(group);
+      details.append(node('summary',group+' · '+items.length+' صلاحية'));
+      const opts=node('div',null,'permission-options');
+      items.forEach(item=>{
+        const label=node('label',null,'permission-option'+(item.sensitive?' sensitive':'')),check=node('input');
+        check.type='checkbox';check.name='permissions';check.value=item.code;
+        const copy=node('span',item.name+(item.sensitive?' · إجراء حساس':''));
+        label.append(check,copy);opts.append(label)
+      });
+      details.append(opts);permissionBox.append(details)
+    });
+    rf.append(permissionBox);
+    const saveRole=node('button','إنشاء الدور','action');saveRole.type='submit';rf.append(saveRole);
+    rf.addEventListener('submit',async ev=>{
+      ev.preventDefault();
+      const permissions=[...rf.querySelectorAll('input[name="permissions"]:checked')].map(x=>x.value);
+      if(!permissions.length){message('اختر صلاحية واحدة على الأقل');return}
+      saveRole.disabled=true;
+      try{
+        await api('rolesCreate',{name_ar:nameInput.value.trim(),description_ar:descInput.value.trim()||null,permissions});
+        message('تم إنشاء الدور ويمكن اختياره عند إضافة الموظف');await load('staff');
+      }catch(e){message(e.message);saveRole.disabled=false}
+    });
+    roleCreate.append(rf);
+
     const create=box('إضافة موظف نقطة بيع');
-    const choices=(roles.roles||[]).filter(r=>r.is_active).map(r=>({value:r.id,label:r.name_ar}));
-    form(create,[['display_name','اسم الموظف'],['employee_code','رمز الدخول'],['password','كلمة مرور الموظف','password'],['merchant_role_id','الصلاحية','select',[{value:'',label:'الدور الافتراضي لنقطة البيع'},...choices]]], 'إنشاء حساب الموظف',d=>api('staffCreate',d))
+    hint(create,'ينشأ حساب دخول مستقل للموظف، ثم يُسنَد له الدور الحقيقي الذي اخترته. الجهاز يُفعّل من «إعداد نقطة بيع».');
+    const choices=roles.filter(r=>r.is_active).map(r=>({value:r.id,label:r.name_ar}));
+    form(create,[
+      ['display_name','اسم الموظف'],
+      ['employee_code','رمز الدخول'],
+      ['password','كلمة مرور مؤقتة','password'],
+      ['merchant_role_id','الدور والصلاحيات','select',[{value:'',label:'الدور الافتراضي لنقطة البيع'},...choices]]
+    ],'إنشاء حساب الموظف',d=>api('staffCreate',d));
   }
 
   // AMIAL-MERCHANT-WEB-PROCUREMENT-001 — المالك أصبح Web-only؛ لذلك
