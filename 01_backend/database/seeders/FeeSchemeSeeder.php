@@ -52,7 +52,6 @@ class FeeSchemeSeeder extends Seeder
             // ══════════════════════════════════════════════════════════
             ['MERCHANT_QR',       'دفع تاجر QR',       'percent',            '0',      '0',    null,  null,  '0',      '0', 'merchant', 'sender'],
             ['MERCHANT_POS',      'دفع تاجر POS',      'percent',            '0',      '0',    null,  null,  '0',      '0', 'merchant', 'sender'],
-            ['SUPPLIER_PAYMENT',  'سداد مورد من المحفظة','fixed',              '0',      '0',    null,  null,  '0',      '0', 'merchant', 'merchant'],
             ['SAFE_PAYMENT',      'الدفع الآمن',       'percent',            '1.5000', '0',    '100', null,  '0',      '0', 'customer', 'sender'],
             ['BILL_PAY',          'تسديد فاتورة',      'fixed',              '0',      '10',   null,  null,  '0',      '0', 'customer', 'sender'],
             ['SPLIT_BILL',        'تقسيم فاتورة',      'percent',            '0',      '0',    null,  null,  '0',      '0', 'customer', 'sender'],
