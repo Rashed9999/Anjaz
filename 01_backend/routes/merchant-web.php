@@ -234,11 +234,19 @@ Route::middleware('merchant.web')->group(function () {
             ->middleware(['capability:employees', 'throttle:20,1'])->name('staff.create');
         Route::post('/staff/{id}/toggle', [Staff::class, 'toggle'])
             ->where('id', '[0-9]+')->middleware('capability:employees')->name('staff.toggle');
+        Route::post('/staff/{id}/branch', [Staff::class, 'assignBranch'])
+            ->whereNumber('id')->middleware(['capability:employees', 'throttle:30,1'])->name('staff.branch');
+        Route::post('/staff/{id}/role', [Staff::class, 'setRole'])
+            ->whereNumber('id')->middleware(['capability:employees', 'throttle:30,1'])->name('staff.role');
 
         Route::get('/devices', [Devices::class, 'index'])
             ->middleware('capability:multi_pos')->name('devices');
         Route::post('/devices/activation-codes', [Devices::class, 'createActivationCode'])
             ->middleware(['capability:multi_pos', 'throttle:10,1'])->name('devices.activate');
+        Route::patch('/devices/{id}', [Devices::class, 'update'])
+            ->whereNumber('id')->middleware(['capability:multi_pos', 'throttle:30,1'])->name('devices.update');
+        Route::delete('/devices/{id}', [Devices::class, 'destroy'])
+            ->whereNumber('id')->middleware(['capability:multi_pos', 'throttle:20,1'])->name('devices.destroy');
 
         Route::get('/receipt-settings', [Receipts::class, 'show'])->name('receipts');
         Route::post('/receipt-settings', [Receipts::class, 'save'])
