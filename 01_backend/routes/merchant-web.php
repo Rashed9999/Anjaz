@@ -43,6 +43,9 @@ Route::middleware('merchant.web')->group(function () {
             Route::get('/{ulid}/status', [$reports, 'status'])->where('ulid', '[A-Z0-9]{26}')->name('status');
             Route::get('/{ulid}/download', [$reports, 'download'])->where('ulid', '[A-Z0-9]{26}')->name('download');
         });
+        Route::get('/backup', [\App\Http\Controllers\Api\V1\Amial\MerchantBackupController::class, 'download'])
+            ->name('backup');
+
         Route::prefix('/integrations/api-keys')->name('integrations.api-keys.')->group(function () {
             $apiKeys = \App\Http\Controllers\Api\V1\Amial\MerchantApiKeyController::class;
             Route::get('/', [$apiKeys, 'index'])->name('index');
