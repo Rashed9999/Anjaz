@@ -610,6 +610,84 @@
     p.append(frm);
     p.scrollIntoView({behavior:'smooth',block:'start'});
   }
+  async function showCustomerProfile(id){
+    document.getElementById('customer-profile-360')?.remove();
+    const data=await api('sectorCustomerProfile',undefined,routes.sectorCustomerProfile.replace('__ID__',String(id)));
+    const pData=data.profile||{},identity=pData.identity||{},commerce=pData.commerce||{},credit=pData.credit||null;
+    const p=box('ملف العميل 360° · '+(identity.company_name||identity.name||'العميل'));p.id='customer-profile-360';
+    hint(p,'هذا الملف يجمع سجل القطاع مع دفتر الدين الموحد دون جمع الرصيدين معاً؛ كل رقم يحتفظ بمصدره حتى لا تتكرر الذمة أو المبيعات.');
+
+    const summary=node('div',null,'kpi-grid');
+    summary.append(
+      kpiCard('إجمالي المشتريات',money(commerce.sales_total||0),'↗',(commerce.sales_count||0)+' عملية'),
+      kpiCard('متوسط الفاتورة',commerce.average_ticket!==undefined?money(commerce.average_ticket):'حسب القطاع','◇',commerce.last_visit_at?'آخر زيارة '+new Date(commerce.last_visit_at).toLocaleDateString('ar-YE'):(commerce.last_purchase_date?'آخر شراء '+commerce.last_purchase_date:'لا توجد زيارة مسجلة'),'blue'),
+      kpiCard('الدين الموحد',credit?money(credit.current_balance):'لا يوجد حساب آجل','◫',credit?.credit_limit?'الحد '+money(credit.credit_limit):'لا يُفترض وجود دين من مجرد وجود العميل',Number(credit?.current_balance||0)>0?'red':''),
+      kpiCard('الهاتف',identity.phone||'غير مسجل','♟',identity.company_name||identity.city||'ملف العميل')
+    );
+    p.append(summary);
+
+    const identityPanel=node('section',null,'panel');identityPanel.append(node('h2','بيانات العميل'));
+    const identityGrid=node('div',null,'grid');
+    const pairs=[
+      ['الاسم',identity.name||'—'],['المنشأة',identity.company_name||'—'],['الهاتف',identity.phone||'—'],
+      ['البريد',identity.email||'—'],['المدينة',identity.city||'—'],['العنوان',identity.address||'—'],
+      ['الرقم الضريبي',identity.tax_number||'—'],['التصنيف',customerClassLabel(identity.classification)]
+    ].filter(([,v])=>v!=='—');
+    pairs.forEach(([label,value])=>identityGrid.append(metric(label,String(value))));identityPanel.append(identityGrid);p.append(identityPanel);
+
+    if(pData.kind==='pharmacy'){
+      const clinical=pData.clinical||{},clinicalPanel=node('section',null,'panel');clinicalPanel.append(node('h2','بيانات السلامة الدوائية'));
+      hint(clinicalPanel,'هذه البيانات تخص ملف الصيدلية وتستخدم لتنبيه البيع عند الحساسية أو الحالات الخاصة؛ لا تُعرض خارج هذا القطاع.');
+      const rows=[
+        ['الحساسيات',(clinical.allergies||[]).join('، ')||'لا توجد مسجلة'],
+        ['الأمراض المزمنة',(clinical.chronic_conditions||[]).join('، ')||'لا توجد مسجلة'],
+        ['الأدوية المنتظمة',(clinical.regular_medications||[]).join('، ')||'لا توجد مسجلة'],
+        ['الحمل',clinical.is_pregnant?'نعم':'لا'],['الرضاعة',clinical.is_breastfeeding?'نعم':'لا']
+      ];
+      table(clinicalPanel,[['البند',x=>x[0]],['البيانات',x=>x[1]]],rows);p.append(clinicalPanel);
+    }
+
+    if(pData.kind==='wholesale'){
+      const policy=pData.wholesale_credit_policy||{},policyPanel=node('section',null,'panel');policyPanel.append(node('h2','سياسة عميل الجملة'));
+      const g=node('div',null,'grid');
+      g.append(metric('حد الائتمان',money(policy.credit_limit||0)),metric('رصيد الجملة التشغيلي',money(policy.current_balance_snapshot||0)),
+        metric('الائتمان المتاح',money(policy.available_credit||0)),metric('مدة السداد',policy.payment_terms_days?policy.payment_terms_days+' يوم':'غير محددة'));
+      policyPanel.append(g);hint(policyPanel,policy.note||'');p.append(policyPanel);
+
+      const invoices=commerce.recent_invoices||[];
+      const inv=node('section',null,'panel');inv.append(node('h2','آخر فواتير الجملة'));
+      table(inv,[['الفاتورة',x=>x.document_number],['التاريخ',x=>x.invoice_date||'—'],['الاستحقاق',x=>x.due_date||'—'],
+        ['الإجمالي',x=>money(x.total)],['المدفوع',x=>money(x.paid)],['المتبقي',x=>money(x.balance_due)],['الحالة',x=>saleStatusLabel(x.status)]],invoices);
+      p.append(inv);
+
+      const cols=commerce.recent_collections||[];
+      if(cols.length){const cp=node('section',null,'panel');cp.append(node('h2','آخر التحصيلات'));table(cp,[['التاريخ',x=>x.date||'—'],['المبلغ',x=>money(x.amount)],['الطريقة',x=>paymentLabel(x.payment_method)],['المرجع',x=>x.reference_number||x.reference||'—']],cols);p.append(cp)}
+    }else{
+      const sales=commerce.recent_sales||[];
+      const sp=node('section',null,'panel');sp.append(node('h2','آخر المشتريات'));
+      table(sp,[['التاريخ',x=>x.occurred_at?new Date(x.occurred_at).toLocaleString('ar-YE'):'—'],
+        ['الفاتورة',x=>x.document_number||x.reference],['طريقة الدفع',x=>paymentLabel(x.payment_method)],
+        ['الإجمالي',x=>money(x.total)],['الحالة',x=>saleStatusLabel(x.status)]],sales);p.append(sp);
+    }
+
+    if(credit){
+      const ledger=node('section',null,'panel');ledger.append(node('h2','دفتر الدين الموحد'));
+      const cg=node('div',null,'grid');
+      cg.append(metric('الرصيد الحالي',money(credit.current_balance)),metric('الحد',credit.credit_limit?money(credit.credit_limit):'غير محدد'),
+        metric('إجمالي الزيادات',money(credit.totals?.debit||0)),metric('إجمالي السداد/الخصم',money(credit.totals?.credit||0)));
+      ledger.append(cg);
+      const pdf=node('a','تنزيل كشف الحساب PDF','link-action');pdf.href=debtUrl('debtStatementPdf',credit.account_id);pdf.target='_blank';pdf.rel='noopener noreferrer';ledger.append(pdf);
+      table(ledger,[['التاريخ',x=>x.created_at?new Date(x.created_at).toLocaleString('ar-YE'):'—'],
+        ['النوع',x=>x.type==='sale'?'بيع آجل':x.type==='payment'?'سداد':x.type==='return'?'مرتجع':'تعديل'],
+        ['المبلغ',x=>money(x.amount)],['الرصيد بعد',x=>money(x.balance_after)],
+        ['المرجع',x=>x.reference_number||x.reference_id||'—'],['ملاحظة',x=>x.note||'—']],credit.movements||[]);
+      p.append(ledger);
+    }
+
+    const close=action('إغلاق الملف',()=>p.remove());p.append(close);
+    p.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
   async function customers(search=''){
     const url=new URL(routes.sectorCustomers,window.location.href);
     if(search)url.searchParams.set('search',search);
@@ -649,7 +727,7 @@
         ['تاريخ الميلاد',x=>x.date_of_birth||'—'],
         ['الجنس',x=>x.gender==='male'?'ذكر':x.gender==='female'?'أنثى':'—'],
         ['ملاحظات',x=>x.notes||'—'],
-        ['الإجراء',x=>action('تعديل',()=>customerEditor(x))]
+        ['الإجراء',x=>buttons([action('فتح الملف',()=>showCustomerProfile(x.id)),action('تعديل',()=>customerEditor(x))])]
       ],rows);
     }else if(actualSector==='wholesale'){
       table(p,[
@@ -658,7 +736,7 @@
         ['الرصيد المستحق',x=>money(x.current_balance||0)],
         ['حد الائتمان',x=>x.credit_limit?money(x.credit_limit):'غير محدد'],
         ['مدة السداد',x=>x.payment_terms_days?x.payment_terms_days+' يوم':'—'],
-        ['الإجراء',x=>action('تعديل',()=>customerEditor(x))]
+        ['الإجراء',x=>buttons([action('فتح الملف',()=>showCustomerProfile(x.id)),action('تعديل',()=>customerEditor(x))])]
       ],rows);
     }else{
       const canOpenDebt=navigation.some(item=>item.tab==='debts'&&item.state==='available');
@@ -669,8 +747,9 @@
         ['حد الائتمان',x=>Number(x.credit_limit||0)>0?money(x.credit_limit):'غير محدد'],
         ['آخر سداد',x=>x.last_payment_at||'—'],
         ['الإجراء',x=>buttons([
+          action('فتح الملف',()=>showCustomerProfile(x.id)),
           action('تعديل',()=>customerEditor(x)),
-          canOpenDebt?action('كشف الحساب',()=>{load('debts').then(()=>setTimeout(()=>debtDetails(x.id),100))}):null
+          canOpenDebt?action('تحصيل / دين',()=>{load('debts').then(()=>setTimeout(()=>debtDetails(x.id),100))}):null
         ])]
       ],rows);
     }
