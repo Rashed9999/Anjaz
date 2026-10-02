@@ -115,25 +115,50 @@ class ThermalPrintService extends GetxService {
   int _dotsFor(int mm) => mm == 58 ? 384 : 576;
 
   /// يلتقط widget الإيصال كصورة ويطبعه.
-  Future<PrintResult> printWidget(Widget receipt) async {
+  Future<PrintResult> printWidget(
+    Widget receipt, {
+    String? documentType,
+    String? documentId,
+    String? documentNumber,
+    int copies = 1,
+    Map<String, dynamic> metadata = const {},
+  }) async {
     final cfg = config.value;
-    if (cfg == null) return const PrintResult(false, 'لم يتم اختيار طابعة — افتح إعدادات الطابعة');
+    if (cfg == null) {
+      return const PrintResult(false, 'لم يتم اختيار طابعة — افتح إعدادات الطابعة');
+    }
+
+    final startedAt = DateTime.now().toUtc();
     final width = _dotsFor(cfg.paperMm).toDouble();
+    PrintResult result;
     try {
       final wrapped = Material(
         color: Colors.white,
         child: SizedBox(width: width, child: receipt),
       );
-      // pixelRatio: 1 ⇒ عرض الصورة بالبكسل = عرض الورق بالنقاط.
       final png = await ScreenshotController().captureFromWidget(
         wrapped,
         pixelRatio: 1.0,
         delay: const Duration(milliseconds: 60),
       );
-      return await printPng(png);
+      result = await printPng(png);
     } catch (_) {
-      return const PrintResult(false, 'تعذّر تجهيز الإيصال للطباعة');
+      result = const PrintResult(false, 'تعذّر تجهيز الإيصال للطباعة');
     }
+
+    if (documentType != null && documentType.isNotEmpty) {
+      await _trackPrintOutcome(
+        result: result,
+        startedAt: startedAt,
+        documentType: documentType,
+        documentId: documentId,
+        documentNumber: documentNumber,
+        copies: copies,
+        metadata: metadata,
+      );
+    }
+
+    return result;
   }
 
   /// يجلب بايتات الشعار من رابطه (لتُطبع مع الإيصال). null إن تعذّر.
@@ -186,58 +211,74 @@ class ThermalPrintService extends GetxService {
       verificationUrl: verificationUrl,
     ));
 
-    // AMIAL-PRINT-TRACKING-001 — لا نجعل نجاح البيع أو رجوع شاشة
-    // الكاشير ينتظر الشبكة. نحفظ النتيجة محلياً أولاً ثم نحاول رفعها.
-    final cfg = config.value;
-    if (cfg != null) {
-      final finishedAt = DateTime.now().toUtc();
-      final id = _newClientJobId(documentType, documentId ?? invoiceNo);
-      final payload = <String, dynamic>{
-        'client_job_id': id,
-        'document_type': documentType,
-        if ((documentId ?? '').isNotEmpty) 'document_id': documentId,
-        if ((documentNumber ?? invoiceNo ?? '').isNotEmpty)
-          'document_number': documentNumber ?? invoiceNo,
-        'status': result.ok ? 'completed' : 'failed',
-        'copies': copies.clamp(1, 20),
-        if (!result.ok) 'error_code': _printErrorCode(result.message),
-        if (!result.ok) 'error_message': result.message,
-        if (result.ok) 'result_message': result.message,
-        'queued_at': startedAt.toIso8601String(),
-        'started_at': startedAt.toIso8601String(),
-        'finished_at': finishedAt.toIso8601String(),
-        'metadata': <String, dynamic>{
-          'source': 'flutter_thermal_service',
-          'open_cash_drawer': cfg.openCashDrawer,
-          ...metadata,
-        },
-        'printer': <String, dynamic>{
-          'name': cfg.name,
-          'printer_type': 'thermal',
-          'connection_type': cfg.connection,
-          'connection_identity': cfg.connection == 'network'
-              ? '${cfg.host ?? ''}:${cfg.port}'
-              : cfg.mac,
-          'paper_size': '${cfg.paperMm}mm',
-          'capabilities': <String, dynamic>{
-            'cut': true,
-            'cash_drawer': cfg.openCashDrawer,
-            'qr': true,
-            'raster_arabic': true,
-          },
-          'settings': <String, dynamic>{
-            'paper_mm': cfg.paperMm,
-            'port': cfg.connection == 'network' ? cfg.port : null,
-          },
-        },
-      };
-
-      await _queuePrintReport(payload);
-      // لا ننتظر الشبكة: إن فشل الرفع تبقى المهمة في SharedPreferences.
-      Future<void>.microtask(flushPendingPrintReports);
-    }
+    await _trackPrintOutcome(
+      result: result,
+      startedAt: startedAt,
+      documentType: documentType,
+      documentId: documentId,
+      documentNumber: documentNumber ?? invoiceNo,
+      copies: copies,
+      metadata: metadata,
+    );
 
     return result;
+  }
+
+  Future<void> _trackPrintOutcome({
+    required PrintResult result,
+    required DateTime startedAt,
+    required String documentType,
+    String? documentId,
+    String? documentNumber,
+    int copies = 1,
+    Map<String, dynamic> metadata = const {},
+  }) async {
+    final cfg = config.value;
+    if (cfg == null) return;
+
+    final finishedAt = DateTime.now().toUtc();
+    final id = _newClientJobId(documentType, documentId ?? documentNumber);
+    final payload = <String, dynamic>{
+      'client_job_id': id,
+      'document_type': documentType,
+      if ((documentId ?? '').isNotEmpty) 'document_id': documentId,
+      if ((documentNumber ?? '').isNotEmpty) 'document_number': documentNumber,
+      'status': result.ok ? 'completed' : 'failed',
+      'copies': copies.clamp(1, 20),
+      if (!result.ok) 'error_code': _printErrorCode(result.message),
+      if (!result.ok) 'error_message': result.message,
+      if (result.ok) 'result_message': result.message,
+      'queued_at': startedAt.toIso8601String(),
+      'started_at': startedAt.toIso8601String(),
+      'finished_at': finishedAt.toIso8601String(),
+      'metadata': <String, dynamic>{
+        'source': 'flutter_thermal_service',
+        'open_cash_drawer': cfg.openCashDrawer,
+        ...metadata,
+      },
+      'printer': <String, dynamic>{
+        'name': cfg.name,
+        'printer_type': 'thermal',
+        'connection_type': cfg.connection,
+        'connection_identity': cfg.connection == 'network'
+            ? '${cfg.host ?? ''}:${cfg.port}'
+            : cfg.mac,
+        'paper_size': '${cfg.paperMm}mm',
+        'capabilities': <String, dynamic>{
+          'cut': true,
+          'cash_drawer': cfg.openCashDrawer,
+          'qr': true,
+          'raster_arabic': true,
+        },
+        'settings': <String, dynamic>{
+          'paper_mm': cfg.paperMm,
+          'port': cfg.connection == 'network' ? cfg.port : null,
+        },
+      },
+    };
+
+    await _queuePrintReport(payload);
+    Future<void>.microtask(flushPendingPrintReports);
   }
 
   String _newClientJobId(String type, String? documentId) {
