@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\MerchantSale;
 use App\Models\PharmacySale;
 use App\Models\PosUser;
 use App\Models\User;
@@ -103,5 +104,69 @@ class PosDailyVerticalReportGuardTest extends TestCase
         $this->assertSame('700.0000', $report['by_method']['cash']);
         $this->assertSame('0.0000', $report['by_method']['amial_pay']);
         $this->assertNull($report['outstanding_credit_total']);
+    }
+
+    /** @test */
+    public function retail_pos_report_never_includes_a_colleagues_merchant_sale(): void
+    {
+        $merchant = User::factory()->create([
+            'type' => 3,
+            'role' => A::ROLE_MERCHANT,
+            'zone_code' => 'SOUTH',
+        ]);
+
+        MerchantProfile::create([
+            'user_id' => $merchant->id,
+            'business_type' => A::BIZ_RETAIL,
+            'business_name' => 'متجر تقرير POS',
+            'verification_status' => 'verified',
+            'subscription_plan' => A::PLAN_BUSINESS,
+        ]);
+
+        $mine = User::factory()->create(['role' => 'pos', 'zone_code' => 'SOUTH']);
+        $other = User::factory()->create(['role' => 'pos', 'zone_code' => 'SOUTH']);
+
+        $myPos = PosUser::create([
+            'user_id' => $mine->id,
+            'merchant_user_id' => $merchant->id,
+            'pos_number' => 'RTL-RPT-001',
+            'display_name' => 'كاشير 1',
+            'is_active' => true,
+        ]);
+        $otherPos = PosUser::create([
+            'user_id' => $other->id,
+            'merchant_user_id' => $merchant->id,
+            'pos_number' => 'RTL-RPT-002',
+            'display_name' => 'كاشير 2',
+            'is_active' => true,
+        ]);
+
+        foreach ([
+            [$myPos->id, '300.0000', 'cash'],
+            [$otherPos->id, '800.0000', 'cash'],
+        ] as [$posId, $amount, $method]) {
+            MerchantSale::create([
+                'sale_ulid' => (string) Str::ulid(),
+                'merchant_user_id' => $merchant->id,
+                'pos_user_id' => $posId,
+                'total_amount' => $amount,
+                'payment_method' => $method,
+                'status' => 'completed',
+                'items' => [],
+                'zone_code' => 'SOUTH',
+            ]);
+        }
+
+        $report = app(CashierService::class)->dailyReportForPos(
+            $merchant,
+            $myPos->id,
+            $mine->id,
+        );
+
+        $this->assertSame('merchant_sales', $report['source']);
+        $this->assertSame('pos_user', $report['report_scope']);
+        $this->assertSame(1, $report['sales_count']);
+        $this->assertSame('300.0000', $report['total_all']);
+        $this->assertSame('300.0000', $report['by_method']['cash']);
     }
 }
