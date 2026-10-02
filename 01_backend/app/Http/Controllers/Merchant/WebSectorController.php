@@ -488,7 +488,8 @@ class WebSectorController extends Controller
                 ], 409);
             }
 
-            return app(CashierController::class)->downloadInvoice($request, $order->sale_ulid);
+            $response = app(CashierController::class)->downloadInvoice($request, $order->sale_ulid);
+            return $this->presentInvoiceResponse($request, $response, $sector, (string) $id);
         }
 
         $target = match ($sector) {
@@ -500,7 +501,58 @@ class WebSectorController extends Controller
         };
         if (!$target) return $this->unsupported($sector);
 
-        return app($target[0])->{$target[1]}($request, $id);
+        $response = app($target[0])->{$target[1]}($request, $id);
+        return $this->presentInvoiceResponse($request, $response, $sector, (string) $id);
+    }
+
+    private function presentInvoiceResponse(
+        Request $request,
+        Response|JsonResponse $response,
+        ?string $sector,
+        string $documentId,
+    ): Response|JsonResponse {
+        if ($response instanceof JsonResponse || $response->getStatusCode() >= 400) {
+            return $response;
+        }
+
+        // المتصفح يستطيع معاينة PDF والطباعة عبر عارضه، لكنه ليس طابعة
+        // ESC/POS. inline يغيّر طريقة العرض فقط ولا ينشئ معاملة أو فاتورة.
+        if ($request->boolean('inline')) {
+            $current = (string) $response->headers->get('Content-Disposition', '');
+            $filename = 'invoice.pdf';
+            if (preg_match('/filename="?([^";]+)"?/i', $current, $m)) {
+                $filename = $m[1];
+            }
+            $response->headers->set('Content-Disposition', 'inline; filename="' . $filename . '"');
+        }
+
+        try {
+            app(\App\Services\AuditService::class)->record([
+                'actor_type' => 'merchant',
+                'actor_user_id' => $request->user('merchant_web')?->id,
+                'subject_type' => 'merchant_invoice',
+                'subject_id' => $documentId,
+                'action' => 'FINANCIAL_DOCUMENT_RENDERED',
+                'decision_code' => 'DOCUMENT_DELIVERED',
+                'zone_code' => $request->user('merchant_web')?->zone_code,
+                'severity' => 'info',
+                'context' => [
+                    'sector' => $sector,
+                    'format' => 'pdf',
+                    'presentation' => $request->boolean('inline') ? 'inline_preview' : 'download',
+                    'copies' => 1,
+                    'ip' => $request->ip(),
+                    'device' => mb_substr((string) $request->userAgent(), 0, 180),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            // سجل التدقيق لا يفسد مستنداً نجح توليده؛ يسجل الخلل تقنياً.
+            \Log::warning('Merchant invoice render audit failed', [
+                'sector' => $sector, 'document_id' => $documentId, 'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $response;
     }
 
     private function invoke(array $target, Request $request, ?string $sector, int|string|null $id = null): JsonResponse
