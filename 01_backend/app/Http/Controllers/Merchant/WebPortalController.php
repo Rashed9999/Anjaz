@@ -110,6 +110,9 @@ class WebPortalController extends Controller
             'approvalGrant' => route('merchant.web.data.approvals.grant', ['id' => '__ID__']),
             'approvalReject' => route('merchant.web.data.approvals.reject', ['id' => '__ID__']),
             'staff' => route('merchant.web.data.staff'),
+            'staffPerformance' => route('merchant.web.data.staff.performance'),
+            'staffToggle' => route('merchant.web.data.staff.toggle', ['id' => '__ID__']),
+
             'staffCreate' => route('merchant.web.data.staff.create'),
             'devices' => route('merchant.web.data.devices'),
             'deviceActivation' => route('merchant.web.data.devices.activate'),
