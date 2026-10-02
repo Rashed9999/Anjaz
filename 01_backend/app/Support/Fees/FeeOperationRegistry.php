@@ -213,7 +213,6 @@ final class FeeOperationRegistry
                 zoneScoped: true,
                 consumers: [
                     'app/Http/Controllers/Api/V1/Amial/SupplierController.php',
-                    'app/Services/AdminWalletTransferService.php',
                 ],
                 owner: 'App\\Http\\Controllers\\Api\\V1\\Amial\\SupplierController::walletPayment',
             ),
