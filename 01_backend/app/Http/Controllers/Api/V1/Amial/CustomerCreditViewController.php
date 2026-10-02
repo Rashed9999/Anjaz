@@ -7,9 +7,11 @@ use App\Http\Controllers\Controller;
 use App\Models\CustomerCreditAccount;
 use App\Models\CustomerCreditMovement;
 use App\Models\MerchantSale;
+use App\Models\PharmacySale;
 use App\Models\WholesaleInvoice;
 use App\Models\User;
 use App\Services\CashierSaleInvoicePdfService;
+use App\Services\PharmacySaleInvoicePdfService;
 use App\Services\WholesaleInvoicePdfService;
 use App\Services\CustomerCreditSettleService;
 use App\Services\CreditSourceSettlementService;
@@ -168,6 +170,21 @@ class CustomerCreditViewController extends Controller
                 }
 
                 $pdfSvc = app(CashierSaleInvoicePdfService::class);
+                $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                    $pdfSvc->cacheKey($document),
+                    fn () => $pdfSvc->generate($document),
+                );
+                $filename = $pdfSvc->suggestedFilename($document);
+            } elseif ($movement->reference_type === 'pharmacy_sale') {
+                $document = PharmacySale::where('sale_ulid', $movement->reference_id)
+                    ->where('merchant_user_id', $account->merchant_user_id)
+                    ->first();
+
+                if (!$document) {
+                    return $this->error('NOT_FOUND', 'فاتورة الصيدلية الأصلية غير موجودة', 404);
+                }
+
+                $pdfSvc = app(PharmacySaleInvoicePdfService::class);
                 $pdf = app(\App\Services\PdfCacheService::class)->remember(
                     $pdfSvc->cacheKey($document),
                     fn () => $pdfSvc->generate($document),

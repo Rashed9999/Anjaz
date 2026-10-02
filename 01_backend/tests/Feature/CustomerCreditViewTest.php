@@ -4,10 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
+use App\Models\PharmacySale;
 use App\Models\User;
 use App\Services\CashierSaleInvoicePdfService;
 use App\Services\CashierService;
 use App\Services\CustomerCreditService;
+use App\Services\PharmacySaleInvoicePdfService;
+use App\Services\PharmacyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
@@ -123,6 +126,77 @@ class CustomerCreditViewTest extends TestCase
         $this->get(
             "/api/v1/amial/customer/credits/{$account->id}/invoices/{$movement->movement_ulid}/pdf"
         )->assertStatus(404);
+    }
+
+    /** @test فاتورة الصيدلية الآجلة تفتح للعميل وتتبع المتبقي الحقيقي. */
+    public function pharmacy_deferred_invoice_pdf_tracks_unified_credit_remaining(): void
+    {
+        $pharmacy = app(PharmacyService::class)->getOrCreatePharmacy($this->merchant);
+        $sale = PharmacySale::create([
+            'sale_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'invoice_number' => 'PH-CR-001',
+            'merchant_user_id' => $this->merchant->id,
+            'pharmacy_id' => $pharmacy->id,
+            'subtotal' => '1200.0000',
+            'discount_amount' => '0.0000',
+            'total_amount' => '1200.0000',
+            'payment_method' => 'credit',
+            'status' => 'completed',
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $account = $this->svc->findOrCreateAccount(
+            $this->merchant->id,
+            $this->customer->phone,
+            'عميل فاتورة صيدلية',
+        );
+        $movement = $this->svc->recordSale(
+            account: $account,
+            amount: '1200',
+            dueDate: '2026-12-31',
+            referenceType: 'pharmacy_sale',
+            referenceId: $sale->sale_ulid,
+            referenceNumber: $sale->invoice_number,
+        );
+
+        $pdfSvc = app(PharmacySaleInvoicePdfService::class);
+        $first = $pdfSvc->creditSnapshot($sale->fresh());
+        $this->assertSame('unpaid', $first['state']);
+        $this->assertSame('1200.0000', $first['remaining']);
+        $firstKey = $pdfSvc->cacheKey($sale->fresh());
+
+        Passport::actingAs($this->customer->fresh(), [], 'api');
+        $pdf = $this->get(
+            "/api/v1/amial/customer/credits/{$account->id}/invoices/{$movement->movement_ulid}/pdf"
+        );
+        $pdf->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $this->svc->recordPayment(
+            account: $account->fresh(),
+            amount: '400',
+            referenceType: 'debt_payment',
+            referenceId: 'PH-PAY-400',
+            saleMovementUlid: $movement->movement_ulid,
+        );
+
+        $partial = $pdfSvc->creditSnapshot($sale->fresh());
+        $this->assertSame('partial', $partial['state']);
+        $this->assertSame('800.0000', $partial['remaining']);
+        $this->assertNotSame($firstKey, $pdfSvc->cacheKey($sale->fresh()));
+
+        $this->svc->recordPayment(
+            account: $account->fresh(),
+            amount: '800',
+            referenceType: 'debt_payment',
+            referenceId: 'PH-PAY-800',
+            saleMovementUlid: $movement->movement_ulid,
+        );
+
+        $paid = $pdfSvc->creditSnapshot($sale->fresh());
+        $this->assertSame('paid', $paid['state']);
+        $this->assertSame('0.0000', $paid['remaining']);
+        $this->assertSame('0.0000', (string) $account->fresh()->current_balance);
     }
 
     /** @test لا يرى العميل حساب عميل آخر (عزل). */

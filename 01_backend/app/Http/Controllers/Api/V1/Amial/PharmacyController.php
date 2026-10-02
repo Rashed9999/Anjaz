@@ -634,7 +634,7 @@ class PharmacyController extends Controller
             $pdfSvc = app(\App\Services\PharmacySaleInvoicePdfService::class);
 
             $pdf = app(\App\Services\PdfCacheService::class)->remember(
-                "pharmacy_invoice_{$sale->sale_ulid}",
+                $pdfSvc->cacheKey($sale),
                 fn () => $pdfSvc->generate($sale),
             );
             return response($pdf, 200, [
