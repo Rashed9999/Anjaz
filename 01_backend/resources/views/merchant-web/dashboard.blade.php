@@ -310,6 +310,66 @@
     if(receivable===0&&open===0&&(devices===0||live===devices))add('✓','التشغيل مستقر','لا توجد ذمم أو ورديات مفتوحة تحتاج إجراءً فوريًا.');
     card.append(list);return card
   }
+  function sectorIntelligenceCard(sector={}){
+    if(!sector||!(sector.cards||[]).length)return null;
+    const section=node('section',null,'chart-card'),head=node('div',null,'chart-head'),copy=node('div');
+    const titles={retail:'ذكاء المبيعات والمخزون',pharmacy:'صيدلية · المخزون والصلاحية',fuel:'محطة الوقود · التشغيل اليومي',restaurant:'المطعم · الطلبات والطاولات',wholesale:'الجملة · الاستحقاقات والذمم'};
+    copy.append(node('h3',titles[sector.kind]||'مؤشرات القطاع'),node('small','من محرك القطاع نفسه · '+(sector.meta?.source||'المصدر التشغيلي')));
+    head.append(copy,node('span',actualSectorName||sector.vertical||'القطاع','source-chip'));section.append(head);
+
+    const g=node('div',null,'kpi-grid');
+    (sector.cards||[]).forEach(x=>{
+      const tone=x.tone==='danger'?'red':x.tone==='warning'?'gold':x.tone==='ok'?'':'blue';
+      const value=x.money?money(x.value):String(x.value??'—');
+      g.append(kpiCard(x.label,value,x.tone==='danger'?'!':x.tone==='warning'?'◷':'◇','',tone));
+    });
+    section.append(g);
+
+    const lists=sector.lists||{};
+    if(sector.kind==='retail'&&(lists.top_products||[]).length){
+      const title=node('h3','الأصناف الأعلى أداءً');section.append(title);
+      table(section,[
+        ['الصنف',x=>x.name],['صافي الكمية',x=>x.qty],['الإيراد',x=>money(x.revenue)],
+        ['المرتجع',x=>x.returned_qty||'0'],['الربح المعروف',x=>money(x.profit)],
+        ['الهامش',x=>x.margin_percent===null?'غير متاح':x.margin_percent+'%']
+      ],lists.top_products);
+      if(sector.meta?.cost_note)hint(section,sector.meta.cost_note);
+    }else if(sector.kind==='pharmacy'&&(lists.expiring_batches||[]).length){
+      const title=node('h3','الدفعات الأقرب للصلاحية');section.append(title);
+      table(section,[
+        ['الدواء',x=>x.product],['التشغيلة',x=>x.batch_number],['الصلاحية',x=>x.expiry_date||'—'],
+        ['المتبقي',x=>x.quantity_remaining],
+        ['الحالة',x=>x.status==='expired'?'منتهية':x.status==='near_expiry'?'تنتهي خلال 30 يومًا':'قريبة']
+      ],lists.expiring_batches);
+    }else if(sector.kind==='fuel'&&(lists.by_product||[]).length){
+      const title=node('h3','مبيعات الوقود اليوم حسب النوع');section.append(title);
+      table(section,[['النوع',x=>x.name],['اللترات',x=>x.liters],['القيمة',x=>money(x.total)]],lists.by_product);
+    }else if(sector.kind==='restaurant'&&(lists.active_orders||[]).length){
+      const title=node('h3','الطلبات المفتوحة الآن');section.append(title);
+      table(section,[
+        ['الطلب',x=>x.order_no||x.invoice_number||x.id],['الحالة',x=>saleStatusLabel(x.status)],
+        ['الإجمالي',x=>money(x.total)],['وقت الفتح',x=>x.opened_at?new Date(x.opened_at).toLocaleString('ar-YE'):'—']
+      ],lists.active_orders);
+    }else if(sector.kind==='wholesale'&&(lists.overdue_invoices||[]).length){
+      const title=node('h3','الفواتير الأكثر تأخرًا');section.append(title);
+      table(section,[
+        ['الفاتورة',x=>x.invoice_number],['العميل',x=>x.customer],['تاريخ الاستحقاق',x=>x.due_date||'—'],
+        ['أيام التأخير',x=>x.days_overdue],['الرصيد',x=>money(x.balance_due)]
+      ],lists.overdue_invoices);
+    }
+    return section
+  }
+
+  function dashboardPeriodBar(days){
+    const bar=node('section',null,'panel'),row=node('div',null,'buttons');
+    hint(bar,'غيّر الفترة لتحليل اتجاه المبيعات ومؤشرات القطاع دون تغيير رصيد المحفظة أو تعريف «مبيعات اليوم».');
+    [7,14,30].forEach(n=>{
+      const b=action(n+' أيام',()=>{content.replaceChildren();overview(n).catch(e=>message(e.message))},n!==days);
+      if(n===days)b.disabled=true;row.append(b);
+    });
+    bar.append(row);return bar
+  }
+
   function quickHero(dashboard){
     const hero=node('section',null,'dashboard-hero');
     hero.append(node('div','لوحة القيادة اليومية','hero-kicker'),node('h2','صورة واحدة لحالة منشأتك الآن'));
@@ -321,7 +381,7 @@
     hero.append(actions);return hero
   }
 
-  async function overview(){
+  async function overview(days=14){
     if(!actualSector){
       const data=await api('sectorTypes'),p=box('ابدأ بتحديد نشاط المنشأة');
       hint(p,'نوع النشاط يحدد مسارات البيع والمخزون والتقارير. لن نعرض أدوات قطاع آخر أو نخمن مصدر أرقام غير موجود.');
@@ -334,12 +394,13 @@
       p.append(form);return;
     }
 
-    const [bundle,o]=await Promise.all([api('dashboardV2'),api('overview')]);
-    const r=bundle.financial||{},d=bundle.dashboard||{},counts=o.counts||{},sales=r.sales||{},methods=sales.by_payment_method||{},movement=r.movement||{};
+    const dashUrl=new URL(routes.dashboardV2,window.location.href);dashUrl.searchParams.set('days',String(days));
+    const [bundle,o]=await Promise.all([api('dashboardV2',undefined,dashUrl.toString()),api('overview')]);
+    const r=bundle.financial||{},d=bundle.dashboard||{},sector=bundle.sector||{},counts=o.counts||{},sales=r.sales||{},methods=sales.by_payment_method||{},movement=r.movement||{};
     const todayCount=Number(sales.count||0),todayGross=Number(sales.gross||0),todayAvg=todayCount>0?todayGross/todayCount:0;
     const saleReturn=(movement.rows||[]).find(x=>x.code==='sale_return'),returnToday=saleReturn?.available?Number(saleReturn.total||0):null;
 
-    content.append(quickHero(d));
+    content.append(quickHero(d),dashboardPeriodBar(days));
     dashboardKpis([
       ['مبيعات اليوم',money(sales.gross),'↗',d.today_change_percent===null?'المقارنة تحتاج مبيعات أمس':((Number(d.today_change_percent)>=0?'+':'')+Number(d.today_change_percent).toFixed(1)+'% عن أمس')],
       ['عدد عمليات البيع',String(todayCount),'▧','متوسط الفاتورة '+money(todayAvg),'blue'],
@@ -357,6 +418,8 @@
 
     const operation=node('div',null,'dash-grid equal');
     operation.append(operationsCard(counts),attentionCard(r,counts));content.append(operation);
+
+    const sectorCard=sectorIntelligenceCard(sector);if(sectorCard)content.append(sectorCard);
 
     const recent=node('section',null,'chart-card'),recentHead=node('div',null,'recent-head');
     recentHead.append(node('h3','آخر المبيعات'),node('button','عرض سجل المبيعات','text-button'));
