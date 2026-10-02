@@ -97,12 +97,14 @@ final class MerchantPortalNavigationService
         }
 
         $items = [
+            // Merchant Portal V2 يبدأ بلوحة قيادة فعلية، لا بمساحة قطاع
+            // متخصصة. ومنها يصل المالك إلى البيع والمخزون والمالية.
+            $this->item('overview', 'الرئيسية', 'insights', EntitlementService::AVAILABLE),
             $this->item('sector', $vertical['workspace'], 'dashboard_customize', $this->state($states, $vertical['workspace_capability'])),
             // سجل البيع ليس تقريراً عاماً: كل قطاع يقرأ سجله من محرّكه
             // الخاص. وحارسه ليس بالضرورة حارس مساحة الإدارة: طلبات المطعم
             // ليست طاولاته، ومبيعات الوقود ليست مضخاته.
             $this->item('sales', $vertical['sales'], 'receipt_long', $this->state($states, $vertical['sales_capability'])),
-            $this->item('overview', 'ملخص المنشأة', 'insights', EntitlementService::AVAILABLE),
             $this->item('wallet', 'المحفظة وكشف الحساب', 'account_balance_wallet', EntitlementService::AVAILABLE),
         ];
 
