@@ -97,6 +97,9 @@ Route::middleware('merchant.web')->group(function () {
         Route::post('/sector/returns/{id}/resolve', [Sector::class, 'resolveSaleReturn'])
             ->whereNumber('id')->middleware(['amial.idempotency', 'amial.rate-limit:merchant_web_return_resolve,30,1'])
             ->name('sector.returns.resolve');
+        Route::post('/sector/returns/{id}/settle', [Sector::class, 'settleSaleReturn'])
+            ->whereNumber('id')->middleware(['amial.idempotency', 'amial.rate-limit:merchant_web_return_settle,20,1'])
+            ->name('sector.returns.settle');
         Route::get('/sector/sales', [Sector::class, 'sales'])->name('sector.sales');
         Route::get('/sector/sales/{id}', [Sector::class, 'sale'])
             ->where('id', '[A-Za-z0-9-]+')->name('sector.sales.show');
