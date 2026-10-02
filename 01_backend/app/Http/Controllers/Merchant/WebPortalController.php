@@ -35,6 +35,10 @@ class WebPortalController extends Controller
         $merchantRoutes = [
             'overview' => route('merchant.web.data.overview'),
             'dashboardV2' => route('merchant.web.data.dashboard-v2'),
+            'integrationApiKeys' => route('merchant.web.data.integrations.api-keys.index'),
+            'integrationApiKeysCreate' => route('merchant.web.data.integrations.api-keys.store'),
+            'integrationApiKeyToggle' => route('merchant.web.data.integrations.api-keys.toggle', ['id' => '__ID__']),
+            'integrationApiKeyDelete' => route('merchant.web.data.integrations.api-keys.destroy', ['id' => '__ID__']),
             'salesV2' => route('merchant.web.data.sales-v2'),
             'productsV2' => route('merchant.web.data.products-v2'),
             'sector' => route('merchant.web.data.sector'),
