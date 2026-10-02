@@ -249,7 +249,7 @@ class ThermalPrintService extends GetxService {
   }
 
   String? _printErrorCode(String message) {
-    final m = RegExp(r'\\b(PRINT_\\d{4})\\b').firstMatch(message);
+    final m = RegExp(r'\b(PRINT_\d{4})\b').firstMatch(message);
     return m?.group(1);
   }
 
