@@ -58,6 +58,7 @@ class LedgerCoverageGuardTest extends TestCase
         // أسماء الحقول مثل current_balance في استعلامات sum/get، لكن الملف
         // لا ينفّذ debit/credit/hold ولا insert/update على المحافظ.
         'CustomerSystemsCenterService' => 'مركز مراقبة أنظمة العميل — يجمع count/sum/get من المصادر الأصلية للعرض فقط؛ لا يكتب محفظة ولا يحرّك مالاً',
+        'MerchantCustomerProfileService' => 'ملف العميل 360° للمالك — يقرأ المبيعات والذمم والتحصيلات من مصادرها الأصلية للعرض فقط؛ لا ينشئ بيعاً ولا تحصيلاً ولا يكتب محفظة أو دفتر أستاذ',
 
         // أمسكها الحارس لأنّها تقرأ `EMoney` — وهو إمساكٌ صحيح. والجواب
         // أنّها **عكسُ التحريك**: `preflight` تشترط أن يكون كلُّ رصيدٍ
