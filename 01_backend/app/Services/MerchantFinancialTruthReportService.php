@@ -118,7 +118,7 @@ class MerchantFinancialTruthReportService
             $source = 'wholesale_invoices';
             if ($businessId) {
                 $rows = WholesaleInvoice::where('business_id', $businessId)
-                    ->where('status', '!=', 'voided')
+                    ->whereNotIn('status', ['draft', 'voided'])
                     ->whereBetween('invoice_date', [$start->toDateString(), $end->toDateString()])
                     ->get([
                         'id', 'invoice_ulid', 'invoice_number', 'invoice_date', 'total_amount',
@@ -518,7 +518,7 @@ class MerchantFinancialTruthReportService
         if ($vertical === 'wholesale') {
             $businessId = WholesaleBusiness::where('merchant_user_id', $merchant->id)->value('id');
             if (!$businessId) return [collect(), 'wholesale_invoices'];
-            return [WholesaleInvoice::where('business_id', $businessId)->where('status', '!=', 'voided')
+            return [WholesaleInvoice::where('business_id', $businessId)->whereNotIn('status', ['draft', 'voided'])
                 ->whereBetween('invoice_date', [$start->toDateString(), $end->toDateString()])
                 ->get(['total_amount as amount', 'payment_type as method']), 'wholesale_invoices'];
         }
