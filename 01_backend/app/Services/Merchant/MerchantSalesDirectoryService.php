@@ -30,9 +30,12 @@ final class MerchantSalesDirectoryService
 
         $this->applyFilters($query, $filters, $dateColumn, $vertical);
 
-        $summaryQuery = clone $query;
-        $count = (int) (clone $summaryQuery)->count();
-        $total = (string) ((clone $summaryQuery)->sum('amount') ?: '0');
+        // Aggregate over the normalized projection so aliases such as
+        // "amount" are real columns of the subquery, not guessed source
+        // columns on different vertical tables.
+        $summaryBase = DB::query()->fromSub(clone $query, 'sales_directory');
+        $count = (int) (clone $summaryBase)->count();
+        $total = (string) ((clone $summaryBase)->sum('amount') ?: '0');
 
         $page = $query->orderByDesc('occurred_at')->paginate(20);
 
@@ -41,6 +44,7 @@ final class MerchantSalesDirectoryService
             'source' => $source,
             'rows' => collect($page->items())->map(fn ($row) => [
                 'id' => $row->id,
+                'detail_id' => $row->detail_id ?? $row->id,
                 'reference' => (string) ($row->reference ?: $row->id),
                 'document_number' => $row->document_number ?: null,
                 'customer_name' => $row->customer_name ?: null,
@@ -84,6 +88,9 @@ final class MerchantSalesDirectoryService
 
         return $q->select([
             'ms.id',
+            DB::raw($vertical === A::BIZ_RESTAURANT
+                ? 'ro.id as detail_id'
+                : 'ms.sale_ulid as detail_id'),
             'ms.sale_ulid as reference',
             DB::raw($vertical === A::BIZ_RESTAURANT
                 ? 'COALESCE(ms.invoice_number, ro.invoice_number, ro.order_no) as document_number'
@@ -107,7 +114,7 @@ final class MerchantSalesDirectoryService
             ->where('fs.merchant_user_id', $merchant->id)
             ->where('fs.status', 'completed')
             ->select([
-                'fs.id', 'fs.sale_ulid as reference', 'fs.invoice_number as document_number',
+                'fs.id', 'fs.sale_ulid as detail_id', 'fs.sale_ulid as reference', 'fs.invoice_number as document_number',
                 'fca.company_name as customer_name', 'fs.total_amount as amount',
                 'fs.payment_method', 'fs.status', 'pu.id as employee_id',
                 'pu.display_name as employee_name', DB::raw('NULL as branch_name'),
@@ -123,7 +130,7 @@ final class MerchantSalesDirectoryService
             ->where('ps.merchant_user_id', $merchant->id)
             ->where('ps.status', 'completed')
             ->select([
-                'ps.id', 'ps.sale_ulid as reference', 'ps.invoice_number as document_number',
+                'ps.id', 'ps.sale_ulid as detail_id', 'ps.sale_ulid as reference', 'ps.invoice_number as document_number',
                 'pc.full_name as customer_name', 'ps.total_amount as amount',
                 'ps.payment_method', 'ps.status', 'pu.id as employee_id',
                 'pu.display_name as employee_name', DB::raw('NULL as branch_name'),
@@ -141,7 +148,7 @@ final class MerchantSalesDirectoryService
             ->where('wb.merchant_user_id', $merchant->id)
             ->whereNotIn('wi.status', ['draft', 'voided'])
             ->select([
-                'wi.id', 'wi.invoice_ulid as reference', 'wi.invoice_number as document_number',
+                'wi.id', 'wi.id as detail_id', 'wi.invoice_ulid as reference', 'wi.invoice_number as document_number',
                 DB::raw('COALESCE(wc.company_name, wc.full_name) as customer_name'),
                 'wi.total_amount as amount', 'wi.payment_type as payment_method',
                 'wi.status', 'pu.id as employee_id', 'pu.display_name as employee_name',
