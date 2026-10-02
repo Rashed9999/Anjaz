@@ -86,7 +86,16 @@ class CashierShiftController extends Controller
         [$merchant, $posId, $branch] = $ctx;
         $shift = $this->svc->current($merchant, $posId, $branch?->id);
         if (!$shift) return $this->err('NO_SHIFT', 'لا توجد وردية مفتوحة', 404);
-        return $this->ok(['report' => $this->svc->snapshot($shift)]);
+
+        $cash = app(\App\Services\Retail\MerchantShiftCashService::class);
+
+        return $this->ok([
+            'report' => $this->svc->snapshot($shift),
+            'movements' => $cash->movements(
+                \App\Models\Retail\ShiftCashMovement::CASHIER,
+                (int) $shift->id,
+            ),
+        ]);
     }
 
     /**
