@@ -1839,11 +1839,58 @@
     };
     actions.append(grant,reject);return actions;
   }
+  async function editStaffScope(row,roles,branches){
+    document.getElementById('staff-assignment-editor')?.remove();
+    const p=box('نطاق ودور الموظف · '+row.display_name);p.id='staff-assignment-editor';
+    hint(p,'تغيير الفرع ينهي جلسة نقطة البيع الحالية للموظف حتى لا يبقى صندوق الفرع القديم مفتوحاً. تغيير الدور يكتب نظام RBAC الفعلي، لا قائمة واجهة منفصلة.');
+    const frm=node('form',null,'editor');
+
+    const roleLabel=node('label','الدور التشغيلي','field'),roleSelect=node('select');
+    roles.filter(x=>x.is_active).forEach(r=>{const o=node('option',r.name_ar);o.value=String(r.id);roleSelect.append(o)});
+    const currentRole=row.roles?.[0]?.id; if(currentRole)roleSelect.value=String(currentRole);
+    roleLabel.append(roleSelect);
+
+    const branchLabel=node('label','موقع التشغيل','field'),branchSelect=node('select');
+    branchSelect.append(new Option('المنشأة الرئيسية',''));
+    branches.filter(x=>x.is_active).forEach(b=>branchSelect.append(new Option(b.name+(b.city?' — '+b.city:''),String(b.id))));
+    branchSelect.value=row.branch_id===null||row.branch_id===undefined?'':String(row.branch_id);
+    branchLabel.append(branchSelect);
+
+    const meta=node('div',null,'note');
+    meta.append(node('strong','آخر دخول: '),node('span',row.last_login_at?new Date(row.last_login_at).toLocaleString('ar-YE'):'لم يُسجل بعد'));
+    const actions=node('div',null,'buttons'),save=action('حفظ النطاق والدور',()=>{} ,false),cancel=action('إلغاء',()=>p.remove());
+    save.type='submit';actions.append(save,cancel);frm.append(roleLabel,branchLabel,meta,actions);p.append(frm);
+
+    frm.onsubmit=async ev=>{
+      ev.preventDefault();save.disabled=true;
+      try{
+        const tasks=[];
+        const nextRole=String(roleSelect.value||''),oldRole=String(currentRole||'');
+        const nextBranch=String(branchSelect.value||''),oldBranch=row.branch_id===null||row.branch_id===undefined?'':String(row.branch_id);
+        if(nextRole&&nextRole!==oldRole){
+          tasks.push(api('staffRole',{merchant_role_id:Number(nextRole)},routes.staffRole.replace('__ID__',String(row.id))));
+        }
+        if(nextBranch!==oldBranch){
+          tasks.push(api('staffBranch',{branch_id:nextBranch===''?null:Number(nextBranch)},routes.staffBranch.replace('__ID__',String(row.id))));
+        }
+        if(!tasks.length){message('لم يتغير الدور أو موقع التشغيل');save.disabled=false;return}
+        const results=await Promise.all(tasks);
+        const ended=results.reduce((n,x)=>n+Number(x.ended_device_sessions||0),0);
+        message(ended>0?'تم الحفظ وإنهاء '+ended+' جلسة POS قديمة؛ يلزم تسجيل الدخول مجدداً.':'تم تحديث الموظف بنجاح');
+        await load('staff');
+      }catch(e){message(e.message);save.disabled=false}
+    };
+    p.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
   async function staff(){
-    const [data,rolesData,approvalData,performance]=await Promise.all([
-      api('staff'),api('roles'),api('approvals'),api('staffPerformance').catch(()=>({staff:[],grand_total:0,unattributed_total:0,source:'غير متاح'}))
+    const [data,rolesData,approvalData,performance,branchData]=await Promise.all([
+      api('staff'),api('roles'),api('approvals'),
+      api('staffPerformance').catch(()=>({staff:[],grand_total:0,unattributed_total:0,source:'غير متاح'})),
+      api('branches').catch(()=>({branches:[]}))
     ]);
-    const staffRows=data.staff||[],roles=rolesData.roles||[],catalogue=rolesData.permission_catalogue||[],approvals=approvalData.approvals||[];
+    const staffRows=data.staff||[],roles=rolesData.roles||[],catalogue=rolesData.permission_catalogue||[],
+      approvals=approvalData.approvals||[],branches=branchData.branches||[];
     const activeStaff=staffRows.filter(x=>x.is_active).length;
     const perfById=new Map((performance.staff||[]).map(x=>[String(x.id),x]));
 
@@ -1878,14 +1925,18 @@
       ['مبيعات الفترة',x=>money(perfById.get(String(x.id))?.sales_total||0)],
       ['عمليات اليوم',x=>perfById.get(String(x.id))?.today_count||0],
       ['الحالة',x=>{const s=node('span',x.is_active?'نشط':'موقوف','staff-status '+(x.is_active?'on':'off'));return s}],
-      ['الإجراء',x=>{const b=action(x.is_active?'إيقاف':'تفعيل',async()=>{
-        if(!window.confirm((x.is_active?'إيقاف':'تفعيل')+' حساب «'+x.display_name+'»؟'+(x.is_active?' سيتم قطع جلسات العمل المفتوحة فوراً.':'')))return;
-        b.disabled=true;
-        try{
-          const result=await api('staffToggle',{},routes.staffToggle.replace('__ID__',String(x.id)));
-          message(result.message||(x.is_active?'تم الإيقاف':'تم التفعيل'));await load('staff');
-        }catch(e){message(e.message);b.disabled=false}
-      });return b}]
+      ['الإجراء',x=>{
+        const manage=action('الدور والنطاق',()=>editStaffScope(x,roles,branches));
+        const toggle=action(x.is_active?'إيقاف':'تفعيل',async()=>{
+          if(!window.confirm((x.is_active?'إيقاف':'تفعيل')+' حساب «'+x.display_name+'»؟'+(x.is_active?' سيتم قطع جلسات العمل المفتوحة فوراً.':'')))return;
+          toggle.disabled=true;
+          try{
+            const result=await api('staffToggle',{},routes.staffToggle.replace('__ID__',String(x.id)));
+            message(result.message||(x.is_active?'تم الإيقاف':'تم التفعيل'));await load('staff');
+          }catch(e){message(e.message);toggle.disabled=false}
+        });
+        return buttons([manage,toggle])
+      }]
     ],staffRows);
 
     if(Number(performance.unattributed_total||0)>0){
@@ -2300,7 +2351,8 @@
   }
 
   async function devices(){
-    const data=await api('devices'),rows=data.devices||[],active=rows.filter(x=>x.is_active).length,live=rows.reduce((s,x)=>s+Number(x.live_sessions||0),0);
+    const [data,branchData]=await Promise.all([api('devices'),api('branches').catch(()=>({branches:[]}))]);
+    const rows=data.devices||[],branches=branchData.branches||[],active=rows.filter(x=>x.is_active).length,live=rows.reduce((s,x)=>s+Number(x.live_sessions||0),0);
     dashboardKpis([
       ['المقاعد المستخدمة',String(data.used??active),'▣',data.unlimited?'دون حد':('من '+(data.max??'—'))],
       ['الأجهزة النشطة',String(active),'✓','أجهزة صالحة للتشغيل'],
@@ -2308,13 +2360,52 @@
       ['أجهزة غير نشطة',String(rows.length-active),'○','تبقى محفوظة للتدقيق']
     ]);
     const p=box('أجهزة نقاط البيع');
-    hint(p,'الجهاز أصل للمنشأة وليس موظفاً. الجلسة تربط الموظف بالجهاز أثناء العمل، وإلغاء الجهاز لا يمحو تاريخه.');
+    hint(p,'الجهاز أصل للمنشأة وليس موظفاً. نقل الجهاز بين الفروع يقطع جلساته الحالية فوراً، والإلغاء لا يحذف تاريخه المالي.');
     table(p,[
       ['الجهاز',x=>x.display_name],['الفرع',x=>x.branch_name||'المنشأة الرئيسية'],
-      ['آخر ظهور',x=>x.last_seen_at||'—'],['الجلسات',x=>x.live_sessions??0],
+      ['آخر ظهور',x=>x.last_seen_at?new Date(x.last_seen_at).toLocaleString('ar-YE'):'—'],['الجلسات',x=>x.live_sessions??0],
       ['البصمة',x=>x.fingerprint_suffix?('•••• '+x.fingerprint_suffix):'—'],
-      ['الحالة',x=>{const s=node('span',x.is_active?'نشط':'غير نشط','staff-status '+(x.is_active?'on':'off'));return s}]
+      ['الحالة',x=>{const s=node('span',x.is_active?'نشط':'غير نشط','staff-status '+(x.is_active?'on':'off'));return s}],
+      ['الإجراء',x=>{
+        if(!x.is_active)return 'محفوظ للتدقيق';
+        const edit=action('تعديل',()=>editDevice(x,branches));
+        const revoke=action('إلغاء الجهاز',async()=>{
+          if(!window.confirm('إلغاء جهاز «'+x.display_name+'»؟ سيتم إنهاء جلساته وإخلاء مقعد POS، مع بقاء سجله التاريخي.'))return;
+          revoke.disabled=true;
+          try{
+            await api('deviceDestroy',{},routes.deviceDestroy.replace('__ID__',String(x.id)),'DELETE');
+            message('تم إلغاء الجهاز وإخلاء المقعد');await load('devices');
+          }catch(e){message(e.message);revoke.disabled=false}
+        });
+        return buttons([edit,revoke])
+      }]
     ],rows);
+
+    async function editDevice(row,branchRows){
+      document.getElementById('device-editor')?.remove();
+      const e=box('تعديل الجهاز · '+row.display_name);e.id='device-editor';
+      hint(e,'تغيير الفرع ينهي الجلسة المفتوحة على الجهاز حتى لا تبقى عهدة الفرع السابق فعّالة.');
+      const frm=node('form',null,'editor'),nameLabel=node('label','اسم الجهاز','field'),name=node('input');
+      name.value=row.display_name||'';name.maxLength=120;nameLabel.append(name);
+      const branchLabel=node('label','الفرع','field'),branch=node('select');branch.append(new Option('المنشأة الرئيسية',''));
+      branchRows.filter(x=>x.is_active).forEach(b=>branch.append(new Option(b.name+(b.city?' — '+b.city:''),String(b.id))));
+      branch.value=row.branch_id===null||row.branch_id===undefined?'':String(row.branch_id);branchLabel.append(branch);
+      const save=action('حفظ الجهاز',()=>{},false);save.type='submit';const cancel=action('إلغاء',()=>e.remove());
+      frm.append(nameLabel,branchLabel,buttons([save,cancel]));e.append(frm);e.scrollIntoView({behavior:'smooth',block:'start'});
+      frm.onsubmit=async ev=>{
+        ev.preventDefault();save.disabled=true;
+        try{
+          const result=await api('deviceUpdate',{
+            display_name:name.value.trim()||null,
+            branch_id:branch.value===''?null:Number(branch.value)
+          },routes.deviceUpdate.replace('__ID__',String(row.id)),'PATCH');
+          const ended=Number(result.ended_sessions||0);
+          message(ended>0?'تم تحديث الجهاز وإنهاء '+ended+' جلسة قديمة.':'تم تحديث الجهاز.');
+          await load('devices');
+        }catch(err){message(err.message);save.disabled=false}
+      };
+    }
+
     const create=box('تفعيل جهاز بيع جديد');
     hint(create,'ينشئ المالك رمزاً مؤقتاً صالحاً لمرة واحدة. أدخله في تطبيق نقطة البيع على الجهاز الفعلي؛ المقعد لا يُستهلك حتى يتم التفعيل.');
     form(create,[['display_name','اسم الجهاز']], 'إنشاء رمز التفعيل',d=>api('deviceActivation',d));
