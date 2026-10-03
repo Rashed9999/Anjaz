@@ -164,4 +164,16 @@
         }
         @media(prefers-reduced-motion:reduce){.merchant-modal{animation:none}}
 
+    
+        .modal-confirm-copy{padding:15px 16px;border:1px solid #dfe9e5;border-radius:14px;background:#f8fbfa}
+        .modal-confirm-copy strong{display:block;font-size:15px;margin-bottom:7px}.modal-confirm-copy p{margin:0;color:#637970;line-height:1.9;font-size:13px}
+        .modal-confirm-copy.danger{background:#fff5f2;border-color:#efd4cd}.modal-confirm-copy.danger strong{color:#9d3f33}
+        .danger-action{background:linear-gradient(135deg,#a94337,#bf5144)!important}
+        .merchant-modal textarea{width:100%;resize:vertical;min-height:105px;padding:12px;border:1px solid #cbdcd5;border-radius:10px;font:14px Tahoma;background:#fff}
+        .merchant-modal textarea:focus{outline:none;border-color:#6db49a;box-shadow:0 0 0 3px #19815f12}
+        .staff-toolbar.compact{justify-content:flex-end;margin:0 0 12px}.staff-toolbar.compact .buttons{margin:0}
+        .activation-secret{padding:20px;border:1px solid #d6e7df;border-radius:16px;background:#f7fbf9;text-align:center}
+        .activation-label{display:block;color:#688078;font-size:11px}.activation-code{display:block;direction:ltr;font:900 31px/1.4 monospace;letter-spacing:5px;color:#116b50;margin:8px 0}
+        .activation-secret small{display:block;color:#788b84}
+
     </style>

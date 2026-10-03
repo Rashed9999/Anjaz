@@ -96,7 +96,7 @@
     input.onchange=async()=>{
       const file=input.files?.[0];if(!file)return;
       if(file.size>5*1024*1024){message('الملف أكبر من 5MB');input.value='';return}
-      if(!window.confirm('سيتم فحص الملف صفاً صفاً وتطبيق قواعد القطاع والباقة. هل تريد المتابعة؟')){input.value='';return}
+      if(!await amialConfirm('استيراد الملف','سيتم فحص الملف صفاً صفاً وتطبيق قواعد القطاع والباقة قبل حفظ أي بيانات.',{confirmLabel:'بدء الاستيراد'})){input.value='';return}
       importBtn.disabled=true;result.replaceChildren(node('p','جارٍ فحص واستيراد الملف…','note'));
       try{
         const data=await uploadCsv(kind==='products'?'sectorProductsImport':'sectorCustomersImport',file);
@@ -691,7 +691,7 @@
         message('المبلغ يتجاوز الدين أو المتبقي من الفاتورة');return
       }
       const label=method.value==='cash'?'نقداً في صندوق المنشأة':'بطلب دفع ينتظر موافقة العميل';
-      if(!window.confirm('تأكيد تحصيل '+money(value)+' '+label+'؟'))return;
+      if(!await amialConfirm('تأكيد التحصيل','سيتم تسجيل تحصيل بقيمة '+money(value)+' '+label+'.',{confirmLabel:'تأكيد التحصيل'}))return;
       button.disabled=true;
       try{
         const data={amount:amount.value,idempotency_key:key};
@@ -1668,7 +1668,7 @@
       if(!(value>0)||value>remaining){message('مبلغ الصرف يجب أن يكون موجباً ولا يتجاوز المتبقي');return}
       if(method.value==='cash'&&!shift.value){message('اختر الوردية التي سيخرج منها النقد');return}
       const channel=method.value==='cash'?'درج الوردية #'+shift.value:'محفظة العميل في أميال';
-      if(!window.confirm('تأكيد صرف '+money(value)+' عبر '+channel+'؟ هذا إجراء مالي حقيقي.'))return;
+      if(!await amialConfirm('تأكيد الصرف','سيتم صرف '+money(value)+' عبر '+channel+'. هذا إجراء مالي حقيقي.',{confirmLabel:'تنفيذ الصرف',danger:true}))return;
 
       save.disabled=true;
       try{
@@ -1689,7 +1689,7 @@
   }
 
   async function resolveWholesaleReturn(id,approve){
-    const note=window.prompt(approve?'ملاحظة الاعتماد (اختيارية)':'سبب الرفض');
+    const note=await amialPrompt(approve?'اعتماد المرتجع':'رفض المرتجع',approve?'ملاحظة الاعتماد (اختيارية)':'سبب الرفض',{multiline:true,required:!approve,minLength:approve?0:3,confirmLabel:approve?'اعتماد':'رفض'});
     if(note===null)return;
     try{
       await api('sectorReturnResolve',{approve:Boolean(approve),decision_note:note||null},returnRoute('sectorReturnResolve',id));
@@ -1957,8 +1957,8 @@
     };
     const reject=button('رفض','action secondary');
     reject.onclick=async()=>{
-      const reason=window.prompt('اكتب سبب الرفض للموظف');
-      if(!reason||!reason.trim())return;
+      const reason=await amialPrompt('رفض طلب الموظف','سبب الرفض',{multiline:true,required:true,minLength:3,confirmLabel:'رفض الطلب'});
+      if(reason===null)return;
       reject.disabled=true;
       try{
         await api('approvalReject',{reason:reason.trim()},
@@ -1982,14 +1982,84 @@
     const body=node('div',null,'merchant-modal-body');
     dialog.append(head,body);backdrop.append(dialog);document.body.append(backdrop);
     document.body.classList.add('merchant-modal-open');
-    let closed=false;
+    let closed=false;const closeHandlers=[];
     const onKey=ev=>{if(ev.key==='Escape')close()};
-    const close=()=>{if(closed)return;closed=true;document.removeEventListener('keydown',onKey);backdrop.remove();document.body.classList.remove('merchant-modal-open')};
+    const close=()=>{
+      if(closed)return;closed=true;document.removeEventListener('keydown',onKey);
+      backdrop.remove();document.body.classList.remove('merchant-modal-open');
+      closeHandlers.splice(0).forEach(fn=>{try{fn()}catch(_){}});
+    };
     closeBtn.addEventListener('click',close);
     backdrop.addEventListener('mousedown',ev=>{if(ev.target===backdrop)close()});
     document.addEventListener('keydown',onKey);
     requestAnimationFrame(()=>closeBtn.focus());
-    return {backdrop,dialog,body,close};
+    return {backdrop,dialog,body,close,onClose:fn=>{if(typeof fn==='function')closeHandlers.push(fn)}};
+  }
+
+  function amialConfirm(title,detail,options={}){
+    return new Promise(resolve=>{
+      const modal=openMerchantModal(title,options.subtitle||'');
+      let settled=false;
+      const finish=value=>{if(settled)return;settled=true;modal.close();resolve(value)};
+      modal.onClose(()=>{if(!settled){settled=true;resolve(false)}});
+      const copy=node('div',null,'modal-confirm-copy'+(options.danger?' danger':''));
+      copy.append(node('strong',options.heading||title),node('p',detail));
+      const actions=node('div',null,'merchant-modal-actions');
+      const cancel=node('button',options.cancelLabel||'إلغاء','action secondary');cancel.type='button';cancel.onclick=()=>finish(false);
+      const ok=node('button',options.confirmLabel||'تأكيد','action'+(options.danger?' danger-action':''));ok.type='button';ok.onclick=()=>finish(true);
+      actions.append(cancel,ok);modal.body.append(copy,actions);requestAnimationFrame(()=>ok.focus());
+    });
+  }
+
+  function amialPrompt(title,labelText,options={}){
+    return new Promise(resolve=>{
+      const modal=openMerchantModal(title,options.subtitle||'');
+      let settled=false;
+      const finish=value=>{if(settled)return;settled=true;modal.close();resolve(value)};
+      modal.onClose(()=>{if(!settled){settled=true;resolve(null)}});
+      const frm=node('form',null,'merchant-modal-form'),label=node('label',labelText,'field');
+      const input=options.multiline?node('textarea'):node('input');
+      if(!options.multiline)input.type=options.type||'text';
+      input.value=options.value??'';
+      if(options.placeholder)input.placeholder=options.placeholder;
+      if(options.min!==undefined)input.min=String(options.min);
+      if(options.max!==undefined)input.max=String(options.max);
+      if(options.step!==undefined)input.step=String(options.step);
+      if(options.maxLength)input.maxLength=options.maxLength;
+      if(options.required)input.required=true;
+      if(options.multiline)input.rows=4;
+      label.append(input);frm.append(label);
+      if(options.note)frm.append(node('div',options.note,'note'));
+      const actions=node('div',null,'merchant-modal-actions');
+      const cancel=node('button',options.cancelLabel||'إلغاء','action secondary');cancel.type='button';cancel.onclick=()=>finish(null);
+      const ok=node('button',options.confirmLabel||'متابعة','action');ok.type='submit';actions.append(cancel,ok);frm.append(actions);modal.body.append(frm);
+      frm.onsubmit=ev=>{
+        ev.preventDefault();const value=String(input.value??'');
+        if(options.required&&!value.trim()){message(options.requiredMessage||'هذا الحقل مطلوب');input.focus();return}
+        if(options.minLength&&value.trim().length<options.minLength){message(options.minLengthMessage||('اكتب '+options.minLength+' أحرف على الأقل'));input.focus();return}
+        finish(value);
+      };
+      requestAnimationFrame(()=>input.focus());
+    });
+  }
+
+  function amialSelect(title,labelText,options,config={}){
+    return new Promise(resolve=>{
+      const modal=openMerchantModal(title,config.subtitle||'');
+      let settled=false;
+      const finish=value=>{if(settled)return;settled=true;modal.close();resolve(value)};
+      modal.onClose(()=>{if(!settled){settled=true;resolve(null)}});
+      const frm=node('form',null,'merchant-modal-form'),label=node('label',labelText,'field'),select=node('select');
+      (options||[]).forEach(opt=>select.append(new Option(opt.label,String(opt.value))));
+      if(config.value!==undefined&&config.value!==null)select.value=String(config.value);
+      label.append(select);frm.append(label);
+      if(config.note)frm.append(node('div',config.note,'note'));
+      const actions=node('div',null,'merchant-modal-actions');
+      const cancel=node('button',config.cancelLabel||'إلغاء','action secondary');cancel.type='button';cancel.onclick=()=>finish(null);
+      const ok=node('button',config.confirmLabel||'اختيار','action');ok.type='submit';actions.append(cancel,ok);frm.append(actions);modal.body.append(frm);
+      frm.onsubmit=ev=>{ev.preventDefault();finish(select.value)};
+      requestAnimationFrame(()=>select.focus());
+    });
   }
 
   function modalField(labelText,name,type='text'){
@@ -2091,7 +2161,7 @@
       ['الإجراء',x=>{
         const manage=action('إدارة',()=>editStaffScope(x,roles,branches));
         const toggle=action(x.is_active?'إيقاف':'تفعيل',async()=>{
-          if(!window.confirm((x.is_active?'إيقاف':'تفعيل')+' حساب «'+x.display_name+'»؟'+(x.is_active?' سيتم قطع جلسات العمل المفتوحة فوراً.':'')))return;
+          if(!await amialConfirm((x.is_active?'إيقاف':'تفعيل')+' حساب الموظف','الحساب: «'+x.display_name+'».'+(x.is_active?' سيتم قطع جلسات العمل المفتوحة فوراً.':''),{confirmLabel:x.is_active?'إيقاف الحساب':'تفعيل الحساب',danger:x.is_active}))return;
           toggle.disabled=true;
           try{
             const result=await api('staffToggle',{},routes.staffToggle.replace('__ID__',String(x.id)));
@@ -2226,26 +2296,39 @@
     p.scrollIntoView({behavior:'smooth',block:'start'});
   }
 
-  function chooseCashierShift(openShifts,verb){
+  async function chooseCashierShift(openShifts,verb){
     if(!Array.isArray(openShifts)||openShifts.length===0)return null;
-    if(!window.confirm('هل '+verb+' من درج وردية POS مفتوحة؟\n«إلغاء» = نقد خارجي لا يخصم من أي درج.'))return null;
-    const list=openShifts.map((s,i)=>(i+1)+' — '+(s.opened_by_name||'وردية')+(s.branch_name?' · '+s.branch_name:'')+' (#'+s.id+')').join('\n');
-    const picked=window.prompt('اختر الوردية التي خرج منها النقد:\n'+list,'1');
+    const source=await amialSelect(
+      'مصدر الحركة النقدية','مصدر النقد',
+      [
+        {value:'external',label:'نقد خارجي — لا يخصم من درج POS'},
+        {value:'shift',label:'درج وردية POS مفتوحة'}
+      ],
+      {note:'حدد المصدر الحقيقي حتى تبقى مطابقة الدرج والتقارير صحيحة.',confirmLabel:'متابعة'}
+    );
+    if(source===null)return undefined;
+    if(source==='external')return null;
+    const picked=await amialSelect(
+      verb,'الوردية',
+      openShifts.map(s=>({
+        value:s.id,
+        label:(s.opened_by_name||'وردية')+(s.branch_name?' · '+s.branch_name:'')+' (#'+s.id+')'
+      })),
+      {confirmLabel:'اختيار الوردية'}
+    );
     if(picked===null)return undefined;
-    const shift=openShifts[Number(picked)-1];
-    if(!shift){message('اختيار الوردية غير صحيح');return undefined}
-    return shift.id;
+    return Number(picked);
   }
 
   async function paySupplier(row,openShifts){
     const debt=Number(row.current_debt||0);
     if(!(debt>0)){message('لا توجد مديونية مستحقة لهذا المورد');return}
-    const raw=window.prompt('مبلغ السداد للمورد '+row.name+' — الحد الأقصى '+money(row.current_debt));
+    const raw=await amialPrompt('سداد المورد · '+row.name,'المبلغ',{type:'number',min:0.01,step:'0.01',required:true,note:'الحد الأقصى '+money(row.current_debt),confirmLabel:'متابعة'});
     if(raw===null)return;
     const amount=Number(raw);
     if(!(amount>0)||amount>debt){message('اكتب مبلغاً صحيحاً لا يتجاوز الرصيد المستحق');return}
-    const note=window.prompt('ملاحظة السداد (اختياري)')||'';
-    const shiftId=chooseCashierShift(openShifts,'دفع هذا المبلغ');
+    const note=(await amialPrompt('ملاحظة السداد','ملاحظة (اختياري)',{multiline:true,confirmLabel:'متابعة'}))??'';
+    const shiftId=await chooseCashierShift(openShifts,'دفع هذا المبلغ');
     if(shiftId===undefined)return;
     await api('supplierPayment',{
       amount:String(amount),note,
@@ -2259,12 +2342,12 @@
     const debt=Number(row.current_debt||0);
     if(!(debt>0)){message('لا توجد مديونية مستحقة لهذا المورد');return}
     if(!row.phone){message('أضف رقم هاتف المورد المرتبط بحساب أميال أولاً');return}
-    const raw=window.prompt('مبلغ السداد عبر أميال للمورد '+row.name+' — الحد الأقصى '+money(row.current_debt));
+    const raw=await amialPrompt('سداد المورد عبر أميال · '+row.name,'المبلغ',{type:'number',min:0.01,step:'0.01',required:true,note:'الحد الأقصى '+money(row.current_debt),confirmLabel:'متابعة'});
     if(raw===null)return;
     const amount=Number(raw);
     if(!(amount>0)||amount>debt){message('اكتب مبلغاً صحيحاً لا يتجاوز الرصيد المستحق');return}
-    const note=window.prompt('ملاحظة السداد (اختياري)')||'';
-    if(!window.confirm('سيُخصم '+money(amount)+' من محفظة المنشأة ويرسل إلى حساب أميال المرتبط برقم المورد '+row.phone+'. متابعة؟'))return;
+    const note=(await amialPrompt('ملاحظة السداد','ملاحظة (اختياري)',{multiline:true,confirmLabel:'متابعة'}))??'';
+    if(!await amialConfirm('تأكيد سداد المورد عبر أميال','سيُخصم '+money(amount)+' من محفظة المنشأة ويرسل إلى حساب أميال المرتبط برقم المورد '+row.phone+'.',{confirmLabel:'إرسال المبلغ',danger:true}))return;
     const result=await api('supplierWalletPayment',{amount:String(amount),note},dataUrl('supplierWalletPayment',row.id));
     message('تم السداد عبر أميال — مرجع العملية '+(result.transaction_id||'—'));
     await load('suppliers');
@@ -2273,19 +2356,19 @@
   async function collectSupplierCredit(row,openShifts){
     const credit=Number(row.current_credit||0);
     if(!(credit>0)){message('لا يوجد رصيد لنا عند هذا المورد');return}
-    const raw=window.prompt('المبلغ المحصل من المورد '+row.name+' — الحد الأقصى '+money(row.current_credit),String(credit));
+    const raw=await amialPrompt('تحصيل من المورد · '+row.name,'المبلغ',{type:'number',min:0.01,step:'0.01',value:String(credit),required:true,note:'الحد الأقصى '+money(row.current_credit),confirmLabel:'متابعة'});
     if(raw===null)return;
     const amount=Number(raw);
     if(!(amount>0)||amount>credit){message('اكتب مبلغاً صحيحاً لا يتجاوز الرصيد لنا عند المورد');return}
-    const note=window.prompt('ملاحظة التحصيل (اختياري)')||'';
-    const shiftId=chooseCashierShift(openShifts,'استلام هذا المبلغ من المورد');
+    const note=(await amialPrompt('ملاحظة التحصيل','ملاحظة (اختياري)',{multiline:true,confirmLabel:'متابعة'}))??'';
+    const shiftId=await chooseCashierShift(openShifts,'استلام هذا المبلغ من المورد');
     if(shiftId===undefined)return;
     const result=await api('supplierCreditRefund',{
       amount:String(amount),note,
       ...(shiftId?{cashier_shift_id:shiftId}:{})
     },dataUrl('supplierCreditRefund',row.id));
     message('تم تحصيل رصيد المورد');
-    if(result.receipt?.entry_ulid&&window.confirm('تم التحصيل. هل تريد فتح سند التحصيل PDF؟')){
+    if(result.receipt?.entry_ulid&&await amialConfirm('تم التحصيل','تم إنشاء سند تحصيل رسمي. هل تريد فتحه الآن؟',{confirmLabel:'فتح السند'})){
       window.open(dataUrl('supplierPaymentPdf',result.receipt.entry_ulid),'_blank','noopener');
     }
     await load('suppliers');
@@ -2298,18 +2381,18 @@
     const payload=[];
     for(const item of items){
       const remaining=Number(item.quantity||0)-Number(item.received_quantity||0);
-      const raw=window.prompt('استلام «'+item.name+'» — المتبقي '+remaining, String(remaining));
+      const raw=await amialPrompt('استلام بند الشراء · '+item.name,'الكمية المستلمة',{type:'number',min:0.001,step:'0.001',max:remaining,value:String(remaining),note:'المتبقي '+remaining,confirmLabel:'إضافة الكمية'});
       if(raw===null)continue;
       const qty=Number(raw);
       if(qty>0&&qty<=remaining)payload.push({item_id:item.id,received_quantity:String(qty)});
       else if(raw.trim()!==''){message('كمية غير صحيحة للصنف '+item.name);return}
     }
     if(!payload.length){message('لم تحدد أي كمية للاستلام');return}
-    const paid=window.prompt('المبلغ المدفوع نقداً عند هذا الاستلام (اتركه 0 إن كان كله آجلاً)','0');
+    const paid=await amialPrompt('الدفع عند الاستلام','المبلغ المدفوع نقداً',{type:'number',min:0,step:'0.01',value:'0',required:true,note:'اكتب 0 إذا كان الاستلام كله آجلاً.',confirmLabel:'متابعة'});
     if(paid===null)return;
     let shiftId=null;
     if(Number(paid)>0){
-      shiftId=chooseCashierShift(openShifts,'دفع قيمة الاستلام');
+      shiftId=await chooseCashierShift(openShifts,'دفع قيمة الاستلام');
       if(shiftId===undefined)return;
     }
     await api('purchaseOrderReceive',{
@@ -2325,22 +2408,34 @@
     const order=data.order||{};
     const items=(order.items||[]).filter(item=>Number(item.received_quantity||0)>Number(item.returned_quantity||0));
     if(!items.length){message('لا توجد بضاعة قابلة للرد في هذا الأمر');return}
-    const choices=items.map((item,i)=>(i+1)+' — '+item.name+' (المتاح '+(Number(item.received_quantity||0)-Number(item.returned_quantity||0))+')').join('\n');
-    const picked=window.prompt('اختر رقم البند المراد رده:\n'+choices,'1');
+    const picked=await amialSelect(
+      'اختيار بند المرتجع','البند',
+      items.map(item=>({value:item.id,label:item.name+' — المتاح '+(Number(item.received_quantity||0)-Number(item.returned_quantity||0))})),
+      {confirmLabel:'اختيار البند'}
+    );
     if(picked===null)return;
-    const item=items[Number(picked)-1];
+    const item=items.find(x=>String(x.id)===String(picked));
     if(!item){message('اختيار غير صحيح');return}
     const max=Number(item.received_quantity||0)-Number(item.returned_quantity||0);
-    const raw=window.prompt('كمية الرد من «'+item.name+'» — الحد '+max,String(max));
+    const raw=await amialPrompt('كمية مرتجع الشراء · '+item.name,'الكمية',{type:'number',min:0.001,step:'0.001',max,value:String(max),required:true,note:'الحد الأقصى '+max,confirmLabel:'متابعة'});
     if(raw===null)return;
     const qty=Number(raw);
     if(!(qty>0)||qty>max){message('كمية الرد غير صحيحة');return}
-    const reason=window.prompt('سبب المرتجع (تالف، منتهي، زائد عن الأمر...)');
+    const reason=await amialPrompt('سبب مرتجع الشراء','السبب',{multiline:true,required:true,minLength:3,placeholder:'تالف، منتهي، زائد عن الأمر…',confirmLabel:'متابعة'});
     if(!reason||reason.trim().length<3){message('سبب المرتجع مطلوب');return}
-    const cash=window.confirm('اضغط «موافق» إذا أعاد المورد القيمة نقداً.\nاضغط «إلغاء» إذا ستُخصم من دين المورد.');
+    const settlement=await amialSelect(
+      'طريقة تسوية المرتجع','طريقة التسوية',
+      [
+        {value:'cash_refund',label:'استرداد نقدي من المورد'},
+        {value:'credit_note',label:'خصم القيمة من دين المورد'}
+      ],
+      {note:'الإغلاق أو ESC يلغي العملية ولا يختار طريقة ضمنياً.',confirmLabel:'متابعة'}
+    );
+    if(settlement===null)return;
+    const cash=settlement==='cash_refund';
     let shiftId=null;
     if(cash){
-      shiftId=chooseCashierShift(openShifts,'استلام مبلغ المرتجع');
+      shiftId=await chooseCashierShift(openShifts,'استلام مبلغ المرتجع');
       if(shiftId===undefined)return;
     }
     await api('purchaseReturnCreate',{
@@ -2359,7 +2454,7 @@
     const list=[action('PDF',()=>window.open(dataUrl('purchaseOrderPdf',row.id),'_blank','noopener'))];
     if(row.status==='draft')list.push(action('اعتماد',async()=>{await api('purchaseOrderApprove',{},dataUrl('purchaseOrderApprove',row.id));message('تم اعتماد أمر الشراء');await load('suppliers')},false));
     if(row.status==='approved'||row.status==='partially_received')list.push(action('استلام',()=>receivePurchaseOrder(row,openShifts),false));
-    if(row.status==='draft'||row.status==='approved')list.push(action('إلغاء',async()=>{if(!window.confirm('إلغاء أمر الشراء '+row.po_number+'؟'))return;await api('purchaseOrderCancel',{},dataUrl('purchaseOrderCancel',row.id));message('تم إلغاء الأمر');await load('suppliers')}));
+    if(row.status==='draft'||row.status==='approved')list.push(action('إلغاء',async()=>{if(!await amialConfirm('إلغاء أمر الشراء','سيتم إلغاء أمر الشراء '+row.po_number+' مع بقاء أثره التاريخي.',{confirmLabel:'إلغاء الأمر',danger:true}))return;await api('purchaseOrderCancel',{},dataUrl('purchaseOrderCancel',row.id));message('تم إلغاء الأمر');await load('suppliers')}));
     if(row.status==='partially_received'||row.status==='completed')list.push(action('مرتجع',()=>createReturnFromOrder(row,openShifts)));
     return buttons(list);
   }
@@ -2367,7 +2462,7 @@
   function returnActions(row){
     if(row.status!=='pending')return node('span',row.status==='approved'?'معتمد':'مرفوض','note');
     const approve=action('اعتماد',async()=>{await api('purchaseReturnApprove',{},dataUrl('purchaseReturnApprove',row.id));message('اعتُمد المرتجع وتحدّث المخزون وحساب المورد');await load('suppliers')},false);
-    const reject=action('رفض',async()=>{const reason=window.prompt('سبب رفض المرتجع');if(!reason||reason.trim().length<5){message('اكتب سبباً واضحاً');return}await api('purchaseReturnReject',{reason:reason.trim()},dataUrl('purchaseReturnReject',row.id));message('رُفض المرتجع');await load('suppliers')});
+    const reject=action('رفض',async()=>{const reason=await amialPrompt('رفض مرتجع الشراء','سبب الرفض',{multiline:true,required:true,minLength:5,confirmLabel:'رفض المرتجع'});if(reason===null)return;await api('purchaseReturnReject',{reason:reason.trim()},dataUrl('purchaseReturnReject',row.id));message('رُفض المرتجع');await load('suppliers')});
     return buttons([approve,reject]);
   }
 
@@ -2461,8 +2556,8 @@
 
   const expenseLabels={rent:'إيجار',salary:'رواتب',utilities:'كهرباء ومياه',supplies:'مستلزمات',transport:'نقل',other:'أخرى'};
   async function editExpense(row){
-    const title=window.prompt('بيان المصروف',row.title||'');if(title===null)return;
-    const amount=window.prompt('المبلغ',String(row.amount||''));if(amount===null||!(Number(amount)>0))return;
+    const title=await amialPrompt('تعديل المصروف','البيان',{value:row.title||'',required:true,confirmLabel:'متابعة'});if(title===null)return;
+    const amount=await amialPrompt('تعديل المصروف','المبلغ',{type:'number',min:0.01,step:'0.01',value:String(row.amount||''),required:true,confirmLabel:'حفظ'});if(amount===null||!(Number(amount)>0))return;
     await api('expenseUpdate',{title:title.trim(),amount,category:row.category||'other',spent_on:row.spent_on,note:row.note||''},dataUrl('expenseUpdate',row.id));
     message('تم تعديل المصروف');await load('expenses');
   }
@@ -2479,9 +2574,9 @@
     table(p,[['التاريخ',x=>x.spent_on],['البيان',x=>x.title],['الفئة',x=>expenseLabels[x.category]||x.category],['المبلغ',x=>money(x.amount)],['المصدر',x=>x.payment_source==='cash_shift'?'درج وردية #'+x.cashier_shift_id:'نقد خارجي'],['ملاحظة',x=>x.note||'—'],['الإجراء',x=>buttons([
       action('تعديل الوصف',()=>editExpense(x)),
       action('إلغاء القيد',async()=>{
-        const reason=window.prompt('سبب إلغاء المصروف (لن يُحذف من التاريخ)');
-        if(!reason||reason.trim().length<5){message('اكتب سبباً واضحاً من 5 أحرف على الأقل');return}
-        if(!window.confirm('سيُسجل عكس محاسبي للمصروف ولن يُحذف أثره التاريخي. متابعة؟'))return;
+        const reason=await amialPrompt('إلغاء قيد المصروف','سبب الإلغاء',{multiline:true,required:true,minLength:5,note:'لن يُحذف المصروف من التاريخ؛ سيُسجل قيد عكسي.',confirmLabel:'متابعة'});
+        if(reason===null)return;
+        if(!await amialConfirm('تأكيد القيد العكسي','سيُسجل عكس محاسبي للمصروف ولن يُحذف أثره التاريخي.',{confirmLabel:'تسجيل الإلغاء',danger:true}))return;
         await api('expenseDelete',{reason:reason.trim()},dataUrl('expenseDelete',x.id),'DELETE');
         message('تم إلغاء المصروف بقيد عكسي');await load('expenses')
       })
@@ -2507,12 +2602,12 @@
     p.scrollIntoView({behavior:'smooth',block:'start'});
   }
   async function disposeAsset(row,openShifts){
-    const date=window.prompt('تاريخ استبعاد الأصل YYYY-MM-DD',new Date().toISOString().slice(0,10));if(date===null)return;
-    const reason=window.prompt('سبب الاستبعاد/البيع');if(!reason||reason.trim().length<5){message('اكتب سبباً واضحاً');return}
-    const proceeds=window.prompt('متحصلات البيع إن وجدت (اتركها فارغة عند الإتلاف)','');if(proceeds===null)return;
+    const date=await amialPrompt('استبعاد الأصل','تاريخ الاستبعاد',{type:'date',value:new Date().toISOString().slice(0,10),required:true,confirmLabel:'متابعة'});if(date===null)return;
+    const reason=await amialPrompt('استبعاد الأصل','سبب الاستبعاد أو البيع',{multiline:true,required:true,minLength:5,confirmLabel:'متابعة'});if(reason===null)return;
+    const proceeds=await amialPrompt('استبعاد الأصل','متحصلات البيع إن وجدت',{type:'number',min:0,step:'0.01',value:'',note:'اتركه فارغاً عند الإتلاف دون بيع.',confirmLabel:'متابعة'});if(proceeds===null)return;
     let shiftId=null;
     if(proceeds.trim()!==''&&Number(proceeds)>0){
-      shiftId=chooseCashierShift(openShifts,'استلام متحصلات بيع الأصل');
+      shiftId=await chooseCashierShift(openShifts,'استلام متحصلات بيع الأصل');
       if(shiftId===undefined)return;
     }
     await api('assetDispose',{
@@ -2557,6 +2652,7 @@
     ]);
     const p=box('أجهزة نقاط البيع');
     hint(p,'الجهاز أصل للمنشأة وليس موظفاً. نقل الجهاز بين الفروع يقطع جلساته الحالية فوراً، والإلغاء لا يحذف تاريخه المالي.');
+    const deviceTools=node('div',null,'staff-toolbar compact');deviceTools.append(node('div'),buttons([action('+ تفعيل جهاز جديد',createDeviceActivation,false)]));p.append(deviceTools);
     table(p,[
       ['الجهاز',x=>x.display_name],['الفرع',x=>x.branch_name||'المنشأة الرئيسية'],
       ['آخر ظهور',x=>x.last_seen_at?new Date(x.last_seen_at).toLocaleString('ar-YE'):'—'],['الجلسات',x=>x.live_sessions??0],
@@ -2566,7 +2662,7 @@
         if(!x.is_active)return 'محفوظ للتدقيق';
         const edit=action('تعديل',()=>editDevice(x,branches));
         const revoke=action('إلغاء الجهاز',async()=>{
-          if(!window.confirm('إلغاء جهاز «'+x.display_name+'»؟ سيتم إنهاء جلساته وإخلاء مقعد POS، مع بقاء سجله التاريخي.'))return;
+          if(!await amialConfirm('إلغاء جهاز نقطة البيع','الجهاز: «'+x.display_name+'». سيتم إنهاء جلساته وإخلاء مقعد POS مع بقاء سجله التاريخي.',{confirmLabel:'إلغاء الجهاز',danger:true}))return;
           revoke.disabled=true;
           try{
             await api('deviceDestroy',{},routes.deviceDestroy.replace('__ID__',String(x.id)),'DELETE');
@@ -2578,33 +2674,66 @@
     ],rows);
 
     async function editDevice(row,branchRows){
-      document.getElementById('device-editor')?.remove();
-      const e=box('تعديل الجهاز · '+row.display_name);e.id='device-editor';
-      hint(e,'تغيير الفرع ينهي الجلسة المفتوحة على الجهاز حتى لا تبقى عهدة الفرع السابق فعّالة.');
-      const frm=node('form',null,'editor'),nameLabel=node('label','اسم الجهاز','field'),name=node('input');
-      name.value=row.display_name||'';name.maxLength=120;nameLabel.append(name);
+      const modal=openMerchantModal(
+        'تعديل جهاز POS · '+row.display_name,
+        'تغيير الفرع ينهي الجلسات المفتوحة على الجهاز حتى لا تبقى عهدة الفرع السابق فعالة.'
+      );
+      const frm=node('form',null,'editor merchant-modal-form'),nameLabel=node('label','اسم الجهاز','field'),name=node('input');
+      name.value=row.display_name||'';name.maxLength=120;name.required=true;nameLabel.append(name);
       const branchLabel=node('label','الفرع','field'),branch=node('select');branch.append(new Option('المنشأة الرئيسية',''));
       branchRows.filter(x=>x.is_active).forEach(b=>branch.append(new Option(b.name+(b.city?' — '+b.city:''),String(b.id))));
       branch.value=row.branch_id===null||row.branch_id===undefined?'':String(row.branch_id);branchLabel.append(branch);
-      const save=action('حفظ الجهاز',()=>{},false);save.type='submit';const cancel=action('إلغاء',()=>e.remove());
-      frm.append(nameLabel,branchLabel,buttons([save,cancel]));e.append(frm);e.scrollIntoView({behavior:'smooth',block:'start'});
+      const meta=node('div',null,'modal-summary');
+      const a=node('div');a.append(node('span','الجلسات المفتوحة'),node('strong',String(row.live_sessions||0)));
+      const b=node('div');b.append(node('span','آخر ظهور'),node('strong',row.last_seen_at?new Date(row.last_seen_at).toLocaleString('ar-YE'):'—'));
+      meta.append(a,b);
+      const actions=node('div',null,'merchant-modal-actions'),cancel=action('إلغاء',modal.close),save=action('حفظ الجهاز',()=>{},false);save.type='submit';
+      actions.append(cancel,save);frm.append(nameLabel,branchLabel,meta,actions);modal.body.append(frm);
       frm.onsubmit=async ev=>{
         ev.preventDefault();save.disabled=true;
         try{
           const result=await api('deviceUpdate',{
-            display_name:name.value.trim()||null,
+            display_name:name.value.trim(),
             branch_id:branch.value===''?null:Number(branch.value)
           },routes.deviceUpdate.replace('__ID__',String(row.id)),'PATCH');
-          const ended=Number(result.ended_sessions||0);
+          const ended=Number(result.ended_sessions||0);modal.close();
           message(ended>0?'تم تحديث الجهاز وإنهاء '+ended+' جلسة قديمة.':'تم تحديث الجهاز.');
           await load('devices');
         }catch(err){message(err.message);save.disabled=false}
       };
     }
 
-    const create=box('تفعيل جهاز بيع جديد');
-    hint(create,'ينشئ المالك رمزاً مؤقتاً صالحاً لمرة واحدة. أدخله في تطبيق نقطة البيع على الجهاز الفعلي؛ المقعد لا يُستهلك حتى يتم التفعيل.');
-    form(create,[['display_name','اسم الجهاز']], 'إنشاء رمز التفعيل',d=>api('deviceActivation',d));
+    function createDeviceActivation(){
+      const modal=openMerchantModal(
+        'تفعيل جهاز نقطة بيع جديد',
+        'أنشئ رمزاً مؤقتاً لمرة واحدة ثم أدخله في تطبيق POS على الجهاز الفعلي.'
+      );
+      const frm=node('form',null,'editor merchant-modal-form'),nameLabel=node('label','اسم الجهاز','field'),name=node('input');
+      name.required=true;name.maxLength=120;name.placeholder='مثال: كاشير 1';nameLabel.append(name);
+      const branchLabel=node('label','الفرع','field'),branch=node('select');branch.append(new Option('المنشأة الرئيسية',''));
+      branches.filter(x=>x.is_active).forEach(b=>branch.append(new Option(b.name+(b.city?' — '+b.city:''),String(b.id))));branchLabel.append(branch);
+      const note=node('div','المقعد لا يُستهلك حتى يتم تفعيل الرمز على الجهاز الفعلي.','note');
+      const actions=node('div',null,'merchant-modal-actions'),cancel=action('إلغاء',modal.close),save=action('إنشاء رمز التفعيل',()=>{},false);save.type='submit';
+      actions.append(cancel,save);frm.append(nameLabel,branchLabel,note,actions);modal.body.append(frm);
+      frm.onsubmit=async ev=>{
+        ev.preventDefault();save.disabled=true;
+        try{
+          const result=await api('deviceActivation',{
+            display_name:name.value.trim(),
+            ...(branch.value!==''?{branch_id:Number(branch.value)}:{})
+          });
+          frm.replaceChildren();
+          const secret=node('div',null,'activation-secret');
+          secret.append(node('span','رمز التفعيل','activation-label'),node('strong',result.activation_code||'—','activation-code'));
+          if(result.expires_at)secret.append(node('small','صالح حتى '+result.expires_at));
+          const copy=action('نسخ الرمز',()=>navigator.clipboard.writeText(result.activation_code||'').then(()=>message('تم نسخ رمز التفعيل')));
+          const done=action('إغلاق',async()=>{modal.close();await load('devices')},false);
+          const aa=node('div',null,'merchant-modal-actions');aa.append(copy,done);modal.body.append(secret,aa);
+          message('تم إنشاء رمز التفعيل');
+        }catch(err){message(err.message);save.disabled=false}
+      };
+    }
+
   }
   async function reports(days=30){
     const dashUrl=new URL(routes.dashboardV2,window.location.href);dashUrl.searchParams.set('days',String(Math.min(30,Math.max(7,days))));
@@ -2866,8 +2995,8 @@
     if(apiLocked)apiCard.append(node('p',apiLocked,'muted'));
 
     const backup=card('نسخة احتياطية قطاعية','تنزيل JSON من مصدر قطاعك الحقيقي: منتجات ومبيعات القطاع، ومعها دفاتر الآجل والبيانات المشتركة. قد يتضمن بيانات عملاء حساسة.','حسب الباقة');
-    const backupButton=action('إنشاء وتنزيل النسخة',()=>{
-      if(!window.confirm('قد تحتوي النسخة على بيانات عملاء وذمم ومبيعات حساسة. هل تريد تنزيلها على هذا الجهاز؟'))return;
+    const backupButton=action('إنشاء وتنزيل النسخة',async()=>{
+      if(!await amialConfirm('تنزيل نسخة احتياطية','قد تحتوي النسخة على بيانات عملاء وذمم ومبيعات حساسة وستُنزل إلى هذا الجهاز.',{confirmLabel:'تنزيل النسخة',danger:true}))return;
       window.open(routes.backupDownload,'_blank','noopener');
     });backup.append(backupButton);
 
@@ -2892,7 +3021,7 @@
           }catch(e){message(e.message)}
         }),
         action('حذف',async()=>{
-          if(!window.confirm('حذف هذا المفتاح نهائياً؟ أي تكامل يستخدمه سيتوقف فوراً.'))return;
+          if(!await amialConfirm('حذف مفتاح التكامل','سيُحذف المفتاح نهائياً وأي تكامل يستخدمه سيتوقف فوراً.',{confirmLabel:'حذف المفتاح',danger:true}))return;
           try{
             await api('integrationApiKeyDelete',{},routes.integrationApiKeyDelete.replace('__ID__',String(x.id)),'DELETE');
             message('تم حذف المفتاح');await load('integrations');
