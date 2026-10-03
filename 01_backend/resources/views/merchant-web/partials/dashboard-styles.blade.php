@@ -134,4 +134,34 @@
         @media(max-width:1000px){.filter-bar{grid-template-columns:repeat(3,minmax(0,1fr))}}
         @media(max-width:650px){.filter-bar{grid-template-columns:1fr 1fr}.filter-actions{grid-column:1/-1}}
 
+    
+        /* AMIAL-STAFF-MODAL-UX-001 — إدارة الفريق بدون نماذج طويلة متكدسة. */
+        body.merchant-modal-open{overflow:hidden}
+        .staff-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:15px}
+        .staff-toolbar h3{margin:0 0 5px;font-size:16px}.staff-toolbar p{margin:0;color:#6b7f78;font-size:12px;line-height:1.7;max-width:720px}
+        .staff-toolbar .buttons{margin-top:0;justify-content:flex-end}
+        .merchant-modal-backdrop{position:fixed;inset:0;background:rgba(8,31,24,.58);backdrop-filter:blur(3px);z-index:80;display:flex;align-items:center;justify-content:center;padding:18px}
+        .merchant-modal{width:min(780px,96vw);max-height:min(88vh,860px);background:#fff;border:1px solid #dce8e3;border-radius:21px;box-shadow:0 28px 90px rgba(5,31,23,.28);display:flex;flex-direction:column;overflow:hidden;animation:merchantModalIn .16s ease-out}
+        .merchant-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:19px 21px;border-bottom:1px solid #e5ece9;background:#fbfdfc}
+        .merchant-modal-head h2{margin:0;font-size:19px}.merchant-modal-head p{margin:6px 0 0;color:#687d75;font-size:12px;line-height:1.7;max-width:620px}
+        .merchant-modal-close{width:39px;height:39px;flex:none;border:1px solid #d8e4df;background:#fff;border-radius:11px;color:#385b4e;font-size:25px;line-height:1;cursor:pointer}
+        .merchant-modal-close:hover{background:#edf6f2;color:#125d44}
+        .merchant-modal-body{padding:20px;overflow:auto;overscroll-behavior:contain}
+        .merchant-modal-form{display:grid;gap:14px}.merchant-modal-form .editor{margin:0}
+        .merchant-modal-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;padding-top:13px;border-top:1px solid #edf1ef}
+        .modal-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;grid-column:1/-1}
+        .modal-summary div{padding:11px 12px;border:1px solid #e2ebe7;border-radius:11px;background:#f8fbfa}.modal-summary span{display:block;color:#71847d;font-size:10px}.modal-summary strong{display:block;margin-top:5px;font-size:12px}
+        .modal-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:13px}.modal-toolbar p{margin:0;flex:1}.modal-toolbar .action{flex:none}
+        @keyframes merchantModalIn{from{transform:translateY(10px) scale(.985);opacity:.4}to{transform:none;opacity:1}}
+        @media(max-width:650px){
+          .staff-toolbar{flex-direction:column}.staff-toolbar .buttons{width:100%;justify-content:stretch}.staff-toolbar .buttons .action{flex:1}
+          .merchant-modal-backdrop{padding:0;align-items:flex-end}
+          .merchant-modal{width:100%;max-height:94vh;border-radius:20px 20px 0 0}
+          .merchant-modal-head{padding:16px}.merchant-modal-body{padding:15px}
+          .merchant-modal-actions{position:sticky;bottom:-15px;background:#fff;padding:12px 0 15px;z-index:2}
+          .merchant-modal-actions .action{flex:1}.modal-summary{grid-template-columns:1fr}
+          .modal-toolbar{align-items:stretch;flex-direction:column}.modal-toolbar .action{width:100%}
+        }
+        @media(prefers-reduced-motion:reduce){.merchant-modal{animation:none}}
+
     </style>

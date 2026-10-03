@@ -1969,27 +1969,60 @@
     };
     actions.append(grant,reject);return actions;
   }
+  function openMerchantModal(title,subtitle=''){
+    document.querySelector('.merchant-modal-backdrop')?.remove();
+    const backdrop=node('div',null,'merchant-modal-backdrop');
+    const dialog=node('section',null,'merchant-modal');
+    dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label',title);
+    const head=node('header',null,'merchant-modal-head'),copy=node('div');
+    copy.append(node('h2',title));
+    if(subtitle)copy.append(node('p',subtitle));
+    const closeBtn=node('button','×','merchant-modal-close');closeBtn.type='button';closeBtn.setAttribute('aria-label','إغلاق');
+    head.append(copy,closeBtn);
+    const body=node('div',null,'merchant-modal-body');
+    dialog.append(head,body);backdrop.append(dialog);document.body.append(backdrop);
+    document.body.classList.add('merchant-modal-open');
+    let closed=false;
+    const onKey=ev=>{if(ev.key==='Escape')close()};
+    const close=()=>{if(closed)return;closed=true;document.removeEventListener('keydown',onKey);backdrop.remove();document.body.classList.remove('merchant-modal-open')};
+    closeBtn.addEventListener('click',close);
+    backdrop.addEventListener('mousedown',ev=>{if(ev.target===backdrop)close()});
+    document.addEventListener('keydown',onKey);
+    requestAnimationFrame(()=>closeBtn.focus());
+    return {backdrop,dialog,body,close};
+  }
+
+  function modalField(labelText,name,type='text'){
+    const label=node('label',labelText,'field'),input=node('input');
+    input.name=name;input.type=type;
+    if(type==='password')input.autocomplete='new-password';
+    label.append(input);return {label,input};
+  }
+
   async function editStaffScope(row,roles,branches){
-    document.getElementById('staff-assignment-editor')?.remove();
-    const p=box('نطاق ودور الموظف · '+row.display_name);p.id='staff-assignment-editor';
-    hint(p,'تغيير الفرع ينهي جلسة نقطة البيع الحالية للموظف حتى لا يبقى صندوق الفرع القديم مفتوحاً. تغيير الدور يكتب نظام RBAC الفعلي، لا قائمة واجهة منفصلة.');
-    const frm=node('form',null,'editor');
+    const modal=openMerchantModal(
+      'إدارة الموظف · '+row.display_name,
+      'غيّر الدور أو فرع التشغيل من مكان واحد. تغيير الفرع ينهي جلسات POS القديمة حمايةً للصندوق.'
+    );
+    const frm=node('form',null,'editor merchant-modal-form');
 
     const roleLabel=node('label','الدور التشغيلي','field'),roleSelect=node('select');
     roles.filter(x=>x.is_active).forEach(r=>{const o=node('option',r.name_ar);o.value=String(r.id);roleSelect.append(o)});
-    const currentRole=row.roles?.[0]?.id; if(currentRole)roleSelect.value=String(currentRole);
-    roleLabel.append(roleSelect);
+    const currentRole=row.roles?.[0]?.id;if(currentRole)roleSelect.value=String(currentRole);roleLabel.append(roleSelect);
 
-    const branchLabel=node('label','موقع التشغيل','field'),branchSelect=node('select');
+    const branchLabel=node('label','فرع التشغيل','field'),branchSelect=node('select');
     branchSelect.append(new Option('المنشأة الرئيسية',''));
     branches.filter(x=>x.is_active).forEach(b=>branchSelect.append(new Option(b.name+(b.city?' — '+b.city:''),String(b.id))));
-    branchSelect.value=row.branch_id===null||row.branch_id===undefined?'':String(row.branch_id);
-    branchLabel.append(branchSelect);
+    branchSelect.value=row.branch_id===null||row.branch_id===undefined?'':String(row.branch_id);branchLabel.append(branchSelect);
 
-    const meta=node('div',null,'note');
-    meta.append(node('strong','آخر دخول: '),node('span',row.last_login_at?new Date(row.last_login_at).toLocaleString('ar-YE'):'لم يُسجل بعد'));
-    const actions=node('div',null,'buttons'),save=action('حفظ النطاق والدور',()=>{} ,false),cancel=action('إلغاء',()=>p.remove());
-    save.type='submit';actions.append(save,cancel);frm.append(roleLabel,branchLabel,meta,actions);p.append(frm);
+    const meta=node('div',null,'modal-summary');
+    const addMeta=(k,v)=>{const x=node('div');x.append(node('span',k),node('strong',v));meta.append(x)};
+    addMeta('رمز الدخول',row.employee_code||'—');
+    addMeta('الحالة',row.is_active?'نشط':'موقوف');
+    addMeta('آخر دخول',row.last_login_at?new Date(row.last_login_at).toLocaleString('ar-YE'):'لم يسجل بعد');
+
+    const actions=node('div',null,'merchant-modal-actions'),save=action('حفظ التغييرات',()=>{},false),cancel=action('إلغاء',modal.close);
+    save.type='submit';actions.append(cancel,save);frm.append(roleLabel,branchLabel,meta,actions);modal.body.append(frm);
 
     frm.onsubmit=async ev=>{
       ev.preventDefault();save.disabled=true;
@@ -1997,20 +2030,15 @@
         const tasks=[];
         const nextRole=String(roleSelect.value||''),oldRole=String(currentRole||'');
         const nextBranch=String(branchSelect.value||''),oldBranch=row.branch_id===null||row.branch_id===undefined?'':String(row.branch_id);
-        if(nextRole&&nextRole!==oldRole){
-          tasks.push(api('staffRole',{merchant_role_id:Number(nextRole)},routes.staffRole.replace('__ID__',String(row.id))));
-        }
-        if(nextBranch!==oldBranch){
-          tasks.push(api('staffBranch',{branch_id:nextBranch===''?null:Number(nextBranch)},routes.staffBranch.replace('__ID__',String(row.id))));
-        }
-        if(!tasks.length){message('لم يتغير الدور أو موقع التشغيل');save.disabled=false;return}
-        const results=await Promise.all(tasks);
-        const ended=results.reduce((n,x)=>n+Number(x.ended_device_sessions||0),0);
+        if(nextRole&&nextRole!==oldRole)tasks.push(api('staffRole',{merchant_role_id:Number(nextRole)},routes.staffRole.replace('__ID__',String(row.id))));
+        if(nextBranch!==oldBranch)tasks.push(api('staffBranch',{branch_id:nextBranch===''?null:Number(nextBranch)},routes.staffBranch.replace('__ID__',String(row.id))));
+        if(!tasks.length){message('لم يتغير الدور أو فرع التشغيل');save.disabled=false;return}
+        const results=await Promise.all(tasks),ended=results.reduce((n,x)=>n+Number(x.ended_device_sessions||0),0);
+        modal.close();
         message(ended>0?'تم الحفظ وإنهاء '+ended+' جلسة POS قديمة؛ يلزم تسجيل الدخول مجدداً.':'تم تحديث الموظف بنجاح');
         await load('staff');
       }catch(e){message(e.message);save.disabled=false}
     };
-    p.scrollIntoView({behavior:'smooth',block:'start'});
   }
 
   async function staff(){
@@ -2045,8 +2073,13 @@
       ],approvals);
     }
 
-    const p=box('الموظفون وأداء نقاط البيع');
-    hint(p,'الحساب، الفرع، الدور، الحالة وأداء البيع في مكان واحد. الأداء يُقرأ من سجل قطاع المنشأة نفسه، وليس من جدول تجزئة عام.');
+    const p=box('فريق نقاط البيع');
+    const teamHead=node('div',null,'staff-toolbar'),teamCopy=node('div');
+    teamCopy.append(node('h3','الموظفون، أدوارهم وفروعهم'),node('p','أضف الموظف أولاً ثم اربطه بدور وفرع. الصلاحيات المتقدمة تبقى في نافذة منفصلة ولا تزاحم العمل اليومي.'));
+    const addStaff=action('+ إضافة موظف',()=>openCreateStaff(),false);
+    const manageRoles=action('الأدوار والصلاحيات',()=>openRoles());
+    teamHead.append(teamCopy,buttons([addStaff,manageRoles]));p.append(teamHead);
+
     table(p,[
       ['الموظف',x=>x.display_name],
       ['رمز الدخول',x=>x.employee_code],
@@ -2056,7 +2089,7 @@
       ['عمليات اليوم',x=>perfById.get(String(x.id))?.today_count||0],
       ['الحالة',x=>{const s=node('span',x.is_active?'نشط':'موقوف','staff-status '+(x.is_active?'on':'off'));return s}],
       ['الإجراء',x=>{
-        const manage=action('الدور والنطاق',()=>editStaffScope(x,roles,branches));
+        const manage=action('إدارة',()=>editStaffScope(x,roles,branches));
         const toggle=action(x.is_active?'إيقاف':'تفعيل',async()=>{
           if(!window.confirm((x.is_active?'إيقاف':'تفعيل')+' حساب «'+x.display_name+'»؟'+(x.is_active?' سيتم قطع جلسات العمل المفتوحة فوراً.':'')))return;
           toggle.disabled=true;
@@ -2073,67 +2106,100 @@
       hint(p,'يوجد '+money(performance.unattributed_total)+' من مبيعات الفترة غير منسوب لموظف POS (مثل مبيعات نفذها المالك مباشرة).');
     }
 
-    const rolesPanel=box('الأدوار والصلاحيات');
-    hint(rolesPanel,'الدور حزمة صلاحيات حقيقية يقرأها الخادم عند تنفيذ الفعل. الصلاحيات الحساسة مميزة، ولا يكفي إخفاء زر في الواجهة.');
-    const roleGrid=node('div',null,'roles-grid'),catalogueMap=new Map(catalogue.map(x=>[x.code,x]));
-    roles.forEach(role=>{
-      const card=node('article',null,'role-card'),head=node('div',null,'role-card-head');
-      head.append(node('h4',role.name_ar),node('span',role.is_system?'دور جاهز':'مخصص','source-chip'));card.append(head);
-      if(role.description_ar)card.append(node('p',role.description_ar));
-      const meta=node('div',null,'role-meta');
-      meta.append(node('span',(role.permissions_count||0)+' صلاحية'),node('span',(role.assignments_count||0)+' موظف'));
-      card.append(meta);
-      const details=node('details'),summary=node('summary','عرض الصلاحيات ('+(role.permissions_count||0)+')');
-      details.append(summary);
-      const names=(role.permissions||[]).map(code=>catalogueMap.get(code)?.name||code);
-      details.append(node('p',names.join(' · ')||'لا توجد صلاحيات','muted'));card.append(details);roleGrid.append(card)
-    });
-    rolesPanel.append(roleGrid);
+    function openCreateStaff(){
+      const modal=openMerchantModal(
+        'إضافة موظف نقطة بيع',
+        'هذا ينشئ حساب دخول للموظف. الجهاز نفسه يُدار بشكل مستقل من إعداد نقاط البيع.'
+      );
+      const frm=node('form',null,'editor merchant-modal-form');
+      const name=modalField('اسم الموظف','display_name'),code=modalField('رمز الدخول','employee_code'),pass=modalField('كلمة مرور مؤقتة','password');
+      name.input.required=code.input.required=pass.input.required=true;
 
-    const roleCreate=box('إنشاء دور مخصص');
-    hint(roleCreate,'مثال: «مشرف فرع» أو «محاسب». اختر فقط ما يحتاجه هذا الدور؛ يمكنك استخدام الأدوار الجاهزة بدلاً من إنشاء نسخة منها.');
-    const rf=node('form',null,'editor'),nameLabel=node('label','اسم الدور','field'),nameInput=node('input');
-    nameInput.name='name_ar';nameInput.required=true;nameInput.maxLength=80;nameLabel.append(nameInput);
-    const descLabel=node('label','وصف مختصر','field'),descInput=node('input');descInput.name='description_ar';descInput.maxLength=240;descLabel.append(descInput);
-    rf.append(nameLabel,descLabel);
-    const grouped=new Map();
-    catalogue.forEach(item=>{if(!grouped.has(item.group))grouped.set(item.group,[]);grouped.get(item.group).push(item)});
-    const permissionBox=node('div',null,'permission-groups');
-    grouped.forEach((items,group)=>{
-      const details=node('details',null,'permission-group');details.open=['الموظفون','الصندوق'].includes(group);
-      details.append(node('summary',group+' · '+items.length+' صلاحية'));
-      const opts=node('div',null,'permission-options');
-      items.forEach(item=>{
-        const label=node('label',null,'permission-option'+(item.sensitive?' sensitive':'')),check=node('input');
-        check.type='checkbox';check.name='permissions';check.value=item.code;
-        const copy=node('span',item.name+(item.sensitive?' · إجراء حساس':''));
-        label.append(check,copy);opts.append(label)
+      const roleLabel=node('label','الدور والصلاحيات','field'),roleSelect=node('select');roleSelect.name='merchant_role_id';
+      roleSelect.append(new Option('الدور الافتراضي لنقطة البيع',''));
+      roles.filter(r=>r.is_active).forEach(r=>roleSelect.append(new Option(r.name_ar,String(r.id))));roleLabel.append(roleSelect);
+
+      const branchLabel=node('label','فرع التشغيل','field'),branchSelect=node('select');branchSelect.name='branch_id';
+      branchSelect.append(new Option('المنشأة الرئيسية',''));
+      branches.filter(b=>b.is_active).forEach(b=>branchSelect.append(new Option(b.name+(b.city?' — '+b.city:''),String(b.id))));branchLabel.append(branchSelect);
+
+      const note=node('div',null,'note');
+      note.textContent='الدور يحدد ماذا يستطيع الموظف فعله، والفرع يحدد أين يعمل. ربط جهاز POS يتم من إعداد الأجهزة ولا ينشأ ضمن هذا الحساب.';
+      const actions=node('div',null,'merchant-modal-actions'),cancel=action('إلغاء',modal.close),save=action('إنشاء حساب الموظف',()=>{},false);save.type='submit';
+      actions.append(cancel,save);frm.append(name.label,code.label,pass.label,roleLabel,branchLabel,note,actions);modal.body.append(frm);
+
+      frm.onsubmit=async ev=>{
+        ev.preventDefault();save.disabled=true;
+        try{
+          const payload=Object.fromEntries(new FormData(frm).entries());
+          Object.keys(payload).forEach(k=>{if(payload[k]==='')delete payload[k]});
+          if(payload.merchant_role_id)payload.merchant_role_id=Number(payload.merchant_role_id);
+          if(payload.branch_id)payload.branch_id=Number(payload.branch_id);
+          const result=await api('staffCreate',payload);
+          modal.close();message(result.message||'تم إنشاء حساب الموظف');await load('staff');
+        }catch(e){message(e.message);save.disabled=false}
+      };
+    }
+
+    function openRoles(){
+      const modal=openMerchantModal(
+        'الأدوار والصلاحيات',
+        'الأدوار الجاهزة تكفي أغلب المتاجر. أنشئ دوراً مخصصاً فقط عندما تحتاج مجموعة صلاحيات مختلفة فعلاً.'
+      );
+      const top=node('div',null,'modal-toolbar');
+      top.append(node('p','كل دور حزمة صلاحيات يطبقها الخادم عند تنفيذ العملية، وليس مجرد إخفاء أزرار.','muted'));
+      const createRole=action('+ إنشاء دور مخصص',()=>{modal.close();openCreateRole()},false);top.append(createRole);modal.body.append(top);
+
+      const roleGrid=node('div',null,'roles-grid'),catalogueMap=new Map(catalogue.map(x=>[x.code,x]));
+      roles.forEach(role=>{
+        const card=node('article',null,'role-card'),head=node('div',null,'role-card-head');
+        head.append(node('h4',role.name_ar),node('span',role.is_system?'دور جاهز':'مخصص','source-chip'));card.append(head);
+        if(role.description_ar)card.append(node('p',role.description_ar));
+        const meta=node('div',null,'role-meta');
+        meta.append(node('span',(role.permissions_count||0)+' صلاحية'),node('span',(role.assignments_count||0)+' موظف'));card.append(meta);
+        const details=node('details'),summary=node('summary','عرض الصلاحيات ('+(role.permissions_count||0)+')');details.append(summary);
+        const names=(role.permissions||[]).map(code=>catalogueMap.get(code)?.name||code);
+        details.append(node('p',names.join(' · ')||'لا توجد صلاحيات','muted'));card.append(details);roleGrid.append(card)
       });
-      details.append(opts);permissionBox.append(details)
-    });
-    rf.append(permissionBox);
-    const saveRole=node('button','إنشاء الدور','action');saveRole.type='submit';rf.append(saveRole);
-    rf.addEventListener('submit',async ev=>{
-      ev.preventDefault();
-      const permissions=[...rf.querySelectorAll('input[name="permissions"]:checked')].map(x=>x.value);
-      if(!permissions.length){message('اختر صلاحية واحدة على الأقل');return}
-      saveRole.disabled=true;
-      try{
-        await api('rolesCreate',{name_ar:nameInput.value.trim(),description_ar:descInput.value.trim()||null,permissions});
-        message('تم إنشاء الدور ويمكن اختياره عند إضافة الموظف');await load('staff');
-      }catch(e){message(e.message);saveRole.disabled=false}
-    });
-    roleCreate.append(rf);
+      modal.body.append(roleGrid);
+    }
 
-    const create=box('إضافة موظف نقطة بيع');
-    hint(create,'ينشأ حساب دخول مستقل للموظف، ثم يُسنَد له الدور الحقيقي الذي اخترته. الجهاز يُفعّل من «إعداد نقطة بيع».');
-    const choices=roles.filter(r=>r.is_active).map(r=>({value:r.id,label:r.name_ar}));
-    form(create,[
-      ['display_name','اسم الموظف'],
-      ['employee_code','رمز الدخول'],
-      ['password','كلمة مرور مؤقتة','password'],
-      ['merchant_role_id','الدور والصلاحيات','select',[{value:'',label:'الدور الافتراضي لنقطة البيع'},...choices]]
-    ],'إنشاء حساب الموظف',d=>api('staffCreate',d));
+    function openCreateRole(){
+      const modal=openMerchantModal(
+        'إنشاء دور مخصص',
+        'اختر أقل قدر من الصلاحيات التي يحتاجها هذا الدور. الإجراءات الحساسة مميزة بوضوح.'
+      );
+      const frm=node('form',null,'merchant-modal-form'),fields=node('div',null,'editor');
+      const name=modalField('اسم الدور','name_ar'),desc=modalField('وصف مختصر','description_ar');
+      name.input.required=true;name.input.maxLength=80;desc.input.maxLength=240;fields.append(name.label,desc.label);frm.append(fields);
+
+      const grouped=new Map();catalogue.forEach(item=>{if(!grouped.has(item.group))grouped.set(item.group,[]);grouped.get(item.group).push(item)});
+      const permissionBox=node('div',null,'permission-groups');
+      grouped.forEach((items,group)=>{
+        const details=node('details',null,'permission-group');details.open=['الموظفون','الصندوق'].includes(group);
+        details.append(node('summary',group+' · '+items.length+' صلاحية'));
+        const opts=node('div',null,'permission-options');
+        items.forEach(item=>{
+          const label=node('label',null,'permission-option'+(item.sensitive?' sensitive':'')),check=node('input');check.type='checkbox';check.name='permissions';check.value=item.code;
+          label.append(check,node('span',item.name+(item.sensitive?' · إجراء حساس':'')));opts.append(label)
+        });
+        details.append(opts);permissionBox.append(details)
+      });
+      frm.append(permissionBox);
+      const actions=node('div',null,'merchant-modal-actions'),cancel=action('إلغاء',modal.close),save=action('إنشاء الدور',()=>{},false);save.type='submit';actions.append(cancel,save);frm.append(actions);modal.body.append(frm);
+
+      frm.onsubmit=async ev=>{
+        ev.preventDefault();
+        const permissions=[...frm.querySelectorAll('input[name="permissions"]:checked')].map(x=>x.value);
+        if(!permissions.length){message('اختر صلاحية واحدة على الأقل');return}
+        save.disabled=true;
+        try{
+          await api('rolesCreate',{name_ar:name.input.value.trim(),description_ar:desc.input.value.trim()||null,permissions});
+          modal.close();message('تم إنشاء الدور ويمكن اختياره عند إضافة الموظف');await load('staff');
+        }catch(e){message(e.message);save.disabled=false}
+      };
+    }
+
   }
 
   // AMIAL-MERCHANT-WEB-PROCUREMENT-001 — المالك أصبح Web-only؛ لذلك
