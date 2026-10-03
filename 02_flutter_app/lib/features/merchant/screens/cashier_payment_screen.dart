@@ -729,6 +729,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           customerName: customer?['name'],
           currencySymbol: _isBaseCurrency ? null : _currencySymbol,
           baseTotal: _net,
+          invoiceTitle: widget.freeAmount ? 'فاتورة بيع سريع' : null,
         ));
   }
 
@@ -737,7 +738,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   Future<void> _amialPay() async {
     Get.to(() => AmialQrCollectScreen(
           amount: _net,
-          note: 'دفع مشتريات',
+          note: widget.freeAmount ? 'بيع سريع' : 'دفع مشتريات',
           onPaid: (paidTxId) async {
             final sale = await c.recordSale(
               total: _net,
@@ -751,6 +752,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                   sale: sale,
                   total: _net,
                   method: 'amial_pay',
+                  invoiceTitle: widget.freeAmount ? 'فاتورة بيع سريع' : null,
                 ));
             return true;
           },

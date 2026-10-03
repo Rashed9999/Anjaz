@@ -44,6 +44,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
         // لا نطلب كتالوجاً لا ينتمي لهذا القطاع، ونمسح أي سلة بقيت في
         // الذاكرة من جلسة حساب سابقة قبل فتح شاشة المبلغ.
         c.clearCart();
+        c.lastNegativeStock.clear();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _offline.refreshCount().then((n) {
             if (n > 0) _offline.sync();

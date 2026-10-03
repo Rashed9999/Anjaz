@@ -51,4 +51,34 @@ void main() {
       contains('بيع سريع: التحصيل نقداً أو عبر أميال باي فقط.'),
     );
   });
+
+
+  test('quick sale clears retail stock state and uses a quick-sale invoice title', () {
+    final pos =
+        File('lib/features/merchant/screens/cashier_pos_screen.dart')
+            .readAsStringSync();
+    final payment =
+        File('lib/features/merchant/screens/cashier_payment_screen.dart')
+            .readAsStringSync();
+
+    expect(pos, contains('c.lastNegativeStock.clear();'));
+    expect(
+      payment,
+      contains("invoiceTitle: widget.freeAmount ? 'فاتورة بيع سريع' : null"),
+    );
+    expect(
+      payment,
+      contains("note: widget.freeAmount ? 'بيع سريع' : 'دفع مشتريات'"),
+    );
+  });
+
+  test('quick sale report never advertises a debt row', () {
+    final report =
+        File('lib/features/merchant/screens/cashier_report_screen.dart')
+            .readAsStringSync();
+
+    expect(report, contains('bool get _isQuickSale'));
+    expect(report, contains('if (!_isQuickSale)'));
+    expect(report, contains("'تقرير البيع السريع'"));
+  });
 }

@@ -24,6 +24,10 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
     return !access.isFuel && !access.isPharmacy && !access.isWholesale;
   }
 
+  bool get _isQuickSale =>
+      Get.isRegistered<AccessController>() &&
+      Get.find<AccessController>().isQuickSale;
+
   String _sourceLabel(dynamic source) => switch (source?.toString()) {
         'merchant_sales' => 'مبيعات الكاشير',
         'pharmacy_sales' => 'مبيعات الصيدلية',
@@ -249,7 +253,7 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('تقرير اليوم'),
+        title: Text(_isQuickSale ? 'تقرير البيع السريع' : 'تقرير اليوم'),
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -283,16 +287,17 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
                 _card('نقد', '${_n(byMethod['cash'])} ر.ي', Colors.green),
                 _card('أميال باي', '${_n(byMethod['amial_pay'])} ر.ي', AmialColors.primary),
               ]),
-              Row(children: [
-                _card('أجل اليوم', '${_n(byMethod['credit'])} ر.ي', AmialColors.textSecondary),
-                _card(
-                  'إجمالي الأجل المستحق',
-                  r['outstanding_credit_total'] == null
-                      ? 'غير معروض للموظف'
-                      : '${_n(r['outstanding_credit_total'])} ر.ي',
-                  AmialColors.red,
-                ),
-              ]),
+              if (!_isQuickSale)
+                Row(children: [
+                  _card('أجل اليوم', '${_n(byMethod['credit'])} ر.ي', AmialColors.textSecondary),
+                  _card(
+                    'إجمالي الأجل المستحق',
+                    r['outstanding_credit_total'] == null
+                        ? 'غير معروض للموظف'
+                        : '${_n(r['outstanding_credit_total'])} ر.ي',
+                    AmialColors.red,
+                  ),
+                ]),
               const SizedBox(height: 16),
               if (top.isNotEmpty) ...[
                 const Text('الأكثر مبيعاً', style: TextStyle(fontWeight: FontWeight.bold)),

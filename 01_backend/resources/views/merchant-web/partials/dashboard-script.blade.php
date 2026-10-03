@@ -152,7 +152,7 @@
   function paymentMixCard(methods={}){
     const card=node('section',null,'chart-card'),head=node('div',null,'chart-head');
     head.append(node('div',null));head.firstChild.append(node('h3','طرق الدفع'),node('small','توزيع مبيعات اليوم حسب طريقة التحصيل'));card.append(head);
-    const defs=[['cash','نقد','cash'],['amial_pay','أميال باي','wallet'],['credit','آجل / حساب','credit'],['other','أخرى','other']];
+    const defs=actualSector==='quick_sale'?[['cash','نقد','cash'],['amial_pay','أميال باي','wallet']]:[['cash','نقد','cash'],['amial_pay','أميال باي','wallet'],['credit','آجل / حساب','credit'],['other','أخرى','other']];
     const total=defs.reduce((s,[k])=>s+Number(methods[k]||0),0),list=node('div',null,'mix-list');
     defs.forEach(([key,label])=>{
       const value=Number(methods[key]||0),pct=total>0?Math.max(0,Math.min(100,value/total*100)):0,row=node('div',null,'mix-row');
@@ -174,10 +174,10 @@
     const card=node('section',null,'chart-card'),head=node('div',null,'chart-head');head.append(node('div'));head.firstChild.append(node('h3','يحتاج انتباهك'),node('small','تنبيهات تشغيلية مبنية على الحالة الحالية'));card.append(head);
     const list=node('div',null,'attention-list'),receivable=Number(report.receivables?.amount||0),open=Number(counts.open_shifts||0),devices=Number(counts.devices||0),live=Number(counts.active_device_sessions||0);
     const add=(icon,title,detail,tone='')=>{const r=node('div',null,'attention-item'+(tone?' '+tone:''));r.append(node('span',icon,'att-icon'));const x=node('div');x.append(node('strong',title),node('small',detail));r.append(x);list.append(r)};
-    if(receivable>0)add('◫','ذمم عملاء قائمة',money(receivable)+' ما زالت مستحقة على العملاء.','warn');
+    if(actualSector!=='quick_sale'&&receivable>0)add('◫','ذمم عملاء قائمة',money(receivable)+' ما زالت مستحقة على العملاء.','warn');
     if(open>0)add('◷','ورديات مفتوحة',open+' وردية لم تُقفل بعد؛ راقب جرد الصندوق وتسليم النقد.','warn');
     if(devices>0&&live<devices)add('▣','أجهزة غير متصلة',(devices-live)+' جهاز مرخص لا يملك جلسة نشطة الآن.');
-    if(receivable===0&&open===0&&(devices===0||live===devices))add('✓','التشغيل مستقر','لا توجد ذمم أو ورديات مفتوحة تحتاج إجراءً فوريًا.');
+    if((actualSector==='quick_sale'||receivable===0)&&open===0&&(devices===0||live===devices))add('✓','التشغيل مستقر',actualSector==='quick_sale'?'لا توجد ورديات أو أجهزة تحتاج إجراءً فوريًا.':'لا توجد ذمم أو ورديات مفتوحة تحتاج إجراءً فوريًا.');
     card.append(list);return card
   }
   function sectorIntelligenceCard(sector={}){
@@ -253,8 +253,10 @@
 
   function quickHero(dashboard){
     const hero=node('section',null,'dashboard-hero');
-    hero.append(node('div','لوحة القيادة اليومية','hero-kicker'),node('h2','صورة واحدة لحالة منشأتك الآن'));
-    hero.append(node('p','المبيعات، طرق الدفع، المحفظة، الذمم ونقاط البيع معروضة كلٌّ من مصدره الحقيقي؛ لا نخلط النقد في الدرج برصيد أميال أو بالدين الآجل.'));
+    hero.append(node('div','لوحة القيادة اليومية','hero-kicker'),node('h2',actualSector==='quick_sale'?'مبيعاتك وتحصيلك اليوم':'صورة واحدة لحالة منشأتك الآن'));
+    hero.append(node('p',actualSector==='quick_sale'
+      ?'البيع السريع يعمل بمبلغ مباشر: النقد يبقى في درج الوردية، ومدفوعات أميال تصل إلى محفظة المنشأة، وكل عملية لها فاتورة.'
+      :'المبيعات، طرق الدفع، المحفظة، الذمم ونقاط البيع معروضة كلٌّ من مصدره الحقيقي؛ لا نخلط النقد في الدرج برصيد أميال أو بالدين الآجل.'));
     const actions=node('div',null,'hero-actions'),available=new Map(navigation.map(x=>[x.tab,x.state==='available']));
     [['sales','فتح المبيعات',true],['products','المنتجات والمخزون',false],['posSetup','إعداد نقطة بيع',false],['reports','التقارير',false]].forEach(([tab,label,primary])=>{
       if(!available.get(tab))return;const b=node('button',label,primary?'primary':'');b.type='button';b.onclick=()=>load(tab);actions.append(b)
@@ -282,17 +284,24 @@
     const saleReturn=(movement.rows||[]).find(x=>x.code==='sale_return'),returnToday=saleReturn?.available?Number(saleReturn.total||0):null;
 
     content.append(quickHero(d),dashboardPeriodBar(days));
-    dashboardKpis([
+    const overviewKpis=[
       ['مبيعات اليوم',money(sales.gross),'↗',d.today_change_percent===null?'المقارنة تحتاج مبيعات أمس':((Number(d.today_change_percent)>=0?'+':'')+Number(d.today_change_percent).toFixed(1)+'% عن أمس')],
       ['عدد عمليات البيع',String(todayCount),'▧','متوسط الفاتورة '+money(todayAvg),'blue'],
       ['المبيعات النقدية',money(methods.cash),'▣','تبقى في درج الوردية حتى التسليم'],
-      ['مدفوعات أميال',money(methods.amial_pay),'◉','تصل إلى محفظة المنشأة','gold'],
-      ['المبيعات الآجلة',money(methods.credit),'◫','تُسجل في ذمم العملاء','blue'],
+      ['مدفوعات أميال',money(methods.amial_pay),'◉','تصل إلى محفظة المنشأة','gold']
+    ];
+    if(actualSector!=='quick_sale'){
+      overviewKpis.push(
+        ['المبيعات الآجلة',money(methods.credit),'◫','تُسجل في ذمم العملاء','blue'],
+        ['إجمالي الذمم',money(r.receivables?.amount),'◌','لا يُعدّ نقدًا أو رصيد محفظة',Number(r.receivables?.amount||0)>0?'red':'']
+      );
+    }
+    overviewKpis.push(
       ['رصيد المحفظة',money(r.wallet?.balance),'◎','محفظة أميال الإلكترونية فقط','gold'],
-      ['إجمالي الذمم',money(r.receivables?.amount),'◌','لا يُعدّ نقدًا أو رصيد محفظة',Number(r.receivables?.amount||0)>0?'red':''],
       ['مرتجعات اليوم',returnToday===null?'غير متاحة':money(returnToday),'↶',saleReturn?.available?(saleReturn.count+' مرتجع من '+saleReturn.source):'لا يملك هذا القطاع مصدر مرتجع','red'],
-      ['متوسط '+(d.days||14)+' يوم',money(d.average_ticket),'◇',(d.period_count||0)+' عملية خلال الفترة'],
-    ]);
+      ['متوسط '+(d.days||14)+' يوم',money(d.average_ticket),'◇',(d.period_count||0)+' عملية خلال الفترة']
+    );
+    dashboardKpis(overviewKpis);
 
     const analytics=node('div',null,'dash-grid');
     analytics.append(salesTrendCard(d.series||[],d.period_total,d.today_change_percent),paymentMixCard(methods));content.append(analytics);
@@ -325,7 +334,9 @@
     const r=w.report||{},v=r.wallet||{};
     grid([['رصيد محفظة المنشأة',money(v.balance)],['وارد المحفظة خلال الفترة',money(v.received)],['صادر المحفظة خلال الفترة',money(v.paid_out)],['حركة المحفظة الصافية',money(v.net_movement)]]);
     const verify=box('مطابقة المحفظة مع الدفتر المالي');
-    hint(verify,'محفظة واحدة باسم مالك المنشأة لجميع مدفوعات أميال. مبيعات النقد تبقى في الدرج، ومبيعات الآجل في الذمم حتى التحصيل.');
+    hint(verify,actualSector==='quick_sale'
+      ?'محفظة واحدة باسم مالك المنشأة لمدفوعات أميال. المبيعات النقدية تبقى في درج الوردية ولا تدخل رصيد المحفظة.'
+      :'محفظة واحدة باسم مالك المنشأة لجميع مدفوعات أميال. مبيعات النقد تبقى في الدرج، ومبيعات الآجل في الذمم حتى التحصيل.');
     if(verification.unavailable){
       const notice=node('div','تعذّر التحقق من مطابقة الرصيد: '+verification.unavailable,'note warning-note');verify.append(notice);
     }else{
@@ -340,7 +351,9 @@
       if(state==='mismatch')hint(verify,'لا يتم تصحيح الرصيد من هذه الشاشة. راجع الإدارة وكشف القيود للتحقيق في مصدر الفرق.');
     }
     const audit=box('من أين جاء رصيد المحفظة؟');
-    hint(audit,'حركة دفتر المحفظة المثبتة منذ بداية السجل. لا تُحسب المبيعات النقدية ولا الفواتير الآجلة أموالاً في المحفظة.');
+    hint(audit,actualSector==='quick_sale'
+      ?'حركة دفتر المحفظة المثبتة منذ بداية السجل. المبيعات النقدية لا تُحسب أموالاً في محفظة أميال.'
+      :'حركة دفتر المحفظة المثبتة منذ بداية السجل. لا تُحسب المبيعات النقدية ولا الفواتير الآجلة أموالاً في المحفظة.');
     if(origins.unavailable){
       hint(audit,'تعذّر تحميل مصادر الرصيد: '+origins.unavailable);
     }else if(origins.available!==true){
