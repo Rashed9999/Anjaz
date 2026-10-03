@@ -191,6 +191,82 @@ class CustomerCenterController extends Controller
         return $this->ok($data);
     }
 
+    /**
+     * AMIAL-CUSTOMER-CENTER-OPS-001 — الطوابير العامة داخل مركز العملاء.
+     *
+     * لا ننسخ منطق KYC أو التحديثات أو مراقبة الأنظمة إلى Controller جديد؛
+     * نقرأ الخدمات الأصلية نفسها ثم نعرضها في تبويبات تشغيلية داخل المركز.
+     */
+    public function operationsKyc(Request $request): JsonResponse
+    {
+        /** @var \App\Services\KycDocumentService $kyc */
+        $kyc = app(\App\Services\KycDocumentService::class);
+        $reveal = $request->user()->hasPlatformPermission('platform.customers.pii.reveal');
+
+        $safe = function (array $row) use ($reveal): array {
+            if (!$reveal && array_key_exists('customer_phone', $row)) {
+                $row['customer_phone'] = $this->maskPhone((string) $row['customer_phone']);
+            }
+
+            return $row;
+        };
+
+        $data = [
+            'pending' => array_map($safe, $kyc->pendingQueue()),
+            'activation' => array_map($safe, $kyc->activationQueue()),
+            'restricted_pending' => [],
+            'restricted_activation' => [],
+            'restricted_visible' => false,
+        ];
+
+        if ($kyc instanceof \App\Services\Kyc\GuardedKycDocumentService
+            && $request->user()->hasPlatformPermission('platform.customers.kyc.restricted.view')) {
+            $data['restricted_pending'] = array_map(
+                $safe,
+                $kyc->restrictedPendingQueue($request->user()),
+            );
+            $data['restricted_activation'] = array_map(
+                $safe,
+                $kyc->restrictedActivationQueue($request->user()),
+            );
+            $data['restricted_visible'] = true;
+        }
+
+        return $this->ok($data);
+    }
+
+    public function operationsChanges(Request $request): JsonResponse
+    {
+        $reveal = $request->user()->hasPlatformPermission('platform.customers.pii.reveal');
+
+        $items = collect(
+            app(\App\Services\Kyc\ProfileChangeRequestService::class)->pendingQueue()
+        )->map(function (array $row) use ($reveal): array {
+            return [
+                'id' => (int) $row['id'],
+                'user_id' => (int) $row['user_id'],
+                'field' => (string) $row['field'],
+                'reason' => (string) ($row['reason'] ?? ''),
+                'supporting_document_id' => $row['supporting_document_id']
+                    ? (int) $row['supporting_document_id'] : null,
+                'created_at' => (string) $row['created_at'],
+                'customer_name' => trim((string) (($row['f_name'] ?? '') . ' ' . ($row['l_name'] ?? ''))) ?: '—',
+                'customer_phone' => $reveal
+                    ? (string) ($row['phone'] ?? '—')
+                    : $this->maskPhone((string) ($row['phone'] ?? '')),
+            ];
+        })->all();
+
+        return $this->ok(['items' => $items]);
+    }
+
+    public function operationsSystems(Request $request): JsonResponse
+    {
+        return $this->ok(
+            app(\App\Services\Admin\CustomerSystemsCenterService::class)->snapshot()
+        );
+    }
+
     public function act(Request $request, int $id): JsonResponse
     {
         $customer = User::where('type', CUSTOMER_TYPE)->find($id);

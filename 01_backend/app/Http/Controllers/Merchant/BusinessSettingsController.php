@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Merchant;
 
-use App\CentralLogics\helpers;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
+use App\Services\Merchant\MerchantLogoService;
 use App\Traits\UploadSizeHelperTrait;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Contracts\View\View;
@@ -34,13 +34,18 @@ class BusinessSettingsController extends Controller
         }
 
         $request->validate([
-            'logo' => 'nullable|image|max:'. $this->maxImageSizeKB .'|mimes:' . implode(',', array_column(IMAGE_EXTENSIONS, 'key')),
+            'logo' => 'nullable|image|max:'. min($this->maxImageSizeKB, 2048) .'|mimes:jpg,jpeg,png',
         ]);
 
         $merchant = $this->merchant->where(['user_id' => auth()->user()->id])->first();
 
-        if ($request->has('logo')) {
-            $logo = Helpers::update('merchant/', $merchant->logo, APPLICATION_IMAGE_FORMAT, $request->file('logo'));
+        if ($request->hasFile('logo')) {
+            try {
+                $logo = app(MerchantLogoService::class)->replaceFromUploadedFile($merchant, $request->file('logo'));
+            } catch (\InvalidArgumentException $e) {
+                Toastr::error($e->getMessage());
+                return back();
+            }
         } else {
             $logo = $merchant['logo'];
         }

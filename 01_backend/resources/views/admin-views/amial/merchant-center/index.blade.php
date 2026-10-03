@@ -547,7 +547,14 @@
                                 + '</td><td class="small">' + esc(v.expires_at)
                                 + '</td><td class="small text-danger">' + esc(v.rejection_reason || '')
                                 + '</td></tr>'), 'لا وثائق مرفوعة'),
-                        'الامتثال قسم مستقل عن الاشتراك — ولا يُخلطان.');
+                        'الامتثال قسم مستقل عن الاشتراك — ولا يُخلطان.')
+                    + card('ملفات التسجيل المؤرشفة',
+                        table(['المرجع','المصدر','الحالة','ورقي','أنشئ'],
+                            (d.registration_dossiers || []).map(v => '<tr><td class="font-monospace">'
+                                + esc(v.reference) + '</td><td>' + esc(v.source) + '</td><td>' + esc(v.state)
+                                + '</td><td>' + (v.has_paper_form ? 'نعم' : '—') + '</td><td class="small">'
+                                + esc(v.created_at || '—') + '</td></tr>'), 'لا ملف تسجيل مرتبط'),
+                        'النسخة الكاملة والطباعة في «ملفات التسجيل والأرشفة» وبصلاحية مستقلة.');
             } catch (e) { failed(el, e); }
         },
 

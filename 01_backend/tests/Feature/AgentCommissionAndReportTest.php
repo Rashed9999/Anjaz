@@ -82,6 +82,7 @@ class AgentCommissionAndReportTest extends TestCase
             ['current_balance' => '100000', 'zone_code' => 'SOUTH']);
 
         $this->branch = app(AgentBranchService::class)->create($this->agent, [
+            'email' => 'branch-' . bin2hex(random_bytes(8)) . '@example.test',
             'name' => 'فرع المكلا', 'code' => 'MKL-01',
             'phone' => '770004402', 'password' => 'branch-pass-123',
         ]);
@@ -282,6 +283,7 @@ class AgentCommissionAndReportTest extends TestCase
         $this->seedFee('agent_deposit');
 
         $other = app(AgentBranchService::class)->create($this->agent, [
+            'email' => 'branch-' . bin2hex(random_bytes(8)) . '@example.test',
             'name' => 'فرع ثانٍ', 'code' => 'MKL-02',
             'phone' => '770004403', 'password' => 'branch-pass-456',
         ]);

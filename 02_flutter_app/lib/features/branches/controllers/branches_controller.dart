@@ -26,7 +26,11 @@ class BranchesController extends GetxController implements GetxService {
         // الافتراضي إذا لم يُختر فرع
         if (activeBranchId.value == 0) {
           final def = branches.firstWhereOrNull((b) => b['is_default'] == true);
-          if (def != null) activeBranchId.value = def['id'] as int;
+          if (def != null) {
+            // اختيار الفرع في الذاكرة وحده لا يحدد سياق الطلبات. نضبط
+            // الترويسة عند أول تحميل أيضاً، لا بعد أن يضغط المستخدم فرعاً.
+            switchBranch(def['id'] as int);
+          }
         }
       }
     } catch (_) { lastError.value = 'خطأ في الشبكة'; }

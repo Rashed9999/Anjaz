@@ -115,6 +115,10 @@ class ObservabilityGuardTest extends TestCase
         $svc = app(ErrorTrackingService::class);
         $e = new \RuntimeException('انفجارٌ مُتعمَّد للاختبار');
 
+        // نقطة الصحة ووسيط الاستثناء قد يسجلان عطلاً مستقلاً أثناء إقلاع
+        // بيئة الاختبار؛ هذا المثال يعزل سجل العطل المقصود نفسه.
+        DB::table('system_errors')->delete();
+
         $svc->record($e, null, 500);
         $svc->record($e, null, 500);
         $svc->record($e, null, 500);
@@ -140,6 +144,7 @@ class ObservabilityGuardTest extends TestCase
     public function correct_refusals_are_not_recorded_as_defects(): void
     {
         $svc = app(ErrorTrackingService::class);
+        DB::table('system_errors')->delete();
 
         foreach ([403, 404, 419, 422, 429] as $status) {
             $svc->record(new \RuntimeException("ردٌّ {$status}"), null, $status);

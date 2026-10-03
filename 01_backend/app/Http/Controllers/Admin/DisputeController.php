@@ -99,14 +99,54 @@ class DisputeController extends Controller
             $dispute->denied_note = $request->denied_note;
         }
 
-        $dispute->save();
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-WRONG-TRANSFER-001 — **الحفظُ وحركةُ المال في معاملةٍ واحدة.**
+        //
+        // **الثمنُ الذي دُفع:** كان `$dispute->save()` يجري هنا **قبل**
+        // `disputeTransaction()` وبلا `try/catch`. فإن سقطت حركةُ المال —
+        // ورصيدُ المتنازَع عليه صِفرٌ لأنّه أنفقه، وهي الحالةُ الأشيع —
+        // خرج الاستثناءُ صفحةَ ٥٠٠ **والملفُّ محفوظٌ «disputed»**.
+        //
+        // فالسجلُّ يقول «حُلّ» ولا ريالَ تحرّك، ويُغلَق الملفُّ على المشتكي
+        // إلى الأبد. **وسجلٌّ ماليٌّ يكذب أسوأ من سجلٍّ لا يوجد.**
+        //
+        // والعلاجُ معاملةٌ واحدةٌ تضمّ الاثنين: إمّا حُفظ الملفُّ وتحرّك
+        // المالُ معاً، وإمّا لم يقع شيءٌ **وقيل السببُ بالعربيّة**.
+        // ══════════════════════════════════════════════════════════════
+        try {
+            DB::transaction(function () use ($dispute, $request) {
+                $dispute->save();
+
+                if ($request->status == 'disputed') {
+                    $this->disputeTransaction(
+                        ref_transaction_id: $dispute->trx_id,
+                        dispute_claimed_user_id: $dispute->sender_id,
+                        disputed_user_id: $dispute->disputed_user_id,
+                        amount: $dispute->amount,
+                    );
+                }
+            }, 3);
+        } catch (\App\Exceptions\InsufficientBalanceException $e) {
+            // **الرسالةُ تقول ما العمل، لا «خطأ ما».**
+            Toastr::error(
+                'لم يُحسم النزاع: رصيدُ الطرف الآخر لا يكفي لإعادة المبلغ، '
+                .'ولم يتغيّر شيء. افتح دعوى «تحويلٌ إلى رقمٍ خاطئ» على العمليّة '
+                .'ليُحجَز الموجودُ فوراً ويُسجَّل الباقي ذمّةً تُقتطَع من الوارد.');
+
+            return back();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error(
+                'AMIAL-DISPUTE: تعذّر حسمُ النزاع '.$dispute->id.' — '.$e->getMessage());
+
+            Toastr::error('تعذّر حسمُ النزاع، ولم يتغيّر شيء: '.$e->getMessage());
+
+            return back();
+        }
 
         $senderFcmToken = $dispute->sender->fcm_token ?? null;
 
-        // If status is disputed, process transaction reversal
+        // If status is disputed, notify both sides — **بعد استقرار المال لا قبله**
         if ($request->status == 'disputed') {
-            $this->disputeTransaction(ref_transaction_id: $dispute->trx_id, dispute_claimed_user_id: $dispute->sender_id, disputed_user_id: $dispute->disputed_user_id, amount: $dispute->amount);
-
             $disputedUserData = [
                 'title' => translate('Disputed Transaction'),
                 'description' => helpers::set_symbol($dispute->amount) . ' ' . translate('has been deducted from your balance'),

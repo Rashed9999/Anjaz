@@ -5,15 +5,18 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/setting/domain/models/profile_model.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
 import 'package:amial_pay/features/setting/controllers/edit_profile_controller.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/features/camera_verification/controllers/camera_screen_controller.dart';
+import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/features/setting/widgets/email_identity_dialog.dart';
 
-/// AMIAL-PROFILE-EDIT-001 — «تعديل بياناتي» (أُعيد تصميمها بأسلوب أميال باي).
+/// AMIAL-PROFILE-EDIT-001 + AMIAL-EMAIL-IDENTITY-001
 ///
-/// النسخة الأصلية كانت شاشة 6cash قديمة تعتمد على روابط إعداد قد لا تُملأ في
-/// أميال باي (تُظهر شاشة رمادية/فارغة عند null). هذه نسخة متينة: بلا كسر عند
-/// نقص البيانات، تعيد استخدام EditProfileController (منطق الحفظ نفسه).
+/// البريد الإلكتروني اعتماد استعادة أمني، لذلك لا يُعدّل مع الاسم/الصورة.
+/// تغييره يتطلب كلمة المرور الحالية ثم OTP يصل إلى البريد الجديد، وبعد نجاح
+/// التغيير تُلغى الجلسات ويُطلب تسجيل الدخول من جديد.
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -27,11 +30,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _lastName = TextEditingController();
   final _email = TextEditingController();
   final _occupation = TextEditingController();
+  bool _changingEmail = false;
 
   @override
   void initState() {
     super.initState();
-    final info = Get.find<ProfileController>().userInfo; // قد يكون null — نتعامل بأمان
+    final info = Get.find<ProfileController>().userInfo;
     _firstName.text = info?.fName ?? '';
     _lastName.text = info?.lName ?? '';
     _email.text = info?.email ?? '';
@@ -48,9 +52,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
-
   Future<void> _save(EditProfileController c) async {
     if (!_formKey.currentState!.validate()) return;
     final image = Get.find<CameraScreenController>().getImage;
@@ -59,33 +60,50 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       lName: _lastName.text.trim(),
       gender: c.gender,
       occupation: _occupation.text.trim(),
+      // البريد لا يمر من update-profile؛ يبقى هنا للعرض فقط.
       email: _email.text.trim(),
     );
     final multipart = image != null ? [MultipartBody('image', image)] : <MultipartBody>[];
-    final ok = await c.updateProfileData(body, multipart);
-    if (!mounted) return;
-    if (ok) {
-      Get.find<ProfileController>().getProfileData(reload: true);
-      _snack('تم حفظ البيانات', ok: true);
-      Get.back();
-    } else {
-      _snack('تعذّر حفظ البيانات — تحقّق من الاتصال');
-    }
+    await c.updateProfileData(body, multipart);
   }
 
+  Future<void> _changeEmail() async {
+    if (_changingEmail) return;
+    setState(() => _changingEmail = true);
+    try {
+      final changed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => EmailIdentityDialog(initialEmail: _email.text.trim()),
+      );
+      if (changed != true || !mounted) return;
+      final repo = Get.find<AuthRepo>();
+      await repo.removeUserToken();
+      repo.removeUserData();
+      if (!mounted) return;
+      Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = Get.context;
+        if (ctx == null) return;
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          content: Text('email_identity_success'.tr),
+          backgroundColor: AmialColors.success,
+        ));
+      });
+    } finally {
+      if (mounted) setState(() => _changingEmail = false);
+    }
+  }
   @override
   Widget build(BuildContext context) {
     final phone = Get.find<ProfileController>().userInfo?.phone ?? '';
     return GetBuilder<EditProfileController>(builder: (c) {
       return Scaffold(
         backgroundColor: AmialColors.background,
-        appBar: AppBar(
-          title: const Text('تعديل بياناتي'),
-        ),
+        appBar: AppBar(title: Text('email_profile_title'.tr)),
         body: Form(
           key: _formKey,
           child: ListView(padding: const EdgeInsets.all(16), children: [
-            // الصورة الرمزية + زر الكاميرا
             Center(
               child: Stack(clipBehavior: Clip.none, children: [
                 GetBuilder<CameraScreenController>(builder: (cam) {
@@ -115,37 +133,51 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             const SizedBox(height: 20),
 
             if (phone.isNotEmpty) ...[
-              _readOnly('رقم الجوال', phone),
+              _readOnly('email_profile_phone'.tr, phone),
               const SizedBox(height: 12),
             ],
-            _field(_firstName, 'الاسم الأول *', required: true),
+            _field(_firstName, 'email_profile_first_name'.tr, required: true),
             const SizedBox(height: 12),
-            _field(_lastName, 'الاسم الأخير *', required: true),
+            _field(_lastName, 'email_profile_last_name'.tr, required: true),
             const SizedBox(height: 12),
-            _field(_email, 'البريد الإلكتروني (اختياري)', keyboard: TextInputType.emailAddress, validator: (v) {
-              final s = (v ?? '').trim();
-              if (s.isEmpty) return null;
-              return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(s) ? null : 'بريد غير صحيح';
-            }),
+
+            _readOnly('email_identity_linked'.tr,
+                _email.text.trim().isEmpty ? 'email_identity_missing'.tr : _email.text.trim()),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _changingEmail ? null : _changeEmail,
+              icon: _changingEmail
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.verified_user_outlined),
+              label: Text(_email.text.trim().isEmpty ? 'email_identity_add'.tr : 'email_identity_manage'.tr),
+            ),
+            Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                'email_identity_edit_help'.tr,
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+            ),
             const SizedBox(height: 12),
-            _field(_occupation, 'المهنة (اختياري)'),
+
+            _field(_occupation, 'email_profile_occupation'.tr),
             const SizedBox(height: 16),
 
-            const Text('الجنس', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            Text('email_profile_gender'.tr, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Row(children: [
-              _genderChip(c, 'Male', 'ذكر'),
+              _genderChip(c, 'Male', 'email_profile_male'.tr),
               const SizedBox(width: 10),
-              _genderChip(c, 'Female', 'أنثى'),
+              _genderChip(c, 'Female', 'email_profile_female'.tr),
             ]),
             const SizedBox(height: 28),
 
             FilledButton.icon(
-              onPressed: c.isLoading ? null : () => _save(c),
+              onPressed: c.isLoading || _changingEmail ? null : () => _save(c),
               icon: c.isLoading
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.save),
-              label: Text(c.isLoading ? 'جارٍ الحفظ…' : 'حفظ البيانات'),
+              label: Text(c.isLoading ? 'email_profile_saving'.tr : 'email_profile_save'.tr),
               style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(52)),
             ),
           ]),
@@ -160,7 +192,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       controller: ctrl,
       keyboardType: keyboard,
       decoration: InputDecoration(labelText: label, filled: true, fillColor: Colors.white, border: const OutlineInputBorder()),
-      validator: validator ?? (required ? (v) => (v == null || v.trim().isEmpty) ? 'مطلوب' : null : null),
+      validator: validator ?? (required ? (v) => (v == null || v.trim().isEmpty) ? 'email_profile_required'.tr : null : null),
     );
   }
 

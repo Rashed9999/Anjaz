@@ -33,6 +33,10 @@
 01_backend/auth.json
 01_backend/oauth-*.key
 
+# Static audit tooling: generated Python bytecode is not source.
+__pycache__/
+*.py[cod]
+
 # ── Flutter ─────────────────────────────────────────────────
 02_flutter_app/build/
 02_flutter_app/.dart_tool/

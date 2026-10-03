@@ -85,7 +85,13 @@ class AgentBranchService
             throw new DomainException('الهاتف مستعمل في حسابٍ آخر');
         }
 
-        return DB::transaction(function () use ($agent, $data, $code, $phone) {
+        $email = app(EmailIdentityService::class)->normalize((string) ($data['email'] ?? ''));
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 255) {
+            throw new DomainException('البريد الإلكتروني الصحيح إلزامي لحساب الفرع');
+        }
+        app(EmailIdentityService::class)->assertAvailable($email);
+
+        return DB::transaction(function () use ($agent, $data, $code, $phone, $email) {
             // `forceFill` لا `create`: نموذج المستخدم يحصر `$fillable` في حقولٍ
             // قليلة، و`create` **تُسقط بصمتٍ** ما ليس فيها — فيُنشأ الحساب بلا
             // نوعٍ ولا كلمة مرور، ويُقبل في الشاشة ويسقط عند أوّل دخول.
@@ -97,6 +103,7 @@ class AgentBranchService
                 'f_name' => (string) $data['name'],
                 'l_name' => 'فرع ' . ($agent->f_name ?? ''),
                 'phone' => $phone,
+                'email' => $email,
                 'type' => AGENT_TYPE,
                 'password' => Hash::make($data['password'] ?? Str::random(12)),
                 'zone_code' => $agent->zone_code,

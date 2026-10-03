@@ -20,6 +20,10 @@ class PharmacyRepo extends GetxService {
     if (lowStockOnly) q['low_stock_only'] = '1';
     return apiClient.getData('$_base/products', query: q.isEmpty ? null : q);
   }
+  Future<Response> listCategories() => apiClient.getData('$_base/categories');
+  Future<Response> similarProducts(String query, {int? categoryId}) => apiClient.getData(
+      '$_base/products/similar', query: {'query': query, if (categoryId != null) 'category_id': '$categoryId'});
+  Future<Response> alternatives(int productId) => apiClient.getData('$_base/products/$productId/alternatives');
   Future<Response> addProduct(Map<String, dynamic> data) => apiClient.postData('$_base/products', data);
   Future<Response> updateProduct(int id, Map<String, dynamic> data) =>
       apiClient.putData('$_base/products/$id', data);
@@ -28,6 +32,10 @@ class PharmacyRepo extends GetxService {
   Future<Response> listBatches(int productId) => apiClient.getData('$_base/products/$productId/batches');
   Future<Response> addBatch(int productId, Map<String, dynamic> data) =>
       apiClient.postData('$_base/products/$productId/batches', data);
+  Future<Response> recallBatch(int batchId, String reason) =>
+      apiClient.postData('$_base/batches/$batchId/recall', {'reason': reason});
+  Future<Response> disposeBatch(int batchId, String type, String reason) =>
+      apiClient.postData('$_base/batches/$batchId/dispose', {'type': type, 'reason': reason});
 
   // Customers
   Future<Response> listCustomers({String? search}) {
@@ -44,6 +52,7 @@ class PharmacyRepo extends GetxService {
   // Sales
   Future<Response> recordSale(Map<String, dynamic> data) => apiClient.postData('$_base/sales', data);
   Future<Response> listSales() => apiClient.getData('$_base/sales');
+  Future<Response> showSale(String ulid) => apiClient.getData('$_base/sales/$ulid');
 
   // Alerts
   Future<Response> listAlerts() => apiClient.getData('$_base/alerts');

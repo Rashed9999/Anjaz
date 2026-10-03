@@ -1,3 +1,4 @@
+import 'package:amial_pay/common/widgets/amial_brand_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
@@ -6,7 +7,6 @@ import 'package:amial_pay/features/home/widgets/show_case/showcaseview.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/util/dimensions.dart';
-import 'package:amial_pay/util/images.dart';
 import 'package:amial_pay/util/styles.dart';
 
 class WelcomeBottomSheet extends StatelessWidget {
@@ -46,7 +46,7 @@ class WelcomeBottomSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: Dimensions.paddingSizeSmall),
 
-                Image.asset(Images.logo, height: 100, fit: BoxFit.fitHeight,),
+                const AmialBrandLogo(height: 84),
                 const SizedBox(height: Dimensions.paddingSizeExtraLarge),
 
                 Text("${"welcome_to".tr} ${AppConstants.appName}!"  , style: rubikSemiBold.copyWith(

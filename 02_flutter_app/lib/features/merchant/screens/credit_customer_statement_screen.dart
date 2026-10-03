@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/helper/pdf_downloader_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -12,7 +14,10 @@ import 'package:amial_pay/features/merchant/controllers/customer_credit_controll
 /// AMIAL-CUSTOMER-CREDIT-001 — كشف حساب عميل + تسجيل سداد/مرتجع.
 class CreditCustomerStatementScreen extends StatefulWidget {
   final Map<String, dynamic> customer;
-  const CreditCustomerStatementScreen({super.key, required this.customer});
+  final bool collectionOnly;
+  const CreditCustomerStatementScreen({
+    super.key, required this.customer, this.collectionOnly = false,
+  });
 
   @override
   State<CreditCustomerStatementScreen> createState() => _CreditCustomerStatementScreenState();
@@ -23,6 +28,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
   DateTime? _from;
   DateTime? _to;
   bool _busyPdf = false;
+  double? _remainingBalance;
 
   @override
   void initState() {
@@ -31,16 +37,68 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
-  void _refresh() {
-    c.loadStatement(
-      widget.customer['id'] as int,
-      from: _from != null ? DateFormat('yyyy-MM-dd').format(_from!) : null,
-      to: _to != null ? DateFormat('yyyy-MM-dd').format(_to!) : null,
-    );
+  Future<void> _refresh() async {
+    final id = widget.customer['id'] as int;
+    if (widget.collectionOnly) {
+      // POS sees only the requested debtor, never the full owner ledger.
+      try {
+        final phone = widget.customer['customer_phone']?.toString() ?? '';
+        final r = await c.repo.lookupByPhone(phone);
+        if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+          final account = Map<String, dynamic>.from(r.body['meta'] as Map);
+          if (account['found'] == true && account['account_id'] == id && mounted) {
+            setState(() => _remainingBalance =
+                double.tryParse('${account['current_balance']}'));
+          }
+        }
+      } catch (_) { /* Retain last known amount; the server rechecks it. */ }
+      await c.loadPendingCollections(accountId: id);
+      return;
+    }
+    await Future.wait([
+      c.loadStatement(
+        id,
+        from: _from != null ? DateFormat('yyyy-MM-dd').format(_from!) : null,
+        to: _to != null ? DateFormat('yyyy-MM-dd').format(_to!) : null,
+      ),
+      c.loadPendingCollections(accountId: id),
+    ]);
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.collectionOnly) {
+      return Scaffold(
+        backgroundColor: AmialColors.background,
+        appBar: AppBar(title: Text(widget.customer['customer_name']?.toString()
+            ?? 'credit_collect_pos_title'.tr)),
+        body: Obx(() {
+          final balance = _remainingBalance ??
+              (double.tryParse('${widget.customer['current_balance'] ?? 0}') ?? 0);
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(color: AmialColors.primary,
+                      borderRadius: BorderRadius.circular(16)),
+                  child: Text('credit_collect_pos_balance'.trParams({
+                    'amount': Money.format(balance),
+                  }), style: const TextStyle(color: Colors.white,
+                      fontSize: 20, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 16),
+                if (balance > 0) _actionsRow(widget.customer),
+                if (balance <= 0) Text('credit_collect_pos_no_debt'.tr),
+                _pendingCollectionPanel(),
+              ],
+            ),
+          );
+        }),
+      );
+    }
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
@@ -71,6 +129,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
               _totalsRow(totals),
               const SizedBox(height: 12),
               _actionsRow(account),
+              _pendingCollectionPanel(),
               const SizedBox(height: 16),
               const Text('الحركات', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
@@ -198,12 +257,23 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
   }
 
   Widget _actionsRow(Map account) {
+    if (widget.collectionOnly) {
+      return SizedBox(width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: _collectionDialog,
+          icon: const Icon(Icons.payments),
+          label: Text('credit_collect_action'.tr),
+          style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700,
+              minimumSize: const Size.fromHeight(52)),
+        ),
+      );
+    }
     return Column(children: [
       Row(children: [
         Expanded(child: FilledButton.icon(
-          onPressed: () => _movementDialog('سداد', 'payment'),
+          onPressed: _collectionDialog,
           icon: const Icon(Icons.payments),
-          label: const Text('سداد'),
+          label: Text('credit_collect_action'.tr),
           style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700),
         )),
         const SizedBox(width: 8),
@@ -356,6 +426,220 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
         const SizedBox(width: 8),
         Icon(icon, color: color, size: 28),
       ]),
+    );
+  }
+
+  /// POS cash or customer-authorized Amial payment, with one retry key.
+  Widget _pendingCollectionPanel() {
+    if (c.pendingCollections.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AmialColors.cardSurface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AmialColors.primary.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('credit_collect_pending_heading'.tr,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            ...c.pendingCollections.map((item) {
+              final review = item['needs_review'] == true;
+              final amount = Money.format(double.tryParse('${item['paid'] ?? 0}') ?? 0);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('credit_collect_pending_amount'.trParams({'amount': amount}),
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    if (review)
+                      Text('credit_collect_review_body'.tr,
+                          style: const TextStyle(color: AmialColors.danger)),
+                    if (!review)
+                      OutlinedButton.icon(
+                        onPressed: c.isSubmitting.value ? null
+                            : () async => _collectionResult(item),
+                        icon: const Icon(Icons.qr_code),
+                        label: Text('credit_collect_resume'.tr),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _collectionDialog() async {
+    final accountId = widget.customer['id'] as int;
+    final amountCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    final method = 'cash'.obs;
+    final requestKey = const Uuid().v4();
+    Map<String, dynamic>? collection;
+    try {
+      final ok = await Get.dialog<bool>(AlertDialog(
+        title: Text('credit_collect_title'.tr),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('credit_collect_explainer'.tr),
+            const SizedBox(height: 16),
+            TextField(
+              controller: amountCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(labelText: 'credit_collect_amount'.tr),
+            ),
+            const SizedBox(height: 12),
+            Obx(() => DropdownButtonFormField<String>(
+              value: method.value,
+              decoration: InputDecoration(labelText: 'credit_collect_method'.tr),
+              items: [
+                DropdownMenuItem(value: 'cash', child: Text('credit_collect_cash'.tr)),
+                DropdownMenuItem(value: 'amial_pay', child: Text('credit_collect_amial'.tr)),
+              ],
+              onChanged: c.isSubmitting.value ? null : (v) {
+                if (v != null) method.value = v;
+              },
+            )),
+            const SizedBox(height: 12),
+            TextField(
+              controller: noteCtrl,
+              maxLength: 255,
+              decoration: InputDecoration(labelText: 'credit_collect_note'.tr),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(result: false),
+              child: Text('credit_collect_cancel'.tr)),
+          Obx(() => FilledButton(
+            onPressed: c.isSubmitting.value ? null : () async {
+              final amount = double.tryParse(amountCtrl.text.trim());
+              if (amount == null || amount <= 0) {
+                Get.snackbar('credit_collect_amount_invalid_title'.tr, 'credit_collect_amount_invalid'.tr);
+                return;
+              }
+              // Use the live statement rather than a stale customer list card.
+              final account = widget.collectionOnly
+                  ? null : c.statement.value?['account'] as Map?;
+              final debt = _remainingBalance ?? double.tryParse(
+                  '${account?['current_balance'] ?? widget.customer['current_balance'] ?? 0}') ?? 0;
+              if (debt > 0 && amount > debt) {
+                Get.snackbar('credit_collect_amount_exceeds_title'.tr, 'credit_collect_amount_exceeds'.tr);
+                return;
+              }
+              collection = method.value == 'cash'
+                  ? await c.collectCash(accountId, amountCtrl.text.trim(),
+                      requestKey, note: noteCtrl.text.trim())
+                  : await c.requestWallet(accountId, amountCtrl.text.trim(),
+                      requestKey);
+              if (collection != null) {
+                Get.back(result: true);
+              } else {
+                Get.snackbar('credit_collect_failed'.tr, c.lastError.value,
+                    snackPosition: SnackPosition.BOTTOM);
+              }
+            },
+            child: c.isSubmitting.value
+                ? const SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2,
+                        color: Colors.white))
+                : Text('credit_collect_continue'.tr),
+          )),
+        ],
+      ));
+      if (ok == true && collection != null) {
+        _refresh();
+        await _collectionResult(collection!);
+      }
+    } finally {
+      amountCtrl.dispose();
+      noteCtrl.dispose();
+    }
+  }
+
+  Future<void> _collectionResult(Map<String, dynamic> collection) async {
+    if (collection['status'] == 'completed') {
+      final current = double.tryParse('${collection['new_balance']}');
+      if (widget.collectionOnly && current != null && mounted) {
+        setState(() => _remainingBalance = current);
+      }
+      await Get.dialog<void>(AlertDialog(
+        title: Text('credit_collect_success_title'.tr),
+        content: Text('credit_collect_success_details'.trParams({
+          'number': collection['receipt_number']?.toString() ?? 'credit_collect_issuing'.tr,
+          'balance': Money.format(double.tryParse('${collection['new_balance']}') ?? 0),
+        })),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: Text('credit_collect_close'.tr)),
+          FilledButton.icon(
+            onPressed: collection['receipt_id'] == null ? null : () async {
+              await _downloadCollectionReceipt(collection['collection_id'] as int);
+            },
+            icon: const Icon(Icons.picture_as_pdf),
+            label: Text('credit_collect_print'.tr),
+          ),
+        ],
+      ));
+      return;
+    }
+    if (collection['needs_review'] == true) {
+      Get.snackbar('credit_collect_review_title'.tr, 'credit_collect_review_body'.tr);
+      return;
+    }
+    final url = collection['payment_url']?.toString() ?? '';
+    await Get.dialog<void>(AlertDialog(
+      title: Text('credit_collect_pending_title'.tr),
+      content: SingleChildScrollView(child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('credit_collect_code'.trParams({'code': collection['payment_code']?.toString() ?? ''})),
+          const SizedBox(height: 12),
+          if (url.isNotEmpty) QrImageView(data: url, size: 210),
+          const SizedBox(height: 12),
+          Text('credit_collect_scan_explainer'.tr),
+        ],
+      )),
+      actions: [
+        TextButton(onPressed: () => Get.back(), child: Text('credit_collect_later'.tr)),
+        Obx(() => FilledButton(
+          onPressed: c.isSubmitting.value ? null : () async {
+            final result = await c.confirmWallet(collection['collection_id'] as int);
+            if (result == null) {
+              Get.snackbar('credit_collect_pending_snackbar'.tr, c.lastError.value,
+                  snackPosition: SnackPosition.BOTTOM);
+              return;
+            }
+            Get.back();
+            _refresh();
+            await _collectionResult(result);
+          },
+          child: c.isSubmitting.value
+              ? const SizedBox(width: 18, height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2,
+                      color: Colors.white))
+              : Text('credit_collect_verify'.tr),
+        )),
+      ],
+    ));
+  }
+
+  Future<void> _downloadCollectionReceipt(int id) async {
+    final response = await c.repo.receiptPdf(id);
+    final bytes = await _collect(response.bodyBytes);
+    if (response.statusCode != 200 || bytes.isEmpty) {
+      Get.snackbar('credit_collect_download_failed'.tr, 'credit_collect_download_failed_body'.tr);
+      return;
+    }
+    await PdfDownloaderHelper.downloadAndOpenPdf(
+      pdfData: bytes, baseFileName: 'collection-receipt-$id',
     );
   }
 

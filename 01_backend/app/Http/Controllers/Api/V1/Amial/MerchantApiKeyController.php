@@ -26,7 +26,10 @@ class MerchantApiKeyController extends Controller
 
     private function guard(Request $request): mixed
     {
-        $u = $request->user();
+        // نفس مالك المنشأة قد يصل من تطبيق API أو من بوابة merchant_web.
+        // لا ننشئ منطق مفاتيح ثانياً للويب؛ نحل الهوية من الحارسين ثم
+        // نمرر القرار نفسه إلى FeatureAccessService.
+        $u = $request->user('merchant_web') ?? $request->user();
         if (!$u || $u->role !== A::ROLE_MERCHANT) {
             return $this->error('NOT_A_MERCHANT', 'متاح للتجّار فقط', 403);
         }

@@ -14,6 +14,11 @@ return [
     App\Providers\RouteServiceProvider::class,
     App\Providers\ConfigServiceProvider::class,
 
+    // AMIAL-KYC-CENTRAL-GUARD-001 — ربط خدمة KYC المحروسة قبل أي استدعاء
+    // تطبيقي لها. كل Controller/Service يطلب KycDocumentService يأخذ طبقة
+    // إثبات الملكية والمراجعة المقيدة تلقائياً.
+    App\Providers\KycSecurityServiceProvider::class,
+
     // AMIAL-WHOLESALE-ACCESS-001 — policy واحدة تحرس كل endpoint للجملة
     // وتزوّد Flutter بنفس snapshot الباقات/الصلاحيات.
     App\Providers\WholesaleAccessServiceProvider::class,

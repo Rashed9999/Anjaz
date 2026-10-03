@@ -132,7 +132,12 @@ class MerchantController extends Controller
             $user->identification_type = $request->identification_type;
             $user->identification_number = $request->identification_number;
             $user->identification_image = $identityImage;
-            $user->is_kyc_verified = 1;
+            // AMIAL-KYC-EVIDENCE-001 — **الإنشاءُ لا يوثّق.**
+            //
+            // كان هنا `= 1`: تاجرٌ يُنشأ من اللوحة فيصير «موثَّقاً»
+            // **بلا وثيقةٍ واحدة**، ويُفتح له سقفُ مالٍ يُبنى على توثيقٍ
+            // لم يقع. والتوثيقُ يخرج من طابور مراجعة الهويّة وحدَه.
+            $user->is_kyc_verified = 0;
             $user->save();
 
             $user->find($user->id);

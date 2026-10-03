@@ -53,9 +53,6 @@ class ForgetPinController extends GetxController implements GetxService{
       PhoneNumber phoneNumber = PhoneNumber.parse(phone ?? '');
       bool isValid = phoneNumber.isValid(type: PhoneNumberType.mobile);
       String countryCode = phoneNumber.countryCode;
-      String nationalNumber = phoneNumber.international.replaceAll(countryCode, '');
-
-      UserShortDataModel? userData = Get.find<AuthController>().getUserData();
 
       if(isValid) {
         await authController.updatePin(newPass);

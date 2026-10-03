@@ -541,6 +541,26 @@ class ReceiptController extends Controller
         ]);
     }
 
+    /**
+     * صفحة التحقق التي تفتح من رابط المشاركة وQR.
+     *
+     * الـ API أعلاه باقٍ للتطبيقات والدعم، أما المتلقي في واتساب فلا يملك
+     * Bearer token ولا ينبغي أن يرى JSON خاماً أو رابط تنزيل محمي. هذه
+     * الصفحة تعلن فقط صحة السند وملخصه غير الحساس.
+     */
+    public function verifyPublicPage(string $code): \Illuminate\Http\Response
+    {
+        $normalized = preg_replace('/[\s\-]+/', '', strtoupper($code));
+        $validShape = preg_match('/^([0-9]{16}|[A-Z2-9]{16})$/', $normalized) === 1;
+        $result = $validShape ? $this->service->verifyByCode($normalized) : null;
+
+        return response()->view('receipts.verify-public', [
+            'receipt' => $result,
+            'code' => $normalized,
+            'invalidFormat' => ! $validShape,
+        ], $result ? 200 : ($validShape ? 404 : 400));
+    }
+
     private function error(string $code, string $message, int $status): JsonResponse
     {
         return new JsonResponse([

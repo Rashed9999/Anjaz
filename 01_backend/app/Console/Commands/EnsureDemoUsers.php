@@ -20,6 +20,11 @@ use Illuminate\Support\Facades\Hash;
  */
 class EnsureDemoUsers extends Command
 {
+    /** AMIAL-DEMO-MONEY-001 — أرصدةُ العرض. لا تُسَكّ في الإنتاج بلا موافقة. */
+    public const CUSTOMER_BALANCE = '50000.0000';
+
+    public const RECIPIENT_BALANCE = '10000.0000';
+
     protected $signature = 'amial:ensure-demo';
     protected $description = 'يضمن حساب عميل تجريبي ويختبر الدخول';
 
@@ -59,7 +64,7 @@ class EnsureDemoUsers extends Command
                 EMoney::firstOrCreate(
                     ['user_id' => $user->id],
                     [
-                        'current_balance' => '50000.0000',
+                        'current_balance' => DemoAccountPolicy::seededWalletBalance(self::CUSTOMER_BALANCE),
                         'charge_earned' => '0', 'pending_balance' => '0',
                         'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
                     ]
@@ -68,6 +73,7 @@ class EnsureDemoUsers extends Command
                 goto demo_recipient;
             }
             $user = new User();
+            $user->email = DemoAccountPolicy::emailForNewAccount($phone);
             $user->f_name = 'أحمد';
             $user->l_name = 'سالم';
             $user->phone = $phone;
@@ -88,7 +94,7 @@ class EnsureDemoUsers extends Command
             EMoney::firstOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'current_balance' => '50000.0000',
+                    'current_balance' => DemoAccountPolicy::seededWalletBalance(self::CUSTOMER_BALANCE),
                     'charge_earned' => '0', 'pending_balance' => '0',
                     'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
                 ]
@@ -129,7 +135,7 @@ class EnsureDemoUsers extends Command
                 EMoney::firstOrCreate(
                     ['user_id' => $existingRx->id],
                     [
-                        'current_balance' => '10000.0000',
+                        'current_balance' => DemoAccountPolicy::seededWalletBalance(self::RECIPIENT_BALANCE),
                         'charge_earned' => '0', 'pending_balance' => '0',
                         'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
                     ]
@@ -138,6 +144,7 @@ class EnsureDemoUsers extends Command
                 goto after_recipient;
             }
             $recipient = new User();
+            $recipient->email = DemoAccountPolicy::emailForNewAccount($rxPhone);
             $recipient->f_name = 'محمد';
             $recipient->l_name = 'علي';
             $recipient->phone = $rxPhone;
@@ -155,7 +162,7 @@ class EnsureDemoUsers extends Command
             EMoney::firstOrCreate(
                 ['user_id' => $recipient->id],
                 [
-                    'current_balance' => '10000.0000',
+                    'current_balance' => DemoAccountPolicy::seededWalletBalance(self::RECIPIENT_BALANCE),
                     'charge_earned' => '0', 'pending_balance' => '0',
                     'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
                 ]

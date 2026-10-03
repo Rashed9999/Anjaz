@@ -272,6 +272,56 @@ class MerchantApprovalOverrideTest extends TestCase
         $this->assertTrue($svc->consume($one, P::RETAIL_RETURN_CREATE));
     }
 
+    /** @test */
+    public function a_permit_for_one_sale_cannot_be_spent_on_another_sale(): void
+    {
+        // المبلغ والصلاحية وحدهما لا يعرّفان العملية. قد توجد فاتورتان
+        // بالمبلغ نفسه، وموافقة المالك على الأولى لا تجيز الثانية.
+        $m = $this->merchant();
+        $cashier = $this->staff($m, 'cashier');
+        $svc = app(MerchantOverrideService::class);
+
+        $id = $svc->request(
+            $cashier,
+            P::RETAIL_RETURN_CREATE,
+            'مرتجع الفاتورة A',
+            '500',
+            'sale_refund:A',
+        );
+        $svc->grant($m, $id);
+
+        $this->assertFalse(
+            $svc->consume($cashier, P::RETAIL_RETURN_CREATE, '500', 'sale_refund:B')
+        );
+        $this->assertTrue(
+            $svc->consume($cashier, P::RETAIL_RETURN_CREATE, '500', 'sale_refund:A')
+        );
+
+        $this->assertDatabaseHas('merchant_permission_overrides', [
+            'id' => $id,
+            'status' => 'consumed',
+            'context_key' => 'sale_refund:A',
+        ]);
+    }
+
+    /** @test */
+    public function pending_requests_for_equal_amounts_stay_separate_by_operation(): void
+    {
+        $m = $this->merchant();
+        $cashier = $this->staff($m, 'cashier');
+        $svc = app(MerchantOverrideService::class);
+
+        $a = $svc->request(
+            $cashier, P::RETAIL_RETURN_CREATE, 'مرتجع A', '500', 'sale_refund:A'
+        );
+        $b = $svc->request(
+            $cashier, P::RETAIL_RETURN_CREATE, 'مرتجع B', '500', 'sale_refund:B'
+        );
+
+        $this->assertNotSame($a, $b);
+        $this->assertDatabaseCount('merchant_permission_overrides', 2);
+    }
+
     // ══════════════════════════════════════════════════════════════════
     //  ④ والمنحُ الثلاثُ الميّتةُ صارت حيّةً — وهي سببُ هذا كلِّه
     // ══════════════════════════════════════════════════════════════════

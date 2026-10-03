@@ -61,11 +61,16 @@ class TransactionController extends Controller
         if (!isset($user))
             return response()->json(['message' => translate('المستلِم غير موجود — تحقّق من الرقم')], 403); //Receiver Check
 
-        if($user->is_kyc_verified != 1)
-            return response()->json(['message' => translate('حساب المستلِم غير موثّق')], 403); //kyc check
-
-        if($request->user()->is_kyc_verified != 1)
-            return response()->json(['message' => translate('أكمل توثيق حسابك أولاً')], 403); //kyc check
+        // Tier 1 هو المسار الأساسي للعميل، وليس علم KYC الكامل القديم.
+        // الفحص هنا مبكر للرد الواضح، ويُعاد في TransactionTrait لحماية
+        // أي استدعاء مباشر يتجاوز الـ controller.
+        try {
+            $tiers = app(\App\Services\KycTierService::class);
+            $tiers->assertIndividualTransactionAllowed($request->user(), (string) $request['amount'], 'send_money');
+            $tiers->assertIndividualCanReceive($user, (string) $request['amount']);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => translate($e->getMessage())], 403);
+        }
 
         if ($request->user()->phone == $receiverPhone)
             return response()->json(['message' => translate('لا يمكن إجراء المعاملة على رقمك نفسه')], 400); //own number check
@@ -172,8 +177,13 @@ class TransactionController extends Controller
         if($user->is_kyc_verified != 1)
             return response()->json(['message' => translate('حساب المستلِم غير موثّق')], 403); //kyc check
 
-        if($request->user()->is_kyc_verified != 1)
-            return response()->json(['message' => translate('تحقّق من بيانات حسابك')], 403); //kyc check
+        try {
+            app(\App\Services\KycTierService::class)->assertIndividualTransactionAllowed(
+                $request->user(), (string) $request['amount'], 'cash_out',
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => translate($e->getMessage())], 403);
+        }
 
         if ($request->user()->phone == $receiverPhone)
             return response()->json(['message' => translate('لا يمكن إجراء المعاملة على رقمك نفسه')], 400); //own number check
@@ -264,11 +274,15 @@ class TransactionController extends Controller
         if (!isset($user))
             return response()->json(['message' => translate('المستلِم غير موجود — تحقّق من الرقم')], 403); //Receiver Check
 
-        if($user->is_kyc_verified != 1)
-            return response()->json(['message' => translate('حساب المستلِم غير موثّق')], 403); //kyc check
-
-        if($request->user()->is_kyc_verified != 1)
-            return response()->json(['message' => translate('تحقّق من بيانات حسابك')], 403); //kyc check
+        try {
+            $tiers = app(\App\Services\KycTierService::class);
+            // الطلب لا يحرّك مالاً بعد، لكنه لا يُنشأ لطرفين لا يملكان
+            // الخدمة الأساسية أو لا يستطيع صاحب الطلب استقبال أصل المبلغ.
+            $tiers->assertIndividualFeatureAllowed($user, 'send_money');
+            $tiers->assertIndividualCanReceive($request->user(), (string) $request['amount']);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => translate($e->getMessage())], 403);
+        }
 
         if ($request->user()->phone == $receiverPhone)
             return response()->json(['message' => translate('لا يمكن إجراء المعاملة على رقمك نفسه')], 400); //own number check
@@ -337,12 +351,6 @@ class TransactionController extends Controller
         if (!isset($requestMoney))
             return response()->json(['message' => translate('الطلب غير موجود')], 404);
 
-        if($this->user->find($requestMoney->to_user_id)->is_kyc_verified != 1)
-            return response()->json(['message' => translate('حساب المستلِم غير موثّق')], 403);
-
-        if($request->user()->is_kyc_verified != 1)
-            return response()->json(['message' => translate('أكمل توثيق حسابك أولاً')], 403);
-
         if($requestMoney->to_user_id != $request->user()->id)
             return response()->json(['message' => translate('طلب غير مصرّح به')], 403);
 
@@ -359,6 +367,21 @@ class TransactionController extends Controller
             return response()->json(['message' => 'success'], 200);
         }
 
+        $requester = $this->user->find($requestMoney->from_user_id);
+        if (!$requester) {
+            return response()->json(['message' => translate('صاحب الطلب غير موجود')], 404);
+        }
+
+        try {
+            $tiers = app(\App\Services\KycTierService::class);
+            $tiers->assertIndividualTransactionAllowed(
+                $request->user(), (string) $requestMoney->amount, 'send_money',
+            );
+            $tiers->assertIndividualCanReceive($requester, (string) $requestMoney->amount);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => translate($e->getMessage())], 403);
+        }
+
         $sendMoneyLimit = Helpers::get_business_settings('customer_send_money_limit');
 
         if(isset($sendMoneyLimit) && $sendMoneyLimit['status'] == 1){
@@ -372,7 +395,7 @@ class TransactionController extends Controller
         //
         // وكان يقرأ `business_settings` كأخوَيه، **فبابٌ ثالثٌ للرسم نفسِه**
         // — ويُنسى عادةً لأنّه لا يُسمّى «تحويلاً» في الشاشة.
-        $receiverPhone = $this->user->find($requestMoney->from_user_id)->phone;
+        $receiverPhone = $requester->phone;
 
         $breakdown = app(\App\Services\FeeService::class)
             ->calculate('SEND_MONEY', (string) $requestMoney->amount, ['applies_to' => 'customer']);
@@ -422,8 +445,12 @@ class TransactionController extends Controller
         if (!$addMoneyStatus)
             return response()->json(['message' => translate('خدمة إضافة الرصيد غير مفعّلة حالياً')], 403);
 
-        if($request->user()->is_kyc_verified != 1) {
-            return response()->json(['message' => translate('تحقّق من بيانات حسابك')], 403);
+        try {
+            app(\App\Services\KycTierService::class)->assertIndividualCanReceive(
+                $request->user(), (string) $request->input('amount'),
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => translate($e->getMessage())], 403);
         }
 
         $amount = $request->amount;

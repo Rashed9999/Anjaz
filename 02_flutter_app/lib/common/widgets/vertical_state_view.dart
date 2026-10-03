@@ -44,6 +44,20 @@ class VerticalStateView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
+      // ⓪ **فشلَ فعلٌ لا تحميل** — AMIAL-VERTICAL-ACTION-ERROR-001.
+      //
+      // القائمةُ محمَّلةٌ سليمةٌ في الذاكرة، وفشل إدخالٌ واحد. فحجبُ
+      // الشاشة هنا يمحو **البياناتِ وزرَّ الإضافة معاً**، ولا طريقَ
+      // للتصحيح إلّا الخروجُ والعودة — ولا شيءَ يقول ذلك.
+      //
+      // فتُعرَض الرسالةُ شريطاً فوق المحتوى، ويبقى كلُّ شيءٍ يعمل.
+      if (c.errorIsAction.value && c.lastError.isNotEmpty) {
+        return Column(children: [
+          _actionBanner(c.lastError.value),
+          Expanded(child: child),
+        ]);
+      }
+
       // ① بلا اتّصال — **قبل الخطأ**، فهو تشخيصٌ أدقّ.
       if (c.isOffline.value) {
         return _message(
@@ -97,6 +111,39 @@ class VerticalStateView extends StatelessWidget {
       // ⑥ المحتوى.
       return child;
     });
+  }
+
+  /// شريطُ خطأِ الفعل — **فوق المحتوى لا مكانَه**، ويُغلَق بضغطة.
+  Widget _actionBanner(String message) {
+    return Material(
+      color: AmialColors.warningSurface,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+          child: Row(children: [
+            const Icon(Icons.error_outline_rounded,
+                color: Colors.red, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(message,
+                  key: const Key('vertical-action-error'),
+                  style: const TextStyle(
+                      fontSize: 13, color: AmialColors.textPrimary)),
+            ),
+            IconButton(
+              key: const Key('vertical-action-error-dismiss'),
+              tooltip: 'إخفاء',
+              icon: const Icon(Icons.close_rounded, size: 18),
+              onPressed: () {
+                c.lastError.value = '';
+                c.errorIsAction.value = false;
+              },
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 
   Widget _message({

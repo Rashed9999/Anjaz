@@ -44,6 +44,7 @@ class AgentCounterReceiptTest extends TestCase
         parent::setUp();
 
         $this->company = new User();
+        $this->company->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $this->company->forceFill([
             'f_name' => 'البسيري', 'l_name' => 'للصرافة', 'phone' => '967772000001',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
@@ -54,6 +55,7 @@ class AgentCounterReceiptTest extends TestCase
         $this->hq = app(AgentStaffService::class)->ensureHeadOfficeAccount($this->company, 'hq123456');
 
         $bu = new User();
+        $bu->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $bu->forceFill([
             'f_name' => 'فرع المكلا', 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '967772000099', 'password' => Hash::make('secret123'),
@@ -220,6 +222,7 @@ class AgentCounterReceiptTest extends TestCase
     {
         // فرعٌ ثانٍ بصرّافه، وعمليّةٌ فيه.
         $bu = new User();
+        $bu->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $bu->forceFill([
             'f_name' => 'فرع سيحوت', 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '967772000077', 'password' => Hash::make('secret123'),

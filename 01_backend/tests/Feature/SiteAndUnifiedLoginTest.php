@@ -162,6 +162,7 @@ class SiteAndUnifiedLoginTest extends TestCase
     private function makeCompany(string $phone = '967771900001'): User
     {
         $u = new User();
+        $u->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $u->forceFill([
             'f_name' => 'البسيري', 'l_name' => 'للصرافة', 'phone' => $phone,
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
@@ -175,6 +176,7 @@ class SiteAndUnifiedLoginTest extends TestCase
     private function makeAdmin(string $phone = '967771900009'): User
     {
         $u = new User();
+        $u->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $u->forceFill([
             'f_name' => 'مدير', 'l_name' => 'المنصّة', 'phone' => $phone,
             'type' => ADMIN_TYPE, 'password' => Hash::make('admin12345'),
@@ -257,6 +259,7 @@ class SiteAndUnifiedLoginTest extends TestCase
     public function a_customer_is_told_where_to_go_instead_of_being_called_wrong(): void
     {
         $u = new User();
+        $u->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $u->forceFill([
             'f_name' => 'عميل', 'l_name' => 'تجريبيّ', 'phone' => '967771900003',
             'type' => CUSTOMER_TYPE, 'password' => Hash::make('secret123'), 'is_active' => 1,

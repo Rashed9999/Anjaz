@@ -147,12 +147,16 @@ class CurrencyPolicyGuardTest extends TestCase
         }
 
         $src = file_get_contents($wizard);
+        $quick = file_get_contents(base_path(
+            '../02_flutter_app/lib/features/auth/screens/quick_registration_screen.dart'));
 
-        // الدخلُ الشهريُّ يُرسَل بعملةٍ **ثابتةٍ معلنة**، لا بمنتقٍ.
-        $this->assertStringContainsString("'monthly_income_currency': 'YER'", $src,
-            'عملةُ الدخل غيرُ معلنةٍ في التسجيل');
-
-        $this->assertStringNotContainsString('reg-currency-picker', $src,
+        // التسجيل السريع لا يسأل عن الدخل أصلاً؛ وعندما يأتي لاحقاً
+        // يثبّت الخادم YER (يختبره الاختبار التالي) ولا يعرض منتقي عملة.
+        $this->assertStringContainsString('QuickRegistrationScreen', $src,
+            'معالج التسجيل يجب أن يوجّه إلى التسجيل السريع الفعلي');
+        $this->assertStringNotContainsString('monthly_income_currency', $quick,
+            'التسجيل السريع لا يجمع الدخل؛ لا ترسل حقلاً بلا واجهة');
+        $this->assertStringNotContainsString('reg-currency-picker', $quick,
             'عُرض على العميل منتقي عملات — والقرارُ أنّ اليمنيَّ وحدَه له');
     }
 

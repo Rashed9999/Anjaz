@@ -335,7 +335,7 @@ class ProductCatalogTest extends TestCase
     public function the_admin_screen_is_reachable_from_the_sidebar(): void
     {
         $html = $this->actingAs($this->admin(), 'user')
-            ->get(route('admin.dashboard'))->assertOk()->getContent();
+            ->get(route('admin.amial.workspace.index'))->assertOk()->getContent();
 
         $this->assertStringContainsString('/admin/amial/catalog', $html,
             'لا رابطَ إلى مركز الكتالوج من أيّ صفحةٍ يمرّ بها المدير');

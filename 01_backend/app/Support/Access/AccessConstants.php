@@ -56,14 +56,18 @@ class AccessConstants
 
     // ============ Subscription Plans ============
     public const PLAN_FREE = 'free';
-    public const PLAN_STARTER = 'starter';            // 15 SAR/شهر
     public const PLAN_BUSINESS = 'business';          // 35 SAR/شهر
-    public const PLAN_MERCHANT_PRO = 'merchant_pro';  // 65 SAR/شهر
-    public const PLAN_ENTERPRISE = 'enterprise';      // 150 SAR/شهر
+    public const PLAN_ENTERPRISE = 'enterprise';      // 99 SAR/شهر
+
+    // توافق داخلي مؤقت للاختبارات والسجلات البرمجية القديمة فقط. لا تدخل
+    // هاتان التسميتان في ALL_PLANS ولا في API أو واجهة المستخدم.
+    /** @deprecated استعمل PLAN_BUSINESS؛ باقة البداية ألغيت. */
+    public const PLAN_STARTER = self::PLAN_BUSINESS;
+    /** @deprecated استعمل PLAN_ENTERPRISE؛ باقة تاجر محترف ألغيت. */
+    public const PLAN_MERCHANT_PRO = self::PLAN_ENTERPRISE;
 
     public const ALL_PLANS = [
-        self::PLAN_FREE, self::PLAN_STARTER, self::PLAN_BUSINESS,
-        self::PLAN_MERCHANT_PRO, self::PLAN_ENTERPRISE,
+        self::PLAN_FREE, self::PLAN_BUSINESS, self::PLAN_ENTERPRISE,
     ];
 
     /**
@@ -81,27 +85,35 @@ class AccessConstants
 
     public const PLAN_PRICES_SAR = [
         self::PLAN_FREE => 0,
-        self::PLAN_STARTER => 15,
         self::PLAN_BUSINESS => 35,
-        self::PLAN_MERCHANT_PRO => 65,
-        self::PLAN_ENTERPRISE => 150,
+        self::PLAN_ENTERPRISE => 99,
     ];
 
     public const PLAN_PRICES_SAR_ANNUAL = [
         self::PLAN_FREE => 0,
-        self::PLAN_STARTER => 150,
         self::PLAN_BUSINESS => 350,
-        self::PLAN_MERCHANT_PRO => 650,
-        self::PLAN_ENTERPRISE => 1500,
+        self::PLAN_ENTERPRISE => 990,
     ];
 
     public const PLAN_LABELS = [
         self::PLAN_FREE => 'مجاني',
-        self::PLAN_STARTER => 'البداية',
         self::PLAN_BUSINESS => 'الأعمال',
-        self::PLAN_MERCHANT_PRO => 'تاجر محترف',
         self::PLAN_ENTERPRISE => 'مؤسسة',
     ];
+
+    /**
+     * حماية زمن النشر: تظل البيانات القديمة مفهومة إلى أن يمرّ الترحيل،
+     * من دون أن تعود هذه الأكواد جزءاً من الكتالوج أو API.
+     */
+    public static function canonicalPlan(?string $plan): string
+    {
+        return match ($plan) {
+            'starter' => self::PLAN_BUSINESS,
+            'merchant_pro' => self::PLAN_ENTERPRISE,
+            self::PLAN_FREE, self::PLAN_BUSINESS, self::PLAN_ENTERPRISE => $plan,
+            default => self::PLAN_FREE,
+        };
+    }
 
     /**
      * حدود رقمية لكل خطّة. القيمة -1 = غير محدود. القيمة 0 = ممنوع.
@@ -111,34 +123,46 @@ class AccessConstants
         self::PLAN_FREE => [
             'monthly_operations' => 100,    // عمليات بيع شهرياً
             'archive_days' => 30,
-            'products' => 0,                // FREE: لا منتجات (بيع سريع فقط)
+            // إدارة الأصناف تبدأ في الأعمال؛ لا نعرض حدّاً لميزة مقفلة.
+            'products' => 0,
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-POS-SEAT-002 — **المجّانيّةُ بلا موظّفين، صراحةً.**
+            //
+            // **وقعت هنا كذبتان متتاليتان، والثانيةُ كذبتي:**
+            //
+            // ① كان `employees => 0` مع `pos_devices => 1` — مقعدٌ يُباع
+            //    ولا يُشغَّل، لأنّ الدخولَ إلى نقطة البيع برمز موظّف.
+            //    كشفه صاحبُ المشروع حين عجز عن تجربة نقطة البيع.
+            //
+            // ② فرُفع `employees` إلى ١ — **وبقي المسارُ يردّ ٤٠٢**:
+            //    قدرةُ `employees` أرضيّتُها `PLAN_BUSINESS` في
+            //    `CapabilityRegistry`، والحارسُ الذي كُتب حينها
+            //    (`PosSeatIsUsableGuardTest`) **يقرأ هذا الجدولَ ولا
+            //    يضغط الزرّ** — فمرّ أخضرَ على عطلٍ قائم. وحارسٌ يقرأ
+            //    رقماً ولا يجرّب المسارَ يُطمئن ولا يحرس.
+            //
+            // **والقرارُ لصاحب المشروع، واختاره صراحةً:** المجّانيّةُ بلا
+            // موظّفين. وهو المتّسقُ مع باقي حدودها — `products => 0`
+            // و`monthly_operations => 100`: محلٌّ بصاحبه وحدَه. **والوعدُ
+            // يُسحَب بدل أن يبقى وعداً لا يُنفَّذ**، وتصير «الموظفون»
+            // سبباً حقيقيّاً للترقية لا بابَ إحباط.
+            //
+            // ولا يُنزَل `employees` وحدَه: مقعدُ جهازٍ بلا شاغلٍ يُعيد
+            // التناقضَ الأوّلَ مقلوباً.
+            // ══════════════════════════════════════════════════════════
             'employees' => 0,
             'branches' => 0,
-            'pos_devices' => 1,
-        ],
-        self::PLAN_STARTER => [
-            'monthly_operations' => -1,
-            'archive_days' => 180,          // 6 أشهر
-            'products' => 100,
-            'employees' => 0,
-            'branches' => 0,
-            'pos_devices' => 1,
+            'pos_devices' => 0,
         ],
         self::PLAN_BUSINESS => [
             'monthly_operations' => -1,
             'archive_days' => 365,
-            'products' => 300,
+            'products' => 500,
             'employees' => 5,
+            // الفروع قدرة مؤسسة؛ لا نعد بفرع في الأعمال قبل فتحها.
             'branches' => 0,
             'pos_devices' => 3,
-        ],
-        self::PLAN_MERCHANT_PRO => [
-            'monthly_operations' => -1,
-            'archive_days' => -1,
-            'products' => -1,
-            'employees' => -1,
-            'branches' => 3,
-            'pos_devices' => -1,
         ],
         self::PLAN_ENTERPRISE => [
             'monthly_operations' => -1,
@@ -208,6 +232,10 @@ class AccessConstants
     public const F_PHARMACY_CUSTOMERS = 'pharmacy_customers';
     public const F_PHARMACY_ALERTS = 'pharmacy_alerts';
     public const F_PHARMACY_PRESCRIPTIONS = 'pharmacy_prescriptions';
+    /** بدائل من نفس المادة الفعالة والتركيز والشكل الدوائي. */
+    public const F_PHARMACY_SUBSTITUTIONS = 'pharmacy_substitutions';
+    /** إتلاف/إرجاع الدفعات غير القابلة للبيع بسجل تدقيقي. */
+    public const F_PHARMACY_BATCH_DISPOSITION = 'pharmacy_batch_disposition';
 
     // جملة
     public const F_WHOLESALE_INVOICES = 'wholesale_invoices';

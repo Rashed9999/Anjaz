@@ -45,6 +45,7 @@ class AgentSettlementEngineTest extends TestCase
         ]);
 
         $this->company = new User();
+        $this->company->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $this->company->forceFill([
             'f_name' => 'العمقي', 'l_name' => 'للصرافة', 'phone' => '967771400001',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
@@ -63,6 +64,7 @@ class AgentSettlementEngineTest extends TestCase
     private function makeBranch(string $code, string $name): AgentBranch
     {
         $bu = new User();
+        $bu->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $bu->forceFill([
             'f_name' => $name, 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '9677714' . random_int(10000, 99999),
@@ -290,6 +292,7 @@ class AgentSettlementEngineTest extends TestCase
         EMoney::where('user_id', $this->company->id)->increment('current_balance', 5000);
 
         $clean = new User();
+        $clean->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $clean->forceFill([
             'f_name' => 'وكيل', 'l_name' => 'نظيف', 'phone' => '967771400099',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),

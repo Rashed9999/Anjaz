@@ -2,27 +2,35 @@
 
 namespace App\Http\Controllers\Api\V1\Amial;
 
-use App\Http\Controllers\Controller;
 use App\Models\FamilyFund;
 use App\Models\FamilyFundMember;
 use App\Models\FamilyFundTransaction;
 use App\Services\FamilyFundService;
+use App\Services\KycTierService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 /**
  * AMIAL-FUND-FAMILY-001 (v0.9-B)
+ *
+ * AMIAL-CUSTOMER-TIER-SURFACE-001:
+ * صندوق العائلة ميزة Tier 2+ للعميل الفرد. المنع هنا Backend حقيقي،
+ * وليس إخفاء بطاقة في Flutter فقط. كل قراءة/إدارة للصندوق تمر من
+ * assertFeatureAllowed، وكل حركة مالية تمر كذلك من حدود KYC.
  */
-class FamilyFundController extends AmialApiController // AMIAL-FIX-007
+class FamilyFundController extends AmialApiController
 {
     public function __construct(
         private readonly FamilyFundService $service,
+        private readonly KycTierService $kyc,
     ) {}
 
-    /** GET /api/v1/amial/funds  — قائمة صناديق المستخدم */
+    /** GET /api/v1/amial/funds — قائمة صناديق المستخدم */
     public function index(Request $request): JsonResponse
     {
+        if ($blocked = $this->requireFamilyFund($request)) return $blocked;
+
         $user = $request->user();
         $memberships = FamilyFundMember::with('fund')
             ->where('user_id', $user->id)
@@ -50,6 +58,8 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
 
     public function show(Request $request, string $ulid): JsonResponse
     {
+        if ($blocked = $this->requireFamilyFund($request)) return $blocked;
+
         $fund = FamilyFund::where('fund_ulid', $ulid)->first();
         if (!$fund) return $this->error('NOT_FOUND', 'الصندوق غير موجود', 404);
 
@@ -59,8 +69,6 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
         }
 
         $members = $fund->activeMembers()->with('user:id,f_name,l_name,phone')->get();
-        // AMIAL-FUND-UI: أسماء منفّذ الحركة والمستفيد — حتى يعرض التطبيق
-        // «بواسطة فلان» و«إلى فلان» في صرف/مساهمات الصندوق.
         $recentTx = FamilyFundTransaction::where('fund_id', $fund->id)
             ->with(['user:id,f_name,l_name', 'beneficiary:id,f_name,l_name'])
             ->orderByDesc('id')
@@ -77,11 +85,13 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
 
     public function create(Request $request): JsonResponse
     {
+        if ($blocked = $this->requireFamilyFund($request)) return $blocked;
+
         $v = Validator::make($request->all(), [
             'name' => 'required|string|max:100',
             'description' => 'sometimes|string|max:500',
             'require_owner_approval_for_disbursement' => 'sometimes|boolean',
-            'target_amount' => 'sometimes|nullable|numeric|min:1', // AMIAL-FUND-002
+            'target_amount' => 'sometimes|nullable|numeric|min:1',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -102,6 +112,8 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
 
     public function invite(Request $request, string $ulid): JsonResponse
     {
+        if ($blocked = $this->requireFamilyFund($request)) return $blocked;
+
         $fund = FamilyFund::where('fund_ulid', $ulid)->first();
         if (!$fund) return $this->error('NOT_FOUND', 'الصندوق غير موجود', 404);
 
@@ -110,6 +122,23 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
             'role' => 'sometimes|string|in:admin,member,viewer',
         ]);
         if ($v->fails()) return $this->validationError($v);
+
+        // لا نرسل دعوة لصندوق لا يستطيع المستلم فتحه أصلاً.
+        $invitee = \App\Models\User::whereIn(
+            'phone',
+            \App\Support\Phone::variants((string) $request->input('phone')),
+        )->first();
+        if ($invitee) {
+            try {
+                $this->kyc->assertFeatureAllowed($invitee, 'family_fund');
+            } catch (\RuntimeException $e) {
+                return $this->error(
+                    'INVITEE_KYC_TIER_REQUIRED',
+                    'المستخدم المدعو يجب أن يكون عميلاً موثقاً بهوية قبل الانضمام إلى صندوق العائلة.',
+                    422,
+                );
+            }
+        }
 
         try {
             $member = $this->service->inviteMember(
@@ -127,6 +156,8 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
 
     public function acceptInvite(Request $request, int $membershipId): JsonResponse
     {
+        if ($blocked = $this->requireFamilyFund($request)) return $blocked;
+
         $member = FamilyFundMember::find($membershipId);
         if (!$member) return $this->error('NOT_FOUND', 'الدعوة غير موجودة', 404);
 
@@ -150,11 +181,15 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
         ]);
         if ($v->fails()) return $this->validationError($v);
 
+        $amount = (string) $request->input('amount');
         try {
+            // يشمل Tier 2 + الإقامة + حد العملية/اليوم/الشهر.
+            $this->kyc->assertTransactionAllowed($request->user(), $amount, 'family_fund');
+
             $tx = $this->service->contribute(
                 $fund,
                 $request->user(),
-                (string)$request->input('amount'),
+                $amount,
                 $request->input('note'),
                 $request->header('Idempotency-Key'),
             );
@@ -169,6 +204,8 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
 
     public function proposeDisbursement(Request $request, string $ulid): JsonResponse
     {
+        if ($blocked = $this->requireFamilyFund($request)) return $blocked;
+
         $fund = FamilyFund::where('fund_ulid', $ulid)->first();
         if (!$fund) return $this->error('NOT_FOUND', 'الصندوق غير موجود', 404);
 
@@ -180,13 +217,19 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
         if ($v->fails()) return $this->validationError($v);
 
         $beneficiary = \App\Models\User::find($request->input('beneficiary_user_id'));
+        $amount = (string) $request->input('amount');
 
         try {
+            // المستفيد نفسه يجب أن يكون مؤهلاً للصندوق، والاستلام يجب ألا
+            // يتجاوز حد حركته أو رصيده في لحظة الاقتراح.
+            $this->kyc->assertFeatureAllowed($beneficiary, 'family_fund');
+            $this->kyc->assertCanReceive($beneficiary, $amount);
+
             $tx = $this->service->proposeDisbursement(
                 $fund,
                 $request->user(),
                 $beneficiary,
-                (string)$request->input('amount'),
+                $amount,
                 $request->input('note'),
             );
         } catch (\RuntimeException $e) {
@@ -203,10 +246,22 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
 
     public function approveDisbursement(Request $request, string $ulid): JsonResponse
     {
+        if ($blocked = $this->requireFamilyFund($request)) return $blocked;
+
         $tx = FamilyFundTransaction::where('tx_ulid', $ulid)->first();
         if (!$tx) return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
 
         try {
+            $beneficiary = $tx->beneficiary;
+            if (!$beneficiary) {
+                throw new \RuntimeException('Beneficiary no longer exists');
+            }
+
+            // إعادة الفحص عند التنفيذ الفعلي؛ فقد تتغير حدود المستفيد بين
+            // الاقتراح والموافقة.
+            $this->kyc->assertFeatureAllowed($beneficiary, 'family_fund');
+            $this->kyc->assertCanReceive($beneficiary, (string) $tx->amount);
+
             $ok = $this->service->approveDisbursement($tx, $request->user());
         } catch (\RuntimeException $e) {
             return $this->error('APPROVE_FAILED', $e->getMessage(), 422);
@@ -217,6 +272,8 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
 
     public function rejectDisbursement(Request $request, string $ulid): JsonResponse
     {
+        if ($blocked = $this->requireFamilyFund($request)) return $blocked;
+
         $tx = FamilyFundTransaction::where('tx_ulid', $ulid)->first();
         if (!$tx) return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
 
@@ -236,6 +293,8 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
 
     public function transactions(Request $request, string $ulid): JsonResponse
     {
+        if ($blocked = $this->requireFamilyFund($request)) return $blocked;
+
         $fund = FamilyFund::where('fund_ulid', $ulid)->first();
         if (!$fund) return $this->error('NOT_FOUND', 'الصندوق غير موجود', 404);
         if (!$fund->isMember($request->user()->id)) {
@@ -256,5 +315,17 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
         ]);
     }
 
-    // Helpers
+    /**
+     * لا يظهر الصندوق ولا يُفتح برابط مباشر لمن هو دون Tier 2.
+     * KycTierService هو مصدر الحقيقة للمستوى والإقامة الفعلية.
+     */
+    private function requireFamilyFund(Request $request): ?JsonResponse
+    {
+        try {
+            $this->kyc->assertFeatureAllowed($request->user(), 'family_fund');
+            return null;
+        } catch (\RuntimeException $e) {
+            return $this->error('KYC_TIER_REQUIRED', $e->getMessage(), 403);
+        }
+    }
 }

@@ -1,0 +1,462 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\FuelSale;
+use App\Models\Merchant;
+use App\Models\MerchantSale;
+use App\Models\PharmacySale;
+use App\Models\PurchaseOrder;
+use App\Models\SupplierLedgerEntry;
+use App\Models\Receipt;
+use App\Models\RestaurantOrder;
+use App\Models\User;
+use App\Models\WholesaleInvoice;
+use Carbon\Carbon;
+
+/**
+ * AMIAL-DOC-VERIFY-001 — **رمزٌ واحدٌ يُتحقَّق منه، ويقول الحقيقةَ الحاليّة.**
+ *
+ * ══════════════════════════════════════════════════════════════════════
+ * **ثلاثةُ أعطالٍ قِيست، ولكلٍّ منها ثمنٌ يقع على من يحمل الورقة:**
+ *
+ *   ① **المستندُ الملغى يُجيب «لا إيصال صالح لهذا الرمز».**
+ *      `ReceiptService::verifyByCode` يقتصر على `status='pdf_generated'`،
+ *      **فالملغى والمزوَّرُ جوابُهما واحد**. والفرقُ بينهما هو كلُّ
+ *      المسألة: من ألغى فاتورتَه بحقٍّ يُتَّهم بالتزوير، ومن زوَّر يجد
+ *      لنفسه عذراً («لعلّها أُلغيت»). (القاعدة السابعة: الغيابُ يُقال
+ *      بسببه، ولا يُخلط بغيره.)
+ *
+ *   ② **وسندُ الوقود يطبع «رمز التحقّق» ولا مُتحقِّقَ يقبله.**
+ *      `pdf/fuel-sale-receipt` يطبع `substr(sale_ulid, -8)` تحت لافتة
+ *      «رمز التحقّق» — **ولا مسارَ في المنصّة يفهمه**. فمن جرّبه وجد
+ *      «غير صحيح»، فيقرأ سندَه الصحيحَ مزوَّراً. **ولافتةٌ تَعِد بما لا
+ *      تفعل أسوأ من غيابها.**
+ *
+ *   ③ **والنتيجةُ تُكاش خمسَ دقائق.** فتُلغى فاتورةٌ ويبقى الورقُ
+ *      «صحيحاً» خمسَ دقائقَ بعدها — وهي بالضبط الدقائقُ التي يُستعمل
+ *      فيها.
+ *
+ * **وحدُّ ما يُعرَض:** نوعُ المستند ورقمُه ومُصدِرُه ومبلغُه ووقتُه
+ * وحالتُه. **ولا اسمَ عميلٍ ولا هاتفَ ولا رصيد** — الصفحةُ عامّةٌ بلا
+ * مصادقة، ومن يحمل الرمزَ ليس بالضرورة صاحبَ المستند.
+ *
+ * **والقديمُ لا يُكسَر:** الرموزُ المطبوعةُ سلفاً — رمزُ الوقود القصير
+ * ورموزُ `receipts` — تبقى كلُّها مقبولة. فإيصالٌ في جيب سائقٍ منذ شهر
+ * لا يصير باطلاً لأنّنا وحّدنا الصيغة.
+ *
+ * يظهر في : الموقع ← `/verify` (إدخالُ الرمز أو مسحُ QR) و`/v/{code}`
+ * (من مسح رمز السند مباشرةً). وفي لوحة الإدارة: لا — هذه صفحةُ جمهور.
+ *
+ * @see \Tests\Feature\DocumentVerificationGuardTest
+ */
+class DocumentVerificationService
+{
+    /** توقيتُ مكّة — وهو ما يُطبع على المستندات. */
+    public const TZ = 'Asia/Riyadh';
+
+    /**
+     * @return array{found:bool,authenticity:string,authenticity_label:string,
+     *               doc_type:?string,doc_type_label:?string,document_number:?string,
+     *               issuer:?string,amount:?string,currency:?string,
+     *               issued_at:?string,state:?string,state_label:?string,source:?string,
+     *               reason:?string}
+     */
+    public function verify(string $raw): array
+    {
+        $code = $this->normalize($raw);
+
+        if ($code === '') {
+            return $this->notFound('لم يُدخَل رمز');
+        }
+
+        // ① السجلُّ المركزيُّ أوّلاً — وفيه فواتيرُ التجّار وعمليّاتُ المنصّة.
+        if ($receipt = Receipt::where('verification_code', $code)->first()) {
+            return $this->fromReceipt($receipt);
+        }
+
+        // ② فواتير نقاط البيع غير المالية أيضاً قابلة للتحقق. لا نجبر
+        // النقد والآجل على إنشاء Receipt مالي مصطنع؛ معرّف المستند نفسه
+        // يكفي، والصفحة العامة تقرأ حالته الحية من مصدر القطاع.
+        if (preg_match('/^[0-9A-Z]{26}$/', $code)) {
+            // مستندات المشتريات لها ULID مستقل. لا تُنشئ Receipt ماليّاً
+            // مصطنعاً للشراء النقدي/الآجل؛ نتحقق من مصدر المستند نفسه.
+            if ($purchase = PurchaseOrder::whereRaw('UPPER(document_ulid) = ?', [$code])->first()) {
+                return $this->fromPurchaseOrder($purchase);
+            }
+            if ($payment = SupplierLedgerEntry::whereRaw('UPPER(entry_ulid) = ?', [$code])
+                ->whereIn('entry_type', ['payment', 'supplier_refund'])->first()) {
+                return $this->fromSupplierPayment($payment);
+            }
+            if ($order = RestaurantOrder::whereRaw('UPPER(sale_ulid) = ?', [$code])->first()) {
+                return $this->fromRestaurantOrder($order);
+            }
+            if ($sale = MerchantSale::whereRaw('UPPER(sale_ulid) = ?', [$code])->first()) {
+                return $this->fromMerchantSale($sale);
+            }
+            if ($sale = PharmacySale::whereRaw('UPPER(sale_ulid) = ?', [$code])->first()) {
+                return $this->fromPharmacySale($sale);
+            }
+            if ($sale = FuelSale::whereRaw('UPPER(sale_ulid) = ?', [$code])->first()) {
+                return $this->fromFuelSale($sale, false);
+            }
+            if ($invoice = WholesaleInvoice::whereRaw('UPPER(invoice_ulid) = ?', [$code])->first()) {
+                return $this->fromWholesaleInvoice($invoice);
+            }
+        }
+
+        // ③ والرمزُ القصيرُ القديمُ للوقود يبقى مقبولاً — إيصالٌ مطبوعٌ
+        //    منذ شهرٍ لا يصير باطلاً لأنّنا وحّدنا الصيغة.
+        if (preg_match('/^[0-9A-Z]{8}$/', $code)) {
+            $sale = FuelSale::whereRaw('UPPER(RIGHT(sale_ulid, 8)) = ?', [$code])->first();
+
+            if ($sale) {
+                return $this->fromFuelSale($sale);
+            }
+        }
+
+        return $this->notFound('لا مستند بهذا الرمز');
+    }
+
+    /** الصيغةُ تُقبَل كما يقرؤها الإنسانُ على الورق: «1234-5678 9012». */
+    public function normalize(string $raw): string
+    {
+        return preg_replace('/[^A-Z0-9]/', '', strtoupper(trim($raw))) ?? '';
+    }
+
+    // ── مصادرُ المستندات ───────────────────────────────────────────────
+
+    private function fromReceipt(Receipt $receipt): array
+    {
+        // ① **الملغى يُقال ملغىً، لا «غير موجود».**
+        $voided = $receipt->status === 'voided';
+
+        // مرجع القطاع يُحلّ حسب نوعه الحقيقي. لا يجوز قراءة pharmacy_sale
+        // أو fuel_sale بمعرّف من جدول merchant_sales لمجرّد أن الاسم يحوي
+        // كلمة sale؛ ذلك قد ينسب الإيصال لبيعة أخرى تحمل الرقم الداخلي نفسه.
+        $business = $this->receiptBusinessContext($receipt);
+        $state = $voided ? 'cancelled' : ($business['status'] ?? 'completed');
+        $stateLabel = $voided ? 'ملغى' : $this->stateLabel($state);
+
+        $authenticity = match (true) {
+            $voided, $state === 'cancelled', $state === 'voided' => 'cancelled',
+            $state === 'refunded' => 'refunded',
+            default => 'authentic',
+        };
+
+        return [
+            'found' => true,
+            'authenticity' => $authenticity,
+            'authenticity_label' => $this->authenticityLabel($authenticity),
+            'doc_type' => $receipt->receipt_type,
+            'doc_type_label' => $business['label'] ?? $this->typeLabel($receipt->receipt_type),
+            'document_number' => $receipt->receipt_number,
+            'issuer' => isset($business['merchant_user_id'])
+                ? $this->merchantName((int) $business['merchant_user_id'])
+                : 'أميال باي',
+            'amount' => (string) $receipt->amount,
+            'currency' => 'ر.ي',
+            'issued_at' => $this->mecca($receipt->issued_at ?? $receipt->created_at),
+            'state' => $state,
+            'state_label' => $stateLabel,
+            'source' => 'receipt',
+            'reason' => null,
+        ];
+    }
+
+    /**
+     * ② سندُ الوقود بالرمز القصير — **مقبولٌ ومقروءٌ كغيره.**
+     *
+     * ولا يُبنى له سجلٌّ ثانٍ: الصحّةُ تُقرأ من البيعة نفسِها، وهي مصدرُ
+     * الحقيقة. (القاعدة السادسة: الرقمُ من مصدره لا من عمودٍ منسوخ.)
+     */
+    private function fromFuelSale(FuelSale $sale, bool $legacy = true): array
+    {
+        $cancelled = in_array($sale->status, ['cancelled', 'voided', 'refunded'], true);
+        $authenticity = $sale->status === 'refunded'
+            ? 'refunded' : ($cancelled ? 'cancelled' : 'authentic');
+
+        return [
+            'found' => true,
+            'authenticity' => $authenticity,
+            'authenticity_label' => $this->authenticityLabel($authenticity),
+            'doc_type' => 'fuel_sale',
+            'doc_type_label' => 'سند بيع وقود',
+            'document_number' => $sale->invoice_number ?: (string) $sale->sale_ulid,
+            'issuer' => $this->merchantName((int) $sale->merchant_user_id),
+            'amount' => (string) $sale->total_amount,
+            'currency' => 'ر.ي',
+            'issued_at' => $this->mecca($sale->created_at),
+            'state' => (string) $sale->status,
+            'state_label' => $this->stateLabel((string) $sale->status),
+            'source' => $legacy ? 'fuel_legacy' : 'fuel_sale',
+            'reason' => null,
+        ];
+    }
+
+    private function fromMerchantSale(MerchantSale $sale): array
+    {
+        return $this->businessDocument(
+            type: 'merchant_sale',
+            label: 'فاتورة نقطة بيع',
+            number: (string) ($sale->invoice_number ?: $sale->sale_ulid),
+            merchantUserId: (int) $sale->merchant_user_id,
+            amount: (string) $sale->total_amount,
+            status: (string) $sale->status,
+            issuedAt: $sale->created_at,
+            source: 'merchant_sale',
+        );
+    }
+
+    private function fromPharmacySale(PharmacySale $sale): array
+    {
+        return $this->businessDocument(
+            type: 'pharmacy_sale',
+            label: 'فاتورة صيدلية',
+            number: (string) ($sale->invoice_number ?: $sale->sale_ulid),
+            merchantUserId: (int) $sale->merchant_user_id,
+            amount: (string) $sale->total_amount,
+            status: (string) $sale->status,
+            issuedAt: $sale->created_at,
+            source: 'pharmacy_sale',
+        );
+    }
+
+    private function fromWholesaleInvoice(WholesaleInvoice $invoice): array
+    {
+        $invoice->loadMissing('business');
+        $merchantUserId = (int) ($invoice->business?->merchant_user_id ?? 0);
+
+        return $this->businessDocument(
+            type: 'wholesale_invoice',
+            label: 'فاتورة جملة',
+            number: (string) ($invoice->invoice_number ?: $invoice->invoice_ulid),
+            merchantUserId: $merchantUserId,
+            amount: (string) $invoice->total_amount,
+            status: (string) $invoice->status,
+            issuedAt: $invoice->created_at,
+            source: 'wholesale_invoice',
+        );
+    }
+
+    private function fromPurchaseOrder(PurchaseOrder $order): array
+    {
+        return $this->businessDocument(
+            type: 'purchase_order',
+            label: 'أمر شراء',
+            number: (string) $order->po_number,
+            merchantUserId: (int) $order->merchant_user_id,
+            amount: (string) $order->total_amount,
+            status: (string) $order->status,
+            issuedAt: $order->created_at,
+            source: 'purchase_order',
+        );
+    }
+
+    private function fromSupplierPayment(SupplierLedgerEntry $payment): array
+    {
+        $isCollection = $payment->entry_type === 'supplier_refund';
+
+        return $this->businessDocument(
+            type: $isCollection ? 'supplier_collection' : 'supplier_payment',
+            label: $isCollection ? 'سند تحصيل من مورد' : 'سند سداد مورد',
+            number: (string) $payment->entry_ulid,
+            merchantUserId: (int) $payment->merchant_user_id,
+            amount: (string) $payment->amount,
+            status: 'completed',
+            issuedAt: $payment->created_at,
+            source: $isCollection ? 'supplier_collection' : 'supplier_payment',
+        );
+    }
+
+    private function fromRestaurantOrder(RestaurantOrder $order): array
+    {
+        return $this->businessDocument(
+            type: 'restaurant_order',
+            label: 'فاتورة مطعم',
+            number: (string) ($order->invoice_number ?: $order->order_no ?: $order->sale_ulid),
+            merchantUserId: (int) $order->merchant_user_id,
+            amount: (string) $order->total,
+            status: (string) $order->status,
+            issuedAt: $order->closed_at ?? $order->created_at,
+            source: 'restaurant_order',
+        );
+    }
+
+    private function businessDocument(
+        string $type,
+        string $label,
+        string $number,
+        int $merchantUserId,
+        string $amount,
+        string $status,
+        ?Carbon $issuedAt,
+        string $source,
+    ): array {
+        $cancelled = in_array($status, ['cancelled', 'voided'], true);
+        $refunded = $status === 'refunded';
+        $authenticity = $refunded ? 'refunded' : ($cancelled ? 'cancelled' : 'authentic');
+
+        return [
+            'found' => true,
+            'authenticity' => $authenticity,
+            'authenticity_label' => $this->authenticityLabel($authenticity),
+            'doc_type' => $type,
+            'doc_type_label' => $label,
+            'document_number' => $number,
+            'issuer' => $merchantUserId > 0 ? $this->merchantName($merchantUserId) : 'منشأة غير مسمّاة',
+            'amount' => $amount,
+            'currency' => 'ر.ي',
+            'issued_at' => $this->mecca($issuedAt),
+            'state' => $status,
+            'state_label' => $this->stateLabel($status),
+            'source' => $source,
+            'reason' => null,
+        ];
+    }
+
+    // ── مساعدات ───────────────────────────────────────────────────────
+
+    /**
+     * سياق المنشأة خلف Receipt مالي.
+     *
+     * @return array{status:string,merchant_user_id:int,label:string}|array{}
+     */
+    private function receiptBusinessContext(Receipt $receipt): array
+    {
+        $id = (int) ($receipt->reference_id ?? 0);
+        if ($id <= 0) {
+            return [];
+        }
+
+        $ref = strtolower((string) ($receipt->reference_type ?? ''));
+
+        if ($ref === 'merchant_sale') {
+            $sale = MerchantSale::find($id);
+            return $sale ? [
+                'status' => (string) $sale->status,
+                'merchant_user_id' => (int) $sale->merchant_user_id,
+                'label' => 'فاتورة نقطة بيع',
+            ] : [];
+        }
+
+        if ($ref === 'pharmacy_sale') {
+            $sale = PharmacySale::find($id);
+            return $sale ? [
+                'status' => (string) $sale->status,
+                'merchant_user_id' => (int) $sale->merchant_user_id,
+                'label' => 'فاتورة صيدلية',
+            ] : [];
+        }
+
+        if ($ref === 'fuel_sale') {
+            $sale = FuelSale::find($id);
+            return $sale ? [
+                'status' => (string) $sale->status,
+                'merchant_user_id' => (int) $sale->merchant_user_id,
+                'label' => 'سند بيع وقود',
+            ] : [];
+        }
+
+        if ($ref === 'restaurant_order') {
+            $order = RestaurantOrder::find($id);
+            return $order ? [
+                'status' => (string) $order->status,
+                'merchant_user_id' => (int) $order->merchant_user_id,
+                'label' => 'فاتورة مطعم',
+            ] : [];
+        }
+
+        if ($ref === 'wholesale_invoice') {
+            $invoice = WholesaleInvoice::with('business')->find($id);
+            $merchantUserId = (int) ($invoice?->business?->merchant_user_id ?? 0);
+            return $invoice && $merchantUserId > 0 ? [
+                'status' => (string) $invoice->status,
+                'merchant_user_id' => $merchantUserId,
+                'label' => 'فاتورة جملة',
+            ] : [];
+        }
+
+        return [];
+    }
+
+    private function stateLabel(string $status): string
+    {
+        return match ($status) {
+            'completed', 'credit_paid', 'paid', 'closed' => 'مكتمل',
+            'approved' => 'معتمد',
+            'partially_received' => 'مستلم جزئياً',
+            'credit_unpaid', 'issued' => 'غير مدفوع (آجل)',
+            'partially_paid', 'partial', 'partial_paid' => 'مدفوع جزئيّاً',
+            'refunded' => 'مسترجَع',
+            'cancelled', 'voided' => 'ملغى',
+            'pending', 'pending_payment', 'open', 'preparing', 'ready', 'served', 'draft' => 'قيد الإتمام',
+            'overdue' => 'متأخر السداد',
+            // **ولا يُخترَع معنىً لحالةٍ لا تُعرَف.** رمزٌ خامٌ يُوقف
+            // القارئَ ليسأل، والترجمةُ المخترَعةُ تُمرّره واثقاً من معنىً
+            // لم يقصده أحد. (درسُ سجلّ التدقيق.)
+            default => $status !== '' ? "حالة غير مترجمة: {$status}" : 'حالة غير معروفة',
+        };
+    }
+
+    private function authenticityLabel(string $a): string
+    {
+        return match ($a) {
+            'authentic' => 'مستند أصلي',
+            'cancelled' => 'مستند ملغى — لا يُعتدّ به',
+            'refunded' => 'مستند مسترجَع',
+            default => 'لا مستند بهذا الرمز',
+        };
+    }
+
+    private function typeLabel(string $type): string
+    {
+        return match ($type) {
+            'send_money' => 'تحويل أموال',
+            'cash_in' => 'إيداع نقدي',
+            'cash_out', 'withdraw' => 'سحب نقدي',
+            'add_money' => 'إضافة رصيد',
+            'pay_merchant' => 'دفع لتاجر',
+            'pos_payment' => 'فاتورة نقطة بيع',
+            'qr_payment' => 'دفع عبر رمز QR',
+            'refund' => 'استرجاع',
+            'fee_charge' => 'رسوم',
+            'donation' => 'تبرّع',
+            'bank_settlement' => 'تسوية بنكيّة',
+            default => 'عملية مالية',
+        };
+    }
+
+    private function merchantName(int $merchantUserId): string
+    {
+        $store = Merchant::where('user_id', $merchantUserId)->value('store_name');
+
+        if ($store) {
+            return (string) $store;
+        }
+
+        $u = User::find($merchantUserId);
+        $name = $u ? trim(($u->f_name ?? '').' '.($u->l_name ?? '')) : '';
+
+        return $name !== '' ? $name : 'منشأة غير مسمّاة';
+    }
+
+    /** ووقتُ مكّة يُقال بتوقيته لا خاماً — فالمستندُ يُقرأ في اليمن. */
+    private function mecca(?Carbon $at): ?string
+    {
+        return $at?->copy()->setTimezone(self::TZ)->format('Y-m-d H:i');
+    }
+
+    private function notFound(string $reason): array
+    {
+        return [
+            'found' => false,
+            'authenticity' => 'not_found',
+            'authenticity_label' => $this->authenticityLabel('not_found'),
+            'doc_type' => null, 'doc_type_label' => null, 'document_number' => null,
+            'issuer' => null, 'amount' => null, 'currency' => null,
+            'issued_at' => null, 'state' => null, 'state_label' => null,
+            'source' => null, 'reason' => $reason,
+        ];
+    }
+}

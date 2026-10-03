@@ -36,6 +36,10 @@
 	<string>تسجيل دخول سريع باستخدام Face ID</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app يحتاج إذن للصور لرفع المستندات والصور الشخصية.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>نستخدم الإذن فقط عند حفظ إيصال أو صورة تختار حفظها في جهازك.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>نستخدم موقعك اختيارياً لتحديد محافظتك واقتراح منطقة الخدمة. يمكنك إدخالها يدوياً دائماً.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

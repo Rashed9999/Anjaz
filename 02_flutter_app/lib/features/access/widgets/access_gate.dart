@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/access/domain/vertical_catalog.dart';
 
 /// CRITICAL-001 — AccessGate widget.
 ///
@@ -9,10 +10,26 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 /// الاستخدام:
 ///   AccessGate(feature: 'inventory', child: _serviceCard(...))
 ///   AccessGate(feature: 'fuel_pos', child: ..., fallback: ...)
+///   AccessGate(ownerOnly: true, child: _LinkTile(label: 'سحب رصيدي'))
 class AccessGate extends StatelessWidget {
   final String? feature;
   final List<String>? anyOf;
   final List<String>? allOf;
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-POS-SCOPE-001 — **الملكيّةُ ليست ميزةً، فلا تُفحص بـ`feature`.**
+  ///
+  /// «سحب رصيدي» و«موظفو نقاط البيع» و«إعدادات المتجر» **يرثها الكاشيرُ
+  /// في قائمة الميزات** — لأنّ الوراثةَ تُحسب بصنف صاحبه وخطّته، ثمّ
+  /// تُقصّ بصلاحيّاته. فمن أُعطي `employees` (مديرُ عمليّات مثلاً) يملك
+  /// الميزةَ **ولا يملك المتجر**.
+  ///
+  /// فحاجزٌ على الميزة وحدَها يمرّ، والخادمُ يردّ ٤٠٣ «متاح للتجّار
+  /// فقط». **وزرٌّ يُرسَم ثمّ يُصفع أسوأُ من غيابه**: الغيابُ يُسأل عنه،
+  /// والرفضُ يُقرأ عطلاً في التطبيق.
+  /// ══════════════════════════════════════════════════════════════════
+  final bool ownerOnly;
+
   final Widget child;
   final Widget? fallback;
 
@@ -21,6 +38,7 @@ class AccessGate extends StatelessWidget {
     this.feature,
     this.anyOf,
     this.allOf,
+    this.ownerOnly = false,
     required this.child,
     this.fallback,
   });
@@ -33,6 +51,11 @@ class AccessGate extends StatelessWidget {
       if (feature != null) allowed = allowed && access.has(feature!);
       if (anyOf != null) allowed = allowed && access.hasAny(anyOf!);
       if (allOf != null) allowed = allowed && access.hasAll(allOf!);
+
+      // **ولا يُعرَض بديلٌ «بالترقية» لمن ليس مالكاً**: الترقيةُ لا تجعل
+      // الكاشيرَ صاحبَ المتجر، ودعوتُه إليها كذب.
+      if (ownerOnly && !access.isMerchantOwner) return const SizedBox.shrink();
+
       return allowed ? child : (fallback ?? const SizedBox.shrink());
     });
   }
@@ -54,14 +77,28 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
   String? _selected;
   bool _submitting = false;
 
-  static const _options = [
-    _BizOption('quick_sale', 'بيع سريع', 'أسماك، خضار، بسطات', Icons.shopping_basket, Color(0xFF2196F3)),
-    _BizOption('retail', 'تجزئة', 'بقالة، سوبرماركت', Icons.storefront, Color(0xFF4CAF50)),
-    _BizOption('fuel', 'محطة وقود', 'بنزين، ديزل', Icons.local_gas_station, Color(0xFF1B5E20)),
-    _BizOption('pharmacy', 'صيدلية', 'أدوية + Batches', Icons.local_pharmacy, Color(0xFF7B1FA2)),
-    _BizOption('wholesale', 'جملة', 'فواتير + حسابات آجلة', Icons.warehouse, Color(0xFFE65100)),
-    _BizOption('restaurant', 'مطعم', '(قريباً)', Icons.restaurant, Color(0xFF795548)),
-  ];
+  /// AMIAL-VERTICAL-COMPOSE-001 — **البطاقاتُ تُسأل من الخادم.**
+  ///
+  /// كانت ستَّ بطاقاتٍ محفورةً هنا، فقطاعٌ تُنشئه الإدارةُ يعمل في
+  /// الخادم كاملاً **ولا يجد تاجرٌ بطاقةً يضغطها**. والستّةُ تُعرَض
+  /// بأشكالها كما هي — `VerticalCatalog.builtIn` نسخةُ ما كان هنا.
+  List<VerticalOption> _options = VerticalCatalog.builtIn.values.toList();
+  bool _loadingOptions = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOptions();
+  }
+
+  Future<void> _loadOptions() async {
+    final list = await VerticalCatalog.load();
+    if (!mounted) return;
+    setState(() {
+      _options = list;
+      _loadingOptions = false;
+    });
+  }
 
   Future<void> _submit() async {
     if (_selected == null) return;
@@ -115,7 +152,13 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
               ]),
             ),
             const SizedBox(height: 16),
-            ..._options.map((o) => _optionTile(o)),
+            if (_loadingOptions)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else
+              ..._options.map((o) => _optionTile(o)),
             const SizedBox(height: 20),
             FilledButton.icon(
               onPressed: _selected == null || _submitting ? null : _submit,
@@ -135,11 +178,11 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
     );
   }
 
-  Widget _optionTile(_BizOption o) {
-    final selected = _selected == o.value;
+  Widget _optionTile(VerticalOption o) {
+    final selected = _selected == o.code;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: () => setState(() => _selected = o.value),
+      onTap: () => setState(() => _selected = o.code),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
@@ -169,11 +212,3 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
   }
 }
 
-class _BizOption {
-  final String value;
-  final String label;
-  final String description;
-  final IconData icon;
-  final Color color;
-  const _BizOption(this.value, this.label, this.description, this.icon, this.color);
-}

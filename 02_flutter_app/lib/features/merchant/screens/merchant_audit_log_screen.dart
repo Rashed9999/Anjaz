@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 
 /// AMIAL-MERCHANT-AUDIT-001 — «سجلّ التدقيق» للتاجر (باقة التاجر برو فأعلى).
 ///
@@ -52,9 +53,12 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
         _ => AmialColors.primary,
       };
 
+  String _status(Map<String, dynamic> e) =>
+      '${e['decision_label'] ?? e['decision_code'] ?? 'audit_recorded_event'.tr}';
+
   String _dt(String? iso) {
     if (iso == null) return '';
-    final d = DateTime.tryParse(iso)?.toLocal();
+    final d = DateConverterHelper.tryFromApi(iso);
     if (d == null) return '';
     return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')} '
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
@@ -109,14 +113,54 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
         title: Text('${e['action_label'] ?? e['action'] ?? ''}',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text([
-          if (e['reason'] != null) '${e['reason']}',
+          _status(e),
+          if (e['actor_label'] != null)
+            'audit_by_actor'.trParams({'name': '${e['actor_label']}'}),
+          if (e['branch'] is Map)
+            'audit_branch_name'.trParams({'name': '${(e['branch'] as Map)['name']}'}),
+          if (e['reason'] != null && '${e['reason']}'.trim().isNotEmpty) '${e['reason']}',
           _dt('${e['created_at']}'),
         ].where((s) => s.isNotEmpty).join('\n'), style: const TextStyle(fontSize: 11)),
-        trailing: e['decision_code'] != null
-            ? Text('${e['decision_code']}', style: TextStyle(fontSize: 10, color: c, fontWeight: FontWeight.bold))
-            : null,
-        isThreeLine: e['reason'] != null,
+        trailing: Text('${e['severity_label'] ?? 'audit_information'.tr}',
+            style: TextStyle(fontSize: 10, color: c, fontWeight: FontWeight.bold)),
+        isThreeLine: true,
+        onTap: () => _showDetails(e),
       ),
     );
   }
+
+  void _showDetails(Map<String, dynamic> e) {
+    final details = ((e['details'] ?? []) as List)
+        .whereType<Map>()
+        .map((d) => Map<String, dynamic>.from(d))
+        .toList();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${e['action_label'] ?? 'audit_details'.tr}'),
+        content: SingleChildScrollView(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _detail('audit_status'.tr, _status(e)),
+            _detail('audit_actor'.tr, '${e['actor_label'] ?? '—'}'),
+            if (e['branch'] is Map) _detail('audit_branch'.tr, '${(e['branch'] as Map)['name'] ?? '—'}'),
+            if (e['reason'] != null && '${e['reason']}'.trim().isNotEmpty)
+              _detail('audit_reason'.tr, '${e['reason']}'),
+            if (e['transaction_id'] != null) _detail('audit_transaction_reference'.tr, '${e['transaction_id']}'),
+            ...details.map((d) => _detail('${d['label'] ?? 'audit_detail'.tr}', '${d['value'] ?? '—'}')),
+            _detail('audit_recorded_at'.tr, _dt('${e['created_at']}')),
+          ]),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text('cancel'.tr))],
+      ),
+    );
+  }
+
+  Widget _detail(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+          const SizedBox(height: 2),
+          SelectableText(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ]),
+      );
 }

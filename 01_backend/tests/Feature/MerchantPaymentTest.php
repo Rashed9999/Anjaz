@@ -37,6 +37,17 @@ class MerchantPaymentTest extends TestCase
         };
     }
 
+    // AMIAL-MERCHANT-VERIFY-RECEIVE-001 — القبضُ يتطلّب تاجراً موثّقاً في
+    // الخادم. فالتاجرُ في اختبارات القبض تاجرٌ حقيقيٌّ موثّق، لا حسابٌ عارٍ.
+    private function verifyMerchant(int $userId): void
+    {
+        \App\Models\MerchantProfile::create([
+            'user_id' => $userId, 'tier' => 'small',
+            'verification_status' => 'verified',
+            'single_receive_limit' => '500000', 'daily_receive_limit' => '5000000',
+        ]);
+    }
+
     private function scheme(string $code, string $percent): FeeScheme
     {
         return FeeScheme::create([
@@ -56,6 +67,7 @@ class MerchantPaymentTest extends TestCase
         $this->wallet($admin->id);
         $this->wallet($customer->id, '2000.0000');
         $this->wallet($merchant->id);
+        $this->verifyMerchant($merchant->id);
 
         $scheme = $this->scheme('MERCHANT_QR', '1.0000'); // 1%
 
@@ -90,6 +102,7 @@ class MerchantPaymentTest extends TestCase
         $this->wallet($admin->id);
         $this->wallet($customer->id, '2000.0000');
         $this->wallet($merchant->id);
+        $this->verifyMerchant($merchant->id);
 
         $this->scheme('MERCHANT_POS', '2.0000');
 
@@ -119,6 +132,7 @@ class MerchantPaymentTest extends TestCase
         $this->wallet($admin->id);
         $this->wallet($customer->id, '2000.0000');
         $this->wallet($merchant->id);
+        $this->verifyMerchant($merchant->id);
 
         // لا توجد نسخة MERCHANT_QR → رسم صفر
         $txId = $this->trait()->merchant_payment_transaction(

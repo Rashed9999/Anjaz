@@ -45,17 +45,27 @@ class CustomerCreditService
 
         // ابحث عن حساب موجود
         $account = CustomerCreditAccount::where('merchant_user_id', $merchantId)
-            ->where('customer_phone', $customerPhone)
+            ->whereIn('customer_phone', \App\Support\Phone::variants($customerPhone))
             ->first();
 
         if ($account) {
-            // حدّث الاسم إن أرسله التاجر، والحد إن أرسله
+            // حدّث الاسم إن أرسله التاجر، والحد إن أرسله. والأهم: الحساب
+            // الذي نشأ قبل تسجيل العميل أو قبل إصلاح صيغ رقم الهاتف يجب أن
+            // يُربط عند أول بيع جديد؛ وإلا يبقى الدين في لوحة التاجر فقط
+            // ولا يظهر في «فواتيري الآجلة» لصاحب المحفظة.
             $updates = [];
             if ($account->customer_name !== $customerName) {
                 $updates['customer_name'] = $customerName;
             }
             if ($creditLimit !== null) {
                 $updates['credit_limit'] = MoneyService::normalize($creditLimit);
+            }
+            if ($account->customer_user_id === null) {
+                $linkedUserId = User::whereIn('phone', \App\Support\Phone::variants($customerPhone))
+                    ->value('id');
+                if ($linkedUserId !== null) {
+                    $updates['customer_user_id'] = $linkedUserId;
+                }
             }
             if ($updates) $account->update($updates);
             return $account;
@@ -120,6 +130,8 @@ class CustomerCreditService
         ?int $createdBy = null,
         ?string $referenceType = null,
         ?string $referenceId = null,
+        ?string $referenceNumber = null,
+        ?string $saleMovementUlid = null,
     ): CustomerCreditMovement {
         $amount = MoneyService::normalize($amount);
         if (!MoneyService::isPositive($amount)) {
@@ -134,6 +146,8 @@ class CustomerCreditService
             createdBy: $createdBy,
             referenceType: $referenceType,
             referenceId: $referenceId,
+            referenceNumber: $referenceNumber,
+            saleMovementUlid: $saleMovementUlid,
         );
     }
 
@@ -246,7 +260,7 @@ class CustomerCreditService
      *   silver: سدّد خلال 90 يوم آخر  +  استهلاك < 90%
      *   bronze: غير ذلك (افتراضي/تجاوز/متأخّر).
      */
-    public function calculateClassification(CustomerCreditAccount $account): string
+    private function calculateClassification(CustomerCreditAccount $account): string
     {
         $util = $account->utilizationPercent();
         $lastPay = $account->last_payment_at;
@@ -342,6 +356,7 @@ class CustomerCreditService
         ?string $referenceType = null,
         ?string $referenceId = null,
         ?string $referenceNumber = null,
+        ?string $saleMovementUlid = null,
     ): CustomerCreditMovement {
         if (!in_array($type, CustomerCreditMovement::TYPES, true)) {
             throw new InvalidArgumentException("نوع قيد غير صحيح: {$type}");
@@ -349,7 +364,7 @@ class CustomerCreditService
 
         return DB::transaction(function () use (
             $account, $type, $signedAmount, $dueDate, $note,
-            $createdBy, $referenceType, $referenceId, $referenceNumber,
+            $createdBy, $referenceType, $referenceId, $referenceNumber, $saleMovementUlid,
         ) {
             // اقفل الحساب لمنع race على current_balance
             $locked = CustomerCreditAccount::where('id', $account->id)
@@ -357,6 +372,11 @@ class CustomerCreditService
                 ->first();
             if (!$locked) {
                 throw new RuntimeException('الحساب غير موجود');
+            }
+
+            if ($saleMovementUlid !== null && !CustomerCreditMovement::where('account_id', $locked->id)
+                ->where('type', 'sale')->where('movement_ulid', $saleMovementUlid)->exists()) {
+                throw new InvalidArgumentException('الفاتورة المختارة لا تخص هذا الحساب');
             }
 
             // طبّع المبلغ الموقّع
@@ -389,6 +409,7 @@ class CustomerCreditService
                 'reference_type' => $referenceType,
                 'reference_id' => $referenceId,
                 'reference_number' => $referenceNumber,
+                'sale_movement_ulid' => $saleMovementUlid,
                 'note' => $note,
                 'created_by_user_id' => $createdBy,
                 'zone_code' => $locked->zone_code,

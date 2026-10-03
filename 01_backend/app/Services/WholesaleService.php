@@ -7,7 +7,9 @@ use App\Models\WholesaleBusiness;
 use App\Models\WholesaleCustomer;
 use App\Models\WholesalePriceTier;
 use App\Models\WholesaleProduct;
+use App\Models\WholesaleProductLot;
 use App\Models\WholesaleProductPrice;
+use App\Models\WholesaleProductUnit;
 use App\Models\WholesaleSalesRep;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -103,7 +105,7 @@ class WholesaleService
             throw new InvalidArgumentException('سعر أساسي صحيح مطلوب');
         }
 
-        return WholesaleProduct::create([
+        $product = WholesaleProduct::create([
             'business_id' => $biz->id,
             'sku' => $data['sku'] ?? null,
             'barcode' => $data['barcode'] ?? null,
@@ -117,6 +119,8 @@ class WholesaleService
             'description' => $data['description'] ?? null,
             'is_active' => true,
         ]);
+        $this->ensureBaseUnit($product);
+        return $product->fresh(['units']);
     }
 
     public function updateProduct(WholesaleProduct $product, array $data): WholesaleProduct
@@ -134,6 +138,104 @@ class WholesaleService
         }
         $product->update($allowed);
         return $product->fresh();
+    }
+
+    /** وحدات المنتج: كل عامل موجب ويشير دائماً إلى وحدة الأساس. */
+    public function listUnits(WholesaleProduct $product): array
+    {
+        $this->ensureBaseUnit($product);
+        return $product->units()->orderByDesc('is_base')->orderBy('factor_to_base')->get()->all();
+    }
+
+    public function saveUnit(WholesaleProduct $product, array $data): WholesaleProductUnit
+    {
+        $code = trim((string) ($data['code'] ?? ''));
+        $name = trim((string) ($data['name'] ?? ''));
+        $factor = MoneyService::normalize((string) ($data['factor_to_base'] ?? '0'));
+        if ($code === '' || $name === '' || MoneyService::compare($factor, '0') <= 0) {
+            throw new InvalidArgumentException('رمز الوحدة واسمها وعامل التحويل الموجب مطلوبة');
+        }
+
+        return DB::transaction(function () use ($product, $code, $name, $factor, $data) {
+            $this->ensureBaseUnit($product);
+            $isBase = (bool) ($data['is_base'] ?? false);
+            if ($isBase && MoneyService::compare($factor, '1') !== 0) {
+                throw new InvalidArgumentException('وحدة الأساس عاملها 1 دائماً');
+            }
+            $currentBase = WholesaleProductUnit::where('product_id', $product->id)
+                ->where('is_base', true)->lockForUpdate()->first();
+            if ($isBase && $currentBase !== null && $currentBase->code !== $code) {
+                // تغيير وحدة الأساس بعد وجود مخزون أو فواتير يغيّر معنى كل
+                // كمية تاريخية؛ التحويل يضاف كوحدة بيع ولا يعيد تعريف الأصل.
+                throw new InvalidArgumentException('لا يمكن تغيير وحدة الأساس؛ أضف وحدة بيع بعامل تحويل');
+            }
+            if ($isBase) {
+                WholesaleProductUnit::where('product_id', $product->id)->update(['is_base' => false]);
+            }
+            return WholesaleProductUnit::updateOrCreate(
+                ['product_id' => $product->id, 'code' => $code],
+                ['name' => $name, 'factor_to_base' => $factor, 'is_base' => $isBase, 'is_active' => true],
+            );
+        });
+    }
+
+    /** استلام دفعة: الكمية تدخل بوحدة مختارة وتُحفظ/تُضاف كمخزون أساس فقط. */
+    public function receiveLot(WholesaleProduct $product, array $data): WholesaleProductLot
+    {
+        $lotNumber = trim((string) ($data['lot_number'] ?? ''));
+        $qty = MoneyService::normalize((string) ($data['quantity'] ?? '0'));
+        if ($lotNumber === '' || MoneyService::compare($qty, '0') <= 0) {
+            throw new InvalidArgumentException('رقم الدفعة والكمية الموجبة مطلوبان');
+        }
+        $expiry = !empty($data['expiry_date']) ? \Carbon\Carbon::parse($data['expiry_date'])->startOfDay() : null;
+        if ($expiry !== null && $expiry->isPast()) {
+            throw new InvalidArgumentException('لا يمكن استلام دفعة منتهية الصلاحية');
+        }
+
+        return DB::transaction(function () use ($product, $data, $lotNumber, $qty, $expiry) {
+            $locked = WholesaleProduct::lockForUpdate()->findOrFail($product->id);
+            $unit = $this->unitFor($locked, $data['unit_id'] ?? null, true);
+            $baseQty = MoneyService::mul($qty, (string) $unit->factor_to_base);
+            $location = trim((string) ($data['location'] ?? '')) ?: null;
+            $exists = WholesaleProductLot::where('product_id', $locked->id)
+                ->where('lot_number', $lotNumber)->where('location', $location)->exists();
+            if ($exists) {
+                throw new InvalidArgumentException('هذه الدفعة مسجلة مسبقاً في الموقع نفسه');
+            }
+            $lot = WholesaleProductLot::create([
+                'lot_ulid' => (string) \Illuminate\Support\Str::ulid(),
+                'product_id' => $locked->id, 'lot_number' => $lotNumber, 'location' => $location,
+                'received_at' => !empty($data['received_at']) ? $data['received_at'] : now()->toDateString(),
+                'expiry_date' => $expiry?->toDateString(),
+                'quantity_received' => $baseQty, 'quantity_available' => $baseQty,
+                'cost_per_base_unit' => isset($data['cost_per_unit'])
+                    ? MoneyService::div(MoneyService::normalize((string) $data['cost_per_unit']), (string) $unit->factor_to_base)
+                    : null,
+                'supplier_reference' => $data['supplier_reference'] ?? null,
+                'status' => 'active',
+            ]);
+            $locked->update(['current_stock' => MoneyService::add((string) $locked->current_stock, $baseQty)]);
+            return $lot->fresh();
+        });
+    }
+
+    public function unitFor(WholesaleProduct $product, mixed $unitId = null, bool $lock = false): WholesaleProductUnit
+    {
+        $this->ensureBaseUnit($product);
+        $query = WholesaleProductUnit::where('product_id', $product->id)->where('is_active', true);
+        if ($lock) $query->lockForUpdate();
+        $unit = $unitId ? $query->where('id', (int) $unitId)->first() : $query->where('is_base', true)->first();
+        if ($unit === null) throw new InvalidArgumentException('وحدة بيع المنتج غير صالحة');
+        return $unit;
+    }
+
+    private function ensureBaseUnit(WholesaleProduct $product): void
+    {
+        if (WholesaleProductUnit::where('product_id', $product->id)->where('is_base', true)->exists()) return;
+        WholesaleProductUnit::firstOrCreate(
+            ['product_id' => $product->id, 'code' => 'base'],
+            ['name' => $product->unit ?: 'قطعة', 'factor_to_base' => '1', 'is_base' => true, 'is_active' => true],
+        );
     }
 
     /** تعديل مخزون يدوياً (تعديل جرد). */

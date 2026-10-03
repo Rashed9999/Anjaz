@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Route;
 /**
  * MERGED (6cash base + Amial Pay):
  *   - راوتات 6cash الأساسية (api/v1, admin, merchant, install, web).
- *   - راوتات أميال تُسجَّل في bootstrap/app.php (then:) — لا تكرار هنا.
+ *   - راوتات أميال تُسجَّل هنا دون فتح أبواب متوازية لنفس القرار.
  */
 class RouteServiceProvider extends ServiceProvider
 {
@@ -29,19 +29,48 @@ class RouteServiceProvider extends ServiceProvider
                 ->namespace($this->namespace)
                 ->group(base_path('routes/api/v1/api.php'));
 
+            // AMIAL-PROGRESSIVE-MONEY-ROUTES-001 — **نفس العنوان، قرارٌ واحد.**
+            //
+            // الملف السابق يعرّف أبواب 6cash التاريخية. نعيد تعريف الأبواب
+            // المالية الأربعة وحدها بعده، تحت URI نفسه، لتصبح سياسة KYC
+            // التدريجي هي المسار الفعلي للتطبيق وكل عميل API. لا endpoint
+            // موازياً ولا تبديل constants في Flutter.
+            Route::prefix('api/v1')
+                ->middleware('api')
+                ->namespace($this->namespace)
+                ->group(base_path('routes/api/progressive-customer-money.php'));
+
             Route::prefix('admin')
                 ->middleware('web')
                 ->namespace($this->namespace)
                 ->group(base_path('routes/admin.php'));
+
+            // AMIAL-KYC-FORENSIC-002 — مركز التتبّع له ملف routes مستقل
+            // لكنه يعيش تحت نفس بوابة موظفي المنصّة وبنفس حارس تغيير PIN.
+            Route::prefix('admin/amial')
+                ->middleware(['web', 'admin', 'amial.force-pin-change'])
+                ->name('admin.amial.')
+                ->group(base_path('routes/admin/kyc-privacy.php'));
+
+            // AMIAL-KYC-BIOMETRIC-WEBHOOK-001 — المزود الخارجي لا يملك
+            // auth:api. لا نضع عليه limiter العملاء العام (90/IP) لأن callback
+            // قد يصل بدفعات؛ له throttle مستقل في ملفه، والثقة الفعلية من
+            // التوقيع التشفيري الذي يتحقق منه Driver قبل قراءة الحدث.
+            Route::prefix('api/v1/amial')
+                ->group(base_path('routes/api/kyc-biometric-webhook.php'));
+
+            // AMIAL-KYC-PRIVACY-API-001 — اختيار صاحب الحساب لمسار الخصوصية.
+            // نفس حراس سطح amial المصادق: الرمز يعود لصاحب الحساب نفسه،
+            // ولا يستطيع هذا الباب منح اعتماد أو كتابة نتيجة بيومترية.
+            Route::prefix('api/v1/amial')
+                ->middleware(['api', 'auth:api', 'trackLastActiveAt', 'amial.pos-device'])
+                ->group(base_path('routes/api/kyc-privacy.php'));
 
             // AMIAL-AUDIT-ORPHAN-002: أُزيل تسجيل routes/merchant.php —
             // لوحة التاجر الويبيّة من قالب 6cash. قوالبها كلّها محذوفة، فكل
             // صفحاتها ترمي 500، ولا شيء خارجها يشير إليها (مراجعها الوحيدة
             // متحكّماتها نفسها). تاجر أميال يعمل من التطبيق عبر
             // /api/v1/amial/merchant/* — وهي حيّة ومختبَرة.
-            //
-            // الملفّ يبقى في المستودع لا يُحمَّل: حذفه يُفقد سياق ما كان،
-            // وتسجيله يُبقي سطح خطأ بلا وظيفة.
 
             // AMIAL-CLEANUP: أُزيل تسجيل routes/install.php (معالج تثبيت 6cash)
 
@@ -52,40 +81,7 @@ class RouteServiceProvider extends ServiceProvider
     }
 
     /**
-     * AMIAL-RATELIMIT-CGNAT-001 — **حدٌّ بالـIP يقتل تجربةً في اليمن.**
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * **ما كان، وقد قِيس بجولةٍ حقيقيّةٍ عبر HTTP لا بقراءة:**
-     *
-     *     360 طلباً · 12 متوازية  →  59 نجحت · **301 ردَّت 429**
-     *     والسبب: `Limit::perMinute(60)->by(user ?: ip)`
-     *
-     * **والمصادَقُ سليم** — يُحدُّ بحسابه، وستّون طلباً في الدقيقة كافيةٌ
-     * لمحفظة.
-     *
-     * **وغيرُ المصادق يُحدُّ بالـIP، وهذا هو القاتل:** مشغّلو الهاتف في
-     * اليمن يستعملون CGNAT — آلافُ المشتركين خلف عناوينَ معدودة. فألفا
-     * مستخدمٍ على ثلاثة عناوين ⇒ ~٦٦٠ لكلٍّ ⇒ **طلبٌ واحدٌ كلَّ إحدى
-     * عشرةَ دقيقةً للمستعمل**.
-     *
-     * ويراه العميلُ «التطبيقُ لا يعمل»، **ولا خطأَ في أيّ سجلٍّ عندنا** —
-     * الحدُّ يعمل كما كُتب.
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * **ولا يُرفع الحدُّ وحدَه — يُفرَّق المفتاح.**
-     *
-     * رفعُه إلى ٣٠٠ يترك ٦٦٠ مستعملاً يتقاسمونها، ويُضعف الحمايةَ في آن.
-     * فالمفتاحُ يصير **العنوانَ ومعه الجهاز**: التطبيقُ يرسل `device-id`
-     * (تقرؤه `CheckDeviceId` سلفاً)، فيُفرَّق ألفُ جهازٍ خلف عنوانٍ واحد.
-     *
-     * **والحمايةُ الحقيقيّةُ ليست هنا أصلاً.** الأبوابُ الحسّاسةُ لها
-     * حدودُها المبنيّةُ لها: `amial.rate-limit:auth_login,10,1` على
-     * الدخول، وقفلُ الحساب المتصاعد خلفه. **وهذا حدٌّ عامٌّ خلفيّ**،
-     * وظيفتُه منعُ الإغراق لا حراسةُ باب.
-     *
-     * **ومن لا يرسل جهازاً يبقى على العنوان وحدَه** — فلا يُفتح الباب
-     * بترويسةٍ يخترعها مهاجم: أسوأُ ما يبلغه أن يُعامَل كجهازٍ واحدٍ
-     * إضافيّ، وحدُّه هو نفسُه.
+     * AMIAL-RATELIMIT-CGNAT-001 — حدٌّ بالـIP يقتل تجربةً في اليمن.
      */
     protected function configureRateLimiting()
     {
@@ -93,15 +89,11 @@ class RouteServiceProvider extends ServiceProvider
             $user = optional($request->user())->id;
 
             if ($user) {
-                // مصادَقٌ: الحدُّ على حسابه — والحسابُ لا يتقاسمه أحد.
                 return Limit::perMinute(120)->by('u:' . $user);
             }
 
-            // **وغيرُ المصادق: العنوانُ والجهازُ معاً.** والجهازُ يُقصَّر
-            // ويُنظَّف — ترويسةٌ طويلةٌ أو غريبةٌ لا تُوسّع المفتاح بلا حدّ.
             $device = preg_replace('/[^A-Za-z0-9_\-]/', '',
                 (string) $request->header('device-id', ''));
-
             $device = $device === '' ? 'nodev' : substr($device, 0, 48);
 
             return Limit::perMinute(90)->by('ip:' . $request->ip() . '|d:' . $device);

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\FuelStation;
 use App\Models\MerchantProfile;
+use App\Models\Merchant\MerchantRole;
 use App\Models\Pharmacy;
 use App\Models\User;
 use App\Models\WholesaleBusiness;
@@ -55,6 +56,50 @@ class VerticalBootstrapGuardTest extends TestCase
     private function boot(): VerticalBootstrapService
     {
         return app(VerticalBootstrapService::class);
+    }
+
+    public function test_role_bootstrap_does_not_create_a_vertical_record(): void
+    {
+        $merchant = $this->merchant(A::BIZ_FUEL);
+
+        $this->boot()->ensureRolesFor($merchant);
+
+        $this->assertDatabaseHas('merchant_roles', [
+            'merchant_user_id' => $merchant->id, 'code' => 'cashier', 'is_active' => true,
+        ]);
+        $this->assertDatabaseMissing('fuel_stations', ['merchant_user_id' => $merchant->id]);
+    }
+
+    public function test_role_bootstrap_preserves_owner_changes_and_tenant_isolation(): void
+    {
+        $merchant = $this->merchant(A::BIZ_RETAIL);
+        $other = $this->merchant(A::BIZ_RETAIL);
+        $this->boot()->ensureRolesFor($merchant);
+        $cashier = MerchantRole::where('merchant_user_id', $merchant->id)
+            ->where('code', 'cashier')->firstOrFail();
+        $cashier->update(['name_ar' => 'دور المالك المخصص', 'is_active' => false]);
+        $cashier->permissions()->delete();
+        $count = MerchantRole::where('merchant_user_id', $merchant->id)->count();
+
+        $this->boot()->ensureRolesFor($merchant);
+        $this->boot()->ensureRolesFor($other);
+
+        $this->assertSame($count, MerchantRole::where('merchant_user_id', $merchant->id)->count());
+        $this->assertSame('دور المالك المخصص', $cashier->fresh()->name_ar);
+        $this->assertFalse($cashier->fresh()->is_active);
+        $this->assertSame(0, $cashier->permissions()->count());
+        $this->assertDatabaseHas('merchant_roles', [
+            'merchant_user_id' => $other->id, 'code' => 'cashier', 'is_active' => true,
+        ]);
+    }
+
+    public function test_role_bootstrap_without_a_profile_does_not_guess_a_sector(): void
+    {
+        $merchant = User::factory()->create(['type' => MERCHANT_TYPE, 'role' => A::ROLE_MERCHANT]);
+
+        $this->boot()->ensureRolesFor($merchant);
+
+        $this->assertDatabaseMissing('merchant_roles', ['merchant_user_id' => $merchant->id]);
     }
 
     // ══════════════════════════════════════════════════════════════════

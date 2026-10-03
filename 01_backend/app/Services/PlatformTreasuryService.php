@@ -6,7 +6,9 @@ use App\CentralLogics\Helpers;
 use App\Models\EMoney;
 use App\Models\Ledger\LedgerJournalEntry;
 use App\Models\User;
+use App\Models\Transaction;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -21,6 +23,7 @@ class PlatformTreasuryService
     public function __construct(
         private readonly LedgerService $ledger,
         private readonly AuditService $audit,
+        private readonly FinancialGuardService $wallets,
     ) {
     }
 
@@ -164,7 +167,7 @@ class PlatformTreasuryService
      *
      * @return array<string,mixed>
      */
-    public function issuancePreview(string $amount, string $fundingSource): array
+    private function issuancePreview(string $amount, string $fundingSource): array
     {
         $src = self::FUNDING_SOURCES[$fundingSource] ?? self::FUNDING_SOURCES['treasury_supply'];
 
@@ -266,20 +269,10 @@ class PlatformTreasuryService
                 );
             }
 
-            $legacyTransactionId = Helpers::make_transaction([
-                'from_user_id' => $adminId,
-                'to_user_id' => $adminId,
-                'user_id' => $adminId,
-                'type' => 'credit',
-                'transaction_type' => CASH_IN,
-                'ref_trans_id' => null,
-                'amount' => $amount,
-                'note' => "إصدار خزينة: {$reference} — {$reason}",
-            ]);
-
-            if (! $legacyTransactionId) {
-                throw new RuntimeException('تعذّر تسجيل حركة المحفظة');
-            }
+            // لا نستخدم Helpers::make_transaction هنا: ذلك المسار يغيّر
+            // e_money مباشرةً قبل أن يثبت الدفتر. نولّد مرجع سجل التوافق
+            // مسبقاً، ثم نرحّل القيد ونحدّث المحفظة داخل المعاملة نفسها.
+            $legacyTransactionId = (string) Str::ulid();
 
             // **الطرفُ المقابلُ يتبع مصدرَ المال لا يُثبَّت على النقد.**
             // (‏انظر جدولَ الكذبات فوق `FUNDING_SOURCES`.)
@@ -321,6 +314,37 @@ class PlatformTreasuryService
                         ? hash('sha256', $idempotencyKey) : null,
                 ],
             );
+
+            $walletAfter = $this->wallets->credit(
+                $adminId, $amount, 'treasury_issuance',
+            );
+            $expectedWalletAfter = MoneyService::add(
+                (string) $operationalWallet->current_balance, $amount,
+            );
+            if (MoneyService::compare(
+                (string) $walletAfter->current_balance, $expectedWalletAfter,
+            ) !== 0) {
+                throw new RuntimeException(
+                    'نتيجة محفظة الإدارة لا تطابق قيد الإصدار؛ رُدّت العملية كاملة',
+                );
+            }
+
+            // سجل التوافق القديم للعرض والإيصالات فقط؛ لا يغيّر الرصيد.
+            Transaction::create([
+                'user_id' => $adminId,
+                'transaction_id' => $legacyTransactionId,
+                'transaction_type' => CASH_IN,
+                'debit' => '0.0000',
+                'credit' => $amount,
+                'amount' => $amount,
+                'balance' => $expectedWalletAfter,
+                'from_user_id' => $adminId,
+                'to_user_id' => $adminId,
+                'note' => "إصدار خزينة: {$reference} — {$reason}",
+                'idempotency_key' => $key,
+                'decision_code' => 'POSTED',
+                'zone_code' => (string) $operationalWallet->zone_code,
+            ]);
 
             $this->audit->record([
                 'actor_type' => 'admin', 'actor_user_id' => $actor?->id,

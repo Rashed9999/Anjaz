@@ -66,7 +66,7 @@ class EntitlementsGuardTest extends TestCase
             'قفلُ الباقة يُقال «صلاحية» — فيبحث التاجر عن دورٍ يمنحه لنفسه ولن يجد');
         $this->assertGreaterThan(0, $r['unlock']['price_monthly'],
             'رسالةٌ بلا سعرٍ ولا اسمِ باقة ليست طريقَ خروج');
-        $this->assertSame('تاجر محترف', $r['unlock']['plan_name']);
+        $this->assertSame(A::PLAN_LABELS[A::PLAN_ENTERPRISE], $r['unlock']['plan_name']);
     }
 
     public function test_a_pro_merchant_gets_the_same_capability(): void
@@ -239,7 +239,6 @@ class EntitlementsGuardTest extends TestCase
 
     public function test_reaching_the_product_limit_says_the_two_numbers(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);
 
         // **الطبقتان تعملان معاً**: الإدارةُ تفتح «الأصناف» على المجّاني،
         // **وحدُّ الباقة يبقى صفراً**. فالفتحُ ليس رفعاً للحدّ — ومن خلطهما
@@ -249,16 +248,40 @@ class EntitlementsGuardTest extends TestCase
             'is_enabled' => true, 'reason' => 'تجربة: أصناف على المجّاني',
         ]);
 
-        \App\Models\MerchantProduct::create([
-            'merchant_user_id' => $m->id, 'name' => 'صنف',
-            'price' => '10', 'cost_price' => '5', 'quantity' => '1', 'is_active' => true,
-        ]);
+        // **والسقفُ يُقرأ من الكتالوج لا يُكتَب رقماً.** كان مكتوباً
+        // صفراً، ثمّ فتح توحيدُ الباقات للمجّاني خمسةً وعشرين — فسقط
+        // الحارسُ على تغييرٍ مقصود. (وهو أحدُ ثلاثةَ عشرَ سقطت معه.)
+        // **والباقةُ تُختار بحدِّها لا باسمها** — صارت المجّانيّةُ صفراً
+        // بقرارِ تسعير، فلا يُقاس بها «بلوغُ حدّ»: صفرٌ يمنع من الأوّل.
+        $plan = null;
+        foreach (A::ALL_PLANS as $candidate) {
+            if (A::maxProducts($candidate) > 0) {
+                $plan = $candidate;
+                break;
+            }
+        }
+
+        $this->assertNotNull($plan,
+            'لا باقةَ لها سقفُ أصنافٍ منتهٍ موجب — فلا يُقاس بلوغُ حدٍّ أصلاً');
+
+        $max = A::maxProducts($plan);
+
+        // **والتاجرُ يُنشأ بالباقة المختارة** — كان يُنشأ بالمجّانيّة
+        // ثمّ يُقاس سقفُ غيرِها، فيُقارَن حدٌّ بحدِّ باقةٍ أخرى.
+        $m = $this->merchant($plan);
+
+        for ($i = 0; $i <= $max; $i++) {   // سقفٌ + واحد
+            \App\Models\MerchantProduct::create([
+                'merchant_user_id' => $m->id, 'name' => "صنف {$i}",
+                'price' => '10', 'cost_price' => '5', 'quantity' => '1', 'is_active' => true,
+            ]);
+        }
 
         $r = $this->svc()->state($m->fresh(), A::F_PRODUCTS);
 
         $this->assertSame(EntitlementService::LIMIT_REACHED, $r['state']);
-        $this->assertSame(1, $r['usage']['used']);
-        $this->assertSame(0, $r['usage']['max']);
+        $this->assertSame($max + 1, $r['usage']['used']);
+        $this->assertSame($max, $r['usage']['max']);
         $this->assertNotNull($r['unlock'],
             'بلغ الحدَّ ولا يُقال أيّ باقةٍ ترفعه — منعٌ بلا طريق خروج');
     }
@@ -423,26 +446,65 @@ class EntitlementsGuardTest extends TestCase
             'الشاشةُ لا تُرسم من الملفّ — قائمةٌ مكتوبةٌ تعود بنا إلى ٢٦ بوّابة');
     }
 
-    /** كلُّ بادئةِ مسارٍ في السجلّ تخصّ مساراً حقيقيّاً — **ولا حراسةَ للهواء**. */
+    /**
+     * كلُّ بادئةِ مسارٍ في السجلّ تخصّ مساراً حقيقيّاً — **ولا حراسةَ للهواء**.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-ENTITLEMENTS-007 — **حارسان لحقلٍ واحدٍ بعُرفين متناقضين.**
+     *
+     * كان هذا يُركّب `amial/merchant/` + البادئة، أي **يفترض أنّ كلَّ
+     * قدرةٍ تحرس مساراً تاجريّاً**. وقد صحّ ذلك عرَضاً: كلُّ ما كان
+     * مربوطاً حتّى اليوم تحت `merchant/`.
+     *
+     * و`EntitlementGateReachabilityGuardTest` كان قد كشف هذا التناقضَ
+     * ووحّد العُرفَ **عندَه وحدَه** — وبقي هذا على القديم. فأوّلُ قدرةٍ
+     * تحرس مساراً غيرَ تاجريّ (`payment-requests`، ومثلُها
+     * `restaurant`) **يستحيل إرضاءُ الحارسين فيها معاً**: ما يقبله
+     * أحدُهما يُسقط الآخر.
+     *
+     * وهو نفسُ عطل «مصدرَي حقيقةٍ يفترقان» الذي يحاربه المشروع كلُّه —
+     * واقعاً على الحرّاس أنفسِهم، **وتوثيقُ التوحيد في أحدهما جعله يبدو
+     * محسوماً وهو قائم**.
+     *
+     * فصار المقياسُ **وجودَ المسار تحت `amial/`** حيثما كان: البادئةُ
+     * التاجريّةُ تفصيلُ ترتيبٍ لا شرطُ صحّة.
+     * ══════════════════════════════════════════════════════════════════
+     */
     public function test_every_declared_route_prefix_exists(): void
     {
         $uris = collect(Route::getRoutes())->map(fn ($r) => $r->uri())->all();
+
+        $this->assertNotEmpty($uris, 'لم يُقرأ مسارٌ واحد — الحارسُ يفحص فراغاً');
+
         $missing = [];
+        $checked = 0;
 
         foreach (CapabilityRegistry::all() as $cap) {
             foreach ($cap->routePrefixes() as $prefix) {
+                $checked++;
+                $needle = trim($prefix, '/');
+
                 $found = false;
                 foreach ($uris as $u) {
-                    if (str_contains($u, 'amial/merchant/' . trim($prefix, '/'))) {
+                    // تحت `amial/` — سواءٌ أكانت تاجريّةً (`amial/merchant/…`)
+                    // أم مشتركةً بين العميل والتاجر (`amial/payment-requests`).
+                    if (str_contains($u, 'amial/' . $needle)
+                        || str_contains($u, 'amial/merchant/' . $needle)) {
                         $found = true;
                         break;
                     }
                 }
+
                 if (! $found) {
                     $missing[] = $cap->code . ' → ' . $prefix;
                 }
             }
         }
+
+        // **ولا يُفحص فراغ.** لو أفرغ أحدُهم `routes()` من السجلّ كلِّه
+        // لخرج هذا أخضرَ ولم يحرس شيئاً.
+        $this->assertGreaterThan(10, $checked,
+            "لم تُفحص إلّا {$checked} بادئة — أفُرِّغت `routes()` من السجلّ؟");
 
         $this->assertSame([], $missing,
             "قدرات تحرس مساراتٍ لا وجود لها:\n" . implode("\n", $missing));

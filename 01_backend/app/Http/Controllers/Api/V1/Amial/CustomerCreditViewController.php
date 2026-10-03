@@ -6,8 +6,15 @@ use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\CustomerCreditAccount;
 use App\Models\CustomerCreditMovement;
+use App\Models\MerchantSale;
+use App\Models\PharmacySale;
+use App\Models\WholesaleInvoice;
 use App\Models\User;
+use App\Services\CashierSaleInvoicePdfService;
+use App\Services\PharmacySaleInvoicePdfService;
+use App\Services\WholesaleInvoicePdfService;
 use App\Services\CustomerCreditSettleService;
+use App\Services\CreditSourceSettlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -99,15 +106,22 @@ class CustomerCreditViewController extends Controller
             ->get()
             ->map(fn (CustomerCreditMovement $m) => [
                 'id' => $m->id,
+                'movement_ulid' => $m->movement_ulid,
                 'type' => $m->type, // sale | payment | return | adjustment
                 'type_label' => $this->typeLabel($m->type),
                 'amount' => (string) $m->amount,
                 'balance_after' => (string) $m->balance_after,
                 'due_date' => $m->due_date?->toDateString(),
                 'note' => $m->note,
+                'reference_type' => $m->reference_type,
+                'reference_id' => $m->reference_id,
                 'reference_number' => $m->reference_number,
                 'created_at' => $m->created_at?->toIso8601String(),
             ]);
+
+        // هذه فواتير العميل المستحقة فعلاً، وكلّ واحدة تحمل متبقيها بعد
+        // السدادات الجزئية والمرتجعات من دفتر الديون نفسه.
+        $breakdown = app(CreditSourceSettlementService::class)->balanceBreakdown($account);
 
         return $this->ok([
             'account_id' => $account->id,
@@ -115,7 +129,107 @@ class CustomerCreditViewController extends Controller
             'current_balance' => (string) $account->current_balance,
             'credit_limit' => (string) $account->credit_limit,
             'movements' => $movements,
+            ...$breakdown,
         ], 'OK', 'كشف الحساب الآجل');
+    }
+
+    /**
+     * AMIAL-CUSTOMER-CREDIT-PDF-001 — نسخة العميل من فاتورة البيع التي أنشأت الدَّين.
+     *
+     * لا نقبل sale_ulid قادماً من التطبيق مباشرةً: يبدأ التفويض من حساب
+     * الآجل المملوك للعميل ثم من حركة البيع داخله، وبعدها فقط نصل إلى
+     * MerchantSale التابعة للتاجر نفسه. بذلك لا يتحول مسار PDF إلى IDOR.
+     */
+    public function invoicePdf(Request $request, int $id, string $movementUlid)
+    {
+        $account = CustomerCreditAccount::where('id', $id)
+            ->where('customer_user_id', $request->user()->id)
+            ->first();
+
+        if (!$account) {
+            return $this->error('NOT_FOUND', 'الفاتورة غير موجودة أو لا تخصّك', 404);
+        }
+
+        $movement = CustomerCreditMovement::where('account_id', $account->id)
+            ->where('movement_ulid', $movementUlid)
+            ->where('type', 'sale')
+            ->first();
+
+        if (!$movement || empty($movement->reference_id)) {
+            return $this->error('NOT_FOUND', 'لا توجد فاتورة PDF لهذا القيد', 404);
+        }
+
+        try {
+            if ($movement->reference_type === 'merchant_sale') {
+                $document = MerchantSale::where('sale_ulid', $movement->reference_id)
+                    ->where('merchant_user_id', $account->merchant_user_id)
+                    ->first();
+
+                if (!$document) {
+                    return $this->error('NOT_FOUND', 'الفاتورة الأصلية غير موجودة', 404);
+                }
+
+                $pdfSvc = app(CashierSaleInvoicePdfService::class);
+                $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                    $pdfSvc->cacheKey($document),
+                    fn () => $pdfSvc->generate($document),
+                );
+                $filename = $pdfSvc->suggestedFilename($document);
+            } elseif ($movement->reference_type === 'pharmacy_sale') {
+                $document = PharmacySale::where('sale_ulid', $movement->reference_id)
+                    ->where('merchant_user_id', $account->merchant_user_id)
+                    ->first();
+
+                if (!$document) {
+                    return $this->error('NOT_FOUND', 'فاتورة الصيدلية الأصلية غير موجودة', 404);
+                }
+
+                $pdfSvc = app(PharmacySaleInvoicePdfService::class);
+                $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                    $pdfSvc->cacheKey($document),
+                    fn () => $pdfSvc->generate($document),
+                );
+                $filename = $pdfSvc->suggestedFilename($document);
+            } elseif ($movement->reference_type === 'wholesale_invoice') {
+                $document = WholesaleInvoice::where('invoice_ulid', $movement->reference_id)
+                    ->whereHas('business', fn ($q) => $q->where(
+                        'merchant_user_id', $account->merchant_user_id
+                    ))
+                    ->first();
+
+                if (!$document) {
+                    return $this->error('NOT_FOUND', 'فاتورة الجملة الأصلية غير موجودة', 404);
+                }
+
+                $pdfSvc = app(WholesaleInvoicePdfService::class);
+                $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                    $pdfSvc->cacheKey($document),
+                    fn () => $pdfSvc->generate($document),
+                );
+                $filename = $pdfSvc->suggestedFilename($document);
+            } else {
+                return $this->error('NOT_FOUND', 'لا توجد فاتورة PDF لهذا القيد', 404);
+            }
+
+            return response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Length' => (string) strlen($pdf),
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                'Cache-Control' => 'private, max-age=900',
+                'Content-Encoding' => 'identity',
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Customer deferred invoice PDF failed', [
+                'customer_user_id' => $request->user()->id,
+                'credit_account_id' => $account->id,
+                'movement_ulid' => $movementUlid,
+                'reference_type' => $movement->reference_type,
+                'reference_id' => $movement->reference_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->error('PDF_FAILED', 'تعذّر تجهيز الفاتورة PDF', 500);
+        }
     }
 
     /** سداد الدَّين الآجل (كلّه أو جزء) من محفظة العميل. */
@@ -126,6 +240,7 @@ class CustomerCreditViewController extends Controller
         $v = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:0.01',
             'pin' => 'required|string|min:4|max:8',
+            'sale_movement_ulid' => 'sometimes|nullable|string|max:40',
         ]);
         if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
 
@@ -140,20 +255,37 @@ class CustomerCreditViewController extends Controller
         }
 
         try {
-            $result = app(CustomerCreditSettleService::class)
-                ->settle($user, $account, (string) $request->input('amount'));
+            $result = app(CustomerCreditSettleService::class)->settle(
+                $user,
+                $account,
+                (string) $request->input('amount'),
+                $request->filled('sale_movement_ulid')
+                    ? (string) $request->input('sale_movement_ulid') : null,
+            );
         } catch (\App\Exceptions\InsufficientBalanceException $e) {
             return $this->error('INSUFFICIENT_BALANCE', 'رصيد محفظتك لا يكفي', 422);
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID', $e->getMessage(), 422);
         } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Customer debt settlement failed', [
+                'user_id' => $user->id,
+                'credit_account_id' => $id,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
             return $this->error('SETTLE_FAILED', 'تعذّر تنفيذ السداد', 422);
         }
 
         return $this->ok([
             'paid' => $result['paid'],
             'new_balance' => $result['new_balance'],
-        ], 'SETTLED', 'تم السداد بنجاح');
+            'transaction_id' => $result['transaction_id'],
+            'transaction_no' => $result['transaction_no'],
+            'receipt_id' => $result['receipt_id'] ?? null,
+            'receipt_number' => $result['receipt_number'] ?? null,
+            'receipt_type' => 'debt_payment',
+            'allocations' => $result['allocations'] ?? [],
+        ], 'SETTLED', 'تم سداد الدين بنجاح');
     }
 
     private function typeLabel(string $type): string

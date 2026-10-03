@@ -301,6 +301,44 @@ const TIMESHEET_BROKEN = {
     integrity: {ok: false, checked: 3, broken_at: 12, reason: 'محتوى الحدث تغيّر بعد كتابته'},
 };
 
+// AMIAL-ADMIN-EDIT-001 — حسابٌ مقفلٌ كما يخرج من التسجيل: بلا وثائقَ
+// ولا محافظة. وهي الحالةُ التي شكا منها صاحبُ المشروع بالرقم.
+const READINESS = {
+    id: 7, name: 'راشد العرابي', phone: '967783545525',
+    kyc: 0, is_active: true, zone_code: 'UNKNOWN', would_be_zone: 'UNKNOWN',
+    documents: [
+        {doc_type: 'national_id_front', label: 'بطاقة الهوية — الوجه',
+         id: null, status: null, usable: false, status_label: 'لم يُرفع'},
+        {doc_type: 'national_id_back', label: 'بطاقة الهوية — الظهر',
+         id: null, status: null, usable: false, status_label: 'لم يُرفع'},
+        {doc_type: 'selfie', label: 'صورة شخصية حيّة',
+         id: 44, status: 'pending', usable: false, status_label: 'مرفوعٌ بانتظار الاعتماد'},
+    ],
+    doc_types: [
+        {value: 'national_id_front', label: 'بطاقة الهوية — الوجه'},
+        {value: 'selfie', label: 'صورة شخصية حيّة'},
+    ],
+    governorates: [
+        {code: 'YE-AD', name: 'عدن', name_en: 'Aden', zone: 'SOUTH'},
+        {code: 'YE-SN', name: 'صنعاء', name_en: "Sana'a", zone: 'NORTH'},
+    ],
+    profile: {
+        f_name: 'راشد', l_name: 'العرابي', name_en: null, father_name: null,
+        grandfather_name: null, residence_governorate: null,
+        residence_district: null, residence_area: null, residence_landmark: null,
+        occupation: null, gender: null, income_source: null, account_purpose: null,
+    },
+    income_sources: ['salary', 'business'],
+    account_purposes: ['savings', 'business'],
+    missing_fields: [],
+    blockers: [
+        {code: 'DOCUMENTS_INCOMPLETE', text: 'وثائقُ الهويّة ناقصةٌ أو غيرُ معتمَدة'},
+        {code: 'GOVERNORATE_MISSING', text: '**لا محافظةَ سكنٍ في الملفّ**'},
+        {code: 'ACCOUNT_NOT_VERIFIED', text: 'الحسابُ لم يُعتمد بعد'},
+    ],
+    can_receive: false,
+};
+
 // كلّ نداءٍ يُسجَّل، لأنّ سؤال هذا الفحص ليس «هل ظهر خطأ» بل **هل وصل
 // الطلب أصلاً**. وزرُّ الإيداع الميّت كان يسقط قبل أيّ نداء.
 const STUBS = `
@@ -339,6 +377,10 @@ window.fetch = async (url, opts) => {
     });
 
     if (u.includes('users.json')) return _json({data: ${JSON.stringify(FAKE_ROWS)}, current_page: 1, last_page: 1, total: 2});
+    // AMIAL-ADMIN-EDIT-001 — حالةُ الحساب لنافذة التعديل. **حمولةٌ كاملةُ
+    // الشكل**: ناقصةُ المفاتيح تُسقط الشيفرةَ بخطأٍ ليس من صنعها، فيضيع
+    // الفحصُ في مطاردة عطلٍ اخترعه الفحصُ نفسُه.
+    if (u.includes('readiness.json')) return _json({data: ${JSON.stringify(READINESS)}});
     if (u.includes('kyc.json'))   return _json({data: []});
 
     if (u.includes('/staff/9/profile')) return _json({success: true,
@@ -888,6 +930,57 @@ const CASES = [
         click: 'button[data-act="toggle"]',
         expectNav: null,
     },
+    // ── AMIAL-ADMIN-EDIT-001 ────────────────────────────────────────
+    //
+    // «أنني أصرخُ من شهر يجب إضافة زرّ لتعديل حساب المستخدم». والزرُّ
+    // الآن موجود — **ويُضغَط ها هنا**، فزرٌّ لم يُضغط ليس مبنيّاً.
+    //
+    // **ولا يُكتفى بفتح النافذة**: نافذةٌ تُفتح فارغةً لأنّ القراءةَ
+    // سقطت تبدو ناجحةً تماماً. فيُقاس **ما رُسم داخلها**.
+    {
+        name: 'زر «تعديل» يفتح النافذة ويملؤها بحالة الحساب',
+        click: 'button[data-act="edit"]',
+        expectModal: '#modal-edit',
+        expectNav: null,
+        dom: [
+            ['حالةُ الحساب قُرئت من الخادم',
+                `window.__calls.some(c => c.url.includes('readiness.json'))`],
+            ['وما ينقص مكتوبٌ بعينه لا «الملفّ ناقص»',
+                `/لا محافظةَ سكن/.test(document.getElementById('edit-blockers').textContent)`],
+            ['وصفوفُ الوثائق رُسمت بحالاتها',
+                `document.querySelectorAll('#edit-docs tr').length === 3
+                 && /بانتظار الاعتماد/.test(document.getElementById('edit-docs').textContent)`],
+            ['ومستندٌ مرفوعٌ غيرُ معتمدٍ له زرُّ اعتماد',
+                `!!document.querySelector('#edit-docs button[data-doc-approve="44"]')`],
+            ['وقائمةُ المحافظات محمَّلةٌ من الخادم',
+                `document.getElementById('ed-residence_governorate').options.length === 3`],
+            ['والحقولُ ملأى بما وصل لا فارغة',
+                `document.getElementById('ed-f_name').value === 'راشد'`],
+            ['والهاتفُ معروضٌ ولا حقلَ لتعديله',
+                `/967783545525/.test(document.getElementById('edit-phone').textContent)
+                 && !document.getElementById('ed-phone')`],
+        ],
+    },
+    {
+        // **واختيارُ محافظةٍ شماليّةٍ يُقال أثرُه قبل الحفظ.** فمن حفِظ
+        // ثمّ اعتمد ثمّ اكتشف أنّ الحسابَ لا يستقبل يبحث عن العطل في
+        // مكانٍ آخر — وهو الغموضُ الذي شُكي منه.
+        name: 'اختيارُ محافظةٍ خارج النطاق يُقال قبل الحفظ لا بعده',
+        steps: [
+            ['click', 'button[data-act="edit"]'],
+            ['select', '#ed-residence_governorate', 'YE-SN'],
+        ],
+        expectNav: null,
+        dom: [
+            ['قِيل إنّها خارج النطاق',
+                `/خارج نطاق الخدمة/.test(document.getElementById('edit-zone-hint').textContent)`],
+            ['وعدنُ تُقال داخلَه — وإلّا كان التحذيرُ ثابتاً لا قياساً',
+                `(() => { const s = document.getElementById('ed-residence_governorate');
+                   s.value = 'YE-AD'; s.dispatchEvent(new Event('change'));
+                   return /داخل نطاق الخدمة/.test(
+                       document.getElementById('edit-zone-hint').textContent); })()`],
+        ],
+    },
     {
         // المنصّة ──► الوكيل الأمّ ──► الفرع. والخدمة ترفض تمويل الفرع على
         // كلّ حال؛ وهذا يتحقّق أنّ الشاشة تقول **السبب** بدل أن تَصُدّ بعد
@@ -959,6 +1052,9 @@ for (const c of CASES) {
 
         for (const [action, sel, val] of (c.steps || [])) {
             if (action === 'fill') await page.fill(sel, val);
+            // قائمةٌ منسدلةٌ تُختار لا تُضغَط: الضغطُ عليها يفتحها ولا
+            // يُطلق `change`، فيمرّ فحصٌ يظنّ أنّه اختار شيئاً.
+            else if (action === 'select') await page.selectOption(sel, val);
             else if (action === 'print') await page.evaluate(() => window.print());
             else if (action === 'wait') await page.waitForTimeout(Number(sel) || 300);
             else await page.click(sel);

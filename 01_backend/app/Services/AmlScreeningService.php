@@ -70,7 +70,7 @@ class AmlScreeningService
         $this->registerStrategy(new AgentVelocityRule());
     }
 
-    public function registerStrategy(AmlRuleInterface $rule): void
+    private function registerStrategy(AmlRuleInterface $rule): void
     {
         $this->strategies[$rule->getType()] = $rule;
     }

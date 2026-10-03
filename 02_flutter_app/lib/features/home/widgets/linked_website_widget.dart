@@ -42,7 +42,10 @@ class LinkedWebsiteWidget extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeLarge),
                         child: Text(
-                          '${'pay_with'.tr} ${AppConstants.appName}'.tr, style: rubikMedium.copyWith(
+                          // AMIAL-I18N-004 — `.tr` الخارجيّةُ ميّتة: تبحث
+                          // عن «Pay with أميال باي» مفتاحاً، ولا مفتاحَ
+                          // يساوي نصّاً مركَّباً. والداخليّةُ هي العاملة.
+                          '${'pay_with'.tr} ${AppConstants.appName}', style: rubikMedium.copyWith(
                           fontSize: Dimensions.fontSizeSemiLarge,
                           color: Theme.of(context).textTheme.titleLarge!.color,
                         ),),

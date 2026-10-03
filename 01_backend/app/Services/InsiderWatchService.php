@@ -63,7 +63,7 @@ class InsiderWatchService
     }
 
     /** عدّادات اليوم لموظف. */
-    public function todayCounters(int $adminId): array
+    private function todayCounters(int $adminId): array
     {
         $start = now()->startOfDay();
 

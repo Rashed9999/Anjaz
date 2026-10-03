@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
@@ -33,21 +34,52 @@ class _MerchantExpensesScreenState extends State<MerchantExpensesScreen> {
     _load();
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-EXPENSES-DIAG-001 — **رسالةٌ تدلّ على سببها.**
+  //
+  // كان كلُّ فشلٍ يُبتلع في `catch (_)` ويخرج «خطأ في الشبكة» — فرفضُ
+  // صلاحيّةٍ (٤٠٣) وانتهاءُ جلسةٍ (٤٠١) وعطلُ خادمٍ (٥٠٠) وانقطاعُ
+  // إنترنتٍ كلُّها تُقرأ شيئاً واحداً. فيُطارَد العطلُ في الشبكة وهو في
+  // الحساب، **ويصل إليّ بلاغٌ لا يمكن تشخيصُه.**
+  //
+  // (وهو نمطُ العطل الذي دفع المشروعُ ثمنَه مراراً: «الرسالةُ لا تدلّ
+  // على سببها».) فتُميَّز الحالاتُ الآن، ويُذكَر الرمزُ لما لم يُتوقَّع.
+  // ══════════════════════════════════════════════════════════════════
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
       final r = await _api.getData('/api/v1/amial/merchant/expenses');
-      if (r.statusCode == 402) {
-        setState(() { _error = 'المصروفات متاحة في باقة الأعمال فأعلى'; _loading = false; });
-        return;
-      }
+
       if (r.statusCode == 200 && r.body is Map) {
         final meta = (r.body['meta'] ?? {}) as Map;
         _items = ((meta['expenses'] ?? []) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
         _total = '${meta['total'] ?? '0'}';
         _byCat = Map<String, dynamic>.from((meta['by_category'] ?? {}) as Map);
+        return;
       }
-    } catch (_) { _error = 'خطأ في الشبكة'; }
+
+      // رسالةُ الخادم أدقُّ ما يمكن قولُه — تُقدَّم على أيّ نصٍّ عندنا.
+      String? serverSays;
+      try {
+        if (r.body is Map && r.body['message'] != null) {
+          final m = '${r.body['message']}';
+          if (m.isNotEmpty) serverSays = m;
+        }
+      } catch (_) {}
+
+      _error = switch (r.statusCode) {
+        402 => serverSays ?? 'المصروفات متاحة في باقة الأعمال فأعلى',
+        403 => serverSays ?? 'هذه الصفحة لحساب التاجر — الحساب الحالي لا يملك صلاحيتها',
+        401 => 'انتهت الجلسة — سجّل الدخول من جديد',
+        -1 => 'أوقف VPN ثم حاول مجدداً',
+        0 || 1 => 'لا اتصال بالإنترنت',
+        _ => serverSays ?? 'تعذّر فتح المصروفات (رمز ${r.statusCode})',
+      };
+    } catch (e) {
+      // **ويُقال إنّه غيرُ متوقَّع** — لا يُلبَس ثوبَ عطلِ شبكة.
+      _error = 'تعذّر فتح المصروفات — خطأ غير متوقَّع';
+      if (kDebugMode) debugPrint('expenses load: $e');
+    }
     finally { if (mounted) setState(() => _loading = false); }
   }
 

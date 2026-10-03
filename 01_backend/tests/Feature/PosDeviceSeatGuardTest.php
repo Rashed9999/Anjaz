@@ -25,6 +25,27 @@ class PosDeviceSeatGuardTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * AMIAL-POS-SEAT-002 — **باقةُ المقاعد تُختار بالحدّ لا بالاسم.**
+     *
+     * كانت هذه الاختباراتُ تستعمل `PLAN_FREE` بوصفها «الباقةَ ذاتَ
+     * المقعد الواحد». ثمّ قرّر صاحبُ المشروع أن تكون المجّانيّةُ **بلا
+     * مقاعد** — فسقطت عشرةُ اختباراتٍ سليمةٍ دفعةً واحدة، لا لأنّ شيئاً
+     * انكسر بل لأنّها كتبت **قرارَ تسعيرٍ في نصّها**.
+     *
+     * فصارت تسأل الجدولَ عن **أصغر باقةٍ لها مقاعد**، وتعبّر عن كلّ
+     * توقّعٍ بحدّها لا برقمٍ مكتوب. فتغييرُ التسعير غداً لا يُسقط حارساً
+     * واحداً.
+     */
+    private const SEAT_PLAN = A::PLAN_BUSINESS;
+
+    /** حدُّ المقاعد المُعلَن لباقة الاختبار — يُقرأ ولا يُكتب. */
+    private function seatLimit(): int
+    {
+        return (int) (A::PLAN_LIMITS[self::SEAT_PLAN]['pos_devices'] ?? 0);
+    }
+
+
     private function merchant(string $plan): User
     {
         $u = User::factory()->create([
@@ -37,6 +58,17 @@ class PosDeviceSeatGuardTest extends TestCase
         ]);
 
         return $u->refresh();
+    }
+
+    /**
+     * يملأ مقاعدَ التاجر حتّى الحدّ **إلّا واحداً** — فيبقى مقعدٌ واحدٌ
+     * حرّ. وبه تُختبَر حالةُ «الحدُّ مستنفَد» بلا كتابة رقمٍ في النصّ.
+     */
+    private function fillSeatsLeavingOne(\App\Models\User $m): void
+    {
+        for ($i = 1; $i < $this->seatLimit(); $i++) {
+            $this->reg()->register($m, "seat-filler-{$i}");
+        }
     }
 
     private function reg(): PosDeviceRegistrar
@@ -78,20 +110,46 @@ class PosDeviceSeatGuardTest extends TestCase
     /**
      * @test
      *
-     * **المجّانيّة: الأوّلُ ينجح والثاني يُرفض.**
+     * **الباقةُ تقبل حدَّها بالضبط، والزائدُ يُرفض.**
+     *
+     * ويُقرأ الحدُّ من الجدول: رقمٌ مكتوبٌ هنا يُسقط الاختبارَ أوّلَ
+     * تغييرِ تسعير، وهو ما وقع فعلاً حين صارت المجّانيّةُ بلا مقاعد.
      */
-    public function the_free_plan_allows_exactly_one_device(): void
+    public function a_plan_accepts_exactly_its_declared_device_count(): void
     {
+        $limit = $this->seatLimit();
+
+        $this->assertGreaterThan(0, $limit,
+            'باقةُ الاختبار بلا مقاعد — الحارسُ يفحص فراغاً');
+
+        $m = $this->merchant(self::SEAT_PLAN);
+
+        for ($i = 1; $i <= $limit; $i++) {
+            $this->assertSame(PosDeviceRegistrar::RESULT_REGISTERED,
+                $this->reg()->register($m, "device-ok-{$i}")['result'],
+                "الجهازُ رقم {$i} رُفض والحدُّ {$limit}");
+        }
+
+        $this->assertSame(PosDeviceRegistrar::RESULT_LIMIT,
+            $this->reg()->register($m, 'device-over')['result'],
+            "الجهازُ رقم " . ($limit + 1) . " مرّ والحدُّ {$limit}");
+    }
+
+    /**
+     * @test
+     *
+     * **والمجّانيّةُ بلا مقعدٍ إطلاقاً — بقرارِ تسعيرٍ صريح.**
+     */
+    public function the_free_plan_registers_no_device_at_all(): void
+    {
+        $this->assertSame(0, (int) (A::PLAN_LIMITS[A::PLAN_FREE]['pos_devices'] ?? -1),
+            'عادت المجّانيّةُ تبيع مقعداً — والقرارُ أن تكون بلا موظّفين');
+
         $m = $this->merchant(A::PLAN_FREE);
 
-        $first = $this->reg()->register($m, 'device-aaa-0001');
-        $second = $this->reg()->register($m, 'device-bbb-0002');
-
-        $this->assertSame(PosDeviceRegistrar::RESULT_REGISTERED, $first['result'],
-            'الجهازُ الأوّل رُفض على المجّانيّة وحدُّها واحد');
-
-        $this->assertSame(PosDeviceRegistrar::RESULT_LIMIT, $second['result'],
-            'الجهازُ الثاني مرّ على المجّانيّة — والحدُّ واحد');
+        $this->assertSame(PosDeviceRegistrar::RESULT_LIMIT,
+            $this->reg()->register($m, 'device-free-1')['result'],
+            'سجّلت المجّانيّةُ جهازاً وحدُّها صفر');
     }
 
     /**
@@ -123,7 +181,7 @@ class PosDeviceSeatGuardTest extends TestCase
      */
     public function the_same_device_returning_does_not_take_a_second_seat(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);
+        $m = $this->merchant(self::SEAT_PLAN);
 
         $this->reg()->register($m, 'device-same-uuid');
         $again = $this->reg()->register($m, 'device-same-uuid');
@@ -142,7 +200,7 @@ class PosDeviceSeatGuardTest extends TestCase
      */
     public function a_revoked_device_frees_its_seat(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);
+        $m = $this->merchant(self::SEAT_PLAN);
 
         $first = $this->reg()->register($m, 'device-to-revoke');
 
@@ -172,7 +230,7 @@ class PosDeviceSeatGuardTest extends TestCase
      */
     public function a_revoked_device_comes_back_alive_in_its_own_row(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);
+        $m = $this->merchant(self::SEAT_PLAN);
 
         $first = $this->reg()->register($m, 'device-revoke-then-return');
         $this->reg()->revoke($first['device'], $m->id);
@@ -205,12 +263,14 @@ class PosDeviceSeatGuardTest extends TestCase
      */
     public function a_revoked_device_cannot_return_when_the_limit_is_full(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);   // مقعدٌ واحد
+        $m = $this->merchant(self::SEAT_PLAN);
+
+        $this->fillSeatsLeavingOne($m);          // بقي مقعدٌ واحدٌ حرّ
 
         $old = $this->reg()->register($m, 'device-old-one');
         $this->reg()->revoke($old['device'], $m->id);
 
-        // المقعدُ الوحيدُ شُغل بجهازٍ آخر.
+        // المقعدُ الحرُّ الأخيرُ شُغل بجهازٍ آخر.
         $this->assertSame(PosDeviceRegistrar::RESULT_REGISTERED,
             $this->reg()->register($m, 'device-new-one')['result']);
 
@@ -219,8 +279,33 @@ class PosDeviceSeatGuardTest extends TestCase
         $this->assertSame(PosDeviceRegistrar::RESULT_LIMIT, $back['result'],
             'الملغى عاد والحدُّ مستنفَد — **فالإلغاءُ بابُ تجاوزٍ للحدّ**');
 
-        $this->assertSame(1, PosDevice::activeSeats($m->id),
+        $this->assertSame($this->seatLimit(), PosDevice::activeSeats($m->id),
             'المقاعدُ تجاوزت الحدَّ بعودةِ ملغى');
+    }
+
+    /** @test */
+    public function one_active_installation_identity_cannot_belong_to_two_merchants(): void
+    {
+        $first = $this->merchant(self::SEAT_PLAN);
+        $second = $this->merchant(self::SEAT_PLAN);
+
+        $claimed = $this->reg()->register($first, 'shared-physical-device');
+        $this->assertSame(PosDeviceRegistrar::RESULT_REGISTERED, $claimed['result']);
+
+        $conflict = $this->reg()->register($second, 'shared-physical-device');
+        $this->assertSame(PosDeviceRegistrar::RESULT_OTHER_MERCHANT, $conflict['result'],
+            'هويّة جهاز واحدة صارت مقعداً نشطاً لمنشأتين');
+
+        $this->assertSame(0, PosDevice::activeSeats($second->id),
+            'التاجر الثاني استهلك مقعداً رغم أن الجهاز ما زال للمالك الأول');
+
+        // النقل مشروع بعد الإلغاء الصريح: لا قفل دائم على جهاز مستعمل.
+        $this->reg()->revoke($claimed['device'], $first->id);
+
+        $moved = $this->reg()->register($second, 'shared-physical-device');
+        $this->assertSame(PosDeviceRegistrar::RESULT_REGISTERED, $moved['result'],
+            'الجهاز لم ينتقل بعد أن ألغى المالك السابق مقعده');
+        $this->assertSame(1, PosDevice::activeSeats($second->id));
     }
 
     /**
