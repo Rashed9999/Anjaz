@@ -134,6 +134,36 @@ class VerticalScopeGuardTest extends TestCase
     /**
      * @test
      *
+     * **البيع السريع مبلغٌ لا كتالوج.**
+     *
+     * رفع الباقة يفتح الفريق والتقارير العامة، لكنه لا يغيّر نوع النشاط
+     * إلى تجزئة ولا يضيف له أصنافاً أو باركوداً أو مخزوناً أو آجلاً.
+     */
+    public function quick_sale_stays_productless_on_every_plan(): void
+    {
+        $forbidden = [
+            A::F_PRODUCTS, A::F_BARCODE, A::F_INVENTORY,
+            A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
+            A::F_SUPPLIERS, A::F_PURCHASES, A::F_DEBTS, A::F_CASHIER,
+        ];
+
+        foreach (A::ALL_PLANS as $plan) {
+            $has = $this->featuresFor(A::BIZ_QUICK_SALE, $plan);
+
+            $this->assertContains(A::F_QUICK_SALE, $has,
+                "سقط البيع السريع نفسه عن باقة {$plan}");
+
+            foreach ($forbidden as $code) {
+                $this->assertNotContains($code, $has,
+                    "تسرّبت «{$code}» إلى البيع السريع على باقة {$plan} — "
+                    . 'الباقة لا تغيّر القطاع إلى تجزئة.');
+            }
+        }
+    }
+
+    /**
+     * @test
+     *
      * **والتجزئةُ لم تُمَسّ.** فإصلاحٌ يقصّ قطاعاً سليماً أسوأُ من العطل.
      */
     public function retail_keeps_every_capability_it_had(): void

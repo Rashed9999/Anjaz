@@ -90,17 +90,20 @@ class FeatureAccessTest extends TestCase
         $features = $access['features'];
         // يرى ميزات QUICK_SALE
         $this->assertContains(A::F_QUICK_SALE, $features);
-        $this->assertContains(A::F_DEBTS, $features);
         $this->assertContains(A::F_DAILY_REPORTS, $features);
+        $this->assertNotContains(A::F_DEBTS, $features);
 
         // لا يرى ميزات Retail/Fuel/Pharmacy
         $this->assertNotContains(A::F_CASHIER, $features);
         $this->assertNotContains(A::F_FUEL_POS, $features);
         $this->assertNotContains(A::F_PHARMACY_POS, $features);
 
-        // لا يرى ميزات الخطط المرتفعة
+        // لا يرى كتالوجاً ولا مخزوناً ولا باركوداً؛ هذا قرار القطاع لا الباقة.
+        $this->assertNotContains(A::F_PRODUCTS, $features);
         $this->assertNotContains(A::F_INVENTORY, $features);
         $this->assertNotContains(A::F_BARCODE, $features);
+        $this->assertNotContains(A::F_SUPPLIERS, $features);
+        $this->assertNotContains(A::F_PURCHASES, $features);
         $this->assertNotContains(A::F_EMPLOYEES, $features);
 
         // ══════════════════════════════════════════════════════════════

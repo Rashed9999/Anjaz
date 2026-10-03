@@ -67,9 +67,9 @@ class VerticalParityGuardTest extends TestCase
     {
         return [
             'quick_sale' => [
-                'free' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'quick_sale', 'receipts', 'receive', 'refunds', 'transfer', 'wallet'],
-                'business' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'quick_sale', 'receipts', 'receive', 'refunds', 'transfer', 'wallet'],
-                'enterprise' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'quick_sale', 'receipts', 'receive', 'refunds', 'transfer', 'wallet'],
+                'free' => ['daily_reports', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'quick_sale', 'receipts', 'receive', 'refunds', 'transfer', 'wallet'],
+                'business' => ['daily_reports', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'quick_sale', 'receipts', 'receive', 'refunds', 'transfer', 'wallet'],
+                'enterprise' => ['daily_reports', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'quick_sale', 'receipts', 'receive', 'refunds', 'transfer', 'wallet'],
             ],
             'retail' => [
                 'free' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'payment_requests', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'refunds', 'split_bill', 'transfer', 'wallet'],

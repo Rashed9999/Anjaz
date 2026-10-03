@@ -764,7 +764,7 @@ class WebSectorController extends Controller
         return match ($sector) {
             A::BIZ_FUEL => A::F_FUEL_PRODUCTS,
             A::BIZ_PHARMACY => A::F_PHARMACY_PRODUCTS,
-            A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_WHOLESALE, A::BIZ_RESTAURANT => A::F_PRODUCTS,
+            A::BIZ_RETAIL, A::BIZ_WHOLESALE, A::BIZ_RESTAURANT => A::F_PRODUCTS,
             default => null,
         };
     }
