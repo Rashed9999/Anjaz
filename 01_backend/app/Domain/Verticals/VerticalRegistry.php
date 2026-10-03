@@ -37,10 +37,14 @@ final class VerticalRegistry
             A::BIZ_QUICK_SALE => new class extends MerchantVertical {
                 public function code(): string { return A::BIZ_QUICK_SALE; }
 
-                /** بائعُ السمك والخضار: بساطةٌ قصوى — بيعٌ ودَينٌ ومرتجع. */
+                /**
+                 * بائعُ السمك والخضار والبسطة: مبلغٌ حرّ فقط.
+                 * لا كتالوج ولا مخزون ولا بيع آجل؛ الاسترداد يبقى مرتبطاً
+                 * بالفاتورة لأن المال المقبوض قد يحتاج عكساً موثقاً.
+                 */
                 public function own(): array
                 {
-                    return [A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS];
+                    return [A::F_QUICK_SALE, A::F_REFUNDS];
                 }
             },
 

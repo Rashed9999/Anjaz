@@ -58,10 +58,12 @@ final class CapabilityRegistry
      *
      * ── وحدُّها ما مُنع صراحةً، لا ما ظننتُه ──
      *
-     * **البيعُ السريع داخلٌ فيها**: التدقيقُ يمنع عنه «مضخات، وصفات،
-     * فواتير جملة، مطبخ» **ولا يذكر الأصناف**، وبائعُ الخضار قد يمسك
-     * قائمةَ أسعارٍ بسيطة. ومن قصّها عنه فليقصّها بقرارٍ مكتوبٍ لا بظنّ.
-     * ══════════════════════════════════════════════════════════════════
+     * **قرار المنتج الآن أوضح:** `quick_sale` ليس قطاعَ كتالوجٍ أصلاً.
+     * هو للبسطات والسمك والخضار ومن يعمل بمنطق:
+     * «أدخل المبلغ ← استقبل نقداً أو أميال باي ← أصدر الفاتورة».
+     *
+     * لذلك لا يرث المنتجات أو الباركود أو المخزون أو الموردين أو دفتر
+     * الآجل مهما ارتفعت الباقة. من يحتاج هذه الأدوات يختار «التجزئة».
      *
      * @var array<int,string>
      */
@@ -70,7 +72,6 @@ final class CapabilityRegistry
         A::BIZ_WHOLESALE,
         A::BIZ_PHARMACY,
         A::BIZ_RESTAURANT,
-        A::BIZ_QUICK_SALE,
     ];
 
     /** @var array<string,Capability>|null */
@@ -237,7 +238,10 @@ final class CapabilityRegistry
                 ->descAr('بيع بمبلغ حرّ بلا أصناف — لبائع الخضار والسمك ومن لا كتالوج له.')
                 ->group('البيع')->icon('bolt')
                 ->minPlan(A::PLAN_FREE)->screen('/quick-sale')
-                ->businessTypes(self::GOODS),
+                ->businessTypes([
+                    A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_WHOLESALE,
+                    A::BIZ_PHARMACY, A::BIZ_RESTAURANT,
+                ]),
 
             C::make(A::F_CASHIER)
                 ->nameAr('الكاشير')

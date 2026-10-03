@@ -104,7 +104,7 @@ class WebSectorController extends Controller
         $sector = $this->sector($request);
         if ($deny = $this->requireCapability($request, $this->productCapability($sector))) return $deny;
         $target = match ($sector) {
-            A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_RESTAURANT
+            A::BIZ_RETAIL, A::BIZ_RESTAURANT
                 => [CashierController::class, 'products'],
             A::BIZ_FUEL => [FuelStationController::class, 'listProducts'],
             A::BIZ_PHARMACY => [PharmacyController::class, 'listProducts'],
@@ -121,7 +121,7 @@ class WebSectorController extends Controller
         $capability = match ($sector) {
             A::BIZ_FUEL => A::F_FUEL_PRODUCTS,
             A::BIZ_PHARMACY => A::F_PHARMACY_PRODUCTS,
-            A::BIZ_WHOLESALE, A::BIZ_RETAIL, A::BIZ_QUICK_SALE, A::BIZ_RESTAURANT
+            A::BIZ_WHOLESALE, A::BIZ_RETAIL, A::BIZ_RESTAURANT
                 => A::F_PRODUCTS,
             default => null,
         };
@@ -159,12 +159,12 @@ class WebSectorController extends Controller
     public function lookupBarcode(Request $request): JsonResponse
     {
         $sector = $this->sector($request);
-        if ($sector === A::BIZ_FUEL) return $this->unsupported($sector);
+        if (in_array($sector, [A::BIZ_FUEL, A::BIZ_QUICK_SALE], true)) return $this->unsupported($sector);
         if ($deny = $this->requireCapability($request, A::F_BARCODE)) return $deny;
         $context = match ($sector) {
             A::BIZ_PHARMACY => 'pharmacy',
             A::BIZ_WHOLESALE => 'wholesale',
-            A::BIZ_RETAIL, A::BIZ_QUICK_SALE, A::BIZ_RESTAURANT => 'retail',
+            A::BIZ_RETAIL, A::BIZ_RESTAURANT => 'retail',
             default => null,
         };
         if ($context === null) return $this->unsupported($sector);
@@ -175,7 +175,7 @@ class WebSectorController extends Controller
     /** Public shared catalogue provides suggestions, never competitors' prices. */
     public function catalogueLookup(Request $request): JsonResponse
     {
-        if (!in_array($this->sector($request), [A::BIZ_RETAIL, A::BIZ_QUICK_SALE, A::BIZ_RESTAURANT], true))
+        if (!in_array($this->sector($request), [A::BIZ_RETAIL, A::BIZ_RESTAURANT], true))
             return $this->unsupported($this->sector($request));
         if ($deny = $this->requireCapability($request, 'retail.catalog')) return $deny;
         return app(ProductCatalogController::class)->lookup($request);
@@ -188,7 +188,7 @@ class WebSectorController extends Controller
         $cap = match ($sector) {
             A::BIZ_FUEL => A::F_FUEL_PRODUCTS,
             A::BIZ_PHARMACY => A::F_PHARMACY_PRODUCTS,
-            A::BIZ_RETAIL, A::BIZ_QUICK_SALE, A::BIZ_WHOLESALE, A::BIZ_RESTAURANT => A::F_PRODUCTS,
+            A::BIZ_RETAIL, A::BIZ_WHOLESALE, A::BIZ_RESTAURANT => A::F_PRODUCTS,
             default => null,
         };
         if ($cap === null) return $this->unsupported($sector);
@@ -217,7 +217,7 @@ class WebSectorController extends Controller
 
     private function genericSector(?string $sector): bool
     {
-        return in_array($sector, [A::BIZ_RETAIL, A::BIZ_QUICK_SALE, A::BIZ_RESTAURANT], true);
+        return in_array($sector, [A::BIZ_RETAIL, A::BIZ_RESTAURANT], true);
     }
 
     /** Category/brand/unit trees come from the existing retail engine. */
@@ -351,7 +351,7 @@ class WebSectorController extends Controller
             A::BIZ_WHOLESALE => [WholesaleController::class, 'listInvoices'],
             A::BIZ_RETAIL => [RetailVerticalController::class, 'categories'],
             A::BIZ_RESTAURANT => [RestaurantController::class, 'tables'],
-            A::BIZ_QUICK_SALE => [CashierController::class, 'heldIndex'],
+            A::BIZ_QUICK_SALE => [CashierController::class, 'report'],
             default => null,
         };
         if (!$target) return $this->unsupported($sector);

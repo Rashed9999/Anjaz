@@ -13,6 +13,7 @@ use App\Services\CashierSaleInvoicePdfService;
 use App\Services\BranchResolverService;
 use App\Services\Merchant\MerchantPermissionService;
 use App\Support\Merchant\MerchantPermissions as P;
+use App\Support\Access\AccessConstants as A;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -297,6 +298,30 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant, $posUserId, , $branch] = $ctx;
+
+        // AMIAL-QUICK-SALE-CONTRACT-001 — البيع السريع «مبلغ لا سلة».
+        // حتى لو استُخدم API قديماً أو عُدّل التطبيق لا يمكن تحويل
+        // البسطة إلى كاشير منتجات أو دفتر آجل من الباب الخلفي.
+        $businessType = (string) MerchantProfile::where('user_id', $merchant->id)
+            ->value('business_type');
+        if ($businessType === A::BIZ_QUICK_SALE) {
+            if ((array) $request->input('items', []) !== []) {
+                return $this->error(
+                    'QUICK_SALE_ITEMS_NOT_ALLOWED',
+                    'البيع السريع يعمل بمبلغ مباشر بلا أصناف. استخدم قطاع التجزئة لإدارة المنتجات.',
+                    422,
+                );
+            }
+
+            if (! in_array((string) $request->input('payment_method'), ['cash', 'amial_pay'], true)) {
+                return $this->error(
+                    'QUICK_SALE_PAYMENT_METHOD_NOT_ALLOWED',
+                    'البيع السريع يقبل النقد أو أميال باي فقط.',
+                    422,
+                );
+            }
+        }
+
 
         // AMIAL-CORPORATE-ACCOUNTS-001: البيع على حساب شركة يتطلّب الباقة المؤسسية
         if ($request->input('payment_method') === 'corporate'

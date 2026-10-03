@@ -805,7 +805,7 @@
     create.querySelector('input[name="phone"]').required=true;
   }
   async function products(){
-    const generic=['retail','quick_sale','restaurant'].includes(actualSector);
+    const generic=['retail','restaurant'].includes(actualSector);
     const editable=generic||['pharmacy','wholesale','fuel'].includes(actualSector);
     let items=[],options={categories:[],brands:[],units:[]},search='',lowOnly=false,productStatus='active',productPage=1,productMeta={};
     const page=box('المنتجات والباركود · '+actualSectorName);
@@ -1262,7 +1262,7 @@
     let cards=[];
     switch(actualSector){
       case 'quick_sale':
-        cards=[['مبيعات اليوم',money(d.total_all)],['عدد البيعات',d.sales_count],['المحصل اليوم',money(d.realized_revenue)],['الذمم غير المحصلة',money(d.outstanding_credit_total)]];break;
+        cards=[['مبيعات اليوم',money(d.total_all)],['عدد البيعات',d.sales_count],['نقد',money(d.by_method?.cash||0)],['أميال باي',money(d.by_method?.amial_pay||0)]];break;
       case 'retail':
         cards=[['مواقع المخزون',d.locations?.length],['تحويلات بانتظار الموافقة',d.pending?.transfers_to_approve],['جرد بانتظار المراجعة',d.pending?.counts_in_review],['تحديثات سعر معلّقة',d.pending?.prices_proposed]];break;
       case 'fuel':
@@ -1293,9 +1293,15 @@
     }else if(actualSector==='restaurant'){
       table(p,[['الطاولة',x=>x.label],['المقاعد',x=>x.seats],['الحالة',x=>x.status]],o.tables||[]);
       workspaceActions(p,['sales','products','debts','wallet']);
+    }else if(actualSector==='quick_sale'){
+      hint(p,'هذا القطاع لا يملك كتالوجاً أو مخزوناً: نقطة البيع تدخل المبلغ ثم تحصّل نقداً أو عبر أميال باي وتصدر الفاتورة.');
+      table(p,[['طريقة الدفع',x=>x.label],['مبيعات اليوم',x=>money(x.amount)]],[
+        {label:'نقد',amount:o.by_method?.cash||0},
+        {label:'أميال باي',amount:o.by_method?.amial_pay||0}
+      ]);
+      workspaceActions(p,['sales','returns','reports','wallet','documents']);
     }else{
-      table(p,[['الطلب المعلق',x=>x.label||x.ulid||x.id],['الإنشاء',x=>x.created_at||'—']],o.tickets||[]);
-      workspaceActions(p,['sales','products','debts','reports','wallet']);
+      hint(p,'لا توجد وحدة تشغيل إضافية لهذا القطاع.');
     }
     hint(p,'هذه البيانات من وحدة قطاع منشأتك المسجّل؛ القطاعات الأخرى لا تمنح وصولًا إلى أعمالها.');
   }
@@ -1340,19 +1346,28 @@
       input.value=filters[name]??'';holder.append(input);return [holder,input]
     };
     const [fromL,from]=makeField('من','from','date'),[toL,to]=makeField('إلى','to','date');
-    const methods=[
-      {value:'',label:'كل طرق الدفع'},{value:'cash',label:'نقد'},
-      {value:'amial_pay',label:'أميال باي'},{value:'credit',label:'آجل'},
-      {value:'mixed',label:'مختلط'},{value:'company_card',label:'حساب شركة'},
-      {value:'corporate',label:'حساب مؤسسي'}
-    ];
+    const methods=actualSector==='quick_sale'
+      ?[
+        {value:'',label:'كل طرق الدفع'},{value:'cash',label:'نقد'},
+        {value:'amial_pay',label:'أميال باي'}
+      ]
+      :[
+        {value:'',label:'كل طرق الدفع'},{value:'cash',label:'نقد'},
+        {value:'amial_pay',label:'أميال باي'},{value:'credit',label:'آجل'},
+        {value:'mixed',label:'مختلط'},{value:'company_card',label:'حساب شركة'},
+        {value:'corporate',label:'حساب مؤسسي'}
+      ];
     const [methodL,method]=makeField('طريقة الدفع','payment_method','select',methods);
-    const statusOptions=[
-      {value:'',label:'كل الحالات'},{value:'completed',label:'مكتملة'},
-      {value:'credit_unpaid',label:'آجل غير مسدد'},{value:'credit_paid',label:'آجل مسدد'},
-      {value:'issued',label:'صادرة'},{value:'partial_paid',label:'مسددة جزئياً'},
-      {value:'paid',label:'مسددة'}
-    ];
+    const statusOptions=actualSector==='quick_sale'
+      ?[
+        {value:'',label:'كل الحالات'},{value:'completed',label:'مكتملة'}
+      ]
+      :[
+        {value:'',label:'كل الحالات'},{value:'completed',label:'مكتملة'},
+        {value:'credit_unpaid',label:'آجل غير مسدد'},{value:'credit_paid',label:'آجل مسدد'},
+        {value:'issued',label:'صادرة'},{value:'partial_paid',label:'مسددة جزئياً'},
+        {value:'paid',label:'مسددة'}
+      ];
     const [statusL,status]=makeField('الحالة','status','select',statusOptions);
     const employeeOptions=[{value:'',label:'كل الموظفين'},...staff.map(x=>({value:x.id,label:x.display_name+' — '+x.employee_code}))];
     const [employeeL,employee]=makeField('الموظف','employee_id','select',employeeOptions);
@@ -1709,7 +1724,15 @@
     const current=data.current_plan||{},usage=data.usage||{},manifest=data.manifest||{},comparison=data.comparison||{};
     const p=box('باقتي الحالية');
     const body=node('div',null,'grid');
-    [['الباقة',current.name],['السعر الشهري',(current.price_monthly??0)+' ر.س'],['انتهاء الاشتراك',current.expires_at?new Date(current.expires_at).toLocaleDateString('ar-YE'):'دون موعد انتهاء'],['عمليات الشهر',(usage.monthly_operations?.current??0)+' / '+limitText(usage.monthly_operations?.max)],['الأصناف',(usage.products?.current??0)+' / '+limitText(usage.products?.max)],['الموظفون',(usage.employees?.current??0)+' / '+limitText(usage.employees?.max)]].forEach(x=>labelValue(body,x[0],x[1]));
+    const usageRows=[
+      ['الباقة',current.name],
+      ['السعر الشهري',(current.price_monthly??0)+' ر.س'],
+      ['انتهاء الاشتراك',current.expires_at?new Date(current.expires_at).toLocaleDateString('ar-YE'):'دون موعد انتهاء'],
+      ['عمليات الشهر',(usage.monthly_operations?.current??0)+' / '+limitText(usage.monthly_operations?.max)]
+    ];
+    if(actualSector!=='quick_sale')usageRows.push(['الأصناف',(usage.products?.current??0)+' / '+limitText(usage.products?.max)]);
+    usageRows.push(['الموظفون',(usage.employees?.current??0)+' / '+limitText(usage.employees?.max)]);
+    usageRows.forEach(x=>labelValue(body,x[0],x[1]));
     p.append(body);
     if(current.is_expired)hint(p,'انتهى اشتراكك المدفوع، والباقات والأذونات محسوبة حالياً على المجانية حتى التجديد.');
     else hint(p,'الباقة الفعلية وعداداتها من نظام الاستحقاقات نفسه الذي يتحكم في نقاط البيع.');

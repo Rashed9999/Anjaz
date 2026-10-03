@@ -19,11 +19,11 @@ final class MerchantPortalNavigationService
         A::BIZ_QUICK_SALE => [
             'workspace' => 'مركز البيع السريع',
             'sales' => 'مبيعات ونقاط البيع',
-            'products' => 'الأصناف والأسعار',
+            'products' => 'لا يوجد كتالوج',
             'reports' => 'مبيعات اليوم',
             'workspace_capability' => A::F_QUICK_SALE,
             'sales_capability' => A::F_QUICK_SALE,
-            'product_capability' => A::F_PRODUCTS,
+            'product_capability' => null,
         ],
         A::BIZ_RETAIL => [
             'workspace' => 'مركز التجزئة والمخزون',

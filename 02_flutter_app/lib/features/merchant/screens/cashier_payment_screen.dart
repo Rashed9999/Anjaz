@@ -865,7 +865,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('تأكيد الدفع'),
+        title: Text(widget.freeAmount ? 'بيع سريع — تأكيد الدفع' : 'تأكيد الدفع'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -928,7 +928,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           if (_acceptedCurrencies.length > 1) _currencyPicker(),
 
           // ====== خصم / كوبون (باقة ستارتر فأعلى) ======
-          AccessGate(feature: 'promotions', child: Align(
+          if (!widget.freeAmount) AccessGate(feature: 'promotions', child: Align(
             alignment: Alignment.centerRight,
             child: _discount > 0
                 ? TextButton.icon(
@@ -948,7 +948,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           const SizedBox(height: 10),
 
           // ====== نقاط الولاء (باقة الأعمال فأعلى) ======
-          AccessGate(feature: 'loyalty', child: _loyaltyCard()),
+          if (!widget.freeAmount) AccessGate(feature: 'loyalty', child: _loyaltyCard()),
 
           // ====== المبلغ المستلم والباقي (نقداً فقط) ======
           //
@@ -961,6 +961,23 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
               onChanged: (v) => setState(() => _received = v),
             ),
 
+          if (widget.freeAmount)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF4F9F7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(children: [
+                Icon(Icons.bolt_rounded, color: AmialColors.primary, size: 20),
+                SizedBox(width: 8),
+                Expanded(child: Text(
+                  'بيع سريع: التحصيل نقداً أو عبر أميال باي فقط.',
+                  style: TextStyle(fontSize: 12.5, color: AmialColors.textSecondary),
+                )),
+              ]),
+            ),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: const [
             Text('الرجاء تحديد خيار واحد',
                 style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
@@ -984,8 +1001,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
               MerchantPaymentOption.cash,
               if (_methodAllowedInCurrency('amial_pay'))
                 MerchantPaymentOption.amialPay,
-              MerchantPaymentOption.credit,
-              if (_methodAllowedInCurrency('mixed'))
+              if (!widget.freeAmount) MerchantPaymentOption.credit,
+              if (!widget.freeAmount && _methodAllowedInCurrency('mixed'))
                 MerchantPaymentOption.mixed,
             ],
           ),
@@ -994,9 +1011,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           // سأل صاحبُ المشروع «أيٌّ منهم مرتبطٌ الآجلُ فيه بنظام الديون؟»
           // — والجوابُ: كلُّها. فتقوله الشاشةُ بدل أن يُخمَّن، وبنصٍّ واحدٍ
           // مشتركٍ فلا يفترق عن نصّ الصيدليّة بعد أوّل تعديل.
-          if (_method == 'credit') const CreditSaleNotice(),
+          if (!widget.freeAmount && _method == 'credit') const CreditSaleNotice(),
 
-          if (_methodAllowedInCurrency('corporate'))
+          if (!widget.freeAmount && _methodAllowedInCurrency('corporate'))
             AccessGate(feature: 'corporate_accounts', child: _methodCard(
               value: 'corporate',
               icon: Icons.business_center_outlined,

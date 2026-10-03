@@ -30,6 +30,7 @@ class CashierPosScreen extends StatefulWidget {
 class _CashierPosScreenState extends State<CashierPosScreen> {
   CashierController get c => Get.find<CashierController>();
   final _search = TextEditingController();
+  final _quickAmount = TextEditingController();
   String _category = 'الكل'.tr;
 
   final _offline = Get.find<OfflineSaleQueue>();
@@ -39,6 +40,17 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     super.initState();
     if (Get.isRegistered<AccessController>()) {
       final access = Get.find<AccessController>();
+      if (access.isQuickSale) {
+        // لا نطلب كتالوجاً لا ينتمي لهذا القطاع، ونمسح أي سلة بقيت في
+        // الذاكرة من جلسة حساب سابقة قبل فتح شاشة المبلغ.
+        c.clearCart();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _offline.refreshCount().then((n) {
+            if (n > 0) _offline.sync();
+          });
+        });
+        return;
+      }
       if (access.isFuel ||
           access.isPharmacy ||
           access.isWholesale ||
@@ -59,6 +71,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
   @override
   void dispose() {
     _search.dispose();
+    _quickAmount.dispose();
     super.dispose();
   }
 
@@ -262,11 +275,12 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // حاجز قطاعي أخير: الكاشير العام للتجزئة والبيع السريع فقط.
+    // حاجز قطاعي أخير: لكل قطاع شاشة تشغيله؛ الكاشير العام هنا للتجزئة.
     // كل قطاع متخصص يعاد إلى شاشة البيع التي تحفظ قواعده حتى لو وصل
     // إلى هذا المسار من رابط قديم أو إشعار أو زر لم يُحدّث بعد.
     if (Get.isRegistered<AccessController>()) {
       final access = Get.find<AccessController>();
+      if (access.isQuickSale) return ShiftGate(child: _quickSaleTill(context));
       if (access.isFuel) return const FuelSaleScreen();
       if (access.isPharmacy) return const PharmacySaleScreen();
       if (access.isWholesale) return const WholesaleInvoiceCreateScreen();
@@ -281,6 +295,160 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     // والحدُّ الحقيقيُّ في الخادم (`amial.shift`)؛ هذا يمنع أن يملأ
     // الكاشيرُ السلّةَ والزبونُ واقفٌ ثمّ يُردّ عند الضغط الأخير.
     return ShiftGate(child: _till(context));
+  }
+
+  Widget _quickSaleTill(BuildContext context) {
+    void continueToPayment() {
+      final total = double.tryParse(_quickAmount.text.trim()) ?? 0;
+      if (total <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('أدخل مبلغاً أكبر من صفر'),
+          backgroundColor: AmialColors.red,
+        ));
+        return;
+      }
+
+      FocusScope.of(context).unfocus();
+      _quickAmount.clear();
+      Get.to(() => CashierPaymentScreen(total: total, freeAmount: true));
+    }
+
+    return Scaffold(
+      backgroundColor: AmialColors.background,
+      appBar: AppBar(
+        title: Text('بيع سريع'.tr),
+        actions: [
+          IconButton(
+            key: const Key('quick-sale-calculator'),
+            icon: const Icon(Icons.calculate_outlined),
+            tooltip: 'آلة حاسبة'.tr,
+            onPressed: () => QuickCalculatorSheet.open(context),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: AmialColors.border),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0D000000),
+                    blurRadius: 18,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: AmialColors.primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(Icons.bolt_rounded,
+                        color: AmialColors.primary, size: 34),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'أدخل مبلغ البيع',
+                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'لا منتجات ولا باركود — مبلغ، تحصيل، ثم فاتورة.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AmialColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  TextField(
+                    key: const Key('quick-sale-amount'),
+                    controller: _quickAmount,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 34,
+                      fontWeight: FontWeight.w800,
+                      color: AmialColors.primaryDark,
+                    ),
+                    onSubmitted: (_) => continueToPayment(),
+                    decoration: InputDecoration(
+                      hintText: '0',
+                      suffixText: 'ر.ي'.tr,
+                      filled: true,
+                      fillColor: AmialColors.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: AmialColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: AmialColors.border),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    key: const Key('quick-sale-continue'),
+                    onPressed: continueToPayment,
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    label: Text(
+                      'متابعة للدفع'.tr,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AmialColors.primary,
+                      minimumSize: const Size.fromHeight(56),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF4F9F7),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.receipt_long_outlined,
+                      color: AmialColors.primary, size: 22),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'طرق الدفع: نقد أو أميال باي. بعد التحصيل تُنشأ الفاتورة تلقائياً ويمكن طباعتها أو مشاركتها.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.5,
+                        color: AmialColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _till(BuildContext context) {
@@ -359,48 +527,8 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
       ),
       body: Obx(() {
         final items = _visible;
-        // ══════════════════════════════════════════════════════════════
-        // AMIAL-QUICKSALE-PRIMARY-001 — **بائعُ السمك لا يملك منتجات.**
-        //
-        // `quick_sale` قطاعُ الأسماك والخضار والبسطات (كما يقول تعريفُه
-        // في `AccessConstants`): **لا كتالوجَ فيه — يُدخَل المبلغُ ويُدفَع
-        // وتُصدَر الفاتورة**. والبنيةُ لذلك مبنيّةٌ هنا منذ البداية:
-        // `_manualAmount()` و`CashierPaymentScreen(freeAmount: true)`.
-        //
-        // **لكنّها كانت خلف أيقونةٍ صغيرةٍ في الشريط العلويّ**، وجسمُ
-        // الشاشة شبكةُ منتجاتٍ — **فارغةٌ أبداً لمن لا منتجاتِ له**. فيفتح
-        // بائعُ السمك «بيع جديد» فيرى فراغاً، وما يحتاجه أيقونةٌ بلا اسم.
-        //
-        // فصار فعلُه الأوّلَ ظاهراً بحجمه. **ولا تُخفى الشبكةُ ولا يُقفَل
-        // شيء**: من أضاف صنفاً يجده كما كان — القطاعُ يقرّر ما يتقدّم،
-        // لا ما يُمنَع. (والباقةُ لا تدخل هنا: البيعُ السريع مجّانيٌّ
-        // بطبعه، والإدخالُ اليدويُّ ليس قدرةً مُسعَّرة.)
-        // ══════════════════════════════════════════════════════════════
-        final quickSale = Get.isRegistered<AccessController>() &&
-            Get.find<AccessController>().isQuickSale;
-
-        return Column(children: [
-          if (quickSale)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _manualAmount,
-                  icon: const Icon(Icons.edit_note_rounded, size: 26),
-                  label: Text('أدخل المبلغ'.tr,
-                      style: TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AmialColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-              ),
-            ),
+        // شبكة الكاشير العامة هنا للتجزئة فقط؛ البيع السريع خرج إلى
+        // _quickSaleTill أعلاه ولا يحمّل كتالوجاً أو باركوداً.
           // ====== البحث + الماسح ======
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
