@@ -61,15 +61,19 @@ class CashSaleWorksInEverySectorTest extends TestCase
         return $u;
     }
 
-    /** حمولةُ بيعٍ نقديٍّ كما يبنيها التطبيق — ومعها `client_uuid` دائماً. */
-    private function cashSale(): array
+    /**
+     * حمولةُ بيعٍ نقديٍّ كما يبنيها التطبيق.
+     *
+     * البيع السريع لا يرسل سلةً أصلاً؛ التجزئة وحدها تضيف أسطر المنتجات.
+     */
+    private function cashSale(bool $withItems = true): array
     {
         return [
             'payment_method' => 'cash',
             'total' => '500',
-            'items' => [
+            ...($withItems ? ['items' => [
                 ['name' => 'بريك بيج', 'qty' => 1, 'unit_price' => '500'],
-            ],
+            ]] : []),
             // **يُرسَل في كلّ بيع** — متّصلاً كان أو غيرَ متّصل.
             'client_uuid' => (string) \Illuminate\Support\Str::uuid(),
         ];
@@ -91,7 +95,10 @@ class CashSaleWorksInEverySectorTest extends TestCase
         foreach (['quick_sale', 'retail'] as $vertical) {
             $m = $this->merchant($vertical);
             $r = $this->actingAs($m, 'api')
-                ->postJson('/api/v1/amial/merchant/cashier/sales', $this->cashSale());
+                ->postJson(
+                    '/api/v1/amial/merchant/cashier/sales',
+                    $this->cashSale($vertical !== A::BIZ_QUICK_SALE),
+                );
 
             // **ويُشترط النجاحُ صراحةً** — لا «ليس ٥٠٠». فأوّلُ صياغةٍ
             // قبلت ٤٢٢ (حمولتي كانت `total_amount` والعقدُ `total`)،
@@ -106,6 +113,48 @@ class CashSaleWorksInEverySectorTest extends TestCase
             "**البيعُ النقديُّ ينهار:**\n  %s\n\n"
             .'وهو مسارُ المال نفسُه — كاشيرٌ لا يُتمّ بيعةً واحدة.',
             implode("\n  ", $crashed)));
+    }
+
+    /**
+     * @test
+     *
+     * **البيع السريع مبلغٌ فقط، حتى عند ضرب الـ API مباشرةً.**
+     *
+     * الواجهة ليست الحارس: تطبيق قديم أو طلب يدوي لا يستطيع إرسال صنف
+     * ولا تحويل البسطة إلى بيع آجل. والرفض يجب أن يقع قبل إنشاء أي بيعة.
+     */
+    public function quick_sale_rejects_items_and_credit_at_the_server_boundary(): void
+    {
+        $m = $this->merchant(A::BIZ_QUICK_SALE);
+
+        $withItem = $this->actingAs($m, 'api')
+            ->postJson('/api/v1/amial/merchant/cashier/sales', [
+                'total' => '500',
+                'payment_method' => 'cash',
+                'items' => [['name' => 'سمك', 'qty' => 1, 'price' => '500']],
+                'client_uuid' => (string) \Illuminate\Support\Str::uuid(),
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'QUICK_SALE_ITEMS_NOT_ALLOWED');
+
+        $this->assertSame(
+            'البيع السريع يعمل بمبلغ مباشر بلا أصناف. استخدم قطاع التجزئة لإدارة المنتجات.',
+            $withItem->json('message'),
+        );
+
+        $this->actingAs($m, 'api')
+            ->postJson('/api/v1/amial/merchant/cashier/sales', [
+                'total' => '500',
+                'payment_method' => 'credit',
+                'customer' => ['name' => 'عميل اختبار', 'phone' => '770000001'],
+                'client_uuid' => (string) \Illuminate\Support\Str::uuid(),
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'QUICK_SALE_PAYMENT_METHOD_NOT_ALLOWED');
+
+        $this->assertDatabaseMissing('merchant_sales', [
+            'merchant_user_id' => $m->id,
+        ]);
     }
 
     /**
