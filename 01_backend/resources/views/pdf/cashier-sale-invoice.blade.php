@@ -59,18 +59,25 @@
     </td>
   </tr></table>
 
-  <table class="items"><thead><tr>
-    <th style="width:6%">#</th><th>الصنف</th>
-    @if($vertical === 'retail')<th style="width:16%">الباركود</th>@endif
-    <th style="width:11%">الكمية</th><th style="width:16%">سعر الوحدة</th><th style="width:16%">الإجمالي</th>
-  </tr></thead><tbody>
-    @forelse($items as $i => $item)<tr>
-      <td class="center">{{ $i + 1 }}</td><td>{{ $item['name'] }}</td>
-      @if($vertical === 'retail')<td class="left">{{ $item['barcode'] ?: '—' }}</td>@endif
-      <td class="center">{{ rtrim(rtrim(number_format((float)$item['quantity'], 3, '.', ''), '0'), '.') }}</td>
-      <td class="left">{{ number_format((float)$item['unit_price'], 2) }}</td><td class="left"><strong>{{ number_format((float)$item['total'], 2) }}</strong></td>
-    </tr>@empty<tr><td colspan="{{ $vertical === 'retail' ? 6 : 5 }}" class="center">لا توجد بنود مسجلة</td></tr>@endforelse
-  </tbody></table>
+  @if($vertical === 'quick_sale')
+    <div class="notice">
+      بيع سريع بمبلغ مباشر — لا يتطلب هذا النوع أصنافاً أو باركوداً.
+      الإجمالي وطريقة التحصيل والمرجع أدناه هي بيانات العملية المالية.
+    </div>
+  @else
+    <table class="items"><thead><tr>
+      <th style="width:6%">#</th><th>الصنف</th>
+      @if($vertical === 'retail')<th style="width:16%">الباركود</th>@endif
+      <th style="width:11%">الكمية</th><th style="width:16%">سعر الوحدة</th><th style="width:16%">الإجمالي</th>
+    </tr></thead><tbody>
+      @forelse($items as $i => $item)<tr>
+        <td class="center">{{ $i + 1 }}</td><td>{{ $item['name'] }}</td>
+        @if($vertical === 'retail')<td class="left">{{ $item['barcode'] ?: '—' }}</td>@endif
+        <td class="center">{{ rtrim(rtrim(number_format((float)$item['quantity'], 3, '.', ''), '0'), '.') }}</td>
+        <td class="left">{{ number_format((float)$item['unit_price'], 2) }}</td><td class="left"><strong>{{ number_format((float)$item['total'], 2) }}</strong></td>
+      </tr>@empty<tr><td colspan="{{ $vertical === 'retail' ? 6 : 5 }}" class="center">لا توجد بنود مسجلة</td></tr>@endforelse
+    </tbody></table>
+  @endif
 
   <table class="summary">
     <tr><td>المجموع الفرعي</td><td class="left">{{ number_format((float)$subtotal, 2) }} ر.ي</td></tr>
