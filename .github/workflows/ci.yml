@@ -172,7 +172,7 @@ jobs:
 
       - name: رحلة التاجر الذهبية — التسجيل ثم التشغيل ثم الاعتماد
         working-directory: 01_backend
-        run: php artisan test --compact tests/Feature/SelfRegisteredMerchantIsUsableTest.php tests/Feature/RegistrationRolesTest.php
+        run: php artisan test --compact tests/Feature/SelfRegisteredMerchantIsUsableTest.php tests/Feature/RegistrationRolesTest.php tests/Feature/MerchantWebRegistrationJourneyTest.php
 
       - name: رحلة الوكيل الذهبية — الشركة فالفرع فالصراف فالعميل
         working-directory: 01_backend
