@@ -530,6 +530,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
         final items = _visible;
         // شبكة الكاشير العامة هنا للتجزئة فقط؛ البيع السريع خرج إلى
         // _quickSaleTill أعلاه ولا يحمّل كتالوجاً أو باركوداً.
+        return Column(children: [
           // ====== البحث + الماسح ======
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
