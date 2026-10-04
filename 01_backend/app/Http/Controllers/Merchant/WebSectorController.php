@@ -89,7 +89,16 @@ class WebSectorController extends Controller
             'message' => $valid->errors()->first()], 422);
 
         $profile = MerchantProfile::where('user_id', $request->user('merchant_web')->id)->firstOrFail();
-        $updated = $access->updateBusinessType($profile, $valid->validated()['business_type']);
+
+        try {
+            $updated = $access->updateBusinessType($profile, $valid->validated()['business_type']);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'code' => 'BUSINESS_TYPE_LOCKED',
+                'message' => $e->getMessage(),
+            ], 409);
+        }
 
         return response()->json(['success' => true, 'code' => 'BUSINESS_TYPE_UPDATED',
             'message' => 'تم حفظ نوع النشاط. ستُحدّث البوابة الآن.',

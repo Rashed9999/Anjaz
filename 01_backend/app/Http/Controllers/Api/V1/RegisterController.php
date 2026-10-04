@@ -138,8 +138,10 @@ class RegisterController extends Controller
             // AMIAL-REG-ROLES: التسجيل الذاتي للأدوار الثلاثة من نفس المعالج —
             // الحساب يُنشأ «قيد التحقق» (kyc=0) ويظهر في لوحة التحقق للاعتماد.
             'account_type' => 'sometimes|nullable|in:customer,merchant,agent',
-            'store_name' => 'sometimes|nullable|string|max:120',
-            'business_type' => 'sometimes|nullable|in:' . implode(',', \App\Domain\Verticals\VerticalRegistry::codes()),
+            // AMIAL-MERCHANT-SECTOR-IDENTITY-001 — القطاع جزءٌ من هوية المنشأة،
+            // لا تفضيل واجهة. لا يجوز أن يضيع الحقل فنسجّل بائع سمك كتجزئة.
+            'store_name' => 'required_if:account_type,merchant|nullable|string|max:120',
+            'business_type' => 'required_if:account_type,merchant|nullable|in:' . implode(',', \App\Domain\Verticals\VerticalRegistry::codes()),
         ]);
 
 
@@ -213,10 +215,17 @@ class RegisterController extends Controller
             'agent' => AGENT_TYPE,
             default => CUSTOMER_TYPE,
         };
-        if ($accountType === MERCHANT_TYPE && trim((string) $request->input('store_name', '')) === '') {
-            return response()->json(['errors' => [
-                ['code' => 'store_name', 'message' => 'اسم المتجر مطلوب لحساب التاجر'],
-            ]], 403);
+        if ($accountType === MERCHANT_TYPE) {
+            if (trim((string) $request->input('store_name', '')) === '') {
+                return response()->json(['errors' => [
+                    ['code' => 'store_name', 'message' => 'اسم المنشأة مطلوب لحساب التاجر'],
+                ]], 403);
+            }
+            if (trim((string) $request->input('business_type', '')) === '') {
+                return response()->json(['errors' => [
+                    ['code' => 'business_type', 'message' => 'اختر قطاع المنشأة قبل إنشاء حساب التاجر'],
+                ]], 403);
+            }
         }
 
         $loginNumbers = ['agent_number' => null, 'merchant_number' => null];
@@ -434,8 +443,9 @@ class RegisterController extends Controller
                 $loginNumbers['merchant_number'] = $mr->merchant_number;
 
                 \App\Models\MerchantProfile::firstOrCreate(['user_id' => $user->id], [
-                    'business_type' => $request->input('business_type')
-                        ?: \App\Support\Access\AccessConstants::BIZ_RETAIL,
+                    // لا fallback إلى التجزئة: التسجيل سبق أن ألزم التاجر
+                    // باختيار قطاعه، وهذه القيمة هي مصدر الحقيقة لبقية النظام.
+                    'business_type' => (string) $request->input('business_type'),
                     'verification_status' => 'pending_review',
                     'zone_code' => 'SOUTH',
                     'subscription_plan' => \App\Support\Access\AccessConstants::PLAN_FREE,

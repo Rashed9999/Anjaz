@@ -139,11 +139,16 @@ class AccessController extends Controller
             return $this->error('NO_PROFILE', 'لا يوجد ملفّ تاجر', 404);
         }
 
-        $updated = $this->svc->updateBusinessType($merchant, $request->input('business_type'));
+        try {
+            $updated = $this->svc->updateBusinessType($merchant, $request->input('business_type'));
+        } catch (\DomainException $e) {
+            return $this->error('BUSINESS_TYPE_LOCKED', $e->getMessage(), 409);
+        }
+
         return $this->ok([
             'merchant_profile' => $updated,
             'access' => $this->svc->accessFor($user->fresh()),
-        ], 'BUSINESS_TYPE_UPDATED', 'تم تحديث نوع النشاط');
+        ], 'BUSINESS_TYPE_UPDATED', 'تم تثبيت نوع النشاط');
     }
 
     /**
@@ -338,8 +343,13 @@ class AccessController extends Controller
         $merchant = MerchantProfile::find($merchantId);
         if (!$merchant) return $this->error('NOT_FOUND', 'التاجر غير موجود', 404);
 
-        $updated = $this->svc->updateBusinessType($merchant, $request->input('business_type'));
-        return $this->ok(['merchant_profile' => $updated], 'UPDATED', 'تم التحديث');
+        $updated = $this->svc->updateBusinessType(
+            $merchant,
+            $request->input('business_type'),
+            allowTransition: true,
+        );
+
+        return $this->ok(['merchant_profile' => $updated], 'UPDATED', 'تم تحديث القطاع وتهيئته');
     }
 
     public function adminAddExtraFeature(Request $request, int $merchantId): JsonResponse

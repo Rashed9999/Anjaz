@@ -87,6 +87,65 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
+    public function merchant_registration_requires_an_explicit_business_type(): void
+    {
+        $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500013', [
+            'account_type' => 'merchant',
+            'store_name' => 'بسطة بلا قطاع',
+        ]))->assertStatus(403);
+
+        $this->assertDatabaseMissing('users', ['phone' => '967771500013']);
+        $this->assertSame(0, MerchantProfile::count(),
+            'تسجيل تاجر بلا قطاع أنشأ ملفاً ثم خمّنه كتجزئة.');
+    }
+
+    /** @test */
+    public function merchant_registration_preserves_the_selected_vertical_for_all_six_built_in_sectors(): void
+    {
+        $matrix = [
+            \App\Support\Access\AccessConstants::BIZ_QUICK_SALE => '771501101',
+            \App\Support\Access\AccessConstants::BIZ_RETAIL => '771501102',
+            \App\Support\Access\AccessConstants::BIZ_PHARMACY => '771501103',
+            \App\Support\Access\AccessConstants::BIZ_WHOLESALE => '771501104',
+            \App\Support\Access\AccessConstants::BIZ_RESTAURANT => '771501105',
+            \App\Support\Access\AccessConstants::BIZ_FUEL => '771501106',
+        ];
+
+        foreach ($matrix as $sector => $phone) {
+            $response = $this->postJson(
+                '/api/v1/customer/auth/register',
+                $this->registerPayload($phone, [
+                    'account_type' => 'merchant',
+                    'store_name' => 'منشأة ' . $sector,
+                    'business_type' => $sector,
+                ])
+            )->assertOk()->json();
+
+            $user = User::where('phone', '967' . $phone)->firstOrFail();
+            $profile = MerchantProfile::where('user_id', $user->id)->firstOrFail();
+
+            $this->assertSame($sector, $profile->business_type,
+                "تغيّر القطاع المختار أثناء التسجيل: {$sector}");
+            $this->assertSame('pending_review', $profile->verification_status);
+            $this->assertNotEmpty($response['merchant_number'] ?? null);
+
+            $access = app(\App\Services\FeatureAccessService::class)->accessFor($user->fresh());
+            $this->assertSame($sector, $access['business_type'] ?? null,
+                "محرّك الاستحقاقات لم يقرأ قطاع {$sector} من ملف التاجر");
+
+            if ($sector === \App\Support\Access\AccessConstants::BIZ_FUEL) {
+                $this->assertDatabaseHas('fuel_stations', ['merchant_user_id' => $user->id]);
+            }
+            if ($sector === \App\Support\Access\AccessConstants::BIZ_PHARMACY) {
+                $this->assertDatabaseHas('pharmacies', ['merchant_user_id' => $user->id]);
+            }
+            if ($sector === \App\Support\Access\AccessConstants::BIZ_WHOLESALE) {
+                $this->assertDatabaseHas('wholesale_businesses', ['merchant_user_id' => $user->id]);
+            }
+        }
+    }
+
+    /** @test */
     public function agent_self_registration_gets_agent_number(): void
     {
         $resp = $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500004', [

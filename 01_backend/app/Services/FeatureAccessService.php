@@ -415,14 +415,46 @@ class FeatureAccessService
         return $merchant->fresh();
     }
 
-    /** Admin: تغيير business_type تاجر. */
-    public function updateBusinessType(MerchantProfile $merchant, ?string $type): MerchantProfile
-    {
+    /**
+     * تغيير قطاع التاجر قرارٌ هويّاتي، لا تبديل واجهة.
+     *
+     * المالك يستطيع فقط إكمال ملف قديم بلا قطاع أو إعادة نفس القيمة.
+     * الانتقال بين قطاعين قائمين يحتاج قرار إدارة صريحاً حتى لا تختلط
+     * سجلات الصيدلية/الوقود/الجملة مع قطاع جديد.
+     */
+    public function updateBusinessType(
+        MerchantProfile $merchant,
+        ?string $type,
+        bool $allowTransition = false,
+    ): MerchantProfile {
         if ($type !== null && !in_array($type, \App\Domain\Verticals\VerticalRegistry::codes(), true)) {
             throw new \InvalidArgumentException("نوع نشاط غير صحيح: {$type}");
         }
-        $merchant->update(['business_type' => $type]);
-        return $merchant->fresh();
+
+        $current = $merchant->business_type !== null
+            ? (string) $merchant->business_type : null;
+
+        if (! $allowTransition && $current !== null && $type !== null && $current !== $type) {
+            throw new \DomainException(
+                'نوع النشاط مثبت على حساب المنشأة. تغيير القطاع يحتاج مراجعة الإدارة حتى لا تختلط بيانات القطاعات.'
+            );
+        }
+
+        if ($current !== $type) {
+            $merchant->update(['business_type' => $type]);
+        }
+
+        $updated = $merchant->fresh();
+
+        if ($type !== null) {
+            $owner = User::find($updated->user_id);
+            if ($owner) {
+                app(\App\Services\Vertical\VerticalBootstrapService::class)
+                    ->ensureFor($owner);
+            }
+        }
+
+        return $updated;
     }
 
     /** Admin: إضافة feature إضافية يدوياً (للحالات الاستثنائية). */
