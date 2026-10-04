@@ -48,10 +48,10 @@ class MerchantWebRegistrationJourneyTest extends TestCase
     {
         $this->get('/merchant/register')->assertOk()
             ->assertSee('إنشاء حساب منشأة')
-            ->assertSee('البيع السريع')
-            ->assertSee('التجزئة')
+            ->assertSee('بيع سريع')
+            ->assertSee('تجزئة')
             ->assertSee('الصيدلية')
-            ->assertSee('تاجر جملة')
+            ->assertSee('تجارة جملة')
             ->assertSee('المطعم')
             ->assertSee('محطة وقود')
             ->assertSee('/api/v1/auth/email-otp/request', false)
