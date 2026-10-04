@@ -15,6 +15,7 @@
         button:hover{background:#0d523c}.error{background:#fff2ee;border:1px solid #f2b7a4;color:#a52c16;padding:12px;border-radius:10px;margin-top:17px}
         .foot{border-top:1px solid #e1e9e6;margin-top:25px;padding-top:20px;font-size:13px;color:#62716c}
         a{color:#156d52}.check{display:flex;gap:9px;align-items:center;margin-top:18px;color:#48655b}.check input{width:16px;height:16px}
+        .account-links{display:flex;justify-content:space-between;gap:12px;margin-top:16px;font-size:13px}.account-links a{text-decoration:none;font-weight:700}
     </style>
 </head>
 <body>
@@ -34,6 +35,10 @@
             <label class="check"><input type="checkbox" name="remember" value="1"> تذكّر تسجيل الدخول على هذا الجهاز</label>
             <button type="submit">الدخول إلى لوحة التاجر ←</button>
         </form>
+        <div class="account-links">
+            <a href="{{ route('merchant.web.register') }}">إنشاء حساب منشأة جديد</a>
+            <a href="{{ route('merchant.web.recover') }}">نسيت كلمة المرور؟</a>
+        </div>
         <div class="foot">موظف نقطة البيع؟ استخدم تطبيق أميال باي بحسابك المستقل. <a href="{{ rtrim(config('app.url'), '/') }}">العودة إلى الموقع الرئيسي</a></div>
     </main>
 </body>

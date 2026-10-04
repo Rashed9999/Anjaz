@@ -255,6 +255,16 @@ class RegisterController extends Controller
             $user->identification_image = json_encode([]);
             $user->password = bcrypt($request->password);
             $user->type = $accountType;
+            // AMIAL-ACCOUNT-ROLE-SYNC-001 — type القديم وrole الحديث يجب أن
+            // يقولا الحقيقة نفسها. وإلا يُنشأ التاجر ثم ترفضه بوابة الويب
+            // لأنها ترى role=user الافتراضي.
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'role')) {
+                $user->role = match ($accountType) {
+                    MERCHANT_TYPE => \App\Support\Access\AccessConstants::ROLE_MERCHANT,
+                    AGENT_TYPE => \App\Support\Access\AccessConstants::ROLE_AGENT,
+                    default => \App\Support\Access\AccessConstants::ROLE_USER,
+                };
+            }
             $user->referral_id = $request->referral_id ?? null;
             // لا fallback إلى كلمة المرور. إن كانت نسخة العميل حديثة تضبط
             // PIN مستقلاً الآن؛ وإلا يبقى الحساب بحاجة إعداد PIN صريح.
