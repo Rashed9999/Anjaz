@@ -39,6 +39,9 @@ class UnifiedVerificationCenterController extends Controller
         ]);
         $reviewer = $request->user();
         $canRestricted = $reviewer->hasPlatformPermission('platform.customers.kyc.restricted.view');
+        $canViewStaffSecurity = $reviewer->hasPlatformPermission('platform.staff.security.view');
+        $visibleTypes = [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE];
+        if ($canViewStaffSecurity) $visibleTypes[] = ADMIN_TYPE;
         $q = trim((string) ($input['q'] ?? ''));
 
         // كُلّ مصدر يصل إلى نفس القائمة: تسجيل جديد، مستند، سكن، ترقية هوية.
@@ -60,6 +63,20 @@ class UnifiedVerificationCenterController extends Controller
             ->where(fn ($builder) => $builder->whereNull('is_kyc_verified')
                 ->orWhere('is_kyc_verified', 0))
             ->orderByDesc('id')->limit(150)->pluck('id')->all();
+        $staffSecurityIds = [];
+        if ($canViewStaffSecurity) {
+            $staffSecurityQuery = User::query()->where('users.type', ADMIN_TYPE);
+            if (Schema::hasTable('admin_user_roles')) {
+                $staffSecurityQuery->leftJoin('admin_user_roles as aur', 'aur.user_id', '=', 'users.id')
+                    ->select('users.id')->distinct();
+            }
+            $staffSecurityQuery->where(fn ($builder) => $builder->whereNull('users.two_factor_enabled')
+                ->orWhere('users.two_factor_enabled', false)
+                ->orWhereNull('users.two_factor_confirmed_at')
+                ->when(Schema::hasTable('admin_user_roles'), fn ($nested) => $nested->orWhereNull('aur.user_id')));
+            $staffSecurityIds = $staffSecurityQuery->orderByDesc('users.id')->limit(150)
+                ->pluck('users.id')->all();
+        }
 
         // يظل طلب ترقية المستوى الثالث ظاهرًا بعد اعتماد آخر وثيقة.
         $identityCandidateIds = KycDocument::query()
@@ -72,11 +89,12 @@ class UnifiedVerificationCenterController extends Controller
             ->orderByDesc('id')->limit(220)->pluck('user_id')->all();
 
         $ids = array_values(array_unique(array_map('intval', array_merge(
-            $pendingDocumentIds, $pendingResidenceIds, $pendingMerchantIds, $newAccountIds, $identityCandidateIds
+            $pendingDocumentIds, $pendingResidenceIds, $pendingMerchantIds, $newAccountIds,
+            $staffSecurityIds, $identityCandidateIds
         ))));
 
         $usersQuery = User::query()
-            ->whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE]);
+            ->whereIn('type', $visibleTypes);
 
         // البحث لا يتقيّد بآخر 150 تسجيلًا: يستطيع المراجع فتح طلبٍ أقدم
         // برقم الحساب أو الهاتف، ولو خرج من نافذة الطابور السريع.
@@ -129,6 +147,22 @@ class UnifiedVerificationCenterController extends Controller
             $tier = (int) ($user->kyc_tier ?? 0);
             $verified = (int) $user->is_kyc_verified === 1;
 
+            if ((int) $user->type === ADMIN_TYPE) {
+                $rows[] = [
+                    'id' => (int) $user->id,
+                    'name' => trim((string) ($user->f_name.' '.$user->l_name)) ?: '—',
+                    'phone' => (string) ($user->phone ?? ''),
+                    'role' => 'موظف إدارة',
+                    'stage' => 'security',
+                    'restricted' => false,
+                    'pending_documents' => 0,
+                    'residence_pending' => false,
+                    'tier' => 0,
+                    'registered_at' => $user->created_at?->format('Y-m-d H:i'),
+                ];
+                continue;
+            }
+
             $hasBasicIdentity = in_array(KycDocument::TYPE_ID_FRONT, $approved, true)
                 && in_array(KycDocument::TYPE_ID_BACK, $approved, true);
             $hasNewTierThreeEvidence = $tier === 2
@@ -165,7 +199,7 @@ class UnifiedVerificationCenterController extends Controller
             ];
         }
 
-        $priority = ['decision' => 0, 'residence' => 1, 'documents' => 2, 'new' => 3];
+        $priority = ['decision' => 0, 'residence' => 1, 'documents' => 2, 'new' => 3, 'security' => 4];
         usort($rows, static fn ($a, $b) =>
             ($priority[$a['stage']] <=> $priority[$b['stage']])
             ?: strcmp((string) $a['registered_at'], (string) $b['registered_at'])
@@ -182,6 +216,7 @@ class UnifiedVerificationCenterController extends Controller
                     'residence' => $counts['residence'] ?? 0,
                     'documents' => $counts['documents'] ?? 0,
                     'decision' => $counts['decision'] ?? 0,
+                    'security' => $counts['security'] ?? 0,
                 ],
                 'scope' => 'recent_candidates',
                 'restricted_visible' => $canRestricted,
@@ -199,10 +234,10 @@ class UnifiedVerificationCenterController extends Controller
         PiiAccessAuditService $pii,
         VerificationCaseService $workflow,
     ): JsonResponse {
-        $user = User::query()->whereIn(
-            'type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE]
-        )->findOrFail($id);
         $reviewer = $request->user();
+        $visibleTypes = [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE];
+        if ($reviewer->hasPlatformPermission('platform.staff.security.view')) $visibleTypes[] = ADMIN_TYPE;
+        $user = User::query()->whereIn('type', $visibleTypes)->findOrFail($id);
 
         try {
             $privacy->assertReviewerAccess($user, $reviewer, false);
@@ -214,6 +249,51 @@ class UnifiedVerificationCenterController extends Controller
         // لا يُسجّل وصولٌ إلى حالة مقيدة رُفض عرضها أعلاه.
         $pii->logAccess((int) $reviewer->id, 'user', (int) $user->id,
             'kyc_verification_dossier', 'view', 'فتح ملف التحقق والهوية الموحد');
+
+        if ((int) $user->type === ADMIN_TYPE) {
+            try {
+                $unifiedCase = $workflow->snapshot($user);
+            } catch (DomainException) {
+                $unifiedCase = null;
+            }
+            $roles = Schema::hasTable('admin_user_roles')
+                ? DB::table('admin_user_roles')->where('user_id', $user->id)->count()
+                : 0;
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'account' => [
+                        'id' => (int) $user->id,
+                        'name' => trim((string) ($user->f_name.' '.$user->l_name)) ?: '—',
+                        'phone' => (string) ($user->phone ?? ''),
+                        'type' => (int) $user->type,
+                        'role' => 'موظف إدارة',
+                        'tier' => 0,
+                        'effective_tier' => 0,
+                        'verified' => false,
+                        'phone_verified' => (bool) ($user->is_phone_verified ?? false),
+                        'registered_at' => $user->created_at?->format('Y-m-d H:i'),
+                        'target_tier' => 0,
+                        'restricted' => false,
+                    ],
+                    'unified_case' => $unifiedCase,
+                    'staff_security' => [
+                        'two_factor_enabled' => (bool) ($user->two_factor_enabled ?? false),
+                        'two_factor_confirmed_at' => $user->two_factor_confirmed_at?->toIso8601String(),
+                        'operator_roles_count' => $roles,
+                    ],
+                    'permissions' => [
+                        'review_documents' => false,
+                        'view_documents' => false,
+                        'view_biometric' => false,
+                        'review_residence' => false,
+                        'decide_account' => false,
+                        'activate_ready' => false,
+                    ],
+                ],
+            ]);
+        }
 
         $restricted = $privacy->isRestricted($user);
         $updateRequired = (int) ($user->kyc_update_required ?? 0) === 1;

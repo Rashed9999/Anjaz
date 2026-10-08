@@ -96,4 +96,30 @@ class UnifiedVerificationCenterTest extends TestCase
         $this->assertFalse($case->json('data.permissions.review_documents'));
         $this->assertFalse($case->json('data.permissions.activate_ready'));
     }
+
+    public function test_staff_security_case_is_visible_only_with_the_dedicated_permission(): void
+    {
+        $staffAccount = User::factory()->create([
+            'type' => ADMIN_TYPE,
+            'two_factor_enabled' => false,
+            'two_factor_confirmed_at' => null,
+        ]);
+        $kycReviewer = $this->reviewer(['platform.customers.kyc.view']);
+
+        $this->actingAs($kycReviewer, 'user')
+            ->getJson(route('admin.amial.kyc.center.account', $staffAccount->id))
+            ->assertNotFound();
+
+        $securityReviewer = $this->reviewer([
+            'platform.customers.kyc.view',
+            'platform.staff.security.view',
+        ]);
+        $case = $this->actingAs($securityReviewer, 'user')
+            ->getJson(route('admin.amial.kyc.center.account', $staffAccount->id))
+            ->assertOk();
+
+        $this->assertSame('موظف إدارة', $case->json('data.account.role'));
+        $this->assertArrayHasKey('staff_security', $case->json('data'));
+        $this->assertFalse($case->json('data.permissions.decide_account'));
+    }
 }

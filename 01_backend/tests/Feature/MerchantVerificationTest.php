@@ -178,6 +178,10 @@ class MerchantVerificationTest extends TestCase
         $approved = $this->svc->approve($req, $this->admin->id);
 
         $this->assertSame('verified', $approved->status);
+        $this->assertDatabaseHas('verification_case_events', [
+            'actor_user_id' => $this->admin->id,
+            'event_type' => 'merchant_verification_approved',
+        ]);
         $this->assertSame($this->admin->id, $approved->reviewed_by_admin_id);
 
         $profile = MerchantProfile::where('user_id', $this->merchant->id)->first();

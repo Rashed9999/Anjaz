@@ -47,6 +47,7 @@
                     <option value="عميل">عملاء</option>
                     <option value="تاجر">تجّار</option>
                     <option value="وكيل">وكلاء</option>
+                    <option value="موظف إدارة">موظفو الإدارة</option>
                 </select>
             </div>
             <div class="col-md-4">
@@ -57,6 +58,7 @@
                     <button class="btn btn-outline-primary btn-sm vc-filter" data-stage="residence" type="button">السكن</button>
                     <button class="btn btn-outline-primary btn-sm vc-filter" data-stage="documents" type="button">المستندات</button>
                     <button class="btn btn-outline-primary btn-sm vc-filter" data-stage="decision" type="button">قرار نهائي</button>
+                    <button class="btn btn-outline-primary btn-sm vc-filter" data-stage="security" type="button">أمان الموظفين</button>
                 </div>
             </div>
         </div>
@@ -102,7 +104,7 @@
         csrf: @json(csrf_token()),
     };
     const GOVERNORATES = @json($governorates);
-    const STAGES = {new:'تسجيل جديد',residence:'مراجعة السكن',documents:'مراجعة المستندات',decision:'جاهز لفحص القرار'};
+    const STAGES = {new:'تسجيل جديد',residence:'مراجعة السكن',documents:'مراجعة المستندات',decision:'جاهز لفحص القرار',security:'أمان الموظفين'};
     const DOC_STATES = {pending:'بانتظار المراجعة',approved:'معتمد',rejected:'مرفوض',superseded:'مستبدل'};
     const el = id => document.getElementById(id);
     const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
@@ -143,7 +145,7 @@
     }
     function stats(meta) {
         const names = [['all','كل الطلبات'],['new','تسجيل جديد'],['residence','السكن'],
-            ['documents','الهوية والمستندات'],['decision','قرار نهائي']];
+            ['documents','الهوية والمستندات'],['decision','قرار نهائي'],['security','أمان الموظفين']];
         el('vc-stats').innerHTML = names.map(item =>
             '<div class="col-6 col-lg"><div class="vc-stat"><div class="vc-sub">' + item[1] +
             '</div><strong style="font-size:23px">' + esc((meta.counts || {})[item[0]] || 0) +
@@ -166,7 +168,8 @@
                 '<div class="vc-sub" dir="ltr">#' + item.id + ' · ' + esc(item.phone) + '</div>' +
                 '<div class="d-flex justify-content-between mt-2 align-items-center">' +
                 '<span class="badge bg-' + (item.stage === 'decision' ? 'success' :
-                    item.stage === 'documents' ? 'warning text-dark' : 'primary') + '">' +
+                    item.stage === 'documents' ? 'warning text-dark' :
+                    item.stage === 'security' ? 'secondary' : 'primary') + '">' +
                 esc(STAGES[item.stage]) + '</span>' +
                 '<small class="vc-sub">' + (item.restricted ? '🔒 مراجعة مقيدة' :
                     esc(item.registered_at || '')) + '</small></div></button>';
@@ -281,6 +284,20 @@
             '</section>';
     }
 
+    function staffSecurityCard(security) {
+        if (!security) return '';
+        const mfa = security.two_factor_enabled && security.two_factor_confirmed_at;
+        const roles = Number(security.operator_roles_count || 0);
+        return '<section class="vc-section"><h5>🔐 أمان موظف الإدارة</h5>' +
+            '<p class="small text-muted">هذه مراجعة أمن وصول وليست توثيقاً مالياً؛ لا تمنح حدوداً أو صلاحيات مالية.</p>' +
+            '<div class="row g-2 small"><div class="col-md-6">المصادقة الثنائية: ' +
+            (mfa ? '<span class="text-success">مفعّلة ومؤكدة ✓</span>' : '<span class="text-danger">غير مكتملة</span>') +
+            '</div><div class="col-md-6">الأدوار الإدارية المسندة: <strong>' + esc(roles) +
+            '</strong></div></div>' +
+            (!mfa || !roles ? '<div class="alert alert-warning py-2 mt-3 mb-0">لا يُتاح العمل الإداري قبل إكمال المصادقة الثنائية وإسناد دور من خلال إدارة الصلاحيات.</div>' : '') +
+            '</section>';
+    }
+
     function renderCase(data) {
         current = data;
         const a = data.account, ev = data.evidence || {}, docs = ev.documents || [], p = data.permissions || {};
@@ -304,19 +321,20 @@
             esc((ev.legal_name || {}).identity_document_name || 'لم يؤكد') + '</strong></div>' +
             '</div>' + blockers((ev.reuse || {}).warnings, 'تنبيهات تكرار', 'info') + '</section>' +
             unifiedCaseCard(data.unified_case) +
-            merchantVerificationCard(data.merchant_verification) +
-            residenceCard(data.residence || {}, data.residence_review, p) +
-            '<section class="vc-section" id="vc-documents"><h5>🪪 مستندات الهوية والملكية</h5>' +
-            '<div class="small text-muted mb-2">مراجعة المستند منفصلة عن اعتماد الحساب. الصورة الأصلية لا تعرض دون علامة مائية.</div>' +
-            (docs.length ? docs.map(d => docCard(d, p)).join('') :
-                '<div class="alert alert-secondary">لم يرفع العميل مستندات في سجل التوثيق الحديث.</div>') +
-            '<div id="vc-document-view" class="mt-3"></div>' +
-            blockers((ev.ownership || {}).blockers, 'إثبات ملكية الهوية', 'warning') +
-            '</section>' +
-            '<section class="vc-section" id="vc-ai"><h5>✨ المساعد الذكي للفحص</h5>' +
-            '<div class="small text-muted mb-2">تحليل استشاري مشفر؛ لا يعتمد الهوية ولا يرفضها.</div>' +
-            '<div id="vc-ai-panel" class="small">تحميل أحدث تقرير...</div></section>' +
-            decisionCard(data);
+            (data.staff_security ? staffSecurityCard(data.staff_security) :
+                merchantVerificationCard(data.merchant_verification) +
+                residenceCard(data.residence || {}, data.residence_review, p) +
+                '<section class="vc-section" id="vc-documents"><h5>🪪 مستندات الهوية والملكية</h5>' +
+                '<div class="small text-muted mb-2">مراجعة المستند منفصلة عن اعتماد الحساب. الصورة الأصلية لا تعرض دون علامة مائية.</div>' +
+                (docs.length ? docs.map(d => docCard(d, p)).join('') :
+                    '<div class="alert alert-secondary">لم يرفع العميل مستندات في سجل التوثيق الحديث.</div>') +
+                '<div id="vc-document-view" class="mt-3"></div>' +
+                blockers((ev.ownership || {}).blockers, 'إثبات ملكية الهوية', 'warning') +
+                '</section>' +
+                '<section class="vc-section" id="vc-ai"><h5>✨ المساعد الذكي للفحص</h5>' +
+                '<div class="small text-muted mb-2">تحليل استشاري مشفر؛ لا يعتمد الهوية ولا يرفضها.</div>' +
+                '<div id="vc-ai-panel" class="small">تحميل أحدث تقرير...</div></section>' +
+                decisionCard(data));
     }
 
     function unifiedCaseCard(workflow) {

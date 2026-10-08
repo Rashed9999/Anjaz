@@ -7,6 +7,7 @@ use App\Models\MerchantProfile;
 use App\Models\MerchantVerificationRequest;
 use App\Models\User;
 use App\Models\VerificationCase;
+use App\Models\VerificationCaseEvent;
 use App\Models\VerificationCaseStep;
 use App\Models\VerificationRequirementPolicy;
 use App\Services\Kyc\KycOwnershipGuardService;
@@ -50,7 +51,7 @@ class VerificationCaseService
         ));
         $workflow = $case->workflow_status;
         if (!in_array($workflow, [self::STATUS_APPROVED, self::STATUS_REJECTED], true)) {
-            $workflow = $firstOpen ? (string) $firstOpen['status'] : self::STATUS_REVIEW;
+            $workflow = $firstOpen ? (string) $firstOpen['status'] : self::STATUS_COMPLETE;
             $case->forceFill([
                 'workflow_status' => $workflow,
                 'current_step' => $firstOpen['key'] ?? null,
@@ -123,6 +124,122 @@ class VerificationCaseService
         return ['id_card_front', 'id_card_back', 'commercial_register', 'store_photo'];
     }
 
+    /**
+     * Records the only decision that can make an identity-verification case
+     * final. The KYC service performs the document, ownership and four-eyes
+     * guards first; this method makes that already-authorized result visible
+     * in the unified case and its immutable timeline.
+     */
+    public function recordAccountDecision(
+        User $subject,
+        User $reviewer,
+        bool $approved,
+        int $targetLevel,
+        ?string $reason = null,
+    ): void {
+        if (!Schema::hasTable('kyc_verification_cases')
+            || !Schema::hasTable('verification_case_steps')
+            || !Schema::hasTable('verification_case_events')) {
+            // Deployment may briefly run application code before this additive
+            // migration. Never turn a completed, guarded KYC decision into a
+            // partial failure because its projection table is not present yet.
+            return;
+        }
+
+        DB::transaction(function () use ($subject, $reviewer, $approved, $targetLevel, $reason) {
+            $case = $this->ensure($subject);
+            $case = VerificationCase::query()->lockForUpdate()->findOrFail($case->id);
+            $previousStatus = (string) $case->workflow_status;
+            $case->forceFill([
+                'target_level' => max((int) $case->target_level, $targetLevel),
+                'workflow_status' => $approved ? self::STATUS_APPROVED : self::STATUS_REJECTED,
+                'current_step' => 'final_activation',
+                'final_decided_by' => (int) $reviewer->id,
+                'final_decided_at' => now(),
+                'final_reason' => $reason,
+            ])->save();
+
+            // A manual risk review is never inferred from a document upload.
+            // It is attested by the authorised final reviewer and gets its own
+            // event so audit can distinguish it from automated screening.
+            if ($approved) {
+                VerificationCaseEvent::create([
+                    'verification_case_id' => $case->id,
+                    'actor_user_id' => (int) $reviewer->id,
+                    'event_type' => 'risk_review_completed',
+                    'details' => ['source' => 'final_identity_decision'],
+                ]);
+            }
+
+            $finalOrder = $this->requirementOrder($case, 'final_activation');
+            VerificationCaseStep::query()->updateOrCreate(
+                ['verification_case_id' => $case->id, 'step_key' => 'final_activation'],
+                [
+                    'step_order' => $finalOrder,
+                    'status' => $approved ? self::STATUS_APPROVED : self::STATUS_REJECTED,
+                    'completed_at' => $approved ? now() : null,
+                    'reviewed_by' => (int) $reviewer->id,
+                    'reviewed_at' => now(),
+                    'review_note' => $reason,
+                ],
+            );
+
+            VerificationCaseEvent::create([
+                'verification_case_id' => $case->id,
+                'actor_user_id' => (int) $reviewer->id,
+                'event_type' => $approved ? 'identity_case_approved' : 'identity_case_rejected',
+                'details' => [
+                    'target_level' => $targetLevel,
+                    'previous_status' => $previousStatus,
+                    'reason_provided' => filled($reason),
+                ],
+            ]);
+        });
+    }
+
+    /**
+     * Merchant registration is a scoped business decision, not personal KYC.
+     * It is recorded in the same case without finalising the identity case or
+     * changing financial verification state.
+     */
+    public function recordMerchantReview(
+        User $merchant,
+        User $reviewer,
+        bool $approved,
+        string $requestUlid,
+        ?string $reason = null,
+    ): void {
+        if (!Schema::hasTable('verification_case_events')) return;
+
+        DB::transaction(function () use ($merchant, $reviewer, $approved, $requestUlid, $reason) {
+            $case = $this->ensure($merchant);
+            $stepKey = $case->merchant_vertical === 'quick_sale'
+                ? 'quick_sale_location' : 'establishment';
+
+            VerificationCaseStep::query()->updateOrCreate(
+                ['verification_case_id' => $case->id, 'step_key' => $stepKey],
+                [
+                    'step_order' => $this->requirementOrder($case, $stepKey),
+                    'status' => $approved ? self::STATUS_APPROVED : self::STATUS_REJECTED,
+                    'completed_at' => $approved ? now() : null,
+                    'reviewed_by' => (int) $reviewer->id,
+                    'reviewed_at' => now(),
+                    'review_note' => $reason,
+                ],
+            );
+
+            VerificationCaseEvent::create([
+                'verification_case_id' => $case->id,
+                'actor_user_id' => (int) $reviewer->id,
+                'event_type' => $approved ? 'merchant_verification_approved' : 'merchant_verification_rejected',
+                'details' => [
+                    'request_ulid' => $requestUlid,
+                    'reason_provided' => filled($reason),
+                ],
+            ]);
+        });
+    }
+
     /** @return array<int,array<string,mixed>> */
     private function evaluate(User $subject, VerificationCase $case, array $requirements): array
     {
@@ -145,7 +262,9 @@ class VerificationCaseService
                 'ownership' => $this->ownershipAssessment($subject),
                 'establishment' => $this->establishmentAssessment($merchantRequest, false),
                 'quick_sale_location' => $this->establishmentAssessment($merchantRequest, true),
-                'risk_review' => $this->riskAssessment($subject),
+                'agent_operating_profile' => $this->agentOperatingAssessment($subject),
+                'staff_security' => $this->staffSecurityAssessment($subject),
+                'risk_review' => $this->riskAssessment($subject, $case),
                 'final_activation' => $this->finalAssessment($case),
                 default => ['status' => self::STATUS_ACTION_REQUIRED, 'reason' => 'متطلب غير معروف في السياسة.'],
             };
@@ -236,6 +355,12 @@ class VerificationCaseService
             'store_photo' => !empty($request->store_photo_path),
             'commercial_register' => !empty($request->commercial_register_path),
         ];
+        if ($request->status === 'rejected') {
+            return ['status' => self::STATUS_REJECTED, 'reason' => (string) ($request->admin_note ?: 'رُفض طلب توثيق النشاط.'), 'evidence' => $evidence];
+        }
+        if ($request->status === 'resubmission_required') {
+            return ['status' => self::STATUS_ACTION_REQUIRED, 'reason' => (string) ($request->admin_note ?: 'يلزم استكمال بيانات أو أدلة النشاط.'), 'evidence' => $evidence];
+        }
         $complete = $quickSale ? $base : ($base && $evidence['commercial_register']);
         $review = $request->status === 'pending_review';
         return [
@@ -247,11 +372,45 @@ class VerificationCaseService
     }
 
     /** @return array<string,mixed> */
-    private function riskAssessment(User $user): array
+    private function agentOperatingAssessment(User $user): array
+    {
+        $agentNumber = trim((string) ($user->agent_number ?? ''));
+        $zone = trim((string) ($user->zone_code ?? ''));
+        $complete = $agentNumber !== '' && $zone !== '';
+        return [
+            'status' => $complete ? self::STATUS_COMPLETE : self::STATUS_ACTION_REQUIRED,
+            'reason' => $complete ? null : 'يلزم رقم وكيل ونطاق تشغيلي معتمدان قبل التفعيل.',
+            'evidence' => ['agent_number_assigned' => $agentNumber !== '', 'zone_assigned' => $zone !== ''],
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function staffSecurityAssessment(User $user): array
+    {
+        $twoFactor = (bool) ($user->two_factor_enabled ?? false)
+            && !empty($user->two_factor_confirmed_at);
+        $hasRole = Schema::hasTable('admin_user_roles')
+            && DB::table('admin_user_roles')->where('user_id', $user->id)->exists();
+        $complete = $twoFactor && $hasRole;
+        return [
+            'status' => $complete ? self::STATUS_COMPLETE : self::STATUS_ACTION_REQUIRED,
+            'reason' => $complete ? null : 'يلزم تفعيل المصادقة الثنائية وإسناد دور إداري قبل إتاحة العمل.',
+            'evidence' => ['two_factor_confirmed' => $twoFactor, 'operator_role_assigned' => $hasRole],
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function riskAssessment(User $user, VerificationCase $case): array
     {
         $status = (string) ($user->sanction_status ?? 'not_screened');
         if (in_array($status, ['clear', 'passed'], true)) return ['status' => self::STATUS_COMPLETE, 'evidence' => ['sanction_status' => $status]];
         if (in_array($status, ['blocked', 'matched'], true)) return ['status' => self::STATUS_REJECTED, 'reason' => 'الحساب يحتاج معالجة امتثال قبل التفعيل.', 'evidence' => ['sanction_status' => $status]];
+        $manuallyReviewed = Schema::hasTable('verification_case_events')
+            && VerificationCaseEvent::query()->where('verification_case_id', $case->id)
+                ->where('event_type', 'risk_review_completed')->exists();
+        if ($manuallyReviewed) {
+            return ['status' => self::STATUS_COMPLETE, 'evidence' => ['sanction_status' => $status, 'manual_review' => true]];
+        }
         return ['status' => self::STATUS_REVIEW, 'reason' => 'مراجعة المخاطر مطلوبة قبل القرار النهائي.', 'evidence' => ['sanction_status' => $status]];
     }
 
@@ -296,6 +455,15 @@ class VerificationCaseService
     private function policyFor(VerificationCase $case): ?VerificationRequirementPolicy
     {
         return $this->resolvePolicy((string) $case->subject_kind, $case->merchant_vertical);
+    }
+
+    private function requirementOrder(VerificationCase $case, string $key): int
+    {
+        $requirements = $this->policyFor($case)?->requirements ?? [];
+        foreach ($requirements as $index => $requirement) {
+            if (($requirement['key'] ?? null) === $key) return $index + 1;
+        }
+        return count($requirements) + 1;
     }
 
     private function resolvePolicy(string $kind, ?string $vertical): ?VerificationRequirementPolicy

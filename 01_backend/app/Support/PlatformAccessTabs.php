@@ -116,6 +116,7 @@ final class PlatformAccessTabs
                     'platform.audit.view' => 'سجلّ التدقيق',
                     'platform.customers.security.view' => 'أجهزة العميل وجلساتُه',
                     'platform.customers.devices.view' => 'عرض أجهزة العميل',
+                    'platform.staff.security.view' => 'حالة المصادقة الثنائية والأدوار لموظفي المنصّة',
                     'platform.recovery.view' => 'عرض طلبات استعادة الحساب',
                     'platform.ops.status.view' => 'حالة النظام',
                     'saher.view' => 'رادار ساهر — الشاشة',

@@ -179,6 +179,15 @@ class MerchantVerificationService
                     }
                 }
 
+                if ($reviewer) {
+                    $this->workflow->recordMerchantReview(
+                        merchant: $merchant,
+                        reviewer: $reviewer,
+                        approved: true,
+                        requestUlid: (string) $request->request_ulid,
+                    );
+                }
+
                 $this->notif->dispatch(
                     $merchant,
                     'merchant_verified',
@@ -204,26 +213,38 @@ class MerchantVerificationService
         if ($request->status !== 'pending_review') {
             throw new RuntimeException('الطلب ليس بانتظار مراجعة');
         }
-        $request->update([
-            'status' => 'rejected',
-            'admin_note' => $reason,
-            'reviewed_by_admin_id' => $adminId,
-            'reviewed_at' => now(),
-        ]);
-        MerchantProfile::where('user_id', $request->merchant_user_id)
-            ->update(['verification_status' => 'rejected']);
+        return DB::transaction(function () use ($request, $adminId, $reason) {
+            $request->update([
+                'status' => 'rejected',
+                'admin_note' => $reason,
+                'reviewed_by_admin_id' => $adminId,
+                'reviewed_at' => now(),
+            ]);
+            MerchantProfile::where('user_id', $request->merchant_user_id)
+                ->update(['verification_status' => 'rejected']);
 
-        $merchant = User::find($request->merchant_user_id);
-        if ($merchant) {
-            $this->notif->dispatch(
-                $merchant,
-                'merchant_verification_rejected',
-                'تمّ رفض طلب التوثيق',
-                "السبب: {$reason}",
-                data: ['request_ulid' => $request->request_ulid],
-            );
-        }
-        return $request->fresh();
+            $merchant = User::find($request->merchant_user_id);
+            $reviewer = User::find($adminId);
+            if ($merchant && $reviewer) {
+                $this->workflow->recordMerchantReview(
+                    merchant: $merchant,
+                    reviewer: $reviewer,
+                    approved: false,
+                    requestUlid: (string) $request->request_ulid,
+                    reason: $reason,
+                );
+            }
+            if ($merchant) {
+                $this->notif->dispatch(
+                    $merchant,
+                    'merchant_verification_rejected',
+                    'تمّ رفض طلب التوثيق',
+                    "السبب: {$reason}",
+                    data: ['request_ulid' => $request->request_ulid],
+                );
+            }
+            return $request->fresh();
+        });
     }
 
     /** Admin: طلب إعادة رفع وثائق. */

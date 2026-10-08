@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\AuditService;
 use App\Services\EncryptedFileStorage;
 use App\Services\KycDocumentService;
+use App\Services\Verification\VerificationCaseService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -149,6 +150,13 @@ class GuardedKycDocumentService extends KycDocumentService
                 $approve,
                 $reason,
                 $ownership['method'] ?? null,
+            );
+            app(VerificationCaseService::class)->recordAccountDecision(
+                subject: $account,
+                reviewer: $reviewer,
+                approved: $approve,
+                targetLevel: $targetTier,
+                reason: $reason,
             );
 
             return $account->fresh();
