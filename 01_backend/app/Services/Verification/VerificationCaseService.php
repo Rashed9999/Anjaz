@@ -125,6 +125,36 @@ class VerificationCaseService
     }
 
     /**
+     * Administrative-only timeline. It is intentionally separate from
+     * snapshot(), which also serves customer status APIs and must not disclose
+     * reviewer identities or internal risk-review events.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function administrativeTimeline(User $subject, int $limit = 20): array
+    {
+        if (!Schema::hasTable('verification_case_events')) return [];
+        $case = $this->ensure($subject);
+        $events = VerificationCaseEvent::query()
+            ->where('verification_case_id', $case->id)
+            ->latest('id')->limit(max(1, min($limit, 50)))->get();
+        $actors = User::query()->whereIn('id', $events->pluck('actor_user_id')->filter()->unique())
+            ->get(['id', 'f_name', 'l_name'])->keyBy('id');
+
+        return $events->map(function (VerificationCaseEvent $event) use ($actors): array {
+            $actor = $actors->get($event->actor_user_id);
+            return [
+                'type' => $event->event_type,
+                'at' => $event->created_at?->toIso8601String(),
+                'actor' => $actor
+                    ? (trim((string) ($actor->f_name.' '.$actor->l_name)) ?: '#'.$event->actor_user_id)
+                    : ($event->actor_user_id ? '#'.$event->actor_user_id : 'النظام'),
+                'summary' => $this->eventSummary($event->event_type),
+            ];
+        })->values()->all();
+    }
+
+    /**
      * Records the only decision that can make an identity-verification case
      * final. The KYC service performs the document, ownership and four-eyes
      * guards first; this method makes that already-authorized result visible
@@ -464,6 +494,18 @@ class VerificationCaseService
             if (($requirement['key'] ?? null) === $key) return $index + 1;
         }
         return count($requirements) + 1;
+    }
+
+    private function eventSummary(string $eventType): string
+    {
+        return match ($eventType) {
+            'risk_review_completed' => 'أُثبتت مراجعة المخاطر ضمن القرار النهائي.',
+            'identity_case_approved' => 'اعتماد نهائي لتوثيق الهوية.',
+            'identity_case_rejected' => 'رفض نهائي لطلب توثيق الهوية.',
+            'merchant_verification_approved' => 'اعتماد توثيق المنشأة؛ لا يعني اعتماد هوية الشخص.',
+            'merchant_verification_rejected' => 'رُفض طلب توثيق المنشأة.',
+            default => 'حدث في مسار التحقق.',
+        };
     }
 
     private function resolvePolicy(string $kind, ?string $vertical): ?VerificationRequirementPolicy

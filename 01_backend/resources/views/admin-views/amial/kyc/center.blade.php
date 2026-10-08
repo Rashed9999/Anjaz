@@ -298,6 +298,16 @@
             '</section>';
     }
 
+    function caseTimelineCard(events) {
+        if (!events || !events.length) return '';
+        return '<section class="vc-section"><h5>📜 سجل قرارات القضية</h5>' + events.map(event =>
+            '<div class="d-flex justify-content-between align-items-start gap-2 py-2 border-bottom small">' +
+            '<div><strong>' + esc(event.summary || 'حدث في مسار التحقق') + '</strong>' +
+            '<div class="vc-sub">بواسطة: ' + esc(event.actor || 'النظام') + '</div></div>' +
+            '<span class="vc-sub" dir="ltr">' + esc(event.at || '—') + '</span></div>'
+        ).join('') + '</section>';
+    }
+
     function renderCase(data) {
         current = data;
         const a = data.account, ev = data.evidence || {}, docs = ev.documents || [], p = data.permissions || {};
@@ -321,6 +331,7 @@
             esc((ev.legal_name || {}).identity_document_name || 'لم يؤكد') + '</strong></div>' +
             '</div>' + blockers((ev.reuse || {}).warnings, 'تنبيهات تكرار', 'info') + '</section>' +
             unifiedCaseCard(data.unified_case) +
+            caseTimelineCard(data.case_timeline) +
             (data.staff_security ? staffSecurityCard(data.staff_security) :
                 merchantVerificationCard(data.merchant_verification) +
                 residenceCard(data.residence || {}, data.residence_review, p) +

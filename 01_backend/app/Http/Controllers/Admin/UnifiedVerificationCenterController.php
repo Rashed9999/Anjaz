@@ -251,8 +251,10 @@ class UnifiedVerificationCenterController extends Controller
             'kyc_verification_dossier', 'view', 'فتح ملف التحقق والهوية الموحد');
 
         if ((int) $user->type === ADMIN_TYPE) {
+            $caseTimeline = [];
             try {
                 $unifiedCase = $workflow->snapshot($user);
+                $caseTimeline = $workflow->administrativeTimeline($user);
             } catch (DomainException) {
                 $unifiedCase = null;
             }
@@ -278,6 +280,7 @@ class UnifiedVerificationCenterController extends Controller
                         'restricted' => false,
                     ],
                     'unified_case' => $unifiedCase,
+                    'case_timeline' => $caseTimeline,
                     'staff_security' => [
                         'two_factor_enabled' => (bool) ($user->two_factor_enabled ?? false),
                         'two_factor_confirmed_at' => $user->two_factor_confirmed_at?->toIso8601String(),
@@ -361,8 +364,10 @@ class UnifiedVerificationCenterController extends Controller
             }
         }
 
+        $caseTimeline = [];
         try {
             $unifiedCase = $workflow->snapshot($user);
+            $caseTimeline = $workflow->administrativeTimeline($user);
         } catch (\DomainException) {
             $unifiedCase = null;
         }
@@ -400,6 +405,7 @@ class UnifiedVerificationCenterController extends Controller
                     'review_mode' => $privacy->forUser($user)['review_mode'] ?? 'standard',
                 ],
                 'unified_case' => $unifiedCase,
+                'case_timeline' => $caseTimeline,
                 'merchant_verification' => $merchantVerification,
                 'permissions' => [
                     'review_documents' => $canReviewDocuments,

@@ -44,6 +44,8 @@ class UnifiedVerificationWorkflowTest extends TestCase
             'actor_user_id' => $reviewer->id,
             'event_type' => 'identity_case_approved',
         ]);
+        $timeline = app(VerificationCaseService::class)->administrativeTimeline($subject);
+        $this->assertSame('identity_case_approved', $timeline[0]['type'] ?? null);
     }
 
     /** @test */
