@@ -616,6 +616,13 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
     Route::post('/center/accounts/{id}/decision', [$center, 'decide'])->where('id', '[0-9]+')
         ->middleware(['platform:platform.customers.kyc.view', 'platform:platform.approvals.decide', 'amial.idempotency'])
         ->name('center.decision');
+    Route::post('/center/accounts/{id}/merchant-verification', [$center, 'decideMerchant'])->where('id', '[0-9]+')
+        ->middleware(['platform:platform.customers.kyc.view', 'platform:platform.merchants.compliance', 'platform:platform.approvals.decide', 'amial.idempotency'])
+        ->name('center.merchant-decision');
+    Route::get('/center/accounts/{id}/merchant-documents/{type}', [$center, 'merchantDocument'])
+        ->where(['id' => '[0-9]+', 'type' => 'id_card_front|id_card_back|commercial_register|store_photo|address_proof|profession_license|optional_document'])
+        ->middleware(['platform:platform.customers.kyc.view', 'platform:platform.merchants.compliance'])
+        ->name('center.merchant-document');
     // المساعد الذكي استشاري: يُشغّله المراجع المخوّل يدوياً فقط.
     $ai = App\Http\Controllers\Admin\KycAiReviewController::class;
     Route::get('/center/accounts/{id}/ai', [$ai, 'latest'])->where('id', '[0-9]+')

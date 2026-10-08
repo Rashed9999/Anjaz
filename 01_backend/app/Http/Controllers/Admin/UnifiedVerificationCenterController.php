@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
 use App\Models\MerchantVerificationRequest;
 use App\Models\User;
+use App\Services\MerchantVerificationService;
 use App\Services\Admin\KycEvidenceService;
 use App\Services\Kyc\KycPrivacyService;
 use App\Services\Kyc\ResidenceVerificationService;
@@ -19,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * AMIAL-KYC-ONE-CENTER-001 — شاشة القضية الواحدة، لا ثلاثة روابط.
@@ -361,6 +363,10 @@ class UnifiedVerificationCenterController extends Controller
                     'has_commercial_register' => !empty($requestRow->commercial_register_path),
                     'has_store_photo' => !empty($requestRow->store_photo_path),
                     'admin_note' => (string) ($requestRow->admin_note ?? ''),
+                    'can_decide' => $reviewer->hasPlatformPermission('platform.merchants.compliance')
+                        && $reviewer->hasPlatformPermission('platform.approvals.decide'),
+                    'documents' => $this->merchantDocuments($requestRow,
+                        $reviewer->hasPlatformPermission('platform.merchants.compliance')),
                 ];
             }
         }
@@ -466,5 +472,88 @@ class UnifiedVerificationCenterController extends Controller
             'success' => true,
             'message' => $approved ? 'تم اعتماد الهوية وتسجيل القرار في القضية الموحدة.' : 'تم رفض طلب توثيق الهوية وتسجيل السبب.',
         ]);
+    }
+
+    public function decideMerchant(Request $request, int $id, MerchantVerificationService $merchants): JsonResponse
+    {
+        $input = $request->validate([
+            'action' => ['required', 'in:approve,reject,resubmit'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+            'tier' => ['nullable', 'in:standard,premium,gold'],
+        ]);
+        $merchant = User::query()->where('type', MERCHANT_TYPE)->findOrFail($id);
+        $verification = MerchantVerificationRequest::query()
+            ->where('merchant_user_id', $merchant->id)->latest('id')->firstOrFail();
+        $action = (string) $input['action'];
+        $reason = trim((string) ($input['reason'] ?? ''));
+        if ($action !== 'approve' && mb_strlen($reason) < 5) {
+            return response()->json(['message' => 'سبب واضح من خمسة أحرف على الأقل مطلوب.'], 422);
+        }
+
+        try {
+            $updated = match ($action) {
+                'approve' => $merchants->approve($verification, (int) $request->user()->id, $input['tier'] ?? null),
+                'reject' => $merchants->reject($verification, (int) $request->user()->id, $reason),
+                'resubmit' => $merchants->requestResubmission($verification, (int) $request->user()->id, $reason),
+            };
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => match ($action) {
+                'approve' => 'تم اعتماد المنشأة. يبقى توثيق هوية المالك قراراً مستقلاً.',
+                'reject' => 'تم رفض طلب توثيق المنشأة مع إبلاغ التاجر بالسبب.',
+                default => 'تم طلب استكمال وثائق أو بيانات المنشأة.',
+            },
+            'status' => $updated->status,
+        ]);
+    }
+
+    public function merchantDocument(int $id, string $type)
+    {
+        $merchant = User::query()->where('type', MERCHANT_TYPE)->findOrFail($id);
+        $request = MerchantVerificationRequest::query()->where('merchant_user_id', $merchant->id)
+            ->latest('id')->firstOrFail();
+        $documents = $this->merchantDocumentMap();
+        $document = $documents[$type] ?? null;
+        if (!$document) abort(404);
+        $path = $request->{$document['column']};
+        if (!$path || !Storage::disk('local')->exists($path)) abort(404);
+
+        return Storage::disk('local')->response($path);
+    }
+
+    /** @return array<int,array{type:string,label:string,uploaded:bool,url:?string}> */
+    private function merchantDocuments(MerchantVerificationRequest $request, bool $canView): array
+    {
+        $out = [];
+        foreach ($this->merchantDocumentMap() as $type => $document) {
+            $uploaded = !empty($request->{$document['column']});
+            $out[] = [
+                'type' => $type,
+                'label' => $document['label'],
+                'uploaded' => $uploaded,
+                'url' => $uploaded && $canView
+                    ? route('admin.amial.kyc.center.merchant-document', ['id' => $request->merchant_user_id, 'type' => $type])
+                    : null,
+            ];
+        }
+        return $out;
+    }
+
+    /** @return array<string,array{column:string,label:string}> */
+    private function merchantDocumentMap(): array
+    {
+        return [
+            'id_card_front' => ['column' => 'id_card_front_path', 'label' => 'هوية المالك — الوجه'],
+            'id_card_back' => ['column' => 'id_card_back_path', 'label' => 'هوية المالك — الظهر'],
+            'commercial_register' => ['column' => 'commercial_register_path', 'label' => 'السجل التجاري'],
+            'store_photo' => ['column' => 'store_photo_path', 'label' => 'صورة نقطة البيع'],
+            'address_proof' => ['column' => 'address_proof_path', 'label' => 'إثبات العنوان'],
+            'profession_license' => ['column' => 'profession_license_path', 'label' => 'رخصة المهنة'],
+            'optional_document' => ['column' => 'optional_document_path', 'label' => 'مستند إضافي'],
+        ];
     }
 }

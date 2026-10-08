@@ -100,6 +100,7 @@
         document: @json(url('admin/amial/kyc/documents')),
         residence: @json(url('admin/amial/kyc/residence')),
         accountDecision: @json(url('admin/amial/kyc/center/accounts')),
+        merchantDecision: @json(url('admin/amial/kyc/center/accounts')),
         print: @json(url('admin/amial/hub/account')),
         csrf: @json(csrf_token()),
     };
@@ -374,6 +375,9 @@
     function merchantVerificationCard(record) {
         if (!record) return '';
         const yes = value => value ? '<span class="text-success">موجود ✓</span>' : '<span class="text-warning">ناقص</span>';
+        const docs = (record.documents || []).filter(doc => doc.uploaded).map(doc =>
+            doc.url ? '<a class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener" href="' + esc(doc.url) + '">' + esc(doc.label) + '</a>' :
+                '<span class="vc-badge">' + esc(doc.label) + '</span>').join('');
         return '<section class="vc-section"><h5>🏪 ملف توثيق المنشأة</h5>' +
             '<div class="row g-2 small"><div class="col-md-6">النشاط: <strong>' + esc(record.business_name || '—') + '</strong></div>' +
             '<div class="col-md-6">الحالة: ' + statusBadge(record.status) + '</div>' +
@@ -383,6 +387,11 @@
             '<div class="col-md-3">ظهر الهوية: ' + yes(record.has_id_back) + '</div>' +
             '<div class="col-md-3">صورة نقطة البيع: ' + yes(record.has_store_photo) + '</div>' +
             '<div class="col-md-3">السجل التجاري: ' + yes(record.has_commercial_register) + '</div></div>' +
+            (docs ? '<div class="d-flex gap-1 flex-wrap mt-3">' + docs + '</div>' : '') +
+            (record.can_decide && record.status === 'pending_review' ?
+                '<div class="d-flex gap-2 flex-wrap mt-3"><button type="button" class="btn btn-success btn-sm" data-action="merchant-approve">اعتماد المنشأة</button>' +
+                '<button type="button" class="btn btn-outline-warning btn-sm" data-action="merchant-resubmit">طلب استكمال</button>' +
+                '<button type="button" class="btn btn-outline-danger btn-sm" data-action="merchant-reject">رفض المنشأة</button></div>' : '') +
             (record.admin_note ? '<div class="alert alert-warning py-2 mt-3 mb-0">' + esc(record.admin_note) + '</div>' : '') +
             '</section>';
     }
@@ -588,6 +597,18 @@
             if (reason.trim().length < 5) return notice('سبب الرفض مطلوب، خمسة أحرف على الأقل.', 'warning');
             url = ROUTES.accountDecision + '/' + current.account.id + '/decision';
             body = {status:2, target_tier:current.account.target_tier, reason:reason.trim()};
+        } else if (action === 'merchant-approve') {
+            if (!current.merchant_verification || !current.merchant_verification.can_decide) return;
+            if (!window.confirm('هل راجعت بيانات ووثائق المنشأة؟ اعتماد المنشأة لا يعتمد هوية المالك.')) return;
+            url = ROUTES.merchantDecision + '/' + current.account.id + '/merchant-verification';
+            body = {action:'approve'};
+        } else if (action === 'merchant-reject' || action === 'merchant-resubmit') {
+            if (!current.merchant_verification || !current.merchant_verification.can_decide) return;
+            const prompt = action === 'merchant-reject' ? 'سبب رفض المنشأة — سيصل للتاجر:' : 'ما الوثائق أو البيانات المطلوب استكمالها؟';
+            const reason = window.prompt(prompt) || '';
+            if (reason.trim().length < 5) return notice('سبب واضح من خمسة أحرف على الأقل مطلوب.', 'warning');
+            url = ROUTES.merchantDecision + '/' + current.account.id + '/merchant-verification';
+            body = {action: action === 'merchant-reject' ? 'reject' : 'resubmit', reason:reason.trim()};
         } else return;
 
         button.disabled = true;
