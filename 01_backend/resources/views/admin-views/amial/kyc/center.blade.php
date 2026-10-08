@@ -134,9 +134,10 @@
     function statusBadge(state) {
         const color = state === 'verified' || state === 'approved' ? 'success'
             : state === 'rejected' ? 'danger'
-            : state === 'pending' ? 'warning text-dark' : 'secondary';
+            : ['pending', 'pending_review', 'resubmission_required'].includes(state) ? 'warning text-dark' : 'secondary';
         const labels = {verified:'معتمد',approved:'معتمد',pending:'بانتظار المراجعة',
             not_submitted:'لم يُقدم',needs_more_evidence:'يحتاج دليلاً إضافيًا',
+            pending_review:'بانتظار مراجعة المنشأة',resubmission_required:'يحتاج استكمالاً',
             rejected:'مرفوض',expired:'منتهي'};
         return '<span class="badge bg-' + color + '">' + esc(labels[state] || state || 'غير متاح') + '</span>';
     }
@@ -302,6 +303,8 @@
             '<div class="col-md-6">الاسم المؤكد من الهوية: <strong>' +
             esc((ev.legal_name || {}).identity_document_name || 'لم يؤكد') + '</strong></div>' +
             '</div>' + blockers((ev.reuse || {}).warnings, 'تنبيهات تكرار', 'info') + '</section>' +
+            unifiedCaseCard(data.unified_case) +
+            merchantVerificationCard(data.merchant_verification) +
             residenceCard(data.residence || {}, data.residence_review, p) +
             '<section class="vc-section" id="vc-documents"><h5>🪪 مستندات الهوية والملكية</h5>' +
             '<div class="small text-muted mb-2">مراجعة المستند منفصلة عن اعتماد الحساب. الصورة الأصلية لا تعرض دون علامة مائية.</div>' +
@@ -314,6 +317,45 @@
             '<div class="small text-muted mb-2">تحليل استشاري مشفر؛ لا يعتمد الهوية ولا يرفضها.</div>' +
             '<div id="vc-ai-panel" class="small">تحميل أحدث تقرير...</div></section>' +
             decisionCard(data);
+    }
+
+    function unifiedCaseCard(workflow) {
+        if (!workflow) return '';
+        const labels = {
+            complete: 'مكتملة', approved: 'معتمدة', review: 'بانتظار المراجعة',
+            action_required: 'تحتاج استكمالاً', blocked: 'مقفلة حتى الخطوة السابقة',
+            rejected: 'مرفوضة'
+        };
+        const color = state => (state === 'complete' || state === 'approved') ? 'success'
+            : state === 'rejected' ? 'danger' : state === 'review' ? 'warning text-dark' : 'secondary';
+        const rows = (workflow.steps || []).map(step =>
+            '<div class="d-flex justify-content-between align-items-center gap-2 py-2 border-bottom">' +
+            '<div><strong>' + esc(step.order) + '. ' + esc(step.label) + '</strong>' +
+            (step.reason ? '<div class="vc-sub">' + esc(step.reason) + '</div>' : '') + '</div>' +
+            '<span class="badge bg-' + color(step.status) + '">' + esc(labels[step.status] || step.status) + '</span></div>'
+        ).join('');
+        return '<section class="vc-section"><div class="d-flex justify-content-between gap-2 flex-wrap"><h5>🧭 رحلة التوثيق الموحدة</h5>' +
+            '<span class="vc-badge" dir="ltr">' + esc(workflow.case_ulid || '') + '</span></div>' +
+            '<div class="small text-muted mb-2">السياسة: ' + esc(workflow.policy_version || '—') +
+            (workflow.merchant_vertical ? ' · القطاع: ' + esc(workflow.merchant_vertical) : '') + '</div>' + rows +
+            (workflow.ready_for_final_review ? '<div class="alert alert-success py-2 mt-3 mb-0">اكتملت المتطلبات الآلية؛ الحالة جاهزة لقرار الاعتماد النهائي من المفوض.</div>' : '') +
+            '</section>';
+    }
+
+    function merchantVerificationCard(record) {
+        if (!record) return '';
+        const yes = value => value ? '<span class="text-success">موجود ✓</span>' : '<span class="text-warning">ناقص</span>';
+        return '<section class="vc-section"><h5>🏪 ملف توثيق المنشأة</h5>' +
+            '<div class="row g-2 small"><div class="col-md-6">النشاط: <strong>' + esc(record.business_name || '—') + '</strong></div>' +
+            '<div class="col-md-6">الحالة: ' + statusBadge(record.status) + '</div>' +
+            '<div class="col-md-6">الموقع: ' + esc([record.city, record.address].filter(Boolean).join(' — ') || '—') + '</div>' +
+            '<div class="col-md-6">تصنيف النشاط: ' + esc(record.business_category || '—') + '</div>' +
+            '<div class="col-md-3">وجه الهوية: ' + yes(record.has_id_front) + '</div>' +
+            '<div class="col-md-3">ظهر الهوية: ' + yes(record.has_id_back) + '</div>' +
+            '<div class="col-md-3">صورة نقطة البيع: ' + yes(record.has_store_photo) + '</div>' +
+            '<div class="col-md-3">السجل التجاري: ' + yes(record.has_commercial_register) + '</div></div>' +
+            (record.admin_note ? '<div class="alert alert-warning py-2 mt-3 mb-0">' + esc(record.admin_note) + '</div>' : '') +
+            '</section>';
     }
 
     async function openCase(id) {

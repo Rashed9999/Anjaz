@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\MerchantProfile;
 use App\Models\MerchantVerificationRequest;
 use App\Models\User;
+use App\Services\Verification\VerificationCaseService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -39,6 +40,7 @@ class MerchantVerificationService
 
     public function __construct(
         private readonly NotificationService $notif,
+        private readonly VerificationCaseService $workflow,
     ) {}
 
     /** تأكّد أن المستخدم لديه MerchantProfile (يخلقه إن لم يوجد). */
@@ -80,7 +82,13 @@ class MerchantVerificationService
                 ->whereIn('status', ['pending_review', 'resubmission_required'])
                 ->first();
 
-            // ارفع الملفات وحفظ مساراتها
+            // AMIAL-UNIFIED-VERIFICATION-002 — المتطلبات تتبع سياسة
+            // القطاع. البيع السريع لا يُحجب بسجل تجاري، لكن لا يفقد هوية
+            // المالك أو صورة وموقع نقطة البيع. الفحص قبل التخزين حتى لا
+            // تخلّف محاولة ناقصة ملفات خاصة يتيمة.
+            $this->assertRequiredDocuments($merchant, $request, $this->plannedPaths($files));
+
+            // ارفع الملفات وحفظ مساراتها بعد اجتياز سياسة القطاع.
             $paths = $this->uploadFiles($merchant->id, $files);
 
             if ($request) {
@@ -257,6 +265,12 @@ class MerchantVerificationService
             ->first();
     }
 
+    /** @return array<int,string> */
+    public function requiredDocsFor(User $merchant): array
+    {
+        return $this->workflow->merchantRequiredDocuments($merchant);
+    }
+
     // ============ Private ============
 
     private function sanitizeData(array $data): array
@@ -267,6 +281,57 @@ class MerchantVerificationService
             'bank_account_holder', 'contact_phone',
         ];
         return array_intersect_key($data, array_flip($allowed));
+    }
+
+    private function assertRequiredDocuments(
+        User $merchant,
+        ?MerchantVerificationRequest $existing,
+        array $newPaths,
+    ): void {
+        $columns = [
+            'id_card_front' => 'id_card_front_path',
+            'id_card_back' => 'id_card_back_path',
+            'commercial_register' => 'commercial_register_path',
+            'store_photo' => 'store_photo_path',
+        ];
+        $missing = [];
+        foreach ($this->requiredDocsFor($merchant) as $document) {
+            $column = $columns[$document] ?? null;
+            if (!$column) continue;
+            if (empty($newPaths[$column]) && empty($existing?->{$column})) {
+                $missing[] = $document;
+            }
+        }
+        if ($missing !== []) {
+            $labels = [
+                'id_card_front' => 'وجه الهوية',
+                'id_card_back' => 'ظهر الهوية',
+                'commercial_register' => 'السجل التجاري',
+                'store_photo' => 'صورة نقطة البيع',
+            ];
+            throw new InvalidArgumentException('يلزم استكمال: '.implode('، ', array_map(
+                fn (string $key) => $labels[$key] ?? $key,
+                $missing,
+            )));
+        }
+    }
+
+    /** @return array<string,string> */
+    private function plannedPaths(array $files): array
+    {
+        $map = [
+            'id_card_front' => 'id_card_front_path',
+            'id_card_back' => 'id_card_back_path',
+            'commercial_register' => 'commercial_register_path',
+            'store_photo' => 'store_photo_path',
+        ];
+        $paths = [];
+        foreach ($map as $document => $column) {
+            if (($files[$document] ?? null) instanceof UploadedFile) {
+                $paths[$column] = '__new_upload__';
+            }
+        }
+        return $paths;
     }
 
     /**

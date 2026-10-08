@@ -11,6 +11,7 @@ use App\Services\Kyc\KycPrivacyService;
 use App\Services\Kyc\ResidenceVerificationService;
 use App\Services\KycTierService;
 use App\Support\Kyc\KycProfileFields;
+use App\Services\Verification\VerificationCaseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,6 +31,7 @@ class VerificationStatusController extends Controller
         ResidenceVerificationService $residence,
         KycPrivacyService $privacy,
         KycOwnershipGuardService $ownership,
+        VerificationCaseService $workflow,
     ): JsonResponse {
         $user = $request->user();
         if (!$user || (int) $user->type !== 2) {
@@ -192,6 +194,7 @@ class VerificationStatusController extends Controller
                     ),
                 ],
                 'account_kyc_state' => $account['state'],
+                'unified_case' => $this->workflowSnapshot($user, $workflow),
                 'verification_levels' => $levels,
                 'next_actions' => $actions,
                 'verification_documents' => $this->verificationDocuments((int) $user->id),
@@ -423,5 +426,14 @@ class VerificationStatusController extends Controller
         }
         if (!$operationalResidence) return 'RESIDENCE_OUTSIDE_OPERATIONAL_AREA';
         return null;
+    }
+
+    private function workflowSnapshot($user, VerificationCaseService $workflow): ?array
+    {
+        try {
+            return $workflow->snapshot($user);
+        } catch (\DomainException) {
+            return null;
+        }
     }
 }

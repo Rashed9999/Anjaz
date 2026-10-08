@@ -250,6 +250,34 @@ class MerchantVerificationTest extends TestCase
     }
 
     /** @test */
+    public function quick_sale_uses_its_own_evidence_policy_and_does_not_require_a_commercial_register(): void
+    {
+        MerchantProfile::create([
+            'user_id' => $this->merchant->id,
+            'business_type' => 'quick_sale',
+            'verification_status' => 'unverified',
+            'tier' => 'standard',
+        ]);
+
+        $required = $this->svc->requiredDocsFor($this->merchant);
+        $this->assertSame(['id_card_front', 'id_card_back', 'store_photo'], $required);
+        $this->assertNotContains('commercial_register', $required);
+
+        $request = $this->svc->submit($this->merchant, [
+            'business_name' => 'بسطة خضار السوق',
+            'city' => 'عدن',
+            'address' => 'سوق الشيخ عثمان',
+        ], [
+            'id_card_front' => $this->fakeImage('front.jpg'),
+            'id_card_back' => $this->fakeImage('back.jpg'),
+            'store_photo' => $this->fakeImage('stall.jpg'),
+        ]);
+
+        $this->assertSame('pending_review', $request->status);
+        $this->assertNull($request->commercial_register_path);
+    }
+
+    /** @test */
     public function approve_fails_if_status_not_pending(): void
     {
         $req = $this->svc->submit(

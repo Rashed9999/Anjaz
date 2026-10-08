@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
+use App\Models\MerchantVerificationRequest;
 use App\Models\User;
 use App\Services\Admin\KycEvidenceService;
 use App\Services\Kyc\KycPrivacyService;
 use App\Services\Kyc\ResidenceVerificationService;
 use App\Services\KycTierService;
 use App\Services\PiiAccessAuditService;
+use App\Services\Verification\VerificationCaseService;
 use App\Support\YemenGovernorates;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -46,6 +48,12 @@ class UnifiedVerificationCenterController extends Controller
             ->orderBy('created_at')->limit(200)->pluck('user_id')->all();
         $pendingResidence = collect($residence->pendingQueue(200));
         $pendingResidenceIds = $pendingResidence->pluck('user_id')->all();
+        // طلب التاجر كان يعيش في طابور منفصل، فيختفي من المركز إذا لم
+        // يرفع وثيقة KYC حديثة. نجلب المعرف فقط؛ الأدلة تبقى محمية في
+        // ملف الحساب ولا تُرسل إلى الطابور.
+        $pendingMerchantIds = MerchantVerificationRequest::query()
+            ->whereIn('status', ['pending_review', 'resubmission_required'])
+            ->orderBy('created_at')->limit(200)->pluck('merchant_user_id')->all();
 
         $newAccountIds = User::query()
             ->whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE])
@@ -64,7 +72,7 @@ class UnifiedVerificationCenterController extends Controller
             ->orderByDesc('id')->limit(220)->pluck('user_id')->all();
 
         $ids = array_values(array_unique(array_map('intval', array_merge(
-            $pendingDocumentIds, $pendingResidenceIds, $newAccountIds, $identityCandidateIds
+            $pendingDocumentIds, $pendingResidenceIds, $pendingMerchantIds, $newAccountIds, $identityCandidateIds
         ))));
 
         $usersQuery = User::query()
@@ -189,6 +197,7 @@ class UnifiedVerificationCenterController extends Controller
         KycPrivacyService $privacy,
         KycTierService $tiers,
         PiiAccessAuditService $pii,
+        VerificationCaseService $workflow,
     ): JsonResponse {
         $user = User::query()->whereIn(
             'type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE]
@@ -252,6 +261,32 @@ class UnifiedVerificationCenterController extends Controller
             && $decisionEvidence['complete']
             && ($decisionEvidence['blockers'] ?? []) === [];
 
+        $merchantVerification = null;
+        if ((int) $user->type === MERCHANT_TYPE) {
+            $requestRow = MerchantVerificationRequest::query()
+                ->where('merchant_user_id', $user->id)->latest('id')->first();
+            if ($requestRow) {
+                $merchantVerification = [
+                    'status' => $requestRow->status,
+                    'business_name' => (string) $requestRow->business_name,
+                    'business_category' => (string) ($requestRow->business_category ?? ''),
+                    'city' => (string) ($requestRow->city ?? ''),
+                    'address' => (string) ($requestRow->address ?? ''),
+                    'has_id_front' => !empty($requestRow->id_card_front_path),
+                    'has_id_back' => !empty($requestRow->id_card_back_path),
+                    'has_commercial_register' => !empty($requestRow->commercial_register_path),
+                    'has_store_photo' => !empty($requestRow->store_photo_path),
+                    'admin_note' => (string) ($requestRow->admin_note ?? ''),
+                ];
+            }
+        }
+
+        try {
+            $unifiedCase = $workflow->snapshot($user);
+        } catch (\DomainException) {
+            $unifiedCase = null;
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -284,6 +319,8 @@ class UnifiedVerificationCenterController extends Controller
                 'privacy' => [
                     'review_mode' => $privacy->forUser($user)['review_mode'] ?? 'standard',
                 ],
+                'unified_case' => $unifiedCase,
+                'merchant_verification' => $merchantVerification,
                 'permissions' => [
                     'review_documents' => $canReviewDocuments,
                     'view_documents' => $reviewer->hasPlatformPermission('platform.customers.freeze'),
