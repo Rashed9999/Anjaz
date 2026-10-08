@@ -122,4 +122,15 @@ class UnifiedVerificationCenterTest extends TestCase
         $this->assertArrayHasKey('staff_security', $case->json('data'));
         $this->assertFalse($case->json('data.permissions.decide_account'));
     }
+
+    public function test_final_decision_endpoint_requires_decision_permission_in_addition_to_view_permission(): void
+    {
+        $viewer = $this->reviewer(['platform.customers.kyc.view']);
+        $customer = User::factory()->create(['type' => CUSTOMER_TYPE]);
+
+        $this->actingAs($viewer, 'user')->postJson(
+            route('admin.amial.kyc.center.decision', $customer->id),
+            ['status' => 2, 'target_tier' => 2, 'reason' => 'سبب رفض واضح'],
+        )->assertForbidden();
+    }
 }

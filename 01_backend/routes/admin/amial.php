@@ -613,6 +613,9 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
     Route::get('/center/queue', [$center, 'queue'])->middleware('platform:platform.customers.kyc.view')->name('center.queue');
     Route::get('/center/accounts/{id}', [$center, 'account'])->where('id', '[0-9]+')
         ->middleware('platform:platform.customers.kyc.view')->name('center.account');
+    Route::post('/center/accounts/{id}/decision', [$center, 'decide'])->where('id', '[0-9]+')
+        ->middleware(['platform:platform.customers.kyc.view', 'platform:platform.approvals.decide', 'amial.idempotency'])
+        ->name('center.decision');
     // المساعد الذكي استشاري: يُشغّله المراجع المخوّل يدوياً فقط.
     $ai = App\Http\Controllers\Admin\KycAiReviewController::class;
     Route::get('/center/accounts/{id}/ai', [$ai, 'latest'])->where('id', '[0-9]+')
@@ -625,8 +628,8 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
     Route::get('/classic', [$kyc, 'page'])->middleware('platform:platform.customers.freeze')->name('classic');
     Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.customers.freeze')->name('queue');
 
-    // القرار النهائي منفصل عن اعتماد المستند المفرد. كانت الشاشة تنادي
-    // هذين المسارين من دون أن يكونا مسجلين، فتضطر عملياً إلى الباب القديم.
+    // القرار النهائي منفصل عن اعتماد المستند المفرد؛ مسار المركز أعلاه هو
+    // المدخل اليومي، والمساران التاليان لتوافق الواجهات القديمة فقط.
     Route::get('/activation-queue', [$kyc, 'activationQueue'])
         ->middleware('platform:platform.customers.freeze')
         ->name('activation-queue');

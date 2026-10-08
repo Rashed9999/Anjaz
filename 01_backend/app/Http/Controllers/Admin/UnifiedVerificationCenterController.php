@@ -12,6 +12,7 @@ use App\Services\Kyc\ResidenceVerificationService;
 use App\Services\KycTierService;
 use App\Services\PiiAccessAuditService;
 use App\Services\Verification\VerificationCaseService;
+use App\Services\Verification\AccountVerificationDecisionService;
 use App\Support\YemenGovernorates;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -419,6 +420,51 @@ class UnifiedVerificationCenterController extends Controller
                     'activate_ready' => $canActivate,
                 ],
             ],
+        ]);
+    }
+
+    public function decide(Request $request, int $id, AccountVerificationDecisionService $decisions): JsonResponse
+    {
+        $input = $request->validate([
+            'status' => ['required', 'integer', 'in:1,2'],
+            'target_tier' => ['required', 'integer', 'in:2,3'],
+            'governorate' => ['nullable', 'string', 'max:100'],
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+        $account = User::query()->whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE])
+            ->findOrFail($id);
+        $approved = (int) $input['status'] === 1;
+
+        if (!$approved && mb_strlen(trim((string) ($input['reason'] ?? ''))) < 5) {
+            return response()->json(['message' => 'سبب الرفض مطلوب، خمسة أحرف على الأقل.'], 422);
+        }
+
+        try {
+            $decisions->decide(
+                account: $account,
+                reviewer: $request->user(),
+                approve: $approved,
+                targetTier: (int) $input['target_tier'],
+                requestedGovernorate: $input['governorate'] ?? null,
+                reason: $input['reason'] ?? null,
+            );
+        } catch (DomainException $e) {
+            $code = $e->getMessage();
+            $message = match ($code) {
+                'KYC_TIER_TARGET_INVALID' => 'مستوى التوثيق المطلوب غير صالح.',
+                'MISSING_RESIDENCE_GOVERNORATE' => 'اختر محافظة السكن قبل اعتماد الحساب.',
+                default => $code,
+            };
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+                'code' => $code,
+            ], str_contains($code, 'KYC_TIER_SEQUENCE_VIOLATION') ? 409 : 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $approved ? 'تم اعتماد الهوية وتسجيل القرار في القضية الموحدة.' : 'تم رفض طلب توثيق الهوية وتسجيل السبب.',
         ]);
     }
 }

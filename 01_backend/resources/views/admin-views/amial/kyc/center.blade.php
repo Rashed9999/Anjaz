@@ -99,7 +99,7 @@
         account: @json(url('admin/amial/kyc/center/accounts')),
         document: @json(url('admin/amial/kyc/documents')),
         residence: @json(url('admin/amial/kyc/residence')),
-        accountDecision: @json(url('admin/amial/hub/users')),
+        accountDecision: @json(url('admin/amial/kyc/center/accounts')),
         print: @json(url('admin/amial/hub/account')),
         csrf: @json(csrf_token()),
     };
@@ -580,13 +580,13 @@
             const gov = el('vc-governorate') ? el('vc-governorate').value : '';
             if (!gov) return notice('اختر محافظة السكن قبل اعتماد الحساب.', 'warning');
             if (!window.confirm('قرار اعتماد نهائي يغيّر مستوى التوثيق والحدود المالية. هل أكملت المراجعة؟')) return;
-            url = ROUTES.accountDecision + '/' + current.account.id + '/kyc';
+            url = ROUTES.accountDecision + '/' + current.account.id + '/decision';
             body = {status:1, target_tier:current.account.target_tier, governorate:gov};
         } else if (action === 'account-reject') {
             if (!current.permissions.decide_account) return;
             const reason = window.prompt('سبب رفض طلب التوثيق — سيظهر للعميل:') || '';
             if (reason.trim().length < 5) return notice('سبب الرفض مطلوب، خمسة أحرف على الأقل.', 'warning');
-            url = ROUTES.accountDecision + '/' + current.account.id + '/kyc';
+            url = ROUTES.accountDecision + '/' + current.account.id + '/decision';
             body = {status:2, target_tier:current.account.target_tier, reason:reason.trim()};
         } else return;
 

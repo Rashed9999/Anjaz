@@ -463,92 +463,27 @@ class AdminHubController extends Controller
         $user = User::findOrFail($id);
         $targetTier = (int) $request->input('target_tier', 2);
 
-        if ($status === 1 && !in_array($targetTier, [2, 3], true)) {
-            return response()->json([
-                'message' => 'مستوى التوثيق المطلوب غير صالح.',
-                'code' => 'KYC_TIER_TARGET_INVALID',
-            ], 422);
-        }
-
-        $governorate = null;
-        if ($status === 1) {
-            // هذه واجهة توافقية قديمة؛ لا نسمح لها بعد اليوم بإنتاج حساب
-            // "مقبول" ومنطقته UNKNOWN. إن لم يكن في الملف اختيار محفوظ،
-            // يمكن للمراجع اختياره صراحة في الطلب، ثم يسجَّل كبيان السكن.
-            $governorate = \App\Support\YemenGovernorates::codeFromName(
-                (string) ($request->input('governorate')
-                    ?: $user->residence_governorate
-                    ?: $user->origin_governorate)
-            );
-            if ($governorate === null) {
-                return response()->json([
-                    'message' => 'اختر محافظة السكن قبل اعتماد الحساب. استخدم طابور مراجعة الهوية لإتمام التفعيل.',
-                    'code' => 'MISSING_RESIDENCE_GOVERNORATE',
-                ], 422);
-            }
-        }
-
-        if ($status === 1 && (int) $user->type === CUSTOMER_TYPE) {
-            try {
-                // المحافظة شرط رسالةٍ مستقلة قابلة للعلاج؛ بعدها فقط نفحص
-                // تسلسل المستويات، ولا نُغيّر شيئاً من حالة الاعتماد نفسها.
-                app(\App\Services\KycTierService::class)
-                    ->assertSequentialVerificationDecision($user, $targetTier);
-            } catch (\DomainException $e) {
-                return response()->json([
-                    'message' => $e->getMessage(),
-                    'code' => str_contains($e->getMessage(), 'KYC_TIER_SEQUENCE_VIOLATION')
-                        ? 'KYC_TIER_SEQUENCE_VIOLATION'
-                        : 'KYC_TIER_DECISION_REJECTED',
-                ], 409);
-            }
-        }
-
         try {
-            // المحافظة وقرار التوثيق معاملة واحدة: فشل الحارس لا يترك
-            // بيانات سكن معدلة ولا حالة اعتماد جزئية.
-            $user = \Illuminate\Support\Facades\DB::transaction(function () use (
-                $user, $request, $status, $targetTier, $governorate
-            ) {
-                if ($status === 1) {
-                    $user->residence_governorate = $governorate;
-                    $user->save();
-                }
-                return app(KycDocumentService::class)->decideAccountVerification(
-                    user: $user,
-                    reviewer: $request->user(),
-                    approve: $status === 1,
-                    targetTier: $targetTier,
-                    reason: $request->input('reason'),
-                );
-            });
+            app(\App\Services\Verification\AccountVerificationDecisionService::class)->decide(
+                account: $user,
+                reviewer: $request->user(),
+                approve: $status === 1,
+                targetTier: $targetTier,
+                requestedGovernorate: $request->input('governorate'),
+                reason: $request->input('reason'),
+            );
         } catch (\DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $code = $e->getMessage();
+            $message = match ($code) {
+                'KYC_TIER_TARGET_INVALID' => 'مستوى التوثيق المطلوب غير صالح.',
+                'MISSING_RESIDENCE_GOVERNORATE' => 'اختر محافظة السكن قبل اعتماد الحساب.',
+                default => $code,
+            };
+            return response()->json([
+                'message' => $message,
+                'code' => $code,
+            ], str_contains($code, 'KYC_TIER_SEQUENCE_VIOLATION') ? 409 : 422);
         }
-
-        // AMIAL-VERIFY-HUB: اعتماد تاجر يوثّق ملفه أيضاً (يفتح ميزات التطبيق فعلياً)
-        if ((int) $user->type === MERCHANT_TYPE) {
-            MerchantProfile::where('user_id', $user->id)->update(
-                $status === 1
-                    ? ['verification_status' => 'verified', 'verified_at' => now()]
-                    : ['verification_status' => 'rejected'],
-            );
-        }
-
-        // AMIAL-VERIFY-GATE: إشعار داخل التطبيق (مركز الإشعارات) — يعرف صاحب
-        // الحساب فور القرار دون انتظار محاولة دخول. آمن: لا يكسر القرار أبداً.
-        try {
-            $title = $status === 1 ? 'تم اعتماد حسابك ✅' : 'تعذّر اعتماد حسابك';
-            $body = $status === 1
-                ? 'وثّقنا حسابك بنجاح. يمكنك الآن استخدام كل الخدمات.'
-                : 'راجعنا وثائقك ولم نتمكّن من اعتمادها. يرجى إعادة رفع وثائق واضحة أو مراجعة الدعم.';
-            app(\App\Services\NotificationService::class)->dispatch(
-                $user, 'kyc_verification', $title, $body,
-                data: ['is_kyc_verified' => $status],
-            );
-        } catch (\Throwable $e) { /* الإشعار تحسيني */ }
-
-        // Push يخرج الآن من NotificationService بعد commit؛ لا إرسال ثانٍ موازٍ هنا.
 
         return response()->json(['kyc' => $status, 'message' => $status === 1 ? 'تم اعتماد الوثائق' : 'تم رفض الوثائق']);
     }
