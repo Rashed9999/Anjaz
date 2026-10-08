@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * AMIAL-KYC-TIERS-001 + AMIAL-SANCTION-001 (v1.9) — اختبارات.
+ * AMIAL-KYC-TIERS-001 + AMIAL-SANCTION-001 (v2.0) — اختبارات.
  */
 class KycSanctionTest extends TestCase
 {
@@ -28,6 +28,41 @@ class KycSanctionTest extends TestCase
         $this->sanction = app(SanctionScreeningService::class);
     }
 
+    /**
+     * حساب عميل يصل فعلياً إلى المستوى المطلوب وفق العقد الحالي:
+     * Tier 1 ليس رقماً في العمود فقط؛ يلزمه هاتف مثبت وسكن معتمد.
+     */
+    private function customerAt(int $tier, bool $verified = false): User
+    {
+        $user = User::factory()->create([
+            'type' => 2,
+            'kyc_tier' => $tier,
+            'is_phone_verified' => $tier >= 1 ? 1 : 0,
+            'is_kyc_verified' => $verified ? 1 : 0,
+            'residence_governorate' => $tier >= 1 ? 'YE-AD' : null,
+            'verified_residence_governorate' => $tier >= 1 ? 'YE-AD' : null,
+            'residence_verified_at' => $tier >= 1 ? now() : null,
+            'zone_code' => 'SOUTH',
+        ]);
+
+        if ($tier >= 1) {
+            DB::table('residence_verifications')->insert([
+                'user_id' => $user->id,
+                'kyc_document_id' => null,
+                'declared_governorate' => 'YE-AD',
+                'evidence_type' => 'government_residence_document',
+                'evidence_strength' => 'strong',
+                'status' => 'verified',
+                'submitted_at' => now()->subMinute(),
+                'reviewed_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return $user->fresh();
+    }
+
     // ============ KYC Tiers ============
 
     /** @test */
@@ -41,36 +76,48 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function tier_1_allows_small_transactions()
     {
-        $user = User::factory()->create(['kyc_tier' => 1]);
-        // 1000 ضمن حد 5000 لـ tier 1
+        $user = $this->customerAt(1);
+        // 1000 ضمن حد 100000 لـ Tier 1 التدريجي.
         $this->kyc->assertTransactionAllowed($user, '1000', 'send_money');
-        $this->assertTrue(true); // لم يُرمَ exception
+        $this->assertTrue(true);
     }
 
     /** @test */
     public function tier_1_rejects_large_single_transaction()
     {
-        $user = User::factory()->create(['kyc_tier' => 1]);
+        $user = $this->customerAt(1);
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('حد العملية الواحدة');
-        // 10000 > حد 5000
-        $this->kyc->assertTransactionAllowed($user, '10000', 'send_money');
+        $this->kyc->assertTransactionAllowed($user, '100000.0001', 'send_money');
+    }
+
+    /** @test */
+    public function documented_individual_limit_override_is_enforced()
+    {
+        $user = User::factory()->create([
+            'kyc_tier' => 2,
+            'is_kyc_verified' => 1,
+            'limit_override' => ['max_single_transaction' => '1200'],
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('حد العملية الواحدة');
+        $this->kyc->assertTransactionAllowed($user, '1200.0001', 'send_money');
     }
 
     /** @test */
     public function tier_1_blocks_safe_payment_feature()
     {
-        $user = User::factory()->create(['kyc_tier' => 1]);
+        $user = $this->customerAt(1);
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('مستوى توثيق أعلى');
-        // safe_payment غير مسموح في tier 1
         $this->kyc->assertTransactionAllowed($user, '1000', 'safe_payment');
     }
 
     /** @test */
     public function tier_2_allows_safe_payment()
     {
-        $user = User::factory()->create(['kyc_tier' => 2]);
+        $user = $this->customerAt(2, true);
         $this->kyc->assertTransactionAllowed($user, '1000', 'safe_payment');
         $this->assertTrue(true);
     }
@@ -78,7 +125,7 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function tier_3_allows_all_features()
     {
-        $user = User::factory()->create(['kyc_tier' => 3]);
+        $user = $this->customerAt(3, true);
         foreach (['send_money', 'safe_payment', 'donations', 'family_fund'] as $feature) {
             $this->kyc->assertTransactionAllowed($user, '1000', $feature);
         }
@@ -88,21 +135,21 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function balance_limit_is_enforced()
     {
-        $user = User::factory()->create(['kyc_tier' => 1]);
+        $user = $this->customerAt(1);
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('الرصيد سيتجاوز الحد');
-        // 100000 > حد رصيد tier 1 (50000)
-        $this->kyc->assertBalanceAllowed($user, '100000');
+        $this->kyc->assertBalanceAllowed($user, '100000.0001');
     }
 
     /** @test */
-    public function upgrade_tier_works()
+    public function direct_customer_tier_upgrade_is_forbidden()
     {
-        $user = User::factory()->create(['kyc_tier' => 0]);
+        $user = User::factory()->create(['type' => 2, 'kyc_tier' => 0]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('KYC_DIRECT_TIER_MUTATION_FORBIDDEN');
+
         $this->kyc->upgradeTier($user, 2);
-        $user->refresh();
-        $this->assertEquals(2, $user->kyc_tier);
-        $this->assertNotNull($user->kyc_tier_updated_at);
     }
 
     /** @test */
@@ -116,7 +163,7 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function tier_info_includes_next_tier()
     {
-        $user = User::factory()->create(['kyc_tier' => 1]);
+        $user = $this->customerAt(1);
         $info = $this->kyc->getUserTierInfo($user);
         $this->assertEquals(1, $info['current_tier']);
         $this->assertNotNull($info['next_tier']);
@@ -171,7 +218,6 @@ class KycSanctionTest extends TestCase
     /** @test */
     public function name_normalization_handles_arabic()
     {
-        // الألف بأشكالها → ا، التاء المربوطة → ه
         $a = $this->sanction->normalizeName('أحمد');
         $b = $this->sanction->normalizeName('احمد');
         $this->assertEquals($a, $b);

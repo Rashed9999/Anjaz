@@ -22,7 +22,7 @@ class GovernoratePicker extends StatefulWidget {
 
   final String label;
   final String? value;
-  final ValueChanged<String?> onChanged;
+  final ValueChanged<String?>? onChanged;
   final String? helper;
 
   /// أسماء المحافظات الـ22 (21 محافظة + أمانة العاصمة، وسقطرى مستقلّة).

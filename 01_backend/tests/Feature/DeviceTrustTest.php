@@ -53,9 +53,9 @@ class DeviceTrustTest extends TestCase
         // HttpException — والتقاطُ الصنف الخطأ يجعل الاختبار يسقط بخطأٍ بدل
         // أن يقرأ «مُنع»، فيبدو العطل في الشيفرة وهو في الفحص.
         try {
-            (new CheckDeviceId())->handle($request, fn ($r) => response('ok'));
+            $response = (new CheckDeviceId())->handle($request, fn ($r) => response('ok'));
 
-            return true;
+            return $response->getStatusCode() < 400;
         } catch (HttpResponseException) {
             return false;
         }
@@ -138,6 +138,42 @@ class DeviceTrustTest extends TestCase
             'أُعيد تنشيط جهازٍ محظور بمجرّد تسجيل الدخول');
         $this->assertTrue((bool) $device->is_blocked,
             'رُفع الحظر بالدخول — وهو ما لا يملكه المستخدم');
+    }
+
+    public function test_unknown_device_returns_actionable_arabic_code_not_legacy_access_denied(): void
+    {
+        $u = User::factory()->create();
+        $this->deviceFor($u, 'DEV-OK');
+
+        $request = Request::create('/api/v1/customer/get-customer', 'GET');
+        $request->headers->set('device-id', 'DEV-STRANGER');
+        $request->server->set('REMOTE_ADDR', '196.1.2.3');
+        $request->setUserResolver(fn () => $u);
+
+        $response = (new CheckDeviceId())->handle($request, fn () => response('ok'));
+
+        $this->assertSame(403, $response->getStatusCode());
+        $payload = json_decode($response->getContent(), true);
+        $this->assertSame('DEVICE_NOT_ACTIVE', $payload['code']);
+        $this->assertStringContainsString('سجّل الدخول من جديد', $payload['message']);
+        $this->assertStringNotContainsString('access denied', strtolower($payload['message']));
+    }
+
+    public function test_blocked_device_returns_specific_arabic_reason(): void
+    {
+        $u = User::factory()->create();
+        $this->deviceFor($u, 'DEV-STOLEN', ['is_blocked' => true, 'is_active' => 1]);
+
+        $request = Request::create('/api/v1/customer/get-customer', 'GET');
+        $request->headers->set('device-id', 'DEV-STOLEN');
+        $request->server->set('REMOTE_ADDR', '196.1.2.3');
+        $request->setUserResolver(fn () => $u);
+
+        $response = (new CheckDeviceId())->handle($request, fn () => response('ok'));
+        $payload = json_decode($response->getContent(), true);
+
+        $this->assertSame('DEVICE_BLOCKED', $payload['code']);
+        $this->assertStringContainsString('محظور', $payload['message']);
     }
 
     // ── الحالة التي يفترضها الوسيط ولا يفحصها أحد ──────────────────────

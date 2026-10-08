@@ -28,6 +28,8 @@ class MixedPaymentTest extends TestCase
     /** @test بيع مختلط صحيح: 400 نقد + 600 محفظة = 1000، يُخزَّن التقسيم. */
     public function valid_mixed_sale_stores_split(): void
     {
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TXWALLET', '600');
         $sale = app(CashierService::class)->recordSale(
             merchant: $this->merchant, total: '1000', paymentMethod: 'mixed', items: [],
             paidTransactionId: 'TXWALLET', cashAmount: '400', walletAmount: '600',
@@ -43,6 +45,8 @@ class MixedPaymentTest extends TestCase
     public function mismatched_split_is_rejected(): void
     {
         $this->expectException(\InvalidArgumentException::class);
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TX', '600');
         app(CashierService::class)->recordSale(
             merchant: $this->merchant, total: '1000', paymentMethod: 'mixed', items: [],
             paidTransactionId: 'TX', cashAmount: '300', walletAmount: '600', // = 900 ≠ 1000

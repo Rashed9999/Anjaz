@@ -79,8 +79,10 @@ class ZoneOnRegistrationTest extends TestCase
     private function registrationPayload(string $phone = '783545525'): array
     {
         return [
-            'f_name' => 'راشد', 'l_name' => 'المعربي', 'gender' => 'male',
+            'f_name' => 'راشد', 'father_name' => 'محمد', 'grandfather_name' => 'عوض',
+            'family_name' => 'المعربي', 'l_name' => 'المعربي', 'gender' => 'male',
             'dial_country_code' => '+967', 'phone' => $phone,
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'password' => '4321',
         ];
     }
@@ -156,25 +158,20 @@ class ZoneOnRegistrationTest extends TestCase
     // ══════════════════════════════════════════════════════════════════
 
     /** @test */
-    public function an_unverified_recipient_is_told_verification_is_pending(): void
+    public function a_tier_one_recipient_can_receive_before_full_kyc_approval(): void
     {
         $sender = $this->customer('SOUTH');
-        $recipient = $this->customer('UNKNOWN');
+        $recipient = $this->customer('NORTH');
+
+        // وصل إلى أساس Tier 1 (هاتف وإقامة) ثم طلب Tier أعلى؛ انتظار
+        // اعتماد الهوية لا يلغي خدمات Tier 1 الأساسية مثل الاستقبال.
         $recipient->forceFill(['is_kyc_verified' => 0])->save();
 
-        try {
-            app(RecipientVerificationService::class)
-                ->verifyRecipient((string) $recipient->phone, $sender->id);
+        $result = app(RecipientVerificationService::class)
+            ->verifyRecipient((string) $recipient->phone, $sender->id);
 
-            $this->fail('قُبل مستلمٌ غيرُ موثَّق');
-        } catch (RuntimeException $e) {
-            $this->assertStringContainsString('لم يُوثَّق بعد', $e->getMessage(),
-                'الرسالةُ لا تقول إنّ التوثيقَ ناقص — فيظنّ القارئُ '
-                . 'الحسابَ محظوراً، ويذهب إلى الدعم بلا معلومة');
-
-            // **وتقول ماذا يفعل** — رفضٌ بلا مخرجٍ يُنتج تذكرةَ دعم.
-            $this->assertStringContainsString('التوثيق', $e->getMessage());
-        }
+        $this->assertSame($recipient->id, (int) $result['recipient_id']);
+        $this->assertNotEmpty($result['verification_token']);
     }
 
     /** @test */

@@ -14,7 +14,7 @@ class InformationView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(children: [
 
-      const CustomLogoWidget(height: 70, width: 70),
+      const CustomLogoWidget(height: 56),
       Padding(
         padding: const EdgeInsets.symmetric(
             vertical: Dimensions.paddingSizeLarge),

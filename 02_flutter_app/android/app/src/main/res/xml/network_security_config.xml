@@ -12,15 +12,11 @@
 -->
 <network-security-config>
     <!--
-        AMIAL-PILOT-HTTP-001 — وضع التجربة: السماح بـ http (cleartext) بالكامل.
-        سبب: خادم Contabo/Coolify عبر sslip.io بلا شهادة SSL بعد، وإعداد
-        النطاق المحدّد لم يُطبَّق على بعض الأجهزة — فنسمح مؤقّتاً بالكامل ليعمل
-        الاختبار بضمان.
-        ⚠️⚠️ للتجربة فقط — قبل الإطلاق/عرض البنك: انتقل إلى دومين + https،
-        أعِد base-config إلى cleartextTrafficPermitted="false"،
-        وأعِد usesCleartextTraffic="false" في AndroidManifest.
+        P0-HTTPS-ONLY — النسخة الحالية تتصل افتراضياً بـ https://amialpay.com.
+        لا يوجد استثناء HTTP في main/release؛ أي اختبار محلي غير مشفّر يجب
+        أن يُعزل لاحقاً في debug manifest/config ولا يُورَّث إلى APK الإنتاج.
     -->
-    <base-config cleartextTrafficPermitted="true">
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

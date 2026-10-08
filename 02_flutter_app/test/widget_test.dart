@@ -12,7 +12,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/features/auth/screens/role_router.dart';
 import 'package:amial_pay/features/home/screens/nav_bar_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_dashboard_screen.dart';
 import 'package:amial_pay/features/access/screens/home_dispatcher_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
 
@@ -20,12 +19,36 @@ void main() {
   const fast = Timeout(Duration(seconds: 30));
 
   group('التهيئة (config)', () {
-    test('اللغات: العربية أساسية + الإنجليزية فقط (AMIAL-I18N-001)', () {
+    test('اللغات: العربية أساسية وبلا لغاتٍ موروثة (AMIAL-I18N-001)', () {
       final codes = AppConstants.languages.map((l) => l.languageCode).toList();
-      // بالضبط لغتان، العربية أولاً ثم الإنجليزية — بلا بنغالي/هندي.
-      expect(codes, equals(['ar', 'en']));
+
+      // **عقدُ هذا الفحص كما كُتب**: «بلا بنغالي/هندي» — وهي بقايا
+      // القالب الموروث، وعودتُها تعني قائمةً بلغاتٍ لا يقرؤها أحد هنا.
+      // والعربيّةُ أوّلاً لأنّها الافتراضيّةُ في `fallbackLocale`.
+      expect(codes.first, 'ar');
       expect(codes.contains('bn'), isFalse);
       expect(codes.contains('hi'), isFalse);
+
+      // ══════════════════════════════════════════════════════════════
+      // **AMIAL-I18N-003 — وحبسُ الإنجليزيّة هنا كان أثراً جانبيّاً.**
+      //
+      // كان الفحصُ `equals(['ar','en'])`، فيشترط وجودَها. وقال صاحبُ
+      // المشروع: «زرُّ الترجمة لا يعمل — عند تغيير الإنجليزيّة لا
+      // يتغيّر شيء». وقِيست الآليّةُ فإذا هي سليمةٌ كاملة، **والعطلُ
+      // في التغطية**: ٣٥٩ نداءَ `.tr` مقابل ٨٢٥ نصّاً محفوراً، ولوحةُ
+      // التجزئة **صفرُ نداءات**.
+      //
+      // فرُفعت من القائمة — **ووعدٌ لا يُوفى أسوأ من غيابه**. ولم
+      // يُهدَم ما بُني: `en.json` و`Messages` و`Get.updateLocale` كما
+      // هي، يحرسها `no_english_reaches_the_eye_test`.
+      //
+      // **ولا تُعاد بتعديل هذا السطر** — تُعاد يومَ تُترجَم شاشاتُ
+      // التاجر، فيمرّ الفحصُ من تلقائه.
+      // ══════════════════════════════════════════════════════════════
+      for (final c in codes) {
+        expect(['ar', 'en'].contains(c), isTrue,
+            reason: 'لغةٌ ثالثةٌ دخلت القائمة: $c');
+      }
     }, timeout: fast);
   });
 
@@ -37,15 +60,16 @@ void main() {
       expect(RoleRouter.homeForRole('unknown'), isA<NavBarScreen>());
     }, timeout: fast);
 
-    test('التاجر/الـ POS → موزّع القطاعات، ومرجعه لوحة التاجر', () {
-      // AMIAL-SECTOR-ROUTING: التاجر لم يعد يذهب إلى لوحة واحدة، بل يمرّ
-      // بموزّع يقرأ نوع نشاطه (صيدلية/مطعم/وقود/جملة) ويفتح لوحته. ولوحة
-      // التاجر العامّة هي المرجع حين لا يكون النشاط من القطاعات المعروفة.
+    test('التاجر/الـ POS → موزّع الفاعل، ومرجعه بوابة المالك', () {
+      // لا يكفي الدور وحده: موظف POS يشارك مالكه role=merchant في بعض
+      // الجلسات، لذلك يبقيهما RoleRouter عند الموزّع ليفصل actor من الخادم.
       for (final role in ['merchant', 'pos']) {
         final home = RoleRouter.homeForRole(role);
         expect(home, isA<HomeDispatcherScreen>(), reason: 'الدور: $role');
         expect((home as HomeDispatcherScreen).userHomeFallback,
-            isA<MerchantDashboardScreen>());
+            isA<WebPortalNoticeScreen>());
+        expect((home.userHomeFallback as WebPortalNoticeScreen).role,
+            equals('merchant'));
       }
     }, timeout: fast);
 

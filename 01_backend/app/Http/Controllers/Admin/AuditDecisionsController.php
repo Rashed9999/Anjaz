@@ -83,7 +83,7 @@ class AuditDecisionsController extends Controller
             'filters' => $request->only([
                 'decision_code', 'severity', 'actor_user_id', 'action',
                 'subject_type', 'subject_id', 'date_from', 'date_to',
-                'transaction_id', 'q', 'zone_code', 'domain', 'integrity',
+                'transaction_id', 'correlation_id', 'q', 'zone_code', 'domain', 'integrity',
             ]),
             'domains' => \App\Support\AuditVocabulary::DOMAINS,
             'actions_by_domain' => $this->actionsPresent(),
@@ -198,6 +198,7 @@ class AuditDecisionsController extends Controller
             'zone_code' => $d->zone_code,
             'transaction_id' => $d->transaction_id,
             'idempotency_key' => $d->idempotency_key,
+            'correlation_id' => $d->correlation_id,
 
             'actor' => $actor ? [
                 'id' => (int) $actor->id,
@@ -253,7 +254,7 @@ class AuditDecisionsController extends Controller
             fputcsv($out, ['المعرّف', 'الوقت', 'المنفِّذ', 'صفةُ المنفِّذ',
                 'الفعل', 'رمزُ الفعل', 'القرار', 'رمزُ القرار', 'الدرجة',
                 'الموضوع', 'نوعُ الموضوع (رمز)', 'معرّفُ الموضوع',
-                'المعاملة', 'النطاق', 'السبب', 'بصمةُ السجلّ']);
+                'المعاملة', 'معرّفُ التتبّع', 'النطاق', 'السبب', 'بصمةُ السجلّ']);
 
             foreach ($rows as $r) {
                 $action = \App\Support\AuditVocabulary::action($r->action);
@@ -272,6 +273,7 @@ class AuditDecisionsController extends Controller
                     $r->subject_type,
                     $r->subject_id,
                     $r->transaction_id,
+                    $r->correlation_id,
                     $r->zone_code,
                     $r->reason,
                     $r->entry_hash,
@@ -535,6 +537,9 @@ class AuditDecisionsController extends Controller
         if ($tx = $request->query('transaction_id')) {
             $query->where('transaction_id', $tx);
         }
+        if ($correlation = trim((string) $request->query('correlation_id', ''))) {
+            $query->where('correlation_id', $correlation);
+        }
 
         if ($zone = $request->query('zone_code')) {
             $query->where('zone_code', $zone);
@@ -553,7 +558,8 @@ class AuditDecisionsController extends Controller
                 $w->where('reason', 'like', $like)
                     ->orWhere('action', 'like', $like)
                     ->orWhere('decision_code', 'like', $like)
-                    ->orWhere('decision_id', 'like', $like);
+                    ->orWhere('decision_id', 'like', $like)
+                    ->orWhere('correlation_id', 'like', $like);
             });
         }
 

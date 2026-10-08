@@ -253,10 +253,40 @@ class FuelShiftTest extends TestCase
             'pump_id' => $this->pump->id, 'fuel_product_id' => $this->product->id,
             'sale_type' => 'by_amount', 'amount' => 5000, 'payment_method' => 'cash',
         ]);
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-FUEL-QR-001 — **مرجعُ دفعٍ حقيقيٌّ لا `'TX1'`.**
+        //
+        // كان يُمرَّر نصٌّ مخترَع، وشُدّد المسارُ بحقّ: البيعُ بمحفظة
+        // أميال يشترط طلبَ دفعٍ **دفعه العميلُ فعلاً** — فلا يخصم موظّفُ
+        // المحطّة من محفظةِ أحدٍ بلا تأكيده.
+        //
+        // فمرجعٌ مخترَعٌ يُثبت أنّ الرفضَ يقع، لا أنّ الورديّةَ تجمع.
+        // **والمحروسُ هنا مجاميعُ الورديّة**، فيُبنى المرجعُ صادقاً ليبلغ
+        // الاختبارُ ما كُتب له. (القاعدة الرابعة: يُسلَك المسارُ الحقيقيّ.)
+        // ══════════════════════════════════════════════════════════════
+        $customer = User::factory()->create(['type' => 2, 'zone_code' => 'SOUTH']);
+
+        foreach ([$this->merchant->id => '0.0000', $customer->id => '50000.0000'] as $uid => $bal) {
+            \App\Models\EMoney::firstOrCreate(['user_id' => $uid], [
+                'current_balance' => $bal, 'held_balance' => '0.0000',
+                'pending_balance' => '0.0000', 'charge_earned' => '0.0000',
+                'zone_code' => 'SOUTH',
+            ]);
+        }
+
+        $requests = app(\App\Services\PaymentRequestService::class);
+        $paid = $requests->pay($customer, $requests->create(
+            requester: $this->merchant, amount: '3000',
+            note: 'دفع وقود', shareMethod: 'qr',
+        ));
+
+        $this->assertNotEmpty($paid['transaction_id'],
+            'لم يُنتج دفعُ العميل مرجعاً — الاختبار يفحص فراغاً');
+
         $this->stationSvc->recordSale($this->merchant, null, [
             'pump_id' => $this->pump->id, 'fuel_product_id' => $this->product->id,
             'sale_type' => 'by_amount', 'amount' => 3000,
-            'payment_method' => 'amial_pay', 'paid_transaction_id' => 'TX1',
+            'payment_method' => 'amial_pay', 'paid_transaction_id' => $paid['transaction_id'],
         ]);
         $company = $this->stationSvc->addCompanyAccount($this->merchant, [
             'company_name' => 'شركة', 'credit_limit' => '100000',

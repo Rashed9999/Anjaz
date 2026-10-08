@@ -44,6 +44,7 @@ class AgentPortalContractTest extends TestCase
         parent::setUp();
 
         $this->company = new User();
+        $this->company->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $this->company->forceFill([
             'f_name' => 'البسيري', 'l_name' => 'للصرافة', 'phone' => '967771800001',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
@@ -57,6 +58,7 @@ class AgentPortalContractTest extends TestCase
     private function addBranch(string $code = 'MKL'): AgentBranch
     {
         $bu = new User();
+        $bu->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $bu->forceFill([
             'f_name' => 'فرع ' . $code, 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '9677718' . random_int(10000, 99999),

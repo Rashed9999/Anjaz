@@ -37,8 +37,8 @@ class Helpers
                 'Content-Type' => 'application/json',
             ];
 
-            Http::withHeaders($headers)->post($url, $data);
-            return true;
+            $response = Http::withHeaders($headers)->timeout(10)->post($url, $data);
+            return $response->successful();
         }catch (\Exception $exception){
             return false;
         }
@@ -73,14 +73,24 @@ class Helpers
             'message' => [
                 "token" => $fcm_token,
                 "data" => [
-                    "title" => (string)$data['title'],
+                    "title" => trim((string)($data['title'] ?? '')) ?: 'أميال باي',
                     "body" => (string)$data['description'],
                     "image" => (string)$data['image'],
                     "type" => (string)$data['type']
                 ],
                 "notification" => [
-                    'title' => (string)$data['title'],
+                    'title' => trim((string)($data['title'] ?? '')) ?: 'أميال باي',
                     'body' => (string)$data['description'],
+                ],
+                // إشعار الخلفية يعرضه Android نفسه عندما لا تكون Flutter
+                // نشطة؛ يجب أن يذهب إلى القناة التي ينشئها التطبيق حتى
+                // يحتفظ بالصوت والأولوية، لا إلى قناة FCM الافتراضية الصامتة.
+                'android' => [
+                    'priority' => 'HIGH',
+                    'notification' => [
+                        'channel_id' => 'amial_pay_default',
+                        'sound' => 'notification',
+                    ],
                 ],
                 "apns" => [
                     "payload" => [
@@ -92,7 +102,35 @@ class Helpers
             ]
         ];
 
-        return self::sendNotificationToHttp($postData);
+        $sent = self::sendNotificationToHttp($postData);
+
+        // AMIAL-NOTIFICATION-DELIVERY-001 — المسارات القديمة المباشرة
+        // أصبحت تترك الأثر الإداري نفسه بدلاً من Push لا يمكن تتبعه.
+        try {
+            $userId = $fcm_token
+                ? User::where('fcm_token', $fcm_token)->value('id')
+                : null;
+
+            if ($userId) {
+                $delivery = app(\App\Services\NotificationDeliveryLogService::class);
+                $type = (string) ($data['type'] ?? 'legacy_push');
+
+                if ($sent) {
+                    $delivery->accepted((int) $userId, $type);
+                } else {
+                    $delivery->failed(
+                        (int) $userId,
+                        'LEGACY_FCM_SEND_FAILED',
+                        'مسار FCM القديم لم يحصل على قبول ناجح من المزود.',
+                        $type,
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            // التدقيق fail-soft ولا يغيّر نتيجة إرسال الإشعار.
+        }
+
+        return $sent;
     }
 
     public static function send_push_notif_to_topic(array $data): bool
@@ -102,15 +140,22 @@ class Helpers
             'message' => [
                 "topic" => $data['receiver'],
                 "data" => [
-                    "title" => (string)$data['title'],
+                    "title" => trim((string)($data['title'] ?? '')) ?: 'أميال باي',
                     "body" => (string)$data['description'],
                     "image" => (string)$image,
                     "type" => (string)$data['type']
                 ],
                 "notification" => [
-                    "title" => (string)$data['title'],
+                    "title" => trim((string)($data['title'] ?? '')) ?: 'أميال باي',
                     "body" => (string)$data['description'],
                     "image" => (string)$image,
+                ],
+                'android' => [
+                    'priority' => 'HIGH',
+                    'notification' => [
+                        'channel_id' => 'amial_pay_default',
+                        'sound' => 'notification',
+                    ],
                 ],
                 "apns" => [
                     "payload" => [
@@ -122,7 +167,36 @@ class Helpers
             ]
         ];
 
-        return self::sendNotificationToHttp($postData);
+        $sent = self::sendNotificationToHttp($postData);
+
+        try {
+            $delivery = app(\App\Services\NotificationDeliveryLogService::class);
+            $type = (string) ($data['type'] ?? 'general');
+            $topicRef = 'topic:' . (string) ($data['receiver'] ?? 'unknown');
+
+            if ($sent) {
+                $delivery->accepted(
+                    null, $type, $topicRef, null, null, 1, null, 'fcm_topic',
+                );
+            } else {
+                $delivery->failed(
+                    null,
+                    'TOPIC_FCM_SEND_FAILED',
+                    'لم يحصل إرسال FCM الجماعي على قبول ناجح من المزود.',
+                    $type,
+                    $topicRef,
+                    null,
+                    1,
+                    false,
+                    null,
+                    'fcm_topic',
+                );
+            }
+        } catch (\Throwable $e) {
+            // سجل التدقيق ثانوي ولا يغيّر نتيجة الإرسال.
+        }
+
+        return $sent;
     }
 
     public static function order_status_update_message(string $status): string
@@ -857,10 +931,7 @@ class Helpers
         $user = User::find($user_id);
         $value = Helpers::order_status_update_message($transaction_type);
 
-        if(isset($user) && $user->fcm_token && $value)
-        {
-            $fcm_token = $user->fcm_token;
-
+        if (isset($user) && $user->fcm_token && $value) {
             $data = [
                 'title' => '',
                 'description' => self::set_symbol($amount) . ' ' . $value,
@@ -869,12 +940,15 @@ class Helpers
                 'type' => $notificationType ?? $transaction_type,
             ];
 
-            try {
-                Helpers::send_push_notif_to_device($fcm_token, $data);
-                return true;
-            } catch (\Exception $exception) {
-                return false;
-            }
+            return Helpers::send_push_notif_to_device($user->fcm_token, $data);
+        }
+
+        if ($user) {
+            app(\App\Services\NotificationDeliveryLogService::class)->skipped(
+                $user_id,
+                empty($user->fcm_token) ? 'FCM_TOKEN_MISSING' : 'NOTIFICATION_MESSAGE_DISABLED',
+                $notificationType ?? $transaction_type,
+            );
         }
 
         return false;
@@ -1092,5 +1166,3 @@ function translate(string $key): string
 
     return $result;
 }
-
-

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/bill_pay/controllers/bill_pay_controller.dart';
 import 'package:amial_pay/features/bill_pay/domain/models/bill_pay_models.dart';
+import 'package:amial_pay/features/bill_pay/screens/bill_pay_history_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/common/widgets/amial_result_sheet.dart';
@@ -45,45 +46,61 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
     if (!_formKey.currentState!.validate()) return;
     final ctrl = Get.find<BillPayController>();
 
-    // لو fixed: المبلغ من المنتج
-    String amount = _selectedProduct?.isFixed == true
+    final amount = _selectedProduct?.isFixed == true
         ? _selectedProduct!.fixedAmount!
         : _amountCtrl.text.trim();
 
-    // AMIAL-DS-001: ورقة النتيجة الموحّدة (جارٍ الدفع → نجاح/فشل) بدل
-    // AlertDialog + SnackBar المتفرّقين.
-    final done = await AmialResultSheet.run<bool>(
+    final result = await AmialResultSheet.run<AmialBillOrder>(
       context,
       processingTitle: 'جارٍ تسديد الفاتورة',
       processingSubtitle: 'نتواصل مع المزوّد...',
       successTitle: 'تم تسديد الفاتورة',
-      successSubtitle: 'ستجد الإيصال في قائمة الإيصالات',
+      successSubtitle: 'ستجد سند السداد في قائمة الإيصالات.',
       successButton: 'تم',
-      errorMessage: (e) => '$e',
+      pendingWhen: (order) => order.isPending,
+      pendingTitle: 'السداد قيد التأكيد',
+      pendingSubtitle:
+          'تم حجز المبلغ مؤقتاً. لا تُعِد الدفع؛ أميال يتحقق من نفس مرجع العملية تلقائياً.',
+      pendingButton: 'متابعة الحالة',
+      errorMessage: (e) => e.toString().replaceFirst('Exception: ', ''),
       action: () async {
-        final ok = await ctrl.pay(
+        final accepted = await ctrl.pay(
           serviceId: widget.service.id,
           productId: _selectedProduct?.id,
           subscriberAccount: _subscriberCtrl.text.trim(),
           amount: amount,
         );
+
         final order = ctrl.lastOrder.value;
-        if (!ok || order == null) {
-          throw Exception(ctrl.lastError.value.isNotEmpty
-              ? ctrl.lastError.value
-              : 'فشل الدفع، حاول مرة أخرى');
+        if (!accepted || order == null) {
+          throw Exception(
+            ctrl.lastError.value.isNotEmpty
+                ? ctrl.lastError.value
+                : 'تعذّر إرسال طلب السداد.',
+          );
         }
         if (order.isFailed) {
-          throw Exception('لم تنجح العملية. المبلغ أعيد لحسابك.');
+          throw Exception(
+            order.status == 'reversed'
+                ? 'تم عكس العملية.'
+                : 'أكد المزود فشل العملية وأعيد المبلغ المحجوز إلى محفظتك.',
+          );
         }
-        return true;
+        if (!order.isSuccess && !order.isPending) {
+          throw Exception('حالة السداد غير معروفة. راجع سجل عمليات السداد.');
+        }
+        return order;
       },
     );
 
-    if (!mounted) return;
-    if (done == true) {
-      Navigator.pop(context); // العودة لصفحة المزودين
+    if (!mounted || result == null) return;
+
+    if (result.isPending) {
+      Get.off(() => const BillPayHistoryScreen());
+      return;
     }
+
+    Navigator.pop(context);
   }
 
   @override

@@ -129,7 +129,13 @@ class CustomerMoneyLifecycleE2ETest extends TestCase
     /** @test */
     public function transfer_from_user_outside_south_zone_is_blocked(): void
     {
-        $sender   = User::factory()->outsideZone('NORTH')->create();
+        // اجتز بوابة KYC كي يعزل الاختبار حارس المنطقة الذي يقصده.
+        $sender = User::factory()->outsideZone('NORTH')->create([
+            'kyc_tier' => 3,
+            'is_kyc_verified' => 1,
+            'residence_governorate' => 'YE-AD',
+            'verified_residence_governorate' => 'YE-AD',
+        ]);
         $receiver = User::factory()->create(['zone_code' => 'SOUTH']);
 
         $this->wallet($sender->id, '1000.0000');

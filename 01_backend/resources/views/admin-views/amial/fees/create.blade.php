@@ -101,6 +101,31 @@
                             </div>
                         </div>
 
+                        {{-- ③ب الباقة — AMIAL-FEE-PLAN-001
+                             «كلُّ الباقات» هي `NULL`، وهي ما كان قائماً قبل هذه
+                             الميزة. وباقةٌ بعينها **تسبق** العامّةَ عند الحساب،
+                             فمن ضبط سعراً عامّاً ثمّ استثنى باقةً عمل استثناؤه
+                             ولم يُلغِ العامّ. --}}
+                        <div class="row g-3 mt-1">
+                            <div class="col-sm-6">
+                                <label class="form-label" for="f-plan">الباقة</label>
+                                <select class="form-select" id="f-plan" name="plan">
+                                    <option value="" @selected(($old('plan', $cur->plan ?? null) ?? '') === '')>
+                                        كلُّ الباقات
+                                    </option>
+                                    @foreach(\App\Support\Access\AccessConstants::ALL_PLANS as $pl)
+                                        <option value="{{ $pl }}" @selected($old('plan', $cur->plan ?? null) === $pl)>
+                                            {{ \App\Support\Access\AccessConstants::PLAN_LABELS[$pl] ?? $pl }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">
+                                    نسخةُ باقةٍ بعينها <b>تسبق</b> نسخةَ «كلّ الباقات»
+                                    — ولا تُلغيها.
+                                </div>
+                            </div>
+                        </div>
+
                         <hr class="my-4">
 
                         {{-- ④ نوعُ الرسم — والحقولُ تتبعه --}}
@@ -412,6 +437,7 @@
         body.append('zone_code', $('f-zone').value);
         body.append('applies_to', appliesSel.value);
         body.append('fee_type', typeSel.value);
+        body.append('plan', $('f-plan') ? ($('f-plan').value || '') : '');
         body.append('percent_rate', $('f-percent').value || '0');
         body.append('fixed_amount', $('f-fixed').value || '0');
         body.append('min_fee', $('f-min').value);

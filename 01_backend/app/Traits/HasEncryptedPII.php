@@ -147,13 +147,35 @@ trait HasEncryptedPII
         );
     }
 
+    /**
+     * AMIAL-KYC-DUP-001 — **والنطاقُ يبحث عن العمود لا عن الاسم.**
+     *
+     * كان يقرأ `['national_id']` من الخريطة مباشرةً. ولمّا صار المفتاحُ
+     * `identification_number` (وهو العمودُ الحقيقيُّ في `users`) سقط
+     * **بحثُ مركز العملاء كلُّه بـ٥٠٠** — `Undefined array key`.
+     *
+     * وأمسكته البوّابةُ في ثلاثة اختباراتٍ قائمةٍ قبل أيّ التزام، وهو
+     * بالضبط ما تُستدعى له `amial-impact`: تعديلٌ في خريطةٍ يكسر قارئاً
+     * في ملفٍّ آخر.
+     *
+     * **فيُقبَل الاسمان**، ويُرفَع خطأٌ مفهومٌ إن غاب كلاهما بدل تحذيرٍ
+     * غامضٍ من عمق السمة.
+     */
     public function scopeWhereNationalId($query, string $nid)
     {
         $service = $this->getEncryptionService();
-        return $query->where(
-            $this->getPiiFieldsConfig()['national_id']['blind_index'],
-            $service->blindIndex($nid, 'national_id'),
-        );
+        $config = $this->getPiiFieldsConfig();
+
+        $column = $config['identification_number']['blind_index']
+            ?? $config['national_id']['blind_index']
+            ?? null;
+
+        if ($column === null) {
+            throw new \LogicException(static::class
+                .': لا حقلَ هويّةٍ في خريطة التشفير — لا `identification_number` ولا `national_id`.');
+        }
+
+        return $query->where($column, $service->blindIndex($nid, 'national_id'));
     }
 
     // ============================================================
@@ -181,8 +203,16 @@ trait HasEncryptedPII
         return match ($field) {
             'phone' => 'maskPhone',
             'email' => 'maskEmail',
-            'national_id' => 'maskNationalId',
-            default => 'maskPhone', // fallback
+
+            // AMIAL-KYC-DUP-001 — والعمودُ الحقيقيُّ في `users` اسمُه
+            // `identification_number`؛ و`national_id` يبقى لأنّه اسمُ
+            // الحقل في نماذجَ أخرى تستعمل السمةَ نفسَها.
+            'national_id', 'identification_number' => 'maskNationalId',
+
+            // **والافتراضيُّ كان `maskPhone` صامتاً** — أي أنّ حقلاً
+            // جديداً يُقنَّع بقناع هاتفٍ ولا يُنبَّه أحد. وقناعٌ خاطئٌ
+            // يُعرَض في لوحةٍ إداريّةٍ يُقرأ بياناً صحيحاً.
+            default => 'maskGeneric',
         };
     }
 

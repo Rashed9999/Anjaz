@@ -24,7 +24,11 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        // الإهلاك يُثبّت بعد إغلاق الشهر السابق؛ الأمر idempotent، لذلك
+        // إعادة تشغيل المجدول لا تُنشئ قيد الشهر مرتين.
+        $schedule->command('amial:post-asset-depreciation')
+            ->dailyAt('00:20')
+            ->withoutOverlapping();
     }
 
     /**

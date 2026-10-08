@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to "review since X".
+description: 'Review changes since a fixed point along two separate axes: Standards (repository rules) and Spec (the requested behavior). Use when reviewing a branch, PR, work in progress, or “review since X”.'
 ---
 
 Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
@@ -8,7 +8,9 @@ Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
 - **Standards** — does the code conform to this repo's documented coding standards?
 - **Spec** — does the code faithfully implement the originating issue / spec?
 
-Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
+Review the two axes independently, then aggregate them side by side. Use
+parallel sub-agents when available and authorized; otherwise perform the
+Standards review first, reset the review notes, then perform the Spec review.
 
 **This repo has no issue tracker.** The Spec axis reads its spec from the owner's request in the conversation, the commit messages on the branch, and the rules in `01_backend/CLAUDE.md`; the Standards axis reads `CLAUDE.md` and `.claude/skills/`. Say which of the three you used — a Spec review with no spec named is a review of nothing.
 
@@ -20,7 +22,7 @@ Whatever the user said is the fixed point — a commit SHA, branch name, tag, `m
 
 Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <fixed-point>..HEAD --oneline`.
 
-Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside two parallel sub-agents.
+Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside a review axis.
 
 ### 2. Identify the spec source
 
@@ -55,7 +57,7 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - **Middle Man** — a class or function that mostly just delegates onward. → cut it, call the real target direct.
 - **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
 
-### 4. Spawn both sub-agents in parallel
+### 4. Run the two independent axes
 
 **Standards sub-agent prompt** — include:
 
@@ -69,7 +71,11 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - The path or fetched contents of the spec.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
 
-If the spec is missing, skip the Spec sub-agent and note this in the final report.
+If the spec is missing, skip the Spec axis and note this in the final report.
+
+When delegation is unavailable, run the Standards brief, record its findings,
+then run the Spec brief without carrying Standards conclusions into the second
+axis. The final report still keeps the two sections separate.
 
 ### 5. Aggregate
 

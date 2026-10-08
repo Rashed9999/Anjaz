@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 10369)
+Total output lines: 626
+
 <?php
 
 /**
@@ -7,6 +10,15 @@
  */
 
 return [
+
+    // الوقت المالي يُحفظ في قاعدة البيانات UTC كي تبقى المطابقة والتسوية
+    // مستقرتين بين الخوادم، ثم يُعرض لجميع أدوار أميال بتوقيت مكة فقط.
+    // لا يجوز أن يغيّر جهاز العميل أو الموظف تاريخ حركةٍ مالية.
+    'time' => [
+        'storage_timezone' => 'UTC',
+        'display_timezone' => env('AMIAL_DISPLAY_TIMEZONE', 'Asia/Riyadh'),
+        'use_24_hour_clock' => true,
+    ],
 
     /*
      * AMIAL-WA-LIMIT-001 — الحدّ الافتراضيّ للمال عبر بوت واتساب.
@@ -149,13 +161,11 @@ return [
     'encryption' => [
         // base64-encoded 32 bytes; toggle to fresh ones via:
         // php -r 'echo base64_encode(random_bytes(32)) . PHP_EOL;'
-        // AMIAL-FIX: مفاتيح ثابتة افتراضية (كانت تُولَّد عشوائياً كل نشر فتنكسر
-        // فهارس البحث المُعمّاة → فشل الدخول). للإنتاج: اضبطها كمتغيّرات بيئة.
-        'pii_key' => env('AMIAL_PII_ENCRYPTION_KEY', 'ynZEB1h/HBqgQPmWKH7AuB/NVqpSpqkT+GiqnF+wQmo='),
-        'blind_index_key' => env('AMIAL_PII_BLIND_INDEX_KEY', 'aPq8RXLclEIEz6I26E2UEzaRGT3nQrcZhR5NkcY5Q3k='),
-
-        // فحوصات أمان
-        'require_keys_in_production' => env('AMIAL_REQUIRE_PII_KEYS', true),
+        // لا توجد مفاتيح بديلة في المصدر. المفتاح الافتراضي ليس «احتياطاً»:
+        // كل من يقرأ المستودع يستطيع فك بيانات كل بيئة نسيت متغير البيئة.
+        // تولّد مرةً وتُحفظ في مدير الأسرار، ويُرفض إقلاع الإنتاج عند غيابها.
+        'pii_key' => env('AMIAL_PII_ENCRYPTION_KEY'),
+        'blind_index_key' => env('AMIAL_PII_BLIND_INDEX_KEY'),
     ],
 
     // ============================================================
@@ -293,31 +303,7 @@ return [
          *
          * شرطُ الخروج كان «إثباتُ المتأثّرين». وقد صار يُقاس بأمرٍ
          * مستقلّ — `php artisan amial:shadow-report` — يقرأ ما سجّلته
-         * البوّابةُ في مركز الأعطال. **والوضعُ الصامتُ بلا تاريخِ انتهاء
-         * ليس تدرّجاً، بل تسعيرٌ لا يُحصَّل.**
-         *
-         * ─────────────────────────────────────────────────────────────
-         * **والمنفذُ يبقى مفتوحاً بلا نشرة**: إن أظهرت التجربةُ أنّ قدرةً
-         * بعينها تُخرج تاجراً يعمل، تُعاد **وحدَها** إلى الصمت:
-         *
-         *     AMIAL_ENTITLEMENTS_SHADOW=customers
-         *
-         * ولا تُصفَّر البوّابةُ كلُّها — فقد فُعل ذلك مرّةً بمفتاحٍ عامّ
-         * (`enforce => false`) **فأطفأ حرّاساً كانت تعمل**، وكاد يُسلّم
-         * `products` و`retail.*` و`rbac` مجّاناً. فالصمتُ **قائمةٌ** لا
-         * مفتاح.
-         */
-        'shadow' => array_values(array_filter(array_map(
-            'trim',
-            explode(',', (string) env('AMIAL_ENTITLEMENTS_SHADOW', '')),
-        ))),
-    ],
-
-    // ============================================================
-    // AMIAL-AML-001 — محرّك مكافحة غسل الأموال (AML)
-    // ============================================================
-    'aml' => [
-        // مفتاح التشغيل الرئيسي. عند false لا يُستدعى المحرّك إطلاقاً.
+         * البوّابةُ ف…369 tokens truncated…ل الرئيسي. عند false لا يُستدعى المحرّك إطلاقاً.
         // التشغيل آمن: القواعد تبدأ في وضع الظل (shadow) فلا توقف أي معاملة
         // حتى يفعّلها الأدمن صراحةً — إطلاق مصرفي متدرّج (observe ← enforce).
         'enabled' => env('AMIAL_AML_ENABLED', true),
@@ -348,6 +334,15 @@ return [
     // AMIAL-KYC-OCR-001 — استخراج بيانات وثائق الهوية
     // ============================================================
     'kyc' => [
+        // جاهز بمجرد إضافة المفتاح؛ غياب المفتاح يبقي الاتصال الخارجي مغلقاً.
+        // AMIAL_KYC_AI_ENABLED=false مفتاح إيقاف طوارئ مستقل.
+        'ai' => [
+            'enabled' => env('AMIAL_KYC_AI_ENABLED', true),
+            'key' => env('OPENROUTER_API_KEY', ''),
+            'model' => env('AMIAL_KYC_AI_MODEL', 'google/gemini-3.1-flash-lite'),
+            'send_images' => env('AMIAL_KYC_AI_SEND_IMAGES', false),
+            'daily_limit' => (int) env('AMIAL_KYC_AI_DAILY_LIMIT', 30),
+        ],
         'ocr' => [
             'enabled' => env('AMIAL_KYC_OCR_ENABLED', true),
 
@@ -475,6 +470,8 @@ return [
     'hosts' => [
         'admin' => env('AMIAL_ADMIN_HOST', ''),
         'agent' => env('AMIAL_AGENT_HOST', ''),
+        // يفعّل بعد ضبط DNS وTLS؛ حتى ذلك الوقت يبقى /merchant على النطاق الحالي.
+        'merchant' => env('AMIAL_MERCHANT_HOST', ''),
     ],
 
     /*
@@ -504,7 +501,22 @@ return [
         // ولا تكفي لبقاء الرمز حيّاً في صندوق الوارد.
         'lifetime_seconds' => (int) env('AMIAL_OTP_LIFETIME_SECONDS', 600),
 
-        'demo_code' => env('AMIAL_DEMO_OTP', '123456'),
+        // لا يوجد رمز عرض افتراضي في الإنتاج. البيئة التجريبية فقط تحصل
+        // على 123456 افتراضياً؛ وعلى خادم production يجب ضبطه صراحةً مع
+        // AMIAL_ALLOW_DEMO_OTP=true كي يعلم المشغّل أنه فتح مسار العرض.
+        'demo_code' => env(
+            'AMIAL_DEMO_OTP',
+            env('APP_ENV', 'production') === 'production' ? '' : '123456',
+        ),
+
+        // بوابة تطوير صريحة فقط — لا تُفعّل افتراضياً. حسابات العرض
+        // المسجّلة وحدها تستخدم `demo_code`؛ لا يُفتح 123456 لكل رقم حقيقي.
+        // لا تُشغّل هذه البوابة في الإنتاج إلا لحالة اختبار مصرح بها.
+        'pilot_customer_phone_enabled' => filter_var(
+            env('AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED', false),
+            FILTER_VALIDATE_BOOL,
+        ),
+        'pilot_customer_phone_code' => env('AMIAL_PILOT_CUSTOMER_PHONE_OTP', '123456'),
 
         'demo_numbers' => array_filter(array_map('trim', explode(',', (string) env(
             'AMIAL_DEMO_PHONES',
@@ -512,6 +524,11 @@ return [
                 '967777100001',   // عميل تجريبيّ ١
                 '967777100002',   // عميل تجريبيّ ٢
                 '967777200001',   // تاجر تجريبيّ
+                '967777200002',   // مطعم تجريبيّ
+                '967777200003',   // صيدلية تجريبية
+                '967777200004',   // محطة وقود تجريبية
+                '967777200005',   // تاجر جملة تجريبي
+                '967777200006',   // بيع سريع تجريبي
                 '967777300001',   // وكيل تجريبيّ
                 '967777900001',   // وكيل AG-001
                 '967700000000',   // أدمن العرض

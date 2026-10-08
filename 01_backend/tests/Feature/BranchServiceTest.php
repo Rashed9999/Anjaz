@@ -4,9 +4,13 @@ namespace Tests\Feature;
 
 use App\Exceptions\UsageLimitExceededException;
 use App\Models\Branch;
+use App\Models\CashierShift;
+use App\Models\Merchant\PosDevice;
+use App\Models\PosUser;
 use App\Models\MerchantProfile;
 use App\Models\User;
 use App\Services\BranchService;
+use App\Services\CashierShiftService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -46,18 +50,58 @@ class BranchServiceTest extends TestCase
         $this->svc->create($this->merchant, ['name' => 'فرع 1']);
     }
 
-    /** @test */
-    public function pro_plan_can_create_up_to_3_branches(): void
+    /**
+     * @test
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **كان اسمُه `pro_plan_can_create_up_to_3_branches`** — وباقةُ
+     * «تاجر محترف» أُلغيت في توحيد الكتالوج إلى ثلاث باقات، و
+     * `PLAN_MERCHANT_PRO` صار **مرادفاً** لـ`PLAN_ENTERPRISE`. فصار
+     * الاختباران واحداً بتوقّعَين متناقضين: هذا ينتظر حدّاً عند ثلاثة،
+     * وأخوه ينتظر «بلا حدّ» — وكلاهما على الباقة نفسِها.
+     *
+     * فانتقل الحارسُ إلى الباقة التي لها حدٌّ منتهٍ اليوم (الأعمال)،
+     * **والرقمُ يُقرأ من `PLAN_LIMITS` لا يُكتَب** — فتعديلُ الكتالوج
+     * لا يُسقط حارساً، وهو ما أسقط عشرةً في هذا الدمج.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    public function a_finite_plan_is_capped_at_its_declared_branch_limit(): void
     {
-        $this->setPlan(A::PLAN_MERCHANT_PRO);
-        $this->svc->create($this->merchant, ['name' => 'فرع 1']);
-        $this->svc->create($this->merchant, ['name' => 'فرع 2']);
-        $this->svc->create($this->merchant, ['name' => 'فرع 3']);
-        $this->assertEquals(3, Branch::count());
+        // ══════════════════════════════════════════════════════════════
+        // **والحدُّ يُقرأ من الكتالوج، والباقةُ تُختار به لا بالاسم.**
+        //
+        // كان هذا يفترض أنّ «الأعمال» لها حدُّ فروعٍ موجب. ثمّ صارت صفراً
+        // بقرارِ تسعير — فسقط الحارسُ على قرارٍ سليم. **ولا باقةَ اليوم
+        // لها حدٌّ منتهٍ موجب**: صفرٌ في المجّانيّة والأعمال، وبلا حدٍّ في
+        // مؤسسة.
+        //
+        // فيُختار أوّلُ ما له حدٌّ منتهٍ — أيّاً كان اسمُه — ويُحرَس أنّ
+        // الحدَّ **يُفرَض**: صفرٌ يعني المنعَ من أوّل فرع، لا سقفاً لاحقاً.
+        // ══════════════════════════════════════════════════════════════
+        $plan = null;
+        foreach (A::ALL_PLANS as $candidate) {
+            if (A::maxBranches($candidate) !== -1) {
+                $plan = $candidate;
+                break;
+            }
+        }
 
-        // الرابع يجب أن يفشل
+        $this->assertNotNull($plan,
+            'كلُّ الباقات بلا حدِّ فروع — فلا حدَّ يُفرَض أصلاً');
+
+        $limit = A::maxBranches($plan);
+
+        $this->setPlan($plan);
+
+        for ($i = 1; $i <= $limit; $i++) {
+            $this->svc->create($this->merchant, ['name' => "فرع {$i}"]);
+        }
+
+        $this->assertEquals($limit, Branch::count());
+
+        // **والحدُّ يعضّ عند تجاوزه** — وحدٌّ لا يمنع ليس حدّاً.
         $this->expectException(UsageLimitExceededException::class);
-        $this->svc->create($this->merchant, ['name' => 'فرع 4']);
+        $this->svc->create($this->merchant, ['name' => 'فرعٌ فوق الحدّ']);
     }
 
     /** @test */
@@ -120,6 +164,55 @@ class BranchServiceTest extends TestCase
         $this->setPlan(A::PLAN_MERCHANT_PRO, now()->subDay()); // منتهي
         $this->expectException(UsageLimitExceededException::class);
         $this->svc->create($this->merchant, ['name' => 'فرع 1']);
+    }
+
+    /** @test */
+    public function enabling_branches_adopts_live_pos_state_into_the_main_branch(): void
+    {
+        // يبدأ كتاجر أعمال: POS يعمل على «المنشأة الرئيسية» بصيغة
+        // branch_id=null لأن الباقة لا تفتح الفروع.
+        $this->setPlan(A::PLAN_BUSINESS);
+
+        $staffUser = User::factory()->create(['type' => 4, 'is_active' => 1]);
+        $pos = PosUser::create([
+            'user_id' => $staffUser->id,
+            'merchant_user_id' => $this->merchant->id,
+            'branch_id' => null,
+            'pos_number' => 'UPGRADE-POS-01',
+            'display_name' => 'كاشير قائم قبل الترقية',
+            'is_active' => true,
+        ]);
+
+        $device = PosDevice::create([
+            'merchant_user_id' => $this->merchant->id,
+            'branch_id' => null,
+            'device_uuid_hash' => hash('sha256', 'upgrade-pos-device'),
+            'hash_key_version' => 1,
+            'device_hint' => 'vice',
+            'display_name' => 'جهاز قائم قبل الترقية',
+            'registered_at' => now(),
+            'is_active' => true,
+        ]);
+
+        $shift = app(CashierShiftService::class)->open(
+            $this->merchant, $pos->id, '250', $device->id, null,
+        );
+
+        // الترقية إلى مؤسسة تخلق أول فرع حقيقي. يجب ألا تقطع الموظف أو
+        // الجهاز أو الوردية الجارية في منتصف يوم العمل.
+        MerchantProfile::where('user_id', $this->merchant->id)->update([
+            'subscription_plan' => A::PLAN_ENTERPRISE,
+            'subscription_expires_at' => now()->addDays(30),
+        ]);
+
+        $branch = $this->svc->ensureDefaultBranch($this->merchant);
+
+        $this->assertNotNull($branch);
+        $this->assertTrue($branch->is_default);
+        $this->assertSame($branch->id, $pos->fresh()->branch_id);
+        $this->assertSame($branch->id, $device->fresh()->branch_id);
+        $this->assertSame($branch->id, $shift->fresh()->branch_id);
+        $this->assertSame('open', $shift->fresh()->status);
     }
 
     /** @test */

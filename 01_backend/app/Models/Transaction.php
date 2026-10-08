@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
 
 /**
  * AMIAL-REFACTOR-CORE-001 — REPLACE
@@ -76,6 +77,37 @@ class Transaction extends Model
         'split_bill_id',
         'split_participant_id',
     ];
+
+    /**
+     * AMIAL-TRANSACTION-EMAIL-001 — كل صف معاملة لعميل ذي بريد موثق
+     * ينتج إيصالاً بريدياً بعد استقرار المعاملة فقط.
+     *
+     * لا نرسل للتاجر/الوكيل من هذا المسار، ولا إلى بريد غير موثق. كما أن
+     * الإرسال Job مستقل، لذلك فشل مزود البريد لا يغير المال ولا يعيد القيد.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (Transaction $transaction): void {
+            $user = User::find((int) $transaction->user_id);
+            if (!$user
+                || (int) $user->type !== 2
+                || (int) ($user->is_email_verified ?? 0) !== 1
+                || empty($user->email_verified_at)
+                || !filter_var((string) $user->email, FILTER_VALIDATE_EMAIL)) {
+                return;
+            }
+
+            $dispatch = static function () use ($transaction): void {
+                \App\Jobs\SendTransactionEmailJob::dispatch((int) $transaction->id);
+            };
+
+            if (DB::transactionLevel() > 0) {
+                DB::afterCommit($dispatch);
+            } else {
+                $dispatch();
+            }
+        });
+    }
 
     public function user(): BelongsTo
     {

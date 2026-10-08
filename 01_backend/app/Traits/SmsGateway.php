@@ -7,6 +7,7 @@ use Twilio\Rest\Client;
 use Illuminate\Support\Facades\Http;
 use GuzzleHttp\Client as HpptClient;
 use App\Models\Setting;
+use App\Services\Messaging\Providers\Sms\Msg91SmsProvider;
 
 trait  SmsGateway
 {
@@ -172,36 +173,19 @@ trait  SmsGateway
         return $response;
     }
 
+    /**
+     * مسارُ التوافق للنداءات القديمة. التنفيذُ الحقيقي في المزوّد الحديث
+     * كي لا تختلف صيغة MSG91 أو حكم النجاح بين التسجيل واستعادة كلمة المرور.
+     */
     public static function msg_91(string $receiver, string $otp): string
     {
-        $config = self::get_settings('msg91');
-        $response = 'error';
-        if (isset($config) && $config['status'] == 1) {
-            $receiver = str_replace("+", "", $receiver);
-            $curl = curl_init();
-            curl_setopt_array($curl, array(
-                CURLOPT_URL => "https://api.msg91.com/api/v5/otp?template_id=" . $config['template_id'] . "&mobile=" . $receiver . "&authkey=" . $config['auth_key'] . "",
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => "",
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => "GET",
-                CURLOPT_POSTFIELDS => "{\"OTP\":\"$otp\"}",
-                CURLOPT_HTTPHEADER => array(
-                    "content-type: application/json"
-                ),
-            ));
-            $response = curl_exec($curl);
-            $err = curl_error($curl);
-            curl_close($curl);
-            if (!$err) {
-                $response = 'success';
-            } else {
-                $response = 'error';
-            }
+        $provider = app(Msg91SmsProvider::class);
+
+        if (!$provider->isEnabled()) {
+            return 'error';
         }
-        return $response;
+
+        return $provider->sendOtp($receiver, $otp) ? 'success' : 'error';
     }
 
     public static function releans(string $receiver, string $otp): string

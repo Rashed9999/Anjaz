@@ -3,6 +3,16 @@
 namespace App\Services;
 
 use App\Models\MerchantProduct;
+use App\Models\MerchantExpense;
+use App\Models\MerchantExpenseReversal;
+use App\Models\MerchantFixedAsset;
+use App\Models\MerchantAssetAdjustment;
+use App\Models\MerchantAssetDepreciation;
+use App\Models\Retail\MerchantCategory;
+use App\Models\Retail\MerchantBrand;
+use App\Models\Retail\MerchantUnit;
+use DomainException;
+use App\Services\MerchantProductBarcodeService;
 use App\Models\MerchantSale;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -19,61 +29,213 @@ use RuntimeException;
  */
 class CashierService
 {
+    public function __construct(
+        private readonly MerchantPaymentReferenceService $paymentReference,
+        private readonly MerchantInvoiceNumberService $invoiceNumbers,
+    ) {}
+
     // ============ المنتجات (اختيارية) ============
 
+    /** Primary barcode and product are committed together, never separately. */
     public function addProduct(User $merchant, array $data): MerchantProduct
     {
-        $created = MerchantProduct::create([
-            'merchant_user_id' => $merchant->id,
-            'name' => $data['name'],
-            'price' => MoneyService::normalize((string)($data['price'] ?? 0)),           // سعر البيع
-            'cost_price' => MoneyService::normalize((string)($data['cost_price'] ?? 0)),  // التكلفة
-            'offer_price' => isset($data['offer_price']) && $data['offer_price'] !== null && $data['offer_price'] !== ''
-                ? MoneyService::normalize((string)$data['offer_price']) : null,           // العرض
-            'quantity' => (string)($data['quantity'] ?? 0),                               // المخزون
-            'production_date' => $data['production_date'] ?? null,
-            'expiry_date' => $data['expiry_date'] ?? null,
-            'category' => $data['category'] ?? null,
-            'barcode' => $data['barcode'] ?? null,
-            'is_active' => true,
-        ]);
+        return DB::transaction(function () use ($merchant, $data) {
+            $this->assertMerchantProductFields($merchant, $data);
+            $barcode = trim((string) ($data['barcode'] ?? ''));
+            $tracksStock = (bool) ($data['track_stock'] ?? true);
+            $initialQuantity = isset($data['quantity']) && $data['quantity'] !== ''
+                ? bcadd((string) $data['quantity'], '0', 3)
+                : '0.000';
+            $product = MerchantProduct::create([
+                'merchant_user_id' => $merchant->id,
+                'name' => $data['name'],
+                'price' => MoneyService::normalize((string) ($data['price'] ?? 0)),
+                'cost_price' => MoneyService::normalize((string) ($data['cost_price'] ?? 0)),
+                'offer_price' => isset($data['offer_price']) && $data['offer_price'] !== ''
+                    ? MoneyService::normalize((string) $data['offer_price']) : null,
+                // المرآة تبدأ صفراً؛ الرصيد الافتتاحي يُكتب لاحقاً كحركة في موقع.
+                'quantity' => $tracksStock ? '0.000' : $initialQuantity,
+                'production_date' => $data['production_date'] ?? null,
+                'expiry_date' => $data['expiry_date'] ?? null,
+                'category' => !empty($data['category_id'])
+                    ? MerchantCategory::find($data['category_id'])->name : ($data['category'] ?? null),
+                'category_id' => $data['category_id'] ?? null,
+                'brand_id' => $data['brand_id'] ?? null,
+                'unit_id' => $data['unit_id'] ?? null,
+                'sku' => $data['sku'] ?? null,
+                'reorder_level' => $data['reorder_level'] ?? 0,
+                'track_stock' => $data['track_stock'] ?? true,
+                'barcode' => null,
+                'is_active' => true,
+            ]);
+            if ($barcode !== '') {
+                app(MerchantProductBarcodeService::class)->ensurePrimary($merchant, $product, $barcode);
+            }
+            app(\App\Services\Retail\ProductCatalogService::class)->ensureSku($product);
 
-        return $created->fresh();
+            if ($tracksStock) {
+                $stock = app(\App\Services\Retail\StockService::class);
+                $location = $stock->defaultLocation($merchant->id);
+                // حتى رصيد الصفر يبدأ من موقع معلوم، فلا يبقى الصنف
+                // «غير موزع» إلى أن تقع أول بيعة.
+                $stock->ensureLocationStock($product, $location);
+
+                if (bccomp($initialQuantity, '0', 3) > 0) {
+                    $stock->move(
+                        $product, $location, $initialQuantity,
+                        'opening_balance', $merchant,
+                        note: 'الرصيد الافتتاحي عند إنشاء المنتج'
+                    );
+                }
+            }
+
+            return $product->fresh()->load(['barcodes', 'stocks.location']);
+        }, 3);
     }
 
     public function updateProduct(User $merchant, int $productId, array $data): MerchantProduct
     {
-        $product = MerchantProduct::where('id', $productId)
-            ->where('merchant_user_id', $merchant->id)
-            ->firstOrFail();
+        return DB::transaction(function () use ($merchant, $productId, $data) {
+            $product = MerchantProduct::where('id', $productId)
+                ->where('merchant_user_id', $merchant->id)->lockForUpdate()->firstOrFail();
+            $this->assertMerchantProductFields($merchant, $data, $productId);
+            $requestedQuantity = array_key_exists('quantity', $data)
+                && $data['quantity'] !== null && $data['quantity'] !== ''
+                    ? bcadd((string) $data['quantity'], '0', 3)
+                    : null;
+            $previousReorder = bcadd((string) ($product->reorder_level ?? '0'), '0', 3);
+            $product->fill([
+                'name' => $data['name'] ?? $product->name,
+                'price' => isset($data['price']) ? MoneyService::normalize((string) $data['price']) : $product->price,
+                'cost_price' => isset($data['cost_price']) ? MoneyService::normalize((string) $data['cost_price']) : $product->cost_price,
+                'offer_price' => array_key_exists('offer_price', $data)
+                    ? ($data['offer_price'] !== null && $data['offer_price'] !== ''
+                        ? MoneyService::normalize((string) $data['offer_price']) : null) : $product->offer_price,
+                // Existing stock adjustments must be journaled, not saved as a raw number.
+                'production_date' => $data['production_date'] ?? $product->production_date,
+                'expiry_date' => $data['expiry_date'] ?? $product->expiry_date,
+                'category' => !empty($data['category_id'])
+                    ? MerchantCategory::find($data['category_id'])->name
+                    : ($data['category'] ?? $product->category),
+                'category_id' => $data['category_id'] ?? $product->category_id,
+                'brand_id' => $data['brand_id'] ?? $product->brand_id,
+                'unit_id' => $data['unit_id'] ?? $product->unit_id,
+                'sku' => $data['sku'] ?? $product->sku,
+                'reorder_level' => $data['reorder_level'] ?? $product->reorder_level,
+                'track_stock' => $data['track_stock'] ?? $product->track_stock,
+                'is_active' => $data['is_active'] ?? $product->is_active,
+            ]);
+            $product->save();
 
-        $product->fill([
-            'name' => $data['name'] ?? $product->name,
-            'price' => isset($data['price']) ? MoneyService::normalize((string)$data['price']) : $product->price,
-            'cost_price' => isset($data['cost_price']) ? MoneyService::normalize((string)$data['cost_price']) : $product->cost_price,
-            'offer_price' => array_key_exists('offer_price', $data)
-                ? ($data['offer_price'] !== null && $data['offer_price'] !== '' ? MoneyService::normalize((string)$data['offer_price']) : null)
-                : $product->offer_price,
-            'quantity' => $data['quantity'] ?? $product->quantity,
-            'production_date' => $data['production_date'] ?? $product->production_date,
-            'expiry_date' => $data['expiry_date'] ?? $product->expiry_date,
-            'category' => $data['category'] ?? $product->category,
-            'barcode' => $data['barcode'] ?? $product->barcode,
-            'is_active' => $data['is_active'] ?? $product->is_active,
-        ])->save();
+            if (array_key_exists('reorder_level', $data)
+                && $data['reorder_level'] !== null && $data['reorder_level'] !== '') {
+                $newReorder = bcadd((string) $data['reorder_level'], '0', 3);
+                // حدّ المنتج هو الافتراضي. نحدّث المواقع التي ما زالت ترث
+                // الافتراضي القديم أو لم يُضبط لها حد، ونترك الحد المخصص.
+                \App\Models\Retail\ProductStock::where('product_id', $product->id)
+                    ->where(function ($q) use ($previousReorder) {
+                        $q->where('reorder_level', '0')
+                            ->orWhere('reorder_level', $previousReorder);
+                    })
+                    ->update(['reorder_level' => $newReorder]);
+            }
 
-        return $product;
+            if ($requestedQuantity !== null
+                && bccomp($requestedQuantity, (string) $product->quantity, 3) !== 0) {
+                $stock = app(\App\Services\Retail\StockService::class);
+                $defaultLocation = $stock->defaultLocation($merchant->id);
+                // A total merchant-wide quantity may not be written into the
+                // default branch when there is nonzero stock in ANY other branch.
+                if (\App\Models\Retail\ProductStock::where('product_id', $product->id)
+                    ->where('location_id', '!=', $defaultLocation->id)
+                    ->where('on_hand', '!=', 0)->exists()) {
+                    throw new DomainException('يوجد مخزون في فرع آخر؛ عدّل كمية كل فرع من شاشة الجرد');
+                }
+                $delta = bcsub($requestedQuantity, (string) $product->quantity, 3);
+                $stock->move($product, $defaultLocation, $delta,
+                    'count_adjustment', $merchant, note: 'تعديل مخزون المنتج من لوحة المنشأة');
+            }
+            if (array_key_exists('barcode', $data)) {
+                app(MerchantProductBarcodeService::class)->ensurePrimary($merchant, $product, $data['barcode']);
+            }
+            return $product->fresh()->load('barcodes');
+        }, 3);
     }
 
-    public function listProducts(User $merchant, ?string $search = null)
+    /** Validate ownership in the service, so app, web and catalogue adoption agree. */
+    private function assertMerchantProductFields(User $owner, array $data, ?int $exceptId = null): void
     {
+        foreach (['category_id' => MerchantCategory::class, 'brand_id' => MerchantBrand::class,
+                  'unit_id' => MerchantUnit::class] as $key => $model) {
+            if (empty($data[$key])) continue;
+            if (!$model::where('merchant_user_id', $owner->id)->whereKey((int) $data[$key])->exists()) {
+                throw new DomainException('التصنيف أو العلامة أو الوحدة لا يتبع منشأتك');
+            }
+        }
+        $sku = trim((string) ($data['sku'] ?? ''));
+        if ($sku !== '') {
+            $query = MerchantProduct::where('merchant_user_id', $owner->id)->where('sku', $sku);
+            if ($exceptId !== null) $query->where('id', '!=', $exceptId);
+            if ($query->exists()) throw new DomainException('رمز SKU مستخدم بالفعل في منشأتك');
+        }
+    }
+
+    /**
+     * أصنافُ الكاشير.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-VARIANT-PARENT-001 — **الأبُ لا يُباع، فلا يُعرَض.**
+     *
+     * **ما وصل صاحبَ المشروع:** يضيف متغيّراتٍ لمنتج، ثمّ يفتح الكاشيرَ
+     * فإذا **«نفذ المخزون»** على كلّ شيء.
+     *
+     * وسببُه شقّان يظهران معاً:
+     *
+     * ① **الأبُ يبقى في القائمة.** `is_variant_parent` مضبوطٌ عليه و
+     *    `track_stock=false` — أي أنّه **مِظلّةٌ لا صنفٌ يُباع**، كما يقول
+     *    تعليقُ النموذج بنصّه: «الأبُ لا يُباع ولا يُخزَّن». ومع ذلك كان
+     *    هذا الاستعلامُ يجلبه كسائر الأصناف.
+     *
+     * ② **والمتغيّراتُ تُولَّد بكمّيّة صفر** (وهو صحيح: المخزونُ يُدخَل
+     *    لكلّ مقاسٍ على حدة). فالشاشةُ تعرض الأبَ ومعه تسعةَ متغيّراتٍ
+     *    **كلُّها صفر** — فيقرؤها البائعُ «نفذ» ولا يستطيع بيعَ شيء.
+     *
+     * **ولا يمسكه شيء**: الصفوفُ سليمة، والاستعلامُ يعمل، والرقمُ يُقرأ.
+     * لا يظهر إلّا لمن يبيع فعلاً.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    public function listProducts(
+        User $merchant,
+        ?string $search = null,
+        // **وشاشةُ إدارة المنتجات ليست شبكةَ البيع.**
+        //
+        // استثناءُ المِظلّة صحيحٌ في الكاشير وخطأٌ في الكتالوج: لو غابت
+        // عن الإدارة أيضاً **لم يعد للتاجر بابٌ إليها إطلاقاً** — لا
+        // تعديلَ اسمٍ ولا وصولَ إلى «الأنواع» ليوزّع مخزونَها. فتُقاد
+        // من الطلب، والافتراضيُّ سلوكُ الكاشير.
+        bool $includeVariantParents = false,
+    ) {
         return MerchantProduct::where('merchant_user_id', $merchant->id)
             ->where('is_active', true)
+            ->with(['barcodes'])
+            // **مِظلّةُ المتغيّرات تُستثنى** — ومخزونُها ليس مخزوناً يُباع.
+            ->when(! $includeVariantParents,
+                fn ($q) => $q->where(fn ($w) => $w->whereNull('is_variant_parent')
+                    ->orWhere('is_variant_parent', false)))
             ->when($search, fn ($q) => $q->where(function ($w) use ($search) {
-                $w->where('name', 'like', "%{$search}%")->orWhere('barcode', $search);
+                $w->where('name', 'like', "%{$search}%")->orWhere('barcode', $search)
+                   ->orWhereHas('barcodes', fn ($b) => $b->where('barcode', $search));
             }))
             ->orderBy('name')
-            ->get();
+            ->get()
+            // **والاسمُ المعروضُ يميّز المتغيّر** — ولولاه ظهرت تسعةُ صفوفٍ
+            // باسم «قميص» ولا يُعرف أيُّها الذي في اليد.
+            ->each(function (MerchantProduct $p) {
+                $p->setAttribute('display_name', $p->displayName());
+                // **وتُقال صفةُ المِظلّة للشاشة** — فزرُّ «الأنواع» لا
+                // يُعرَض إلّا عليها، وشاشةٌ فارغةٌ على صنفٍ عاديٍّ تُقرأ عطلاً.
+                $p->setAttribute('is_variant_parent', (bool) $p->is_variant_parent);
+            });
     }
 
     /**
@@ -87,10 +249,7 @@ class CashierService
             return null;
         }
 
-        return MerchantProduct::where('merchant_user_id', $merchant->id)
-            ->where('is_active', true)
-            ->where('barcode', $barcode)
-            ->first();
+        return app(MerchantProductBarcodeService::class)->find($merchant, $barcode)['product'] ?? null;
     }
 
     // ============ البيع ============
@@ -120,6 +279,29 @@ class CashierService
         ?string $cashAmount = null,
         ?string $walletAmount = null,
         ?string $clientUuid = null,
+        // AMIAL-MULTI-CURRENCY-003 — **افتراضُه الأساس، فكلُّ نداءٍ قائمٍ
+        // يعني الريالَ حرفاً بحرف.**
+        ?string $currency = null,
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-LOYALTY-AT-PAYMENT-001 — **النقاطُ تُصرَف داخل البيعة.**
+        //
+        // وكان الاستبدالُ يقع في شاشةٍ أخرى ثمّ يُقال للكاشير «طبّقه على
+        // الفاتورة»: نقاطٌ تُحرَق ثمّ خصمٌ يُطبَّق **إن تذكّر**. وإن
+        // نسِي أو أُلغيت البيعة ذهبت النقاطُ ودفع العميلُ كاملاً.
+        //
+        // فصارت هنا: تُصرَف في معاملة البيعة نفسِها — تسقط البيعةُ فتعود
+        // النقاط، وتُحفظ فتُوسَم حركتُها بمعرّفها.
+        // ══════════════════════════════════════════════════════════════
+        ?float $redeemPoints = null,
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-CASH-TENDERED-001 — **ما استلمه الكاشيرُ نقداً.**
+        //
+        // والباقي يُحسب منه ومن الإجماليّ، **ولا يُخزَّن** — عمودٌ ثالثٌ
+        // يمكن أن يناقض الاثنين (القاعدة السادسة). و`null` تعني «لم
+        // يُدخَل» لا صفراً: الآجلُ والمحفظةُ لا مستلَمَ فيهما أصلاً.
+        // ══════════════════════════════════════════════════════════════
+        ?string $amountReceived = null,
+        ?int $branchId = null,
     ): MerchantSale {
         // AMIAL-OFFLINE-POS-001: idempotency — بيع دون اتصال يُعاد إرساله بنفس
         // client_uuid عند المزامنة؛ إن كان مُسجَّلاً سابقاً نُعيده كما هو دون
@@ -127,7 +309,12 @@ class CashierService
         if (!empty($clientUuid)) {
             $existing = MerchantSale::where('merchant_user_id', $merchant->id)
                 ->where('client_uuid', $clientUuid)->first();
-            if ($existing) return $existing;
+            if ($existing) {
+                if ($branchId !== null && (int) $existing->branch_id !== $branchId) {
+                    throw new RuntimeException('معرّف المزامنة يعود إلى بيع في فرع آخر.');
+                }
+                return $existing;
+            }
         }
 
         if (!in_array($paymentMethod, MerchantSale::METHODS, true)) {
@@ -137,6 +324,43 @@ class CashierService
         if (!MoneyService::isPositive($total)) {
             throw new InvalidArgumentException('إجمالي البيع يجب أن يكون موجباً');
         }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-MULTI-CURRENCY-003 — **عملةُ البيعة وسعرُها المجمَّد.**
+        //
+        // **وثلاثةُ شروطٍ قبل قبول عملةٍ غيرِ الأساس، وكلٌّ منها يمنع
+        // مالاً خارج الرقابة:**
+        //
+        // ① **أن تكون مدعومةً** — رمزٌ مخترَعٌ يُنشئ بيعاتٍ لا يجدها تقرير.
+        // ② **أن يكون التاجرُ قد فعّل قبضَها** — وإلّا سجّل موظّفٌ بيعةً
+        //    بعملةٍ لم يقرّرها صاحبُ المتجر.
+        // ③ **أن يكون لها سعرٌ مضبوط** — فبيعةٌ بلا مكافئٍ لا يُحسَب عليها
+        //    حدُّ استلامٍ ولا تدخل تقريراً. (القاعدة السابعة: لا يُفترَض
+        //    السعرُ واحداً — فمئةُ دولارٍ تصير مئةَ ريال.)
+        // ══════════════════════════════════════════════════════════════
+        $currency = \App\Support\Money\Currencies::normalize(
+            $currency ?: \App\Support\Money\Currencies::BASE
+        );
+        $fxRate = '1';
+
+        if (!\App\Support\Money\Currencies::isBase($currency)) {
+            $accepted = \App\Models\MerchantCurrency::where('merchant_user_id', $merchant->id)
+                ->where('code', $currency)->where('accepts_payments', true)->exists();
+
+            if (!$accepted) {
+                throw new InvalidArgumentException(sprintf(
+                    'المتجر لا يقبل الدفع بـ%s — تُفعَّل من شاشة «محافظي».',
+                    \App\Support\Money\Currencies::nameAr($currency)
+                ));
+            }
+
+            // يرمي `RuntimeException` برسالةٍ تقول أنّ السعرَ غيرُ مضبوط.
+            $fxRate = app(\App\Services\FxRateService::class)->rateToBase($currency);
+        }
+
+        // **المكافئُ يُحسب مرّةً هنا ويُحفَظ** — لا يُعاد حسابُه عند القراءة
+        // بسعرِ ذلك اليوم، فتقريرُ الشهر الماضي لا يتغيّر كلَّ صباح.
+        $baseTotal = bcmul($total, $fxRate, 4);
 
         $status = 'completed';
         if ($paymentMethod === 'credit') {
@@ -196,14 +420,87 @@ class CashierService
             $this->assertDiscountAllowed($merchant, $posUserId, $discountAmount);
         }
 
-        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid) {
+        // **ونقاطٌ بلا عميلٍ لا تُصرَف**: الرصيدُ محفوظٌ على هاتفه، فبلا
+        // هاتفٍ لا يُعرف من يدفع من رصيده.
+        if ($redeemPoints !== null && $redeemPoints > 0 && empty($customer['phone'])) {
+            throw new InvalidArgumentException(
+                'استبدالُ النقاط يحتاج رقمَ العميل — فرصيدُ النقاط محفوظٌ على رقمه');
+        }
+
+        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid, $currency, $fxRate, $baseTotal, $redeemPoints, $amountReceived, $branchId) {
+            // لا يكفي `paid_transaction_id` القادم من Flutter. يجب أن يكون
+            // طلب QR مدفوعاً لمحفظة المنشأة وبالمبلغ نفسه وغير مستهلك.
+            // البيع بلا مرجع يبقى معلّقاً إلى أن تُتم شاشة QR الدفع؛ أمّا إذا
+            // زوّد التطبيق مرجعاً فلا يجوز اعتباره دليلاً بنفسه.
+            if ($paymentMethod === 'amial_pay' && !empty($paidTransactionId)) {
+                $this->paymentReference->assertPaidForMerchant(
+                    $merchant, $paidTransactionId, $total,
+                );
+            }
+            if ($paymentMethod === 'mixed' && MoneyService::isPositive((string) $walletAmount)) {
+                $this->paymentReference->assertPaidForMerchant(
+                    $merchant, $paidTransactionId, (string) $walletAmount,
+                );
+            }
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-SHIFT-GATE-001 — **البيعةُ تحمل ورديّتَها، لا تُستنتَج.**
+            //
+            // الورديّةُ لها مدىً زمنيّ، والحسابُ به يعمل **حتّى يقع
+            // تداخل**: ورديّةٌ نُسي إقفالُها ثمّ فُتحت أخرى، أو ساعةٌ
+            // تُعدَّل. فالرابطُ الصريحُ يقول من قبض هذه البيعةَ بعينها.
+            //
+            // **ويُقرأ هنا لا يُمرَّر مُعامِلاً**: التوقيعُ فيه عشرون
+            // مُعامِلاً وخمسةَ عشرَ منادياً، **وواحدٌ ينسى تمريرَه يُنتج
+            // بيعةً بلا ورديّة بلا خطأ**. والمفتاحُ نفسُه الذي يعرفه
+            // الحارس: (التاجر، موظّف نقطة البيع).
+            //
+            // **و`null` هنا ليست عطلاً** (القاعدة السابعة): تاجرٌ أطفأ
+            // الحدَّ من لوحته يبيع بلا ورديّة عن قصد، والعمودُ يقول ذلك.
+            // ══════════════════════════════════════════════════════════
+            $openShift = app(CashierShiftService::class)->current($merchant, $posUserId, $branchId);
+            $shiftId = $openShift?->id;
+
+            if ($branchId !== null && $openShift !== null
+                && (int) $openShift->branch_id !== $branchId) {
+                throw new RuntimeException('الوردية المفتوحة لا تتبع الفرع التشغيلي.');
+            }
+
+            // الفرع الفعلي هو ما حُلّ من الجهاز/الموظف، أو فرع الوردية إن
+            // كان النداء الداخلي قديماً ولم يمرره. ومنه وحده يخرج موقع
+            // المخزون؛ فلا بيعُ فرعٍ ثانٍ يخصم من MAIN.
+            $effectiveBranchId = $branchId
+                ?? ($openShift?->branch_id !== null ? (int) $openShift->branch_id : null);
+            $stockLocation = app(\App\Services\Retail\StockService::class)
+                ->locationForBranch($merchant->id, $effectiveBranchId);
+
+            // AMIAL-SHIFT-DEVICE-001 — **والصندوقُ يُقرأ من الورديّة لا
+            // من الطلب.**
+            //
+            // فلا مصدرانِ للجهاز يفترقان: البيعةُ تقع داخل ورديّة، والورديّةُ
+            // فُتحت على صندوقٍ أثبتته البوّابة. وقراءتُه ثانيةً من الطلب
+            // تفتح بابَ فاتورةٍ تقول صندوقاً ودرجُها في آخر.
+            //
+            // **وبلا ورديّةٍ لا جهاز** — وهو صادقٌ: تاجرٌ أطفأ حدَّ الورديّة
+            // يبيع من هاتفه، ولا درجَ يُنسَب إليه.
+            $saleDeviceId = $openShift?->pos_device_id;
+
             $sale = MerchantSale::create([
                 'sale_ulid' => (string) Str::ulid(),
+                'invoice_number' => $this->invoiceNumbers->nextForMerchant($merchant),
                 'client_uuid' => $clientUuid ?: null,
                 'merchant_user_id' => $merchant->id,
+                'branch_id' => $effectiveBranchId,
                 'pos_user_id' => $posUserId,
+                'shift_id' => $shiftId,
+                'pos_device_id' => $saleDeviceId,
                 'total_amount' => $total,
+                // AMIAL-MULTI-CURRENCY-003 — العملةُ والسعرُ المجمَّد والمكافئ.
+                'currency' => $currency,
+                'fx_rate_to_base' => $fxRate,
+                'base_amount' => $baseTotal,
                 'discount_amount' => $discountAmount,
+                'amount_received' => $amountReceived,
                 'promotion_id' => $promotionId,
                 'cash_amount' => $paymentMethod === 'mixed' ? $cashAmount : null,
                 'wallet_amount' => $paymentMethod === 'mixed' ? $walletAmount : null,
@@ -227,8 +524,8 @@ class CashierService
             $fresh = $sale->fresh();
 
             if ($status !== 'pending_payment') {
-                // خصم المخزون للعناصر المرتبطة بمنتج (product_id)
-                $this->decrementStockForSale($fresh);
+                // خصم المخزون من موقع الفرع الذي حدثت فيه البيعة.
+                $this->decrementStockForSale($fresh, $stockLocation->id);
             } else {
                 // AMIAL-RETAIL-VERTICAL-001 · المرحلة ٩ — **حجزٌ لا خصم**.
                 //
@@ -237,7 +534,7 @@ class CashierService
                 // آخرُ حبّةٍ لزبونين معاً. والحجزُ يُبقيها موجودةً وغيرَ
                 // متاحة، حتّى ينجح الدفعُ أو تنتهي المهلة.
                 app(\App\Services\Retail\StockReservationService::class)
-                    ->holdForSale($fresh);
+                    ->holdForSale($fresh, $stockLocation);
             }
 
             // AMIAL-CUSTOMER-CREDIT-001 — ربط بيع الأجل بحساب العميل الائتماني
@@ -256,7 +553,7 @@ class CashierService
                     createdBy: $posUserId ?? $merchant->id,
                     referenceType: 'merchant_sale',
                     referenceId: $sale->sale_ulid,
-                    referenceNumber: '#' . substr($sale->sale_ulid, -8),
+                    referenceNumber: $sale->invoice_number,
                 );
             }
 
@@ -274,7 +571,7 @@ class CashierService
                     note: 'بيع من الكاشير',
                     referenceType: 'merchant_sale',
                     referenceId: $sale->sale_ulid,
-                    referenceNumber: '#' . substr($sale->sale_ulid, -8),
+                    referenceNumber: $sale->invoice_number,
                 );
             }
 
@@ -285,6 +582,32 @@ class CashierService
                 } catch (\Throwable $e) {
                     logger()->warning('Promotion consume failed: ' . $e->getMessage());
                 }
+            }
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-LOYALTY-AT-PAYMENT-001 — **الاستبدالُ داخل المعاملة.**
+            //
+            // **ولا يُبتلَع خطؤه** — بخلاف الكسب أسفلَه. والفرقُ ليس
+            // اجتهاداً: الكسبُ **يُعطي**، فسقوطُه يُنقص العميلَ نقاطاً
+            // ولا يمسّ مالاً. والاستبدالُ **يأخذ من رصيده ويُنقص ما
+            // يدفع**؛ فابتلاعُ خطئه يُنتج أسوأَ حالتين:
+            //
+            //   · إن مرّ الخصمُ ولم تُنقَص النقاط ⇒ المتجرُ خسِر خصماً
+            //     بلا مقابل، مرّةً بعد مرّة.
+            //   · وإن نُقصت النقاطُ وسقطت البيعة ⇒ العميلُ خسِر رصيدَه.
+            //
+            // فالرميُ هنا يُسقط البيعةَ كلَّها، **فتعود النقاطُ ولا
+            // يُقبَض المال** — وبيعةٌ تُعاد أهونُ من رصيدٍ يضيع.
+            // ══════════════════════════════════════════════════════════
+            if ($redeemPoints !== null && $redeemPoints > 0) {
+                $redeemed = app(\App\Services\LoyaltyService::class)->redeem(
+                    $merchant, (string) $customer['phone'], $redeemPoints,
+                    $posUserId ?? $merchant->id, $sale->sale_ulid,
+                );
+
+                $sale->loyalty_points_redeemed = $redeemPoints;
+                $sale->loyalty_discount = $redeemed['discount'];
+                $sale->save();
             }
 
             // AMIAL-LOYALTY-001 — كسب نقاط الولاء مركزياً لكل بيع مُتمّ بعميل معروف.
@@ -325,13 +648,49 @@ class CashierService
      * من الرفّ فعلاً، ورفضُها بعد خروجها لا يُفيد أحداً — **لكنّ الرصيد
      * السالب يبقى ظاهراً** حتّى يُصلحه جردٌ، وهو الإشارةُ التي كانت تُمحى.
      */
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-NEGATIVE-STOCK-001 — **ما نزل تحت الصفر يُقال للكاشير.**
+     *
+     * البيعُ يمرّ بالسالب عمداً (انظر أدناه)، **والسالبُ يبقى ظاهراً**.
+     * لكنّه كان يُترَك في جدولٍ يقرؤه المالكُ بعد يومين إن بحث — **وأنفعُ
+     * لحظةٍ لقوله هي هذه**: الكاشيرُ واقفٌ أمام الرفّ، ويستطيع أن ينظر
+     * فيه الآن.
+     *
+     * **ولا يُوقَف البيعُ ولا يُؤخَّر** — الرسالةُ بعد نجاحه لا قبله.
+     * ✱ @var array<int,array<string,string>>
+     * ══════════════════════════════════════════════════════════════════
+     */
+    private array $wentNegative = [];
+
+    /** ما نزل تحت الصفر في آخر بيعة — يُقرأ مرّةً ثمّ يُفرَّغ. */
+    public function takeNegativeLines(): array
+    {
+        $lines = $this->wentNegative;
+        $this->wentNegative = [];
+
+        return $lines;
+    }
+
     private function decrementStockForSale(MerchantSale $sale, ?int $locationId = null): void
     {
         $stock = app(\App\Services\Retail\StockService::class);
-        $location = $locationId
-            ? \App\Models\Retail\MerchantLocation::find($locationId)
-            : null;
-        $location ??= $stock->defaultLocation($sale->merchant_user_id);
+
+        if ($locationId !== null) {
+            $location = \App\Models\Retail\MerchantLocation::whereKey($locationId)
+                ->where('merchant_user_id', $sale->merchant_user_id)
+                ->where('is_active', true)
+                ->first();
+
+            if (! $location) {
+                throw new RuntimeException('موقع مخزون الفرع غير صالح لهذه البيعة');
+            }
+        } else {
+            $location = $stock->locationForBranch(
+                $sale->merchant_user_id,
+                $sale->branch_id !== null ? (int) $sale->branch_id : null,
+            );
+        }
 
         // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — **يُقرأ السطرُ لا الـJSON**.
         // فالكمّيّةُ طُبّعت مرّةً عند الكتابة، ولا تُقرأ هنا بمفتاحين.
@@ -342,9 +701,9 @@ class CashierService
             $product = MerchantProduct::where('id', $line->product_id)
                 ->where('merchant_user_id', $sale->merchant_user_id)
                 ->first();
-            if (!$product) continue;
+            if (!$product || $product->track_stock === false) continue;
 
-            $stock->move(
+            $movement = $stock->move(
                 product: $product,
                 location: $location,
                 delta: '-' . $qty,
@@ -356,6 +715,19 @@ class CashierService
                 // **يُسمح بالسالب عمداً** — انظر شرح الدالّة أعلاه.
                 allowNegative: true,
             );
+
+            // AMIAL-NEGATIVE-STOCK-001 — **ويُلتقَط ما نزل تحت الصفر.**
+            //
+            // ويُقرأ من `balance_after` في الحركة نفسِها لا باستعلامٍ
+            // ثانٍ: الحركةُ هي ما وقع، واستعلامٌ بعدها قد يقرأ رصيداً
+            // حرّكته بيعةٌ أخرى في الثانية نفسِها. (القاعدة السادسة.)
+            if (bccomp((string) $movement->balance_after, '0', 3) < 0) {
+                $this->wentNegative[] = [
+                    'product' => (string) $product->name,
+                    'on_hand' => (string) $movement->balance_after,
+                    'shortfall' => ltrim((string) $movement->balance_after, '-'),
+                ];
+            }
         }
     }
 
@@ -388,7 +760,12 @@ class CashierService
             // **ولا حجزَ = بيعةٌ قديمةٌ سبقت المرحلة ٩** — تُخصم كما كانت،
             // فلا يمرّ دفعٌ بلا خصمِ مخزون.
             if ($consumed === 0) {
-                $this->decrementStockForSale($sale);
+                $location = app(\App\Services\Retail\StockService::class)
+                    ->locationForBranch(
+                        $sale->merchant_user_id,
+                        $sale->branch_id !== null ? (int) $sale->branch_id : null,
+                    );
+                $this->decrementStockForSale($sale, $location->id);
             }
 
             return $sale->fresh();
@@ -396,11 +773,14 @@ class CashierService
     }
 
     /** تسوية بيع أجل (تحويله مدفوعاً). */
-    public function settleCredit(User $merchant, int $saleId, ?string $paidTransactionId = null): MerchantSale
+    public function settleCredit(
+        User $merchant, int $saleId, ?string $paidTransactionId = null, ?int $branchId = null,
+    ): MerchantSale
     {
-        return DB::transaction(function () use ($merchant, $saleId, $paidTransactionId) {
+        return DB::transaction(function () use ($merchant, $saleId, $paidTransactionId, $branchId) {
             $sale = MerchantSale::where('id', $saleId)
                 ->where('merchant_user_id', $merchant->id)
+                ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -416,6 +796,33 @@ class CashierService
                 'paid_transaction_id' => $paidTransactionId,
                 'settled_at' => now(),
             ]);
+
+            // التسوية من لوحة التاجر ليست حالةً محليةً للبيع فقط؛ يجب أن
+            // تنشر قيد السداد في الدفتر الذي يراه العميل أيضاً.
+            if (!empty($sale->customer_phone)) {
+                $account = \App\Models\CustomerCreditAccount::where('merchant_user_id', $merchant->id)
+                    ->whereIn('customer_phone', \App\Support\Phone::variants((string) $sale->customer_phone))
+                    ->lockForUpdate()
+                    ->first();
+                if ($account) {
+                    $saleMovement = \App\Models\CustomerCreditMovement::where('account_id', $account->id)
+                        ->where('type', 'sale')
+                        ->where('reference_type', 'merchant_sale')
+                        ->where('reference_id', $sale->sale_ulid)
+                        ->latest('id')
+                        ->first();
+                    app(CustomerCreditService::class)->recordPayment(
+                        account: $account,
+                        amount: (string) $sale->total_amount,
+                        note: 'تسوية بيع آجل من الكاشير',
+                        createdBy: $merchant->id,
+                        // تُربط التسوية بالفاتورة نفسها، فلا يجعلها عرض
+                        // «فواتيري الآجلة» سداداً FIFO لفاتورة أقدم.
+                        referenceType: $saleMovement ? 'credit_sale_payment' : 'merchant_sale_settlement',
+                        referenceId: $saleMovement?->movement_ulid ?? $sale->sale_ulid,
+                    );
+                }
+            }
 
             return $sale->fresh();
         });
@@ -439,12 +846,13 @@ class CashierService
      * `unknown_cost` ويُقال عددُه وإيرادُه، فيعرف القارئ أنّ الهامش
      * محسوبٌ على جزءٍ لا على الكلّ.
      */
-    public function profitReport(User $merchant, int $days = 7): array
+    public function profitReport(User $merchant, int $days = 7, ?int $branchId = null): array
     {
         $days = max(1, min(90, $days));
         $from = now()->subDays($days - 1)->startOfDay();
 
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
             ->where('created_at', '>=', $from)
             ->with('lines')
@@ -491,10 +899,177 @@ class CashierService
             }
         }
 
-        $profit = bcsub($totalRevenue, $totalCost, 4);
-        $margin = bccomp($totalRevenue, '0', 4) > 0
-            ? bcmul(bcdiv($profit, $totalRevenue, 6), '100', 2)
+        // **الربح التشغيلي ليس هامشَ البضاعة فقط.** كانت شاشة
+        // المصروفات تقول إن الإيجار والرواتب والكهرباء تُخصم من الربح،
+        // بينما هذا التقرير لا يقرأ merchant_expenses إطلاقاً. نُبقي
+        // `profit` مرادفاً للربح الإجمالي للتوافق، ونضيف صافي الربح
+        // صراحةً. وعند تقرير فرع لا نخترع توزيعاً لمصروف لم يُنسب لفرع.
+        $grossProfit = bcsub($totalRevenue, $totalCost, 4);
+        $grossMargin = bccomp($totalRevenue, '0', 4) > 0
+            ? bcmul(bcdiv($grossProfit, $totalRevenue, 6), '100', 2)
             : '0';
+
+        $cashOperatingExpenses = null;
+        $grossCashOperatingExpenses = null;
+        $expenseReversals = null;
+        $depreciationExpense = null;
+        $depreciationReversals = null;
+        $operatingExpenses = null;
+        $assetDisposalGainLoss = null;
+        $netResult = null;
+        if ($branchId === null) {
+            $cashOperatingExpenses = '0';
+            $grossCashOperatingExpenses = '0';
+            $expenseReversals = '0';
+            $depreciationExpense = '0';
+            $depreciationReversals = '0';
+            $assetDisposalGainLoss = '0';
+            $reportEnd = now()->endOfDay();
+
+            // الأصل يبقى في يوم صرفه حتى لو صُحّح لاحقاً. التصحيح نفسه
+            // قيد reversal بتاريخ التصحيح؛ حذف الأصل من التاريخ يعيد كتابة الماضي.
+            $expenses = MerchantExpense::where('merchant_user_id', $merchant->id)
+                ->whereDate('spent_on', '>=', $from->toDateString())
+                ->whereDate('spent_on', '<=', $reportEnd->toDateString())
+                ->get(['id', 'amount', 'spent_on']);
+
+            foreach ($expenses as $expense) {
+                $amount = (string) $expense->amount;
+                $grossCashOperatingExpenses = bcadd($grossCashOperatingExpenses, $amount, 4);
+                $cashOperatingExpenses = bcadd($cashOperatingExpenses, $amount, 4);
+                $day = $expense->spent_on?->format('Y-m-d');
+                if ($day) {
+                    $daily[$day]['cash_expenses_gross'] = bcadd(
+                        $daily[$day]['cash_expenses_gross'] ?? '0', $amount, 4
+                    );
+                    $daily[$day]['cash_expenses'] = bcadd(
+                        $daily[$day]['cash_expenses'] ?? '0', $amount, 4
+                    );
+                }
+            }
+
+            $reversals = MerchantExpenseReversal::where('merchant_user_id', $merchant->id)
+                ->whereDate('effective_on', '>=', $from->toDateString())
+                ->whereDate('effective_on', '<=', $reportEnd->toDateString())
+                ->get(['amount', 'effective_on']);
+
+            foreach ($reversals as $reversal) {
+                $amount = (string) $reversal->amount;
+                $expenseReversals = bcadd($expenseReversals, $amount, 4);
+                $cashOperatingExpenses = bcsub($cashOperatingExpenses, $amount, 4);
+                $day = $reversal->effective_on?->format('Y-m-d');
+                if ($day) {
+                    $daily[$day]['expense_reversals'] = bcadd(
+                        $daily[$day]['expense_reversals'] ?? '0', $amount, 4
+                    );
+                    $daily[$day]['cash_expenses'] = bcsub(
+                        $daily[$day]['cash_expenses'] ?? '0', $amount, 4
+                    );
+                }
+            }
+
+            // الإهلاك مصروفٌ غير نقدي: لا يخرج من الدرج ولا المحفظة. نقرأ
+            // قيوده الشهرية المثبتة ونوزّع حصة الفترة على أيامها كي يظل
+            // مجموع السلسلة اليومية مساوياً للإجمالي حتى في مدى 7/30/90.
+            $fromMonth = $from->format('Y-m');
+            $toMonth = $reportEnd->format('Y-m');
+            $depreciations = MerchantAssetDepreciation::where('merchant_user_id', $merchant->id)
+                ->where('period', '>=', $fromMonth)
+                ->where('period', '<=', $toMonth)
+                ->get(['period', 'amount']);
+
+            foreach ($depreciations as $dep) {
+                $monthStart = Carbon::createFromFormat('Y-m-d', $dep->period.'-01')->startOfDay();
+                $monthEnd = $monthStart->copy()->endOfMonth()->endOfDay();
+                $overlapStart = $from->copy()->startOfDay()->gt($monthStart)
+                    ? $from->copy()->startOfDay() : $monthStart->copy();
+                $overlapEnd = $reportEnd->lt($monthEnd)
+                    ? $reportEnd->copy() : $monthEnd->copy();
+                if ($overlapEnd->lt($overlapStart)) continue;
+
+                $coveredDays = $overlapStart->copy()->startOfDay()
+                    ->diffInDays($overlapEnd->copy()->startOfDay()) + 1;
+                $monthDays = $monthStart->daysInMonth;
+                $share = bcdiv(
+                    bcmul((string) $dep->amount, (string) $coveredDays, 8),
+                    (string) $monthDays,
+                    4
+                );
+                $depreciationExpense = bcadd($depreciationExpense, $share, 4);
+
+                $baseDaily = bcdiv($share, (string) $coveredDays, 4);
+                $allocated = '0';
+                for ($d = 0; $d < $coveredDays; $d++) {
+                    $date = $overlapStart->copy()->addDays($d)->format('Y-m-d');
+                    $part = $d === $coveredDays - 1
+                        ? bcsub($share, $allocated, 4)
+                        : $baseDaily;
+                    $allocated = bcadd($allocated, $part, 4);
+                    $daily[$date]['depreciation'] = bcadd(
+                        $daily[$date]['depreciation'] ?? '0', $part, 4
+                    );
+                }
+            }
+
+            // رد أصل للمورد بعد أشهر من الإهلاك يعكس حصة الإهلاك
+            // المتراكمة للكمية الخارجة. هذا أثر P&L في يوم الرد، لا تعديل
+            // لصفوف الأشهر القديمة.
+            $assetAdjustments = MerchantAssetAdjustment::where('merchant_user_id', $merchant->id)
+                ->whereDate('effective_on', '>=', $from->toDateString())
+                ->whereDate('effective_on', '<=', $reportEnd->toDateString())
+                ->where('depreciation_reversed', '>', 0)
+                ->get(['depreciation_reversed', 'effective_on']);
+
+            foreach ($assetAdjustments as $adjustment) {
+                $amount = (string) $adjustment->depreciation_reversed;
+                $depreciationReversals = bcadd($depreciationReversals, $amount, 4);
+                $depreciationExpense = bcsub($depreciationExpense, $amount, 4);
+                $day = $adjustment->effective_on?->format('Y-m-d');
+                if ($day) {
+                    $daily[$day]['depreciation_reversals'] = bcadd(
+                        $daily[$day]['depreciation_reversals'] ?? '0', $amount, 4
+                    );
+                    $daily[$day]['depreciation'] = bcsub(
+                        $daily[$day]['depreciation'] ?? '0', $amount, 4
+                    );
+                }
+            }
+
+            $operatingExpenses = bcadd(
+                $cashOperatingExpenses, $depreciationExpense, 4
+            );
+
+            // بيع/إتلاف أصل ليس مبيعات متجر ولا مصروف تشغيل. نعرض ربح/خسارة
+            // الاستبعاد مستقلاً ثم نضيفه إلى النتيجة النهائية.
+            $disposed = MerchantFixedAsset::where('merchant_user_id', $merchant->id)
+                ->whereNotNull('disposed_on')
+                ->whereNotNull('disposal_gain_loss')
+                ->whereDate('disposed_on', '>=', $from->toDateString())
+                ->whereDate('disposed_on', '<=', $reportEnd->toDateString())
+                ->get(['disposed_on', 'disposal_gain_loss']);
+
+            foreach ($disposed as $asset) {
+                $gainLoss = (string) $asset->disposal_gain_loss;
+                $assetDisposalGainLoss = bcadd($assetDisposalGainLoss, $gainLoss, 4);
+                $day = $asset->disposed_on?->format('Y-m-d');
+                if ($day) {
+                    $daily[$day]['asset_disposal_gain_loss'] = bcadd(
+                        $daily[$day]['asset_disposal_gain_loss'] ?? '0', $gainLoss, 4
+                    );
+                }
+            }
+        }
+
+        $netProfit = $operatingExpenses === null
+            ? null
+            : bcsub($grossProfit, $operatingExpenses, 4);
+        $netMargin = $netProfit !== null && bccomp($totalRevenue, '0', 4) > 0
+            ? bcmul(bcdiv($netProfit, $totalRevenue, 6), '100', 2)
+            : ($netProfit === null ? null : '0');
+
+        $netResult = $netProfit === null
+            ? null
+            : bcadd($netProfit, $assetDisposalGainLoss ?? '0', 4);
 
         // سلسلة يومية كاملة (تشمل أيام الصفر) للأشرطة
         $series = [];
@@ -502,10 +1077,31 @@ class CashierService
             $d = now()->subDays($i)->format('Y-m-d');
             $rev = $daily[$d]['revenue'] ?? '0';
             $cst = $daily[$d]['cost'] ?? '0';
+            $cashExpense = $operatingExpenses === null ? null : ($daily[$d]['cash_expenses'] ?? '0');
+            $depreciation = $operatingExpenses === null ? null : ($daily[$d]['depreciation'] ?? '0');
+            $expense = $operatingExpenses === null
+                ? null : bcadd($cashExpense, $depreciation, 4);
+            $disposal = $operatingExpenses === null ? null
+                : ($daily[$d]['asset_disposal_gain_loss'] ?? '0');
+            $dayGross = bcsub($rev, $cst, 4);
+            $dayOperating = $expense === null ? null : bcsub($dayGross, $expense, 4);
             $series[] = [
                 'date' => $d,
                 'revenue' => $rev,
-                'profit' => bcsub($rev, $cst, 4),
+                'profit' => $dayGross, // توافق قديم: الربح الإجمالي
+                'gross_profit' => $dayGross,
+                'cash_operating_expenses' => $cashExpense,
+                'gross_cash_operating_expenses' => $operatingExpenses === null
+                    ? null : ($daily[$d]['cash_expenses_gross'] ?? '0'),
+                'expense_reversals' => $operatingExpenses === null
+                    ? null : ($daily[$d]['expense_reversals'] ?? '0'),
+                'depreciation_expense' => $depreciation,
+                'depreciation_reversals' => $operatingExpenses === null
+                    ? null : ($daily[$d]['depreciation_reversals'] ?? '0'),
+                'operating_expenses' => $expense,
+                'net_profit' => $dayOperating,
+                'asset_disposal_gain_loss' => $disposal,
+                'net_result' => $dayOperating === null ? null : bcadd($dayOperating, $disposal, 4),
             ];
         }
 
@@ -520,8 +1116,24 @@ class CashierService
             'totals' => [
                 'revenue' => $totalRevenue,
                 'cost' => $totalCost,
-                'profit' => $profit,
-                'margin_percent' => $margin,
+                // `profit` و`margin_percent` محفوظان للتوافق مع العملاء
+                // القديمة، ومعناهما الآن موثّق: ربح إجمالي قبل المصروفات.
+                'profit' => $grossProfit,
+                'gross_profit' => $grossProfit,
+                'margin_percent' => $grossMargin,
+                'gross_margin_percent' => $grossMargin,
+                'cash_operating_expenses' => $cashOperatingExpenses,
+                'gross_cash_operating_expenses' => $grossCashOperatingExpenses,
+                'expense_reversals' => $expenseReversals,
+                'depreciation_expense' => $depreciationExpense,
+                'depreciation_reversals' => $depreciationReversals,
+                'operating_expenses' => $operatingExpenses,
+                'net_profit' => $netProfit,
+                'net_margin_percent' => $netMargin,
+                'asset_disposal_gain_loss' => $assetDisposalGainLoss,
+                'net_result' => $netResult,
+                'expense_scope' => $branchId === null ? 'merchant' : 'unallocated_for_branch',
+                'depreciation_basis' => $branchId === null ? 'posted_monthly_entries_prorated_to_period' : null,
                 'sales_count' => $sales->count(),
             ],
             'daily' => $series,
@@ -545,11 +1157,14 @@ class CashierService
      * المدخل الطبيعي لشاشة الاسترجاع: كل صف يحمل sale_ulid يُفتح به
      * تدفّق «refundable → refund». يُرفَق بكل بيع إجمالي ما استُرجع منه.
      */
-    public function listSales(User $merchant, ?string $date = null, int $limit = 100): array
+    public function listSales(
+        User $merchant, ?string $date = null, int $limit = 100, ?int $branchId = null,
+    ): array
     {
         $day = $date ? Carbon::parse($date) : now();
 
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->whereBetween('created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
             ->orderByDesc('id')
             ->limit(max(1, min($limit, 200)))
@@ -568,6 +1183,7 @@ class CashierService
                 $refundedTotal = (string) ($refunded[$s->sale_ulid] ?? '0');
                 return [
                     'sale_ulid' => $s->sale_ulid,
+                    'invoice_number' => $s->invoice_number,
                     'id' => $s->id,
                     'total_amount' => MoneyService::normalize((string) $s->total_amount),
                     'payment_method' => $s->payment_method,
@@ -627,18 +1243,25 @@ class CashierService
 
     // ============ التقرير اليومي ============
 
-    public function dailyReport(User $merchant, ?string $date = null): array
+    public function dailyReport(User $merchant, ?string $date = null, ?int $branchId = null, ?int $posUserId = null): array
     {
         $day = $date ? Carbon::parse($date) : now();
         $from = $day->copy()->startOfDay();
         $to = $day->copy()->endOfDay();
 
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($posUserId !== null, fn ($q) => $q->where('pos_user_id', $posUserId))
+            // البيع المعلّق عبر QR ليس بيعاً مالياً بعد. إبقاؤه هنا كان
+            // يجعل تقرير نقطة البيع أعلى من تقرير لوحة التاجر لنفس اليوم.
+            ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
             ->whereBetween('created_at', [$from, $to])
             ->with('lines')
             ->get();
 
-        $byMethod = ['cash' => '0', 'credit' => '0', 'amial_pay' => '0'];
+        $zero = MoneyService::normalize('0');
+        $byMethod = ['cash' => $zero, 'credit' => $zero, 'amial_pay' => $zero];
+        $totalAll = $zero;
         $topProducts = [];
 
         // AMIAL-REPORTS-HOURLY-001: توزيع المبيعات على 24 ساعة (عدد + مبلغ).
@@ -648,10 +1271,27 @@ class CashierService
         }
 
         foreach ($sales as $sale) {
-            $byMethod[$sale->payment_method] = MoneyService::add(
-                $byMethod[$sale->payment_method] ?? '0',
-                (string) $sale->total_amount
-            );
+            $totalAll = MoneyService::add($totalAll, (string) $sale->total_amount);
+
+            // نفس عقد الحقيقة المالية في لوحة التاجر:
+            // المختلط يُقسّم بين الدرج والمحفظة، وحساب الشركة ذمّة لا نقد.
+            if ($sale->payment_method === 'mixed') {
+                $byMethod['cash'] = MoneyService::add(
+                    $byMethod['cash'], (string) ($sale->cash_amount ?? '0')
+                );
+                $byMethod['amial_pay'] = MoneyService::add(
+                    $byMethod['amial_pay'], (string) ($sale->wallet_amount ?? '0')
+                );
+            } elseif ($sale->payment_method === 'corporate') {
+                $byMethod['credit'] = MoneyService::add(
+                    $byMethod['credit'], (string) $sale->total_amount
+                );
+            } elseif (array_key_exists($sale->payment_method, $byMethod)) {
+                $byMethod[$sale->payment_method] = MoneyService::add(
+                    $byMethod[$sale->payment_method], (string) $sale->total_amount
+                );
+            }
+
             $h = (int) Carbon::parse($sale->created_at)->format('G'); // 0..23 بتوقيت التطبيق
             $byHour[$h]['count']++;
             $byHour[$h]['total'] = MoneyService::add($byHour[$h]['total'], (string) $sale->total_amount);
@@ -683,13 +1323,15 @@ class CashierService
         // إجمالي الإيرادات الفعلية (نقد + أميال باي) — الأجل غير المسوّى مستحقّات
         $realized = MoneyService::add($byMethod['cash'], $byMethod['amial_pay']);
         $outstandingCredit = (string) MerchantSale::where('merchant_user_id', $merchant->id)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($posUserId !== null, fn ($q) => $q->where('pos_user_id', $posUserId))
             ->where('status', 'credit_unpaid')
-            ->sum('total_amount');
+            ->sum(DB::raw('COALESCE(base_amount, total_amount)'));
 
         return [
             'date' => $day->format('Y-m-d'),
             'sales_count' => $sales->count(),
-            'total_all' => (string) $sales->sum(fn ($s) => (float) $s->total_amount),
+            'total_all' => $totalAll,
             'realized_revenue' => $realized, // نقد + رقمي
             'by_method' => $byMethod,
             'outstanding_credit_total' => $outstandingCredit, // كل الأجل غير المسوّى
@@ -709,6 +1351,135 @@ class CashierService
             ),
             'peak_hour' => $peakHour,
             'peak_hour_total' => $peakTotal,
+            'source' => 'merchant_sales',
+            'report_scope' => $posUserId !== null ? 'pos_user' : 'merchant',
+        ];
+    }
+
+    /**
+     * تقرير يوم موظف POS من مصدر القطاع الحقيقي، ومقيّد بالموظف نفسه.
+     *
+     * لا نستعمل MerchantFinancialTruthReportService هنا: ذلك تقرير المنشأة
+     * (محفظة/ذمم/حركة شاملة)، بينما هذا تقرير كاشير مفوّض. وخلطهما يكشف
+     * مبيعات زملائه أو فروع أخرى لمجرد أن لديه صلاحية «تقرير اليوم».
+     */
+    public function dailyReportForPos(
+        User $merchant,
+        int $posUserId,
+        int $actorUserId,
+        ?string $date = null,
+        ?int $branchId = null,
+    ): array {
+        $vertical = (string) (DB::table('merchant_profiles')
+            ->where('user_id', $merchant->id)->value('business_type') ?: 'retail');
+
+        // القطاعات التي تُغلق بيعها إلى merchant_sales تستفيد من التقرير
+        // الغني نفسه (أسطر/أكثر الأصناف/المختلط)، لكن بنطاق الموظف.
+        if (in_array($vertical, ['retail', 'quick_sale', 'restaurant'], true)) {
+            return $this->dailyReport($merchant, $date, $branchId, $posUserId);
+        }
+
+        $day = $date ? Carbon::parse($date) : now();
+        $from = $day->copy()->startOfDay();
+        $to = $day->copy()->endOfDay();
+
+        $rows = match ($vertical) {
+            'pharmacy' => DB::table('pharmacy_sales')
+                ->where('merchant_user_id', $merchant->id)
+                ->where('pos_user_id', $posUserId)
+                ->where('status', 'completed')
+                ->whereBetween('created_at', [$from, $to])
+                ->get(['total_amount as amount', 'payment_method as method', 'created_at']),
+
+            'fuel' => DB::table('fuel_sales')
+                ->where('merchant_user_id', $merchant->id)
+                ->where('pos_user_id', $posUserId)
+                ->where('status', 'completed')
+                ->whereBetween('created_at', [$from, $to])
+                ->get(['total_amount as amount', 'payment_method as method', 'created_at']),
+
+            'wholesale' => (function () use ($merchant, $actorUserId, $day, $branchId) {
+                $businessId = DB::table('wholesale_businesses')
+                    ->where('merchant_user_id', $merchant->id)->value('id');
+                if (! $businessId) return collect();
+
+                return DB::table('wholesale_invoices')
+                    ->where('business_id', $businessId)
+                    ->where('created_by_user_id', $actorUserId)
+                    ->when($branchId !== null, fn ($q) => $q->where(function ($b) use ($branchId) {
+                        // السجلات التاريخية السابقة لربط الفروع تبقى معروفة
+                        // المصدر ولا ننسبها إلى فرع آخر.
+                        $b->where('branch_id', $branchId)->orWhereNull('branch_id');
+                    }))
+                    ->whereNotIn('status', ['draft', 'voided'])
+                    ->whereDate('invoice_date', $day->toDateString())
+                    ->get(['total_amount as amount', 'payment_type as method', 'created_at']);
+            })(),
+
+            default => collect(),
+        };
+
+        $zero = MoneyService::normalize('0');
+        $byMethod = ['cash' => $zero, 'credit' => $zero, 'amial_pay' => $zero];
+        $totalAll = $zero;
+        $byHour = [];
+        for ($h = 0; $h < 24; $h++) {
+            $byHour[$h] = ['count' => 0, 'total' => $zero];
+        }
+
+        foreach ($rows as $sale) {
+            $amount = MoneyService::normalize((string) ($sale->amount ?? '0'));
+            $method = match ((string) ($sale->method ?? '')) {
+                'cash' => 'cash',
+                'amial_pay' => 'amial_pay',
+                // وقود الشركة وفاتورة الجملة الآجلة ليست نقداً في الدرج.
+                'credit', 'company_card', 'corporate' => 'credit',
+                default => null,
+            };
+
+            $totalAll = MoneyService::add($totalAll, $amount);
+            if ($method !== null) {
+                $byMethod[$method] = MoneyService::add($byMethod[$method], $amount);
+            }
+
+            $hour = (int) Carbon::parse($sale->created_at)->format('G');
+            $byHour[$hour]['count']++;
+            $byHour[$hour]['total'] = MoneyService::add($byHour[$hour]['total'], $amount);
+        }
+
+        $peakHour = null;
+        $peakTotal = $zero;
+        foreach ($byHour as $hour => $bucket) {
+            if (MoneyService::gt($bucket['total'], $peakTotal)) {
+                $peakHour = $hour;
+                $peakTotal = $bucket['total'];
+            }
+        }
+
+        return [
+            'date' => $day->format('Y-m-d'),
+            'sales_count' => $rows->count(),
+            'total_all' => $totalAll,
+            'realized_revenue' => MoneyService::add($byMethod['cash'], $byMethod['amial_pay']),
+            'by_method' => $byMethod,
+            // ذمم المنشأة ليست رقماً خاصاً بالكاشير؛ لا نحوّل «غير مصرح»
+            // إلى صفر يوحي بعدم وجود ديون.
+            'outstanding_credit_total' => null,
+            'top_products' => [],
+            'by_hour' => array_map(
+                fn ($h, $b) => ['hour' => $h, 'count' => $b['count'], 'total' => $b['total']],
+                array_keys($byHour), $byHour
+            ),
+            'peak_hour' => $peakHour,
+            'peak_hour_total' => $peakTotal,
+            'source' => match ($vertical) {
+                'pharmacy' => 'pharmacy_sales',
+                'fuel' => 'fuel_sales',
+                'wholesale' => 'wholesale_invoices',
+                default => 'unknown',
+            },
+            'vertical' => $vertical,
+            'report_scope' => 'pos_user',
         ];
     }
 }

@@ -12,11 +12,12 @@ import 'package:amial_pay/data/api/api_checker.dart';
 import 'package:amial_pay/common/models/error_model.dart';
 import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/data/api/diagnostic_trace_id.dart';
 
 class ApiClient extends GetxService {
    String appBaseUrl = AppConstants.baseUrl ;
   final SharedPreferences sharedPreferences;
-  final String noInternetMessage = 'Connection to API server failed due to internet connection';
+  final String noInternetMessage = 'تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة.';
   final int timeoutInSeconds = 30;
   BaseDeviceInfo deiceInfo;
   final String uniqueId;
@@ -252,10 +253,21 @@ class ApiClient extends GetxService {
   }
 
   Future<Response> postData(
-      String uri, dynamic body, {Map<String, String>? headers, String? idempotencyKey}) async {
+      String uri, dynamic body, {
+      Map<String, String>? headers,
+      String? idempotencyKey,
+      String? correlationId,
+    }) async {
     if(await ApiChecker.isVpnActive()) {
       return const Response(statusCode: -1, statusText: 'you are using vpn');
     }{
+      // AMIAL-SUPPORT-CORRELATION-002 — نولد المرجع قبل الشبكة لا بعدها.
+      // لذلك يبقى في يد العميل حتى إن انتهى الطلب بـ timeout ولم يصل رد.
+      final String traceId =
+          (correlationId != null && DiagnosticTraceId.isValid(correlationId.trim()))
+              ? correlationId.trim()
+              : DiagnosticTraceId.generate();
+
       try {
         // AMIAL-SECURITY-002 (v0.7-C): debug logs آمنة
         if (kDebugMode) {
@@ -283,6 +295,9 @@ class ApiClient extends GetxService {
             : _inFlightKeys.putIfAbsent(
                 autoAction, () => IdempotencyKeyGenerator.forFinancialAction('auto'));
         requestHeaders['Idempotency-Key'] = effectiveKey;
+        // الخادم يعيده في الاستجابة ويسجله مع قرارات AuditService.
+        // لا يحتوي هاتفاً أو PIN أو أي PII، وهو آمن ليُقرأ للدعم.
+        requestHeaders['X-Correlation-Id'] = traceId;
 
         requestHeaders['X-Amial-Zone'] = 'SOUTH';
         requestHeaders['X-Amial-Client-Version'] = '0.7.0';
@@ -303,7 +318,14 @@ class ApiClient extends GetxService {
       } catch (e) {
         // **ولم يصل جواب: يبقى المفتاح.** لا نعلم أوصل الطلبُ أم لا،
         // فتكون الإعادةُ إعادةً لا عمليّةً ثانية. و«لا نعلم» ليست صفراً.
-        return Response(statusCode: 1, statusText: noInternetMessage);
+        //
+        // ولا نفقد خيط التشخيص: ربما وصل الطلب ونُفّذ ثم انقطع الرد.
+        // لهذا لا نقول «الإنترنت ضعيف» كحقيقة، بل «تعذر تأكيد النتيجة».
+        return Response(
+          statusCode: 1,
+          statusText: 'تعذر تأكيد نتيجة الطلب. رقم التتبع: $traceId',
+          headers: {'x-correlation-id': traceId},
+        );
       }
 
     }
@@ -444,29 +466,84 @@ class ApiClient extends GetxService {
 
    }
 
+   /// طبقة دفاع أخيرة: لا تضع الواجهة نصاً تقنياً في يد التاجر حتى لو
+   /// أخطأ خادم أو وكيل شبكة في إرسال رسالة غير آمنة.
+   bool _containsTechnicalDetails(dynamic body) {
+     final message = body is Map
+         ? '${body['message'] ?? ''}'
+         : '${body ?? ''}';
+
+     return RegExp(
+       r'(SQLSTATE|QueryException|PDOException|Unknown column|Connection:|insert into|select .+ from|stack trace|/var/www/|vendor/laravel)',
+       caseSensitive: false,
+     ).hasMatch(message);
+   }
+
+   dynamic _safeErrorBody(dynamic body, int statusCode) {
+     if (statusCode < 500 && !_containsTechnicalDetails(body)) return body;
+
+     final message = statusCode == 503
+         ? 'الخدمة غير متاحة مؤقتاً. أعد المحاولة لاحقاً.'
+         : 'حدثت مشكلة في الخادم. أعد المحاولة، وإذا استمرت المشكلة تواصل مع الدعم.';
+
+     if (body is Map) {
+       final safe = Map<String, dynamic>.from(body);
+       safe['success'] = false;
+       safe['code'] = statusCode == 503 ? 'SERVER_UNAVAILABLE' : 'SERVER_ERROR';
+       safe['message'] = message;
+       safe.remove('debug');
+       safe.remove('exception');
+       safe.remove('trace');
+
+       return safe;
+     }
+
+     return <String, dynamic>{
+       'success': false,
+       'code': statusCode == 503 ? 'SERVER_UNAVAILABLE' : 'SERVER_ERROR',
+       'message': message,
+       'errors': <String, dynamic>{},
+       'meta': <String, dynamic>{},
+     };
+   }
+
    Response handleResponse(http.Response response, String uri) {
      dynamic body;
      try {
        body = jsonDecode(response.body);
-     }catch(e) {
-       debugPrint('error ---> $e');
+     } catch (_) {
+       // الاستجابة غير JSON: لا نطبع محتواها، فقد تكون صفحة خطأ خادم.
      }
+
+     final safeBody = _safeErrorBody(body, response.statusCode);
+     final safeBodyString = safeBody is String ? safeBody : jsonEncode(safeBody);
      Response response0 = Response(
-       body: body ?? response.body, bodyString: response.body.toString(),
+       body: safeBody,
+       bodyString: safeBodyString,
        request: Request(headers: response.request!.headers, method: response.request!.method, url: response.request!.url),
-       headers: response.headers, statusCode: response.statusCode, statusText: response.reasonPhrase,
+       headers: response.headers,
+       statusCode: response.statusCode,
+       statusText: response.reasonPhrase,
      );
-     if(response0.statusCode != 200 && response0.body != null && response0.body is !String) {
-       if(response0.body.toString().startsWith('{errors: [{code:')) {
-         ErrorResponseModel errorResponse = ErrorResponseModel.fromJson(response0.body);
-         response0 = Response(statusCode: response0.statusCode, body: response0.body, statusText: errorResponse.errors![0].message);
-       }else if(response0.body.toString().startsWith('{message')) {
-         response0 = Response(statusCode: response0.statusCode, body: response0.body, statusText: response0.body['message']);
-       }
-     }else if(response0.statusCode != 200 && response0.body == null) {
+
+     if (response0.statusCode != 200 && response0.body is Map) {
+       final message = '${response0.body['message'] ?? ''}';
+       response0 = Response(
+         body: response0.body,
+         bodyString: safeBodyString,
+         headers: response.headers,
+         request: Request(headers: response.request!.headers, method: response.request!.method, url: response.request!.url),
+         statusCode: response0.statusCode,
+         statusText: message,
+       );
+     } else if (response0.statusCode != 200 && response0.body == null) {
        response0 = Response(statusCode: 0, statusText: noInternetMessage);
      }
-     debugPrint('====> API Response: [${response0.statusCode}] $uri\n${response0.body}');
+
+     if (kDebugMode) {
+       debugPrint('====> API Response: [${response0.statusCode}] $uri');
+     }
+
      return response0;
    }
 

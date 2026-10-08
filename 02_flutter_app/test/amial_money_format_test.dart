@@ -82,5 +82,25 @@ void main() {
     test('كسر أصغر من نصف قرش يظهر صفراً لا فراغاً', () {
       expect(AmialMoney.fmt('0.001'), '0');
     });
+
+    test('التقريب ينقل الواحد ويحفظ إشارة السالب دون صفر سالب', () {
+      expect(AmialMoney.fmt('999.9950'), '1,000');
+      expect(AmialMoney.fmt('-999.9950'), '-1,000');
+      expect(AmialMoney.fmt('-0.0050'), '-0.01');
+      expect(AmialMoney.fmt('-0.0049'), '0');
+    });
+
+    test('المبالغ الأكبر من دقة double تحافظ على جميع خاناتها', () {
+      expect(AmialMoney.fmt('9007199254740993.1250'),
+          '9,007,199,254,740,993.13');
+      expect(AmialMoney.fmt('999999999999999999999.9950'),
+          '1,000,000,000,000,000,000,000');
+    });
+
+    test('الدقة المحددة تشمل التقريب الصحيح وصفر خانات', () {
+      expect(AmialMoney.fmt('99.5', maxFractionDigits: 0), '100');
+      expect(AmialMoney.fmt('1.23455', maxFractionDigits: 4), '1.2346');
+      expect(AmialMoney.fmt('1.23455', maxFractionDigits: -1), '1.23455');
+    });
   });
 }

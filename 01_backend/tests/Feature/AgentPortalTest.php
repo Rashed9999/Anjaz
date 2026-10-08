@@ -70,6 +70,7 @@ class AgentPortalTest extends TestCase
             ['current_balance' => '50000', 'zone_code' => 'SOUTH']);
 
         $this->branch = app(AgentBranchService::class)->create($this->agent, [
+            'email' => 'branch-' . bin2hex(random_bytes(8)) . '@example.test',
             'name' => 'فرع عدن', 'code' => 'ADEN-01',
             'phone' => '770002202', 'password' => 'branch-pass-123',
             'city' => 'عدن',
@@ -319,6 +320,7 @@ class AgentPortalTest extends TestCase
     {
         $this->expectException(DomainException::class);
         app(AgentBranchService::class)->create($this->agent, [
+            'email' => 'branch-' . bin2hex(random_bytes(8)) . '@example.test',
             'name' => 'فرع آخر', 'code' => 'ADEN-01',
             'phone' => '770002299', 'password' => 'x-pass-1234',
         ]);

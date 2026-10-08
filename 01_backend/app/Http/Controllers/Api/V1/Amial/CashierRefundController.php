@@ -10,6 +10,11 @@ use App\Models\MerchantSale;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\MerchantSaleRefundService;
+use App\Services\BranchResolverService;
+use App\Services\Merchant\MerchantPermissionService;
+use App\Services\Merchant\MerchantOverrideService;
+use App\Support\Merchant\MerchantPermissions as P;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -28,6 +33,8 @@ class CashierRefundController extends Controller
 
     public function __construct(
         private readonly MerchantSaleRefundService $refundSvc,
+        private readonly MerchantPermissionService $perm,
+        private readonly BranchResolverService $branches,
     ) {}
 
     /** إنشاء مرتجع جديد. */
@@ -37,12 +44,76 @@ class CashierRefundController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'refund_method' => 'required|string|in:cash,wallet,credit_account',
             'items' => 'sometimes|array',
-            'items.*.name' => 'required_with:items|string|max:120',
-            'items.*.qty' => 'required_with:items|numeric|min:0.01',
-            'items.*.price' => 'required_with:items|numeric|min:0',
+            // لا نثق باسم أو سعر من الهاتف. السطر الأصلي هو المرجع، والخادم
+            // يقرأ اسمه وسعره وحدّه القابل للارتجاع من merchant_sale_items.
+            'items.*.sale_item_id' => 'required_with:items|integer|min:1',
+            'items.*.quantity' => 'required_with:items|numeric|min:0.001',
+            'items.*.condition' => 'sometimes|string|in:good,damaged,expired',
+            'items.*.restock' => 'sometimes|boolean',
             'reason' => 'sometimes|nullable|string|max:500',
         ]);
         if ($v->fails()) return $this->validationError($v);
+
+        // لا ننشئ طلبَ اعتماد قبل التحقق من أن البيع موجود داخل منشأة/فرع
+        // هذا الموظف. وإلا يستطيع رقم ULID مخترَع أن يملأ لوحة المالك بطلبات
+        // اعتماد لا يمكن تنفيذها أصلاً.
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posUserId, $branch] = $ctx;
+
+        if (! $this->saleInScope($merchant, $saleUlid, $branch?->id)) {
+            return $this->error('NOT_FOUND', 'العملية غير موجودة في فرعك', 404);
+        }
+
+        // الموافقة مرتبطة بهذه الفاتورة تحديداً؛ لا يكفي تطابق الصلاحية
+        // والمبلغ حتى لا تُستهلك موافقة فاتورة في مرتجع فاتورة أخرى.
+        $approvalKey = 'sale_refund:' . $saleUlid;
+
+        try {
+            $this->perm->assert(
+                $request->user(),
+                P::RETAIL_RETURN_CREATE,
+                ['approval_key' => $approvalKey],
+                (string) $request->input('amount'),
+            );
+        } catch (DomainException $e) {
+            if ($e->getCode() === MerchantPermissionService::APPROVAL_REQUIRED) {
+                // الكاشير لا يُترك أمام 403 ميت. ينشئ طلب إذن حقيقياً يراه
+                // مالك المنشأة، وبعد منحه يعيد الموظف المحاولة بنفس الفاتورة.
+                $userReason = trim((string) $request->input('reason', ''));
+                $reason = 'طلب اعتماد مرتجع للبيع ' . $saleUlid;
+                if ($userReason !== '') {
+                    $reason .= ' — ' . $userReason;
+                }
+
+                try {
+                    $approvalId = app(MerchantOverrideService::class)->request(
+                        $request->user(),
+                        P::RETAIL_RETURN_CREATE,
+                        $reason,
+                        (string) $request->input('amount'),
+                        $approvalKey,
+                    );
+                } catch (DomainException $approvalError) {
+                    return $this->error('FORBIDDEN', $approvalError->getMessage(), 403);
+                }
+
+                return $this->ok([
+                    'approval' => [
+                        'request_id' => $approvalId,
+                        'status' => 'pending',
+                        'permission' => P::RETAIL_RETURN_CREATE,
+                        'amount' => (string) $request->input('amount'),
+                        'context_key' => $approvalKey,
+                    ],
+                ], 'APPROVAL_PENDING',
+                    'أُرسل طلب الاعتماد إلى مالك المنشأة. أعد المحاولة بعد الموافقة.',
+                    202
+                );
+            }
+
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        }
 
         // ══════════════════════════════════════════════════════════════
         // **المرتجعُ الكاملُ مجّانيّ، والسطريُّ مدفوع — والمسارُ واحد.**
@@ -57,10 +128,6 @@ class CashierRefundController extends Controller
                 return $deny;
             }
         }
-
-        $ctx = $this->resolveMerchant($request);
-        if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, $posUserId] = $ctx;
 
         try {
             $refund = $this->refundSvc->refund(
@@ -89,9 +156,12 @@ class CashierRefundController extends Controller
     {
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , $branch] = $ctx;
 
         $page = MerchantRefund::where('merchant_user_id', $merchant->id)
+            ->when($branch !== null, fn ($q) => $q->whereIn('original_sale_ulid',
+                MerchantSale::where('merchant_user_id', $merchant->id)
+                    ->where('branch_id', $branch->id)->select('sale_ulid')))
             ->orderByDesc('id')
             ->paginate(20);
 
@@ -110,10 +180,13 @@ class CashierRefundController extends Controller
     {
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , $branch] = $ctx;
 
         $refund = MerchantRefund::where('id', $id)
             ->where('merchant_user_id', $merchant->id)
+            ->when($branch !== null, fn ($q) => $q->whereIn('original_sale_ulid',
+                MerchantSale::where('merchant_user_id', $merchant->id)
+                    ->where('branch_id', $branch->id)->select('sale_ulid')))
             ->first();
         if (!$refund) return $this->error('NOT_FOUND', 'المرتجع غير موجود', 404);
 
@@ -128,10 +201,11 @@ class CashierRefundController extends Controller
     {
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , $branch] = $ctx;
 
         $sale = MerchantSale::where('sale_ulid', $saleUlid)
             ->where('merchant_user_id', $merchant->id)
+            ->when($branch !== null, fn ($q) => $q->where('branch_id', $branch->id))
             ->first();
         if (!$sale) return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
 
@@ -147,7 +221,9 @@ class CashierRefundController extends Controller
         if ($sale->payment_method === 'credit') {
             $availableMethods[] = 'credit_account';
         }
-        if (!empty($sale->customer_phone) && User::whereIn('phone', \App\Support\Phone::variants((string) $sale->customer_phone))->exists()) {
+        // بيع QR الحقيقي لا يحمل بالضرورة customer_phone في الفاتورة؛
+        // هوية الدافع المثبتة تُقرأ من PaymentRequest عبر خدمة المرتجعات.
+        if ($this->refundSvc->resolveCustomerUserIdForSale($sale) !== null) {
             $availableMethods[] = 'wallet';
         }
 
@@ -183,12 +259,34 @@ class CashierRefundController extends Controller
         if ($pos) {
             $merchant = User::find($pos->merchant_user_id);
             if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
-            return [$merchant, $pos->id];
+            try {
+                $branch = $this->branches->resolveOperational($request, $merchant, $pos);
+                $this->branches->assertDeviceMatches(
+                    \App\Http\Middleware\EnsurePosDevice::deviceOf($request), $merchant, $branch);
+            } catch (\LogicException $e) {
+                return $this->error('BRANCH_SCOPE_INVALID', $e->getMessage(), 403);
+            }
+            return [$merchant, $pos->id, $branch];
         }
         if (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
             return $this->error('NOT_A_MERCHANT', 'متاح للتجار وموظفي نقاط البيع فقط', 403);
         }
-        return [$authUser, null];
+        try {
+            $branch = $this->branches->resolveOperational($request, $authUser);
+            $this->branches->assertDeviceMatches(
+                \App\Http\Middleware\EnsurePosDevice::deviceOf($request), $authUser, $branch);
+        } catch (\LogicException $e) {
+            return $this->error('BRANCH_SCOPE_INVALID', $e->getMessage(), 403);
+        }
+        return [$authUser, null, $branch];
+    }
+
+    private function saleInScope(User $merchant, string $saleUlid, ?int $branchId): bool
+    {
+        return MerchantSale::where('sale_ulid', $saleUlid)
+            ->where('merchant_user_id', $merchant->id)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->exists();
     }
 
     private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse

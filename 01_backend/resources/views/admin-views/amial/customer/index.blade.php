@@ -24,26 +24,98 @@
     <div class="d-flex align-items-center gap-3 mb-3">
         <i class="tio-user-outlined text-primary" style="font-size:24px"></i>
         <h2 class="page-header-title mb-0">مركز العملاء</h2>
-        <span class="badge badge-soft-secondary ms-auto">شاشة واحدة</span>
+        <span class="badge badge-soft-success ms-auto">المصدر الموحد للعميل</span>
     </div>
 
-    {{-- مفاتيح البحث الفعلية فقط؛ كلّ بحث يسجّل بلا حفظ النص الحساس خاماً. --}}
-    <div class="card p-3 mb-3">
-        <div class="input-group">
-            <input type="text" id="cc-q" class="form-control form-control-lg"
-                   placeholder="هاتف / اسم / بريد / رقم حساب / معرّف محفظة / رقم عملية…" data-testid="cc-search">
-            <button class="btn btn-primary" id="cc-btn-search">بحث</button>
+    {{-- AMIAL-CUSTOMER-CENTER-NAV-003
+         الوظائف التي كانت موزعة على الشريط الجانبي أصبحت أدوات تشغيل داخل
+         المركز نفسه. تبقى المسارات المتخصصة موجودة بصلاحياتها، لكن الموظف
+         لا يبحث عنها في خمس مجموعات مختلفة. --}}
+    <div class="card p-3 mb-3" data-testid="cc-operations-bar">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+            <div>
+                <h5 class="mb-1">أدوات العميل</h5>
+                <div class="small text-muted">
+                    البحث والملف والتوثيق والتحديثات وصحة الأنظمة من نقطة واحدة.
+                </div>
+            </div>
+            @if(auth('user')->user()?->hasPlatformPermission('platform.customers.view'))
+                <a class="btn btn-primary btn-sm"
+                   href="{{ route('admin.amial.hub.customers', ['create' => 1]) }}"
+                   data-testid="cc-create-customer">+ إضافة عميل</a>
+            @endif
         </div>
-        <div id="cc-results" class="mt-2"></div>
+        <div class="d-flex flex-wrap gap-2" role="tablist" aria-label="أقسام مركز العملاء">
+            <button type="button" class="btn btn-primary btn-sm js-cc-op active"
+                    data-op="customers" data-testid="cc-op-customers">👤 ملف العميل</button>
+            @if(auth('user')->user()?->hasPlatformPermission('platform.customers.view'))
+                <a class="btn btn-outline-dark btn-sm"
+                   href="{{ route('admin.support-center.index', ['tab' => 'playbooks']) }}"
+                   data-testid="cc-support-diagnostics">🎧 تشخيص وحل المشكلة</a>
+            @endif
+            {{-- AMIAL-KYC-ONE-CENTER-001 — مركز موحد بدل ثلاثة أزرار متفرقة. --}}
+            @if(auth('user')->user()?->hasPlatformPermission('platform.customers.kyc.view'))
+                <a class="btn btn-primary btn-sm" href="{{ route('admin.amial.kyc.page') }}"
+                   data-testid="cc-kyc-unified-center">🛡️ مركز التحقق والهوية</a>
+                <button type="button" class="btn btn-outline-primary btn-sm js-cc-op"
+                        data-op="changes" data-testid="cc-profile-changes">📝 طلبات تحديث البيانات</button>
+            @endif
+            @if(auth('user')->user()?->hasPlatformPermission('platform.audit.view'))
+                <button type="button" class="btn btn-outline-secondary btn-sm js-cc-op"
+                        data-op="systems" data-testid="cc-systems-health">🧭 صحة أنظمة العميل</button>
+            @endif
+            @if(auth('user')->user()?->hasPlatformPermission('platform.registrations.view'))
+                <a class="btn btn-outline-secondary btn-sm"
+                   href="{{ route('admin.amial.registration-dossiers.page') }}"
+                   data-testid="cc-registration-archive">🗂️ الأرشيف</a>
+            @endif
+            @if(auth('user')->user()?->hasPlatformPermission('platform.recovery.view'))
+                <a class="btn btn-outline-danger btn-sm"
+                   href="{{ route('admin.amial.recovery.index') }}"
+                   data-testid="cc-recovery">🔑 متابعة الاستعادة</a>
+            @endif
+        </div>
     </div>
 
-    <div id="cc-profile" data-testid="cc-profile"></div>
+    <div id="cc-op-panel-customers" class="js-cc-op-panel">
+        {{-- مفاتيح البحث الفعلية فقط؛ كلّ بحث يسجّل بلا حفظ النص الحساس خاماً. --}}
+        <div class="card p-3 mb-3">
+            <div class="input-group">
+                <input type="text" id="cc-q" class="form-control form-control-lg"
+                       placeholder="هاتف / اسم / بريد / رقم حساب / معرّف محفظة / رقم عملية…" data-testid="cc-search">
+                <button class="btn btn-primary" id="cc-btn-search">بحث</button>
+            </div>
+            <div id="cc-results" class="mt-2"></div>
+        </div>
+        <div id="cc-profile" data-testid="cc-profile"></div>
+    </div>
+
+    <div id="cc-op-panel-kyc" class="js-cc-op-panel d-none">
+        <div id="cc-ops-kyc-content" class="card p-3 mb-3">
+            <div class="text-muted">اضغط «طابور التوثيق» لتحميل الطلبات.</div>
+        </div>
+    </div>
+
+    <div id="cc-op-panel-changes" class="js-cc-op-panel d-none">
+        <div id="cc-ops-changes-content" class="card p-3 mb-3">
+            <div class="text-muted">اضغط «طلبات تحديث البيانات» لتحميل الطابور.</div>
+        </div>
+    </div>
+
+    <div id="cc-op-panel-systems" class="js-cc-op-panel d-none">
+        <div id="cc-ops-systems-content" class="card p-3 mb-3">
+            <div class="text-muted">اضغط «صحة أنظمة العميل» لتحميل الحالة.</div>
+        </div>
+    </div>
 </div>
 
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const BASE = '{{ url('admin/amial/customer') }}';
+    const KYC_REVIEW_BASE = '{{ url('admin/amial/kyc/documents') }}';
     const CSRF = '{{ csrf_token() }}';
+    const CAN_KYC_DECIDE = @json((bool) auth('user')->user()?->hasPlatformPermission('platform.customers.freeze'));
+    const CAN_RESTRICTED_DECIDE = @json((bool) auth('user')->user()?->hasPlatformPermission('platform.customers.kyc.restricted.decide'));
     const ALLOWED_TABS = @json($tabs);
     const ALLOWED_ACTIONS = @json($actions);
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -89,6 +161,17 @@
         return body;
     }
 
+    async function postUrl(url, body) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':CSRF},
+            body: JSON.stringify(body || {}),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.message || ('خطأ ' + response.status));
+        return payload;
+    }
+
     // ---------- البحث ----------
     document.getElementById('cc-btn-search').onclick = doSearch;
     document.getElementById('cc-q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
@@ -132,20 +215,24 @@
     ];
     const TABS = ALL_TABS.filter(([code]) => ALLOWED_TABS.includes(code));
 
-    async function openCustomer(id) {
+    async function openCustomer(id, targetTab = null) {
         current = id;
         const sequence = ++customerSequence;
         for (const k in loaded) delete loaded[k];
 
+        const selected = TABS.some(t => t[0] === targetTab)
+            ? targetTab
+            : (TABS[0]?.[0] || null);
+
         document.getElementById('cc-profile').innerHTML = `
             <div id="cc-head" class="card p-3 mb-3"><div class="text-muted">جارٍ التحميل…</div></div>
-            <ul class="nav nav-tabs mb-3">${TABS.map((t, i) => `
-                <li class="nav-item"><button class="nav-link ${i === 0 ? 'active' : ''} js-cc-tab"
+            <ul class="nav nav-tabs mb-3">${TABS.map(t => `
+                <li class="nav-item"><button class="nav-link ${t[0] === selected ? 'active' : ''} js-cc-tab"
                     data-tab="${t[0]}" data-testid="cc-tab-${t[0]}">${t[1]}</button></li>`).join('')}
             </ul>
             <div id="cc-tab-body"></div>`;
 
-        if (TABS.length) loadTab(TABS[0][0], sequence);
+        if (selected) loadTab(selected, sequence);
     }
 
     document.addEventListener('click', e => {
@@ -181,6 +268,385 @@
             <tbody>${rows || `<tr><td colspan="${head.length}" class="text-muted text-center py-3">${empty}</td></tr>`}</tbody>
         </table></div>`;
 
+    // ---------- الطوابير التشغيلية داخل نفس الشاشة ----------
+    const opsLoaded = {};
+
+    function showOperationPanel(name) {
+        document.querySelectorAll('.js-cc-op-panel').forEach(panel =>
+            panel.classList.toggle('d-none', panel.id !== 'cc-op-panel-' + name));
+        document.querySelectorAll('.js-cc-op').forEach(button =>
+            button.classList.toggle('active', button.dataset.op === name));
+
+        if (name !== 'customers' && !opsLoaded[name]) {
+            loadOperationPanel(name);
+        }
+    }
+
+    document.querySelectorAll('.js-cc-op').forEach(button => {
+        button.addEventListener('click', () => showOperationPanel(button.dataset.op));
+    });
+
+    async function loadOperationPanel(name, force = false) {
+        if (!force && opsLoaded[name]) return;
+        const target = document.getElementById('cc-ops-' + name + '-content');
+        if (!target) return;
+
+        target.innerHTML = '<div class="text-muted">جارٍ التحميل…</div>';
+        try {
+            const j = await get('/ops/' + name);
+            if (!j.success) throw new Error(j.message || 'تعذر التحميل');
+            opsLoaded[name] = j.meta;
+            if (name === 'kyc') renderOpsKyc(j.meta, target);
+            if (name === 'changes') renderOpsChanges(j.meta, target);
+            if (name === 'systems') renderOpsSystems(j.meta, target);
+        } catch (error) {
+            target.innerHTML = `<div class="alert alert-warning mb-0">${esc(error.message || 'تعذّر التحميل')}</div>`;
+        }
+    }
+
+    function renderOpsKyc(m, target) {
+        const normal = (m.pending || []).map(x => ({...x, restricted:false}));
+        const restricted = (m.restricted_pending || []).map(x => ({...x, restricted:true}));
+        const pending = normal.concat(restricted);
+        const activation = (m.activation || [])
+            .map(x => ({...x, restricted:false}))
+            .concat((m.restricted_activation || []).map(x => ({...x, restricted:true})));
+
+        const pendingRows = pending.map(row => {
+            const canDecide = CAN_KYC_DECIDE
+                && (!row.restricted || CAN_RESTRICTED_DECIDE);
+            return `<tr>
+                <td><strong>${esc(row.customer_name)}</strong><div class="small text-muted">#${esc(row.user_id)} • ${esc(row.customer_phone)}</div></td>
+                <td>${esc(row.doc_label)} ${row.restricted ? '<span class="badge bg-danger">مقيد</span>' : ''}</td>
+                <td class="small">${esc(row.waiting_hours)} ساعة</td>
+                <td class="text-nowrap">
+                    <button class="btn btn-sm btn-outline-primary js-ops-open-customer" data-id="${row.user_id}" data-tab="kyc">فتح الملف</button>
+                    ${canDecide ? `
+                        <button class="btn btn-sm btn-success js-ops-doc-decision" data-id="${row.id}" data-action="approve">اعتماد</button>
+                        <button class="btn btn-sm btn-outline-danger js-ops-doc-decision" data-id="${row.id}" data-action="reject">رفض</button>
+                    ` : ''}
+                </td>
+            </tr>`;
+        }).join('');
+
+        const activationRows = activation.map(row => {
+            const blockers = row.ownership?.blockers || [];
+            return `<tr>
+                <td><strong>${esc(row.customer_name)}</strong><div class="small text-muted">#${esc(row.user_id)} • ${esc(row.customer_phone)}</div></td>
+                <td>${row.restricted ? '<span class="badge bg-danger">مقيد</span>' : '<span class="badge bg-secondary">عادي</span>'}</td>
+                <td>${row.ownership?.ready
+                    ? '<span class="badge bg-success">ملكية الهوية جاهزة</span>'
+                    : '<span class="badge bg-warning text-dark">تحتاج استكمال</span>'}
+                    ${blockers.length ? `<div class="small text-muted mt-1">${blockers.map(esc).join(' • ')}</div>` : ''}
+                </td>
+                <td><button class="btn btn-sm btn-primary js-ops-open-customer" data-id="${row.user_id}" data-tab="kyc">فتح KYC للعميل</button></td>
+            </tr>`;
+        }).join('');
+
+        target.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div><h5 class="mb-1">طابور التوثيق</h5><div class="small text-muted">المستندات والملفات الجاهزة للقرار من المصدر نفسه.</div></div>
+                <button class="btn btn-sm btn-outline-secondary js-ops-refresh" data-op="kyc">↻ تحديث</button>
+            </div>
+            <div class="row g-2 mb-3">
+                ${card('مستندات تنتظر', pending.length)}
+                ${card('حسابات جاهزة للقرار', activation.length)}
+                ${card('مراجعة مقيدة', restricted.length + (m.restricted_activation || []).length,
+                    m.restricted_visible ? 'مرئية لصلاحيتك' : 'غير مرئية لصلاحيتك')}
+            </div>
+            <h6>المستندات بانتظار المراجعة</h6>
+            ${table(['العميل','المستند','الانتظار','الإجراء'], pendingRows, 'لا مستندات معلقة', 'cc-ops-kyc-pending')}
+            <h6 class="mt-3">حسابات جاهزة للقرار النهائي</h6>
+            ${table(['العميل','النوع','إثبات الملكية','الإجراء'], activationRows, 'لا حسابات جاهزة للقرار', 'cc-ops-kyc-activation')}`;
+    }
+
+    function renderOpsChanges(m, target) {
+        const rows = (m.items || []).map(row => `<tr>
+            <td><strong>${esc(row.customer_name)}</strong><div class="small text-muted">#${esc(row.user_id)} • ${esc(row.customer_phone)}</div></td>
+            <td class="font-monospace small">${esc(row.field)}</td>
+            <td class="small">${esc(row.reason || '—')}</td>
+            <td>${row.supporting_document_id ? '#' + esc(row.supporting_document_id) : '—'}</td>
+            <td class="small">${dt(row.created_at)}</td>
+            <td><button class="btn btn-sm btn-primary js-ops-open-customer" data-id="${row.user_id}" data-tab="kyc">فتح العميل</button></td>
+        </tr>`).join('');
+
+        target.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div><h5 class="mb-1">طلبات تحديث بيانات العملاء</h5><div class="small text-muted">الطلبات التي ملأها أصحاب الحسابات وتنتظر مراجعاً.</div></div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary js-ops-refresh" data-op="changes">↻ تحديث</button>
+                    <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.changes.page') }}">أداة القرار المتخصصة</a>
+                </div>
+            </div>
+            ${table(['العميل','الحقل','السبب','المستند','فُتح','الملف'], rows, 'لا طلبات بانتظار المراجعة', 'cc-ops-changes')}`;
+    }
+
+    function renderOpsSystems(m, target) {
+        const summary = m.summary || {};
+        const sections = [
+            ['systems', 'حالة الأنظمة'],
+            ['policy', 'الحركات المرفوضة'],
+            ['credits', 'الأجل والديون'],
+            ['receipts', 'الإيصالات'],
+            ['bill', 'السداد والمزود'],
+            ['requests', 'طلبات الأموال'],
+            ['notifications', 'الإشعارات والتسليم'],
+        ];
+
+        target.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div>
+                    <h5 class="mb-1">صحة أنظمة العميل</h5>
+                    <div class="small text-muted">
+                        المصدر التشغيلي نفسه الذي كان في «مركز أنظمة العميل»،
+                        لكن داخل مركز العملاء وبدون صفحة ثانية.
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary js-ops-refresh" data-op="systems">↻ تحديث</button>
+            </div>
+
+            <div class="row g-2 mb-3">
+                ${card('العملاء', summary.customers ?? '—')}
+                ${card('KYC معلّق', summary.kyc_pending ?? '—')}
+                ${card('حجب سياسة / 24س', summary.policy_blocks_24h ?? '—')}
+                ${card('استثناءات حدود', summary.limit_overrides ?? '—')}
+                ${card('أجل مستحق', summary.outstanding_credit_accounts ?? '—')}
+                ${card('طلبات أموال معلقة', summary.pending_payment_requests ?? '—')}
+                ${card('سداد معلّق', summary.pending_bill_orders ?? '—')}
+                ${card('فشل PDF', summary.receipt_pdf_failures ?? '—')}
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mb-3" data-testid="cc-systems-subtabs">
+                ${sections.map((section, index) => `
+                    <button type="button"
+                            class="btn btn-sm ${index === 0 ? 'btn-primary' : 'btn-outline-secondary'} js-systems-subtab"
+                            data-section="${section[0]}">${section[1]}</button>
+                `).join('')}
+            </div>
+            <div id="cc-systems-detail"></div>`;
+
+        renderSystemsDetail('systems', m);
+    }
+
+    function renderSystemsDetail(section, m) {
+        const target = document.getElementById('cc-systems-detail');
+        if (!target) return;
+
+        const openCustomerButton = id => id
+            ? `<button class="btn btn-sm btn-link p-0 js-ops-open-customer" data-id="${esc(id)}">#${esc(id)}</button>`
+            : '—';
+
+        if (section === 'systems') {
+            const systems = m.systems || [];
+            target.innerHTML = `<div class="row g-3">
+                ${systems.map(system => `
+                    <div class="col-xl-6"><div class="card h-100 p-3">
+                        <div class="d-flex justify-content-between gap-2">
+                            <strong>${esc(system.title)}</strong>
+                            <span class="badge bg-${system.state === 'complete' ? 'success' : (system.state === 'partial' ? 'warning text-dark' : 'secondary')}">${esc(system.state_label)}</span>
+                        </div>
+                        <div class="small text-muted mt-2">${esc(system.description)}</div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-md-4"><div class="border rounded p-2 h-100">
+                                <div class="small text-muted">الرؤية</div><div class="small fw-semibold">${esc(system.visibility || '—')}</div>
+                            </div></div>
+                            <div class="col-md-4"><div class="border rounded p-2 h-100">
+                                <div class="small text-muted">الأوامر</div><div class="small fw-semibold">${esc(system.controls || '—')}</div>
+                            </div></div>
+                            <div class="col-md-4"><div class="border rounded p-2 h-100">
+                                <div class="small text-muted">الأثر</div><div class="small fw-semibold">${esc(system.audit || '—')}</div>
+                            </div></div>
+                        </div>
+                        <div class="mt-2">${(system.metrics || []).map(metric =>
+                            `<span class="badge badge-soft-secondary me-1 mb-1">${esc(metric.label)}: ${metric.money ? money(metric.value) + ' ر.ي' : esc(metric.value)}</span>`).join('')}</div>
+                        ${system.gap ? `<div class="alert alert-warning py-2 small mt-2 mb-0"><strong>فجوة معلنة:</strong> ${esc(system.gap)}</div>` : ''}
+                        ${(system.actions || []).length ? `<div class="d-flex flex-wrap gap-2 mt-2">
+                            ${system.actions.map(action => `<a class="btn btn-sm btn-outline-primary" href="${esc(action.url)}">${esc(action.label)}</a>`).join('')}
+                        </div>` : ''}
+                    </div></div>
+                `).join('')}
+            </div>`;
+            return;
+        }
+
+        if (section === 'policy') {
+            const rows = (m.policy_blocks || []).map(row => `<tr>
+                <td class="small text-nowrap">${dt(row.at)}</td>
+                <td>${openCustomerButton(row.customer_id)}</td>
+                <td><code>${esc(row.feature)}</code></td>
+                <td>${esc(row.tier ?? '—')}</td>
+                <td>${row.amount == null ? '—' : money(row.amount) + ' ر.ي'}</td>
+                <td class="small">${esc(row.reason || row.code || '—')}</td>
+                <td class="font-monospace small">${esc(row.transaction_id || row.decision_id || '—')}</td>
+            </tr>`).join('');
+            target.innerHTML = `
+                <div class="alert alert-info py-2 small">قراءة فقط — لا يوجد زر لتعطيل حارس السياسة من مركز العملاء.</div>
+                ${table(['الوقت','العميل','الميزة','المستوى','المبلغ','السبب','المرجع'], rows, 'لا توجد حالات منع مسجلة', 'cc-systems-policy')}`;
+            return;
+        }
+
+        if (section === 'credits') {
+            const rows = (m.credits || []).map(row => `<tr>
+                <td>#${esc(row.id)}</td>
+                <td>${esc(row.customer_name)} ${row.customer_user_id ? openCustomerButton(row.customer_user_id) : ''}</td>
+                <td>#${esc(row.merchant_user_id)}</td>
+                <td class="fw-bold">${money(row.balance)} ر.ي</td>
+                <td>${String(row.limit || '0') === '0' ? 'بلا حد' : money(row.limit) + ' ر.ي'}</td>
+                <td>${esc(row.classification)}</td>
+                <td class="small">${dt(row.last_payment_at)}</td>
+            </tr>`).join('');
+            target.innerHTML = table(
+                ['الحساب','العميل','التاجر','الرصيد','الحد','التصنيف','آخر سداد'],
+                rows, 'لا توجد أرصدة أجل مستحقة', 'cc-systems-credits');
+            return;
+        }
+
+        if (section === 'receipts') {
+            const rows = (m.receipts || []).map(row => `<tr>
+                <td class="font-monospace small">${esc(row.receipt_number)}</td>
+                <td>${openCustomerButton(row.user_id)}</td>
+                <td>${esc(row.receipt_type)}</td>
+                <td>${money(row.amount)} ر.ي</td>
+                <td>${money(row.fee)} ر.ي</td>
+                <td><span class="badge bg-${row.status === 'pdf_generated' ? 'success' : (row.status === 'pdf_failed' ? 'danger' : 'warning text-dark')}">${esc(row.status)}</span></td>
+                <td class="font-monospace small">${esc(row.reference_transaction_id)}</td>
+                <td class="small">${dt(row.issued_at)}</td>
+            </tr>`).join('');
+            target.innerHTML = table(
+                ['السند','العميل','النوع','المبلغ','الرسوم','PDF','مرجع العملية','الإصدار'],
+                rows, 'لا توجد إيصالات', 'cc-systems-receipts');
+            return;
+        }
+
+        if (section === 'bill') {
+            const orders = (m.bill_pay || []).map(row => `<tr>
+                <td class="font-monospace small">${esc(row.order_ulid)}</td>
+                <td>${openCustomerButton(row.user_id)}</td>
+                <td>${money(row.amount)} ر.ي</td>
+                <td>${money(row.fee)} ر.ي</td>
+                <td><span class="badge bg-${row.status === 'failed' ? 'danger' : 'warning text-dark'}">${esc(row.status)}</span></td>
+                <td class="font-monospace small">${esc(row.provider_reference || '—')}</td>
+                <td class="small">${esc(row.provider_message || '—')}</td>
+                <td class="small">${dt(row.updated_at)}</td>
+            </tr>`).join('');
+            const provider = (m.bill_provider_requests || []).map(row => `<tr>
+                <td class="font-monospace small">${esc(row.order_ulid || '—')}</td>
+                <td>${esc(row.request_type)}</td>
+                <td>${esc(row.http_status ?? '—')}</td>
+                <td>${row.latency_ms == null ? '—' : esc(row.latency_ms) + ' ms'}</td>
+                <td><span class="badge bg-${row.was_successful ? 'success' : 'danger'}">${row.was_successful ? 'نجح' : 'فشل'}</span></td>
+                <td class="small">${esc(row.error_message || '—')}</td>
+                <td class="small">${dt(row.created_at)}</td>
+            </tr>`).join('');
+            target.innerHTML = `
+                <h6>عمليات السداد التي تحتاج متابعة</h6>
+                ${table(['مرجع أميال','العميل','المبلغ','الرسوم','الحالة','مرجع المزود','الرسالة','تحديث'], orders, 'لا توجد عمليات معلقة', 'cc-systems-bill')}
+                <h6 class="mt-3">اتصال مزودي السداد</h6>
+                ${table(['مرجع أميال','الطلب','HTTP','الزمن','النتيجة','الخطأ','الوقت'], provider, 'لا توجد اتصالات مزود مسجلة', 'cc-systems-provider')}`;
+            return;
+        }
+
+        if (section === 'requests') {
+            const rows = (m.payment_requests || []).map(row => `<tr>
+                <td class="font-monospace small">${esc(row.request_ulid)}</td>
+                <td>${openCustomerButton(row.requester_user_id)}</td>
+                <td>${row.recipient_user_id ? openCustomerButton(row.recipient_user_id) : 'عام/رقم هاتف'}</td>
+                <td>${money(row.amount)} ر.ي</td>
+                <td>${esc(row.status)}</td>
+                <td class="font-monospace small">${esc(row.paid_transaction_id || '—')}</td>
+                <td class="small">${dt(row.created_at)}</td>
+            </tr>`).join('');
+            target.innerHTML = table(
+                ['المرجع','الطالب','المستلم','المبلغ','الحالة','عملية الدفع','الإنشاء'],
+                rows, 'لا توجد طلبات أموال', 'cc-systems-requests');
+            return;
+        }
+
+        if (section === 'notifications') {
+            const notices = (m.notifications || []).map(row => `<tr>
+                <td>${openCustomerButton(row.user_id)}</td>
+                <td><code>${esc(row.type)}</code></td>
+                <td>${esc(row.title)}</td>
+                <td>${row.read_at ? '<span class="badge bg-success">مقروء</span>' : '<span class="badge bg-secondary">غير مقروء</span>'}</td>
+                <td class="small">${dt(row.created_at)}</td>
+            </tr>`).join('');
+            const deliveries = (m.notification_deliveries || []).map(row => `<tr>
+                <td class="small">${dt(row.created_at)}</td>
+                <td>${openCustomerButton(row.user_id)}</td>
+                <td><code>${esc(row.channel || 'fcm')}</code></td>
+                <td><code>${esc(row.notification_type || '—')}</code></td>
+                <td>${esc(row.status || '—')}</td>
+                <td>${esc(row.attempt ?? '—')}</td>
+                <td>${esc(row.http_status ?? '—')}</td>
+                <td class="font-monospace small">${esc(row.provider_message_id || '—')}</td>
+                <td class="small">${esc(row.error_message || row.error_code || '—')}</td>
+            </tr>`).join('');
+            target.innerHTML = `
+                <h6>آخر إشعارات العملاء</h6>
+                ${table(['العميل','النوع','العنوان','القراءة','الإنشاء'], notices, 'لا توجد إشعارات', 'cc-systems-notifications')}
+                <h6 class="mt-3">تسليم Push والبريد</h6>
+                <div class="small text-muted mb-2">قبول المزود لا يعني أن العميل قرأ الرسالة؛ نعرض حالة التسليم كما سجلها المزود فقط.</div>
+                ${table(['الوقت','العميل','القناة','النوع','الحالة','المحاولة','HTTP','مرجع المزود','الخطأ'], deliveries, 'لا توجد سجلات تسليم', 'cc-systems-deliveries')}`;
+        }
+    }
+
+    document.addEventListener('click', async event => {
+        const systemsTab = event.target.closest('.js-systems-subtab');
+        if (systemsTab) {
+            document.querySelectorAll('.js-systems-subtab').forEach(button => {
+                button.classList.toggle('btn-primary', button === systemsTab);
+                button.classList.toggle('btn-outline-secondary', button !== systemsTab);
+            });
+            renderSystemsDetail(systemsTab.dataset.section, opsLoaded.systems || {});
+            return;
+        }
+
+        const open = event.target.closest('.js-ops-open-customer');
+        if (open) {
+            showOperationPanel('customers');
+            await openCustomer(Number(open.dataset.id), open.dataset.tab || null);
+            document.getElementById('cc-profile')?.scrollIntoView({behavior:'smooth', block:'start'});
+            return;
+        }
+
+        const refresh = event.target.closest('.js-ops-refresh');
+        if (refresh) {
+            opsLoaded[refresh.dataset.op] = null;
+            await loadOperationPanel(refresh.dataset.op, true);
+            return;
+        }
+
+        const decision = event.target.closest('.js-ops-doc-decision');
+        if (!decision) return;
+
+        const action = decision.dataset.action;
+        let payload = {};
+        if (action === 'approve') {
+            const expires = prompt('تاريخ انتهاء الوثيقة YYYY-MM-DD — اتركه فارغاً إن لم تكن تنتهي:') || '';
+            if (expires.trim()) payload.expires_at = expires.trim();
+            if (!confirm('اعتماد هذا المستند؟ اعتماد المستند لا يعني اعتماد الحساب النهائي.')) return;
+        } else {
+            const reason = prompt('سبب الرفض — سيظهر للعميل:') || '';
+            if (reason.trim().length < 3) {
+                alert('سبب الرفض مطلوب (3 أحرف على الأقل).');
+                return;
+            }
+            payload.reason = reason.trim();
+        }
+
+        try {
+            const result = await postUrl(
+                KYC_REVIEW_BASE + '/' + encodeURIComponent(decision.dataset.id) + '/' + action,
+                payload,
+            );
+            alert(result.message || 'تم');
+            opsLoaded.kyc = null;
+            await loadOperationPanel('kyc', true);
+        } catch (error) {
+            alert(error.message || 'تعذر تنفيذ القرار');
+        }
+    });
+
     const RENDER = {
         overview(m, body) {
             currentOverview = m;
@@ -195,6 +661,15 @@
                             <span class="badge bg-${s.severity}">${esc(s.label)}</span></h4>
                         <div class="text-muted font-monospace">#${p.id} • ${esc(p.phone)} • ${esc(p.email)}</div>
                         <div class="small text-muted">${esc(p.type)} • ${esc(p.zone_code)} • مسجَّل ${dt(p.registered_at)}</div>
+                        <div class="small mt-1">
+                            <strong>حالة الاسم:</strong> ${esc(p.legal_name_status_label || '—')}
+                            ${p.verified_legal_name
+                                ? '<span class="badge bg-success ms-1">اسم قانوني موثق</span>'
+                                : '<span class="badge bg-warning text-dark ms-1">غير موثق بالهوية</span>'}
+                        </div>
+                        ${p.declared_legal_name && p.verified_legal_name && p.declared_legal_name !== p.verified_legal_name
+                            ? `<div class="small text-warning mt-1"><strong>المصرّح به:</strong> ${esc(p.declared_legal_name)}</div>`
+                            : ''}
                     </div>
                     <button class="btn btn-outline-primary btn-sm" id="cc-actions-btn">⚡ الإجراءات</button>
                 </div>
@@ -231,8 +706,39 @@
                         ${l.state === 'configured' ? table(['الحدّ', 'القيمة'], [
                             ['أقصى رصيد', l.max_balance], ['أقصى عملية', l.max_single_transaction],
                             ['يوميّ', l.max_daily_total], ['شهريّ', l.max_monthly_total],
-                        ].map(r => `<tr><td>${r[0]}</td><td class="text-end">${money(r[1])}</td></tr>`).join(''), '')
+                            ['سنويّ', l.max_annual_total],
+                        ].map(r => `<tr><td>${r[0]}</td><td class="text-end">${r[0] === 'سنويّ' && Number(r[1] || 0) === 0 ? 'لا سقف سنوي إضافي' : money(r[1])}</td></tr>`).join(''), '')
                         : '<div class="alert alert-warning mb-0 small">لا توجد سياسة حدود نافذة لهذا العميل؛ لا يُفسَّر ذلك كحدّ صفري.</div>'}
+                        {{--
+                            AMIAL-LIMIT-SCOPE-001 — **حدٌّ يُعرَض بلا نطاقه.**
+
+                            سأل صاحبُ المشروع عن «١٠٠ ألف في اليوم و٥٠٠ ألف
+                            في الشهر» في حساب تاجر وقود: **من وضعها؟**
+
+                            وقِيس: هي حدُّ فئة التوثيق من `kyc_tier_limits`
+                            (الفئة القياسيّة)، **واحدةٌ لكلّ الأنواع** — لا
+                            وُضعت للوقود ولا لقطاعٍ بعينه.
+
+                            نطاقُ الاستدعاءات الحالي خمسة ملفات، منها
+                            ProgressiveCustomerMoneyController لتحويلات العميل
+                            والسحب وتسديد طلب المال، وMerchantPaymentController
+                            للدفع للتاجر من محفظة العميل، إضافةً للصندوق
+                            العائلي والتبرعات والدفع الآمن. لا يعني هذا
+                            تحديد سقف المبيعات داخل نقطة البيع نفسها.
+
+                            ورقمٌ يُعرَض «حدّاً» ولا يحدّ ما يظنّه قارئُه
+                            أسوأ من غيابه: يقرؤه المراجعُ سقفاً للبيع فلا
+                            يبحث عن سقفٍ حقيقيّ. فيُقال نطاقُه صراحةً.
+                        --}}
+                        <div class="small text-muted mt-2">
+                            <strong>نطاقُ هذه الحدود:</strong> تحويلات العميل والسحب النقدي
+                            وتسديد طلب المال، والدفع للتاجر من محفظة العميل، والمساهمات
+                            في الصندوق العائلي، والتبرّعات والدفع الآمن.
+                            <strong>ولا تشمل</strong> سقف مبيعات التاجر ولا مبيعات الوقود
+                            ولا عمليات الكاشير نفسها؛ لتلك ضوابطها المستقلة.
+                            والقيمُ من فئة التوثيق (${esc(l.source)})،
+                            وتُستثنى لهذا الحساب من إجراءات الحساب.
+                        </div>
                     </div></div>
 
                     <div class="col-lg-6"><div class="card p-3">
@@ -305,33 +811,211 @@
         },
 
         kyc(m, body) {
-            const c = m.completeness;
-            const r = m.reconciliation;
+            const c = m.completeness || {};
+            const r = m.reconciliation || {};
+            const contact = m.contact_verification || {};
+            const regulatory = m.regulatory_profile || {fields: [], missing: []};
+            const residence = m.residence || {};
+            const expiry = m.identity_expiry || {};
+            const ownership = m.ownership || {};
+            const privacy = m.privacy || {};
+            const reuse = m.reuse_findings || {blockers: [], warnings: [], matches: []};
+            const changes = m.profile_change_requests || [];
+            const policies = m.tier_policies || [];
+
+            const yesNo = value => value
+                ? '<span class="badge bg-success">موثّق</span>'
+                : '<span class="badge bg-danger">غير موثّق</span>';
+            const stateBadge = (value, positive = []) => {
+                const good = positive.includes(value);
+                const cls = good ? 'success'
+                    : (['expired','rejected','mismatch','failed','blocked'].includes(value) ? 'danger'
+                    : (['pending','collecting','due','needs_more_evidence','not_submitted'].includes(value)
+                        ? 'warning text-dark' : 'secondary'));
+                return `<span class="badge bg-${cls}">${esc(value || '—')}</span>`;
+            };
+            const blockerList = rows => rows?.length
+                ? '<ul class="mb-0 ps-3">' + rows.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>'
+                : '<span class="text-success">لا عوائق مسجلة</span>';
+            const tierName = tier => ({
+                0:'عميل غير موثق', 1:'عميل موثق جزئياً',
+                2:'عميل موثق بهوية', 3:'عميل موثق',
+            })[Number(tier)] || ('المستوى ' + esc(tier));
+
             body.innerHTML = `
-                <div class="alert alert-${esc(r.severity)} py-2" data-testid="cc-kyc-reconciliation">
-                    <strong>${esc(r.label)}</strong>
-                    <div class="small mt-1">${esc(r.description)}</div>
+                <div class="alert alert-${esc(r.severity || 'secondary')} py-2" data-testid="cc-kyc-reconciliation">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <strong>${esc(r.label || 'حالة التوثيق')}</strong>
+                        <span class="badge bg-dark">${tierName(m.tier)}</span>
+                    </div>
+                    <div class="small mt-1">${esc(r.description || '')}</div>
                     <div class="small mt-2">
-                        فئة الحساب: ${esc(m.tier)} • فئة ملف المستندات: ${esc(m.document_target_tier)}<br>
+                        فئة ملف المستندات: ${esc(m.document_target_tier)} •
                         ${c.complete ? 'مستندات الفئة ' + esc(c.tier) + ' مكتملة'
                             : 'المطلوب للاستكمال: ' + (c.missing || []).map(esc).join('، ')}
                     </div>
                 </div>
-                ${table(['المستند', 'الحالة', 'القراءة الآلية', 'ينتهي', 'المراجع', 'رُفع'],
-                    m.documents.map(d => `<tr>
-                        <td>${esc(d.doc_label)}</td>
-                        <td><span class="badge bg-${d.status === 'approved' ? 'success' : (d.status === 'rejected' ? 'danger' : 'warning text-dark')}">${esc(d.status)}</span>
-                            ${d.rejection_reason ? `<div class="small text-muted">${esc(d.rejection_reason)}</div>` : ''}</td>
-                        <td class="small">${esc(d.ocr_status)}</td>
-                        <td class="small">${esc(d.expires_at || '—')}</td>
-                        <td class="small">${esc(d.reviewer || '—')}</td>
-                        <td class="small">${dt(d.uploaded_at)}</td></tr>`).join(''),
-                    'لا مستندات', 'cc-kyc')}
+
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-4"><div class="card h-100 p-3">
+                        <h6>📞 التحقق من وسائل الاتصال</h6>
+                        <div class="d-flex justify-content-between border-bottom py-2">
+                            <span>رقم الهاتف</span>${yesNo(contact.phone_verified)}
+                        </div>
+                        <div class="d-flex justify-content-between py-2">
+                            <span>البريد الإلكتروني</span>${yesNo(contact.email_verified)}
+                        </div>
+                        ${contact.email_verified_at ? `<div class="small text-muted">آخر إثبات بريد: ${dt(contact.email_verified_at)}</div>` : ''}
+                    </div></div>
+
+                    <div class="col-lg-4"><div class="card h-100 p-3">
+                        <h6>🏠 إثبات الإقامة</h6>
+                        <div class="mb-2">الحالة: ${stateBadge(residence.status, ['verified'])}</div>
+                        <div class="small">الميلاد: <strong>${esc(residence.birth_governorate_name || '—')}</strong></div>
+                        <div class="small">السكن المعلن: <strong>${esc(residence.declared_governorate_name || '—')}</strong></div>
+                        <div class="small">السكن المعتمد: <strong>${esc(residence.verified_governorate_name || '—')}</strong></div>
+                        <div class="small">المديرية: ${esc(residence.residence_district || '—')} • الحي: ${esc(residence.residence_area || '—')}</div>
+                        <div class="mt-2">${residence.operational
+                            ? '<span class="badge bg-success">داخل نطاق التشغيل</span>'
+                            : '<span class="badge bg-secondary">خارج نطاق التشغيل/غير محسوم</span>'}</div>
+                    </div></div>
+
+                    <div class="col-lg-4"><div class="card h-100 p-3">
+                        <h6>🪪 صلاحية الهوية</h6>
+                        <div class="mb-2">الحالة: ${stateBadge(expiry.state, ['valid'])}</div>
+                        <div class="small">تاريخ الانتهاء: <strong>${esc(expiry.expires_at || 'غير مسجل')}</strong></div>
+                        <div class="small">الأيام: <strong>${expiry.days === null || expiry.days === undefined ? '—' : esc(expiry.days)}</strong></div>
+                        <div class="small text-muted">المصدر: ${esc(expiry.source || '—')}</div>
+                        ${m.update_required ? '<div class="alert alert-danger py-2 mt-2 mb-0 small">إعادة التوثيق مطلوبة لهذا الحساب.</div>' : ''}
+                    </div></div>
+                </div>
+
+                <div class="card p-3 mb-3">
+                    <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                        <h6 class="mb-0">📋 ملف «اعرف عميلك» الرقابي</h6>
+                        <span class="badge bg-${(regulatory.missing || []).length ? 'warning text-dark' : 'success'}">
+                            ${(regulatory.missing || []).length ? (regulatory.missing.length + ' حقول ناقصة') : 'مكتمل رقابياً'}
+                        </span>
+                    </div>
+                    ${(regulatory.missing || []).length
+                        ? `<div class="alert alert-warning py-2 small"><strong>ما ينقص:</strong> ${regulatory.missing.map(esc).join(' • ')}</div>`
+                        : ''}
+                    <div class="row g-2">
+                        ${(regulatory.fields || []).map(f => `
+                            <div class="col-md-4">
+                                <div class="border rounded p-2 h-100">
+                                    <div class="small text-muted">${esc(f.label)}</div>
+                                    <div class="fw-bold">${esc(f.value || 'غير مدخل')}</div>
+                                </div>
+                            </div>`).join('')}
+                    </div>
+                    ${regulatory.updated_at ? `<div class="small text-muted mt-2">آخر تحديث لحقول KYC: ${dt(regulatory.updated_at)}</div>` : ''}
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-6"><div class="card h-100 p-3">
+                        <h6>🔐 إثبات ملكية الهوية</h6>
+                        ${ownership.hidden
+                            ? '<div class="alert alert-danger small mb-0">تفاصيل الملكية محجوبة لأن الملف في مراجعة خصوصية مقيدة.</div>'
+                            : `
+                                <div class="mb-2"><strong>جاهزية المستوى 2:</strong>
+                                    ${ownership.tier_2?.ready ? '<span class="badge bg-success">جاهز</span>' : '<span class="badge bg-warning text-dark">غير مكتمل</span>'}
+                                </div>
+                                <div class="small mb-3">${blockerList(ownership.tier_2?.blockers || [])}</div>
+                                <div class="mb-2"><strong>جاهزية المستوى 3:</strong>
+                                    ${ownership.tier_3?.ready ? '<span class="badge bg-success">جاهز</span>' : '<span class="badge bg-warning text-dark">غير مكتمل</span>'}
+                                </div>
+                                <div class="small">${blockerList(ownership.tier_3?.blockers || [])}</div>
+                            `}
+                    </div></div>
+
+                    <div class="col-lg-6"><div class="card h-100 p-3">
+                        <h6>🛡️ الخصوصية والتحقق الحيوي</h6>
+                        <div class="mb-2">نمط المراجعة: <strong>${esc(privacy.review_mode_label || privacy.review_mode || '—')}</strong></div>
+                        <div class="mb-2">طريقة إثبات الملكية: <strong>${esc(privacy.ownership_method_label || privacy.ownership_method || '—')}</strong></div>
+                        <div class="mb-2">الحالة: ${stateBadge(privacy.status, ['verified'])}</div>
+                        ${privacy.restricted_review ? '<span class="badge bg-danger">مراجعة مقيدة</span>' : '<span class="badge bg-secondary">مراجعة عادية</span>'}
+                        ${privacy.hidden ? '<div class="alert alert-warning small mt-2 mb-0">التفاصيل الحساسة محجوبة عن صلاحيتك.</div>' : `
+                            <div class="small mt-2">Liveness: ${esc(privacy.liveness?.status || 'not_configured')}</div>
+                            <div class="small">Face Match: ${esc(privacy.face_match?.status || 'not_configured')}</div>
+                            <div class="small">المزود الحيوي: ${privacy.biometric_available ? 'متاح' : 'غير مضبوط'}</div>
+                        `}
+                    </div></div>
+                </div>
+
+                <div class="card p-3 mb-3">
+                    <h6>♻️ كشف تكرار الهوية والمستندات</h6>
+                    ${reuse.hidden
+                        ? '<div class="alert alert-warning small mb-0">نتائج فحص التكرار محجوبة بسبب المراجعة المقيدة.</div>'
+                        : `
+                            ${(reuse.blockers || []).length ? `<div class="alert alert-danger small"><strong>عوائق:</strong>${blockerList(reuse.blockers)}</div>` : ''}
+                            ${(reuse.warnings || []).length ? `<div class="alert alert-warning small"><strong>تنبيهات:</strong>${blockerList(reuse.warnings)}</div>` : ''}
+                            ${!(reuse.blockers || []).length && !(reuse.warnings || []).length ? '<div class="text-success small">لا توجد نتائج تكرار مسجلة.</div>' : ''}
+                        `}
+                </div>
+
+                ${m.documents_hidden
+                    ? '<div class="alert alert-danger mb-3"><strong>المستندات محجوبة:</strong> هذا الحساب في طابور مراجعة مقيد، ولا تملك صلاحية عرضه.</div>'
+                    : table(['المستند', 'الحالة', 'القراءة الآلية', 'ينتهي', 'المراجع', 'رُفع'],
+                        (m.documents || []).map(d => `<tr>
+                            <td>${esc(d.doc_label)}
+                                <div><a target="_blank" rel="noopener" class="small" href="{{ url('admin/amial/kyc/documents') }}/${encodeURIComponent(d.id)}/file">عرض آمن</a></div>
+                            </td>
+                            <td><span class="badge bg-${d.status === 'approved' ? 'success' : (d.status === 'rejected' ? 'danger' : 'warning text-dark')}">${esc(d.status)}</span>
+                                ${d.rejection_reason ? `<div class="small text-muted">${esc(d.rejection_reason)}</div>` : ''}</td>
+                            <td class="small">${esc(d.ocr_status)}</td>
+                            <td class="small">${esc(d.expires_at || '—')}</td>
+                            <td class="small">${esc(d.reviewer || '—')}</td>
+                            <td class="small">${dt(d.uploaded_at)}</td></tr>`).join(''),
+                        'لا مستندات', 'cc-kyc')}
+
+                <div class="card p-3 mb-3">
+                    <h6>🔄 طلبات تحديث بيانات هذا العميل</h6>
+                    ${table(['الحقل', 'الحالة', 'السبب', 'وثيقة داعمة', 'فُتح', 'حُسم'],
+                        changes.map(x => `<tr>
+                            <td class="font-monospace small">${esc(x.field)}</td>
+                            <td>${stateBadge(x.status, ['APPROVED'])}</td>
+                            <td class="small">${esc(x.reason || '—')}</td>
+                            <td>${x.supporting_document_id ? '#' + esc(x.supporting_document_id) : '—'}</td>
+                            <td class="small">${dt(x.created_at)}</td>
+                            <td class="small">${dt(x.decided_at)}</td>
+                        </tr>`).join(''), 'لا طلبات تحديث لهذا العميل', 'cc-profile-changes')}
+                </div>
+
+                <div class="card p-3 mb-3">
+                    <h6>📊 مستويات KYC وحدودها الحالية</h6>
+                    ${table(['المستوى', 'الاسم', 'الرصيد', 'العملية', 'اليومي', 'الشهري', 'السنوي'],
+                        policies.map(p => `<tr class="${Number(p.tier) === Number(m.tier) ? 'table-primary' : ''}">
+                            <td>${esc(p.tier)}</td><td>${esc(p.name_ar || tierName(p.tier))}</td>
+                            <td>${money(p.max_balance)}</td><td>${money(p.max_single_transaction)}</td>
+                            <td>${money(p.max_daily_total)}</td><td>${money(p.max_monthly_total)}</td>
+                            <td>${money(p.max_annual_total)}</td>
+                        </tr>`).join(''), 'لا سياسات مستويات')}
+                </div>
+
                 ${card('ملفات التسجيل المؤرشفة',
                     table(['المرجع', 'المصدر', 'الحالة', 'ورقي', 'أنشئ'],
                         (m.registration_dossiers || []).map(d => `<tr><td class="font-monospace">${esc(d.reference)}</td><td>${esc(d.source)}</td><td>${esc(d.state)}</td><td>${d.has_paper_form ? 'نعم' : '—'}</td><td>${dt(d.created_at)}</td></tr>`),
                         'لا ملف تسجيل مرتبط بهذا العميل', 'cc-registration-dossiers'),
-                    'تُفتح النسخة الكاملة والطباعة من «ملفات التسجيل والأرشفة» بحسب صلاحيتك.')}`;
+                    '')}
+
+                <div class="card p-3 mt-3">
+                    <h6>أدوات KYC المتخصصة</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.page') }}">لجنة التحقق والهوية</a>
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.residence.page') }}">إثبات الإقامة</a>
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.changes.page') }}">طلبات تحديث البيانات</a>
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.hub.verification') }}">طابور التحقق العام</a>
+                        <a class="btn btn-sm btn-outline-danger" href="{{ route('admin.amial.kyc.privacy.page') }}">الخصوصية والتتبّع</a>
+                        <a class="btn btn-sm btn-outline-dark" id="cc-print-dossier" target="_blank" rel="noopener"
+                           href="{{ url('admin/amial/hub/account') }}/${encodeURIComponent(current)}/print">
+                           🖨 طباعة ملفّ الحساب
+                        </a>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        هذه الأدوات باقية كمسارات تشغيل متخصصة، لكن الحقيقة الخاصة بالعميل أصبحت ظاهرة هنا دون الحاجة للبحث عنه مرة أخرى.
+                    </div>
+                </div>`;
         },
 
         risk(m, body) {

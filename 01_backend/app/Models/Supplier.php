@@ -9,12 +9,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Supplier extends Model
 {
     protected $fillable = [
-        'merchant_user_id', 'name', 'contact_person', 'phone', 'email',
-        'address', 'category', 'current_debt', 'is_active',
+        'merchant_user_id', 'amial_user_id', 'name', 'contact_person', 'phone', 'email',
+        'address', 'category', 'current_debt', 'current_credit', 'is_active',
     ];
 
     protected $casts = [
         'merchant_user_id' => 'integer',
+        'amial_user_id' => 'integer',
         'is_active' => 'boolean',
     ];
 

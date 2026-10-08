@@ -11,6 +11,8 @@ class WholesaleRepo extends GetxService {
   // Business + Dashboard
   Future<Response> getBusiness() => apiClient.getData(_base);
   Future<Response> upsertBusiness(Map<String, dynamic> data) => apiClient.postData(_base, data);
+  Future<Response> addPriceTier(Map<String, dynamic> data) =>
+      apiClient.postData('$_base/price-tiers', data);
   Future<Response> dashboard() => apiClient.getData('$_base/dashboard');
 
   // Products
@@ -26,6 +28,14 @@ class WholesaleRepo extends GetxService {
   Future<Response> adjustStock(int id, double newStock, String reason) =>
       apiClient.postData('$_base/products/$id/adjust-stock',
           {'new_stock': newStock, 'reason': reason});
+  Future<Response> listProductUnits(int id) =>
+      apiClient.getData('$_base/products/$id/units');
+  Future<Response> saveProductUnit(int id, Map<String, dynamic> data) =>
+      apiClient.postData('$_base/products/$id/units', data);
+  Future<Response> listProductLots(int id) =>
+      apiClient.getData('$_base/products/$id/lots');
+  Future<Response> receiveProductLot(int id, Map<String, dynamic> data) =>
+      apiClient.postData('$_base/products/$id/lots', data);
 
   // Multi-Pricing
   Future<Response> listProductPrices(int productId) =>
@@ -33,6 +43,15 @@ class WholesaleRepo extends GetxService {
   Future<Response> setProductPrice(int productId, int tierId, double price, double minQty) =>
       apiClient.postData('$_base/products/$productId/prices',
           {'tier_id': tierId, 'price': price, 'min_quantity': minQty});
+  /// سعرٌ إرشاديٌّ من الخادم لنفس العميل والكمية. لا يُرسل السعر من التطبيق
+  /// عند إنشاء الفاتورة؛ الخادم يعيد حسابه داخل المعاملة.
+  Future<Response> quoteProduct(int productId, int customerId, double quantity,
+      {int? unitId}) =>
+      apiClient.getData('$_base/products/$productId/quote', query: {
+        'customer_id': '$customerId',
+        'quantity': '$quantity',
+        if (unitId != null) 'unit_id': '$unitId',
+      });
 
   // Customers
   Future<Response> listCustomers({String? search, bool withBalanceOnly = false}) {
@@ -55,8 +74,26 @@ class WholesaleRepo extends GetxService {
   }
   Future<Response> showInvoice(int id) => apiClient.getData('$_base/invoices/$id');
   Future<Response> createInvoice(Map<String, dynamic> data) => apiClient.postData('$_base/invoices', data);
+  Future<Response> createInvoicePaymentRequest(double amount, {String? note}) =>
+      apiClient.postData('$_base/invoices/amial-payment-request', {
+        'amount': amount.toStringAsFixed(4),
+        if (note != null && note.isNotEmpty) 'note': note,
+      });
+  Future<Response> cancelWholesalePaymentRequest(int requestId) =>
+      apiClient.postData('$_base/payment-requests/$requestId/cancel', {});
   Future<Response> voidInvoice(int id, String reason) =>
       apiClient.postData('$_base/invoices/$id/void', {'reason': reason});
+
+  // Returns — workflow خاص بالجملة، منفصل عن MerchantRefundScreen العام.
+  Future<Response> listReturns({String? status}) => apiClient.getData('$_base/returns',
+      query: status == null ? null : {'status': status});
+  Future<Response> requestReturn(int invoiceId, Map<String, dynamic> data) =>
+      apiClient.postData('$_base/invoices/$invoiceId/returns', data);
+  Future<Response> resolveReturn(int returnId, bool approve, {String? note}) =>
+      apiClient.postData('$_base/returns/$returnId/resolve', {
+        'approve': approve,
+        if (note != null && note.isNotEmpty) 'decision_note': note,
+      });
 
   /// AMIAL-WHOLESALE-PDF — تحميل PDF الفاتورة (binary).
   /// نستخدم http مباشرة بدلاً من apiClient.getData لأنّ الردّ binary وليس JSON.
@@ -65,6 +102,12 @@ class WholesaleRepo extends GetxService {
   // Collections
   Future<Response> recordCollection(int invoiceId, Map<String, dynamic> data) =>
       apiClient.postData('$_base/invoices/$invoiceId/collect', data);
+  Future<Response> createCollectionPaymentRequest(int invoiceId, double amount,
+          {String? note}) =>
+      apiClient.postData('$_base/invoices/$invoiceId/amial-payment-request', {
+        'amount': amount.toStringAsFixed(4),
+        if (note != null && note.isNotEmpty) 'note': note,
+      });
   Future<Response> listCollections({int? customerId}) {
     final q = <String, dynamic>{};
     if (customerId != null) q['customer_id'] = '$customerId';

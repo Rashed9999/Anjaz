@@ -54,7 +54,7 @@ class SubscriptionService
                 throw new \RuntimeException("Merchant profile not found for user {$merchant->id}");
             }
 
-            $oldPlan = $profile->subscription_plan ?? A::PLAN_FREE;
+            $oldPlan = A::canonicalPlan($profile->subscription_plan);
             $oldExpiresAt = $profile->subscription_expires_at;
 
             // تحديد action تلقائياً إن لم يُحدَّد
@@ -122,7 +122,7 @@ class SubscriptionService
         if (!$profile) {
             throw new \RuntimeException("Merchant profile not found");
         }
-        $currentPlan = $profile->subscription_plan ?? A::PLAN_FREE;
+        $currentPlan = A::canonicalPlan($profile->subscription_plan);
         if ($currentPlan === A::PLAN_FREE) {
             throw new \LogicException('Cannot extend a FREE plan');
         }
@@ -147,7 +147,7 @@ class SubscriptionService
     {
         $profile = MerchantProfile::where('user_id', $merchant->id)->first();
         if (!$profile) throw new \RuntimeException("Merchant profile not found");
-        $currentPlan = $profile->subscription_plan ?? A::PLAN_FREE;
+        $currentPlan = A::canonicalPlan($profile->subscription_plan);
         if ($currentPlan === A::PLAN_FREE) {
             throw new \LogicException('Cannot renew a FREE plan');
         }
@@ -320,8 +320,9 @@ class SubscriptionService
         if ($oldPlan === $newPlan) return SubscriptionChange::ACTION_RENEW;
 
         $rank = [
-            A::PLAN_FREE => 0, A::PLAN_STARTER => 1, A::PLAN_BUSINESS => 2,
-            A::PLAN_MERCHANT_PRO => 3, A::PLAN_ENTERPRISE => 4,
+            A::PLAN_FREE => 0,
+            A::PLAN_BUSINESS => 1,
+            A::PLAN_ENTERPRISE => 2,
         ];
         $oldR = $rank[$oldPlan] ?? 0;
         $newR = $rank[$newPlan] ?? 0;

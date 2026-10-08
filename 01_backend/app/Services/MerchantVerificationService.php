@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\MerchantProfile;
 use App\Models\MerchantVerificationRequest;
 use App\Models\User;
+use App\Services\Verification\VerificationCaseService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -39,6 +40,7 @@ class MerchantVerificationService
 
     public function __construct(
         private readonly NotificationService $notif,
+        private readonly VerificationCaseService $workflow,
     ) {}
 
     /** تأكّد أن المستخدم لديه MerchantProfile (يخلقه إن لم يوجد). */
@@ -80,7 +82,13 @@ class MerchantVerificationService
                 ->whereIn('status', ['pending_review', 'resubmission_required'])
                 ->first();
 
-            // ارفع الملفات وحفظ مساراتها
+            // AMIAL-UNIFIED-VERIFICATION-002 — المتطلبات تتبع سياسة
+            // القطاع. البيع السريع لا يُحجب بسجل تجاري، لكن لا يفقد هوية
+            // المالك أو صورة وموقع نقطة البيع. الفحص قبل التخزين حتى لا
+            // تخلّف محاولة ناقصة ملفات خاصة يتيمة.
+            $this->assertRequiredDocuments($merchant, $request, $this->plannedPaths($files));
+
+            // ارفع الملفات وحفظ مساراتها بعد اجتياز سياسة القطاع.
             $paths = $this->uploadFiles($merchant->id, $files);
 
             if ($request) {
@@ -135,12 +143,63 @@ class MerchantVerificationService
             // إشعار التاجر
             $merchant = User::find($request->merchant_user_id);
             if ($merchant) {
+                // ══════════════════════════════════════════════════════
+                // AMIAL-KYC-EVIDENCE-001 — **وثيقةُ النشاط لا توثّق الشخص.**
+                //
+                // كان هنا `$merchant->is_kyc_verified = 1` مباشرةً، وسببُه
+                // مشكلةٌ حقيقيّةٌ مكتوبةٌ في تعليقٍ سابق: تاجرٌ اعتمدته
+                // الإدارةُ كان **يبقى محبوساً** لأنّ الحقلَ الذي يقرؤه
+                // التطبيقُ لم يتحرّك. **والمشكلةُ صحيحةٌ والعلاجُ كان
+                // خطأً**: سجلُّ النشاط التجاريّ (اسمُ المتجر، السجلُّ
+                // التجاريّ) **لا يثبت هويّةَ صاحبه**، فمنحُه التوثيقَ
+                // الشخصيَّ يفتح سقفَ مالٍ على وثيقةٍ لا تخصّ الشخص.
+                //
+                // **فصار البابُ واحداً**: يُسأل مصدرُ القرار، فإن اكتمل
+                // ملفُّ الهويّة رُفع القفلُ **من خلاله** بتدقيقه ومبدئه
+                // الرباعيّ؛ وإن لم يكتمل بقي الحسابُ كما هو **ويُقال
+                // للتاجر ما ينقصه** — فلا يبقى محبوساً بلا سببٍ يعرفه،
+                // وهو عينُ ما شكا منه التعليقُ السابق.
+                // ══════════════════════════════════════════════════════
+                $reviewer = User::find($adminId);
+                $identity = null;
+
+                if ($reviewer && (int) ($merchant->is_kyc_verified ?? 0) !== 1) {
+                    try {
+                        app(\App\Services\KycDocumentService::class)
+                            ->decideAccountVerification(
+                                user: $merchant,
+                                reviewer: $reviewer,
+                                approve: true,
+                            );
+                        $merchant->refresh();
+                    } catch (\DomainException $e) {
+                        // **ولا يُسقِط توثيقَ النشاط**: هما قراران، ونقصُ
+                        // الهويّة لا يُلغي اعتمادَ المتجر — يُقال ويُبلَّغ.
+                        $identity = $e->getMessage();
+                    }
+                }
+
+                if ($reviewer) {
+                    $this->workflow->recordMerchantReview(
+                        merchant: $merchant,
+                        reviewer: $reviewer,
+                        approved: true,
+                        requestUlid: (string) $request->request_ulid,
+                    );
+                }
+
                 $this->notif->dispatch(
                     $merchant,
                     'merchant_verified',
                     '✓ تمّ توثيق متجرك',
-                    'تهانينا! تمّ توثيق متجر "' . $request->business_name . '" بنجاح.',
-                    data: ['request_ulid' => $request->request_ulid],
+                    'تهانينا! تمّ توثيق متجر "' . $request->business_name . '" بنجاح.'
+                        // **وما ينقص يُقال في الرسالة نفسِها** — تاجرٌ يُبلَّغ
+                        // بالتوثيق ثمّ يجد نفسَه محبوساً يفتح تذكرةَ دعم.
+                        . ($identity ? "\n\nويبقى توثيقُ هويّتك الشخصيّة: " . $identity : ''),
+                    data: [
+                        'request_ulid' => $request->request_ulid,
+                        'identity_pending' => $identity,
+                    ],
                 );
             }
 
@@ -154,26 +213,38 @@ class MerchantVerificationService
         if ($request->status !== 'pending_review') {
             throw new RuntimeException('الطلب ليس بانتظار مراجعة');
         }
-        $request->update([
-            'status' => 'rejected',
-            'admin_note' => $reason,
-            'reviewed_by_admin_id' => $adminId,
-            'reviewed_at' => now(),
-        ]);
-        MerchantProfile::where('user_id', $request->merchant_user_id)
-            ->update(['verification_status' => 'rejected']);
+        return DB::transaction(function () use ($request, $adminId, $reason) {
+            $request->update([
+                'status' => 'rejected',
+                'admin_note' => $reason,
+                'reviewed_by_admin_id' => $adminId,
+                'reviewed_at' => now(),
+            ]);
+            MerchantProfile::where('user_id', $request->merchant_user_id)
+                ->update(['verification_status' => 'rejected']);
 
-        $merchant = User::find($request->merchant_user_id);
-        if ($merchant) {
-            $this->notif->dispatch(
-                $merchant,
-                'merchant_verification_rejected',
-                'تمّ رفض طلب التوثيق',
-                "السبب: {$reason}",
-                data: ['request_ulid' => $request->request_ulid],
-            );
-        }
-        return $request->fresh();
+            $merchant = User::find($request->merchant_user_id);
+            $reviewer = User::find($adminId);
+            if ($merchant && $reviewer) {
+                $this->workflow->recordMerchantReview(
+                    merchant: $merchant,
+                    reviewer: $reviewer,
+                    approved: false,
+                    requestUlid: (string) $request->request_ulid,
+                    reason: $reason,
+                );
+            }
+            if ($merchant) {
+                $this->notif->dispatch(
+                    $merchant,
+                    'merchant_verification_rejected',
+                    'تمّ رفض طلب التوثيق',
+                    "السبب: {$reason}",
+                    data: ['request_ulid' => $request->request_ulid],
+                );
+            }
+            return $request->fresh();
+        });
     }
 
     /** Admin: طلب إعادة رفع وثائق. */
@@ -215,6 +286,12 @@ class MerchantVerificationService
             ->first();
     }
 
+    /** @return array<int,string> */
+    public function requiredDocsFor(User $merchant): array
+    {
+        return $this->workflow->merchantRequiredDocuments($merchant);
+    }
+
     // ============ Private ============
 
     private function sanitizeData(array $data): array
@@ -225,6 +302,57 @@ class MerchantVerificationService
             'bank_account_holder', 'contact_phone',
         ];
         return array_intersect_key($data, array_flip($allowed));
+    }
+
+    private function assertRequiredDocuments(
+        User $merchant,
+        ?MerchantVerificationRequest $existing,
+        array $newPaths,
+    ): void {
+        $columns = [
+            'id_card_front' => 'id_card_front_path',
+            'id_card_back' => 'id_card_back_path',
+            'commercial_register' => 'commercial_register_path',
+            'store_photo' => 'store_photo_path',
+        ];
+        $missing = [];
+        foreach ($this->requiredDocsFor($merchant) as $document) {
+            $column = $columns[$document] ?? null;
+            if (!$column) continue;
+            if (empty($newPaths[$column]) && empty($existing?->{$column})) {
+                $missing[] = $document;
+            }
+        }
+        if ($missing !== []) {
+            $labels = [
+                'id_card_front' => 'وجه الهوية',
+                'id_card_back' => 'ظهر الهوية',
+                'commercial_register' => 'السجل التجاري',
+                'store_photo' => 'صورة نقطة البيع',
+            ];
+            throw new InvalidArgumentException('يلزم استكمال: '.implode('، ', array_map(
+                fn (string $key) => $labels[$key] ?? $key,
+                $missing,
+            )));
+        }
+    }
+
+    /** @return array<string,string> */
+    private function plannedPaths(array $files): array
+    {
+        $map = [
+            'id_card_front' => 'id_card_front_path',
+            'id_card_back' => 'id_card_back_path',
+            'commercial_register' => 'commercial_register_path',
+            'store_photo' => 'store_photo_path',
+        ];
+        $paths = [];
+        foreach ($map as $document => $column) {
+            if (($files[$document] ?? null) instanceof UploadedFile) {
+                $paths[$column] = '__new_upload__';
+            }
+        }
+        return $paths;
     }
 
     /**

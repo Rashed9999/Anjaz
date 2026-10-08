@@ -53,6 +53,7 @@ class AgentStaffPortalTest extends TestCase
     private function makeAgentUser(string $phone, string $f, string $l): User
     {
         $u = new User();
+        $u->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $u->forceFill([
             'f_name' => $f, 'l_name' => $l, 'phone' => $phone, 'type' => AGENT_TYPE,
             'password' => Hash::make('secret123'), 'is_kyc_verified' => 1, 'is_active' => 1,
@@ -65,6 +66,7 @@ class AgentStaffPortalTest extends TestCase
     private function makeBranch(string $code, string $name, string $emoney = '5000000'): AgentBranch
     {
         $bu = new User();
+        $bu->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $bu->forceFill([
             'f_name' => $name, 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '9677719' . random_int(10000, 99999),

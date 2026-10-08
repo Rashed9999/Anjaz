@@ -55,7 +55,7 @@ class CustomerAuthController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $customer = $this->user->where(['phone' => $request['phone']])->first();
+        $customer = $this->user->whereIn('phone', \App\Support\Phone::variants((string) $request['phone']))->first();
 
         if (isset($customer) && $customer->type == 2){
             return response()->json([
@@ -116,7 +116,8 @@ class CustomerAuthController extends Controller
             // `AMIAL_DEMO_OTP` يبقى طوال التجربة، وهي لا تحتاج قناةً
             // أصلاً. فالحاجزُ على الحقيقيّ وحدَه.
             // ══════════════════════════════════════════════════════════
-            if ($policy->needsDelivery((string) $request['phone']) && ! $policy->deliveryReady()) {
+            if ($policy->customerPhoneOwnershipNeedsDelivery((string) $request['phone'])
+                && ! $policy->deliveryReady()) {
                 app(\App\Services\OpsAlertService::class)->note(
                     'otp.delivery.unavailable',
                     'لا قناةَ إيصالٍ لرمز التحقّق — والتسجيلُ مقفلٌ على الأرقام الحقيقيّة',
@@ -130,7 +131,7 @@ class CustomerAuthController extends Controller
                 ], 503);
             }
 
-            $otp = $policy->codeFor($request['phone']);
+            $otp = $policy->customerPhoneOwnershipCode((string) $request['phone']);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $request['phone']], [
                 'otp' => $otp,
@@ -141,10 +142,14 @@ class CustomerAuthController extends Controller
                 'updated_at' => now(),
             ]);
 
-            if(addon_published_status('Gateways')){
-                $response = SmsGateway::send($request['phone'],$otp);
-            }else{
-                $response = SmsModule::send($request['phone'], $otp);
+            if ($policy->customerPhoneOwnershipNeedsDelivery((string) $request['phone'])) {
+                if(addon_published_status('Gateways')){
+                    $response = SmsGateway::send($request['phone'],$otp);
+                }else{
+                    $response = SmsModule::send($request['phone'], $otp);
+                }
+            } else {
+                $response = 'success';
             }
 
             // AMIAL-OTP-SPLIT-001: **الإفصاح لأرقام العرض وحدها.**
@@ -152,12 +157,15 @@ class CustomerAuthController extends Controller
             // كان يُفصح عن الرمز لأيّ رقم — فيُلغى التحقّق من أصله: يصير
             // «أثبت أنّك تملك الرقم» «انسخ ما أعطيناك». ولرقمٍ حقيقيّ
             // يبقى `null` مهما كان `AMIAL_DEMO_OTP` مضبوطاً.
-            $demoHint = $policy->mayDisclose($request['phone']) ? (string) $otp : null;
+            $demoHint = $policy->mayDiscloseCustomerPhoneOwnership((string) $request['phone'])
+                ? (string) $otp
+                : null;
 
             return response()->json([
                 'message' => 'Number is ready to register',
                 'otp' => 'active',
                 'demo_otp' => $demoHint,
+                'pilot_mode' => $policy->pilotCustomerPhoneCode() !== null,
             ], 200);
         }
         else{
@@ -181,7 +189,14 @@ class CustomerAuthController extends Controller
         $phone = $request['phone'];
         try {
             // AMIAL-OTP-SPLIT-001: الرقمُ يحدّد الرمز، لا مفتاحٌ عامّ.
-            $otp = app(\App\Services\Otp\OtpPolicy::class)->codeFor($phone);
+            $policy = app(\App\Services\Otp\OtpPolicy::class);
+            if ($policy->customerPhoneOwnershipNeedsDelivery((string) $phone) && ! $policy->deliveryReady()) {
+                return response()->json([
+                    'code' => 'OTP_DELIVERY_UNAVAILABLE',
+                    'message' => $policy->unavailableMessage(),
+                ], 503);
+            }
+            $otp = $policy->customerPhoneOwnershipCode((string) $phone);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $phone], [
                 'otp' => $otp,
@@ -189,21 +204,32 @@ class CustomerAuthController extends Controller
                 'updated_at' => now(),
             ]);
 
-            if(addon_published_status('Gateways')){
-                $response = SmsGateway::send($phone,$otp);
-            }else{
-                $response = SmsModule::send($phone, $otp);
+            if ($policy->customerPhoneOwnershipNeedsDelivery((string) $phone)) {
+                if(addon_published_status('Gateways')){
+                    $response = SmsGateway::send($phone,$otp);
+                }else{
+                    $response = SmsModule::send($phone, $otp);
+                }
+            } else {
+                $response = 'success';
             }
 
+            if (!in_array($response, ['success', true, 1], true)) {
+                DB::table('phone_verifications')
+                    ->whereIn('phone', \App\Support\Phone::variants((string) $phone))
+                    ->delete();
+                return response()->json(['message' => 'تعذّر إيصال رمز التحقق', 'otp' => 'inactive'], 502);
+            }
             return response()->json([
                 'message' => 'OTP sent successfully',
-                'otp' => 'active'
+                'otp' => 'active',
+                'demo_otp' => $policy->mayDiscloseCustomerPhoneOwnership((string) $phone) ? (string) $otp : null,
             ], 200);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json([
                 'message' => 'OTP sent failed',
                 'otp' => 'inactive'
-            ], 200);
+            ], 503);
         }
     }
 
@@ -342,11 +368,17 @@ class CustomerAuthController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
-        if(Helpers::pin_check($request->user()->id, $request->pin)) {
+        $user = $request->user();
+        $pinService = app(\App\Services\TransactionPinService::class);
+        if ($pinService->verify($user, (string) $request->pin)) {
             return response()->json(['message' => 'PIN is correct'], 200);
-        }else{
-            return response()->json(['message' => 'PIN is incorrect'], 403);
         }
+        $user->refresh();
+        if ($user->pin_locked_until !== null && $user->pin_locked_until->isFuture()) {
+            $minutes = max(1, (int) ceil(now()->diffInMinutes($user->pin_locked_until, false)));
+            return response()->json(['message' => "رمز المعاملات مقفول. حاول بعد {$minutes} دقيقة"], 429);
+        }
+        return response()->json(['message' => 'PIN is incorrect'], 403);
     }
 
     public function changePin(Request $request): JsonResponse
@@ -421,8 +453,14 @@ class CustomerAuthController extends Controller
             // «غير معروف» ليس صفراً.
             // ══════════════════════════════════════════════════════════
             if (empty($user->transaction_pin)) {
-                if (! Helpers::pin_check($user->id, (string) $request->old_pin)) {
-                    return response()->json(['message' => 'Old PIN is incorrect'], 401);
+                // نافذة fallback إلى password انتهت؛ لا نمر عبر pin_check.
+                // أول تعيين PIN يثبت كلمة مرور الدخول مباشرة ثم يخزن PIN
+                // منفصلاً. بعد ذلك كل تغيير يعود إلى TransactionPinService.
+                if (! \Illuminate\Support\Facades\Hash::check(
+                    (string) $request->old_pin,
+                    (string) $user->password,
+                )) {
+                    return response()->json(['message' => 'كلمة المرور الحالية غير صحيحة'], 401);
                 }
 
                 $pinService->setPin($user, (string) $request->confirm_pin);

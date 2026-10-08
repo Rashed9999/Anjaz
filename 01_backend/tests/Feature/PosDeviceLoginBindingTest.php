@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Middleware\EnsurePosDevice;
+use App\Models\Branch;
 use App\Models\Merchant\PosDevice;
 use App\Models\Merchant\PosDeviceSession;
 use App\Models\MerchantProfile;
@@ -151,7 +152,21 @@ class PosDeviceLoginBindingTest extends TestCase
         $this->assertIsString($result,
             '**دخولٌ بمعرِّفٍ مخترَعٍ نجح** — فالترويسةُ تُقبل بلا تحقّق');
 
-        $this->assertStringContainsString('غير مسجَّل', $result);
+        // ══════════════════════════════════════════════════════════════
+        // **ويُقاس المعنى لا الصياغة.**
+        //
+        // كان هنا `'غير مسجَّل'` نصّاً، فلمّا حُسّنت الرسالةُ — صارت تقول
+        // **من** يُسجّل الجهازَ و**من أين**، وأنّ الموظّفَ لا يُنشئ حساباً
+        // — سقط الحارسُ على **تحسينٍ صحيح**.
+        //
+        // وحارسٌ يمنع تصحيحاً صحيحاً ليس حارساً؛ فالمحروسُ ثلاثةٌ:
+        // الرفضُ وقع · والرسالةُ تذكر الجهازَ · وتدلّ على المخرج.
+        // ══════════════════════════════════════════════════════════════
+        $this->assertMatchesRegularExpression('/غير\s*(مسجَّل|مسجل|مفعّل|مفعل)/u', $result,
+            'الرفضُ لا يقول إنّ الجهازَ ليس مسجَّلاً — فيُقرأ عطلَ حسابٍ أو كلمةَ مرور');
+
+        $this->assertStringContainsString('أجهزة نقاط البيع', $result,
+            'الرسالةُ لا تدلّ على الشاشة التي تُسجَّل منها — فترفض ولا تدلّ على المخرج');
 
         $this->assertSame(0, PosDeviceSession::count(),
             'رُبطت جلسةٌ بجهازٍ لا وجودَ له');
@@ -184,6 +199,71 @@ class PosDeviceLoginBindingTest extends TestCase
         $this->assertNull($session->ended_at);
     }
 
+    /** @test */
+    public function a_staff_member_cannot_login_on_a_device_assigned_to_another_branch(): void
+    {
+        [$merchant, $staff] = $this->seedShop();
+
+        $mine = Branch::create([
+            'merchant_user_id' => $merchant->id,
+            'name' => 'فرع الموظف',
+            'code' => 'STAFF-BR',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+        $other = Branch::create([
+            'merchant_user_id' => $merchant->id,
+            'name' => 'فرع الجهاز',
+            'code' => 'DEVICE-BR',
+            'is_active' => true,
+            'is_default' => false,
+        ]);
+
+        PosUser::where('user_id', $staff->id)->update(['branch_id' => $mine->id]);
+
+        app(PosDeviceRegistrar::class)->register(
+            $merchant,
+            'branch-device-login-001',
+            ['branch_id' => $other->id],
+        );
+
+        $result = $this->login('branch-device-login-001');
+
+        $this->assertIsString($result,
+            'دخول موظف على صندوق فرع آخر نجح بدل أن يُرفض عند المصادقة');
+        $this->assertStringContainsString('فرع مختلف', $result);
+        $this->assertSame(0, PosDeviceSession::count(),
+            'أُنشئت جلسة POS رغم اختلاف فرع الموظف عن فرع الجهاز');
+    }
+
+    /** @test */
+    public function a_real_passport_request_rejects_a_token_presented_from_another_registered_device(): void
+    {
+        [$merchant] = $this->seedShop();
+
+        app(PosDeviceRegistrar::class)
+            ->register($merchant, 'real-route-device-A');
+
+        $login = $this->login('real-route-device-A');
+        $this->assertIsArray($login, is_string($login) ? $login : '');
+
+        app(PosDeviceRegistrar::class)
+            ->register($merchant, 'real-route-device-B');
+
+        $token = (string) ($login['token'] ?? '');
+        $this->assertNotSame('', $token, 'الدخول لم يُرجع access token');
+
+        config(['amial.pos_devices.enforce_session_binding' => true]);
+
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer '.$token,
+            EnsurePosDevice::HEADER => 'real-route-device-B',
+        ])->getJson('/api/v1/amial/cashier/shift');
+
+        $response->assertForbidden()
+            ->assertJsonPath('code', 'POS_DEVICE_MISMATCH');
+    }
+
     /**
      * @test
      *
@@ -212,7 +292,12 @@ class PosDeviceLoginBindingTest extends TestCase
             '**رفعُ الصمت لم يُنتج منعاً** — فالمفتاحُ لا يفعل شيئاً، '
             . 'والخطّةُ التي تنتظره تنتظر ما لا يقع');
 
-        $this->assertStringContainsString('لا جهازَ مسجَّل', $denied);
+        // **والمعنى لا الصياغة هنا كذلك** — انظر الحالةَ أعلاه.
+        $this->assertMatchesRegularExpression('/(لا\s*جهازَ?\s*مسجَّل|غير\s*مفعّل)/u', $denied,
+            'المنعُ عند الإنفاذ لا يذكر الجهازَ — فيُقرأ عطلَ حسابٍ أو كلمةَ مرور');
+
+        $this->assertStringContainsString('أجهزة نقاط البيع', $denied,
+            'المنعُ لا يدلّ على الشاشة التي تُسجَّل منها');
     }
 
     /**
@@ -235,12 +320,12 @@ class PosDeviceLoginBindingTest extends TestCase
 
         $session = PosDeviceSession::firstOrFail();
 
-        $this->assertSame(200, $this->probe($staff, (string) $session->access_token_id),
+        $this->assertSame(200, $this->probe($staff, (string) $session->access_token_id, 'device-to-be-revoked'),
             'الجلسةُ لم تعمل أصلاً — فالمنعُ التالي لا يُثبت شيئاً');
 
         app(PosDeviceRegistrar::class)->revoke($device, $merchant->id);
 
-        $this->assertSame(401, $this->probe($staff, (string) $session->access_token_id),
+        $this->assertSame(401, $this->probe($staff, (string) $session->access_token_id, 'device-to-be-revoked'),
             '**رمزٌ استمرّ بعد إلغاء جهازه** — فالإلغاءُ يُخلي المقعدَ ولا يوقف الجلسة');
     }
 
@@ -270,13 +355,14 @@ class PosDeviceLoginBindingTest extends TestCase
     }
 
     /** يطرق البوّابةَ برمزٍ بعينه ويُعيد رمزَ الاستجابة. */
-    private function probe(User $actor, string $tokenId): int
+    private function probe(User $actor, string $tokenId, string $deviceUuid): int
     {
         $token = new \Laravel\Passport\Token();
         $token->id = $tokenId;
 
         $request = Request::create('/api/v1/amial/probe', 'GET');
         $request->setUserResolver(fn () => $actor->withAccessToken($token));
+        $request->headers->set(EnsurePosDevice::HEADER, $deviceUuid);
 
         return app(EnsurePosDevice::class)
             ->handle($request, fn () => response()->json(['ok' => true]))

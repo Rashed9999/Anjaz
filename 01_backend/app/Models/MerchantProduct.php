@@ -58,6 +58,12 @@ class MerchantProduct extends Model
         return $this->hasMany(\App\Models\Retail\ProductBarcode::class, 'product_id');
     }
 
+    /** مخزون الصنف حسب الموقع؛ quantity مرآة انتقالية فقط. */
+    public function stocks()
+    {
+        return $this->hasMany(\App\Models\Retail\ProductStock::class, 'product_id');
+    }
+
     /** الأبُ — **لا يُباع ولا يُخزَّن**، هو مِظلّةٌ للمتغيّرات. */
     public function parentProduct()
     {

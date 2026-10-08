@@ -10,6 +10,17 @@
     <color name="amial_red">#DC0A0B</color>
     <color name="amial_background">#FFF8E1</color>
 
+    <!--
+      AMIAL-INSETS-001 — لونا شريطَي النظام.
+
+      الثيمُ الأصلُ `Theme.Black.NoTitleBar` يجعل شريطَ الحالة وشريطَ
+      التنقّل **أسودين**، ومع `windowOptOutEdgeToEdgeEnforcement` لا
+      ترسم فلاتر تحتهما — فيظهران شريطين أسودين فوق التطبيق وتحته.
+      وهو ما وصفه صاحبُ المشروع: «مقتطفات سوداء».
+    -->
+    <color name="amial_status_bar">#053391</color>
+    <color name="amial_nav_bar">#FFFFFF</color>
+
     <!-- Notification color (used by FirebaseMessaging) -->
     <color name="notification_color">#053391</color>
 	<color name="ic_launcher_background">#FECA1E</color>

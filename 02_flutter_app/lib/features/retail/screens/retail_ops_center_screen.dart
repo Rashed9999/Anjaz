@@ -75,6 +75,7 @@ class _RetailOpsCenterScreenState extends State<RetailOpsCenterScreen> {
                   const SizedBox(height: 16),
                   _inTransit(),
                   const SizedBox(height: 16),
+                  _negativeStock(),
                   _lowStock(),
                   const SizedBox(height: 16),
                   _wasteSummary(),
@@ -220,8 +221,93 @@ class _RetailOpsCenterScreenState extends State<RetailOpsCenterScreen> {
 
   // ── تحت حدّ الطلب ─────────────────────────────────────────────────
 
+  /// AMIAL-NEGATIVE-STOCK-001 — **ما نزل تحت الصفر، فوق ما نزل تحت الحدّ.**
+  ///
+  /// وهو **ليس تنبيهَ نفاد**: ذاك يقول «اطلب قريباً»، وهذا يقول **إنّ
+  /// رقمَ مخزونك كاذبٌ الآن** — بِعتَ ما ليس عندك، أو دخلت بضاعةٌ بلا
+  /// إدخال. فيُعرَض فوقه بلونٍ أشدّ، **ولا يُحرَس بقدرةٍ مدفوعة**: بيعُ
+  /// رؤيةِ الخلل بيعُ أرقامٍ خاطئةٍ لمن دفع أقلّ.
+  ///
+  /// **ويُطوى إن كان فارغاً** — لافتةٌ خضراءُ يوميّةٌ تقول «لا سالب» تُعوّد
+  /// العينَ على تخطّي المكان الذي يظهر فيه يومَ يظهر.
+  Widget _negativeStock() {
+    if (!c.can(RetailVerticalController.pStockView)) return const SizedBox.shrink();
+
+    final rows = c.negativeStock;
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        _panel(
+          'مخزونٌ تحت الصفر (${rows.length})',
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'بِيع أكثرُ ممّا دخل — راجِع الاستلام أو اجرد الصنف. '
+                'والبيعُ لم يُمنَع، فالرقم هو الكاذب لا البيعة.',
+                style: TextStyle(fontSize: 12, color: AmialColors.textMuted),
+              ),
+              const SizedBox(height: 8),
+              ...rows.take(10).map((s) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.error_outline_rounded,
+                        color: AmialColors.red),
+                    title: Text('${s['product']}',
+                        style: const TextStyle(fontSize: 13)),
+                    subtitle: Text('${s['location'] ?? ''} · المتوفر ${s['on_hand']}',
+                        style: const TextStyle(
+                            fontSize: 11, color: AmialColors.textMuted)),
+                    trailing: Text('ناقص ${s['shortfall']}',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AmialColors.red)),
+                  )),
+              if (rows.length > 10)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('و${rows.length - 10} صنفاً آخر',
+                      style: const TextStyle(
+                          fontSize: 11, color: AmialColors.textMuted)),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
   Widget _lowStock() {
     if (!c.can(RetailVerticalController.pStockView)) return const SizedBox.shrink();
+
+    // **والقفلُ يُقال ولا يُقرأ صفراً.** الخادمُ يُرسل `low_stock_locked`
+    // لهذا بعينه — وقائمةٌ فارغةٌ مكانَه تقول «فحصنا فلم نجد» وهي «لم
+    // يُنظَر». (القاعدة السابعة.)
+    final locked = c.lowStockLocked;
+    if (locked != null) {
+      return _panel(
+        'تحت حدّ الطلب — مقفول',
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'تنبيهُ النفاد غيرُ مفتوحٍ في باقتك — فلم يُفحَص مخزونُك، '
+              'ولا يعني ذلك أنّ كلّ صنفٍ فوق حدّه.',
+              style: TextStyle(fontSize: 12, color: AmialColors.textMuted),
+            ),
+            if ((locked['unlock'] ?? '').toString().trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text('${locked['unlock']}',
+                  style: const TextStyle(
+                      fontSize: 12, color: AmialColors.primary)),
+            ],
+          ],
+        ),
+      );
+    }
 
     final rows = c.lowStock;
     if (rows.isEmpty) {

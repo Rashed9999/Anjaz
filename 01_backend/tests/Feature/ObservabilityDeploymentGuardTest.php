@@ -72,10 +72,10 @@ class ObservabilityDeploymentGuardTest extends TestCase
         // **ومنفذٌ مكتوبٌ رقماً واحداً يجعل الفحصَ يسقط دائماً**، وفحصٌ
         // يسقط دائماً أسوأ من غيابه: يُعيد تشغيلَ حاويةٍ سليمةٍ كلَّ دقيقة.
         //
-        // و`entrypoint.sh` يُنشئ إصغاءً على `$PORT` و9000 و8080.
+        // و`entrypoint.sh` يُنشئ إصغاءً على `$PORT` و80 (عقد Coolify) و9000 و8080.
         $img = $this->deployedImage();
 
-        foreach (['PORT', '9000', '8080'] as $port) {
+        foreach (['PORT', '80', '9000', '8080'] as $port) {
             $this->assertStringContainsString($port, $img,
                 "فحصُ الصحّة لا يجرّب المنفذ {$port} — و`entrypoint` يُصغي عليه");
         }

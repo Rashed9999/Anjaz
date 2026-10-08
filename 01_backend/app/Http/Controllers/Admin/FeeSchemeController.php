@@ -100,12 +100,27 @@ class FeeSchemeController extends Controller
         $search = trim((string) $request->query('q', ''));
         $category = (string) $request->query('category', '');
 
-        $active = FeeScheme::query()
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-FEE-PLAN-001 — **مفتاحٌ لا يعرف الباقةَ يبتلع نسخةً.**
+        //
+        // كان `keyBy(code|actor)` — ومع بُعد الباقة صار لِـ(‏رمزٍ × جهة)
+        // أكثرُ من نسخةٍ نشطة. و`keyBy` **يُبقي الأخيرةَ ويرمي ما قبلها
+        // صامتاً**: فتُضبط نسخةٌ لـ«البداية» فتختفي العامّةُ من الشاشة،
+        // أو العكس — **والمحرّكُ يُطبّق الاثنتين**.
+        //
+        // فتُجمَع بالباقة، ويُعرَض لكلِّ سطرٍ **كم نسخةً تحته**.
+        // ══════════════════════════════════════════════════════════════
+        $activeRows = FeeScheme::query()
             ->where('zone_code', $zone)
             ->where('is_active', true)
+            ->orderByRaw('plan IS NULL')   // المخصَّصُ أوّلاً — كما يقرؤه المحرّك
             ->orderBy('code')
             ->get()
-            ->keyBy(fn ($s) => $s->code.'|'.$s->applies_to);
+            ->groupBy(fn ($s) => $s->code.'|'.$s->applies_to);
+
+        // النسخةُ التي تُمثّل السطر: العامّةُ إن وُجدت، وإلّا أوّلُ مخصَّصة.
+        $active = $activeRows->map(
+            fn ($g) => $g->firstWhere('plan', null) ?? $g->first());
 
         // ══════════════════════════════════════════════════════════════
         // **صحّةُ المحرّك — الصفُّ الأوّلُ في الشاشة.**
@@ -144,8 +159,14 @@ class FeeSchemeController extends Controller
                 $health[$state]++;
 
                 if ($matches) {
+                    $group = $activeRows[$code.'|'.$actor] ?? collect();
+
                     $rows[] = ['op' => $op, 'actor' => $actor,
-                        'scheme' => $scheme, 'state' => $state];
+                        'scheme' => $scheme, 'state' => $state,
+                        // **وعددُ نسخ الباقات يُقال** — فسطرٌ يعرض سعراً
+                        // واحداً وتحته ثلاثةٌ يُقرأ أنّ السعرَ واحدٌ للجميع.
+                        'plan_overrides' => $group->filter(
+                            fn ($x) => $x->plan !== null)->pluck('plan')->all()];
                 }
             }
         }
@@ -548,6 +569,8 @@ class FeeSchemeController extends Controller
             'label' => ['nullable', 'string', 'max:120'],
             'zone_code' => ['required', 'in:'.implode(',', ZonePolicyService::VALID_ZONES)],
             'applies_to' => ['required', 'in:'.implode(',', FeeScheme::APPLIES_TO)],
+            // AMIAL-FEE-PLAN-001 — والفراغُ مقبولٌ ومعناه «كلُّ الباقات».
+            'plan' => ['nullable', 'in:'.implode(',', \App\Support\Access\AccessConstants::ALL_PLANS)],
             'fee_type' => ['required', 'in:'.implode(',', FeeScheme::FEE_TYPES)],
             'percent_rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'fixed_amount' => ['required', 'numeric', 'min:0'],
