@@ -11,6 +11,7 @@ use App\Models\Merchant;
 use App\Models\MerchantProduct;
 use App\Models\MerchantProfile;
 use App\Models\User;
+use App\Services\Otp\DemoNumberRegistry;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -106,8 +107,28 @@ class EnsureDemoMerchants extends Command
         ],
     ];
 
+    /**
+     * The merchant test catalogue exposed to the OTP centre. Keeping this
+     * derived from the same source as the bootstrap accounts prevents a new
+     * sector demo from being created but unable to complete its phone step.
+     *
+     * @return array<int,array{phone:string,label:string}>
+     */
+    public static function demoNumbers(): array
+    {
+        return array_map(
+            static fn (array $merchant): array => [
+                'phone' => $merchant['phone'],
+                'label' => 'تاجر تجريبي — ' . $merchant['store'],
+            ],
+            self::MERCHANTS,
+        );
+    }
+
     public function handle(): int
     {
+        DemoNumberRegistry::register(self::demoNumbers());
+
         foreach (self::MERCHANTS as $m) {
             try {
                 $user = $this->ensureMerchantUser($m);
@@ -150,6 +171,11 @@ class EnsureDemoMerchants extends Command
             }
             $existing->transaction_pin = Hash::make(self::PIN);
             $existing->is_active = 1;
+            DemoAccountPolicy::markTestContactsVerified($existing);
+            $existing->is_kyc_verified = 1;
+            if (Schema::hasColumn('users', 'kyc_tier')) {
+                $existing->kyc_tier = 3;
+            }
             if (Schema::hasColumn('users', 'role') && $existing->role !== 'merchant') {
                 $existing->role = 'merchant';
             }
@@ -167,6 +193,7 @@ class EnsureDemoMerchants extends Command
             self::PASSWORD, 'AMIAL_BOOTSTRAP_MERCHANT_PASSWORD'));
         $user->transaction_pin = Hash::make(self::PIN);
         $user->is_active = 1;
+        DemoAccountPolicy::markTestContactsVerified($user);
         if (Schema::hasColumn('users', 'is_kyc_verified')) {
             $user->is_kyc_verified = 1;
         }

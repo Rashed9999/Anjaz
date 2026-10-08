@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\EMoney;
 use App\Models\MerchantProfile;
 use App\Models\User;
+use App\Services\Otp\DemoNumberRegistry;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -107,6 +108,14 @@ class MerchantDemoMatrixSeeder extends Seeder
     public function run(): void
     {
         $this->assertSafeEnvironment();
+
+        DemoNumberRegistry::register(array_map(
+            static fn (array $row): array => [
+                'phone' => (string) $row['phone'],
+                'label' => 'تاجر عرض — ' . $row['business_label'] . ' / ' . $row['plan_label'],
+            ],
+            self::accounts(),
+        ));
 
         foreach (self::accounts() as $row) {
             $this->assertNoRealAccountCollision((string) $row['phone']);

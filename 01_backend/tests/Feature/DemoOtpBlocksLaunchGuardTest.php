@@ -36,6 +36,16 @@ class DemoOtpBlocksLaunchGuardTest extends TestCase
         return (string) file_get_contents($path);
     }
 
+    private function deployedEntrypoint(): string
+    {
+        $path = base_path('docker/entrypoint.sh');
+
+        $this->assertFileExists($path,
+            'مدخل Coolify الفعلي مفقود — ولا حارس في ملف لا يُشغّل.');
+
+        return (string) file_get_contents($path);
+    }
+
     // ═════════════════════════════════════════════════════════════════
 
     /**
@@ -56,6 +66,18 @@ class DemoOtpBlocksLaunchGuardTest extends TestCase
         $this->assertStringContainsString('exit 1', $blockBlock,
             '**الحاجزُ يُحذّر ولا يوقف.** فتحذيرٌ يُطبَع ثمّ يُقلع الخادمُ '
             .'بابُه مفتوح — والتحذيرُ الذي لا يوقف يُقرأ ويُمضى.');
+    }
+
+    /** @test */
+    public function the_deployed_entrypoint_has_the_same_explicit_demo_otp_gate(): void
+    {
+        $sh = $this->deployedEntrypoint();
+        $block = $this->slice($sh, 'AMIAL-DEMO-OTP-GUARD-002', 'fi');
+
+        $this->assertStringContainsString('AMIAL_DEMO_OTP', $block);
+        $this->assertStringContainsString('AMIAL_ALLOW_DEMO_OTP', $block);
+        $this->assertStringContainsString('exit 1', $block,
+            'مدخل Coolify يذكر الحارس لكنه لا يوقف الإقلاع.');
     }
 
     /**

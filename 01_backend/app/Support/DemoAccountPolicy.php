@@ -53,6 +53,25 @@ use Illuminate\Support\Str;
  */
 class DemoAccountPolicy
 {
+    /**
+     * A named demo identity is allowed to bypass delivery only for testing.
+     * Keep its contact state coherent as well: a demo account that says KYC
+     * is complete but is blocked by an unverified demo phone/email makes the
+     * sector journey impossible to test.
+     */
+    public static function markTestContactsVerified(\App\Models\User $user): void
+    {
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'is_phone_verified')) {
+            $user->is_phone_verified = 1;
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'is_email_verified')) {
+            $user->is_email_verified = 1;
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'email_verified_at')) {
+            $user->email_verified_at = $user->email_verified_at ?? now();
+        }
+    }
+
     public static function emailForNewAccount(string $phone): string
     {
         $configured = config('amial_otp.bootstrap_emails', []);

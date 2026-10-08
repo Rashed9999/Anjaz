@@ -7,6 +7,28 @@ echo "╚═══════════════════════�
 
 cd /var/www/html
 
+# ── AMIAL-DEMO-OTP-GUARD-002 — الحارس في مدخل Coolify الفعلي ─────────
+#
+# لا يكفي وجود الحارس في entrypoint.prod.sh إن كانت صورة Coolify تستعمل
+# هذا المدخل. الرمز الثابت مسموح فقط للحسابات التجريبية المسجّلة، لكنه
+# يبقى وسيلة دخول معروفة؛ لذلك لا نتركه مفعلاً على خادم production بلا
+# إعلان صريح من المشغّل. local/testing وحدهما لا يحتاجان ذلك الإعلان.
+case "${APP_ENV:-production}" in
+    local|testing)
+        ;;
+    *)
+        PILOT_CUSTOMER_PHONE_OTP_ENABLED="${AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED:-false}"
+        if { [ -n "${AMIAL_DEMO_OTP:-}" ] || [ "$PILOT_CUSTOMER_PHONE_OTP_ENABLED" = "true" ]; } \
+           && [ "${AMIAL_ALLOW_DEMO_OTP:-false}" != "true" ]; then
+            echo "❌ مانع إطلاق: OTP التجريبي مفعّل على خادم غير تجريبي."
+            echo "   لاختبار الحسابات التجريبية المصرح بها فقط اضبط:"
+            echo "   AMIAL_ALLOW_DEMO_OTP=true"
+            echo "   وللإطلاق الحقيقي أفرغ AMIAL_DEMO_OTP وعطّل وضع Pilot."
+            exit 1
+        fi
+        ;;
+esac
+
 # ── AMIAL-CLOCK-GUARD-001: ساعةُ الخادم تُفحص قبل أيّ شيء ────────────
 #
 # ساعةٌ خاطئة لا تشتكي: النظام يعمل ويُصدر أرقاماً، وكلُّ ما يُبنى عليها

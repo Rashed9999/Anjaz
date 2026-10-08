@@ -30,7 +30,7 @@ fi
 # فمن أراد تجربةً على خادمٍ حقيقيّ يفتح المنفذَ بيده ويعرف أنّه فتحه؛
 # ومن نسي إفراغَ الرمز عند الإطلاق **يُوقَف الإقلاعُ فيتذكّر** — لا أن
 # يُطلق منصّةً ماليّةً بابُها مفتوحٌ ولا يدري.
-PILOT_CUSTOMER_PHONE_OTP_ENABLED="${AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED:-true}"
+PILOT_CUSTOMER_PHONE_OTP_ENABLED="${AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED:-false}"
 if { [ -n "$AMIAL_DEMO_OTP" ] || [ "$PILOT_CUSTOMER_PHONE_OTP_ENABLED" = "true" ]; } \
    && [ "$AMIAL_ALLOW_DEMO_OTP" != "true" ]; then
     echo "❌ مانع إطلاق: OTP الهاتف ما زال في وضع Pilot ثابت."

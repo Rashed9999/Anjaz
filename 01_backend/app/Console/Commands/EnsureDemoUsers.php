@@ -6,6 +6,7 @@ use App\Support\DemoAccountPolicy;
 use App\Models\EMoney;
 use App\Models\User;
 use App\Services\UnifiedAuthService;
+use App\Services\Otp\DemoNumberRegistry;
 use Illuminate\Console\Command;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -30,6 +31,11 @@ class EnsureDemoUsers extends Command
 
     public function handle(): int
     {
+        DemoNumberRegistry::register([
+            ['phone' => '967777100001', 'label' => 'عميل تجريبي — مرسل'],
+            ['phone' => '967777100002', 'label' => 'عميل تجريبي — مستلم'],
+        ]);
+
         $phone = '967777100001';
         $password = 'Pass@2026';
 
@@ -56,6 +62,7 @@ class EnsureDemoUsers extends Command
                 }
                 $user->transaction_pin = Hash::make('1237');
                 $user->is_active = 1;
+                DemoAccountPolicy::markTestContactsVerified($user);
                 $user->is_kyc_verified = 1;
                 if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
                     $user->kyc_tier = 3;
@@ -82,6 +89,7 @@ class EnsureDemoUsers extends Command
                 $password, 'AMIAL_BOOTSTRAP_CUSTOMER_PASSWORD'));
             $user->transaction_pin = Hash::make('1237');
             $user->is_active = 1;
+            DemoAccountPolicy::markTestContactsVerified($user);
             // AMIAL-DEMO: موثّق KYC (=1) ليعمل إرسال الأموال (يشترط التوثيق)
             $user->is_kyc_verified = 1;
             $user->zone_code = 'SOUTH';
@@ -127,6 +135,7 @@ class EnsureDemoUsers extends Command
                 }
                 $existingRx->transaction_pin = Hash::make('1237');
                 $existingRx->is_active = 1;
+                DemoAccountPolicy::markTestContactsVerified($existingRx);
                 $existingRx->is_kyc_verified = 1;
                 if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
                     $existingRx->kyc_tier = 3;
@@ -153,6 +162,7 @@ class EnsureDemoUsers extends Command
                 $password, 'AMIAL_BOOTSTRAP_CUSTOMER_PASSWORD'));
             $recipient->transaction_pin = Hash::make('1237');
             $recipient->is_active = 1;
+            DemoAccountPolicy::markTestContactsVerified($recipient);
             $recipient->is_kyc_verified = 1;
             $recipient->zone_code = 'SOUTH';
             if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {

@@ -6,6 +6,7 @@ use App\Support\DemoAccountPolicy;
 use App\Models\EMoney;
 use App\Models\User;
 use App\Services\PlatformRoleService;
+use App\Services\Otp\DemoNumberRegistry;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -33,6 +34,11 @@ class EnsureDemoStaff extends Command
 
     public function handle(): int
     {
+        DemoNumberRegistry::register([
+            ['phone' => '967777000001', 'label' => 'مدير نظام تجريبي'],
+            ['phone' => '967777900001', 'label' => 'وكيل تجريبي'],
+        ]);
+
         $this->ensureAdmin();
         $this->ensureAgent();
         $this->healOrphanAdmins();
@@ -90,6 +96,7 @@ class EnsureDemoStaff extends Command
                     $this->warn(DemoAccountPolicy::skipNotice('أدمن'));
                 }
                 $admin->is_active = 1;
+                DemoAccountPolicy::markTestContactsVerified($admin);
                 if (Schema::hasColumn('users', 'two_factor_enabled')) {
                     $admin->two_factor_enabled = 0;
                 }
@@ -119,6 +126,7 @@ class EnsureDemoStaff extends Command
                 self::PASSWORD, 'AMIAL_BOOTSTRAP_ADMIN_PASSWORD');
             $admin->password = Hash::make($adminPass);
             $admin->is_active = 1;
+            DemoAccountPolicy::markTestContactsVerified($admin);
             // بلا مصادقة ثنائية ليسهل الدخول التجريبي
             if (Schema::hasColumn('users', 'two_factor_enabled')) {
                 $admin->two_factor_enabled = 0;
@@ -160,11 +168,18 @@ class EnsureDemoStaff extends Command
                     $this->warn(DemoAccountPolicy::skipNotice('وكيل'));
                 }
                 $agent->is_active = 1;
+                DemoAccountPolicy::markTestContactsVerified($agent);
                 if (Schema::hasColumn('users', 'transaction_pin')) {
                     $agent->transaction_pin = Hash::make('1237');
                 }
                 if (Schema::hasColumn('users', 'role') && $agent->role !== 'agent') {
                     $agent->role = 'agent';
+                }
+                if (Schema::hasColumn('users', 'is_kyc_verified')) {
+                    $agent->is_kyc_verified = 1;
+                }
+                if (Schema::hasColumn('users', 'kyc_tier')) {
+                    $agent->kyc_tier = 3;
                 }
                 if (Schema::hasColumn('users', 'agent_number') && empty($agent->agent_number)) {
                     $agent->agent_number = $agentNumber;
@@ -195,6 +210,7 @@ class EnsureDemoStaff extends Command
                 self::PASSWORD, 'AMIAL_BOOTSTRAP_AGENT_PASSWORD');
             $agent->password = Hash::make($agentPass);
             $agent->is_active = 1;
+            DemoAccountPolicy::markTestContactsVerified($agent);
             if (Schema::hasColumn('users', 'agent_number')) {
                 $agent->agent_number = $agentNumber;
             }

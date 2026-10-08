@@ -51,7 +51,7 @@ class OtpPolicy
      */
     public function pilotCustomerPhoneCode(): ?string
     {
-        if (! (bool) config('amial.otp.pilot_customer_phone_enabled', true)) {
+        if (! (bool) config('amial.otp.pilot_customer_phone_enabled', false)) {
             return null;
         }
 
