@@ -33,7 +33,11 @@ check_docker() {
 # ── تجهيز ملف .env.demo ─────────────────────────────────
 prepare_env() {
     if [ ! -f ".env.demo" ]; then
-        err "لا يوجد .env.demo — هل أنت في مجلّد 01_backend؟"
+        if [ ! -f ".env.demo.example" ]; then
+            err "لا يوجد .env.demo.example — هل أنت في مجلّد 01_backend؟"
+        fi
+        cp .env.demo.example .env.demo
+        warn "أُنشئ .env.demo محلياً من القالب؛ أضف مفاتيح ngrok/Meta عند الحاجة ولا ترفعه إلى Git."
     fi
     # نسخ .env.demo إلى .env داخل الـ build
     cp .env.demo .env
@@ -147,7 +151,7 @@ start-wa)
         echo "⚡ الخطوات التالية لتفعيل واتساب:"
         echo "   1. افتح Meta Developer Portal → تطبيقك → WhatsApp → Webhook"
         echo "   2. أدخل Callback URL: ${NGROK_URL}/wa/webhook"
-        echo "   3. Verify Token: amyal_webhook_2026"
+        echo "   3. Verify Token: القيمة التي عيّنتها في META_WA_VERIFY_TOKEN محلياً"
         echo "   4. اشترك في حدث: messages"
     else
         warn "تعذّر الحصول على رابط ngrok — تحقّق من NGROK_AUTHTOKEN"

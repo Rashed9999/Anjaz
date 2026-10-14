@@ -5,11 +5,12 @@
 
 # ── أسرار البيئة (لا تُرفَع أبداً) ─────────────────────────
 01_backend/.env
+01_backend/.env.demo
 01_backend/.env.production
 01_backend/.env.backup
 01_backend/.env.*.local
-# ملاحظة: .env.example و .env.demo آمنان للرفع عمداً —
-# يحويان قوالب/قيماً تجريبية فقط، بلا أسرار حقيقية.
+# ملاحظة: القوالب فقط هي الآمنة للرفع؛ أمّا ملفات البيئة الفعلية فمحلية.
+# .env.example و .env.demo.example لا يحويان أسراراً.
 
 # ── Laravel Backend ────────────────────────────────────────
 01_backend/vendor/

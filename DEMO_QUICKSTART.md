@@ -37,8 +37,9 @@ docker compose up -d --build
 لتحويل التشغيل المحلّي إلى **رابط عامّ على الإنترنت** (بلا خادم):
 
 1. أنشئ حساباً مجّانياً على https://ngrok.com واحصل على `NGROK_AUTHTOKEN`.
-2. أضِفه في ملفّ `01_backend/.env.demo`:
+2. أنشئ ملف البيئة المحلي ثم أضِفه فيه (لا ترفع الملف إلى Git):
    ```
+   cp 01_backend/.env.demo.example 01_backend/.env.demo
    NGROK_AUTHTOKEN=توكنك_هنا
    ```
 3. شغّل مع النفق:

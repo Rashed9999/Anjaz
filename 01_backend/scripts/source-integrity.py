@@ -50,6 +50,12 @@ def validate_source(relative: str, data: bytes) -> list[str]:
         errors.append("unexpected binary control characters")
     if re.search(r"^(?:<<<<<<< |=======\s*$|>>>>>>> )", text, re.MULTILINE):
         errors.append("unresolved merge marker")
+    # A copied assistant/tool response is source corruption, even when it
+    # happens to be inside a comment and therefore survives PHP parsing.
+    # Keep this specific so normal prose containing the word "truncated" is
+    # not rejected.
+    if re.search(r"Warning: truncated output \(original token count: \d+\)|…\d+ tokens truncated…", text):
+        errors.append("copied tool-output truncation marker")
 
     path = Path(relative)
     pure_php = path.suffix == ".php" and not relative.endswith(".blade.php")

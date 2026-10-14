@@ -51,6 +51,18 @@ class SourceIntegrityTest(unittest.TestCase):
     def test_merge_marker_rejected(self):
         self.assertTrue(gate.validate_source("x.dart", b"<<<<<<< HEAD\nleft\n=======\nright\n>>>>>>> new"))
 
+    def test_copied_tool_truncation_marker_is_rejected(self):
+        source = bytes.fromhex(
+            "5761726e696e673a207472756e6361746564206f757470757420"
+            "286f726967696e616c20746f6b656e20636f756e743a203130290a"
+            "3c3f7068700a72657475726e205b5d3b0a"
+        )
+        self.assertTrue(gate.validate_source("config/amial.php", source))
+
+    def test_in_source_tool_truncation_marker_is_rejected(self):
+        source = b"<?php\n// " + bytes.fromhex("e280a63120746f6b656e73207472756e6361746564e280a6") + b"\nreturn [];\n"
+        self.assertTrue(gate.validate_source("config/amial.php", source))
+
 
 if __name__ == "__main__":
     unittest.main()

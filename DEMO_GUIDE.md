@@ -50,7 +50,8 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 # 1. احصل على Token مجاني من: https://dashboard.ngrok.com
 #    (إنشاء حساب مجاني → My Authtoken)
 
-# 2. أضف Token في .env.demo:
+# 2. أنشئ ملفك المحلي ثم أضف Token فيه (لا ترفعه إلى Git):
+cp 01_backend/.env.demo.example 01_backend/.env.demo
 echo "NGROK_AUTHTOKEN=your_token_here" >> 01_backend/.env.demo
 
 # 3. شغِّل مع واتساب:
@@ -62,7 +63,7 @@ echo "NGROK_AUTHTOKEN=your_token_here" >> 01_backend/.env.demo
 
 # 5. في Meta Developer Portal → WhatsApp → Configuration → Webhook:
 #    Callback URL: https://abc123.ngrok-free.app/wa/webhook
-#    Verify Token: amyal_webhook_2026
+#    Verify Token: القيمة التي عيّنتها في META_WA_VERIFY_TOKEN محلياً
 #    Subscribe: messages ✓
 ```
 
