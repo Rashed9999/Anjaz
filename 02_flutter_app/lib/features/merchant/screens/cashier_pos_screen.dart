@@ -281,7 +281,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     // إلى هذا المسار من رابط قديم أو إشعار أو زر لم يُحدّث بعد.
     if (Get.isRegistered<AccessController>()) {
       final access = Get.find<AccessController>();
-      if (access.isQuickSale) return ShiftGate(child: _manualAmountTill(context));
+      if (access.isQuickSale) return ShiftGate(child: _quickSaleTill(context));
       if (access.isFuel) return const FuelSaleScreen();
       if (access.isPharmacy) return const PharmacySaleScreen();
       if (access.isWholesale) return const WholesaleInvoiceCreateScreen();
@@ -298,7 +298,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     return ShiftGate(child: _till(context));
   }
 
-  Widget _manualAmountTill(BuildContext context) {
+  Widget _quickSaleTill(BuildContext context) {
     void continueToPayment() {
       final total = double.tryParse(_quickAmount.text.trim()) ?? 0;
       if (total <= 0) {

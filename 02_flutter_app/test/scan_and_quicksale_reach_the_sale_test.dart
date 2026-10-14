@@ -95,7 +95,10 @@ void main() {
 
     test('ولا تُقفَل الشبكةُ على من أضاف صنفاً', () {
       // **الثمنُ يُقاس أيضاً**: القطاعُ يقرّر ما يتقدّم لا ما يُمنَع.
-      final at = pos.indexOf('quickSale');
+      // لا نبدأ من اسم `_quickSaleTill`: فهو مسارٌ آخر مقصودٌ للقطاع.
+      // المعيار هنا هو قرار العرض داخل `_till`، حيث يجب أن يقدَّم إدخال
+      // المبلغ من دون إخفاء الكتالوج إن أضيف صنف لاحقاً.
+      final at = pos.indexOf('final quickSale =');
       expect(at, isNot(-1));
       final near = pos.substring(at, at + 1400);
 
