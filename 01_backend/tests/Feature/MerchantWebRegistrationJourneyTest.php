@@ -52,7 +52,7 @@ class MerchantWebRegistrationJourneyTest extends TestCase
             ->assertSee('تجزئة')
             ->assertSee('صيدلية')
             ->assertSee('تجارة جملة')
-            ->assertSee('المطعم')
+            ->assertSee('مطعم')
             ->assertSee('محطة وقود')
             ->assertSee('/api/v1/auth/email-otp/request', false)
             ->assertSee('/api/v1/auth/register/email', false);
