@@ -159,7 +159,7 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
-    public function verification_panel_lists_pending_and_approval_makes_account_fully_real(): void
+    public function verification_panel_approves_identity_without_auto_approving_the_business(): void
     {
         // تسجيل تاجر ذاتياً
         $resp = $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500005', [
@@ -187,17 +187,19 @@ class RegistrationRolesTest extends TestCase
         $this->assertSame('تاجر', $row['role']);
         $this->assertSame('صيدلية النور', $row['store_name']);
 
-        // الاعتماد يوثّق الحساب وملف التاجر معاً
+        // اعتماد الهوية يوثّق الحساب فقط. اعتماد المنشأة له أدلته وقراره
+        // المستقلّان؛ فلا يُفتح قبضٌ ماليّ بمجرد صور هوية المالك.
         // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
         $this->establishKycEvidence($merchant);
         $this->actingAs($admin, 'user')
             ->postJson("/admin/amial/hub/users/{$merchant->id}/kyc", ['status' => 1])
             ->assertOk();
         $this->assertSame(1, (int) $merchant->fresh()->is_kyc_verified);
-        $this->assertSame('verified',
+        $this->assertSame('pending_review',
             MerchantProfile::where('user_id', $merchant->id)->value('verification_status'));
 
-        // وبعدها يدخل من التطبيق برقم تاجره ويستخدم الكاشير فعلاً
+        // وبعدها يدخل من التطبيق برقم تاجره ويستخدم تشغيل قطاعه غير المالي.
+        // حارس القبض المركزي يبقي استلام المال مقفلاً إلى اعتماد المنشأة.
         Artisan::call('passport:install', ['--no-interaction' => true]);
         $this->postJson('/api/v1/auth/login', [
             'role' => 'merchant',
@@ -209,14 +211,14 @@ class RegistrationRolesTest extends TestCase
         \Laravel\Passport\Passport::actingAs($merchant->fresh(), [], 'api');
 
         // ══════════════════════════════════════════════════════════════
-        // **والتاجرُ الموثَّقُ يفتح بابَ قطاعه — لا بابَ غيره.**
+        // **التاجرُ ذو هوية مالك معتمدة يفتح بابَ قطاعه — لا بابَ غيره.**
         //
         // كان هذا السطرُ يشترط أن يفتح **تاجرُ صيدليّةٍ كاشيرَ البقالة**
         // (`/merchant/cashier/products`)، وهو ما يمنعه عزلُ القطاعات
         // عمداً بـ`PHARMACY_CASHIER_ONLY`: «استخدم كاشير الصيدلية لتبقى
         // الوصفات والتشغيلات والصلاحية في الفاتورة».
         //
-        // **والمقصودُ من الفحص باقٍ**: أنّ الحسابَ بعد الاعتماد يعمل
+        // **والمقصودُ من الفحص باقٍ**: أنّ الحسابَ بعد اعتماد هوية مالكه يعمل
         // فعلاً. فيُقاس على بابه هو — **ويُشترط معه أنّ البابَ الآخرَ
         // مغلق**، فيصير السطرُ الذي كان يناقض العزلَ حارساً له.
         // ══════════════════════════════════════════════════════════════

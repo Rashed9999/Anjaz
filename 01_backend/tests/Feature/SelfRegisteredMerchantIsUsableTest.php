@@ -250,13 +250,13 @@ class SelfRegisteredMerchantIsUsableTest extends TestCase
     }
 
     /**
-     * **④ والسلسلةُ كاملةً تُمشى: رفعٌ ← مراجعةٌ ← إقرار ملكية ← اعتماد.**
+     * **④ سلسلةُ هوية المالك كاملة: رفعٌ ← مراجعةٌ ← إقرار ملكية ← اعتماد.**
      *
      * رفعُ العميل لا يوثّق نفسَه، واعتماد الصور وحده لا يثبت صاحبها.
      * المراجع يعتمد المستندات، يقر رقم الهوية من الوثيقة، ثم يعتمد الحساب.
      */
     /** @test */
-    public function the_full_chain_registration_to_approval_completes(): void
+    public function identity_approval_keeps_business_verification_pending_until_its_own_review(): void
     {
         $user = $this->registerMerchant();
         $reviewer = $this->reviewer();
@@ -280,8 +280,11 @@ class SelfRegisteredMerchantIsUsableTest extends TestCase
         $this->assertSame(1, (int) $user->fresh()->is_kyc_verified,
             'قال «تمّ الاعتماد» ولم يُوثَّق الحساب');
 
-        $this->assertSame('verified',
+        // اعتماد الهوية قرارٌ عن الشخص، لا بديلٌ عن مستندات المنشأة.
+        // فتحُ قبض التاجر يتطلب قرار مراجعة النشاط المستقل؛ ربطهما هنا
+        // يعيد ثغرة امتثالٍ تمنح نشاطاً تجارياً موثوقاً بلا دليله.
+        $this->assertSame('pending_review',
             MerchantProfile::where('user_id', $user->id)->value('verification_status'),
-            'اعتُمد الحسابُ وبقي ملفُّ التاجر غيرَ موثّق — فالقبضُ الماليُّ يبقى مقفلاً');
+            'اعتماد هوية المالك لا يجوز أن يعتمد المنشأة أو يفتح قبضها المالي');
     }
 }

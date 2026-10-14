@@ -50,7 +50,7 @@ class MerchantWebRegistrationJourneyTest extends TestCase
             ->assertSee('إنشاء حساب منشأة')
             ->assertSee('بيع سريع')
             ->assertSee('تجزئة')
-            ->assertSee('الصيدلية')
+            ->assertSee('صيدلية')
             ->assertSee('تجارة جملة')
             ->assertSee('المطعم')
             ->assertSee('محطة وقود')
@@ -130,12 +130,14 @@ class MerchantWebRegistrationJourneyTest extends TestCase
             'password' => Hash::make('6392'),
             'email' => 'pending-merchant@example.test',
         ]);
-        Merchant::create([
-            'user_id' => $owner->id,
-            'store_name' => 'منشأة بانتظار المراجعة',
-            'merchant_number' => '684321',
-            'address' => '—',
-        ]);
+        // Merchant لا يعرّف $fillable عمداً: لا نوسّعه من أجل fixture.
+        // نُسنِد الحقول صراحة كما يفعل مسار الإنشاء الموثوق في التطبيق.
+        $store = new Merchant();
+        $store->user_id = $owner->id;
+        $store->store_name = 'منشأة بانتظار المراجعة';
+        $store->merchant_number = '684321';
+        $store->address = '—';
+        $store->save();
         MerchantProfile::create([
             'user_id' => $owner->id,
             'business_type' => A::BIZ_QUICK_SALE,
