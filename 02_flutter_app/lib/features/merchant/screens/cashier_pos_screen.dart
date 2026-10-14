@@ -281,7 +281,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     // إلى هذا المسار من رابط قديم أو إشعار أو زر لم يُحدّث بعد.
     if (Get.isRegistered<AccessController>()) {
       final access = Get.find<AccessController>();
-      if (access.isQuickSale) return ShiftGate(child: _quickSaleTill(context));
+      if (access.isQuickSale) return ShiftGate(child: _manualAmountTill(context));
       if (access.isFuel) return const FuelSaleScreen();
       if (access.isPharmacy) return const PharmacySaleScreen();
       if (access.isWholesale) return const WholesaleInvoiceCreateScreen();
@@ -298,12 +298,12 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     return ShiftGate(child: _till(context));
   }
 
-  Widget _quickSaleTill(BuildContext context) {
+  Widget _manualAmountTill(BuildContext context) {
     void continueToPayment() {
       final total = double.tryParse(_quickAmount.text.trim()) ?? 0;
       if (total <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('أدخل مبلغاً أكبر من صفر'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('أدخل مبلغاً أكبر من صفر'.tr),
           backgroundColor: AmialColors.red,
         ));
         return;
@@ -358,13 +358,13 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                         color: AmialColors.primary, size: 34),
                   ),
                   const SizedBox(height: 14),
-                  const Text(
-                    'أدخل مبلغ البيع',
+                  Text(
+                    'أدخل مبلغ البيع'.tr,
                     style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'لا منتجات ولا باركود — مبلغ، تحصيل، ثم فاتورة.',
+                  Text(
+                    'لا منتجات ولا باركود — مبلغ، تحصيل، ثم فاتورة.'.tr,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -435,7 +435,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'طرق الدفع: نقد أو أميال باي. بعد التحصيل تُنشأ الفاتورة تلقائياً ويمكن طباعتها أو مشاركتها.',
+                      'طرق الدفع: نقد أو أميال باي. بعد التحصيل تُنشأ الفاتورة تلقائياً ويمكن طباعتها أو مشاركتها.'.tr,
                       style: TextStyle(
                         fontSize: 12.5,
                         height: 1.5,
