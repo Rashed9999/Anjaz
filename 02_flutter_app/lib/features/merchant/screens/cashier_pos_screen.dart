@@ -428,7 +428,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                 color: const Color(0xFFF4F9F7),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Row(
+              child: Row(
                 children: [
                   Icon(Icons.receipt_long_outlined,
                       color: AmialColors.primary, size: 22),
