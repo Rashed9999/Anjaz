@@ -283,7 +283,7 @@ class SelfRegisteredMerchantIsUsableTest extends TestCase
         // اعتماد الهوية قرارٌ عن الشخص، لا بديلٌ عن مستندات المنشأة.
         // فتحُ قبض التاجر يتطلب قرار مراجعة النشاط المستقل؛ ربطهما هنا
         // يعيد ثغرة امتثالٍ تمنح نشاطاً تجارياً موثوقاً بلا دليله.
-        $this->assertSame('pending_review',
+        $this->assertSame('unverified',
             MerchantProfile::where('user_id', $user->id)->value('verification_status'),
             'اعتماد هوية المالك لا يجوز أن يعتمد المنشأة أو يفتح قبضها المالي');
     }

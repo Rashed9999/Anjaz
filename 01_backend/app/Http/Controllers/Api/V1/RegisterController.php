@@ -436,7 +436,7 @@ class RegisterController extends Controller
             $emoney->user_id = $user->id;
             $emoney->save();
 
-            // AMIAL-REG-ROLES: سجلات التاجر — رقم دخوله + ملف «قيد التحقق»
+            // AMIAL-REG-ROLES: سجلات التاجر — رقم دخوله + ملف غير موثّق
             if ($accountType === MERCHANT_TYPE) {
                 $mr = new \App\Models\Merchant();
                 $mr->user_id = $user->id;
@@ -456,7 +456,8 @@ class RegisterController extends Controller
                     // لا fallback إلى التجزئة: التسجيل سبق أن ألزم التاجر
                     // باختيار قطاعه، وهذه القيمة هي مصدر الحقيقة لبقية النظام.
                     'business_type' => (string) $request->input('business_type'),
-                    'verification_status' => 'pending_review',
+                    // «قيد المراجعة» لا تصح قبل أن يرسل التاجر مستنداته.
+                    'verification_status' => 'unverified',
                     'zone_code' => 'SOUTH',
                     'subscription_plan' => \App\Support\Access\AccessConstants::PLAN_FREE,
                 ]);
@@ -526,7 +527,7 @@ class RegisterController extends Controller
             // لا نسمّيه «قيد المراجعة» قبل أن يرسل أصلاً طلب ترقية.
             'verification_status' => $accountType === CUSTOMER_TYPE
                 ? 'active_unverified'
-                : 'pending_review',
+                : 'unverified',
             'kyc_tier' => 0,
             'requires_pin_setup' => !$request->filled('transaction_pin'),
         ], 200);

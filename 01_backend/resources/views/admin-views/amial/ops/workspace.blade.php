@@ -28,8 +28,8 @@
             ['مركز العملاء', route('admin.amial.customer.page'), 'platform.customers.view'],
             ['استعادة الحسابات', route('admin.amial.recovery.index'), 'platform.recovery.view'],
         ]],
-        ['id'=>'merchants','title'=>'التجّار','icon'=>'🏪','desc'=>'إدارة التجار، العقود، نقاط البيع، والتسويات.','items'=>[
-            ['مركز التجّار', route('admin.amial.hub.merchants'), 'platform.customers.view'], ['توثيق التجّار', route('admin.amial.merchants.verification.page'), 'platform.merchants.compliance'], ['الاشتراكات والباقات', route('admin.amial.hub.subscriptions'), 'platform.settings.manage'], ['القدرات والاستحقاقات', route('admin.amial.entitlements.page'), 'platform.settings.manage'], ['فواتير التجار', route('admin.amial.invoices.page'), 'platform.money.view'], ['كتالوج المنتجات', route('admin.amial.catalog.page'), 'platform.settings.update'], ['موظفو التجّار ونقاط البيع', route('admin.amial.hub.staff'), 'platform.staff.view'], ['رقابة محطات الوقود', route('admin.amial.fuel.page'), 'platform.audit.view'], ['رقابة التجزئة', route('admin.amial.retail.page'), 'platform.audit.view'],
+        ['id'=>'merchants','title'=>'التجّار','icon'=>'🏪','desc'=>'إدارة التجار، العقود، نقاط البيع، والتسويات. قرار التوثيق يُتخذ من المركز الموحد.','items'=>[
+            ['مركز التجّار', route('admin.amial.hub.merchants'), 'platform.customers.view'], ['مركز التحقق والتوثيق الموحد', route('admin.amial.kyc.page', ['role' => 'merchant']), 'platform.customers.kyc.view'], ['الاشتراكات والباقات', route('admin.amial.hub.subscriptions'), 'platform.settings.manage'], ['القدرات والاستحقاقات', route('admin.amial.entitlements.page'), 'platform.settings.manage'], ['فواتير التجار', route('admin.amial.invoices.page'), 'platform.money.view'], ['كتالوج المنتجات', route('admin.amial.catalog.page'), 'platform.settings.update'], ['موظفو التجّار ونقاط البيع', route('admin.amial.hub.staff'), 'platform.staff.view'], ['رقابة محطات الوقود', route('admin.amial.fuel.page'), 'platform.audit.view'], ['رقابة التجزئة', route('admin.amial.retail.page'), 'platform.audit.view'],
         ]],
         ['id'=>'agents','title'=>'الوكلاء','icon'=>'🤝','desc'=>'إدارة الوكلاء والهيكل التنظيمي والعمولات.','items'=>[
             ['مركز الوكلاء', route('admin.amial.hub.agents'), 'platform.customers.view'], ['تسويات الوكلاء', route('admin.amial.hub.settlements'), 'platform.money.view'], ['بوابة الوكيل', route('agent.login'), null, '_blank'],
@@ -39,7 +39,7 @@
         ]],
         ['id'=>'compliance','title'=>'الامتثال والمخاطر','icon'=>'🛡️','desc'=>'المراقبة، فحص المعاملات، تقييم المخاطر والضوابط.','items'=>[
             // كل طلبات العملاء والوكلاء والتجار والسكن والهوية داخل شاشة واحدة.
-            ['مركز التحقق والهوية', route('admin.amial.kyc.page'), 'platform.customers.kyc.view'],
+            ['مركز التحقق والتوثيق الموحد', route('admin.amial.kyc.page'), 'platform.customers.kyc.view'],
             ['مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.aml.investigate'], ['سجل التدقيق', route('admin.amial.audit.index'), 'platform.audit.view'], ['الإشراف والأمن', route('admin.amial.supervision.index'), 'platform.audit.view'], ['أحداث الأمان', route('admin.amial.security-events.index'), 'platform.security.act'], ['حارس الأمان', route('admin.amial.sentinel.index'), 'platform.security.act'], ['صحة النظام', route('admin.amial.system.health'), 'platform.audit.view'], ['ساهر — رادار النظام', route('admin.amial.saher.index'), 'saher.view'],
         ]],
         ['id'=>'services','title'=>'خدمات المنصّة','icon'=>'🧩','desc'=>'إدارة الخدمات، التكاملات، وواجهات البرمجة.','items'=>[

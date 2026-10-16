@@ -1,5 +1,5 @@
 @extends('layouts.admin.app')
-@section('title', 'مركز التحقق والهوية')
+@section('title', 'مركز التحقق والتوثيق الموحد')
 @section('content')
 <style>
     .vc-card{background:var(--amial-surface,#fff);border:1px solid #dfe7ee;border-radius:15px}
@@ -22,8 +22,8 @@
 <div class="content container-fluid" id="verification-center" data-testid="unified-verification-center" dir="rtl">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
-            <h2 class="page-header-title mb-1">🛡️ مركز التحقق والهوية</h2>
-            <p class="text-muted mb-0">طلبات العملاء الجدد والترقيات والسكن والهوية وقرار الاعتماد، من ملف واحد.</p>
+            <h2 class="page-header-title mb-1">🛡️ مركز التحقق والتوثيق الموحد</h2>
+            <p class="text-muted mb-0">هوية صاحب الحساب، السكن، ووثائق المنشأة وقرار الاعتماد — من ملف واحد لا من طوابير متفرقة.</p>
         </div>
         <button class="btn btn-outline-primary" id="vc-refresh" type="button">↻ تحديث الحالات</button>
     </div>
@@ -110,7 +110,9 @@
     const el = id => document.getElementById(id);
     const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    let items = [], chosen = null, stage = 'all', role = 'all', current = null, selectedDoc = null, loadVersion = 0;
+    const roleFromLink = new URLSearchParams(window.location.search).get('role');
+    const initialRoles = {customer:'عميل', merchant:'تاجر', agent:'وكيل', staff:'موظف إدارة'};
+    let items = [], chosen = null, stage = 'all', role = initialRoles[roleFromLink] || 'all', current = null, selectedDoc = null, loadVersion = 0;
 
     async function req(url, body) {
         const options = {headers: {'Accept':'application/json'}, credentials:'same-origin'};
@@ -374,6 +376,15 @@
 
     function merchantVerificationCard(record) {
         if (!record) return '';
+        if (record.status === 'not_submitted') {
+            const quickSale = record.business_type === 'quick_sale';
+            const required = quickSale
+                ? 'وجه الهوية وظهرها وصورة نقطة البيع'
+                : 'مستندات المنشأة المطلوبة';
+            return '<section class="vc-section"><h5>🏪 ملف توثيق المنشأة</h5>' +
+                '<div class="alert alert-warning py-2 mb-0">لم يرسل صاحب المنشأة ملف التوثيق بعد. لا يظهر زر الاعتماد حتى يرفع ' +
+                esc(required) + ' من تطبيقه.</div></section>';
+        }
         const yes = value => value ? '<span class="text-success">موجود ✓</span>' : '<span class="text-warning">ناقص</span>';
         const docs = (record.documents || []).filter(doc => doc.uploaded).map(doc =>
             doc.url ? '<a class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener" href="' + esc(doc.url) + '">' + esc(doc.label) + '</a>' :
@@ -650,6 +661,7 @@
             b.classList.toggle('active', b === button));
         renderList();
     });
+    el('vc-role').value = role;
     loadQueue(false);
 })();
 </script>

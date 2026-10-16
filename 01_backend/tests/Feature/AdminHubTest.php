@@ -284,8 +284,8 @@ class AdminHubTest extends TestCase
         $profile = \App\Models\MerchantProfile::where('user_id', $merchant->id)->first();
         // AMIAL-ADMIN-KYC-001: كان هنا assertSame('verified', ...) — أي أن هذا
         // الاختبار كان يُثبّت العطل نفسه: حساب يخرج موثّقاً بلا مراجعة وثائق.
-        // الصحيح أن يخرج بانتظار المراجعة، ويُوثَّق بقرار من لوحة التحقّق.
-        $this->assertSame('pending_review', $profile->verification_status);
+        // الصحيح أن يخرج غير موثّق حتى يرسل ملف النشاط للمراجعة.
+        $this->assertSame('unverified', $profile->verification_status);
         $this->assertSame('business', $profile->subscription_plan);
         $this->assertSame('retail', $profile->business_type);
 

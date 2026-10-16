@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
+use App\Models\MerchantProfile;
 use App\Models\MerchantVerificationRequest;
 use App\Models\User;
 use App\Services\MerchantVerificationService;
@@ -349,6 +350,7 @@ class UnifiedVerificationCenterController extends Controller
 
         $merchantVerification = null;
         if ((int) $user->type === MERCHANT_TYPE) {
+            $profile = MerchantProfile::query()->where('user_id', $user->id)->first();
             $requestRow = MerchantVerificationRequest::query()
                 ->where('merchant_user_id', $user->id)->latest('id')->first();
             if ($requestRow) {
@@ -367,6 +369,24 @@ class UnifiedVerificationCenterController extends Controller
                         && $reviewer->hasPlatformPermission('platform.approvals.decide'),
                     'documents' => $this->merchantDocuments($requestRow,
                         $reviewer->hasPlatformPermission('platform.merchants.compliance')),
+                ];
+            } else {
+                // لا نُخفي البطاقة عند غياب الطلب: الاختفاء يوحي بأن زر
+                // الاعتماد معطّل، بينما لا يوجد ملف قانوني يجوز اعتماده.
+                $merchantVerification = [
+                    'status' => 'not_submitted',
+                    'business_name' => '',
+                    'business_category' => (string) ($profile?->business_type ?? ''),
+                    'business_type' => (string) ($profile?->business_type ?? ''),
+                    'city' => '',
+                    'address' => '',
+                    'has_id_front' => false,
+                    'has_id_back' => false,
+                    'has_commercial_register' => false,
+                    'has_store_photo' => false,
+                    'admin_note' => '',
+                    'can_decide' => false,
+                    'documents' => [],
                 ];
             }
         }

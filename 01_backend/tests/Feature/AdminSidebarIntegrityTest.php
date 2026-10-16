@@ -190,9 +190,12 @@ class AdminSidebarIntegrityTest extends TestCase
         )), 'مركز التحقق يجب أن يظهر مرة واحدة فقط');
         $this->assertNotContains('/admin/amial/kyc/residence', $paths);
         $this->assertNotContains('/admin/amial/hub/verification', $paths);
+        $this->assertNotContains('/admin/amial/merchants/verification', $paths,
+            'توثيق التجّار قرارٌ داخل المركز الموحد، لا بابٌ موازٍ في القائمة');
         $this->actingAs($this->admin(), 'user')
             ->get('/admin/amial/kyc')->assertOk()
-            ->assertSee('unified-verification-center');
+            ->assertSee('unified-verification-center')
+            ->assertSee('مركز التحقق والتوثيق الموحد');
     }
 
     public function reorganising_did_not_drop_a_critical_panel(): void

@@ -151,13 +151,9 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
-    // قيمة توافقية لمسارات قديمة. مصدر الحكم الفعلي هو amial.otp:
-    // الرمز ثابت لأرقام العرض المسجّلة فقط، ولا قيمة افتراضية له في
-    // production. لا تُستخدم هذه القيمة لقبول رقم حقيقي.
-    'amial_demo_otp' => env(
-        'AMIAL_DEMO_OTP',
-        env('APP_ENV', 'production') === 'production' ? '' : '123456',
-    ),
+    // قيمة توافقية لمسارات قديمة. مصدر الحكم الفعلي هو amial.otp.
+    // لا رمز عرض افتراضياً في الشيفرة العامة؛ تضبطه بيئة التجربة صراحةً.
+    'amial_demo_otp' => env('AMIAL_DEMO_OTP', ''),
 
     // AMIAL-TRANSFER-COOLDOWN: نافذة التراجع عن التحويل بالثواني.
     // 60 افتراضياً؛ اضبط AMIAL_TRANSFER_COOLDOWN=15 مثلاً لتجربة أسرع.

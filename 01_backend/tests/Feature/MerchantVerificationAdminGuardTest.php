@@ -98,6 +98,10 @@ class MerchantVerificationAdminGuardTest extends TestCase
             'commercial_register_number' => 'CR-4455',
             'city' => 'عدن',
             'contact_phone' => '967771234567',
+            'id_card_front_path' => 'merchant_verifications/test/id-front.jpg',
+            'id_card_back_path' => 'merchant_verifications/test/id-back.jpg',
+            'commercial_register_path' => 'merchant_verifications/test/commercial-register.jpg',
+            'store_photo_path' => 'merchant_verifications/test/store.jpg',
             'status' => 'pending_review',
             'zone_code' => 'SOUTH',
         ]);
@@ -145,6 +149,22 @@ class MerchantVerificationAdminGuardTest extends TestCase
     }
 
     /** @test */
+    public function a_merchant_without_a_business_file_is_explicitly_marked_not_submitted(): void
+    {
+        $merchant = $this->merchant();
+
+        // التسجيل ينشئ حساب التاجر وملفه، لكنه لا يساوي «طلب توثيق
+        // منشأة». إخفاء البطاقة كلّها يجعل المراجع يبحث عن زر اعتماد لا
+        // يمكن أن يظهر، بينما المطلوب من التاجر هو إرسال الملف أولاً.
+        $body = $this->actingAs($this->admin([]), 'user')
+            ->getJson(route('admin.amial.kyc.center.account', $merchant->id))
+            ->assertOk()->json('data');
+
+        $this->assertSame('not_submitted', $body['merchant_verification']['status']);
+        $this->assertFalse($body['merchant_verification']['can_decide']);
+    }
+
+    /** @test */
     public function the_screen_says_the_owner_identity_is_still_unverified(): void
     {
         $merchant = $this->merchant();
@@ -178,6 +198,21 @@ class MerchantVerificationAdminGuardTest extends TestCase
             'قيل إنّ الهويّةَ وُثِّقت باعتماد النشاط — وسجلُّ المتجر لا '
             .'يثبت هويّةَ صاحبه');
         $this->assertSame(0, (int) $merchant->fresh()->is_kyc_verified);
+    }
+
+    /** @test */
+    public function an_incomplete_business_file_cannot_be_approved_even_if_it_was_created_outside_submission(): void
+    {
+        $merchant = $this->merchant();
+        $req = $this->request($merchant);
+        $req->update(['store_photo_path' => null]);
+
+        $this->actingAs($this->admin([]), 'user')
+            ->postJson(route('admin.amial.merchants.verification.approve', $req->id))
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'يلزم استكمال: صورة نقطة البيع');
+
+        $this->assertSame('pending_review', $req->fresh()->status);
     }
 
     /** @test */

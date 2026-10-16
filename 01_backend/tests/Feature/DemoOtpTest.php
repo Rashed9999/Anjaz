@@ -30,6 +30,13 @@ class DemoOtpTest extends TestCase
             ['key' => 'phone_verification'],
             ['value' => 1]
         );
+        config([
+            'app.amial_demo_otp' => '123456',
+            'amial.otp.demo_code' => '123456',
+            'amial.otp.demo_numbers' => [$this->phone()],
+            'amial.otp.pilot_customer_phone_enabled' => false,
+        ]);
+        \App\Services\Otp\OtpPolicy::forget();
     }
 
     /**
@@ -68,10 +75,10 @@ class DemoOtpTest extends TestCase
         ];
     }
 
-    public function test_config_key_exists_and_defaults_to_the_documented_value(): void
+    public function test_demo_configuration_is_explicit_in_the_test_fixture(): void
     {
-        // العطل الأصلي بعينه: بلا قيمة افتراضية ⇒ null ⇒ الالتفاف ميّت.
-        $this->assertNotNull(config('app.amial_demo_otp'));
+        // لا يقبل الإنتاج رمزاً من قيمة افتراضية عامة؛ الاختبار هو من يصرّح
+        // بمسار العرض الذي يقيسه.
         $this->assertSame('123456', config('app.amial_demo_otp'));
     }
 

@@ -124,7 +124,20 @@ class MerchantVerificationService
             throw new RuntimeException('الطلب ليس بانتظار مراجعة');
         }
 
-        return DB::transaction(function () use ($request, $adminId, $tier) {
+        $merchant = User::find($request->merchant_user_id);
+        if (!$merchant) {
+            throw new RuntimeException('حساب التاجر غير موجود');
+        }
+
+        // الاعتماد آخر خط دفاع، لا واجهة فقط. قد تُنشأ طلبات قديمة أو
+        // مستوردة خارج submit()؛ لا يجوز أن تتجاوز متطلبات قطاعها.
+        try {
+            $this->assertRequiredDocuments($merchant, $request, []);
+        } catch (InvalidArgumentException $e) {
+            throw new RuntimeException($e->getMessage(), 0, $e);
+        }
+
+        return DB::transaction(function () use ($request, $adminId, $tier, $merchant) {
             $request->update([
                 'status' => 'verified',
                 'reviewed_by_admin_id' => $adminId,
@@ -141,7 +154,6 @@ class MerchantVerificationService
             }
 
             // إشعار التاجر
-            $merchant = User::find($request->merchant_user_id);
             if ($merchant) {
                 // ══════════════════════════════════════════════════════
                 // AMIAL-KYC-EVIDENCE-001 — **وثيقةُ النشاط لا توثّق الشخص.**

@@ -31,6 +31,7 @@ import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart
 import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
 import 'package:amial_pay/features/barcode/screens/continuous_scanner_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
+import 'package:amial_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
 
 /// CRITICAL-001 (Phase 2) — شاشات Home متمايزة.
 ///
@@ -104,6 +105,16 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
             ),
           ),
 
+          const SizedBox(height: 14),
+          // لا يملك تاجر البيع السريع لوحة التاجر العامة؛ لهذا يكون باب
+          // إرسال ملف المنشأة هنا، للمالك فقط وليس للكاشير.
+          AccessGate(ownerOnly: true, child: _BigActionButton(
+            icon: Icons.verified_user_outlined,
+            label: 'ملف اعتماد المتجر'.tr,
+            subtitle: 'أرسل ملف المنشأة لمراجعته'.tr,
+            color: AmialColors.primary,
+            onTap: () => Get.to(() => const MerchantVerificationScreen()),
+          )),
           const SizedBox(height: 14),
           AccessGate(feature: 'debts', child: _BigActionButton(
             icon: Icons.receipt_long,

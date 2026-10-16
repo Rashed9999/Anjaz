@@ -691,9 +691,8 @@ class AdminHubController extends Controller
                 // ملف أميال: النشاط يفتح لوحة القطاع، والباقة تفتح الميزات
                 MerchantProfile::firstOrCreate(['user_id' => $user->id], [
                     'business_type' => $request->input('business_type') ?: \App\Support\Access\AccessConstants::BIZ_RETAIL,
-                    // AMIAL-ADMIN-KYC-001: ملف التاجر يتبع حالة الحساب — بانتظار
-                    // المراجعة لا موثّقاً. يرفعه kycStatus عند الاعتماد.
-                    'verification_status' => 'pending_review',
+                    // لا يصبح الملف قيد المراجعة إلا بعد تقديم طلب ومستندات.
+                    'verification_status' => 'unverified',
                     'verified_at' => null,
                     'zone_code' => 'SOUTH',
                     'subscription_plan' => $request->input('plan') ?: \App\Support\Access\AccessConstants::PLAN_FREE,

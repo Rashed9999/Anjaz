@@ -74,7 +74,7 @@ class RegistrationRolesTest extends TestCase
         $this->assertSame($resp['merchant_number'], $store->merchant_number);
 
         $profile = MerchantProfile::where('user_id', $user->id)->first();
-        $this->assertSame('pending_review', $profile->verification_status);
+        $this->assertSame('unverified', $profile->verification_status);
         $this->assertSame('pharmacy', $profile->business_type);
     }
 
@@ -126,7 +126,7 @@ class RegistrationRolesTest extends TestCase
 
             $this->assertSame($sector, $profile->business_type,
                 "تغيّر القطاع المختار أثناء التسجيل: {$sector}");
-            $this->assertSame('pending_review', $profile->verification_status);
+            $this->assertSame('unverified', $profile->verification_status);
             $this->assertNotEmpty($response['merchant_number'] ?? null);
 
             $access = app(\App\Services\FeatureAccessService::class)->accessFor($user->fresh());
@@ -195,7 +195,7 @@ class RegistrationRolesTest extends TestCase
             ->postJson("/admin/amial/hub/users/{$merchant->id}/kyc", ['status' => 1])
             ->assertOk();
         $this->assertSame(1, (int) $merchant->fresh()->is_kyc_verified);
-        $this->assertSame('pending_review',
+        $this->assertSame('unverified',
             MerchantProfile::where('user_id', $merchant->id)->value('verification_status'));
 
         // وبعدها يدخل من التطبيق برقم تاجره ويستخدم تشغيل قطاعه غير المالي.

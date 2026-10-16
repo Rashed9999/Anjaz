@@ -93,7 +93,7 @@ class AdminCreatedAccountReviewTest extends TestCase
 
         $profile = MerchantProfile::where('user_id', $user->id)->first();
         $this->assertNotNull($profile);
-        $this->assertSame('pending_review', $profile->verification_status);
+        $this->assertSame('unverified', $profile->verification_status);
         $this->assertNull($profile->verified_at);
     }
 

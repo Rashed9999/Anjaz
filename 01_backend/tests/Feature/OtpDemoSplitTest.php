@@ -35,8 +35,13 @@ class OtpDemoSplitTest extends TestCase
     {
         parent::setUp();
 
-        // هذا الصنف يختبر فصل «أرقام العرض» القديم بعد إيقاف Pilot العام.
-        config(['amial.otp.pilot_customer_phone_enabled' => false]);
+        // هذا الصنف يختبر مسار العرض صراحةً؛ لا يعتمد على أي قيمة افتراضية
+        // قابلة للاستخدام في الشيفرة العامة.
+        config([
+            'amial.otp.demo_code' => '123456',
+            'amial.otp.demo_numbers' => [self::DEMO_PHONE],
+            'amial.otp.pilot_customer_phone_enabled' => false,
+        ]);
     }
 
     private function policy(): OtpPolicy

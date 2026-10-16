@@ -115,7 +115,7 @@ class MerchantWebRegistrationJourneyTest extends TestCase
             $this->assertSame(A::ROLE_MERCHANT, (string) $user->role);
             $this->assertSame(1, (int) $user->is_email_verified);
             $this->assertSame($sector, (string) $profile->business_type);
-            $this->assertSame('pending_review', (string) $profile->verification_status);
+            $this->assertSame('unverified', (string) $profile->verification_status);
             $this->assertNotEmpty($store->merchant_number);
         }
     }

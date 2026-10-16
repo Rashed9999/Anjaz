@@ -56,7 +56,14 @@
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-daily" id="daily-tab-link">🌙 إقفال اليوم</a></li>
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-settlement" id="settlement-tab-link">⚖️ التوازن والتسوية</a></li>
         @endif
-        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-kyc" id="kyc-tab-link">طلبات التوثيق</a></li>
+        @php
+            $verificationRole = match ($hubSlug) {
+                'merchants' => 'merchant',
+                'agents' => 'agent',
+                default => 'customer',
+            };
+        @endphp
+        <li class="nav-item"><a class="nav-link" href="{{ route('admin.amial.kyc.page', ['role' => $verificationRole]) }}" id="kyc-unified-center-link">🛡️ مركز التحقق والتوثيق الموحد</a></li>
     </ul>
 
     <div class="tab-content">
@@ -98,12 +105,6 @@
             @include('admin-views.amial.hub._agent_tabs')
         @endif
 
-        {{-- ===== تبويب التوثيق ===== --}}
-        <div class="tab-pane fade" id="tab-kyc">
-            <div id="kyc-cards" class="row g-3">
-                <div class="col-12 text-muted">جارٍ التحميل…</div>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -985,56 +986,6 @@
     });
     document.getElementById('prev-page').addEventListener('click', () => { if (page > 1) { page--; loadUsers(); } });
     document.getElementById('next-page').addEventListener('click', () => { if (page < lastPage) { page++; loadUsers(); } });
-
-    // ===== تبويب التوثيق =====
-    async function loadKyc() {
-        const wrap = document.getElementById('kyc-cards');
-        wrap.innerHTML = '<div class="col-12 text-muted">جارٍ التحميل…</div>';
-        const r = await fetch(`${base}/${slug}/kyc.json`, {headers: {'Accept': 'application/json'}});
-        const j = await r.json();
-        if (!j.data.length) {
-            wrap.innerHTML = '<div class="col-12 text-muted">لا طلبات توثيق معلّقة 🎉</div>';
-            return;
-        }
-        wrap.innerHTML = j.data.map(u => `
-            <div class="col-md-6 col-lg-4"><div class="card stat-card h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <strong>${esc(u.name)}</strong>
-                        <span class="text-muted small" dir="ltr">${esc(u.phone)}</span>
-                    </div>
-                    <div class="small text-muted mb-2">${esc(u.id_type ?? '')} ${esc(u.id_number ?? '')}</div>
-                    <div class="d-flex gap-2 flex-wrap mb-3">
-                        ${(u.documents || []).map(d =>
-                            `<a href="${esc(d)}" target="_blank"><img src="${esc(d)}" style="height:70px;border-radius:6px;border:1px solid #ddd"></a>`
-                        ).join('') || '<span class="text-muted small">لا صور</span>'}
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-success flex-fill" data-kyc="1" data-id="${u.id}">اعتماد</button>
-                        <button class="btn btn-sm btn-outline-danger flex-fill" data-kyc="2" data-id="${u.id}">رفض</button>
-                    </div>
-                </div>
-            </div></div>`).join('');
-    }
-
-    document.getElementById('kyc-cards').addEventListener('click', async (e) => {
-        const btn = e.target.closest('button[data-kyc]');
-        if (!btn) return;
-        try {
-            const status = Number(btn.dataset.kyc);
-            const reason = status === 2
-                ? prompt('سبب رفض الوثائق (سيظهر للعميل ويُسجّل في التدقيق):')
-                : null;
-            if (status === 2 && (!reason || reason.trim().length < 5)) {
-                alert('سبب رفض واضح مطلوب (5 أحرف على الأقل)'); return;
-            }
-            const j = await post(`${base}/users/${btn.dataset.id}/kyc`, {status, reason});
-            alert(j.message); loadKyc(); loadUsers();
-        } catch (err) { alert(err.message); }
-    });
-
-    document.getElementById('kyc-tab-link').addEventListener('shown.bs.tab', loadKyc);
-    document.getElementById('kyc-tab-link').addEventListener('click', () => setTimeout(loadKyc, 200));
 
     // AMIAL-CUSTOMER-CREATE-DOOR-002 — الصفحة القديمة لم تعد باب إدارة عميل.
     // يبقى نموذج فتح الحساب نفسه مؤقتاً، ويُفتح مباشرةً من مركز العملاء

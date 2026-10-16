@@ -51,7 +51,6 @@
                 // الرابط هو ما يُريه المدير العنوان ليمرّره لها.
                 ['🏦 بوّابة الوكيل (شركات الصرافة)', route('agent.login'), null, '_blank'],
                 ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), 'platform.customers.view'],
-                ['✅ توثيق التجّار', route('admin.amial.merchants.verification.page'), 'platform.merchants.compliance'],
                 ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.view'],
             ],
         ],
@@ -88,8 +87,9 @@
             'icon' => '🛡️',
             'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*', 'admin/amial/saher*'],
             'links' => [
-                // قرار التحقق الموحّد يشمل العملاء والتجار والوكلاء؛ ليس قائمة عميل مكررة.
-                ['🛡️ مركز التحقق والهوية', route('admin.amial.kyc.page'), 'platform.customers.kyc.view'],
+                // نقطة القرار الوحيدة: هوية صاحب الحساب، السكن، ومستندات المنشأة
+                // تُراجع من ملف واحد. لا يوجد رابط «توثيق تجار» موازٍ يكرر القرار.
+                ['🛡️ مركز التحقق والتوثيق الموحد', route('admin.amial.kyc.page'), 'platform.customers.kyc.view'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.aml.investigate'],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), 'platform.audit.view'],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],
