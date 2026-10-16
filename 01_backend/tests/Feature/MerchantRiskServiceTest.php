@@ -71,6 +71,27 @@ class MerchantRiskServiceTest extends TestCase
     }
 
     /** @test */
+    public function merchant_is_blocked_when_monthly_receive_limit_would_be_exceeded()
+    {
+        $m = $this->makeMerchant('small', [
+            'single_receive_limit' => '1000',
+            'daily_receive_limit' => '5000',
+            'monthly_receive_limit' => '1000',
+        ]);
+        DB::table('transactions')->insert([
+            'transaction_id' => 'MONTH-LIMIT-1',
+            'user_id' => $m->id, 'from_user_id' => 991, 'to_user_id' => $m->id,
+            'transaction_type' => 1, 'amount' => 900,
+            'debit' => 0, 'credit' => 900, 'balance' => 900,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('حد الاستلام الشهري');
+        $this->service->assertReceiveAllowed($m->id, '200');
+    }
+
+    /** @test */
     public function merchant_without_profile_treated_as_micro()
     {
         $m = User::factory()->create(['type' => 3]);

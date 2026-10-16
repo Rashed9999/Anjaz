@@ -8,6 +8,7 @@ use App\Models\MerchantProfile;
 use App\Models\MerchantRefund;
 use App\Models\User;
 use App\Services\CashierService;
+use App\Services\CashierShiftService;
 use App\Services\MerchantSaleRefundService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -89,6 +90,8 @@ class RefundLedgerTruthTest extends TestCase
     /** بيعٌ ثمّ مرتجعٌ إلى المحفظة. */
     private function walletRefund(string $amount = '2000'): MerchantRefund
     {
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TX-LEDGER-TRUTH', '5000');
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '5000',
@@ -228,6 +231,8 @@ class RefundLedgerTruthTest extends TestCase
      */
     public function a_cash_refund_does_not_pretend_to_have_a_ledger_entry(): void
     {
+        app(CashierShiftService::class)->open($this->merchant, null, '0');
+
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant, total: '5000', paymentMethod: 'cash',
             items: [['name' => 'منتج', 'qty' => 1, 'price' => '5000']],
@@ -277,8 +282,11 @@ class RefundLedgerTruthTest extends TestCase
         $this->instance(\App\Services\LedgerService::class, new class extends \App\Services\LedgerService {
             public function __construct() {}
 
-            public function getOrCreateUserWallet(int $userId, string $zoneCode = 'SOUTH'): \App\Models\Ledger\LedgerAccount
-            {
+            public function getOrCreateUserWallet(
+                int $userId,
+                string $zoneCode = 'SOUTH',
+                string $currency = \App\Support\Money\Currencies::BASE,
+            ): \App\Models\Ledger\LedgerAccount {
                 return new \App\Models\Ledger\LedgerAccount(['account_code' => "WALLET:{$userId}"]);
             }
 

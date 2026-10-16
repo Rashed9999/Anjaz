@@ -65,7 +65,7 @@ class SaleLineService
     }
 
     /** تطبيعُ قائمةٍ كاملة — وتُسقَط الأسطرُ التي لا كمّيّةَ لها. */
-    public function normalizeAll(array $items): array
+    private function normalizeAll(array $items): array
     {
         $out = [];
         foreach ($items as $raw) {

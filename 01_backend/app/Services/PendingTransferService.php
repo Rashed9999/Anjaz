@@ -36,6 +36,7 @@ class PendingTransferService
         private readonly TransactionPinService $pinService,
         private readonly AuditService $audit,
         private readonly ReceiptService $receipts,
+        private readonly KycTierService $kyc,
     ) {}
 
     /**
@@ -68,6 +69,11 @@ class PendingTransferService
             throw new RuntimeException('المبلغ يجب أن يكون موجباً');
         }
 
+        // Tier 0 لا يفتح حجزاً مالياً، وTier 1 يستطيع التحويل الأساسي فقط.
+        // الطرف المستلم الفردي يمر من حد الاستقبال نفسه قبل أي خصم.
+        $this->kyc->assertIndividualTransactionAllowed($sender, $amount, 'send_money');
+        $this->kyc->assertIndividualCanReceive($recipient, $amount);
+
         // 2) تحويل المحافظ حركة دفتر داخليّة. ZonePolicyService هو مصدر
         // السياسة: كل منطقة معلومة مسموحة هنا، بينما SOUTH خاص بالنقد الذي
         // يعبر حدّ التشغيل. استخدام enforceFinancialPolicy هنا كان يعيد
@@ -80,12 +86,12 @@ class PendingTransferService
         if (!$recipientPolicy['allowed']) {
             throw new RuntimeException($this->ledgerPolicyMessage($recipientPolicy, 'التحويل إلى هذا الحساب'));
         }
-        if ((int) ($recipient->is_kyc_verified ?? 0) !== 1) {
+        if (!$this->kyc->isIndividualCustomer($recipient)
+            && (int) ($recipient->is_kyc_verified ?? 0) !== 1) {
             throw new RuntimeException('لا يمكن التحويل إلى حساب لم يُعتمد بعد');
         }
         $this->enforceSanction($sender);
         $this->enforceSanction($recipient);
-        $this->enforceKycTier($sender, 'send_money', $amount);
 
         // 3) تأكيد PIN (مطلوب لكل تحويل — AMIAL-PIN-ALL-001)
         if (!$this->pinService->verify($sender, $pin)) {
@@ -224,9 +230,21 @@ class PendingTransferService
 
             // تأكد أن المستلم ما زال مؤهلاً (قد يكون حُظر خلال النافذة)
             $recipient = User::find($locked->recipient_user_id);
-            if (!$recipient || (int) ($recipient->is_kyc_verified ?? 0) !== 1
-                || in_array(($recipient->zone_code ?? 'UNKNOWN'), ['', 'UNKNOWN'], true)
-                || ($recipient->sanction_status ?? 'clear') === 'blocked') {
+            $recipientEligible = $recipient
+                && in_array(($recipient->zone_code ?? 'UNKNOWN'), ['', 'UNKNOWN'], true) === false
+                && ($recipient->sanction_status ?? 'clear') !== 'blocked';
+
+            if ($recipientEligible && $this->kyc->isIndividualCustomer($recipient)) {
+                try {
+                    $this->kyc->assertIndividualCanReceive($recipient, (string) $locked->amount);
+                } catch (RuntimeException) {
+                    $recipientEligible = false;
+                }
+            } elseif ($recipientEligible && (int) ($recipient->is_kyc_verified ?? 0) !== 1) {
+                $recipientEligible = false;
+            }
+
+            if (!$recipientEligible) {
                 // المستلم لم يعد مؤهلاً → استرداد للمرسل
                 $this->guard->credit($locked->sender_user_id, (string)$locked->total_debited,
                     "pending_transfer_failed:{$locked->transfer_ulid}");
@@ -239,6 +257,11 @@ class PendingTransferService
 
             // تسليم المبلغ للمستلم (الرسوم تذهب للمنصة، تبقى محجوزة)
             $releaseTxId = (string) Str::ulid();
+
+            // اربط الحجز بالمعاملة قبل إنشاء صفوف Transaction؛ حارس دوران
+            // العميل سيعتمد مصدر pending-transfer نفسه بدلاً من عدّ الصفوف
+            // النهائية مرةً ثانية عند التسليم.
+            $locked->update(['release_transaction_id' => $releaseTxId]);
             $receiverWallet = $this->guard->credit($locked->recipient_user_id, (string)$locked->amount,
                 "pending_transfer_release:{$locked->transfer_ulid}");
 

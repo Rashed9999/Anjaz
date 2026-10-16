@@ -228,6 +228,30 @@ class DeploymentGateGuardTest extends TestCase
             'البوّابةُ لا تبني `Dockerfile.prod` — والملفّان يتباعدان بلا حارس');
     }
 
+    /**
+     * موقع الويب منتجٌ مستقل عن تطبيق Flutter. فاختبار ترجمة أو واجهة في
+     * الجوال لا يجوز أن يمنع نشر إصلاح باكند اجتاز اختبارات الباكند وبناء
+     * صورة Docker؛ وإلا يبقى الموقع متوقفاً بسبب عدّاد نصوص في التطبيق.
+     */
+    public function website_deploy_is_not_blocked_by_mobile_tests(): void
+    {
+        $yml = $this->workflow();
+
+        if (! preg_match('/^  deploy:\s*$(.*?)(?=^  \w|\z)/ms', $yml, $m)) {
+            $this->fail('وظيفة نشر Coolify غير موجودة في البوابة');
+        }
+
+        $job = (string) preg_replace('/^\s*#.*$/m', '', $m[1]);
+
+        $this->assertDoesNotMatchRegularExpression('/needs:\s*\[[^\]]*\bflutter\b[^\]]*\]/', $job,
+            'نشر الموقع ينتظر اختبار Flutter — فتعطل تطبيق الجوال يمنع إصلاح موقع الويب');
+
+        foreach (['structural', 'backend', 'docker'] as $required) {
+            $this->assertMatchesRegularExpression('/needs:\s*\[[^\]]*\b' . preg_quote($required, '/') . '\b[^\]]*\]/', $job,
+                "نشر الموقع لا ينتظر «{$required}» — سيُنشر ما لم يُفحص");
+        }
+    }
+
     // ══════════════════════════════════════════════════════════════════
     //  حاجزُ APP_DEBUG — **في الملفّ المنشور، ومُجرَّبٌ بالتشغيل لا بالقراءة**
     // ══════════════════════════════════════════════════════════════════
@@ -399,7 +423,7 @@ class DeploymentGateGuardTest extends TestCase
 
         // بيئةُ الديمو المحلّيّة: debug مفتوحٌ عن قصدٍ ومصرَّحٌ به.
         $this->assertSame(0, $this->runDebugGuard(
-            ['APP_DEBUG' => 'true', 'AMIAL_ALLOW_DEBUG' => 'true']),
+            ['APP_DEBUG' => 'true', 'APP_ENV' => 'local', 'AMIAL_ALLOW_DEBUG' => 'true']),
             'منفذُ AMIAL_ALLOW_DEBUG لا يعمل — فتنكسر بيئةُ التطوير المحلّيّة');
     }
 

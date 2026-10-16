@@ -18,9 +18,8 @@ class FaqScreen extends StatefulWidget {
 
 }
 
-class _FaqScreenState extends State<FaqScreen>  with SingleTickerProviderStateMixin  {
+class _FaqScreenState extends State<FaqScreen> {
   AutoScrollController? menuScrollController;
-  TabController? tabController;
   FaqController controller   = Get.find();
 
   @override
@@ -35,13 +34,14 @@ class _FaqScreenState extends State<FaqScreen>  with SingleTickerProviderStateMi
       viewportBoundaryGetter: () => Rect.fromLTRB(0, 0, 0, MediaQuery.of(context).padding.bottom),
       axis: Axis.horizontal,
     );
-    menuScrollController!.scrollToIndex(0, preferPosition: AutoScrollPosition.middle);
-    menuScrollController!.highlight(0);
-
-    Get.find<FaqController>().getFaqCategoryList(false, isUpdate: false).then((value){
-      tabController = TabController(length: Get.find<FaqController>().faqCategoryList?.length ?? 0, vsync: this);
-    });
+    Get.find<FaqController>().getFaqCategoryList(false, isUpdate: false);
     Get.find<FaqController>().getFaqList(1, isFirst: true, reload: true);
+  }
+
+  @override
+  void dispose() {
+    menuScrollController?.dispose();
+    super.dispose();
   }
 
   @override
@@ -99,7 +99,28 @@ class _FaqScreenState extends State<FaqScreen>  with SingleTickerProviderStateMi
             ),
           ): const SizedBox(),
 
-          faqController.helpTopics == null ?  const Expanded(child: FaqShimmer())  : Expanded(
+          faqController.helpTopics == null ?  const Expanded(child: FaqShimmer()) :
+          faqController.loadFailed ? Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.wifi_off_rounded, size: 42, color: AmialColors.textMuted),
+                    const SizedBox(height: 12),
+                    const Text('تعذر تحميل الأسئلة الشائعة الآن.', textAlign: TextAlign.center),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: _loadData,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('إعادة المحاولة'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ) : Expanded(
             child: faqController.helpTopics !=null && faqController.helpTopics!.isNotEmpty ? Column( children: [
               Expanded(
                 child: ListView.builder(

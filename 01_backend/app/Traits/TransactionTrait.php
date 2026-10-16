@@ -146,6 +146,34 @@ trait TransactionTrait
     }
 
     /**
+     * طبقة KYC الخاصة بالعميل الفردي فوق الحارس المالي العام.
+     *
+     * لا نضعها داخل assertFinancialEligibility لأن تلك الدالة تُستعمل أيضاً
+     * للتاجر والوكيل وموظفي POS والإدارة، وهذه الأدوار ليست ضمن Tier 0..3.
+     */
+    protected function assertIndividualCustomerTransactionAllowed(
+        int $userId,
+        string $amount,
+        string $feature,
+    ): void {
+        $user = User::find($userId);
+        if ($user) {
+            app(\App\Services\KycTierService::class)
+                ->assertIndividualTransactionAllowed($user, $amount, $feature);
+        }
+    }
+
+    /** يمنع إدخال أصل حركة واردة إلى عميل غير مؤهل أو متجاوز لحده. */
+    protected function assertIndividualCustomerCanReceive(int $userId, string $amount): void
+    {
+        $user = User::find($userId);
+        if ($user) {
+            app(\App\Services\KycTierService::class)
+                ->assertIndividualCanReceive($user, $amount);
+        }
+    }
+
+    /**
      * AMIAL-AML-001 (وُصِّل في AMIAL-AUDIT-FIX-001) — فحص مكافحة غسل الأموال.
      *
      * يُستدعى قبل فتح معاملة المال (pre-flight) لا داخلها: هكذا لو صدر
@@ -313,10 +341,44 @@ trait TransactionTrait
         $charge = MoneyService::normalize($charge);
         $total = MoneyService::add($amount, $charge);
 
+        // Tier 0 لا يحرّك مالاً؛ Tier 1 يملك التحويل الأساسي فقط. نضع
+        // الحارس في القلب حتى لا يلتف أي controller أو job جديد على الواجهة.
+        $this->assertIndividualCustomerTransactionAllowed($from_user_id, $amount, 'send_money');
+        $this->assertIndividualCustomerCanReceive($to_user_id, $amount);
+
         // AMIAL-ZONE-001 hotfix (v0.7-A.1): فحص zone + security hold في بداية كل عملية
         // هذا defense-in-depth — الـ middleware amial.zone يجب أن يلتقطها أولاً،
         // لكن لو الـ controller استدعى الـ method مباشرة (مثل من admin panel)، فحص هنا يحميها.
         $this->assertFinancialEligibility($from_user_id);
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-TRANSFER-KIND-001 — **والمستلِمُ يُسأل عن نوعه هنا أيضاً.**
+        //
+        // كُشف بالاستعمال أنّ التحويلَ الفرديَّ يبلغ **حسابَ وكيل**، فلا
+        // رسمَ ولا عمولةَ ولا قيدَ سحبٍ ولا حدَّ يوميّ — ويرتفع فلوتُ
+        // الوكيل بلا مقابلٍ في الخزانة، **فيظهر في التسوية فائضٌ لا يزول**.
+        //
+        // **والفحصُ في موضعين عمداً** — كما `assertFinancialEligibility`
+        // أعلاه بالحرف: الوسيطُ وشاشةُ التحقّق يمسكانها أوّلاً، **لكنّ
+        // من ينادي هذه الدالّةَ مباشرةً** (لوحةُ إدارةٍ · أمرٌ · مسارٌ
+        // يُضاف غداً) يتجاوزهما. وبابٌ يُغلَق وأخوه مفتوحٌ ليس مغلقاً.
+        //
+        // **وشبّاكُ الوكيل لا يمرّ من هنا** — قِيس: له
+        // `cash_in_transaction` و`accept_withdraw_transaction`، ولهما
+        // قيودُهما وعمولاتُهما. فالمنعُ لا يمسّ عمليّةً مشروعةً واحدة.
+        // ══════════════════════════════════════════════════════════════
+        $kinds = app(\App\Services\RecipientVerificationService::class);
+
+        if (($recipient = User::find($to_user_id)) !== null) {
+            $kinds->assertReceivableKind($recipient);
+        }
+
+        // **ومن الطرفين.** وكيلٌ يُرسل إلى عميلٍ = إيداعٌ نقديٌّ بلا قيدِ
+        // إيداع: نقدٌ قُبض ولم يدخل النظام، فتضيع العمولةُ والحدُّ والأثر
+        // وينقص الفعليُّ في التسوية بلا سبب. وهو الوجهُ الآخرُ للثقب.
+        if (($sender = User::find($from_user_id)) !== null) {
+            $kinds->assertSendableKind($sender);
+        }
 
         // AMIAL-AML-001: فحص مكافحة غسل الأموال قبل تحريك أي مال (pre-flight).
         $this->screenAml($from_user_id, $to_user_id, SEND_MONEY, $amount);
@@ -324,6 +386,32 @@ trait TransactionTrait
         $txId = DB::transaction(function () use ($from_user_id, $to_user_id, $amount, $charge, $total, $note, $idempotencyKey, $feeMeta) {
             // AMIAL-SCALE-DEADLOCK-001 — قفل بترتيب ثابت قبل أي خصم/إضافة
             $this->guard()->lockWalletsOrdered([$from_user_id, $to_user_id]);
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-MERCHANT-RECEIVE-LIMIT-002 — **وحدُّ التاجر يُفرَض
+            // على التحويل كما يُفرَض على الدفع.**
+            //
+            // سأل صاحبُ المشروع: «هل التاجر يستطيع استقبال تحويلات عادية
+            // دون فواتير؟». وقِيس: **نعم**، ووراءها ثقبٌ لم يكن ظاهراً —
+            // `assertReceiveAllowed` (إيقافُ التاجر تحت المراجعة · حدُّ
+            // العمليّة الواحدة · الحدُّ اليوميّ) مفروضةٌ على
+            // `pay_merchant` وحدَها. **فمن أراد تجاوزَ حدِّ تاجرٍ أرسل
+            // إليه تحويلاً عاديّاً** — والحدُّ يُضبَط في اللوحة ويُعرَض
+            // في مركز ٣٦٠ ولا يعمل على هذا الباب.
+            //
+            // **وحاجزٌ يُعرَض ولا يعمل أسوأ من غيابه** — من رآه ترك
+            // الاحتياط. (القاعدة الثانية.)
+            //
+            // **وموضعُه داخلَ القفل** لأنّ العدَّ اليوميَّ يقرأ مجموعَ ما
+            // استُلم: تحويلان متزامنان يقرآن المجموعَ نفسَه فيمرّان معاً.
+            //
+            // **ولا يمسّ التحويلَ بين الأفراد**: الشرطُ أن يكون المستلِمُ
+            // تاجراً — وهو من له حدٌّ أصلاً.
+            // ══════════════════════════════════════════════════════════
+            if ((int) (User::find($to_user_id)?->type ?? CUSTOMER_TYPE) === MERCHANT_TYPE) {
+                app(\App\Services\MerchantRiskService::class)
+                    ->assertReceiveAllowed($to_user_id, $amount);
+            }
 
             // 1) خصم المرسل (مع lock + فحص رصيد) — يرمي InsufficientBalanceException لو لم يكف
             $senderWallet = $this->guard()->debit(
@@ -482,6 +570,10 @@ trait TransactionTrait
         if ($txId) {
             // AMIAL-MERCHANT-RISK-001 (v2.10): مراقبة المستلم إن كان تاجراً (خلفية)
             $this->maybeAnalyzeMerchantRisk($to_user_id, $from_user_id, $amount);
+
+            // AMIAL-MERCHANT-RISK-002: والمرسِلُ كذلك — بلا هذا لا يشتعل
+            // نمطُ pass-through أبداً. المخرجُ الأوّل من ثلاثة.
+            $this->maybeRecordMerchantTransferOut($from_user_id, $amount);
         }
 
         return $txId;
@@ -500,6 +592,51 @@ trait TransactionTrait
             }
         } catch (\Throwable $e) {
             \Log::warning('Merchant risk dispatch failed', ['err' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * AMIAL-MERCHANT-RISK-002 — **الطرفُ الآخر من طبقة المخاطر.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **العطلُ الذي أغلقه هذا:** `analyzeReceived` تحسب أقوى مؤشّرات
+     * الغسيل — نمطَ pass-through (استلامٌ ثمّ تحويلٌ فوريّ، ‎+٣٥ نقطة) —
+     * من `passThroughRatio()`، وهي تقسم `total_transferred_out` على
+     * المستلَم. **و`recordTransferOut` هي الكاتبُ الوحيدُ لذلك العمود،
+     * ولم يكن يناديها أحد.**
+     *
+     * فالعمودُ صفرٌ أبداً ⇒ النسبةُ صفرٌ أبداً ⇒ **النمطُ الثالثُ لا
+     * يمكن أن يشتعل بحالٍ من الأحوال**. حاجزٌ مبنيٌّ ومُختبَرٌ وعاجزٌ
+     * بنيويّاً عن العمل، ولا سطرَ خطأٍ في أيّ سجلّ.
+     *
+     * **وأخطرُ من ذلك أنّ الرقمَ يُعرَض.** لوحةُ مخاطر التجّار تكتب
+     * `pass_through_ratio: 0.0%` لكلّ تاجر — رقمٌ يبدو مقيساً ولم
+     * يُقَس قطّ. فمن يقرأ «صفر بالمئة» يفهم «فُحص فلم يوجد»، والحقيقةُ
+     * «لم يُعَدّ شيءٌ أصلاً». (القاعدةُ السابعة.)
+     *
+     * **وطبقةٌ باتّجاهٍ واحدٍ ليست مراقبة.** كانت تراقب المستلمَ إن كان
+     * تاجراً ولا تراقب المرسِل — وهو شكلُ القاعدة العاشرة نفسِه.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **وثلاثةُ مخارجَ لا مخرجٌ واحد** (القاعدةُ الرابعة): التحويلُ
+     * للنظير، والصرفُ النقديُّ عند الوكيل، والسحبُ الذي تقرّه الإدارة.
+     * ومخرجٌ منسيٌّ يجعل النسبةَ أقلَّ من حقيقتها — **وحاجزٌ يقرأ أقلَّ
+     * من الواقع يمرّر ما بُني ليمسكه.**
+     *
+     * **ولا يُسقِط العمليّةَ الماليّة.** رميٌ هنا يمنع تحويلاً سليماً؛
+     * والرصدُ لا يُسقط ما يرصده.
+     */
+    protected function maybeRecordMerchantTransferOut(int $fromUserId, string $amount): void
+    {
+        try {
+            $sender = User::find($fromUserId);
+
+            if ($sender && (int) $sender->type === 3) { // 3 = merchant
+                app(\App\Services\MerchantRiskService::class)
+                    ->recordTransferOut($fromUserId, $amount);
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Merchant transfer-out record failed', ['err' => $e->getMessage()]);
         }
     }
 
@@ -577,6 +714,8 @@ trait TransactionTrait
         $amount = MoneyService::normalize($amount);
         $charge = MoneyService::normalize($charge);
         $total = MoneyService::add($amount, $charge);
+
+        $this->assertIndividualCustomerTransactionAllowed($from_user_id, $amount, 'cash_out');
 
         // حصة الوكيل: من محرّك الرسوم إن مُرّرت، وإلا fallback للسلوك القديم
         $agentCommission = $agentCommissionOverride !== null
@@ -742,6 +881,11 @@ trait TransactionTrait
                 'fee' => $charge,
                 'zone_code' => 'SOUTH',
             ]);
+
+            // AMIAL-MERCHANT-RISK-002: المخرجُ الثاني — الصرفُ النقديُّ
+            // عند الوكيل. وهو **أوجهُ صور الغسيل**: رصيدٌ يُستلَم
+            // إلكترونيّاً ثمّ يخرج ورقاً.
+            $this->maybeRecordMerchantTransferOut($from_user_id, $amount);
         }
 
         return $cashOutTxId;
@@ -848,7 +992,29 @@ trait TransactionTrait
             array_merge(['applies_to' => 'merchant'], $context)
         );
         $fee = $breakdown['fee'];
-        $net = MoneyService::sub($amount, $fee); // ما يصل للتاجر
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-FEE-MERCHANT-FREE-001 — **المتحمِّلُ يُقرأ ولا يُفترَض.**
+        //
+        // كان هنا `$net = amount - fee` و`debit(amount)` — أي **التاجرُ
+        // يتحمّل الرسمَ دائماً**، مهما قال `bearer` في النسخة.
+        //
+        // و`FeeService` تحسب الطرفين بحسب المتحمّل منذ زمن
+        // (`total_debit` / `net_credit`)، وهذا المسارُ **يتجاهلهما
+        // ويعيد الحساب بيده**. فالبذرةُ تقول `bearer => 'sender'`
+        // («التاجر يستلم المبلغ كاملاً») والشيفرةُ تخصم منه.
+        //
+        // **ولم يعضّ بعدُ لأنّ النسخة مفقودةٌ فالرسمُ صفر** — ويعضّ صامتاً
+        // أوّلَ ما يُسعَّر أحدٌ هذا الرمزَ من اللوحة: يُخصَم من التاجر بلا
+        // أن يقرّر ذلك أحد، وقرارُ صاحب المشروع صريح: **لا رسمَ على
+        // التاجر، الدخلُ من الاشتراكات**.
+        //
+        // فصار المصدرُ واحداً: ما تحسبه `FeeService`.
+        // ══════════════════════════════════════════════════════════════
+        $customerDebit = (string) $breakdown['total_debit'];  // ما يُخصم من العميل
+        $net = (string) $breakdown['net_credit'];             // ما يصل للتاجر
+
+        $this->assertIndividualCustomerTransactionAllowed($customer_user_id, $amount, 'merchant_pay');
 
         $this->assertFinancialEligibility($customer_user_id);
 
@@ -859,6 +1025,7 @@ trait TransactionTrait
 
         $txId = DB::transaction(function () use (
             $customer_user_id, $merchant_user_id, $amount, $fee, $net,
+            $customerDebit,
             $note, $idempotencyKey, $breakdown, $pos_user_id,
             $split_bill_id, $split_participant_id
         ) {
@@ -887,10 +1054,11 @@ trait TransactionTrait
             app(\App\Services\MerchantRiskService::class)
                 ->assertReceiveAllowed($merchant_user_id, $amount);
 
-            // 1) خصم العميل (المبلغ كاملاً — التاجر يتحمّل الرسم)
+            // 1) خصم العميل — بما تقوله النسخةُ لا بما يُفترَض.
+            //    (`bearer=sender` ⇒ المبلغ + الرسم · `receiver` ⇒ المبلغ.)
             $customerWallet = $this->guard()->debit(
                 userId: $customer_user_id,
-                amount: $amount,
+                amount: $customerDebit,
                 reason: 'merchant_payment',
             );
 
@@ -903,7 +1071,10 @@ trait TransactionTrait
                 'debit' => $amount,
                 'credit' => '0',
                 'charge' => $fee,
-                'amount' => $amount,
+                // **والمسجَّلُ ما خرج من المحفظة فعلاً** — لا المبلغَ
+                // قبل الرسم. فرقمٌ في كشفٍ يخالف ما نقص من الرصيد يُرسل
+                // العميلَ إلى الدعم، ولا يوازن الدفترَ إن اختلفا.
+                'amount' => $customerDebit,
                 'balance' => (string)$customerWallet->current_balance,
                 'from_user_id' => $customer_user_id,
                 'to_user_id' => $merchant_user_id,
@@ -1066,6 +1237,10 @@ trait TransactionTrait
     ): ?string {
         $amount = MoneyService::normalize($amount);
 
+        // الإيداع النقدي لا يتجاوز Tier 0 ولا حد الاستقبال اليومي/الشهري
+        // للعميل، بينما الوكيل لا يدخل أصلاً في نظام KYC الفردي.
+        $this->assertIndividualCustomerCanReceive($to_user_id, $amount);
+
         // AMIAL-ZONE-001 hotfix (v0.7-A.1)
         $this->assertFinancialEligibility($from_user_id);
         $this->assertFinancialEligibility($to_user_id);
@@ -1173,6 +1348,15 @@ trait TransactionTrait
     ): ?string {
         $amount = MoneyService::normalize($amount);
         $userInfo = User::find($to_user_id);
+
+        // لا يصبح الشحن منفذاً خلفياً لإدخال مال إلى Tier 0؛ ويُطبق الحد
+        // على الأصل فقط، أما bonus أدناه فلا يستهلكه.
+        if (!$userInfo) {
+            throw new \RuntimeException("Recipient user {$to_user_id} not found");
+        }
+        app(\App\Services\KycTierService::class)
+            ->assertIndividualCanReceive($userInfo, $amount);
+
         $userType = $userInfo->type == 1 ? 'agent' : ($userInfo->type == 2 ? 'customer' : null);
         $bonus = MoneyService::normalize(
             Helpers::get_add_money_bonus((float)$amount, $to_user_id, $userType)
@@ -1181,9 +1365,6 @@ trait TransactionTrait
         // AMIAL-ZONE-001 hotfix (v0.7-A.1): فحص zone للمستلم.
         // الأدمن (from_user_id) لا نفحصه — admin user دائماً مسموح كحامل لأموال النظام.
         // لكن المستلم: لو محفظته خارج SOUTH أو في security_hold، نرفض إضافة المال.
-        if (!$userInfo) {
-            throw new \RuntimeException("Recipient user {$to_user_id} not found");
-        }
         if ($userInfo->security_hold_until && $userInfo->security_hold_until->isFuture()) {
             throw new \RuntimeException(
                 "Recipient is in security hold until {$userInfo->security_hold_until}"
@@ -1355,6 +1536,10 @@ trait TransactionTrait
 
         $adminUserId = Helpers::get_admin_id();
 
+        // تنفيذ طلب سحب قديم لا يعفي العميل الفردي من Tier الحالي؛ لا
+        // يُسمح لحساب Tier 0 بأن يتحول طلبه المؤجل إلى حركة مالية لاحقاً.
+        $this->assertIndividualCustomerTransactionAllowed($receiver_user_id, $amount, 'cash_out');
+
         // AMIAL-ZONE-001 hotfix (v0.7-A.1)
         $this->assertFinancialEligibility($receiver_user_id);
 
@@ -1470,6 +1655,10 @@ trait TransactionTrait
                 charge: $charge,
                 sourceId: $primaryId,
             );
+
+            // AMIAL-MERCHANT-RISK-002: المخرجُ الثالث — السحبُ الذي تقرّه
+            // الإدارة. والمالُ خرج من محفظة صاحبِ الطلب لا من الإدارة.
+            $this->maybeRecordMerchantTransferOut($receiver_user_id, (string) $amount);
         }, self::TX_ATTEMPTS);
     }
 

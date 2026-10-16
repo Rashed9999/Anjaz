@@ -119,7 +119,16 @@ class CustomerStatusResolver
             $note(self::UNDER_REVIEW, 'عليه تحقيق مفتوح في مكافحة غسل الأموال');
         }
 
-        // ٥) الهوية. والمرفوضة قبل المعلّقة: الرفض قرارٌ اتُّخذ، والتعليق
+        // ٥) الهوية. هذا يقرأ المصدر الموحد نفسه الذي تقرأه الحدود وملف
+        // العميل؛ فلا يظهر للوكيل وضعٌ يخالف ما يطبّقه الحارس المالي.
+        $kyc = app(\App\Services\Kyc\KycAccountStatusService::class)->for($user);
+        if ($kyc['state'] === 'rejected') {
+            $note(self::KYC_REJECTED, 'قرار التحقق مرفوض؛ يلزم إعادة تقديم الهوية.');
+        } elseif ($kyc['state'] === 'update_required') {
+            $note(self::KYC_PENDING, 'تحديث الهوية مطلوب؛ حدود الفئات العليا مقيّدة حتى الاعتماد.');
+        }
+
+        // المرفوضة قبل المعلّقة: الرفض قرارٌ اتُّخذ، والتعليق
         //    انتظار — ومن يرى «معلّقة» ينتظر، ومن يرى «مرفوضة» يتصرّف.
         if (Schema::hasTable('kyc_documents')) {
             $latestRejected = KycDocument::where('user_id', $user->id)
@@ -143,7 +152,7 @@ class CustomerStatusResolver
         //
         // وأثرُ ذلك يوميّ: موظّف الدعم يرى «موثَّق» فيقول للعميل إنّ مشكلته
         // في مكانٍ آخر، والمانعُ هو الهويّة بعينها.
-        if ((int) ($user->is_kyc_verified ?? 0) !== 1) {
+        if (!$kyc['is_verified']) {
             $note(self::KYC_PENDING, 'الهويّة غير موثَّقة بعد');
         }
 

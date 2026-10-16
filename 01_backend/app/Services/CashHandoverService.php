@@ -31,6 +31,7 @@ class CashHandoverService
     public const DIRECTIONS = [
         'agent_to_platform' => 'الوكيل سلّم نقداً لأميال',
         'platform_to_agent' => 'أميال سلّمت نقداً للوكيل',
+        'platform_to_merchant' => 'أميال سلّمت نقداً للتاجر',
     ];
 
     public const STATUSES = ['pending', 'confirmed', 'disputed', 'cancelled'];
@@ -105,8 +106,16 @@ class CashHandoverService
                 throw new DomainException('لا تسليمَ بهذا المرجع');
             }
 
+            // التسليم الموجّه ليس قائمة عامة: لا يكفي أن يكون المؤكِّد
+            // مختلفاً عن المرسِل، بل يجب أن يكون **هو المستلِم المحدد**.
+            // بدونه يستطيع أي حساب آخر إغلاق استلام تاجر/وكيل لم يُسلَّم له.
+            if ($h->to_user_id !== null && (int) $h->to_user_id !== (int) $receiver->id) {
+                throw new DomainException('هذا التسليم مخصّص لمستلم آخر');
+            }
+
             if ($h->status === 'confirmed') {
-                // تأكيدٌ مكرّرٌ نجاحٌ صامت — ولا يُرمى خطأٌ يمنع إغلاق شاشة.
+                // تأكيدٌ مكرّرٌ من المستلم الصحيح نجاحٌ صامت؛ لا تمنع ضغطةٌ
+                // ثانية إغلاق الشاشة، ولا تسرب تأكيد شخصٍ آخر.
                 return (array) $h;
             }
 

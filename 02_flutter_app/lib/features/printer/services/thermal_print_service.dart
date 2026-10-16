@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -7,14 +9,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 
 /// AMIAL-THERMAL-PRINT-001 — إعداد الطابعة الحرارية المحفوظ.
 class ThermalPrinterConfig {
   final String mac;
   final String name;
   final int paperMm; // 58 أو 80
+  final String connection; // bluetooth | network
+  final String? host;
+  final int port;
+  /// نبضة ESC/POS لفتح درج النقد المرتبط بالطابعة بعد الإيصال.
+  final bool openCashDrawer;
 
-  const ThermalPrinterConfig({required this.mac, required this.name, this.paperMm = 80});
+  const ThermalPrinterConfig({required this.mac, required this.name, this.paperMm = 80,
+    this.connection = 'bluetooth', this.host, this.port = 9100,
+    this.openCashDrawer = false});
 }
 
 class PrintResult {
@@ -33,23 +43,33 @@ class ThermalPrintService extends GetxService {
   static const _kMac = 'amial_printer_mac';
   static const _kName = 'amial_printer_name';
   static const _kPaper = 'amial_printer_paper';
+  static const _kConnection = 'amial_printer_connection';
+  static const _kHost = 'amial_printer_host';
+  static const _kPort = 'amial_printer_port';
+  static const _kOpenCashDrawer = 'amial_printer_open_cash_drawer';
+  static const _kPendingReports = 'amial_pending_print_reports_v1';
 
   final Rxn<ThermalPrinterConfig> config = Rxn<ThermalPrinterConfig>();
 
   @override
   void onInit() {
     super.onInit();
-    loadConfig();
+    loadConfig().then((_) => flushPendingPrintReports());
   }
 
   Future<void> loadConfig() async {
     final p = await SharedPreferences.getInstance();
     final mac = p.getString(_kMac);
-    if (mac != null && mac.isNotEmpty) {
+    final connection = p.getString(_kConnection) ?? 'bluetooth';
+    final host = p.getString(_kHost);
+    if ((connection == 'network' && host != null && host.isNotEmpty) ||
+        (connection == 'bluetooth' && mac != null && mac.isNotEmpty)) {
       config.value = ThermalPrinterConfig(
-        mac: mac,
+        mac: mac ?? '',
         name: p.getString(_kName) ?? 'طابعة',
         paperMm: p.getInt(_kPaper) ?? 80,
+        connection: connection, host: host, port: p.getInt(_kPort) ?? 9100,
+        openCashDrawer: p.getBool(_kOpenCashDrawer) ?? false,
       );
     }
   }
@@ -59,6 +79,10 @@ class ThermalPrintService extends GetxService {
     await p.setString(_kMac, c.mac);
     await p.setString(_kName, c.name);
     await p.setInt(_kPaper, c.paperMm);
+    await p.setString(_kConnection, c.connection);
+    if (c.host != null) await p.setString(_kHost, c.host!); else await p.remove(_kHost);
+    await p.setInt(_kPort, c.port);
+    await p.setBool(_kOpenCashDrawer, c.openCashDrawer);
     config.value = c;
   }
 
@@ -67,6 +91,8 @@ class ThermalPrintService extends GetxService {
     await p.remove(_kMac);
     await p.remove(_kName);
     await p.remove(_kPaper);
+    await p.remove(_kConnection); await p.remove(_kHost); await p.remove(_kPort);
+    await p.remove(_kOpenCashDrawer);
     config.value = null;
   }
 
@@ -89,25 +115,50 @@ class ThermalPrintService extends GetxService {
   int _dotsFor(int mm) => mm == 58 ? 384 : 576;
 
   /// يلتقط widget الإيصال كصورة ويطبعه.
-  Future<PrintResult> printWidget(Widget receipt) async {
+  Future<PrintResult> printWidget(
+    Widget receipt, {
+    String? documentType,
+    String? documentId,
+    String? documentNumber,
+    int copies = 1,
+    Map<String, dynamic> metadata = const {},
+  }) async {
     final cfg = config.value;
-    if (cfg == null) return const PrintResult(false, 'لم يتم اختيار طابعة — افتح إعدادات الطابعة');
+    if (cfg == null) {
+      return const PrintResult(false, 'لم يتم اختيار طابعة — افتح إعدادات الطابعة');
+    }
+
+    final startedAt = DateTime.now().toUtc();
     final width = _dotsFor(cfg.paperMm).toDouble();
+    PrintResult result;
     try {
       final wrapped = Material(
         color: Colors.white,
         child: SizedBox(width: width, child: receipt),
       );
-      // pixelRatio: 1 ⇒ عرض الصورة بالبكسل = عرض الورق بالنقاط.
       final png = await ScreenshotController().captureFromWidget(
         wrapped,
         pixelRatio: 1.0,
         delay: const Duration(milliseconds: 60),
       );
-      return await printPng(png);
+      result = await printPng(png);
     } catch (_) {
-      return const PrintResult(false, 'تعذّر تجهيز الإيصال للطباعة');
+      result = const PrintResult(false, 'تعذّر تجهيز الإيصال للطباعة');
     }
+
+    if (documentType != null && documentType.isNotEmpty) {
+      await _trackPrintOutcome(
+        result: result,
+        startedAt: startedAt,
+        documentType: documentType,
+        documentId: documentId,
+        documentNumber: documentNumber,
+        copies: copies,
+        metadata: metadata,
+      );
+    }
+
+    return result;
   }
 
   /// يجلب بايتات الشعار من رابطه (لتُطبع مع الإيصال). null إن تعذّر.
@@ -134,9 +185,16 @@ class ThermalPrintService extends GetxService {
     num? balanceDue,
     List<String> contextLines = const [],
     DateTime? dateTime,
+    String? verificationUrl,
+    String documentType = 'sale_receipt',
+    String? documentId,
+    String? documentNumber,
+    int copies = 1,
+    Map<String, dynamic> metadata = const {},
   }) async {
+    final startedAt = DateTime.now().toUtc();
     final logo = await fetchLogoBytes(settings['logo_url']?.toString());
-    return printWidget(ThermalReceiptWidget.fromSettings(
+    final result = await printWidget(ThermalReceiptWidget.fromSettings(
       settings: settings,
       lines: lines,
       total: total,
@@ -150,7 +208,165 @@ class ThermalPrintService extends GetxService {
       balanceDue: balanceDue,
       contextLines: contextLines,
       dateTime: dateTime,
+      verificationUrl: verificationUrl,
     ));
+
+    await _trackPrintOutcome(
+      result: result,
+      startedAt: startedAt,
+      documentType: documentType,
+      documentId: documentId,
+      documentNumber: documentNumber ?? invoiceNo,
+      copies: copies,
+      metadata: metadata,
+    );
+
+    return result;
+  }
+
+  Future<void> _trackPrintOutcome({
+    required PrintResult result,
+    required DateTime startedAt,
+    required String documentType,
+    String? documentId,
+    String? documentNumber,
+    int copies = 1,
+    Map<String, dynamic> metadata = const {},
+  }) async {
+    final cfg = config.value;
+    if (cfg == null) return;
+
+    final finishedAt = DateTime.now().toUtc();
+    final id = _newClientJobId(documentType, documentId ?? documentNumber);
+    final payload = <String, dynamic>{
+      'client_job_id': id,
+      'document_type': documentType,
+      if ((documentId ?? '').isNotEmpty) 'document_id': documentId,
+      if ((documentNumber ?? '').isNotEmpty) 'document_number': documentNumber,
+      'status': result.ok ? 'completed' : 'failed',
+      'copies': copies.clamp(1, 20),
+      if (!result.ok) 'error_code': _printErrorCode(result.message),
+      if (!result.ok) 'error_message': result.message,
+      if (result.ok) 'result_message': result.message,
+      'queued_at': startedAt.toIso8601String(),
+      'started_at': startedAt.toIso8601String(),
+      'finished_at': finishedAt.toIso8601String(),
+      'metadata': <String, dynamic>{
+        'source': 'flutter_thermal_service',
+        'open_cash_drawer': cfg.openCashDrawer,
+        ...metadata,
+      },
+      'printer': <String, dynamic>{
+        'name': cfg.name,
+        'printer_type': 'thermal',
+        'connection_type': cfg.connection,
+        'connection_identity': cfg.connection == 'network'
+            ? '${cfg.host ?? ''}:${cfg.port}'
+            : cfg.mac,
+        'paper_size': '${cfg.paperMm}mm',
+        'capabilities': <String, dynamic>{
+          'cut': true,
+          'cash_drawer': cfg.openCashDrawer,
+          'qr': true,
+          'raster_arabic': true,
+        },
+        'settings': <String, dynamic>{
+          'paper_mm': cfg.paperMm,
+          'port': cfg.connection == 'network' ? cfg.port : null,
+        },
+      },
+    };
+
+    await _queuePrintReport(payload);
+    Future<void>.microtask(flushPendingPrintReports);
+  }
+
+  String _newClientJobId(String type, String? documentId) {
+    final now = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+    final safeType = type.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    final safeDoc = (documentId ?? '').replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    final suffix = safeDoc.length > 24 ? safeDoc.substring(safeDoc.length - 24) : safeDoc;
+    return '$safeType-$now${suffix.isEmpty ? '' : '-$suffix'}';
+  }
+
+  String? _printErrorCode(String message) {
+    final m = RegExp(r'\b(PRINT_\d{4})\b').firstMatch(message);
+    return m?.group(1);
+  }
+
+  @visibleForTesting
+  String? printErrorCodeForTest(String message) => _printErrorCode(message);
+
+  Future<void> _queuePrintReport(Map<String, dynamic> payload) async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(_kPendingReports) ?? <String>[];
+    final id = payload['client_job_id']?.toString();
+    final next = <String>[
+      ...current.where((raw) {
+        try {
+          final item = jsonDecode(raw);
+          return item is! Map || item['client_job_id']?.toString() != id;
+        } catch (_) {
+          return false;
+        }
+      }),
+      jsonEncode(payload),
+    ];
+    // حد دفاعي: سجل التشغيل وليس أرشيفاً دائماً على الهاتف.
+    final bounded = next.length > 200 ? next.sublist(next.length - 200) : next;
+    await prefs.setStringList(_kPendingReports, bounded);
+  }
+
+  Future<void> flushPendingPrintReports() async {
+    if (!Get.isRegistered<ApiClient>()) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(_kPendingReports) ?? <String>[];
+    if (current.isEmpty) return;
+
+    final api = Get.find<ApiClient>();
+    final remaining = <String>[];
+
+    // نرفع بالتسلسل كي لا نحول عودة الشبكة إلى burst على API.
+    for (final raw in current) {
+      Map<String, dynamic>? payload;
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) payload = Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        continue;
+      }
+      if (payload == null) continue;
+
+      try {
+        final id = payload['client_job_id']?.toString() ?? '';
+        final response = await api.postData(
+          '/api/v1/amial/merchant/printing/report',
+          payload,
+          idempotencyKey: id.isEmpty ? null : 'print_$id',
+        );
+        final ok = response.statusCode != null &&
+            response.statusCode! >= 200 && response.statusCode! < 300;
+        if (!ok) {
+          remaining.add(raw);
+          // إن كانت الجلسة أو الشبكة غير متاحة، لا نكرر 200 طلب.
+          if (response.statusCode == 1 ||
+              response.statusCode == 401 ||
+              response.statusCode == 403) {
+            final index = current.indexOf(raw);
+            remaining.addAll(current.skip(index + 1));
+            break;
+          }
+        }
+      } catch (_) {
+        remaining.add(raw);
+        final index = current.indexOf(raw);
+        remaining.addAll(current.skip(index + 1));
+        break;
+      }
+    }
+
+    await prefs.setStringList(_kPendingReports, remaining);
   }
 
   /// يطبع صورة PNG جاهزة (raster) على الطابعة المحفوظة.
@@ -158,25 +374,108 @@ class ThermalPrintService extends GetxService {
     final cfg = config.value;
     if (cfg == null) return const PrintResult(false, 'لم يتم اختيار طابعة');
     try {
-      if (!await bluetoothEnabled()) return const PrintResult(false, 'البلوتوث مغلق — فعّله ثم أعد المحاولة');
-
-      final raster = await _pngToEscPosRaster(png, _dotsFor(cfg.paperMm));
+      final raster = await _pngToEscPosRaster(
+        png,
+        _dotsFor(cfg.paperMm),
+        openCashDrawer: cfg.openCashDrawer,
+      );
       if (raster == null) return const PrintResult(false, 'تعذّر تجهيز صورة الإيصال');
+      if (cfg.connection == 'network') {
+        if (cfg.host == null || cfg.host!.isEmpty) {
+          return const PrintResult(false, 'PRINT_1001: عنوان IP للطابعة مطلوب');
+        }
+
+        // **ويُلتقط خطأُ الشبكة عند مصدره** — انظر `AMIAL-PRINT-SAY-001`
+        // أسفل الدالّة: `catch` واحدةٌ في الخارج تبتلع سببَه.
+        try {
+          final socket = await Socket.connect(cfg.host!, cfg.port,
+              timeout: const Duration(seconds: 5));
+          socket.add(raster);
+          await socket.flush();
+          await socket.close();
+
+          return const PrintResult(true, 'تمت الطباعة عبر الشبكة');
+        } on SocketException catch (e) {
+          return PrintResult(false, _sayNetwork(e, cfg.host!, cfg.port));
+        }
+      }
+      if (!await bluetoothEnabled()) return const PrintResult(false, 'PRINT_1001: البلوتوث مغلق — فعّله ثم أعد المحاولة');
 
       final connected = await PrintBluetoothThermal.connect(macPrinterAddress: cfg.mac);
-      if (!connected) return const PrintResult(false, 'تعذّر الاتصال بالطابعة — تأكّد أنها مقترنة ومشغّلة');
+      if (!connected) return const PrintResult(false, 'PRINT_1001: تعذّر الاتصال بالطابعة — تأكّد أنها مقترنة ومشغّلة');
       final sent = await PrintBluetoothThermal.writeBytes(raster);
       await PrintBluetoothThermal.disconnect;
       return sent
           ? const PrintResult(true, 'تمت الطباعة')
-          : const PrintResult(false, 'فشل إرسال البيانات للطابعة');
-    } catch (_) {
-      return const PrintResult(false, 'حدث خطأ أثناء الطباعة');
+          : const PrintResult(false, 'PRINT_1006: فشل إرسال البيانات للطابعة');
+    } catch (e) {
+      // **ولا يُبتلَع صنفُ الخطأ** — يُوسَم مجهولاً ويُقال نصُّه.
+      return PrintResult(false, 'PRINT_1007: خطأٌ غيرُ متوقّعٍ أثناء الطباعة ($e)');
     }
   }
 
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-PRINT-SAY-001 — **الفشلُ يقول أيَّ فشلٍ هو.**
+  ///
+  /// كان جسدُ الطباعة كلُّه ملفوفاً في `catch (_)` واحدةٍ تُخرج
+  /// **«حدث خطأ أثناء الطباعة»** لسبعة أسبابٍ مختلفة: عنوانٌ خطأ ·
+  /// طابعةٌ مطفأة · منفذٌ مغلق · واي‑فاي مقطوع · جدارٌ ناريّ · مهلةٌ
+  /// انتهت · صنفٌ مجهول.
+  ///
+  /// **والكاشيرُ واقفٌ والزبونُ ينتظر**، فلا يعرف أيفحص السلك أم
+  /// الشبكة أم الرقم — فيُعيد الضغطَ ثمّ يتّصل بالدعم. وهذا نمطُ
+  /// العطل الذي دُفع ثمنُه مرّاتٍ في هذا المشروع: **رسالةٌ صحيحةٌ
+  /// حرفيّاً وصامتةٌ عن سببها.**
+  ///
+  /// **ومهارةُ الطباعة تشترطه نصّاً**: «Printer failure must show:
+  /// Printer Unavailable · Connection Failed · Timeout …» ولكلٍّ رمزُه
+  /// في محرّك الأخطاء (`PRINT_1000`…). فالتمييزُ عقدٌ لا تحسين.
+  ///
+  /// **ويُذكَر العنوانُ والمنفذ**: «تعذّر الوصول» بلا رقمٍ لا تُصلَّح،
+  /// و«‏192.168.1.50:9100» تُقرأ وتُقارَن بورقةٍ على الطابعة.
+  /// ══════════════════════════════════════════════════════════════════
+  @visibleForTesting
+  String sayNetworkForTest(SocketException e, String host, int port) =>
+      _sayNetwork(e, host, port);
+
+  String _sayNetwork(SocketException e, String host, int port) {
+    final at = '$host:$port';
+    final os = e.osError?.message.toLowerCase() ?? '';
+
+    // مهلةُ الاتّصال — العنوانُ لا يردّ أصلاً.
+    if (e.osError == null || os.contains('timed out') || os.contains('timeout')) {
+      return 'PRINT_1005: لا تردّ الطابعةُ على $at — تأكّد أنّ الجهاز '
+          'والطابعةَ على الشبكة نفسِها، وأنّ العنوان صحيح.';
+    }
+
+    // المنفذُ مغلق: الجهازُ موجودٌ ولا برنامجَ يسمع — طابعةٌ مطفأةٌ غالباً.
+    if (os.contains('refused')) {
+      return 'PRINT_1000: الجهازُ على $at موجودٌ لكنّه يرفض الاتّصال — '
+          'الطابعةُ مطفأةٌ أو المنفذُ غيرُ $port.';
+    }
+
+    // لا شبكةَ إطلاقاً.
+    if (os.contains('unreachable') || os.contains('network is down')) {
+      return 'PRINT_1001: لا شبكةَ تصل إلى $at — تحقّق من الواي‑فاي '
+          'على هذا الجهاز.';
+    }
+
+    // العنوانُ ليس رقماً ولا اسماً يُحَلّ.
+    if (os.contains('failed host lookup') || os.contains('no address')) {
+      return 'PRINT_1001: العنوان «$host» غيرُ معروفٍ على الشبكة — '
+          'أدخِل رقم IP كما يعرضه الطابعُ نفسُه.';
+    }
+
+    // **وما لا يُعرف يُقال خاماً ولا يُخترَع له سبب.**
+    return 'PRINT_1007: تعذّر الوصول إلى $at — ${e.osError?.message ?? e.message}';
+  }
+
   /// يفكّ PNG إلى RGBA عبر dart:ui، ثم يبني أوامر GS v 0 (raster bit image).
-  Future<List<int>?> _pngToEscPosRaster(Uint8List png, int paperDots) async {
+  Future<List<int>?> _pngToEscPosRaster(
+    Uint8List png,
+    int paperDots, {
+    required bool openCashDrawer,
+  }) async {
     ui.Image? image;
     try {
       final codec = await ui.instantiateImageCodec(png, targetWidth: paperDots);
@@ -185,7 +484,8 @@ class ThermalPrintService extends GetxService {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (byteData == null) return null;
       final rgba = byteData.buffer.asUint8List();
-      return _buildRaster(rgba, image.width, image.height);
+      return buildRaster(rgba, image.width, image.height,
+          openCashDrawer: openCashDrawer);
     } catch (_) {
       return null;
     } finally {
@@ -194,7 +494,20 @@ class ThermalPrintService extends GetxService {
   }
 
   /// يبني أوامر ESC/POS: تهيئة + GS v 0 على شكل نطاقات + تغذية + قطع.
-  List<int> _buildRaster(Uint8List rgba, int width, int height) {
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// **ومكشوفةٌ للفحص عمداً.** هذه الدالّةُ هي **منتَجُ الطبقة كلِّها**:
+  /// ما يخرج منها يذهب إلى الطابعة كما هو. وكانت خاصّةً، فلا سبيلَ إلى
+  /// قياسها إلّا بطابعةٍ حقيقيّة — **وما لا يُقاس إلّا بجهازٍ لا يُقاس
+  /// في بوّابة**، فبقيت تسعُمئةِ سطرٍ من طبقة الطباعة بلا حارسٍ واحد.
+  ///
+  /// **وفيها نبضةُ درج النقد** (`ESC p`) — أمرٌ يفتح دُرجَ مالٍ حقيقيّاً.
+  /// فسقوطُه صامتٌ (الدرجُ لا يُفتح فيُفتح باليد)، **وظهورُه حيث لا
+  /// يُطلَب أخطر**: دُرجٌ يُفتح مع كلّ إيصالٍ في وجه الزبون.
+  /// ══════════════════════════════════════════════════════════════════
+  @visibleForTesting
+  List<int> buildRaster(Uint8List rgba, int width, int height,
+      {required bool openCashDrawer}) {
     final bytesPerRow = (width + 7) >> 3;
     final out = <int>[0x1B, 0x40]; // ESC @ : تهيئة الطابعة
     const bandH = 128; // نطاقات آمنة لكل الطابعات
@@ -229,6 +542,9 @@ class ThermalPrintService extends GetxService {
       }
     }
     out.addAll([0x1B, 0x64, 0x03]); // ESC d 3 : تغذية 3 أسطر
+    // ESC p m t1 t2 — النبضة القياسية لدرج النقد (Epson/ESC-POS).
+    // لا تُرسل إلا عندما يفعّلها التاجر لجهاز POS الحالي، وبعد الإيصال.
+    if (openCashDrawer) out.addAll(const [0x1B, 0x70, 0x00, 0x19, 0xFA]);
     out.addAll([0x1D, 0x56, 0x01]); // GS V 1 : قطع جزئي
     return out;
   }

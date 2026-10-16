@@ -178,6 +178,10 @@ class MerchantVerificationTest extends TestCase
         $approved = $this->svc->approve($req, $this->admin->id);
 
         $this->assertSame('verified', $approved->status);
+        $this->assertDatabaseHas('verification_case_events', [
+            'actor_user_id' => $this->admin->id,
+            'event_type' => 'merchant_verification_approved',
+        ]);
         $this->assertSame($this->admin->id, $approved->reviewed_by_admin_id);
 
         $profile = MerchantProfile::where('user_id', $this->merchant->id)->first();
@@ -247,6 +251,34 @@ class MerchantVerificationTest extends TestCase
         $n = AmialNotification::where('user_id', $this->merchant->id)
             ->where('type', 'merchant_resubmission_required')->first();
         $this->assertNotNull($n);
+    }
+
+    /** @test */
+    public function quick_sale_uses_its_own_evidence_policy_and_does_not_require_a_commercial_register(): void
+    {
+        MerchantProfile::create([
+            'user_id' => $this->merchant->id,
+            'business_type' => 'quick_sale',
+            'verification_status' => 'unverified',
+            'tier' => 'standard',
+        ]);
+
+        $required = $this->svc->requiredDocsFor($this->merchant);
+        $this->assertSame(['id_card_front', 'id_card_back', 'store_photo'], $required);
+        $this->assertNotContains('commercial_register', $required);
+
+        $request = $this->svc->submit($this->merchant, [
+            'business_name' => 'بسطة خضار السوق',
+            'city' => 'عدن',
+            'address' => 'سوق الشيخ عثمان',
+        ], [
+            'id_card_front' => $this->fakeImage('front.jpg'),
+            'id_card_back' => $this->fakeImage('back.jpg'),
+            'store_photo' => $this->fakeImage('stall.jpg'),
+        ]);
+
+        $this->assertSame('pending_review', $request->status);
+        $this->assertNull($request->commercial_register_path);
     }
 
     /** @test */

@@ -1,9 +1,9 @@
 ---
 name: amial-architect
-description: بناءُ ميزةٍ جديدة أو تغييرٌ يمسّ البنية: خمسُ مراحل (المتطلّب · مسحُ القائم · الأثر · التبعيّات · خطّة التنفيذ) وقائمةُ اكتمالٍ من ١٣ بنداً.
+description: 'بناءُ ميزةٍ جديدة أو تغييرٌ يمسّ البنية: خمسُ مراحل (المتطلّب · مسحُ القائم · الأثر · التبعيّات · خطّة التنفيذ) وقائمةُ اكتمالٍ من ١٣ بنداً.'
 ---
 
-<!-- المصدر: الملفّ 1 — المتن كما كتبه صاحب المشروع، بلا تعديل. -->
+<!-- المصدر: الملفّ 1، ثمّ ملحق يكيّف المبادئ مع البنية العاملة. -->
 
 # ROLE
 
@@ -240,3 +240,28 @@ Business second.
 Code third.
 
 Never reverse this order.
+
+------------------------------------------------
+
+# PROJECT COMPATIBILITY — AMIAL PAY
+
+## Extend the nearest proven pattern
+
+The codebase already places much of its domain work in services and does not
+have a repository layer beneath every model. Start from the closest working
+flow and add only the boundary that solves a demonstrated problem: duplicated
+logic, an unstable integration, a transaction boundary, or a testability
+need. Do not introduce repositories, observers, events, queues, or policies
+as ceremony for a small compatible change.
+
+Controllers remain thin and Flutter remains a presentation layer. Choose
+queues, events, and observers when asynchronous delivery, lifecycle handling,
+or cross-domain effects make them necessary; keep a direct service path when
+that is the established, safer design.
+
+## Scope map before implementation
+
+For each requested change, classify each area as `changed`, `checked`, or
+`not applicable with reason`: data, backend, public API, Flutter, admin,
+authorization, finance, reporting, notifications, and tests. The map prevents
+both missed consequences and unrelated rebuilds.

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\PlatformRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReadsAdminNavigation;
 use Tests\TestCase;
 
 /**
@@ -37,6 +38,7 @@ use Tests\TestCase;
  */
 class AdminDoorsAreGuardedTest extends TestCase
 {
+    use ReadsAdminNavigation;
     use RefreshDatabase;
 
     /**
@@ -57,19 +59,19 @@ class AdminDoorsAreGuardedTest extends TestCase
         return $u->refresh();
     }
 
-    /** @return list<array{0:string,1:string,2:?string}> روابطُ القائمة */
+    /**
+     * روابطُ القائمة — **من المصدر الحيّ**.
+     *
+     * AMIAL-ADMIN-NAV-SURFACE-001: كانت تُقرأ من `_sidebar.blade.php`،
+     * وتعريفُ الوجهات هناك صار داخل `@if(false)` بعد نقلها إلى «مساحة
+     * العمل». فشاخت النسخةُ الميّتة، **وبلّغ هذا الحارسُ عن ثلاثة أعطالٍ
+     * مصحَّحةٍ أصلاً في الصفحة الحيّة**. والتفصيل في `ReadsAdminNavigation`.
+     *
+     * @return list<array{0:string,1:string,2:?string}>
+     */
     private function sidebarLinks(): array
     {
-        $src = file_get_contents(resource_path(
-            'views/admin-views/amial/partials/_sidebar.blade.php'));
-
-        preg_match_all(
-            "~\[\s*'([^']{2,80})'\s*,\s*route\('([^']+)'\)[^,]*,\s*(null|'[^']+')~",
-            $src, $m, PREG_SET_ORDER);
-
-        return array_map(
-            fn ($x) => [$x[1], $x[2], $x[3] === 'null' ? null : trim($x[3], "'")],
-            $m);
+        return $this->declaredNavigationItems();
     }
 
     /**

@@ -68,6 +68,15 @@ Schedule::call(function () {
 // ============================================================
 Schedule::command('amial:reconcile-fees')->everyMinute()->withoutOverlapping();
 
+// فكّ حجوز المخزون خلال خمس دقائق؛ الأمر نفسه ينذر عند فشل الجولة.
+Schedule::command('amial:release-expired-reservations')
+    ->everyFiveMinutes()->withoutOverlapping()
+    ->description('AMIAL-STOCK: تحرير حجوز المنتجات المنتهية');
+
+// تقرير الاستعداد لا يبقى أمراً يدوياً؛ يُحفظ قياسٌ يومي بعد ساهر.
+Schedule::command('amial:readiness')->dailyAt('05:00')->withoutOverlapping()
+    ->description('AMIAL-OPS: قياس الجاهزية اليومية');
+
 // ══════════════════════════════════════════════════════════════════════
 // AMIAL-RECOVERY-APPLY-001 — **استعادةٌ معتمَدةٌ لا تُطبَّق نفسَها.**
 //
@@ -89,6 +98,22 @@ Schedule::command('amial:recovery:apply-approved')
 Schedule::call(function () {
     app(\App\Services\CustomerWithdrawService::class)->expireStale();
 })->everyMinute()->name('amial-expire-withdrawals')->withoutOverlapping();
+
+// ══════════════════════════════════════════════════════════════════════
+// AMIAL-WRONG-TRANSFER-001 — **الإفراجُ التلقائيُّ واقتطاعُ الذمم.**
+//
+// **بلا هذا السطر يصير الحجزُ مصادرة.** الخدمةُ تحجز مالَ من وصله
+// تحويلٌ خاطئ لتوقف النزيف، ولكلّ حجزٍ ساعةُ انتهاء — **وساعةٌ لا
+// يقرؤها أحدٌ ليست ساعة**. فمن لم يُحسَم ملفُّه يبقى مالُه محبوساً إلى
+// الأبد، وهي عقوبةٌ بيد الدعم على من لم تثبت عليه دعوى.
+//
+// **وكلَّ خمس دقائق لا كلَّ يوم**: المهلةُ تنقضي في لحظةٍ بعينها،
+// واقتطاعُ الذمّة يجب أن يلحق المالَ الداخلَ قبل أن يُنفَق ثانيةً.
+// ══════════════════════════════════════════════════════════════════════
+Schedule::command('amial:recovery-sweep')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->description('AMIAL-WRONG-TRANSFER: إفراجُ الحجوز المنتهية واقتطاعُ الذمم');
 
 // ============================================================
 // AMIAL-RECON-NIGHTLY-001 — المصالحة الليليّة

@@ -6,6 +6,7 @@ use App\Support\DemoAccountPolicy;
 use App\Models\EMoney;
 use App\Models\User;
 use App\Services\UnifiedAuthService;
+use App\Services\Otp\DemoNumberRegistry;
 use Illuminate\Console\Command;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -20,11 +21,21 @@ use Illuminate\Support\Facades\Hash;
  */
 class EnsureDemoUsers extends Command
 {
+    /** AMIAL-DEMO-MONEY-001 — أرصدةُ العرض. لا تُسَكّ في الإنتاج بلا موافقة. */
+    public const CUSTOMER_BALANCE = '50000.0000';
+
+    public const RECIPIENT_BALANCE = '10000.0000';
+
     protected $signature = 'amial:ensure-demo';
     protected $description = 'يضمن حساب عميل تجريبي ويختبر الدخول';
 
     public function handle(): int
     {
+        DemoNumberRegistry::register([
+            ['phone' => '967777100001', 'label' => 'عميل تجريبي — مرسل'],
+            ['phone' => '967777100002', 'label' => 'عميل تجريبي — مستلم'],
+        ]);
+
         $phone = '967777100001';
         $password = 'Pass@2026';
 
@@ -51,6 +62,7 @@ class EnsureDemoUsers extends Command
                 }
                 $user->transaction_pin = Hash::make('1237');
                 $user->is_active = 1;
+                DemoAccountPolicy::markTestContactsVerified($user);
                 $user->is_kyc_verified = 1;
                 if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
                     $user->kyc_tier = 3;
@@ -59,7 +71,7 @@ class EnsureDemoUsers extends Command
                 EMoney::firstOrCreate(
                     ['user_id' => $user->id],
                     [
-                        'current_balance' => '50000.0000',
+                        'current_balance' => DemoAccountPolicy::seededWalletBalance(self::CUSTOMER_BALANCE),
                         'charge_earned' => '0', 'pending_balance' => '0',
                         'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
                     ]
@@ -68,6 +80,7 @@ class EnsureDemoUsers extends Command
                 goto demo_recipient;
             }
             $user = new User();
+            $user->email = DemoAccountPolicy::emailForNewAccount($phone);
             $user->f_name = 'أحمد';
             $user->l_name = 'سالم';
             $user->phone = $phone;
@@ -76,6 +89,7 @@ class EnsureDemoUsers extends Command
                 $password, 'AMIAL_BOOTSTRAP_CUSTOMER_PASSWORD'));
             $user->transaction_pin = Hash::make('1237');
             $user->is_active = 1;
+            DemoAccountPolicy::markTestContactsVerified($user);
             // AMIAL-DEMO: موثّق KYC (=1) ليعمل إرسال الأموال (يشترط التوثيق)
             $user->is_kyc_verified = 1;
             $user->zone_code = 'SOUTH';
@@ -88,7 +102,7 @@ class EnsureDemoUsers extends Command
             EMoney::firstOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'current_balance' => '50000.0000',
+                    'current_balance' => DemoAccountPolicy::seededWalletBalance(self::CUSTOMER_BALANCE),
                     'charge_earned' => '0', 'pending_balance' => '0',
                     'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
                 ]
@@ -121,6 +135,7 @@ class EnsureDemoUsers extends Command
                 }
                 $existingRx->transaction_pin = Hash::make('1237');
                 $existingRx->is_active = 1;
+                DemoAccountPolicy::markTestContactsVerified($existingRx);
                 $existingRx->is_kyc_verified = 1;
                 if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
                     $existingRx->kyc_tier = 3;
@@ -129,7 +144,7 @@ class EnsureDemoUsers extends Command
                 EMoney::firstOrCreate(
                     ['user_id' => $existingRx->id],
                     [
-                        'current_balance' => '10000.0000',
+                        'current_balance' => DemoAccountPolicy::seededWalletBalance(self::RECIPIENT_BALANCE),
                         'charge_earned' => '0', 'pending_balance' => '0',
                         'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
                     ]
@@ -138,6 +153,7 @@ class EnsureDemoUsers extends Command
                 goto after_recipient;
             }
             $recipient = new User();
+            $recipient->email = DemoAccountPolicy::emailForNewAccount($rxPhone);
             $recipient->f_name = 'محمد';
             $recipient->l_name = 'علي';
             $recipient->phone = $rxPhone;
@@ -146,6 +162,7 @@ class EnsureDemoUsers extends Command
                 $password, 'AMIAL_BOOTSTRAP_CUSTOMER_PASSWORD'));
             $recipient->transaction_pin = Hash::make('1237');
             $recipient->is_active = 1;
+            DemoAccountPolicy::markTestContactsVerified($recipient);
             $recipient->is_kyc_verified = 1;
             $recipient->zone_code = 'SOUTH';
             if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
@@ -155,7 +172,7 @@ class EnsureDemoUsers extends Command
             EMoney::firstOrCreate(
                 ['user_id' => $recipient->id],
                 [
-                    'current_balance' => '10000.0000',
+                    'current_balance' => DemoAccountPolicy::seededWalletBalance(self::RECIPIENT_BALANCE),
                     'charge_earned' => '0', 'pending_balance' => '0',
                     'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
                 ]

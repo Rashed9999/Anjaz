@@ -1,0 +1,765 @@
+<title>محاكي البيع السريع</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
+<style>
+  :root{
+    --brand:#053391; --brand-lt:#1D4FB8; --brand-dk:#021F5C;
+    --ok:#0F7A46; --ok-bg:#E3F3E5;
+    --warn:#8A5A00; --warn-bg:#FFF6E0;
+    --bad:#B3261E; --bad-bg:#FDE7E7;
+    --cash:#7A5C00; --cash-bg:#FBF3DC;
+    --ground:#E7EBF3; --panel:#F4F6FA;
+    --surface:#FFFFFF; --surface-2:#F7F9FC;
+    --ink:#0F1729; --ink-2:#48536B; --ink-3:#7B869C;
+    --line:#D8DEEA; --line-2:#E9EDF5;
+    --shadow:0 1px 2px rgba(5,51,145,.06),0 8px 24px rgba(5,51,145,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --brand:#6E92E8; --brand-lt:#8FADF0; --brand-dk:#0A1B3D;
+      --ok:#5FCE93; --ok-bg:#123123;
+      --warn:#E5B65C; --warn-bg:#33260A;
+      --bad:#F2867E; --bad-bg:#3A1512;
+      --cash:#D9B25C; --cash-bg:#2E2409;
+      --ground:#0B1120; --panel:#0F1727;
+      --surface:#151E31; --surface-2:#1B2539;
+      --ink:#E9EDF6; --ink-2:#A6B2C8; --ink-3:#7A87A0;
+      --line:#2A354C; --line-2:#212B3E;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --brand:#6E92E8; --brand-lt:#8FADF0; --brand-dk:#0A1B3D;
+    --ok:#5FCE93; --ok-bg:#123123;
+    --warn:#E5B65C; --warn-bg:#33260A;
+    --bad:#F2867E; --bad-bg:#3A1512;
+    --cash:#D9B25C; --cash-bg:#2E2409;
+    --ground:#0B1120; --panel:#0F1727;
+    --surface:#151E31; --surface-2:#1B2539;
+    --ink:#E9EDF6; --ink-2:#A6B2C8; --ink-3:#7A87A0;
+    --line:#2A354C; --line-2:#212B3E;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  body{
+    margin:0; direction:rtl; background:var(--ground); color:var(--ink);
+    font-family:'Tajawal','Noto Kufi Arabic','Noto Sans Arabic','Segoe UI',
+                'Geeza Pro','Droid Arabic Naskh',system-ui,sans-serif;
+    font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{margin:0; text-wrap:balance; font-weight:800; letter-spacing:-.01em}
+  button{font:inherit; color:inherit; cursor:pointer}
+  .num{font-variant-numeric:tabular-nums}
+
+  .wrap{max-width:1180px; margin:0 auto; padding:24px 20px 56px}
+  .masthead{margin-bottom:20px}
+  .eyebrow{font-size:11px; font-weight:700; letter-spacing:.14em; color:var(--brand); margin-bottom:6px}
+  .masthead h1{font-size:27px; margin-bottom:6px}
+  .masthead p{margin:0; color:var(--ink-2); max-width:64ch; font-size:14px}
+
+  .bench{display:grid; grid-template-columns:minmax(0,352px) minmax(0,1fr); gap:24px; align-items:start}
+  @media (max-width:880px){ .bench{grid-template-columns:1fr} }
+
+  .rail{background:var(--surface); border:1px solid var(--line); border-radius:14px;
+        padding:14px; box-shadow:var(--shadow); margin-bottom:16px}
+  .rail h3{font-size:12px; letter-spacing:.1em; color:var(--ink-3); margin-bottom:9px; font-weight:700}
+  .rail h3 small{font-weight:500; letter-spacing:0; opacity:.85}
+  .seg{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px}
+  .seg:last-child{margin-bottom:0}
+  .seg button{flex:1 1 auto; min-width:78px; padding:7px 10px; border-radius:9px;
+    border:1px solid var(--line); background:var(--surface-2); color:var(--ink-2);
+    font-size:13px; font-weight:500; transition:.14s}
+  .seg button:hover{border-color:var(--brand-lt); color:var(--brand)}
+  .seg button[aria-pressed="true"]{background:var(--brand); border-color:var(--brand); color:#fff; font-weight:700}
+  :root[data-theme="dark"] .seg button[aria-pressed="true"],
+  :root:not([data-theme="light"]) .seg button[aria-pressed="true"]{color:var(--brand-dk)}
+  @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .seg button[aria-pressed="true"]{color:#fff}}
+
+  .verdict{background:var(--surface); border:1px solid var(--line); border-radius:14px;
+           padding:16px; box-shadow:var(--shadow)}
+  .verdict h3{font-size:15px; margin-bottom:4px}
+  .verdict .sub{font-size:12.5px; color:var(--ink-3); margin:0 0 12px}
+  .grant{border-top:1px solid var(--line-2); padding:9px 0; display:flex; gap:9px; align-items:flex-start}
+  .dot{width:8px; height:8px; border-radius:50%; margin-top:7px; flex:none}
+  .dot.on{background:var(--ok)} .dot.off{background:var(--ink-3); opacity:.5}
+  .dot.never{background:var(--bad)}
+  .grant b{font-size:13.5px; font-weight:700; display:block}
+  .grant span{font-size:12px; color:var(--ink-2); display:block; line-height:1.5}
+  .src{display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px;
+       border-radius:5px; margin-inline-start:5px; vertical-align:1px}
+  .src.box{background:var(--ok-bg); color:var(--ok)}
+  .src.plan{background:var(--cash-bg); color:var(--cash)}
+  .src.never{background:var(--bad-bg); color:var(--bad)}
+
+  .phone{width:352px; max-width:100%; height:722px; margin-inline:auto;
+    background:var(--surface); border:9px solid #10182B; border-radius:34px;
+    overflow:hidden; position:relative; display:flex; flex-direction:column;
+    box-shadow:0 18px 46px rgba(5,20,60,.28)}
+  .status{background:var(--brand); color:#fff; font-size:11px; padding:5px 16px;
+    display:flex; justify-content:space-between; flex:none; font-weight:500}
+  .appbar{background:var(--brand); color:#fff; padding:9px 13px 13px;
+    display:flex; align-items:center; gap:9px; flex:none}
+  .appbar h2{font-size:16.5px; flex:1; font-weight:700}
+  .iconbtn{background:rgba(255,255,255,.14); border:0; color:#fff; width:31px; height:31px;
+    border-radius:9px; font-size:15px; display:grid; place-items:center; flex:none}
+  .iconbtn:hover{background:rgba(255,255,255,.26)}
+  .screen{flex:1; overflow-y:auto; overflow-x:hidden; background:var(--panel); padding:13px}
+
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:13px; margin-bottom:11px}
+  .card:last-child{margin-bottom:0}
+  .balance{background:linear-gradient(135deg,var(--brand),var(--brand-lt));
+    color:#fff; border:0; border-radius:15px; padding:15px; margin-bottom:11px}
+  .balance .lbl{font-size:12px; opacity:.85}
+  .balance .amt{font-size:27px; font-weight:800; margin:3px 0 11px}
+  .balance .acts{display:flex; gap:8px}
+  .balance .acts button{flex:1; background:rgba(255,255,255,.17);
+    border:1px solid rgba(255,255,255,.3); color:#fff; padding:8px;
+    border-radius:9px; font-size:13px; font-weight:700}
+  .balance .acts button:hover{background:rgba(255,255,255,.3)}
+
+  .tiles{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+  .tile{background:var(--surface); border:1px solid var(--line); border-radius:13px;
+    padding:13px 11px; text-align:center; position:relative; transition:.14s}
+  .tile:hover{border-color:var(--brand-lt); transform:translateY(-1px)}
+  .tile .ic{font-size:21px; display:block; margin-bottom:5px}
+  .tile .nm{font-size:12.5px; font-weight:700; line-height:1.35; display:block}
+  .tile.lock{opacity:.62}
+  .tile.lock:hover{transform:none; border-color:var(--warn)}
+  .tile .lk{position:absolute; top:6px; inset-inline-start:8px; font-size:11px}
+
+  .row{display:flex; align-items:center; gap:10px; padding:10px 0;
+    border-bottom:1px solid var(--line-2); text-align:start; width:100%;
+    background:none; border-inline:0; border-top:0}
+  .row:last-child{border-bottom:0}
+  .row .g{flex:1; min-width:0}
+  .row .t{font-size:13.5px; font-weight:700; display:block}
+  .row .s{font-size:11.5px; color:var(--ink-3); display:block}
+  .row .v{font-size:13.5px; font-weight:700; white-space:nowrap}
+  .chip{font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap}
+  .chip.ok{background:var(--ok-bg); color:var(--ok)}
+  .chip.wr{background:var(--warn-bg); color:var(--warn)}
+  .chip.bd{background:var(--bad-bg); color:var(--bad)}
+  .chip.cs{background:var(--cash-bg); color:var(--cash)}
+
+  .btn{display:block; width:100%; padding:12px; border-radius:11px; border:0;
+    background:var(--brand); color:#fff; font-size:15px; font-weight:700; margin-top:10px}
+  .btn:hover{background:var(--brand-lt)}
+  .btn.ghost{background:var(--surface); color:var(--brand); border:1.5px solid var(--brand)}
+  .btn:disabled{background:var(--line); color:var(--ink-3); cursor:not-allowed}
+
+  .sec{font-size:11.5px; font-weight:700; color:var(--ink-3); letter-spacing:.08em; margin:14px 0 7px}
+  .sec:first-child{margin-top:0}
+  .note{background:var(--warn-bg); color:var(--warn); border-radius:10px;
+    padding:10px 11px; font-size:12.5px; line-height:1.55; margin-bottom:11px}
+  .note.bad{background:var(--bad-bg); color:var(--bad)}
+  .note.ok{background:var(--ok-bg); color:var(--ok)}
+  .note.cs{background:var(--cash-bg); color:var(--cash)}
+  .note b{font-weight:800}
+  .note code{font-family:ui-monospace,Menlo,monospace; font-size:11.5px}
+
+  /* لوحةُ الأرقام — `FuelCashierScreen` في التطبيق. */
+  .amount{background:var(--surface); border:1px solid var(--line); border-radius:13px;
+    padding:16px 13px; text-align:center; margin-bottom:11px}
+  .amount .big{font-size:33px; font-weight:800; color:var(--brand); line-height:1.2}
+  .amount .conv{font-size:12.5px; color:var(--ink-3); margin-top:3px}
+  .keypad{display:grid; grid-template-columns:repeat(3,1fr); gap:7px}
+  .keypad button{padding:14px; border-radius:11px; border:1px solid var(--line);
+    background:var(--surface); font-size:19px; font-weight:700}
+  .keypad button:hover{border-color:var(--brand-lt)}
+  .quick{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:9px}
+  .quick button{padding:9px 4px; border-radius:9px; border:1px solid var(--line);
+    background:var(--surface-2); font-size:12.5px; font-weight:700}
+  .quick button:hover{border-color:var(--brand-lt); color:var(--brand)}
+
+  .qr{width:154px; height:154px; margin-inline:auto; border-radius:9px;
+    background-color:var(--surface);
+    background-image:
+      repeating-linear-gradient(90deg,var(--ink) 0 7px,transparent 7px 14px),
+      repeating-linear-gradient(0deg,var(--ink) 0 7px,transparent 7px 14px);
+    background-size:14px 14px; border:7px solid var(--surface);
+    outline:2px solid var(--line); opacity:.88}
+
+  .scrim{position:absolute; inset:0; background:rgba(6,14,32,.5); opacity:0;
+    visibility:hidden; transition:.2s; z-index:8}
+  .scrim.open{opacity:1; visibility:visible}
+  .drawer{position:absolute; top:0; bottom:0; inset-inline-start:-101%; width:277px;
+    background:var(--surface); z-index:9; transition:inset-inline-start .22s;
+    visibility:hidden; display:flex; flex-direction:column}
+  .drawer.open{inset-inline-start:0; visibility:visible}
+  .dhead{background:var(--brand); color:#fff; padding:16px 14px}
+  .dhead .nm{font-size:15.5px; font-weight:800}
+  .dhead .sb{font-size:11.5px; opacity:.85}
+  .dbody{flex:1; overflow-y:auto; padding:7px 0}
+  .ditem{display:flex; gap:10px; align-items:flex-start; width:100%; padding:10px 14px;
+    background:none; border:0; text-align:start}
+  .ditem:hover{background:var(--surface-2)}
+  .ditem .ic{font-size:16px; margin-top:1px}
+  .ditem .t{font-size:13.5px; font-weight:700; display:block}
+  .ditem .s{font-size:11px; color:var(--ink-3); display:block; line-height:1.45}
+  .dsep{height:1px; background:var(--line-2); margin:6px 14px}
+
+  .toast{position:absolute; bottom:18px; inset-inline:16px; background:var(--ink);
+    color:var(--surface); padding:11px 14px; border-radius:11px; font-size:13px;
+    font-weight:500; text-align:center; z-index:20; opacity:0; transition:.2s;
+    pointer-events:none; line-height:1.5}
+  .toast.show{opacity:.97}
+  .toast.err{background:var(--bad); color:#fff}
+
+  .caption{font-size:12.5px; color:var(--ink-3); text-align:center; margin-top:11px}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="eyebrow">أميال باي · محاكي القطاعات</div>
+    <h1>محاكي البيع السريع</h1>
+    <p>بائعُ السمك والخضار والبسطة. <b>ومربّعُه ثلاثُ قدراتٍ فقط</b> —
+      بيعٌ ودَينٌ ومرتجع، والتعليقُ في السجلّ يقول بنصّه: «بساطةٌ قصوى».
+      <b>وهذا أصغرُ القطاعات</b>، فما تراه هنا هو أقلُّ ما يُبنى عليه
+      تاجرٌ في أميال باي.</p>
+  </header>
+
+  <div class="bench">
+    <div>
+      <div class="rail">
+        <h3>مَن يمسك الجهاز</h3>
+        <div class="seg" id="segRole">
+          <button data-role="owner" aria-pressed="true">البائع</button>
+          <button data-role="pos" aria-pressed="false">مساعده</button>
+        </div>
+        <h3>الباقة</h3>
+        <div class="seg" id="segPlan">
+          <button data-plan="free" aria-pressed="true">مجّاني</button>
+          <button data-plan="business" aria-pressed="false">الأعمال</button>
+          <button data-plan="enterprise" aria-pressed="false">مؤسسة</button>
+        </div>
+        <h3>صلاحيّاتُ المساعد</h3>
+        <div class="seg" id="segPerms"></div>
+      </div>
+      <div class="verdict">
+        <h3>ما يقوله الخادم</h3>
+        <p class="sub" id="vSub"></p>
+        <div id="vList"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="phone">
+        <div class="status"><span>٩:٤١</span><span>▮▮▮ ⌁ ⬤</span></div>
+        <div class="appbar">
+          <button class="iconbtn" id="back" hidden aria-label="رجوع">→</button>
+          <button class="iconbtn" id="menu" aria-label="القائمة">☰</button>
+          <h2 id="title">الرئيسية</h2>
+        </div>
+        <div class="screen" id="view"></div>
+        <div class="scrim" id="scrim"></div>
+        <nav class="drawer" id="drawer" aria-label="القائمة">
+          <div class="dhead">
+            <div class="nm">بسطة أبو سامي — سمك وخضار</div>
+            <div class="sb" id="dsub">بيع سريع · الباقة المجّانيّة</div>
+          </div>
+          <div class="dbody" id="dbody"></div>
+        </nav>
+        <div class="toast" id="toast"></div>
+      </div>
+      <p class="caption">جرّب: اكتب المبلغ ← بِع نقداً أو بأميال باي. ثلاثُ ضغطاتٍ لا أكثر.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ════════════════════════════════════════════════════════════════
+     العقدُ مقروءٌ من الخادم لا مخترَع:
+
+       VerticalRegistry BIZ_QUICK_SALE->own() =
+         quick_sale · debts · refunds
+       والتعليقُ بنصّه: «بائعُ السمك والخضار: بساطةٌ قصوى — بيعٌ ودَينٌ
+       ومرتجع.»
+       **ولا `paidDepth()`** — ولا `F_CASHIER` حتّى: البيعُ سريعٌ لا سلّةُ
+       كاشير.
+
+       CashierController::recordSale
+         payment_method required|in:cash,credit,amial_pay,corporate,mixed
+     ════════════════════════════════════════════════════════════════ */
+
+  var OWN = ['quick_sale', 'debts', 'refunds'];
+
+  var PLAN_RANK = { free: 0, business: 1, enterprise: 2 };
+  var PLAN_AR = { free: 'المجّانيّة', business: 'الأعمال', enterprise: 'المؤسسة' };
+  var PLAN_PRICE = { free: '٠', business: '٣٥', enterprise: '٩٩' };
+
+  var PLAN_GRANT = {
+    cashier: 'business', products: 'business', inventory: 'business',
+    barcode: 'business', customers: 'business', suppliers: 'business',
+    daily_reports: 'business', employees: 'business',
+    employee_permissions: 'business', shift_close: 'business',
+    multi_pos: 'business',
+    branches: 'enterprise', rbac: 'enterprise', offline_pos: 'enterprise',
+    advanced_reports: 'enterprise'
+  };
+
+  var NAMES = {
+    quick_sale: 'بيع سريع', debts: 'الديون', refunds: 'المرتجعات',
+    cashier: 'الكاشير (سلّة)', products: 'الأصناف', inventory: 'المخزون',
+    barcode: 'الباركود', customers: 'العملاء', suppliers: 'الموردون',
+    daily_reports: 'تقارير يوميّة', advanced_reports: 'تقارير متقدّمة',
+    employees: 'الموظّفون', employee_permissions: 'صلاحيّات الموظّفين',
+    rbac: 'الأدوار', multi_pos: 'أجهزة نقاط البيع',
+    shift_close: 'إغلاق الورديّة', branches: 'الفروع',
+    offline_pos: 'بيع دون اتّصال'
+  };
+
+  var role = 'owner', plan = 'free';
+  var PERMS = [['sell', 'البيع'], ['refunds', 'مرتجع'], ['credit', 'بيع آجل']];
+  var perms = { sell: 1 };
+
+  function has(code) {
+    if (OWN.indexOf(code) > -1) return true;
+    var need = PLAN_GRANT[code];
+    return !!need && PLAN_RANK[plan] >= PLAN_RANK[need];
+  }
+  function granter(code) {
+    if (OWN.indexOf(code) > -1) return { kind: 'box', label: 'مربّع البيع السريع' };
+    var need = PLAN_GRANT[code];
+    if (!need) return { kind: 'never', label: 'لا مانح' };
+    return { kind: 'plan', label: 'باقة ' + PLAN_AR[need] };
+  }
+  function can(p) { return role !== 'pos' || !!perms[p]; }
+
+  var money = function (n) { return Math.round(n).toLocaleString('en-US') + ' ر.ي'; };
+  var BALANCE = 128600;
+
+  var CUSTOMERS = [['أبو نبيل', 8400], ['أم ياسر', 3200], ['جارنا سالم', 12600]];
+
+  var view = document.getElementById('view'),
+      titleEl = document.getElementById('title'),
+      backBtn = document.getElementById('back'),
+      drawer = document.getElementById('drawer'),
+      scrim = document.getElementById('scrim'),
+      toastEl = document.getElementById('toast');
+  var stack = [], toastTimer;
+  var amt = '', payMethod = 'cash', paidTxn = null, shortCode = null, custIx = null;
+
+  function toast(msg, bad) {
+    toastEl.textContent = msg;
+    toastEl.className = 'toast show' + (bad ? ' err' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.className = 'toast'; }, 3200);
+  }
+  function closeDrawer() { drawer.classList.remove('open'); scrim.classList.remove('open'); }
+  function go(name, keep) {
+    closeDrawer();
+    if (!keep && stack[stack.length - 1] !== name) stack.push(name);
+    render();
+  }
+  function back() { if (stack.length > 1) { stack.pop(); render(); } }
+  function newCode() { return String(Math.floor(100000 + Math.random() * 899999)); }
+  var value = function () { return parseInt(amt || '0', 10); };
+
+  /* **ثلاثةُ موانعَ للبيع، ولكلٍّ رسالتُه.** */
+  function saleBlock() {
+    if (value() <= 0) return { why: 'empty', msg: 'أدخل المبلغ' };
+    if (payMethod === 'amial_pay' && !paidTxn) {
+      return { why: 'unpaid', msg: 'بانتظار دفع العميل عبر أميال باي' };
+    }
+    if (payMethod === 'credit') {
+      if (!can('credit')) return { why: 'role', msg: 'البيعُ الآجل غيرُ مُصرَّحٍ لك' };
+      if (custIx === null) return { why: 'cust', msg: 'اختر العميل — والدَّينُ لا يُقيَّد بلا اسم' };
+    }
+    return null;
+  }
+
+  function tiles(list) {
+    return '<div class="tiles">' + list.map(function (t) {
+      var open = t[3] !== false;
+      return '<button class="tile' + (open ? '' : ' lock') + '" data-go="' + t[2] + '"' +
+        (open ? '' : ' data-lock="' + (t[4] || '') + '"') + '>' +
+        (open ? '' : '<span class="lk">🔒</span>') +
+        '<span class="ic">' + t[0] + '</span><span class="nm">' + t[1] + '</span></button>';
+    }).join('') + '</div>';
+  }
+  function rows(list) {
+    return list.map(function (r) {
+      return '<button class="row" data-go="' + (r.go || '') + '">' +
+        '<span class="g"><span class="t">' + r.t + '</span>' +
+        (r.s ? '<span class="s">' + r.s + '</span>' : '') + '</span>' +
+        (r.chip ? '<span class="chip ' + r.chip[1] + '">' + r.chip[0] + '</span>' : '') +
+        (r.v ? '<span class="v num">' + r.v + '</span>' : '') + '</button>';
+    }).join('');
+  }
+
+  var S = {};
+
+  S.home = function () {
+    titleEl.textContent = 'بسطة أبو سامي';
+    var t = [
+      ['⚡', 'بيع سريع', 'sale'],
+      ['💳', 'الديون', 'debts'],
+      ['↩️', 'مرتجع', 'refunds'],
+      ['📊', 'التقارير', 'reports', has('daily_reports'), 'باقة الأعمال']
+    ];
+    return '<div class="balance"><div class="lbl">رصيد المحفظة</div>' +
+      '<div class="amt num">' + money(BALANCE) + '</div>' +
+      '<div class="acts"><button data-go="wallet">المحفظة</button>' +
+      '<button data-act="withdraw">سحب</button></div></div>' +
+      '<div class="card"><div class="sec">اليوم</div>' + rows([
+        { t: 'مبيعات اليوم', v: money(38400) },
+        { t: 'عددُ البيعات', v: '٢٩' },
+        { t: 'على الدفتر', v: money(24200), chip: ['يُتابَع', 'wr'] }
+      ]) + '</div>' + tiles(t) +
+      '<div class="note cs" style="margin-top:11px"><b>وثلاثُ قدراتٍ فقط في المربّع:</b> ' +
+      'بيعٌ ودَينٌ ومرتجع. <b>ولا كاشيرَ ولا أصنافَ ولا مخزون</b> — ' +
+      'والبسطةُ لا تحتاجها. وما تحتاجه يوماً تشتريه بالباقة.</div>';
+  };
+
+  S.sale = function () {
+    titleEl.textContent = 'بيع سريع';
+    var b = saleBlock();
+
+    var out = '<div class="amount"><div class="big num">' + money(value()) + '</div>' +
+      '<div class="conv">اكتب المبلغ — بلا أصنافٍ ولا سلّة</div></div>' +
+      '<div class="quick">' + [1000, 2000, 5000, 10000].map(function (q) {
+        return '<button data-quick="' + q + '">' + (q / 1000) + 'k</button>';
+      }).join('') + '</div>' +
+      '<div class="keypad">' +
+      ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map(function (k) {
+        return '<button data-key="' + k + '">' + k + '</button>';
+      }).join('') + '</div>';
+
+    out += '<div class="card" style="margin-top:11px"><div class="sec">طريقة الدفع</div>' +
+      '<div class="seg" style="margin:0">' +
+      [['cash', 'نقداً'], ['amial_pay', 'أميال باي'], ['credit', 'على الدفتر']]
+        .map(function (m) {
+          return '<button data-pay="' + m[0] + '" aria-pressed="' +
+            (payMethod === m[0]) + '">' + m[1] + '</button>';
+        }).join('') + '</div>' +
+      (payMethod === 'amial_pay'
+        ? (paidTxn
+            ? '<div class="note ok" style="margin:11px 0 0"><b>دُفعت.</b> ' +
+              'رقم الحركة <span class="num">' + paidTxn + '</span></div>'
+            : '<button class="btn" data-go="qr">عرض رمز الدفع</button>')
+        : '') +
+      (payMethod === 'credit'
+        ? (!can('credit')
+            ? '<div class="note bad" style="margin:11px 0 0"><b>البيعُ الآجل غيرُ ' +
+              'مُصرَّحٍ لك.</b></div>'
+            : '<div style="margin-top:11px"><div class="sec">على من؟</div>' +
+              CUSTOMERS.map(function (c, ix) {
+                return '<button class="row" data-cust="' + ix + '"' +
+                  (ix === custIx ? ' style="background:var(--cash-bg)"' : '') + '>' +
+                  '<span class="g"><span class="t">' + c[0] + '</span>' +
+                  '<span class="s num">عليه ' + money(c[1]) + '</span></span></button>';
+              }).join('') +
+              '<div class="note" style="margin:9px 0 0"><b>والدَّينُ لا يُقيَّد بلا اسم.</b> ' +
+              'فدفترٌ بلا أسماءٍ ليس دفتراً.</div></div>')
+        : '') + '</div>';
+
+    out += '<div class="card"><button class="btn" data-act="finish"' +
+      (b ? ' disabled' : '') + '>' +
+      (b && b.why === 'unpaid' ? 'بانتظار دفع العميل'
+        : b && b.why === 'role' ? 'الآجلُ غيرُ مُصرَّحٍ لك'
+        : b && b.why === 'cust' ? 'اختر العميل'
+        : 'تسجيل البيع') + '</button>' +
+      (b && b.why !== 'empty'
+        ? '<p style="font-size:11.5px;color:var(--bad);margin:8px 0 0">' + b.msg + '</p>'
+        : '') + '</div>';
+
+    return out;
+  };
+
+  S.qr = function () {
+    titleEl.textContent = 'الدفع — أميال باي';
+    if (!shortCode) shortCode = newCode();
+    return '<div class="card" style="text-align:center;padding:18px 14px">' +
+      '<div class="sec" style="text-align:center">المطلوب من العميل</div>' +
+      '<div class="num" style="font-size:26px;font-weight:800;color:var(--brand);margin-bottom:13px">' +
+      money(value()) + '</div><div class="qr" aria-label="رمز الدفع"></div>' +
+      '<div style="margin-top:12px;font-size:12px;color:var(--ink-3)">أو بالرمز القصير</div>' +
+      '<div class="num" style="font-size:27px;font-weight:800;letter-spacing:.14em">' +
+      shortCode + '</div></div>' +
+      '<div class="note">لا يُكتب رقمُ مرجعٍ هنا. <b>البيعُ يُسجَّل بعد حركةٍ ' +
+      'مدفوعةٍ فعلاً.</b></div>' +
+      '<button class="btn" data-act="qrPaid">محاكاة: دفع العميل</button>' +
+      '<button class="btn ghost" data-act="qrCancel">إلغاء الطلب</button>';
+  };
+
+  S.done = function () {
+    titleEl.textContent = 'تمّ البيع';
+    var names = { cash: 'نقداً', amial_pay: 'أميال باي', credit: 'على الدفتر' };
+    return '<div class="card" style="text-align:center;padding:26px 14px">' +
+      '<div style="font-size:44px">✅</div>' +
+      '<h3 style="margin:9px 0 4px">سُجّلت البيعة</h3>' +
+      '<p style="color:var(--ink-2);font-size:13px;margin:0">' + names[payMethod] +
+      (payMethod === 'credit' && custIx !== null ? ' — ' + CUSTOMERS[custIx][0] : '') +
+      '</p></div>' +
+      '<div class="card">' + rows([{ t: 'طباعة الإيصال' }, { t: 'إرسال للعميل' }]) + '</div>' +
+      '<button class="btn" data-act="again">بيعةٌ أخرى</button>';
+  };
+
+  S.debts = function () {
+    titleEl.textContent = 'الديون';
+    return '<div class="card"><div class="sec">على الدفتر</div>' +
+      '<div class="row" style="border:0;padding:2px 0"><span class="g">' +
+      '<span class="t">على ٣ عملاء</span></span>' +
+      '<span class="v num" style="font-size:18px;color:var(--bad)">' +
+      money(CUSTOMERS.reduce(function (s, c) { return s + c[1]; }, 0)) +
+      '</span></div></div>' +
+      '<div class="card">' + rows(CUSTOMERS.map(function (c) {
+        return { t: c[0], v: money(c[1]), chip: ['على الدفتر', 'wr'] };
+      })) + '</div>' +
+      '<div class="note ok"><b>والدَّينُ من المربّع</b> — يصله من نشاطه لا من باقته.</div>';
+  };
+
+  S.refunds = function () {
+    titleEl.textContent = 'المرتجعات';
+    if (!can('refunds')) {
+      return '<div class="note"><b>المرتجعاتُ غيرُ مُصرَّحةٍ لك.</b></div>';
+    }
+    return '<div class="card"><div class="sec">مرتجعاتُ اليوم</div>' + rows([
+      { t: 'بيعة ٠٩:٤٠', s: 'سمك — كيلو ونصف', v: '− ' + money(4200), chip: ['مُعاد', 'ok'] }
+    ]) + '</div>' +
+      '<div class="note ok"><b>والمرتجعُ من المربّع أيضاً</b> — ثلاثُ قدراتٍ لا غير.</div>';
+  };
+
+  S.reports = function () {
+    titleEl.textContent = 'التقارير';
+    if (!has('daily_reports')) {
+      return '<div class="note"><b>التقاريرُ تبدأ من باقة الأعمال.</b> ' +
+        'والمجّانيّةُ تُظهر إجماليَّ اليوم في الرئيسيّة وحدَه — ' +
+        '<b>وهو ما تحتاجه البسطة</b>.</div>';
+    }
+    return '<div class="card"><div class="sec">هذا الشهر</div>' + rows([
+      { t: 'المبيعات', v: money(984000) },
+      { t: 'على الدفتر', v: money(24200) },
+      { t: 'المرتجعات', v: money(18400) }
+    ]) + '</div>';
+  };
+
+  S.wallet = function () {
+    titleEl.textContent = 'محفظتي';
+    if (role === 'pos') {
+      return '<div class="note"><b>الرصيد للبائع وحده.</b> الخادمُ يحذف ' +
+        '<code>current_balance</code> من ردّ الإحصاءات لموظّف نقطة البيع ' +
+        'ويُرسل <code>balance_scope: owner_only</code>.</div>';
+    }
+    return '<div class="balance"><div class="lbl">الرصيد المتاح</div>' +
+      '<div class="amt num">' + money(BALANCE) + '</div>' +
+      '<div class="acts"><button data-act="withdraw">سحب</button>' +
+      '<button data-act="transfer">تحويل</button></div></div>' +
+      '<div class="card"><div class="sec">آخر الحركات</div>' + rows([
+        { t: 'مبيعات اليوم — أميال باي', s: 'اليوم', v: '+ ' + money(12800) },
+        { t: 'سحب إلى وكيل البسيري', s: 'أمس', v: '− ' + money(80000) }
+      ]) + '</div>';
+  };
+
+  S.posHome = function () {
+    titleEl.textContent = 'مساعد البائع';
+    var t = [['⚡', 'بيع سريع', 'sale']];
+    if (can('credit')) t.push(['💳', 'الديون', 'debts']);
+    if (can('refunds')) t.push(['↩️', 'مرتجع', 'refunds']);
+    t.push(['🧾', 'بيعاتي', 'sale']);
+
+    return '<div class="card"><div class="sec">اليوم</div>' + rows([
+      { t: 'بِعتُ', v: money(18600) },
+      { t: 'عددُ البيعات', v: '١٤' }
+    ]) +
+      '<div class="note" style="margin:11px 0 0">لا يظهر لك رصيدُ المحفظة — ' +
+      '<b>الخادمُ لا يُرسله</b> لموظّف نقطة البيع.</div></div>' + tiles(t);
+  };
+
+  S.caps = function () {
+    titleEl.textContent = 'مزايا باقتي';
+    var all = OWN.concat(Object.keys(PLAN_GRANT));
+    var open = all.filter(has), shut = all.filter(function (c) { return !has(c); });
+    return '<div class="card"><div class="sec">باقتك: ' + PLAN_AR[plan] + ' · ' +
+      PLAN_PRICE[plan] + ' ر.س / شهر</div>' +
+      '<div class="row" style="border:0;padding:2px 0"><span class="g">' +
+      '<span class="t">قدراتٌ مفتوحة</span></span><span class="v num">' +
+      open.length + ' من ' + all.length + '</span></div></div>' +
+      '<div class="card"><div class="sec">مفتوحة</div>' +
+      rows(open.map(function (c) {
+        return { t: NAMES[c] || c, s: 'من ' + granter(c).label };
+      })) + '</div>' +
+      (shut.length ? '<div class="card"><div class="sec">مقفلة</div>' +
+        rows(shut.map(function (c) {
+          return { t: NAMES[c] || c, s: 'تُفتح في ' + granter(c).label, chip: ['مقفل', 'wr'] };
+        })) + '</div>' + '<button class="btn" data-act="upgrade">ترقية</button>' : '') +
+      '<div class="note cs"><b>وثلاثٌ من المربّع لا غير.</b> وحتّى ' +
+      '<b>الكاشير</b> ليس منها — البسطةُ تبيع بالمبلغ لا بالسلّة.</div>';
+  };
+
+  var SECTIONS = [
+    ['🏠', 'الرئيسية', 'الرصيدُ ومبيعاتُ اليوم.', 'home', function () { return true; }],
+    ['⚡', 'البيع السريع', 'بيعٌ بالمبلغ — بلا سلّةٍ ولا أصناف.', 'sale', function () { return true; }],
+    ['👥', 'العملاء والفريق', 'من عليه دَينٌ ومن يبيع معك.', 'debts', function () { return true; }],
+    ['📊', 'الوردية والتقارير', 'ما بِعتَ اليوم وما بقي على الدفتر.', 'reports', function () { return has('daily_reports'); }]
+  ];
+
+  function renderDrawer() {
+    document.getElementById('dsub').textContent =
+      'بيع سريع · باقة ' + PLAN_AR[plan] + (role === 'pos' ? ' · مساعد' : '');
+    var body = document.getElementById('dbody');
+
+    if (role === 'pos') {
+      body.innerHTML =
+        '<button class="ditem" data-go="posHome"><span class="ic">🏠</span><span>' +
+        '<span class="t">شاشتي</span><span class="s">ما مُنح لي وحدَه.</span></span></button>' +
+        '<button class="ditem" data-go="sale"><span class="ic">⚡</span><span>' +
+        '<span class="t">بيع سريع</span><span class="s">بالمبلغ لا بالسلّة.</span></span></button>' +
+        '<div class="dsep"></div>' +
+        '<div class="ditem" style="cursor:default"><span class="ic">ℹ️</span><span>' +
+        '<span class="s">قائمةُ البائع لا تُعرض لمساعده — لا الباقةُ ولا ' +
+        'المحفظة.</span></span></div>';
+      return;
+    }
+
+    body.innerHTML = SECTIONS.map(function (s) {
+      var open = s[4]();
+      return '<button class="ditem" data-go="' + s[3] + '"><span class="ic">' + s[0] +
+        '</span><span><span class="t">' + s[1] + (open ? '' : ' 🔒') +
+        '</span><span class="s">' + (open ? s[2] : 'مقفلٌ في باقتك.') +
+        '</span></span></button>';
+    }).join('') +
+      '<div class="dsep"></div>' +
+      '<button class="ditem" data-go="wallet"><span class="ic">💳</span><span>' +
+      '<span class="t">محفظتي</span><span class="s">الرصيد والسحب والتحويل.</span></span></button>' +
+      '<button class="ditem" data-go="caps"><span class="ic">⭐</span><span>' +
+      '<span class="t">مزايا باقتي</span><span class="s">ثلاثٌ من المربّع لا غير.</span></span></button>';
+  }
+
+  function render() {
+    var name = stack[stack.length - 1] || 'home';
+    if (!S[name]) name = 'home';
+    view.innerHTML = S[name]();
+    view.scrollTop = 0;
+    backBtn.hidden = stack.length < 2;
+    renderDrawer();
+    renderVerdict();
+  }
+
+  function renderVerdict() {
+    document.getElementById('vSub').textContent =
+      (role === 'owner' ? 'البائع' : 'مساعد') + ' · بيع سريع · باقة ' +
+      PLAN_AR[plan] + ' (' + PLAN_PRICE[plan] + ' ر.س)';
+
+    var watch = ['quick_sale', 'debts', 'refunds', 'cashier', 'products',
+      'inventory', 'customers', 'daily_reports', 'employees', 'branches'];
+
+    document.getElementById('vList').innerHTML = watch.map(function (c) {
+      var on = has(c), g = granter(c);
+      var why = on
+        ? (g.kind === 'box' ? 'يصلها من مربّع البيع السريع — لا تُشترى ولا تُنزَع.'
+                            : 'فتحتها الباقةُ الحاليّة.')
+        : 'مقفلة — تُفتح في ' + g.label + '.';
+      if (c === 'cashier' && !on) {
+        why = 'حتّى الكاشيرُ ليس في المربّع — البسطةُ تبيع بالمبلغ لا بالسلّة.';
+      }
+      return '<div class="grant"><span class="dot ' + (on ? 'on' : 'off') + '"></span>' +
+        '<span><b>' + (NAMES[c] || c) + '<span class="src ' + g.kind + '">' +
+        g.label + '</span></b><span>' + why + '</span></span></div>';
+    }).join('');
+  }
+
+  document.getElementById('menu').addEventListener('click', function () {
+    drawer.classList.add('open'); scrim.classList.add('open');
+  });
+  scrim.addEventListener('click', closeDrawer);
+  backBtn.addEventListener('click', back);
+
+  document.getElementById('segRole').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-role]'); if (!b) return;
+    role = b.dataset.role;
+    [].forEach.call(this.children, function (x) {
+      x.setAttribute('aria-pressed', String(x.dataset.role === role));
+    });
+    stack = [role === 'pos' ? 'posHome' : 'home'];
+    amt = ''; paidTxn = null; custIx = null; payMethod = 'cash';
+    render();
+  });
+
+  document.getElementById('segPlan').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-plan]'); if (!b) return;
+    plan = b.dataset.plan;
+    [].forEach.call(this.children, function (x) {
+      x.setAttribute('aria-pressed', String(x.dataset.plan === plan));
+    });
+    render();
+  });
+
+  var permsEl = document.getElementById('segPerms');
+  permsEl.innerHTML = PERMS.map(function (p) {
+    return '<button data-perm="' + p[0] + '" aria-pressed="' + !!perms[p[0]] + '">' +
+      p[1] + '</button>';
+  }).join('');
+  permsEl.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-perm]'); if (!b) return;
+    var k = b.dataset.perm;
+    if (k === 'sell' && role === 'pos') { toast('البيعُ صلاحيّةٌ لا تُنزع عن المساعد.'); return; }
+    perms[k] = perms[k] ? 0 : 1;
+    b.setAttribute('aria-pressed', String(!!perms[k]));
+    render();
+  });
+
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-go],[data-act],[data-key],[data-quick],' +
+      '[data-pay],[data-cust],[data-lock]');
+    if (!el || !el.closest('.phone')) return;
+
+    if (el.dataset.lock) { toast('مقفلٌ — يُفتح في ' + el.dataset.lock + '.'); return; }
+    if (el.dataset.key) {
+      var k = el.dataset.key;
+      if (k === 'C') amt = '';
+      else if (k === '⌫') amt = amt.slice(0, -1);
+      else if (amt.length < 9) amt += k;
+      paidTxn = null; render(); return;
+    }
+    if (el.dataset.quick) { amt = el.dataset.quick; paidTxn = null; render(); return; }
+    // **والفحصُ على `null` لا على الصدق** — الفهرسُ صفريُّ الأساس.
+    if (el.dataset.cust !== undefined) { custIx = +el.dataset.cust; render(); return; }
+    if (el.dataset.pay) {
+      payMethod = el.dataset.pay;
+      if (payMethod !== 'amial_pay') { paidTxn = null; shortCode = null; }
+      if (payMethod !== 'credit') custIx = null;
+      render(); return;
+    }
+
+    var act = el.dataset.act;
+    if (act === 'finish') {
+      var b = saleBlock();
+      if (b) { toast(b.msg, true); return; }
+      go('done'); return;
+    }
+    if (act === 'again') {
+      amt = ''; paidTxn = null; shortCode = null; custIx = null; payMethod = 'cash';
+      stack = [role === 'pos' ? 'posHome' : 'home']; go('sale'); return;
+    }
+    if (act === 'qrPaid') { paidTxn = 'TX-' + newCode(); back(); toast('وصلت الحركة.'); return; }
+    if (act === 'qrCancel') { shortCode = null; back(); toast('أُلغي طلبُ الدفع.'); return; }
+    if (act === 'upgrade') {
+      plan = plan === 'free' ? 'business' : 'enterprise';
+      [].forEach.call(document.getElementById('segPlan').children, function (x) {
+        x.setAttribute('aria-pressed', String(x.dataset.plan === plan));
+      });
+      render(); toast('رُقّيت إلى باقة ' + PLAN_AR[plan] + '.'); return;
+    }
+    if (act === 'withdraw') { toast('طلبُ سحبٍ إلى وكيل.'); return; }
+    if (act === 'transfer') { toast('تحويلٌ من المحفظة.'); return; }
+
+    var to = el.dataset.go;
+    if (to === 'qr') { shortCode = null; }
+    if (to) {
+      if (role === 'pos' && ['wallet', 'caps', 'reports'].indexOf(to) > -1) {
+        toast('لا يُفتح للمساعد.'); return;
+      }
+      go(to);
+    }
+  });
+
+  stack = ['home'];
+  render();
+})();
+</script>

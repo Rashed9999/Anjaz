@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:amial_pay/helper/amial_crash_reporter.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_direction.dart';
 
 /// AMIAL-BUILD-STAMP-002 — بصمة البناء: أيّ نسخة يشغّلها هذا الجهاز فعلاً.
 ///
@@ -60,7 +61,7 @@ class _AmialBuildStampState extends State<AmialBuildStamp> {
         child: Text(
           _label,
           textAlign: TextAlign.center,
-          textDirection: TextDirection.rtl,
+          textDirection: appTextDirection(),
           style: TextStyle(
             color: widget.onDark
                 ? Colors.white.withValues(alpha: 0.6)
@@ -83,7 +84,7 @@ class _AmialBuildStampState extends State<AmialBuildStamp> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (sheetContext) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: appTextDirection(),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
@@ -124,13 +125,13 @@ class _AmialBuildStampState extends State<AmialBuildStamp> {
                       if (!sheetContext.mounted) return;
                       Navigator.of(sheetContext).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text(
                             'أُرسل تقرير اختبار. أغلق التطبيق وافتحه، '
                             'ثم انظر «Non-fatals» في لوحة Crashlytics.',
-                            textDirection: TextDirection.rtl,
+                            textDirection: appTextDirection(),
                           ),
-                          duration: Duration(seconds: 6),
+                          duration: const Duration(seconds: 6),
                         ),
                       );
                     },
@@ -162,7 +163,7 @@ class _AmialBuildStampState extends State<AmialBuildStamp> {
     showDialog<void>(
       context: sheetContext,
       builder: (dialogContext) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: appTextDirection(),
         child: AlertDialog(
           title: const Text('انهيار متعمَّد'),
           content: const Text(

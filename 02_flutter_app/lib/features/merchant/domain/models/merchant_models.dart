@@ -10,7 +10,18 @@ class AmialMerchant {
   final String? address;
   final String? phone;
   final String? phoneMasked;
-  final String balance;
+  /// ══════════════════════════════════════════════════════════════════
+  /// **«غير معروف» ليس صفراً** — والرصيدُ يُترك عدماً حين يُحجَب.
+  ///
+  /// الخادمُ **يحذف** `current_balance` عن موظّف نقطة البيع عمداً: المالُ
+  /// للمالك لا للكاشير. وافتراضُ `'0'` هنا يكتب على شاشته **«الرصيد
+  /// المتاح: ٠ ر.ي»** على متجرٍ فيه مئتا ألف — رقمٌ ماليٌّ كاذبٌ يُتّخذ
+  /// عليه قرار.
+  ///
+  /// والشاشةُ تفرّق بينهما سلفاً (`balance != null`)؛ النموذجُ وحدَه كان
+  /// يمحو الفرقَ قبل أن تراه. (القاعدة السابعة.)
+  /// ══════════════════════════════════════════════════════════════════
+  final String? balance;
   final bool verified;
   final String? verificationStatus;
 
@@ -23,13 +34,17 @@ class AmialMerchant {
     this.address,
     this.phone,
     this.phoneMasked,
-    required this.balance,
+    this.balance,
     required this.verified,
     this.verificationStatus,
   });
 
   factory AmialMerchant.fromJson(Map<String, dynamic> j) {
     final merchant = j['merchant'] is Map ? Map<String, dynamic>.from(j['merchant']) : <String, dynamic>{};
+
+    // **يُقرأ خاماً ثمّ يُحوَّل** — فـ`?? '0'` قبل `toString` تمحو الغياب
+    // قبل أن تراه الشاشة.
+    final raw = j['current_balance'];
     return AmialMerchant(
       id: merchant['id'] ?? 0,
       userId: j['id'] ?? merchant['user_id'] ?? 0,
@@ -39,7 +54,7 @@ class AmialMerchant {
       address: (merchant['address'] ?? j['address'])?.toString(),
       phone: j['phone']?.toString(),
       phoneMasked: j['phone_masked']?.toString(),
-      balance: (j['current_balance'] ?? '0').toString(),
+      balance: raw?.toString(),
       verified: (j['merchant_verified'] ?? merchant['verified'] ?? 0) == 1,
       verificationStatus: (j['verification_status'] ?? merchant['verification_status'])?.toString(),
     );
@@ -60,6 +75,7 @@ class AmialMerchantTransaction {
   final String? posNumber;
   final String status;
   final DateTime createdAt;
+  final bool incoming;
 
   AmialMerchantTransaction({
     required this.id,
@@ -73,6 +89,7 @@ class AmialMerchantTransaction {
     this.posNumber,
     required this.status,
     required this.createdAt,
+    required this.incoming,
   });
 
   factory AmialMerchantTransaction.fromJson(Map<String, dynamic> j) {
@@ -82,14 +99,48 @@ class AmialMerchantTransaction {
       type: (j['type'] ?? j['transaction_type'] ?? 'unknown').toString(),
       amount: (j['amount'] ?? '0').toString(),
       fee: j['fee']?.toString(),
-      customerName: j['customer_name']?.toString(),
-      customerPhoneMasked: (j['customer_phone_masked'] ?? j['sender_phone'])?.toString(),
+      customerName: (j['customer_name'] ?? (j['sender'] is Map ? j['sender']['name'] : null))?.toString(),
+      customerPhoneMasked: (j['customer_phone_masked'] ?? j['sender_phone'] ?? (j['sender'] is Map ? j['sender']['phone'] : null))?.toString(),
       posUserName: j['pos_user_name']?.toString(),
       posNumber: j['pos_number']?.toString(),
-      status: (j['status'] ?? 'unknown').toString(),
+      // سجل العميل التاريخي لا يحمل status لأن الصف لا يُكتب إلا بعد نجاح
+      // العملية؛ لا نحوله إلى «فاشلة» لمجرد اختلاف عقد الاستجابة.
+      status: (j['status'] ?? 'success').toString(),
       createdAt: j['created_at'] != null
           ? (DateTime.tryParse(j['created_at'].toString()) ?? DateTime.now())
           : DateTime.now(),
+      incoming: (double.tryParse('${j['credit'] ?? 0}') ?? 0) > 0,
+    );
+  }
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-MERCHANT-SESSION-001 — **قيدُ دفترٍ يصير حركةً في المحفظة.**
+  ///
+  /// وكان المصدرُ `/customer/transaction-history` — **وهو يردّ ٤٠٣ لكلّ
+  /// تاجر** (وسيطُ `customerAuth` يشترط نوعَ العميل). فالقائمةُ فارغةٌ
+  /// أبداً، وتُعرَض «لا حركةَ في المحفظة بعد» على متجرٍ يبيع.
+  ///
+  /// والدفترُ لا يحمل `transaction_id` ولا اسمَ عميل — يحمل **الاتّجاهَ
+  /// والمبلغَ والوصفَ ونوعَ المصدر**. وما لا يحمله **يُترك عدماً ولا
+  /// يُخترَع**: `customerName` تبقى `null` فلا يُكتب اسمٌ لم يقله أحد.
+  factory AmialMerchantTransaction.fromLedgerEntry(Map<String, dynamic> j) {
+    final direction = (j['direction'] ?? '').toString();
+
+    return AmialMerchantTransaction(
+      id: 0,
+      transactionId: (j['reference'] ?? '').toString(),
+      type: (j['source_type'] ?? 'unknown').toString(),
+      amount: (j['amount'] ?? '0').toString(),
+      fee: null,
+      customerName: null,
+      customerPhoneMasked: null,
+      posUserName: null,
+      posNumber: null,
+      status: 'success',
+      createdAt: j['date'] != null
+          ? (DateTime.tryParse(j['date'].toString()) ?? DateTime.now())
+          : DateTime.now(),
+      incoming: direction == 'credit',
     );
   }
 
@@ -98,6 +149,7 @@ class AmialMerchantTransaction {
       case 'pay_merchant':
       case 'pos_payment':
       case 'received_payment':
+      case 'received_money':
         return 'استلام دفعة';
       case 'qr_payment':
         return 'دفعة QR';
@@ -111,7 +163,7 @@ class AmialMerchantTransaction {
     }
   }
 
-  bool get isIncoming => !type.contains('refund');
+  bool get isIncoming => incoming;
 }
 
 class AmialMerchantDashboardStats {
@@ -119,30 +171,56 @@ class AmialMerchantDashboardStats {
   final String todayRefunds;
   final String todayNet;
   final int todayTransactionsCount;
-  final String balance;
+  /// ══════════════════════════════════════════════════════════════════
+  /// **«غير معروف» ليس صفراً** — والرصيدُ يُترك عدماً حين يُحجَب.
+  ///
+  /// الخادمُ **يحذف** `current_balance` عن موظّف نقطة البيع عمداً: المالُ
+  /// للمالك لا للكاشير. وافتراضُ `'0'` هنا يكتب على شاشته **«الرصيد
+  /// المتاح: ٠ ر.ي»** على متجرٍ فيه مئتا ألف — رقمٌ ماليٌّ كاذبٌ يُتّخذ
+  /// عليه قرار.
+  ///
+  /// والشاشةُ تفرّق بينهما سلفاً (`balance != null`)؛ النموذجُ وحدَه كان
+  /// يمحو الفرقَ قبل أن تراه. (القاعدة السابعة.)
+  /// ══════════════════════════════════════════════════════════════════
+  final String? balance;
   final String pendingSettlement;
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-MERCHANT-RECEIVE-LIMIT-002 — **تحويلاتٌ واردةٌ ليست مبيعات.**
+  ///
+  /// كان `send_money` يُحتسب في «مبيعات اليوم» — فمالٌ يرسله قريبٌ إلى
+  /// التاجر يُكتب بيعاً. فصار يُفصَل ويُعرَض باسمه، ولا يُطوى.
+  ///
+  /// **و`null` تعني «لم يُرسَل» لا «صفر»** — الخادمُ يحذفه عن موظّف
+  /// نقطة البيع كما يحذف الرصيد، فهو مالُ المالك لا مالُ الورديّة.
+  /// (القاعدة السابعة.)
+  final String? todayTransfersIn;
 
   AmialMerchantDashboardStats({
     required this.todaySales,
     required this.todayRefunds,
     required this.todayNet,
     required this.todayTransactionsCount,
-    required this.balance,
+    this.balance,
+    this.todayTransfersIn,
     required this.pendingSettlement,
   });
 
   factory AmialMerchantDashboardStats.empty() => AmialMerchantDashboardStats(
         todaySales: '0', todayRefunds: '0', todayNet: '0',
-        todayTransactionsCount: 0, balance: '0', pendingSettlement: '0',
+        todayTransactionsCount: 0, pendingSettlement: '0',
       );
 
   factory AmialMerchantDashboardStats.fromJson(Map<String, dynamic> j) {
+    final raw = j['current_balance'] ?? j['balance'];
+
     return AmialMerchantDashboardStats(
       todaySales: (j['today_sales'] ?? '0').toString(),
       todayRefunds: (j['today_refunds'] ?? '0').toString(),
       todayNet: (j['today_net'] ?? j['today_sales'] ?? '0').toString(),
       todayTransactionsCount: j['today_count'] ?? 0,
-      balance: (j['current_balance'] ?? j['balance'] ?? '0').toString(),
+      balance: raw?.toString(),
+      todayTransfersIn: j['today_transfers_in']?.toString(),
       pendingSettlement: (j['pending_settlement'] ?? '0').toString(),
     );
   }

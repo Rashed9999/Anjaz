@@ -7,6 +7,7 @@ use App\Models\Retail\MerchantBrand;
 use App\Models\Retail\MerchantCategory;
 use App\Models\Retail\MerchantUnit;
 use App\Models\Retail\ProductBarcode;
+use App\Services\Retail\StockService;
 use App\Models\User;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -192,9 +193,17 @@ class ProductCatalogService
             ->where('barcode', $code)->first();
         if ($clash) {
             $other = MerchantProduct::find($clash->product_id);
+            if ((int) $clash->product_id === (int) $product->id
+                && bccomp((string) $clash->pack_size, (string) ($data['pack_size'] ?? $clash->pack_size), 3) === 0
+                && (!(bool) ($data['is_primary'] ?? false) || $clash->is_primary)) {
+                return $clash; // Repeated barcode scan/add is idempotent.
+            }
             throw new DomainException(
                 'هذا الباركود مسجَّل على «' . ($other->name ?? 'صنف آخر') . '»');
         }
+        $legacyClash = MerchantProduct::where('merchant_user_id', $merchant->id)
+            ->where('barcode', $code)->where('id', '!=', $product->id)->first();
+        if ($legacyClash) throw new DomainException('هذا الباركود مرتبط بالصنف: ' . $legacyClash->name);
 
         $pack = (string) ($data['pack_size'] ?? '1');
         if (bccomp($pack, '0', 3) <= 0) {
@@ -202,6 +211,13 @@ class ProductCatalogService
         }
 
         return DB::transaction(function () use ($merchant, $product, $code, $data, $pack) {
+            // Products created after the initial migration may have only the
+            // legacy barcode mirror. Preserve it before adding a carton code.
+            if ($product->barcode && !ProductBarcode::where('product_id', $product->id)
+                ->where('barcode', $product->barcode)->exists()) {
+                app(\App\Services\MerchantProductBarcodeService::class)
+                    ->ensurePrimary($merchant, $product, $product->barcode);
+            }
             $isPrimary = (bool) ($data['is_primary'] ?? false)
                 || ! ProductBarcode::where('product_id', $product->id)->exists();
 
@@ -234,27 +250,15 @@ class ProductCatalogService
      */
     public function scan(User $merchant, string $barcode): ?array
     {
-        $barcode = trim($barcode);
-        if ($barcode === '') {
-            return null;
-        }
-
-        $row = ProductBarcode::where('merchant_user_id', $merchant->id)
-            ->where('barcode', $barcode)->with('product')->first();
-
-        if ($row && $row->product) {
-            return [
-                'product' => $row->product,
-                'pack_size' => (string) $row->pack_size,
-                'unit_id' => $row->unit_id,
-            ];
-        }
-
-        // احتياطاً: الأصنافُ التي لم تُهاجَر بعد تقرأ العمودَ القديم.
-        $legacy = MerchantProduct::where('merchant_user_id', $merchant->id)
-            ->where('barcode', $barcode)->where('is_active', true)->first();
-
-        return $legacy ? ['product' => $legacy, 'pack_size' => '1', 'unit_id' => $legacy->unit_id] : null;
+        $hit = app(\App\Services\MerchantProductBarcodeService::class)->find($merchant, $barcode);
+        if (!$hit) return null;
+        $link = ProductBarcode::where('merchant_user_id', $merchant->id)
+            ->where('barcode', trim($barcode))->first();
+        return [
+            'product' => $hit['product'],
+            'pack_size' => $hit['pack_size'],
+            'unit_id' => $link?->unit_id ?? $hit['product']->unit_id,
+        ];
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -267,8 +271,18 @@ class ProductCatalogService
      *
      * **والأبُ يصير مِظلّةً لا يُباع** — وبيعُه يعني بيعَ «قميص» بلا لون.
      */
-    public function generateVariants(User $merchant, int $parentId, array $axes): array
-    {
+    /**
+     * @param  string|null  $unallocated  **يُخرَج بالإشارة**: مخزونُ الأب الذي
+     *   صُفِّر ويحتاج توزيعاً على المتغيّرات. ومعاملٌ اختياريٌّ بالإشارة
+     *   يُبقي النداءات القائمة كما هي حرفاً بحرف — وهي في متحكّمٍ
+     *   وحارسَين.
+     */
+    public function generateVariants(
+        User $merchant,
+        int $parentId,
+        array $axes,
+        ?string &$unallocated = null,
+    ): array {
         $parent = MerchantProduct::where('id', $parentId)
             ->where('merchant_user_id', $merchant->id)->first();
         if (! $parent) {
@@ -292,8 +306,58 @@ class ProductCatalogService
                 'المحاور تُنتج ' . count($combos) . ' متغيّراً — الحدّ ٢٠٠ في المرّة');
         }
 
-        return DB::transaction(function () use ($merchant, $parent, $combos) {
-            $parent->update(['is_variant_parent' => true, 'track_stock' => false]);
+        return DB::transaction(function () use ($merchant, $parent, $combos, &$unallocated) {
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-VARIANT-PARENT-001 — **مخزونُ الأب لا يضيع صامتاً.**
+            //
+            // كان السطرُ التالي يقلب الأبَ مِظلّةً **ويترك `quantity` كما
+            // هي**. فتاجرٌ عنده عشرةُ قمصانٍ يولّد المتغيّراتِ فإذا:
+            //
+            //     الأب     : ١٠ قطعة  ← **لا تُباع** (صار مِظلّة)
+            //     المتغيّرات: ٠ لكلٍّ  ← «نفذ المخزون» على الشاشة
+            //
+            // **فعشرُ قطعٍ حقيقيّةٍ اختفت من البيع بضغطةٍ واحدة**، ولا خطأَ
+            // في أيّ سجلّ — الصفُّ موجودٌ ورقمُه صحيح، لكن لا بابَ إليه.
+            //
+            // **ولا تُوزَّع تلقائيّاً**: قسمةُ العشرة على تسعةِ متغيّراتٍ
+            // اختراعٌ لا يعرفه إلّا التاجر (كم أحمرَ وكم أزرق؟). فالمخزونُ
+            // **يُصفَّر بحركةِ مخزونٍ مسجَّلةٍ سببُها `correction`**، ويُعاد
+            // العددُ في الردّ ليقوله التطبيقُ صراحةً: «١٠ وحداتٍ بانتظار
+            // التوزيع». (القاعدة السابعة: الغيابُ يُقال ولا يُبتلع.)
+            // ══════════════════════════════════════════════════════════
+            $leftOver = (string) ($parent->quantity ?? '0');
+            $hadStock = bccomp($leftOver, '0', 3) > 0;
+
+            if ($hadStock) {
+                try {
+                    $stock = app(StockService::class);
+                    $stock->move(
+                        product: $parent,
+                        location: $stock->defaultLocation($merchant->id),
+                        delta: '-'.$leftOver,
+                        reason: 'correction',
+                        actor: $merchant,
+                        note: 'تحويلُ الصنف إلى مِظلّةِ متغيّرات — المخزونُ '
+                            .'ينتقل إلى المتغيّرات ويُوزَّع يدويّاً',
+                        allowNegative: true,
+                    );
+                } catch (\Throwable $e) {
+                    // **ولا يسقط التوليدُ لأجل حركةِ أثر.** الأثرُ يُحاوَل،
+                    // والتصفيرُ يقع بكلّ حال — فبقاءُ الرقم على الأب أخطرُ
+                    // من غياب سطرٍ في سجلّ الحركة.
+                    \Log::warning('AMIAL-VARIANT-PARENT-001: تعذّر تسجيل حركة تصفير الأب', [
+                        'product_id' => $parent->id, 'error' => $e->getMessage(),
+                    ]);
+                }
+
+                $parent->quantity = '0';
+            }
+
+            $unallocated = $hadStock ? $leftOver : '0';
+
+            $parent->is_variant_parent = true;
+            $parent->track_stock = false;
+            $parent->save();
 
             $made = [];
             foreach ($combos as $combo) {

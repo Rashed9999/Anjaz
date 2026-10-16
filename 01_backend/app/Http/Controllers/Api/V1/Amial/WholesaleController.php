@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Concerns\DeniesByPlan;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
+use App\Models\PaymentRequest;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Models\WholesaleCollection;
@@ -12,13 +13,19 @@ use App\Models\WholesaleCustomer;
 use App\Models\WholesaleInvoice;
 use App\Models\WholesalePriceTier;
 use App\Models\WholesaleProduct;
+use App\Models\WholesaleProductLot;
 use App\Models\WholesaleProductPrice;
 use App\Models\WholesaleSalesRep;
+use App\Models\WholesaleReturn;
 use App\Services\Merchant\MerchantPermissionService;
+use App\Services\MoneyService;
 use App\Services\WholesaleCollectionService;
 use App\Services\WholesaleInvoicePdfService;
 use App\Services\WholesaleInvoiceService;
+use App\Services\PaymentRequestService;
 use App\Services\WholesaleReportsService;
+use App\Services\WholesaleReturnService;
+use App\Services\WholesaleReturnSettlementService;
 use App\Services\WholesaleService;
 use App\Support\Merchant\MerchantPermissions as P;
 use DomainException;
@@ -51,7 +58,10 @@ class WholesaleController extends Controller
         private readonly WholesaleInvoiceService $invSvc,
         private readonly WholesaleCollectionService $colSvc,
         private readonly WholesaleReportsService $reportsSvc,
+        private readonly WholesaleReturnService $returnSvc,
+        private readonly WholesaleReturnSettlementService $returnSettlementSvc,
         private readonly WholesaleInvoicePdfService $pdfSvc,
+        private readonly PaymentRequestService $paymentRequestSvc,
         private readonly MerchantPermissionService $perm,
     ) {}
 
@@ -302,6 +312,71 @@ class WholesaleController extends Controller
         return $this->ok(['product' => $updated], 'ADJUSTED', 'تم تعديل المخزون');
     }
 
+    // ============ Units & Lots (server-owned wholesale stock truth) ============
+
+    public function listProductUnits(Request $request, int $id): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_PRODUCT_VIEW)) return $deny;
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $product = WholesaleProduct::where('business_id', $biz->id)->find($id);
+        if (!$product) return $this->error('NOT_FOUND', 'المنتج غير موجود', 404);
+        return $this->ok(['product' => $product, 'units' => $this->svc->listUnits($product)]);
+    }
+
+    public function saveProductUnit(Request $request, int $id): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_PRODUCT_MANAGE)) return $deny;
+        $v = Validator::make($request->all(), [
+            'code' => 'required|string|max:32', 'name' => 'required|string|max:64',
+            'factor_to_base' => 'required|numeric|gt:0', 'is_base' => 'sometimes|boolean',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $product = WholesaleProduct::where('business_id', $this->svc->getOrCreateBusiness($merchant)->id)->find($id);
+        if (!$product) return $this->error('NOT_FOUND', 'المنتج غير موجود', 404);
+        try { $unit = $this->svc->saveUnit($product, $request->all()); }
+        catch (\InvalidArgumentException $e) { return $this->error('INVALID', $e->getMessage(), 422); }
+        return $this->ok(['unit' => $unit], 'SAVED', 'تم حفظ وحدة التحويل');
+    }
+
+    public function listProductLots(Request $request, int $id): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_PRODUCT_VIEW)) return $deny;
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $product = WholesaleProduct::where('business_id', $this->svc->getOrCreateBusiness($merchant)->id)->find($id);
+        if (!$product) return $this->error('NOT_FOUND', 'المنتج غير موجود', 404);
+        return $this->ok(['product' => $product, 'lots' => WholesaleProductLot::where('product_id', $product->id)
+            ->orderByRaw('expiry_date is null')->orderBy('expiry_date')->orderBy('received_at')->get()]);
+    }
+
+    public function receiveProductLot(Request $request, int $id): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_STOCK_ADJUST)) return $deny;
+        $v = Validator::make($request->all(), [
+            'lot_number' => 'required|string|max:80', 'quantity' => 'required|numeric|gt:0',
+            'unit_id' => 'sometimes|nullable|integer', 'location' => 'sometimes|nullable|string|max:120',
+            'received_at' => 'sometimes|date', 'expiry_date' => 'sometimes|nullable|date',
+            'cost_per_unit' => 'sometimes|nullable|numeric|min:0',
+            'supplier_reference' => 'sometimes|nullable|string|max:120',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $product = WholesaleProduct::where('business_id', $this->svc->getOrCreateBusiness($merchant)->id)->find($id);
+        if (!$product) return $this->error('NOT_FOUND', 'المنتج غير موجود', 404);
+        try { $lot = $this->svc->receiveLot($product, $request->all()); }
+        catch (\Throwable $e) { return $this->error('INVALID', $e->getMessage(), 422); }
+        return $this->ok(['lot' => $lot, 'product' => $product->fresh()], 'RECEIVED', 'تم استلام الدفعة وإضافتها للمخزون', 201);
+    }
+
     // ============ Multi-Pricing ============
 
     public function listProductPrices(Request $request, int $productId): JsonResponse
@@ -364,6 +439,58 @@ class WholesaleController extends Controller
             return $this->error('INVALID', $e->getMessage(), 422);
         }
         return $this->ok(['price' => $price], 'SAVED', 'تم الحفظ');
+    }
+
+    /**
+     * معاينة السعر حسب شريحة العميل والكمية.
+     * هذه للعرض فقط؛ createInvoice يعيد التسعير تحت القفل ولا يثق بها.
+     */
+    public function quoteProduct(Request $request, int $productId): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_PRODUCT_VIEW)) {
+            return $deny;
+        }
+        $v = Validator::make($request->query(), [
+            'customer_id' => 'required|integer',
+            'quantity' => 'required|numeric|min:0.001',
+            'unit_id' => 'sometimes|nullable|integer',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $customer = WholesaleCustomer::where('id', $request->query('customer_id'))
+            ->where('business_id', $biz->id)->where('is_active', true)->first();
+        $product = WholesaleProduct::where('id', $productId)
+            ->where('business_id', $biz->id)->where('is_active', true)->first();
+        if (!$customer || !$product) return $this->error('NOT_FOUND', 'العميل أو المنتج غير موجود', 404);
+
+        $tierId = $customer->default_tier_id ?? WholesalePriceTier::where('business_id', $biz->id)
+            ->where('is_default', true)->where('is_active', true)->value('id');
+        if (!$tierId) return $this->error('PRICE_TIER_MISSING', 'لا توجد شريحة سعر افتراضية', 422);
+        try {
+            $unit = $this->svc->unitFor($product, $request->query('unit_id'));
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('INVALID_UNIT', $e->getMessage(), 422);
+        }
+        $quantity = \App\Services\MoneyService::normalize((string) $request->query('quantity'));
+        $baseQuantity = \App\Services\MoneyService::mul($quantity, (string) $unit->factor_to_base);
+        $basePrice = \App\Services\MoneyService::normalize((string) $product->priceFor((int) $tierId, (float) $baseQuantity));
+        $unitPrice = \App\Services\MoneyService::mul($basePrice, (string) $unit->factor_to_base);
+
+        return $this->ok(['quote' => [
+            'product_id' => $product->id,
+            'customer_id' => $customer->id,
+            'tier_id' => (int) $tierId,
+            'unit_id' => $unit->id,
+            'unit' => $unit->name,
+            'quantity' => $quantity,
+            'base_quantity' => $baseQuantity,
+            'unit_price' => $unitPrice,
+            'line_total' => \App\Services\MoneyService::mul($unitPrice, $quantity),
+        ]]);
     }
 
     // ============ Customers ============
@@ -496,7 +623,8 @@ class WholesaleController extends Controller
 
         $v = Validator::make($request->all(), [
             'customer_id' => 'required|integer',
-            'payment_type' => 'required|in:cash,credit',
+            'payment_type' => 'required|in:cash,amial_pay,credit',
+            'paid_transaction_id' => 'required_if:payment_type,amial_pay|nullable|string|max:64',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|integer',
             'items.*.quantity' => 'required|numeric|min:0.001',
@@ -511,7 +639,35 @@ class WholesaleController extends Controller
 
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, $posUserId] = $ctx + [1 => null];
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-SHIFT-GATE-002 — **فاتورةُ الجملة النقديّة نقدٌ في الدرج.**
+        //
+        // أرسل صاحبُ المشروع: «حساب تاجر جملة أنشأ فاتورةً دون أن يطلب
+        // فتحَ ورديّة، إذن النظامُ غائبٌ عنه». وقِيس فكان محقّاً:
+        // `wholesale/invoices` بلا حارس، **و`payment_type` يقبل `cash`**
+        // — أي نقدٌ يُقبَض في اللحظة.
+        //
+        // **والوسيطُ لا يُركَّب على المسار** لأنّه لا يقرأ جسمَ الطلب:
+        // `credit` دينٌ لا يمسّ الدرج، فطلبُ ورديّةٍ له حاجزٌ يشلّ عملاً
+        // سليماً — وهو أسوأ من ثغرة. فالحكمُ على الشرط، **من المصدر
+        // نفسِه** (`EnsureOpenShift::refusalFor`) لا برسالةٍ ثانية:
+        // رمزان مختلفان يجعلان الشاشةَ تفتح نافذةَ الورديّة في بابٍ
+        // وتعرض عطلاً في الآخر.
+        //
+        // (والتحصيلُ `collect` محروسٌ سلفاً بالوسيط — وهو البابُ الثاني
+        // لنقد الجملة. فصار البابان تحت حكمٍ واحد.)
+        // ══════════════════════════════════════════════════════════════
+        if ($request->input('payment_type') === 'cash') {
+            $refusal = app(\App\Http\Middleware\EnsureOpenShift::class)
+                ->refusalFor($merchant, $posUserId);
+
+            if ($refusal !== null) {
+                return $refusal;
+            }
+        }
+
         $biz = $this->svc->getOrCreateBusiness($merchant);
 
         // P1-BRANCHES — حلّ الفرع النشط تلقائياً
@@ -534,7 +690,12 @@ class WholesaleController extends Controller
             ) {
                 $inv = $this->invSvc->createInvoice(
                     $merchant, $biz, $request->input('items'),
-                    array_merge($request->all(), ['branch_id' => $branchId]),
+                    array_merge($request->all(), [
+                        'branch_id' => $branchId,
+                        // المحاسبة تعرف مالك المتجر، والمراجعة تعرف الموظف
+                        // أو مالك الحساب الذي أصدر الفاتورة فعلاً.
+                        'created_by_user_id' => $request->user()->id,
+                    ]),
                 );
 
                 $this->perm->assert($request->user(), P::WHOLESALE_INVOICE_CREATE,
@@ -550,6 +711,119 @@ class WholesaleController extends Controller
             return $this->error('FAILED', $e->getMessage(), 422);
         }
         return $this->ok(['invoice' => $inv], 'CREATED', 'تم إنشاء الفاتورة', 201);
+    }
+
+    /**
+     * ينشئ QR تحصيل جملة باسم محفظة مالك التاجر دائماً. لا نستخدم endpoint
+     * طلب المال العام هنا، لأن جلسة POS كانت ستنشئ الطلب باسم الموظف فتذهب
+     * الحصيلة إلى محفظته بدلاً من محفظة التاجر.
+     */
+    public function createInvoicePaymentRequest(Request $request): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_INVOICE_CREATE)) return $deny;
+
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:0.01|lt:100000000',
+            'note' => 'sometimes|nullable|string|max:255',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        try {
+            $paymentRequest = $this->paymentRequestSvc->create(
+                requester: $merchant,
+                amount: (string) $request->input('amount'),
+                note: $request->input('note') ?: 'تحصيل فاتورة جملة',
+                shareMethod: 'qr',
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('INVALID_PAYMENT_REQUEST', $e->getMessage(), 422);
+        }
+
+        return $this->ok([
+            'request' => $paymentRequest,
+            'short_code' => $paymentRequest->short_code,
+        ], 'PAYMENT_REQUEST_CREATED', 'تم إنشاء طلب تحصيل أميال باي', 201);
+    }
+
+    /** ينشئ تحصيل QR لدين قائم بعد التأكد من أن المبلغ لا يتجاوز المتبقي. */
+    public function createCollectionPaymentRequest(Request $request, int $invoiceId): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_COLLECTION_RECORD,
+            $request->filled('amount') ? (string) $request->input('amount') : null)) return $deny;
+
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:0.01|lt:100000000',
+            'note' => 'sometimes|nullable|string|max:255',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $invoice = WholesaleInvoice::where('id', $invoiceId)->where('business_id', $biz->id)->first();
+        if (!$invoice) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
+        if ($invoice->status === 'voided' || MoneyService::compare((string) $invoice->balance_due, '0') <= 0) {
+            return $this->error('INVOICE_NOT_COLLECTABLE', 'لا يوجد رصيد قابل للتحصيل في هذه الفاتورة', 422);
+        }
+        if (MoneyService::compare((string) $request->input('amount'), (string) $invoice->balance_due) > 0) {
+            return $this->error('AMOUNT_EXCEEDS_BALANCE', 'مبلغ التحصيل يتجاوز المتبقي في الفاتورة', 422);
+        }
+
+        try {
+            $paymentRequest = $this->paymentRequestSvc->create(
+                requester: $merchant,
+                amount: (string) $request->input('amount'),
+                note: $request->input('note') ?: "تحصيل فاتورة جملة {$invoice->invoice_number}",
+                shareMethod: 'qr',
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('INVALID_PAYMENT_REQUEST', $e->getMessage(), 422);
+        }
+        return $this->ok([
+            'request' => $paymentRequest,
+            'short_code' => $paymentRequest->short_code,
+        ], 'PAYMENT_REQUEST_CREATED', 'تم إنشاء طلب تحصيل أميال باي', 201);
+    }
+
+    /** إلغاء QR جملة أنشئ باسم المالك عندما تكون الجلسة لموظف نقطة بيع. */
+    public function cancelWholesalePaymentRequest(Request $request, int $requestId): JsonResponse
+    {
+        // ══════════════════════════════════════════════════════════════
+        // **السياسةُ تُعلن الصلاحيّةَ لهذا الفعل والنقطةُ لا تسألها.**
+        //
+        // `WholesaleAccessPolicyService` فيها `payment_request.cancel`
+        // مربوطاً بـ`WHOLESALE_INVOICE_CREATE` — ومع ذلك كانت هذه
+        // الدالّةُ تلغي **طلبَ تحصيلِ مال** بلا فحصٍ واحد.
+        //
+        // وإخفاءُ الزرّ في الواجهة ليس أماناً: من يعرف المسارَ يناديه بلا
+        // زرّ. (القاعدةُ الثامنة.) وموظّفُ مبيعاتٍ لا يملك إنشاءَ فاتورة
+        // كان يستطيع إلغاءَ تحصيلِ غيره.
+        //
+        // والصلاحيّةُ **تُؤخَذ من السياسة لا تُخترَع** — فقيمتان لفعلٍ
+        // واحدٍ في موضعين تفترقان مع أوّل تعديل.
+        // ══════════════════════════════════════════════════════════════
+        if ($deny = $this->guard($request, P::WHOLESALE_INVOICE_CREATE)) return $deny;
+
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $paymentRequest = PaymentRequest::where('id', $requestId)
+            ->where('requester_user_id', $merchant->id)
+            ->first();
+        if (!$paymentRequest) return $this->error('NOT_FOUND', 'طلب التحصيل غير موجود', 404);
+        try {
+            $cancelled = $this->paymentRequestSvc->cancel($merchant, $paymentRequest);
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        } catch (\RuntimeException $e) {
+            return $this->error('CANCEL_FAILED', $e->getMessage(), 422);
+        }
+        return $this->ok(['request' => $cancelled], 'CANCELLED', 'تم إلغاء طلب التحصيل');
     }
 
     public function voidInvoice(Request $request, int $id): JsonResponse
@@ -577,6 +851,142 @@ class WholesaleController extends Controller
             return $this->error('FAILED', $e->getMessage(), 422);
         }
         return $this->ok(['invoice' => $voided], 'VOIDED', 'تم الإبطال');
+    }
+
+    // ============ Returns ============
+
+    public function listReturns(Request $request): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_RETURN_VIEW)) return $deny;
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $q = WholesaleReturn::where('business_id', $biz->id)
+            ->with([
+                'invoice:id,invoice_number,branch_id',
+                'customer:id,full_name,company_name,phone',
+                'items',
+                'settlements',
+            ])
+            ->withSum('settlements as refund_paid_amount', 'amount');
+        if ($request->filled('status') && in_array($request->query('status'), WholesaleReturn::STATUSES, true)) {
+            $q->where('status', $request->query('status'));
+        }
+        return $this->ok(['returns' => $q->orderByDesc('id')->limit(100)->get()]);
+    }
+
+    public function requestReturn(Request $request, int $invoiceId): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_RETURN_REQUEST)) return $deny;
+        $v = Validator::make($request->all(), [
+            'reason' => 'required|string|max:500',
+            'items' => 'required|array|min:1',
+            'items.*.invoice_item_id' => 'required|integer',
+            'items.*.quantity' => 'required|numeric|min:0.001',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $invoice = WholesaleInvoice::where('id', $invoiceId)->where('business_id', $biz->id)->first();
+        if (!$invoice) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
+        try {
+            $return = $this->returnSvc->request($request->user(), $invoice, $request->input('items'), $request->input('reason'));
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->error('INVALID_RETURN', $e->getMessage(), 422);
+        }
+        return $this->ok(['return' => $return], 'RETURN_REQUESTED', 'تم إرسال طلب المرتجع للمراجعة', 201);
+    }
+
+    public function resolveReturn(Request $request, int $returnId): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_RETURN_APPROVE)) return $deny;
+        $v = Validator::make($request->all(), [
+            'approve' => 'required|boolean',
+            'decision_note' => 'sometimes|nullable|string|max:500',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $return = WholesaleReturn::where('id', $returnId)->where('business_id', $biz->id)->first();
+        if (!$return) return $this->error('NOT_FOUND', 'طلب المرتجع غير موجود', 404);
+        try {
+            $resolved = $this->returnSvc->resolve($request->user(), $return, $request->boolean('approve'), $request->input('decision_note'));
+        } catch (\RuntimeException $e) {
+            return $this->error('INVALID_RETURN', $e->getMessage(), 422);
+        }
+        return $this->ok(['return' => $resolved], 'RETURN_RESOLVED', 'تم حفظ قرار المرتجع');
+    }
+
+    /**
+     * صرفُ المبلغ الذي صار مستحقاً للعميل بعد اعتماد مرتجعٍ مدفوع.
+     *
+     * refund_due_amount لا يُعتبر مدفوعاً هنا إلا إذا نجح نقدُ الوردية
+     * أو قيدُ المحفظة، ثم سُجّل settlement append-only في المعاملة نفسها.
+     */
+    public function settleReturn(Request $request, int $returnId): JsonResponse
+    {
+        $amount = $request->filled('amount') ? (string) $request->input('amount') : null;
+        if ($deny = $this->guard($request, P::WHOLESALE_RETURN_APPROVE, $amount)) return $deny;
+
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:0.01',
+            'method' => 'required|in:cash,amial_pay',
+            'cashier_shift_id' => 'required_if:method,cash|nullable|integer|min:1',
+            'reference' => 'sometimes|nullable|string|max:100',
+            'note' => 'sometimes|nullable|string|max:500',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $return = WholesaleReturn::whereKey($returnId)
+            ->where('business_id', $biz->id)
+            ->first();
+        if (! $return) return $this->error('NOT_FOUND', 'طلب المرتجع غير موجود', 404);
+
+        $idempotencyKey = trim((string) $request->header('Idempotency-Key', ''));
+        if ($idempotencyKey === '') {
+            return $this->error('IDEMPOTENCY_REQUIRED', 'مفتاح منع التكرار مطلوب لصرف المال', 422);
+        }
+
+        try {
+            $settlement = $this->returnSettlementSvc->settle(
+                merchant: $merchant,
+                return: $return,
+                actor: $request->user('merchant_web') ?? $request->user(),
+                amount: (string) $request->input('amount'),
+                method: (string) $request->input('method'),
+                idempotencyKey: $idempotencyKey,
+                cashierShiftId: $request->filled('cashier_shift_id')
+                    ? (int) $request->input('cashier_shift_id')
+                    : null,
+                note: $request->input('note'),
+                reference: $request->input('reference'),
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->error('RETURN_SETTLEMENT_FAILED', $e->getMessage(), 422);
+        }
+
+        $fresh = $return->fresh()->load('settlements');
+        $paid = MoneyService::normalize((string) $fresh->settlements->sum('amount'));
+        $remaining = $this->returnSettlementSvc->remaining($fresh);
+
+        return $this->ok([
+            'settlement' => $settlement,
+            'return_id' => $fresh->id,
+            'refund_due_amount' => (string) $fresh->refund_due_amount,
+            'refund_paid_amount' => $paid,
+            'refund_remaining_amount' => $remaining,
+            'settlement_type' => $fresh->settlement_type,
+        ], 'RETURN_SETTLED', 'تم صرف مستحق المرتجع', 201);
     }
 
     // ============ Collections ============
@@ -609,7 +1019,11 @@ class WholesaleController extends Controller
         if (!$inv) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
 
         try {
-            $col = $this->colSvc->recordCollection($merchant, $inv, $request->all());
+            // المحفظة والحساب المالي للمنشأة، لكن أثر التحصيل يجب أن يحمل
+            // الموظف الذي استلم المال فعلاً؛ لا نأخذه من جسم طلب العميل.
+            $data = $request->all();
+            $data['received_by_user_id'] = $request->user()->id;
+            $col = $this->colSvc->recordCollection($merchant, $inv, $data);
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID', $e->getMessage(), 422);
         } catch (\RuntimeException $e) {
@@ -712,7 +1126,7 @@ class WholesaleController extends Controller
             // للقطع على شبكة جوّال. updated_at في المفتاح: تعديل الفاتورة
             // يُنتج مفتاحاً جديداً، فلا تُخدَم نسخةٌ قديمة بأرقام قديمة.
             $pdfBytes = app(\App\Services\PdfCacheService::class)->remember(
-                "wholesale_invoice_{$inv->id}_{$inv->updated_at?->timestamp}",
+                $this->pdfSvc->cacheKey($inv),
                 fn () => $this->pdfSvc->generate($inv),
             );
         } catch (\Throwable $e) {
@@ -799,6 +1213,21 @@ class WholesaleController extends Controller
             $merchant = User::find($pos->merchant_user_id);
             if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
             return [$merchant, $pos->id];
+        }
+
+        // موظف الجملة ليس بالضرورة حساب POS. أدوار المبيعات والتحصيل
+        // والمحاسبة تسكن merchant_user_roles وتَرِث المنشأة والباقة من
+        // مالكها، ثم تُقيَّد لاحقاً بـ MerchantPermissionService. رفضها هنا
+        // لأن لا MerchantProfile باسم الموظف يجعل شاشة صحيحة تنتهي 403.
+        $assignment = \Illuminate\Support\Facades\DB::table('merchant_user_roles')
+            ->where('user_id', $authUser->id)
+            ->where('is_active', true)
+            ->orderByDesc('id')
+            ->first();
+        if ($assignment !== null) {
+            $merchant = User::find($assignment->merchant_user_id);
+            if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
+            return [$merchant, null];
         }
         if (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
             return $this->error('NOT_A_MERCHANT', 'متاح للتجار وموظفي الجملة فقط', 403);

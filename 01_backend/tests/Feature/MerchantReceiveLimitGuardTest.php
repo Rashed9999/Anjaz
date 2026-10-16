@@ -77,7 +77,11 @@ class MerchantReceiveLimitGuardTest extends TestCase
                     parent::__construct(app(\App\Services\AuditService::class));
                 }
 
-                public function assertReceiveAllowed(int $merchantUserId, string $amount): void
+                public function assertReceiveAllowed(
+                    int $merchantUserId,
+                    string $amount,
+                    string $currency = \App\Support\Money\Currencies::BASE,
+                ): void
                 {
                     $this->seen[] = [$merchantUserId, $amount];
                 }

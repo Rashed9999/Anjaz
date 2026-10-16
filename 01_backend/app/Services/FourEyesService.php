@@ -74,7 +74,7 @@ class FourEyesService
     }
 
     /** كم فعلاً سابقاً لهذا الشخص على هذا الموضوع. */
-    public function previousActionsBy(
+    private function previousActionsBy(
         string $subjectType,
         string|int $subjectId,
         User $actor,

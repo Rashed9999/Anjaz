@@ -71,19 +71,21 @@ class NotificationController extends Controller
         $data['receiver'] = strtolower($request->receiver);
         $data['type'] = 'general';
 
+        $pushSent = false;
         try {
-            if ($request->receiver == 'all' || $request->receiver == 'customers' || $request->receiver == 'agents') {
-                Helpers::send_push_notif_to_topic($data);
-
-            } else {
-                throw new \Exception();
+            if (in_array($request->receiver, ['all', 'customers', 'agents'], true)) {
+                $pushSent = Helpers::send_push_notif_to_topic($data);
             }
-
-        } catch (\Exception $e) {
-            Toastr::warning('Push notification failed!');
+        } catch (\Throwable $e) {
+            $pushSent = false;
         }
 
-        Toastr::success('Notification sent successfully!');
+        if ($pushSent) {
+            Toastr::success('Notification sent successfully!');
+        } else {
+            Toastr::warning('Notification saved, but Push delivery was not accepted by FCM.');
+        }
+
         return back();
     }
 
@@ -129,17 +131,19 @@ class NotificationController extends Controller
         $data['receiver'] = strtolower($request->has('receiver') ? $request->receiver : $oldNotification->receiver);
         $data['type'] = 'general';
 
+        $pushSent = false;
         try {
-            if ($request->receiver == 'all' || $request->receiver == 'customers' || $request->receiver == 'agents') {
-                Helpers::send_push_notif_to_topic($data);
-                Toastr::success('Notification resend successfully!');
-
-            } else {
-                throw new \Exception();
+            if (in_array($data['receiver'], ['all', 'customers', 'agents'], true)) {
+                $pushSent = Helpers::send_push_notif_to_topic($data);
             }
+        } catch (\Throwable $e) {
+            $pushSent = false;
+        }
 
-        } catch (\Exception $e) {
-            Toastr::warning('Push notification failed!');
+        if ($pushSent) {
+            Toastr::success('Notification resend successfully!');
+        } else {
+            Toastr::warning('Notification updated, but Push delivery was not accepted by FCM.');
         }
 
         return redirect()->route('admin.notification.add-new');

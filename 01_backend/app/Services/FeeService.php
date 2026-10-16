@@ -43,7 +43,11 @@ class FeeService
         $zone = $context['zone_code'] ?? 'SOUTH';
         $appliesTo = $context['applies_to'] ?? 'customer';
 
-        $scheme = $this->activeScheme($code, $zone, $appliesTo);
+        // **الباقةُ اختياريّةٌ في السياق** — ومن لا يمرّرها يُخدَم بالسعر
+        // العامّ كما كان قبل هذه الميزة حرفاً بحرف.
+        $plan = $context['plan'] ?? null;
+
+        $scheme = $this->activeScheme($code, $zone, $appliesTo, $plan);
 
         return $this->compute($scheme, $code, $amount, $zone);
     }
@@ -237,16 +241,43 @@ class FeeService
     // قراءة النسخة النشطة (مع cache)
     // ============================================================
 
-    public function activeScheme(string $code, string $zone = 'SOUTH', string $appliesTo = 'customer'): ?FeeScheme
-    {
-        $key = self::CACHE_PREFIX . "{$code}:{$zone}:{$appliesTo}";
+    public function activeScheme(
+        string $code, string $zone = 'SOUTH', string $appliesTo = 'customer',
+        ?string $plan = null,
+    ): ?FeeScheme {
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-FEE-PLAN-001 — **الباقةُ في المفتاح، لا فقط في الاستعلام.**
+        //
+        // مفتاحٌ لا يذكرها يجعل أوّلَ تاجرٍ يسأل **يُثبّت سعرَه لكلّ
+        // الباقات** لمدّة الخزن: يدفع صاحبُ «الأعمال» سعرَ «البداية»،
+        // ولا خطأَ في أيّ سجلّ. (وهو عطلُ خزنٍ يُقرأ عطلَ تسعير.)
+        // ══════════════════════════════════════════════════════════════
+        $key = self::CACHE_PREFIX."{$code}:{$zone}:{$appliesTo}:".($plan ?? '*');
 
-        return Cache::remember($key, self::CACHE_TTL, function () use ($code, $zone, $appliesTo) {
+        return Cache::remember($key, self::CACHE_TTL, function () use ($code, $zone, $appliesTo, $plan) {
             return FeeScheme::query()
                 ->where('code', $code)
                 ->where('zone_code', $zone)
                 ->where('applies_to', $appliesTo)
                 ->where('is_active', true)
+
+                // ══════════════════════════════════════════════════════
+                // **والأخصُّ يفوز.**
+                //
+                //   `plan = 'starter'`  →  «البداية» وحدَها
+                //   `plan = NULL`       →  كلُّ الباقات
+                //
+                // فمن ضبط سعراً عامّاً ثمّ استثنى باقةً، عمل الاستثناءُ
+                // **ولم يُلغِ العامّ**. وبلا باقةٍ في السياق تُقرأ العامّةُ
+                // وحدَها — فلا تتسرّب نسخةُ باقةٍ إلى من لا باقةَ له.
+                // ══════════════════════════════════════════════════════
+                ->where(function ($q) use ($plan) {
+                    $q->whereNull('plan');
+
+                    if ($plan !== null && $plan !== '') {
+                        $q->orWhere('plan', $plan);
+                    }
+                })
 
                 // ══════════════════════════════════════════════════════
                 // AMIAL-FEE-TRUTH-014 — **`effective_from` كان حقلاً
@@ -268,14 +299,31 @@ class FeeService
                 ->where(function ($q) {
                     $q->whereNull('effective_to')->orWhere('effective_to', '>', now());
                 })
+                // **الترتيبُ يقدّم المخصَّصَ على العامّ** — ثمّ الأحدثَ
+                // نسخةً. و`ORDER BY plan IS NULL` يضع `NOT NULL` أوّلاً.
+                ->orderByRaw('plan IS NULL')
                 ->orderByDesc('version')
                 ->first();
         });
     }
 
+    /**
+     * **ويُمسَح مفتاحُ كلِّ باقةٍ لا مفتاحُ العامّ وحدَه.**
+     *
+     * فنسخةٌ عامّةٌ تُعدَّل بينما مفتاحُ «البداية» مخزونٌ تجعل تجّارَ
+     * «البداية» يدفعون السعرَ القديمَ حتّى تنتهي المدّة — **وهو عطلٌ
+     * يظهر لبعض المستعملين دون بعض**، وأصعبُ ما يُشخَّص.
+     */
     private function flushCache(string $code, string $zone, string $appliesTo): void
     {
-        Cache::forget(self::CACHE_PREFIX . "{$code}:{$zone}:{$appliesTo}");
+        Cache::forget(self::CACHE_PREFIX."{$code}:{$zone}:{$appliesTo}:*");
+
+        foreach (\App\Support\Access\AccessConstants::ALL_PLANS as $plan) {
+            Cache::forget(self::CACHE_PREFIX."{$code}:{$zone}:{$appliesTo}:{$plan}");
+        }
+
+        // المفتاحُ القديم (‏قبل بُعد الباقة) — لئلّا يبقى معلَّقاً بعد ترقية.
+        Cache::forget(self::CACHE_PREFIX."{$code}:{$zone}:{$appliesTo}");
     }
 
     // ============================================================
@@ -294,11 +342,23 @@ class FeeService
         $zone = $data['zone_code'] ?? 'SOUTH';
         $appliesTo = $data['applies_to'] ?? 'customer';
 
-        return DB::transaction(function () use ($data, $code, $zone, $appliesTo, $adminId, $ip) {
+        // AMIAL-FEE-PLAN-001 — **الفراغُ باقةٌ واحدةٌ اسمُها «كلُّ الباقات».**
+        // ويُطبَّع إلى `null` هنا: `''` في العمود يصير باقةً وهميّةً لا
+        // يطابقها أحد، فيبدو السعرُ مضبوطاً ولا يُقرأ أبداً.
+        $plan = ($data['plan'] ?? null) === '' ? null : ($data['plan'] ?? null);
+
+        return DB::transaction(function () use ($data, $code, $zone, $appliesTo, $plan, $adminId, $ip) {
+            // **والنسخةُ السابقةُ هي نسخةُ الباقة نفسِها لا غيرِها.**
+            //
+            // فلو أُبطلت العامّةُ عند إنشاء نسخةٍ لـ«البداية» لسقط سعرُ
+            // كلِّ الباقات الأخرى بضغطةٍ واحدة — **ولا رسالةَ تقول ذلك**.
             $current = FeeScheme::query()
                 ->where('code', $code)
                 ->where('zone_code', $zone)
                 ->where('applies_to', $appliesTo)
+                ->when($plan === null,
+                    fn ($q) => $q->whereNull('plan'),
+                    fn ($q) => $q->where('plan', $plan))
                 ->where('is_active', true)
                 ->orderByDesc('version')
                 ->lockForUpdate()
@@ -319,6 +379,7 @@ class FeeService
                 'label' => $data['label'] ?? null,
                 'zone_code' => $zone,
                 'applies_to' => $appliesTo,
+                'plan' => $plan,
                 'fee_type' => $data['fee_type'],
                 'percent_rate' => MoneyService::normalize((string)($data['percent_rate'] ?? 0)),
                 'fixed_amount' => MoneyService::normalize((string)($data['fixed_amount'] ?? 0)),

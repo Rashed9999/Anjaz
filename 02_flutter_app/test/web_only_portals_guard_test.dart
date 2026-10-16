@@ -1,4 +1,4 @@
-// AMIAL-WEB-ONLY-PORTALS-001 — حارس: لوحتا الإدارة والوكيل خارج التطبيق.
+// AMIAL-WEB-ONLY-PORTALS-001 — حارس: لوحات المالك والإدارة والوكيل خارج التطبيق.
 //
 // **ولماذا حارسٌ بعد الحذف؟**
 //
@@ -63,6 +63,8 @@ void main() {
   });
 
   group('الوكيل والأدمن لا يسقطان إلى شاشة العميل', () {
+    // المالك يمرّ أولاً بـHomeDispatcher كي يميّز موظف POS من مالكه؛ أما
+    // الوكيل والأدمن فلا يملكان هذا الاستثناء فيخرجان مباشرةً إلى الإحالة.
     test('كلٌّ منهما → WebPortalNoticeScreen بدوره الصحيح', () {
       for (final role in ['agent', 'admin']) {
         final home = RoleRouter.homeForRole(role);
@@ -87,18 +89,21 @@ void main() {
     test('النطاق المعتمد + مساران متمايزان', () {
       expect(AppConstants.productionDomain, equals('https://amialpay.com'));
 
+      const merchant = WebPortalNoticeScreen(role: 'merchant');
       const agent = WebPortalNoticeScreen(role: 'agent');
       const admin = WebPortalNoticeScreen(role: 'admin');
 
+      expect(merchant.portalUrl, equals('https://merchant.amialpay.com/merchant/login'));
       expect(agent.portalUrl, equals('https://amialpay.com/agent/login'));
       expect(admin.portalUrl, equals('https://amialpay.com/admin/auth/login'));
 
       // خلطُ العنوانين يُرسل كلاً منهما إلى بوّابةٍ ترفضه بلا رسالةٍ مفهومة،
       // وهو خطأٌ يمرّ بسهولةٍ لأنّ الشاشتين واحدة والفرق حرفٌ في مسار.
+      expect(merchant.portalUrl, isNot(equals(agent.portalUrl)));
       expect(agent.portalUrl, isNot(equals(admin.portalUrl)));
 
       // وكلاهما على النطاق المعتمد لا على عنوانٍ رقميّ منسيّ.
-      for (final u in [agent.portalUrl, admin.portalUrl]) {
+      for (final u in [merchant.portalUrl, agent.portalUrl, admin.portalUrl]) {
         expect(u.startsWith('https://'), isTrue, reason: u);
         expect(RegExp(r'\d+\.\d+\.\d+\.\d+').hasMatch(u), isFalse, reason: u);
       }

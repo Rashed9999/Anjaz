@@ -19,6 +19,7 @@ class ProfileModel {
     this.twoFactor,
     this.fcmToken,
     this.balance,
+    this.accountNumber,
     this.uniqueId,
     this.qrCode,
     this.kycStatus,
@@ -42,6 +43,7 @@ class ProfileModel {
   bool? twoFactor;
   String? fcmToken;
   double? balance;
+  String? accountNumber;
   String? uniqueId;
   String? qrCode;
   KycVerification? kycStatus;
@@ -59,12 +61,13 @@ class ProfileModel {
     phone: json["phone"],
     email: json["email"],
     image: json["image"],
-    type: json["type"],
+    type: int.tryParse('${json["type"] ?? ''}'),
     gender: json["gender"],
     occupation: json["occupation"],
     twoFactor: json["two_factor"]== 1 ? true : false,
     fcmToken: json["fcm_token"],
     balance: json["balance"].toDouble() ?? 0.0,
+    accountNumber: json["account_number"]?.toString() ?? json["receive_address"]?.toString(),
     uniqueId: json["unique_id"],
     qrCode: json["qr_code"],
     kycStatus:  _getStatusType('${json['is_kyc_verified']}'),
@@ -186,6 +189,5 @@ class TransactionLimit {
 
   );
 }
-
 
 

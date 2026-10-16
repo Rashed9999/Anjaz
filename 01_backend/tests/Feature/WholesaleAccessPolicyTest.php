@@ -5,8 +5,11 @@ namespace Tests\Feature;
 use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\User;
+use App\Models\WholesaleCollection;
 use App\Services\Merchant\MerchantPermissionService;
 use App\Services\Vertical\VerticalBootstrapService;
+use App\Services\WholesaleInvoiceService;
+use App\Services\WholesaleService;
 use App\Services\Wholesale\WholesaleAccessPolicyService as Policy;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -71,6 +74,27 @@ class WholesaleAccessPolicyTest extends TestCase
         return $u->refresh();
     }
 
+    /** موظف دورٍ مستقل، لا حساب POS: مهم لفصل الدخول عن الجهاز. */
+    private function roleStaff(User $merchant, string $roleCode): User
+    {
+        $u = User::factory()->create(['type' => 3, 'role' => 'merchant_staff']);
+        $role = DB::table('merchant_roles')
+            ->where('merchant_user_id', $merchant->id)
+            ->where('code', $roleCode)
+            ->first();
+        $this->assertNotNull($role, "دور الجملة {$roleCode} غير موجود");
+        DB::table('merchant_user_roles')->insert([
+            'merchant_user_id' => $merchant->id,
+            'user_id' => $u->id,
+            'merchant_role_id' => $role->id,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $u->refresh();
+    }
+
     private function state(User $user, string $action): string
     {
         return (string) app(Policy::class)->state($user, $action)['state'];
@@ -94,18 +118,18 @@ class WholesaleAccessPolicyTest extends TestCase
     }
 
     /** @test */
-    public function starter_opens_catalog_and_stock_but_invoice_create_waits_for_customer_depth(): void
+    public function business_opens_the_complete_wholesale_sales_flow(): void
     {
-        $m = $this->merchant(A::PLAN_STARTER);
+        $m = $this->merchant(A::PLAN_BUSINESS);
 
-        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'product.create'));
-        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'product.update'));
-        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'stock_alert.view'));
-        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'stock.adjust'));
-
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'customer.manage'));
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'invoice.create'));
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'report.view'));
+        foreach ([
+            'product.create', 'product.update', 'stock.adjust', 'unit.manage',
+            'lot.receive', 'stock_alert.view', 'customer.manage', 'invoice.create',
+            'report.view', 'rep.manage', 'return.request', 'price.view', 'price.set',
+            'tier.manage',
+        ] as $action) {
+            $this->assertSame(Policy::AVAILABLE, $this->state($m, $action), $action);
+        }
     }
 
     /** @test */
@@ -113,21 +137,17 @@ class WholesaleAccessPolicyTest extends TestCase
     {
         $m = $this->merchant(A::PLAN_BUSINESS);
 
-        foreach (['product.create', 'customer.manage', 'invoice.create', 'report.view', 'export', 'rep.manage'] as $action) {
+        foreach (['product.create', 'customer.manage', 'invoice.create', 'report.view', 'export', 'rep.manage', 'price.view', 'price.set', 'tier.manage'] as $action) {
             $this->assertSame(Policy::AVAILABLE, $this->state($m, $action), $action);
         }
-
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'price.view'));
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'price.set'));
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'tier.manage'));
     }
 
     /** @test */
-    public function merchant_pro_opens_multi_pricing(): void
+    public function enterprise_keeps_the_same_wholesale_depth_without_artificially_hiding_business_features(): void
     {
-        $m = $this->merchant(A::PLAN_MERCHANT_PRO);
+        $m = $this->merchant(A::PLAN_ENTERPRISE);
 
-        foreach (['price.view', 'price.set', 'tier.manage'] as $action) {
+        foreach (['price.view', 'price.set', 'tier.manage', 'invoice.create', 'report.view'] as $action) {
             $this->assertSame(Policy::AVAILABLE, $this->state($m, $action), $action);
         }
     }
@@ -159,6 +179,39 @@ class WholesaleAccessPolicyTest extends TestCase
     }
 
     /** @test */
+    public function a_non_pos_collector_can_record_for_the_business_and_is_the_audited_receiver(): void
+    {
+        $owner = $this->merchant(A::PLAN_BUSINESS);
+        $collector = $this->roleStaff($owner, 'collector');
+        $service = app(WholesaleService::class);
+        $business = $service->getOrCreateBusiness($owner);
+        $product = $service->addProduct($business, [
+            'name' => 'صنف تحصيل الموظف', 'base_price' => '1000', 'initial_stock' => 5,
+        ]);
+        $customer = $service->addCustomer($business, [
+            'full_name' => 'عميل التحصيل', 'phone' => '771700001', 'credit_limit' => '10000',
+        ]);
+        $invoice = app(WholesaleInvoiceService::class)->createInvoice($owner, $business, [[
+            'product_id' => $product->id, 'quantity' => '2',
+        ]], ['customer_id' => $customer->id, 'payment_type' => 'credit']);
+
+        // لا يملك الموظف MerchantProfile ولا PosUser؛ نجاحه هنا يثبت أن
+        // دور الموظف لم يعد يُعامل كتاجر مفقود. ولا يمرر received_by من
+        // التطبيق: المتحكم يحقن المستخدم المصدّق بعد الحارس.
+        $this->actingAs($collector, 'api')
+            ->postJson("/api/v1/amial/merchant/wholesale/invoices/{$invoice->id}/collect", [
+                'amount' => '500', 'payment_method' => 'cash',
+                'received_by_user_id' => $owner->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('code', 'RECORDED');
+
+        $collection = WholesaleCollection::query()->sole();
+        $this->assertSame($collector->id, (int) $collection->received_by_user_id,
+            'سجل التحصيل نسب المال للمالك بدل الموظف الذي نفذه');
+    }
+
+    /** @test */
     public function accountant_can_void_but_cannot_sell_or_claim_a_collection(): void
     {
         $owner = $this->merchant(A::PLAN_BUSINESS);
@@ -184,12 +237,20 @@ class WholesaleAccessPolicyTest extends TestCase
             ['GET', "$base/products"], ['POST', "$base/products"],
             ['PUT', "$base/products/12"],
             ['POST', "$base/products/12/adjust-stock"],
+            ['GET', "$base/products/12/units"], ['POST', "$base/products/12/units"],
+            ['GET', "$base/products/12/lots"], ['POST', "$base/products/12/lots"],
+            ['GET', "$base/products/12/quote"],
             ['GET', "$base/products/12/prices"], ['POST', "$base/products/12/prices"],
             ['GET', "$base/customers"], ['POST', "$base/customers"],
             ['PUT', "$base/customers/7"],
             ['GET', "$base/invoices"], ['POST', "$base/invoices"],
             ['GET', "$base/invoices/3"], ['GET', "$base/invoices/3/pdf"],
             ['POST', "$base/invoices/3/void"], ['POST', "$base/invoices/3/collect"],
+            ['POST', "$base/invoices/amial-payment-request"],
+            ['POST', "$base/invoices/3/amial-payment-request"],
+            ['POST', "$base/payment-requests/17/cancel"],
+            ['GET', "$base/returns"], ['POST', "$base/invoices/3/returns"],
+            ['POST', "$base/returns/7/resolve"],
             ['GET', "$base/collections"],
             ['GET', "$base/sales-reps"], ['POST', "$base/sales-reps"],
             ['GET', "$base/reports/aging"],

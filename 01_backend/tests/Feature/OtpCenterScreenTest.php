@@ -8,6 +8,7 @@ use App\Services\PlatformRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Tests\Support\ReadsAdminNavigation;
 use Tests\TestCase;
 
 /**
@@ -30,6 +31,7 @@ use Tests\TestCase;
 class OtpCenterScreenTest extends TestCase
 {
     use RefreshDatabase;
+    use ReadsAdminNavigation;
 
     private function admin(string $role = PlatformRoleService::ADMIN, string $phone = '967770006001'): User
     {
@@ -82,10 +84,15 @@ class OtpCenterScreenTest extends TestCase
      */
     public function the_screen_is_reachable_from_the_sidebar(): void
     {
-        $html = $this->actingAs($this->admin(), 'user')
-            ->get(route('admin.dashboard'))->assertOk()->getContent();
+        // AMIAL-ADMIN-NAV-SURFACE-001 — **الوصولُ يُقاس لا الموضع.**
+        //
+        // انتقلت الوجهاتُ من الشريط الجانبيّ إلى تبويبات «مساحة العمل»،
+        // فسقط هذا الحارسُ على نقلةٍ سليمة. والمحروسُ أن **يبلغ المديرُ
+        // مركزَ التحقّق من مكانٍ يمرّ به**، لا أن يكون في `<aside>`.
+        $links = $this->reachableAdminLinks($this->admin());
 
-        $this->assertStringContainsString('/admin/amial/otp', $html,
+        $this->assertNotEmpty(
+            array_filter($links, static fn (string $l): bool => str_contains($l, '/admin/amial/otp')),
             'لا رابطَ إلى مركز التحقّق من أيّ صفحةٍ يمرّ بها المدير');
     }
 

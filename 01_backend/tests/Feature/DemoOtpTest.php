@@ -30,6 +30,13 @@ class DemoOtpTest extends TestCase
             ['key' => 'phone_verification'],
             ['value' => 1]
         );
+        config([
+            'app.amial_demo_otp' => '123456',
+            'amial.otp.demo_code' => '123456',
+            'amial.otp.demo_numbers' => [$this->phone()],
+            'amial.otp.pilot_customer_phone_enabled' => false,
+        ]);
+        \App\Services\Otp\OtpPolicy::forget();
     }
 
     /**
@@ -55,19 +62,23 @@ class DemoOtpTest extends TestCase
     {
         return [
             'f_name' => 'راشد',
+            'father_name' => 'محمد',
+            'grandfather_name' => 'عوض',
+            'family_name' => 'المهدي',
             'l_name' => 'المهدي',
             'gender' => 'male',
             'dial_country_code' => '+967',
             'phone' => $phone,
+            'email' => 'demo-otp-registration@example.test',
             'password' => '1234',   // العقد: min:4|max:4 (رمز PIN لا كلمة مرور)
             'otp' => $otp,
         ];
     }
 
-    public function test_config_key_exists_and_defaults_to_the_documented_value(): void
+    public function test_demo_configuration_is_explicit_in_the_test_fixture(): void
     {
-        // العطل الأصلي بعينه: بلا قيمة افتراضية ⇒ null ⇒ الالتفاف ميّت.
-        $this->assertNotNull(config('app.amial_demo_otp'));
+        // لا يقبل الإنتاج رمزاً من قيمة افتراضية عامة؛ الاختبار هو من يصرّح
+        // بمسار العرض الذي يقيسه.
         $this->assertSame('123456', config('app.amial_demo_otp'));
     }
 
@@ -92,9 +103,17 @@ class DemoOtpTest extends TestCase
 
     public function test_demo_otp_can_be_switched_off_for_real_production(): void
     {
-        // البوابة الحقيقية: AMIAL_DEMO_OTP فارغاً يُعطّل الالتفاف تماماً،
-        // فيعود النظام لاشتراط رمز حقيقي من بوابة SMS.
-        config(['amial.otp.demo_code' => '']);
+        // يوجد الآن بابان ثابتان منفصلان عمداً:
+        // 1) demo_code لأرقام العرض فقط.
+        // 2) pilot_customer_phone_code لإثبات هاتف العميل مؤقتاً.
+        //
+        // اختبار «الإنتاج الحقيقي» يجب أن يطفئ الاثنين؛ إطفاء Demo وحده
+        // لا يطفئ قرار الـPilot ولا ينبغي أن يفعل ذلك ضمنياً.
+        config([
+            'amial.otp.demo_code' => '',
+            'amial.otp.pilot_customer_phone_enabled' => false,
+        ]);
+        \App\Services\Otp\OtpPolicy::forget();
 
         $this->postJson('/api/v1/customer/auth/register', $this->payload($this->phone(), '123456'))
             ->assertJsonFragment(['code' => 'otp']);

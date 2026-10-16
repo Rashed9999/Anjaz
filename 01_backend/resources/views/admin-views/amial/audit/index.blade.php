@@ -247,6 +247,13 @@
                            value="{{ $filters['transaction_id'] ?? '' }}">
                 </div>
 
+                <div class="col-md-3">
+                    <label class="form-label">معرّفُ التتبّع</label>
+                    <input type="text" name="correlation_id" class="form-control" dir="ltr"
+                           placeholder="X-Correlation-Id"
+                           value="{{ $filters['correlation_id'] ?? '' }}">
+                </div>
+
                 <div class="col-md-2">
                     <label class="form-label">النطاق</label>
                     <input type="text" name="zone_code" class="form-control" dir="ltr"
@@ -474,6 +481,7 @@
                 ${row('النطاق', esc(d.zone_code), true)}
                 ${row('معرّفُ القرار', esc(d.decision_id), true)}
                 ${row('مفتاحُ منع التكرار', esc(d.idempotency_key), true)}
+                ${row('معرّفُ التتبّع', esc(d.correlation_id), true)}
                 <div class="mt-3"><div class="text-muted small mb-1">السياق المسجَّل</div>${ctx}</div>
                 <div class="mt-3">
                   <div class="text-muted small mb-1">سلسلةُ التدقيق</div>
@@ -490,6 +498,8 @@
                      href="?actor_user_id=${encodeURIComponent(d.actor.id)}">كلُّ ما فعله هذا المنفِّذ</a>` : ''}
                   ${d.transaction_id ? `<a class="btn btn-sm btn-outline-secondary"
                      href="?transaction_id=${encodeURIComponent(d.transaction_id)}">كلُّ ما جرى على هذه المعاملة</a>` : ''}
+                  ${d.correlation_id ? `<a class="btn btn-sm btn-outline-secondary"
+                     href="?correlation_id=${encodeURIComponent(d.correlation_id)}">كلُّ ما يحمل معرّف التتبّع هذا</a>` : ''}
                 </div>`;
         } catch (err) {
             body.innerHTML = '<div class="alert alert-danger mb-0">تعذّر الاتصال بالخادم</div>';

@@ -145,7 +145,11 @@ class UsageLimitTest extends TestCase
         $data = json_decode($response->getContent(), true);
         $this->assertEquals('USAGE_LIMIT_EXCEEDED', $data['code']);
         $this->assertEquals(A::PLAN_STARTER, $data['meta']['suggested_plan']);
-        $this->assertEquals(15, $data['meta']['suggested_plan_price_sar']);
+        // والسعرُ من الكتالوج لا رقماً مكتوباً — تغيّر من ١٥ إلى ٣٥
+        // في توحيد الباقات، فأسقط حارساً لا يقرأ مصدرَه.
+        $this->assertEquals(
+            A::PLAN_PRICES_SAR[A::PLAN_STARTER],
+            $data['meta']['suggested_plan_price_sar']);
     }
 
     /** @test */

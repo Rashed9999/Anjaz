@@ -29,11 +29,41 @@ class LoyaltyController extends Controller
         private LoyaltyService $loyalty,
     ) {}
 
-    private function guard(Request $request): mixed
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-LOYALTY-AT-PAYMENT-001 — **والكاشيرُ يقرأ رصيدَ نقاط عميله.**
+     *
+     * كان الحارسُ يشترط `role === merchant`، ودورُ موظّف نقطة البيع
+     * `pos`. **فكلُّ نداءٍ من الشبّاك يُردّ ٤٠٣** — وهو الموضعُ الوحيد
+     * الذي تُصرَف فيه النقاطُ فعلاً: العميلُ واقفٌ يدفع.
+     *
+     * وهو نمطُ القاعدة الرابعة بعينه: الميزةُ جُرّبت من مدخل المالك
+     * وحدَه، والمستعمِلُ يسلك المدخلَ الآخر.
+     *
+     * **والقراءةُ تُفتَح والتعديلُ لا**: تعديلُ البرنامج وتسويةُ رصيدٍ
+     * يدويّاً قرارُ مالكٍ (`ownerOnly`)، والبحثُ والاستبدالُ على فاتورةٍ
+     * عملُ الشبّاك.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    private function guard(Request $request, bool $ownerOnly = true): mixed
     {
         $u = $request->user();
-        if (!$u || $u->role !== A::ROLE_MERCHANT) {
+        if (!$u) {
             return $this->err('NOT_A_MERCHANT', 'متاح للتجّار فقط', 403);
+        }
+
+        if ($u->role !== A::ROLE_MERCHANT) {
+            $pos = ! $ownerOnly
+                ? \App\Models\PosUser::where('user_id', $u->id)->where('is_active', true)->first()
+                : null;
+
+            $owner = $pos ? \App\Models\User::find($pos->merchant_user_id) : null;
+
+            if (! $owner) {
+                return $this->err('NOT_A_MERCHANT', 'متاح للتجّار فقط', 403);
+            }
+
+            $u = $owner;   // القدرةُ والبرنامجُ يُقرآن من منشأته لا من حسابه
         }
         if (!$this->access->hasFeature($u, A::F_LOYALTY)) {
             return $this->err('FEATURE_LOCKED', 'برنامج الولاء متاح في باقة الأعمال فأعلى', 402);
@@ -86,7 +116,7 @@ class LoyaltyController extends Controller
 
     public function lookup(Request $request): JsonResponse
     {
-        $u = $this->guard($request);
+        $u = $this->guard($request, ownerOnly: false);
         if ($u instanceof JsonResponse) return $u;
 
         $phone = (string) $request->query('phone', '');
@@ -108,7 +138,7 @@ class LoyaltyController extends Controller
 
     public function redeem(Request $request): JsonResponse
     {
-        $u = $this->guard($request);
+        $u = $this->guard($request, ownerOnly: false);
         if ($u instanceof JsonResponse) return $u;
 
         $v = Validator::make($request->all(), [

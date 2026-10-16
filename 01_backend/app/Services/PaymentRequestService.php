@@ -77,9 +77,11 @@ class PaymentRequestService
             throw new InvalidArgumentException('المبلغ يجب أن يكون موجباً');
         }
 
-        // لا نُنشئ طلباً لا يستطيع أحد طرفيه إتمامه من الأصل.
-        $this->enforceKycTier($recipient, 'send_money', $amount);
-        $this->enforceKycTier($requester, 'receive_money', $amount);
+        // لا نُنشئ طلباً لا يستطيع أحد طرفيه إتمامه من الأصل. الحارس لا
+        // يفرض Tier العميل على أي دور مؤسسي لو استُخدمت الخدمة لاحقاً لفاتورة.
+        $tiers = app(KycTierService::class);
+        $tiers->assertIndividualTransactionAllowed($recipient, $amount, 'send_money');
+        $tiers->assertIndividualCanReceive($requester, $amount);
 
         return DB::transaction(function () use ($requester, $recipient, $amount, $note) {
             $this->assertAndRecordRequestLimit($requester, $amount);
@@ -267,6 +269,7 @@ class PaymentRequestService
                     'requester_name' => $requester->f_name,
                     'requester_phone' => $requester->phone,
                 ],
+                push: false, // لهذا المسار Push مالي متخصص يحمل request_ulid
             );
 
             // الإشعار الداخلي هو مصدر الحقيقة، وFCM هو التنبيه الفوري.
@@ -337,6 +340,7 @@ class PaymentRequestService
                         . Helpers::money($declined->amount) . ' ر.ي'
                         . ($reason ? " — {$reason}" : ''),
                     data: ['short_code' => $declined->short_code],
+                    push: false, // يتبعه SendTransactionNotificationJob أدناه
                 );
 
                 SendTransactionNotificationJob::dispatch(
@@ -393,7 +397,7 @@ class PaymentRequestService
     }
 
     /** الرسم والإجمالي اللذان يجب أن يراهما المستلم قبل الموافقة. */
-    public function directQuote(User $payer, PaymentRequest $request): array
+    private function directQuote(User $payer, PaymentRequest $request): array
     {
         if (!$request->isDirect() || $request->recipient_user_id !== $payer->id) {
             throw new InvalidArgumentException('هذا الطلب ليس موجّهاً إليك');
@@ -432,11 +436,12 @@ class PaymentRequestService
         }
 
         // حراسة كل باب يصل إلى المال، لا باب واجهة التطبيق وحده.
+        $tiers = app(KycTierService::class);
+        $feature = (int) ($requester->type ?? 0) === 3 ? 'merchant_pay' : 'send_money';
+        $tiers->assertIndividualTransactionAllowed($payer, $amount, $feature);
+        $tiers->assertIndividualCanReceive($requester, $amount);
         $this->assertFinancialEligibility($payer->id);
         $this->enforceSanction($payer);
-        if ($applySendMoneyFee) {
-            $this->enforceKycTier($payer, 'send_money', $amount);
-        }
         $this->enforceZone($requester);
         $this->enforceSanction($requester);
         $this->screenAml(
@@ -672,12 +677,9 @@ class PaymentRequestService
         if (!(bool) $requester->is_active || !(bool) $recipient->is_active) {
             throw new RuntimeException('أحد الحسابين موقوف حالياً');
         }
-        if ((int) $requester->is_kyc_verified !== 1) {
-            throw new RuntimeException('أكمل توثيق حسابك قبل طلب المال');
-        }
-        if ((int) $recipient->is_kyc_verified !== 1) {
-            throw new RuntimeException('حساب العميل غير موثّق لاستقبال الطلب');
-        }
+        $tiers = app(KycTierService::class);
+        $tiers->assertIndividualFeatureAllowed($requester, 'receive_money');
+        $tiers->assertIndividualFeatureAllowed($recipient, 'send_money');
         if (($requester->zone_code ?? 'UNKNOWN') !== 'SOUTH'
             || ($recipient->zone_code ?? 'UNKNOWN') !== 'SOUTH') {
             throw new RuntimeException('الخدمة غير متاحة لأحد الحسابين في منطقته الحالية');
@@ -950,6 +952,7 @@ class PaymentRequestService
                         'short_code' => $request->short_code,
                         'payer_phone' => $payer->phone,
                     ],
+                    push: false, // dispatchPaidPushNotifications يرسل المرجع المالي
                 );
             }
 
@@ -963,6 +966,7 @@ class PaymentRequestService
                     'amount' => (string)$request->amount,
                     'short_code' => $request->short_code,
                 ],
+                push: false, // dispatchPaidPushNotifications يرسل المرجع المالي
             );
         } catch (\Throwable $e) {
             logger()->warning('Payment request notifications failed: ' . $e->getMessage());

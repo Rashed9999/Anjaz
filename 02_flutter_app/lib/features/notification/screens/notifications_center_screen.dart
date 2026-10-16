@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 
 /// AMIAL-NOTIFICATIONS-001 — شاشة مركز الإشعارات.
@@ -192,9 +193,10 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
   String _formatTime(dynamic raw) {
     if (raw == null) return '';
     try {
-      final t = DateTime.parse(raw.toString()).toLocal();
-      final now = DateTime.now();
-      final diff = now.difference(t);
+      final instant = DateConverterHelper.parseApiInstant(raw.toString());
+      final t = DateConverterHelper.toMecca(instant);
+      final now = DateTime.now().toUtc();
+      final diff = now.difference(instant);
       if (diff.inMinutes < 1) return 'الآن';
       if (diff.inMinutes < 60) return 'منذ ${diff.inMinutes} دقيقة';
       if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';

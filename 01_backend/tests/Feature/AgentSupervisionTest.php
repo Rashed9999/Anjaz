@@ -42,6 +42,7 @@ class AgentSupervisionTest extends TestCase
     private function makeAgent(string $phone, string $f, string $l): User
     {
         $u = new User();
+        $u->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $u->forceFill([
             'f_name' => $f, 'l_name' => $l, 'phone' => $phone,
             'type' => AGENT_TYPE, 'password' => bcrypt('secret123'),
@@ -56,6 +57,7 @@ class AgentSupervisionTest extends TestCase
     private function makeBranch(User $agent, string $code, array $till = []): AgentBranch
     {
         $branchUser = new User();
+        $branchUser->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $branchUser->forceFill([
             'f_name' => 'فرع ' . $code, 'l_name' => 'اختبار',
             'phone' => '9677700' . str_pad((string) random_int(1, 99999), 5, '0', STR_PAD_LEFT),
