@@ -58,6 +58,7 @@
                     <button class="btn btn-outline-primary btn-sm vc-filter" data-stage="residence" type="button">السكن</button>
                     <button class="btn btn-outline-primary btn-sm vc-filter" data-stage="documents" type="button">المستندات</button>
                     <button class="btn btn-outline-primary btn-sm vc-filter" data-stage="decision" type="button">قرار نهائي</button>
+                    <button class="btn btn-outline-primary btn-sm vc-filter" data-stage="agent" type="button">تشغيل الوكلاء</button>
                     <button class="btn btn-outline-primary btn-sm vc-filter" data-stage="security" type="button">أمان الموظفين</button>
                 </div>
             </div>
@@ -101,11 +102,12 @@
         residence: @json(url('admin/amial/kyc/residence')),
         accountDecision: @json(url('admin/amial/kyc/center/accounts')),
         merchantDecision: @json(url('admin/amial/kyc/center/accounts')),
+        agentDecision: @json(url('admin/amial/kyc/center/accounts')),
         print: @json(url('admin/amial/hub/account')),
         csrf: @json(csrf_token()),
     };
     const GOVERNORATES = @json($governorates);
-    const STAGES = {new:'تسجيل جديد',residence:'مراجعة السكن',documents:'مراجعة المستندات',decision:'جاهز لفحص القرار',security:'أمان الموظفين'};
+    const STAGES = {new:'تسجيل جديد',residence:'مراجعة السكن',documents:'مراجعة المستندات',decision:'جاهز لفحص القرار',agent:'تشغيل الوكلاء',security:'أمان الموظفين'};
     const DOC_STATES = {pending:'بانتظار المراجعة',approved:'معتمد',rejected:'مرفوض',superseded:'مستبدل'};
     const el = id => document.getElementById(id);
     const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
@@ -148,7 +150,7 @@
     }
     function stats(meta) {
         const names = [['all','كل الطلبات'],['new','تسجيل جديد'],['residence','السكن'],
-            ['documents','الهوية والمستندات'],['decision','قرار نهائي'],['security','أمان الموظفين']];
+            ['documents','الهوية والمستندات'],['decision','قرار نهائي'],['agent','تشغيل الوكلاء'],['security','أمان الموظفين']];
         el('vc-stats').innerHTML = names.map(item =>
             '<div class="col-6 col-lg"><div class="vc-stat"><div class="vc-sub">' + item[1] +
             '</div><strong style="font-size:23px">' + esc((meta.counts || {})[item[0]] || 0) +
@@ -172,6 +174,7 @@
                 '<div class="d-flex justify-content-between mt-2 align-items-center">' +
                 '<span class="badge bg-' + (item.stage === 'decision' ? 'success' :
                     item.stage === 'documents' ? 'warning text-dark' :
+                    item.stage === 'agent' ? 'info text-dark' :
                     item.stage === 'security' ? 'secondary' : 'primary') + '">' +
                 esc(STAGES[item.stage]) + '</span>' +
                 '<small class="vc-sub">' + (item.restricted ? '🔒 مراجعة مقيدة' :
@@ -301,6 +304,28 @@
             '</section>';
     }
 
+    function agentOperatingCard(record, account) {
+        if (!record) return '';
+        const active = record.status === 'active';
+        const status = {active:'نشط',pending_approval:'بانتظار اعتماد التشغيل',suspended:'معلّق',not_created:'لم ينشأ'}[record.status] || record.status;
+        const options = GOVERNORATES.map(g => '<option value="' + esc(g.code) + '"' +
+            (g.code === account.governorate ? ' selected' : '') + '>' + esc(g.name) + '</option>').join('');
+        return '<section class="vc-section"><h5>🏧 ملف تشغيل الوكيل</h5>' +
+            '<p class="small text-muted">هذا قرار تشغيل للوكيل ونطاقه الجغرافي؛ لا يعتمد هوية الشخص ولا يغيّر سجل المنشأة.</p>' +
+            '<div class="row g-2 small"><div class="col-md-4">رقم الوكيل: <strong dir="ltr">' +
+            esc(record.agent_number || 'غير منشأ') + '</strong></div><div class="col-md-4">النطاق: <strong>' +
+            esc(record.zone_code || 'UNKNOWN') + '</strong></div><div class="col-md-4">الحالة: <strong>' +
+            esc(status) + '</strong></div></div>' +
+            (record.business_name ? '<div class="small mt-2">اسم نقطة الخدمة: <strong>' + esc(record.business_name) + '</strong></div>' : '') +
+            (record.can_decide ? '<div class="mt-3"><label class="form-label small" for="vc-agent-governorate">محافظة السكن التي راجعتها للوكيل</label>' +
+                '<select id="vc-agent-governorate" class="form-select mb-2"><option value="">اختر المحافظة</option>' + options + '</select>' +
+                '<div class="d-flex gap-2 flex-wrap">' +
+                (!active ? '<button type="button" class="btn btn-success btn-sm" data-action="agent-approve">اعتماد تشغيل الوكيل</button>' : '') +
+                (active ? '<button type="button" class="btn btn-outline-danger btn-sm" data-action="agent-suspend">تعليق التشغيل</button>' : '') +
+                '</div></div>' : '<div class="vc-sub mt-3">العرض فقط — يلزم تصريح مراجعة وقرار لاعتماد أو تعليق التشغيل.</div>') +
+            '</section>';
+    }
+
     function caseTimelineCard(events) {
         if (!events || !events.length) return '';
         return '<section class="vc-section"><h5>📜 سجل قرارات القضية</h5>' + events.map(event =>
@@ -337,6 +362,7 @@
             caseTimelineCard(data.case_timeline) +
             (data.staff_security ? staffSecurityCard(data.staff_security) :
                 merchantVerificationCard(data.merchant_verification) +
+                agentOperatingCard(data.agent_operating, a) +
                 residenceCard(data.residence || {}, data.residence_review, p) +
                 '<section class="vc-section" id="vc-documents"><h5>🪪 مستندات الهوية والملكية</h5>' +
                 '<div class="small text-muted mb-2">مراجعة المستند منفصلة عن اعتماد الحساب. الصورة الأصلية لا تعرض دون علامة مائية.</div>' +
@@ -620,6 +646,19 @@
             if (reason.trim().length < 5) return notice('سبب واضح من خمسة أحرف على الأقل مطلوب.', 'warning');
             url = ROUTES.merchantDecision + '/' + current.account.id + '/merchant-verification';
             body = {action: action === 'merchant-reject' ? 'reject' : 'resubmit', reason:reason.trim()};
+        } else if (action === 'agent-approve') {
+            if (!current.agent_operating || !current.agent_operating.can_decide) return;
+            const governorate = el('vc-agent-governorate') ? el('vc-agent-governorate').value : '';
+            if (!governorate) return notice('اختر محافظة السكن قبل اعتماد تشغيل الوكيل.', 'warning');
+            if (!window.confirm('هل راجعت رقم الوكيل وملفه التشغيلي والمنطقة قبل التفعيل؟')) return;
+            url = ROUTES.agentDecision + '/' + current.account.id + '/agent-operating-profile';
+            body = {action:'approve', governorate:governorate};
+        } else if (action === 'agent-suspend') {
+            if (!current.agent_operating || !current.agent_operating.can_decide) return;
+            const reason = window.prompt('سبب تعليق تشغيل الوكيل:') || '';
+            if (reason.trim().length < 5) return notice('سبب واضح من خمسة أحرف على الأقل مطلوب.', 'warning');
+            url = ROUTES.agentDecision + '/' + current.account.id + '/agent-operating-profile';
+            body = {action:'suspend', reason:reason.trim()};
         } else return;
 
         button.disabled = true;

@@ -268,26 +268,37 @@ class MerchantVerificationService
         if ($request->status !== 'pending_review') {
             throw new RuntimeException('الطلب ليس بانتظار مراجعة');
         }
-        $request->update([
-            'status' => 'resubmission_required',
-            'admin_note' => $reason,
-            'reviewed_by_admin_id' => $adminId,
-            'reviewed_at' => now(),
-        ]);
-        MerchantProfile::where('user_id', $request->merchant_user_id)
-            ->update(['verification_status' => 'resubmission_required']);
+        return DB::transaction(function () use ($request, $adminId, $reason) {
+            $request->update([
+                'status' => 'resubmission_required',
+                'admin_note' => $reason,
+                'reviewed_by_admin_id' => $adminId,
+                'reviewed_at' => now(),
+            ]);
+            MerchantProfile::where('user_id', $request->merchant_user_id)
+                ->update(['verification_status' => 'resubmission_required']);
 
-        $merchant = User::find($request->merchant_user_id);
-        if ($merchant) {
-            $this->notif->dispatch(
-                $merchant,
-                'merchant_resubmission_required',
-                'يلزم إعادة رفع وثائق',
-                "السبب: {$reason}",
-                data: ['request_ulid' => $request->request_ulid],
-            );
-        }
-        return $request->fresh();
+            $merchant = User::find($request->merchant_user_id);
+            $reviewer = User::find($adminId);
+            if ($merchant && $reviewer) {
+                $this->workflow->recordMerchantResubmission(
+                    merchant: $merchant,
+                    reviewer: $reviewer,
+                    requestUlid: (string) $request->request_ulid,
+                    reason: $reason,
+                );
+            }
+            if ($merchant) {
+                $this->notif->dispatch(
+                    $merchant,
+                    'merchant_resubmission_required',
+                    'يلزم إعادة رفع وثائق',
+                    "السبب: {$reason}",
+                    data: ['request_ulid' => $request->request_ulid],
+                );
+            }
+            return $request->fresh();
+        });
     }
 
     /** الحالة الحالية للتاجر (إن وجدت). */

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
+use App\Models\AgentProfile;
 use App\Models\MerchantProfile;
 use App\Models\MerchantVerificationRequest;
 use App\Models\User;
@@ -61,6 +62,10 @@ class UnifiedVerificationCenterController extends Controller
         $pendingMerchantIds = MerchantVerificationRequest::query()
             ->whereIn('status', ['pending_review', 'resubmission_required'])
             ->orderBy('created_at')->limit(200)->pluck('merchant_user_id')->all();
+        $pendingAgentIds = Schema::hasTable('agent_profiles')
+            ? AgentProfile::query()->whereIn('status', ['pending_approval', 'suspended'])
+                ->orderBy('updated_at')->limit(200)->pluck('user_id')->all()
+            : [];
 
         $newAccountIds = User::query()
             ->whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE])
@@ -93,7 +98,7 @@ class UnifiedVerificationCenterController extends Controller
             ->orderByDesc('id')->limit(220)->pluck('user_id')->all();
 
         $ids = array_values(array_unique(array_map('intval', array_merge(
-            $pendingDocumentIds, $pendingResidenceIds, $pendingMerchantIds, $newAccountIds,
+            $pendingDocumentIds, $pendingResidenceIds, $pendingMerchantIds, $pendingAgentIds, $newAccountIds,
             $staffSecurityIds, $identityCandidateIds
         ))));
 
@@ -127,6 +132,9 @@ class UnifiedVerificationCenterController extends Controller
                 KycDocument::STATUS_PENDING, KycDocument::STATUS_APPROVED,
             ])->get()->groupBy('user_id');
         $residenceByUser = $pendingResidence->keyBy('user_id');
+        $agentProfiles = Schema::hasTable('agent_profiles')
+            ? AgentProfile::query()->whereIn('user_id', $visibleIds)->get()->keyBy('user_id')
+            : collect();
 
         // الفلترة داخل الخادم قبل تسليم أي اسم أو رقم هاتف أو عدد تفصيلي.
         $restrictedIds = Schema::hasTable('kyc_verification_cases')
@@ -150,6 +158,9 @@ class UnifiedVerificationCenterController extends Controller
             $hasResidence = $residenceByUser->has($user->id);
             $tier = (int) ($user->kyc_tier ?? 0);
             $verified = (int) $user->is_kyc_verified === 1;
+            $agentProfile = $agentProfiles->get($user->id);
+            $agentNeedsReview = (int) $user->type === AGENT_TYPE && $agentProfile
+                && in_array($agentProfile->status, ['pending_approval', 'suspended'], true);
 
             if ((int) $user->type === ADMIN_TYPE) {
                 $rows[] = [
@@ -177,13 +188,14 @@ class UnifiedVerificationCenterController extends Controller
                         || $doc->created_at?->greaterThan($user->kyc_tier_updated_at)));
 
             // لا يظهر حساب قديم معتمد لمجرد وجود صورة هوية في أرشيفه.
-            if ($verified && !$hasResidence && $pending->isEmpty() && !$hasNewTierThreeEvidence) {
+            if ($verified && !$agentNeedsReview && !$hasResidence && $pending->isEmpty() && !$hasNewTierThreeEvidence) {
                 continue;
             }
 
-            $stage = $hasResidence ? 'residence'
+            $stage = $agentNeedsReview ? 'agent'
+                : ($hasResidence ? 'residence'
                 : ($pending->isNotEmpty() ? 'documents'
-                    : (($hasBasicIdentity || $hasNewTierThreeEvidence) ? 'decision' : 'new'));
+                    : (($hasBasicIdentity || $hasNewTierThreeEvidence) ? 'decision' : 'new')));
 
             $rows[] = [
                 'id' => (int) $user->id,
@@ -203,7 +215,7 @@ class UnifiedVerificationCenterController extends Controller
             ];
         }
 
-        $priority = ['decision' => 0, 'residence' => 1, 'documents' => 2, 'new' => 3, 'security' => 4];
+        $priority = ['decision' => 0, 'agent' => 1, 'residence' => 2, 'documents' => 3, 'new' => 4, 'security' => 5];
         usort($rows, static fn ($a, $b) =>
             ($priority[$a['stage']] <=> $priority[$b['stage']])
             ?: strcmp((string) $a['registered_at'], (string) $b['registered_at'])
@@ -220,6 +232,7 @@ class UnifiedVerificationCenterController extends Controller
                     'residence' => $counts['residence'] ?? 0,
                     'documents' => $counts['documents'] ?? 0,
                     'decision' => $counts['decision'] ?? 0,
+                    'agent' => $counts['agent'] ?? 0,
                     'security' => $counts['security'] ?? 0,
                 ],
                 'scope' => 'recent_candidates',
@@ -391,6 +404,22 @@ class UnifiedVerificationCenterController extends Controller
             }
         }
 
+        $agentOperating = null;
+        if ((int) $user->type === AGENT_TYPE) {
+            $profile = Schema::hasTable('agent_profiles')
+                ? AgentProfile::query()->where('user_id', $user->id)->first()
+                : null;
+            $agentOperating = [
+                'status' => $profile?->status ?? 'not_created',
+                'agent_number' => (string) ($user->agent_number ?? ''),
+                'zone_code' => (string) ($profile?->zone_code ?: $user->zone_code ?: 'UNKNOWN'),
+                'business_name' => (string) ($profile?->business_name ?? ''),
+                'can_decide' => $canDecide
+                    && $reviewer->hasPlatformPermission('platform.customers.freeze')
+                    && $reviewer->hasPlatformPermission('platform.approvals.decide'),
+            ];
+        }
+
         $caseTimeline = [];
         try {
             $unifiedCase = $workflow->snapshot($user);
@@ -434,6 +463,7 @@ class UnifiedVerificationCenterController extends Controller
                 'unified_case' => $unifiedCase,
                 'case_timeline' => $caseTimeline,
                 'merchant_verification' => $merchantVerification,
+                'agent_operating' => $agentOperating,
                 'permissions' => [
                     'review_documents' => $canReviewDocuments,
                     'view_documents' => $reviewer->hasPlatformPermission('platform.customers.freeze'),
@@ -528,6 +558,42 @@ class UnifiedVerificationCenterController extends Controller
                 default => 'تم طلب استكمال وثائق أو بيانات المنشأة.',
             },
             'status' => $updated->status,
+        ]);
+    }
+
+    public function decideAgent(Request $request, int $id, AccountVerificationDecisionService $decisions): JsonResponse
+    {
+        $input = $request->validate([
+            'action' => ['required', 'in:approve,suspend'],
+            'governorate' => ['nullable', 'string', 'max:100'],
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+        $agent = User::query()->where('type', AGENT_TYPE)->findOrFail($id);
+        $approve = $input['action'] === 'approve';
+
+        try {
+            $profile = $decisions->decideAgent(
+                agent: $agent,
+                reviewer: $request->user(),
+                approve: $approve,
+                requestedGovernorate: $input['governorate'] ?? null,
+                reason: $input['reason'] ?? null,
+            );
+        } catch (DomainException $e) {
+            $code = $e->getMessage();
+            $message = match ($code) {
+                'MISSING_RESIDENCE_GOVERNORATE' => 'اختر محافظة السكن قبل اعتماد تشغيل الوكيل.',
+                'AGENT_NUMBER_REQUIRED' => 'لا يمكن اعتماد التشغيل قبل إنشاء رقم وكيل فريد عند التسجيل.',
+                'AGENT_SUSPENSION_REASON_REQUIRED' => 'سبب التعليق مطلوب، خمسة أحرف على الأقل.',
+                default => $code,
+            };
+            return response()->json(['success' => false, 'message' => $message, 'code' => $code], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $approve ? 'تم اعتماد ملف تشغيل الوكيل ونطاقه الجغرافي.' : 'تم تعليق ملف تشغيل الوكيل مع تسجيل السبب.',
+            'status' => $profile->status,
         ]);
     }
 

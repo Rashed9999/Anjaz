@@ -3,6 +3,7 @@
 namespace App\Services\Verification;
 
 use App\Models\KycDocument;
+use App\Models\AgentProfile;
 use App\Models\MerchantProfile;
 use App\Models\MerchantVerificationRequest;
 use App\Models\User;
@@ -42,7 +43,9 @@ class VerificationCaseService
     {
         $case = $this->ensure($subject);
         $policy = $this->policyFor($case);
-        $requirements = $policy?->requirements ?? [];
+        // السياسة المزروعة تخصيصٌ، لا شرط لصحة المحرك. غيابها في نشر
+        // تدريجي لا يجوز أن يحوّل ملفاً بلا أدلة إلى «مكتمل».
+        $requirements = $policy?->requirements ?? $this->defaultRequirementsFor($case);
         $evaluated = $this->evaluate($subject, $case, $requirements);
         $steps = $this->syncSteps($case, $evaluated);
 
@@ -104,9 +107,9 @@ class VerificationCaseService
             if (!$case->case_ulid) $changes['case_ulid'] = (string) Str::ulid();
             if (!$case->subject_kind) $changes['subject_kind'] = $kind;
             if ($case->merchant_vertical !== $vertical) $changes['merchant_vertical'] = $vertical;
-            if (!$case->policy_version || $case->policy_version !== ($policy?->policy_version)) {
-                $changes['policy_version'] = $policy?->policy_version;
-                $changes['target_level'] = $policy?->target_level ?? 1;
+            if ($policy && (!$case->policy_version || $case->policy_version !== $policy->policy_version)) {
+                $changes['policy_version'] = $policy->policy_version;
+                $changes['target_level'] = $policy->target_level ?? 1;
             }
             if ($changes !== []) $case->forceFill($changes)->save();
 
@@ -167,9 +170,7 @@ class VerificationCaseService
         int $targetLevel,
         ?string $reason = null,
     ): void {
-        if (!Schema::hasTable('kyc_verification_cases')
-            || !Schema::hasTable('verification_case_steps')
-            || !Schema::hasTable('verification_case_events')) {
+        if (!$this->workflowStorageAvailable()) {
             // Deployment may briefly run application code before this additive
             // migration. Never turn a completed, guarded KYC decision into a
             // partial failure because its projection table is not present yet.
@@ -239,7 +240,7 @@ class VerificationCaseService
         string $requestUlid,
         ?string $reason = null,
     ): void {
-        if (!Schema::hasTable('verification_case_events')) return;
+        if (!$this->workflowStorageAvailable()) return;
 
         DB::transaction(function () use ($merchant, $reviewer, $approved, $requestUlid, $reason) {
             $case = $this->ensure($merchant);
@@ -266,6 +267,70 @@ class VerificationCaseService
                     'request_ulid' => $requestUlid,
                     'reason_provided' => filled($reason),
                 ],
+            ]);
+        });
+    }
+
+    /** يسجل طلب الاستكمال كحالة مستقلة، لا كرفض نهائي للمنشأة. */
+    public function recordMerchantResubmission(
+        User $merchant,
+        User $reviewer,
+        string $requestUlid,
+        string $reason,
+    ): void {
+        if (!$this->workflowStorageAvailable()) return;
+
+        DB::transaction(function () use ($merchant, $reviewer, $requestUlid, $reason) {
+            $case = $this->ensure($merchant);
+            $stepKey = $case->merchant_vertical === 'quick_sale'
+                ? 'quick_sale_location' : 'establishment';
+            VerificationCaseStep::query()->updateOrCreate(
+                ['verification_case_id' => $case->id, 'step_key' => $stepKey],
+                [
+                    'step_order' => $this->requirementOrder($case, $stepKey),
+                    'status' => self::STATUS_ACTION_REQUIRED,
+                    'completed_at' => null,
+                    'reviewed_by' => (int) $reviewer->id,
+                    'reviewed_at' => now(),
+                    'review_note' => $reason,
+                ],
+            );
+            VerificationCaseEvent::create([
+                'verification_case_id' => $case->id,
+                'actor_user_id' => (int) $reviewer->id,
+                'event_type' => 'merchant_verification_resubmission_required',
+                'details' => ['request_ulid' => $requestUlid, 'reason_provided' => true],
+            ]);
+        });
+    }
+
+    /** يسجل اعتماد أو تعليق ملف التشغيل للوكيل، منفصلاً عن هوية الشخص. */
+    public function recordAgentDecision(
+        User $agent,
+        User $reviewer,
+        bool $approved,
+        ?string $reason = null,
+    ): void {
+        if (!$this->workflowStorageAvailable()) return;
+
+        DB::transaction(function () use ($agent, $reviewer, $approved, $reason) {
+            $case = $this->ensure($agent);
+            VerificationCaseStep::query()->updateOrCreate(
+                ['verification_case_id' => $case->id, 'step_key' => 'agent_operating_profile'],
+                [
+                    'step_order' => $this->requirementOrder($case, 'agent_operating_profile'),
+                    'status' => $approved ? self::STATUS_APPROVED : self::STATUS_REJECTED,
+                    'completed_at' => $approved ? now() : null,
+                    'reviewed_by' => (int) $reviewer->id,
+                    'reviewed_at' => now(),
+                    'review_note' => $reason,
+                ],
+            );
+            VerificationCaseEvent::create([
+                'verification_case_id' => $case->id,
+                'actor_user_id' => (int) $reviewer->id,
+                'event_type' => $approved ? 'agent_operating_approved' : 'agent_operating_suspended',
+                'details' => ['reason_provided' => filled($reason)],
             ]);
         });
     }
@@ -406,11 +471,18 @@ class VerificationCaseService
     {
         $agentNumber = trim((string) ($user->agent_number ?? ''));
         $zone = trim((string) ($user->zone_code ?? ''));
-        $complete = $agentNumber !== '' && $zone !== '';
+        $validZone = $zone !== '' && $zone !== 'UNKNOWN';
+        $profileActive = Schema::hasTable('agent_profiles')
+            && AgentProfile::query()->where('user_id', $user->id)->where('status', 'active')->exists();
+        $complete = $agentNumber !== '' && $validZone && $profileActive;
         return [
             'status' => $complete ? self::STATUS_COMPLETE : self::STATUS_ACTION_REQUIRED,
-            'reason' => $complete ? null : 'يلزم رقم وكيل ونطاق تشغيلي معتمدان قبل التفعيل.',
-            'evidence' => ['agent_number_assigned' => $agentNumber !== '', 'zone_assigned' => $zone !== ''],
+            'reason' => $complete ? null : 'يلزم رقم وكيل، ملف تشغيلي نشط، ونطاق جغرافي معتمد قبل التفعيل.',
+            'evidence' => [
+                'agent_number_assigned' => $agentNumber !== '',
+                'zone_assigned' => $validZone,
+                'profile_active' => $profileActive,
+            ],
         ];
     }
 
@@ -457,6 +529,8 @@ class VerificationCaseService
     /** @return array<int,array<string,mixed>> */
     private function syncSteps(VerificationCase $case, array $evaluated): array
     {
+        if (!Schema::hasTable('verification_case_steps')) return $evaluated;
+
         foreach ($evaluated as $step) {
             $row = VerificationCaseStep::query()->firstOrNew([
                 'verification_case_id' => $case->id,
@@ -479,7 +553,7 @@ class VerificationCaseService
     private function readyForFinalReview(array $steps): bool
     {
         return collect($steps)->filter(fn (array $step) => $step['key'] !== 'final_activation')
-            ->every(fn (array $step) => $step['status'] === self::STATUS_COMPLETE);
+            ->every(fn (array $step) => in_array($step['status'], [self::STATUS_COMPLETE, self::STATUS_APPROVED], true));
     }
 
     private function policyFor(VerificationCase $case): ?VerificationRequirementPolicy
@@ -487,9 +561,44 @@ class VerificationCaseService
         return $this->resolvePolicy((string) $case->subject_kind, $case->merchant_vertical);
     }
 
+    /** @return array<int,array{key:string,label:string}> */
+    private function defaultRequirementsFor(VerificationCase $case): array
+    {
+        return match ((string) $case->subject_kind) {
+            'merchant' => [
+                ['key' => 'contact', 'label' => 'تأكيد قنوات الاتصال'],
+                ['key' => 'owner_identity', 'label' => 'هوية مالك المنشأة'],
+                [
+                    'key' => $case->merchant_vertical === 'quick_sale' ? 'quick_sale_location' : 'establishment',
+                    'label' => $case->merchant_vertical === 'quick_sale'
+                        ? 'موقع وصورة نقطة البيع السريع' : 'بيانات ووثائق المنشأة التجارية',
+                ],
+                ['key' => 'risk_review', 'label' => 'فحص المخاطر والامتثال'],
+                ['key' => 'final_activation', 'label' => 'قرار التفعيل النهائي'],
+            ],
+            'agent' => [
+                ['key' => 'contact', 'label' => 'تأكيد قنوات الاتصال'],
+                ['key' => 'owner_identity', 'label' => 'هوية الوكيل أو المفوض'],
+                ['key' => 'agent_operating_profile', 'label' => 'ملف تشغيل الوكيل ونطاقه الجغرافي'],
+                ['key' => 'risk_review', 'label' => 'فحص المخاطر والامتثال'],
+                ['key' => 'final_activation', 'label' => 'قرار التفعيل النهائي'],
+            ],
+            'admin_staff' => [
+                ['key' => 'staff_security', 'label' => 'المصادقة الثنائية والدور التشغيلي'],
+            ],
+            default => [
+                ['key' => 'contact', 'label' => 'تأكيد الهاتف والبريد'],
+                ['key' => 'residence', 'label' => 'إثبات محل الإقامة الحالي'],
+                ['key' => 'identity', 'label' => 'توثيق وثيقة الهوية'],
+                ['key' => 'risk_review', 'label' => 'مراجعة المخاطر'],
+                ['key' => 'final_activation', 'label' => 'قرار الاعتماد النهائي'],
+            ],
+        };
+    }
+
     private function requirementOrder(VerificationCase $case, string $key): int
     {
-        $requirements = $this->policyFor($case)?->requirements ?? [];
+        $requirements = $this->policyFor($case)?->requirements ?? $this->defaultRequirementsFor($case);
         foreach ($requirements as $index => $requirement) {
             if (($requirement['key'] ?? null) === $key) return $index + 1;
         }
@@ -504,6 +613,9 @@ class VerificationCaseService
             'identity_case_rejected' => 'رفض نهائي لطلب توثيق الهوية.',
             'merchant_verification_approved' => 'اعتماد توثيق المنشأة؛ لا يعني اعتماد هوية الشخص.',
             'merchant_verification_rejected' => 'رُفض طلب توثيق المنشأة.',
+            'merchant_verification_resubmission_required' => 'طُلب من التاجر استكمال بيانات أو أدلة المنشأة.',
+            'agent_operating_approved' => 'اعتمد ملف تشغيل الوكيل ونطاقه الجغرافي.',
+            'agent_operating_suspended' => 'عُلّق ملف تشغيل الوكيل.',
             default => 'حدث في مسار التحقق.',
         };
     }
@@ -536,5 +648,12 @@ class VerificationCaseService
     {
         if ((int) $user->type !== MERCHANT_TYPE) return null;
         return MerchantProfile::query()->where('user_id', $user->id)->value('business_type');
+    }
+
+    private function workflowStorageAvailable(): bool
+    {
+        return Schema::hasTable('kyc_verification_cases')
+            && Schema::hasTable('verification_case_steps')
+            && Schema::hasTable('verification_case_events');
     }
 }

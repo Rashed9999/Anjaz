@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AgentProfile;
 use App\Models\KycDocument;
 use App\Models\User;
 use App\Services\Kyc\KycPrivacyService;
@@ -132,5 +133,35 @@ class UnifiedVerificationCenterTest extends TestCase
             route('admin.amial.kyc.center.decision', $customer->id),
             ['status' => 2, 'target_tier' => 2, 'reason' => 'سبب رفض واضح'],
         )->assertForbidden();
+    }
+
+    public function test_pending_agent_operating_profile_is_visible_and_kept_separate_from_identity_decision(): void
+    {
+        $reviewer = $this->reviewer([
+            'platform.customers.kyc.view',
+            'platform.customers.freeze',
+            'platform.approvals.decide',
+        ]);
+        $agent = User::factory()->create([
+            'type' => AGENT_TYPE,
+            'agent_number' => 'AG-902',
+            'zone_code' => 'UNKNOWN',
+        ]);
+        AgentProfile::create([
+            'user_id' => $agent->id,
+            'status' => 'pending_approval',
+            'zone_code' => 'UNKNOWN',
+        ]);
+
+        $this->actingAs($reviewer, 'user');
+        $queue = $this->getJson(route('admin.amial.kyc.center.queue'))->assertOk();
+        $row = collect($queue->json('data'))->firstWhere('id', $agent->id);
+        $this->assertSame('agent', $row['stage'] ?? null);
+
+        $case = $this->getJson(route('admin.amial.kyc.center.account', $agent->id))->assertOk();
+        $this->assertSame('pending_approval', $case->json('data.agent_operating.status'));
+        $this->assertSame('AG-902', $case->json('data.agent_operating.agent_number'));
+        $this->assertTrue($case->json('data.agent_operating.can_decide'));
+        $this->assertFalse($case->json('data.account.verified'));
     }
 }

@@ -619,6 +619,9 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
     Route::post('/center/accounts/{id}/merchant-verification', [$center, 'decideMerchant'])->where('id', '[0-9]+')
         ->middleware(['platform:platform.customers.kyc.view', 'platform:platform.merchants.compliance', 'platform:platform.approvals.decide', 'amial.idempotency'])
         ->name('center.merchant-decision');
+    Route::post('/center/accounts/{id}/agent-operating-profile', [$center, 'decideAgent'])->where('id', '[0-9]+')
+        ->middleware(['platform:platform.customers.kyc.view', 'platform:platform.customers.freeze', 'platform:platform.approvals.decide', 'amial.idempotency'])
+        ->name('center.agent-decision');
     Route::get('/center/accounts/{id}/merchant-documents/{type}', [$center, 'merchantDocument'])
         ->where(['id' => '[0-9]+', 'type' => 'id_card_front|id_card_back|commercial_register|store_photo|address_proof|profession_license|optional_document'])
         ->middleware(['platform:platform.customers.kyc.view', 'platform:platform.merchants.compliance'])

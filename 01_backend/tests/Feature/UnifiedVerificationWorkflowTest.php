@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AgentProfile;
 use App\Models\User;
 use App\Services\Verification\VerificationCaseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -62,5 +63,55 @@ class UnifiedVerificationWorkflowTest extends TestCase
         $this->assertSame('admin_staff', $snapshot['subject_kind']);
         $this->assertSame(['staff_security'], array_column($snapshot['steps'], 'key'));
         $this->assertSame('action_required', $snapshot['status']);
+    }
+
+    /** @test */
+    public function missing_policy_rows_fall_back_to_a_safe_customer_workflow(): void
+    {
+        $customer = User::factory()->create([
+            'type' => CUSTOMER_TYPE,
+            'is_phone_verified' => false,
+            'is_email_verified' => false,
+        ]);
+
+        $snapshot = app(VerificationCaseService::class)->snapshot($customer);
+
+        $this->assertSame(
+            ['contact', 'residence', 'identity', 'risk_review', 'final_activation'],
+            array_column($snapshot['steps'], 'key'),
+        );
+        $this->assertSame('action_required', $snapshot['status']);
+        $this->assertFalse($snapshot['ready_for_final_review']);
+    }
+
+    /** @test */
+    public function agent_operating_approval_is_recorded_without_finalising_personal_kyc(): void
+    {
+        $agent = User::factory()->create([
+            'type' => AGENT_TYPE,
+            'agent_number' => 'AG-901',
+            'zone_code' => 'SOUTH',
+        ]);
+        AgentProfile::create([
+            'user_id' => $agent->id,
+            'status' => 'active',
+            'zone_code' => 'SOUTH',
+        ]);
+        $reviewer = User::factory()->create(['type' => ADMIN_TYPE]);
+
+        app(VerificationCaseService::class)->recordAgentDecision($agent, $reviewer, true);
+
+        $case = DB::table('kyc_verification_cases')->where('user_id', $agent->id)->first();
+        $this->assertNotNull($case);
+        $this->assertNotSame('approved', $case->workflow_status);
+        $this->assertDatabaseHas('verification_case_steps', [
+            'verification_case_id' => $case->id,
+            'step_key' => 'agent_operating_profile',
+            'status' => 'approved',
+        ]);
+        $this->assertDatabaseHas('verification_case_events', [
+            'verification_case_id' => $case->id,
+            'event_type' => 'agent_operating_approved',
+        ]);
     }
 }

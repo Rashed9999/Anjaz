@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\KycDocument;
 use App\Models\User;
+use App\Services\Verification\VerificationCaseService;
 use DomainException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,9 @@ class KycDocumentService
 {
     /** ما يلزم لكل مستوى. المستوى 1 لا يطلب مستنداً (هاتف فقط). */
     private const REQUIRED_BY_TIER = [
-        2 => [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE],
+        // المستوى الثاني يثبت وثيقة الهوية نفسها؛ إثبات صاحبها (سيلفي أو
+        // بديل بيومتري/حضوري) يُطلب فقط في المستوى الثالث.
+        2 => [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK],
         3 => [
             KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK,
             KycDocument::TYPE_SELFIE, KycDocument::TYPE_ADDRESS_PROOF,
@@ -41,6 +44,23 @@ class KycDocumentService
 
     private const ALLOWED_MIME = [
         'image/jpeg', 'image/png', 'image/heic', 'image/heif', 'application/pdf',
+    ];
+
+    /** أسماء يفهمها المراجع بدلاً من رموز الحقول التنظيمية الخام. */
+    private const PROFILE_FIELD_LABELS = [
+        'residence_governorate' => 'محافظة السكن',
+        'residence_district' => 'المديرية',
+        'residence_area' => 'الحيّ',
+        'occupation' => 'المهنة',
+        'income_source' => 'مصدر الدخل',
+        'account_purpose' => 'الغرض من الحساب',
+        'gender' => 'الجنس',
+        'date_of_birth' => 'تاريخ الميلاد',
+        'father_name' => 'اسم الأب',
+        'grandfather_name' => 'اسم الجدّ',
+        'name_en' => 'الاسم بالإنجليزية',
+        'is_pep' => 'الإفصاح السياسي (PEP)',
+        'pep_position' => 'المنصب السياسي',
     ];
 
     public function __construct(
@@ -73,7 +93,7 @@ class KycDocumentService
 
         $path = $this->storage->encryptAndStore($file, 'kyc');
 
-        return DB::transaction(function () use ($user, $docType, $path, $mime, $file, $sha, $operator) {
+        $doc = DB::transaction(function () use ($user, $docType, $path, $mime, $file, $sha, $operator) {
             // الأحدث هو النافذ — انظر شرح الصنف.
             KycDocument::where('user_id', $user->id)
                 ->where('doc_type', $docType)
@@ -108,6 +128,10 @@ class KycDocumentService
 
             return $doc;
         });
+
+        $this->syncVerificationCase($user);
+
+        return $doc;
     }
 
     /**
@@ -118,9 +142,9 @@ class KycDocumentService
      * لا تُغيّر شيئاً يستحقّ ذريّةً: إن فشلت، بقي المستند مرفوعاً وحالتُه
      * تقول إنّه لم يُقرأ.
      */
-    public function uploadAndRead(User $user, string $docType, UploadedFile $file): KycDocument
+    public function uploadAndRead(User $user, string $docType, UploadedFile $file, ?User $operator = null): KycDocument
     {
-        $doc = $this->upload($user, $docType, $file);
+        $doc = $this->upload($user, $docType, $file, $operator);
 
         return app(KycOcrService::class)->process($doc);
     }
@@ -149,6 +173,10 @@ class KycDocumentService
             'severity' => 'critical',
             'context' => ['doc_type' => $doc->doc_type, 'customer_id' => $doc->user_id],
         ]);
+
+        if ($doc->user) {
+            $this->syncVerificationCase($doc->user);
+        }
 
         return $doc->fresh();
     }
@@ -179,6 +207,10 @@ class KycDocumentService
             'severity' => 'warning',
             'context' => ['doc_type' => $doc->doc_type, 'customer_id' => $doc->user_id],
         ]);
+
+        if ($doc->user) {
+            $this->syncVerificationCase($doc->user);
+        }
 
         return $doc->fresh();
     }
@@ -297,12 +329,6 @@ class KycDocumentService
                         'KYC_PROFILE_INCOMPLETE',
                         'لا تُرفَع الفئةُ الثالثةُ قبل استكمال هذه الحقول',
                         $completeness['missing_fields'],
-                        // **ولا معجمَ للحقول الرقابيّة بعد** — فتُعرَض
-                        // رموزُها خاماً موسومةً «بلا ترجمة»، ولا تُخترَع
-                        // لها أسماء. (وأوّلُ صياغةٍ كتبت
-                        // `KycProfileFields::LABELS ?? []` — و`??` لا
-                        // تحمي ثابتاً غيرَ معرَّف: النداءُ يسقط بـ
-                        // `Undefined constant`. قِيس فسقط.)
                         self::PROFILE_FIELD_LABELS,
                         'استكملها من نافذة «✏️ تعديل» ثمّ أعِد المحاولة.'
                     ));
@@ -563,6 +589,25 @@ class KycDocumentService
     }
 
     /**
+     * القضية الموحدة إسقاط تشغيلي لحالة الأدلة، لا جزء من قرار المستند.
+     * لذلك لا ينبغي أن يحوّل غياب جدولٍ أثناء نشرٍ تدريجي قرارَ الرفع أو
+     * المراجعة إلى فشلٍ للمستخدم.
+     */
+    private function syncVerificationCase(User $user): void
+    {
+        try {
+            if (Schema::hasTable('kyc_verification_cases')) {
+                app(VerificationCaseService::class)->snapshot($user->fresh());
+            }
+        } catch (\Throwable $e) {
+            Log::warning('verification case sync failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * AMIAL-KYC-SAY-001 — **رفضٌ يقول ما ينقص بالعربيّة وأين يُستدرَك.**
      *
      * ══════════════════════════════════════════════════════════════════
@@ -588,24 +633,6 @@ class KycDocumentService
      * @param  array<int,string>     $codes
      * @param  array<string,string>  $dictionary
      */
-    /**
-     * أسماءُ الحقول الرقابيّة بالعربيّة — **منقولةٌ من نموذج اللوحة
-     * نفسِه** لا مخترَعة، وما ليس فيها يُعرَض خاماً موسوماً.
-     */
-    private const PROFILE_FIELD_LABELS = [
-        'residence_governorate' => 'محافظة السكن',
-        'residence_district' => 'المديرية',
-        'residence_area' => 'الحيّ',
-        'occupation' => 'المهنة',
-        'income_source' => 'مصدر الدخل',
-        'account_purpose' => 'الغرض من الحساب',
-        'gender' => 'الجنس',
-        'date_of_birth' => 'تاريخ الميلاد',
-        'father_name' => 'اسم الأب',
-        'grandfather_name' => 'اسم الجدّ',
-        'name_en' => 'الاسم بالإنجليزيّة',
-    ];
-
     private function sayMissing(
         string $marker,
         string $headline,

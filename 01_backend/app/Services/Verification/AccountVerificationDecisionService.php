@@ -2,10 +2,12 @@
 
 namespace App\Services\Verification;
 
+use App\Models\AgentProfile;
 use App\Models\User;
 use App\Services\KycDocumentService;
 use App\Services\KycTierService;
 use App\Services\NotificationService;
+use App\Services\ZoneAssignmentService;
 use App\Support\YemenGovernorates;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -86,5 +88,68 @@ class AccountVerificationDecisionService
         }
 
         return $result;
+    }
+
+    /**
+     * قرار تشغيل الوكيل لا يبدّل توثيق هويته ولا حالة منشأته. الاعتماد
+     * هنا يفتح ملفه التشغيلي فقط بعد تعيين منطقة آمنة وتحقق رباعي العيون.
+     */
+    public function decideAgent(
+        User $agent,
+        User $reviewer,
+        bool $approve,
+        ?string $requestedGovernorate = null,
+        ?string $reason = null,
+    ): AgentProfile {
+        if ((int) $agent->type !== AGENT_TYPE) {
+            throw new DomainException('AGENT_ACCOUNT_REQUIRED');
+        }
+        if ((int) $agent->id === (int) $reviewer->id) {
+            throw new DomainException('FOUR_EYES_VIOLATION');
+        }
+        if (!$approve && mb_strlen(trim((string) $reason)) < 5) {
+            throw new DomainException('AGENT_SUSPENSION_REASON_REQUIRED');
+        }
+
+        return DB::transaction(function () use ($agent, $reviewer, $approve, $requestedGovernorate, $reason) {
+            $locked = User::query()->lockForUpdate()->findOrFail($agent->id);
+            $profile = AgentProfile::query()->where('user_id', $locked->id)->lockForUpdate()->first();
+
+            if ($approve) {
+                $governorate = YemenGovernorates::codeFromName((string) (
+                    $requestedGovernorate ?: $locked->residence_governorate ?: $locked->origin_governorate
+                ));
+                if ($governorate === null) {
+                    throw new DomainException('MISSING_RESIDENCE_GOVERNORATE');
+                }
+                if (trim((string) $locked->agent_number) === '') {
+                    // رقم دخول الوكيل يُنشأ عند التسجيل فقط؛ توليده هنا
+                    // قد يخلق رقماً ثانياً أو يخرق تسلسل النظام.
+                    throw new DomainException('AGENT_NUMBER_REQUIRED');
+                }
+
+                $locked->residence_governorate = $governorate;
+                $locked->save();
+                app(ZoneAssignmentService::class)->assignFromKyc($locked, $governorate, (int) $reviewer->id);
+                $profile = $profile ?: new AgentProfile(['user_id' => $locked->id]);
+                $profile->zone_code = $locked->zone_code ?: ZoneAssignmentService::ZONE_UNKNOWN;
+                $profile->status = 'active';
+                $profile->save();
+            } else {
+                $profile = $profile ?: new AgentProfile(['user_id' => $locked->id]);
+                $profile->zone_code = $locked->zone_code ?: ZoneAssignmentService::ZONE_UNKNOWN;
+                $profile->status = 'suspended';
+                $profile->save();
+            }
+
+            app(VerificationCaseService::class)->recordAgentDecision(
+                agent: $locked,
+                reviewer: $reviewer,
+                approved: $approve,
+                reason: $reason,
+            );
+
+            return $profile->fresh();
+        });
     }
 }
