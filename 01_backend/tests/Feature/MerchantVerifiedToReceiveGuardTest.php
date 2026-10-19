@@ -36,10 +36,9 @@ use Tests\TestCase;
  *
  * فحارسٌ على أحدهما يُقرأ «مطبَّق» ويُلتفّ عليه من الآخر.
  *
- * **وعُطلٌ ثالثٌ يُمسَك هنا:** الاعتمادُ من اللوحة كان يضبط
- * `verification_status='verified'` على الـprofile وحدَه، و
- * `users.is_kyc_verified` يبقى 0 — فالتاجرُ المعتمَدُ يبقى محبوساً كأنّه
- * لم يُعتمَد. الاختبارُ الأخيرُ يثبت أنّ الاعتمادَ يرفع القفلَ فعلاً.
+ * **وقرارا المنشأة والهوية منفصلان:** اعتماد النشاط لا يرفع حالة KYC
+ * للشخص تلقائياً، حتى لو كانت وثائقه مكتملة. لكل قرار مراجع وأثر تدقيق
+ * مستقلان، ويُفتح الاستلام فقط بعد اكتمال القرارين اللذين يطلبهما الحارس.
  */
 class MerchantVerifiedToReceiveGuardTest extends TestCase
 {
@@ -169,7 +168,7 @@ class MerchantVerifiedToReceiveGuardTest extends TestCase
     // ══════════════════════════════════════════════════════════════════
 
     /** @test */
-    public function admin_approval_flips_kyc_and_unlocks_receiving(): void
+    public function business_and_identity_decisions_are_independent_and_together_unlock_receiving(): void
     {
         $admin = User::factory()->create(['type' => 1]);
         $merchant = $this->merchant('pending_review');
@@ -185,19 +184,24 @@ class MerchantVerifiedToReceiveGuardTest extends TestCase
         $this->assertSame(0, (int) $merchant->fresh()->is_kyc_verified,
             'قبل الاعتماد: التاجرُ غيرُ موثّق');
 
-        // **وملفُّ هويّته مكتملٌ ومثبت الملكية** — فاعتمادُ النشاط يرفع
-        // القفلَ عبر البابِ الواحد، لا بكتابةِ الحقل مباشرةً.
+        // ملف الهوية مكتمل، لكنه لم يحصل بعد على قرار KYC صريح.
         $this->completeIdentity($merchant, $admin);
 
         app(MerchantVerificationService::class)->approve($req, $admin->id);
 
-        // ① الاعتمادُ رفع القفلَ في الحقلين معاً.
-        $this->assertSame(1, (int) $merchant->fresh()->is_kyc_verified,
-            'الاعتمادُ لم يضبط is_kyc_verified — فالتطبيقُ يبقى حابساً للتاجر المعتمَد');
+        // اعتماد المنشأة لا يتخذ قرار الهوية بالنيابة عن مساره المستقل.
+        $this->assertSame(0, (int) $merchant->fresh()->is_kyc_verified,
+            'اعتماد النشاط اتخذ قرار KYC تلقائياً رغم أن قرار الهوية مستقل');
         $this->assertSame('verified',
             MerchantProfile::where('user_id', $merchant->id)->value('verification_status'));
 
-        // ② وبعد الاعتماد يقبض فعلاً عبر البابِ الماليّ.
+        // قرار الهوية صريح ومنفصل، ثم يكتمل الشرطان المطلوبان للاستلام.
+        app(\App\Services\KycDocumentService::class)->decideAccountVerification(
+            $merchant->fresh(), $admin, true, 2,
+        );
+        $this->assertSame(1, (int) $merchant->fresh()->is_kyc_verified);
+
+        // وبعد اكتمال القرارين يقبض فعلاً عبر الباب المالي.
         $customer = $this->customer();
         $this->fund($customer, '10000');
         $svc = new class { use \App\Traits\TransactionTrait; };

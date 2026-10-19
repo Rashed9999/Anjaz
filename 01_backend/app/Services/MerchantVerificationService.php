@@ -128,6 +128,7 @@ class MerchantVerificationService
         if (!$merchant) {
             throw new RuntimeException('حساب التاجر غير موجود');
         }
+        $reviewer = $this->reviewerFor($merchant, $adminId);
 
         // الاعتماد آخر خط دفاع، لا واجهة فقط. قد تُنشأ طلبات قديمة أو
         // مستوردة خارج submit()؛ لا يجوز أن تتجاوز متطلبات قطاعها.
@@ -137,7 +138,7 @@ class MerchantVerificationService
             throw new RuntimeException($e->getMessage(), 0, $e);
         }
 
-        return DB::transaction(function () use ($request, $adminId, $tier, $merchant) {
+        return DB::transaction(function () use ($request, $adminId, $tier, $merchant, $reviewer) {
             $request->update([
                 'status' => 'verified',
                 'reviewed_by_admin_id' => $adminId,
@@ -153,67 +154,24 @@ class MerchantVerificationService
                 $profile->update($updates);
             }
 
-            // إشعار التاجر
-            if ($merchant) {
-                // ══════════════════════════════════════════════════════
-                // AMIAL-KYC-EVIDENCE-001 — **وثيقةُ النشاط لا توثّق الشخص.**
-                //
-                // كان هنا `$merchant->is_kyc_verified = 1` مباشرةً، وسببُه
-                // مشكلةٌ حقيقيّةٌ مكتوبةٌ في تعليقٍ سابق: تاجرٌ اعتمدته
-                // الإدارةُ كان **يبقى محبوساً** لأنّ الحقلَ الذي يقرؤه
-                // التطبيقُ لم يتحرّك. **والمشكلةُ صحيحةٌ والعلاجُ كان
-                // خطأً**: سجلُّ النشاط التجاريّ (اسمُ المتجر، السجلُّ
-                // التجاريّ) **لا يثبت هويّةَ صاحبه**، فمنحُه التوثيقَ
-                // الشخصيَّ يفتح سقفَ مالٍ على وثيقةٍ لا تخصّ الشخص.
-                //
-                // **فصار البابُ واحداً**: يُسأل مصدرُ القرار، فإن اكتمل
-                // ملفُّ الهويّة رُفع القفلُ **من خلاله** بتدقيقه ومبدئه
-                // الرباعيّ؛ وإن لم يكتمل بقي الحسابُ كما هو **ويُقال
-                // للتاجر ما ينقصه** — فلا يبقى محبوساً بلا سببٍ يعرفه،
-                // وهو عينُ ما شكا منه التعليقُ السابق.
-                // ══════════════════════════════════════════════════════
-                $reviewer = User::find($adminId);
-                $identity = null;
+            // AMIAL-VERIFICATION-SCOPE-001 — قرار المنشأة لا يستدعي ولا
+            // يلمس قرار هوية الشخص. حتى وجود ملف KYC مكتمل لا يبرر قراراً
+            // تلقائياً؛ اعتماد الهوية له زر ومراجع وسجل مستقلون.
+            $this->workflow->recordMerchantReview(
+                merchant: $merchant,
+                reviewer: $reviewer,
+                approved: true,
+                requestUlid: (string) $request->request_ulid,
+            );
 
-                if ($reviewer && (int) ($merchant->is_kyc_verified ?? 0) !== 1) {
-                    try {
-                        app(\App\Services\KycDocumentService::class)
-                            ->decideAccountVerification(
-                                user: $merchant,
-                                reviewer: $reviewer,
-                                approve: true,
-                            );
-                        $merchant->refresh();
-                    } catch (\DomainException $e) {
-                        // **ولا يُسقِط توثيقَ النشاط**: هما قراران، ونقصُ
-                        // الهويّة لا يُلغي اعتمادَ المتجر — يُقال ويُبلَّغ.
-                        $identity = $e->getMessage();
-                    }
-                }
-
-                if ($reviewer) {
-                    $this->workflow->recordMerchantReview(
-                        merchant: $merchant,
-                        reviewer: $reviewer,
-                        approved: true,
-                        requestUlid: (string) $request->request_ulid,
-                    );
-                }
-
-                $this->notif->dispatch(
-                    $merchant,
-                    'merchant_verified',
-                    '✓ تمّ توثيق متجرك',
-                    'تهانينا! تمّ توثيق متجر "' . $request->business_name . '" بنجاح.'
-                        // **وما ينقص يُقال في الرسالة نفسِها** — تاجرٌ يُبلَّغ
-                        // بالتوثيق ثمّ يجد نفسَه محبوساً يفتح تذكرةَ دعم.
-                        . ($identity ? "\n\nويبقى توثيقُ هويّتك الشخصيّة: " . $identity : ''),
-                    data: [
-                        'request_ulid' => $request->request_ulid,
-                        'identity_pending' => $identity,
-                    ],
-                );
-            }
+            $this->notif->dispatch(
+                $merchant,
+                'merchant_verified',
+                '✓ تمّ توثيق متجرك',
+                'تهانينا! تمّ توثيق متجر "' . $request->business_name . '" بنجاح. '
+                    . 'توثيق هوية صاحب الحساب قرار منفصل ولا يتغير بهذا الاعتماد.',
+                data: ['request_ulid' => $request->request_ulid],
+            );
 
             return $request->fresh();
         });
@@ -225,7 +183,13 @@ class MerchantVerificationService
         if ($request->status !== 'pending_review') {
             throw new RuntimeException('الطلب ليس بانتظار مراجعة');
         }
-        return DB::transaction(function () use ($request, $adminId, $reason) {
+        $merchant = User::find($request->merchant_user_id);
+        if (!$merchant) {
+            throw new RuntimeException('حساب التاجر غير موجود');
+        }
+        $reviewer = $this->reviewerFor($merchant, $adminId);
+
+        return DB::transaction(function () use ($request, $adminId, $reason, $merchant, $reviewer) {
             $request->update([
                 'status' => 'rejected',
                 'admin_note' => $reason,
@@ -235,26 +199,20 @@ class MerchantVerificationService
             MerchantProfile::where('user_id', $request->merchant_user_id)
                 ->update(['verification_status' => 'rejected']);
 
-            $merchant = User::find($request->merchant_user_id);
-            $reviewer = User::find($adminId);
-            if ($merchant && $reviewer) {
-                $this->workflow->recordMerchantReview(
-                    merchant: $merchant,
-                    reviewer: $reviewer,
-                    approved: false,
-                    requestUlid: (string) $request->request_ulid,
-                    reason: $reason,
-                );
-            }
-            if ($merchant) {
-                $this->notif->dispatch(
-                    $merchant,
-                    'merchant_verification_rejected',
-                    'تمّ رفض طلب التوثيق',
-                    "السبب: {$reason}",
-                    data: ['request_ulid' => $request->request_ulid],
-                );
-            }
+            $this->workflow->recordMerchantReview(
+                merchant: $merchant,
+                reviewer: $reviewer,
+                approved: false,
+                requestUlid: (string) $request->request_ulid,
+                reason: $reason,
+            );
+            $this->notif->dispatch(
+                $merchant,
+                'merchant_verification_rejected',
+                'تمّ رفض طلب التوثيق',
+                "السبب: {$reason}",
+                data: ['request_ulid' => $request->request_ulid],
+            );
             return $request->fresh();
         });
     }
@@ -268,7 +226,13 @@ class MerchantVerificationService
         if ($request->status !== 'pending_review') {
             throw new RuntimeException('الطلب ليس بانتظار مراجعة');
         }
-        return DB::transaction(function () use ($request, $adminId, $reason) {
+        $merchant = User::find($request->merchant_user_id);
+        if (!$merchant) {
+            throw new RuntimeException('حساب التاجر غير موجود');
+        }
+        $reviewer = $this->reviewerFor($merchant, $adminId);
+
+        return DB::transaction(function () use ($request, $adminId, $reason, $merchant, $reviewer) {
             $request->update([
                 'status' => 'resubmission_required',
                 'admin_note' => $reason,
@@ -278,25 +242,19 @@ class MerchantVerificationService
             MerchantProfile::where('user_id', $request->merchant_user_id)
                 ->update(['verification_status' => 'resubmission_required']);
 
-            $merchant = User::find($request->merchant_user_id);
-            $reviewer = User::find($adminId);
-            if ($merchant && $reviewer) {
-                $this->workflow->recordMerchantResubmission(
-                    merchant: $merchant,
-                    reviewer: $reviewer,
-                    requestUlid: (string) $request->request_ulid,
-                    reason: $reason,
-                );
-            }
-            if ($merchant) {
-                $this->notif->dispatch(
-                    $merchant,
-                    'merchant_resubmission_required',
-                    'يلزم إعادة رفع وثائق',
-                    "السبب: {$reason}",
-                    data: ['request_ulid' => $request->request_ulid],
-                );
-            }
+            $this->workflow->recordMerchantResubmission(
+                merchant: $merchant,
+                reviewer: $reviewer,
+                requestUlid: (string) $request->request_ulid,
+                reason: $reason,
+            );
+            $this->notif->dispatch(
+                $merchant,
+                'merchant_resubmission_required',
+                'يلزم إعادة رفع وثائق',
+                "السبب: {$reason}",
+                data: ['request_ulid' => $request->request_ulid],
+            );
             return $request->fresh();
         });
     }
@@ -313,6 +271,20 @@ class MerchantVerificationService
     public function requiredDocsFor(User $merchant): array
     {
         return $this->workflow->merchantRequiredDocuments($merchant);
+    }
+
+    private function reviewerFor(User $merchant, int $reviewerId): User
+    {
+        if ((int) $merchant->id === $reviewerId) {
+            throw new RuntimeException('FOUR_EYES_VIOLATION');
+        }
+
+        $reviewer = User::find($reviewerId);
+        if (!$reviewer || (int) $reviewer->type !== ADMIN_TYPE) {
+            throw new RuntimeException('MERCHANT_VERIFICATION_REVIEWER_REQUIRED');
+        }
+
+        return $reviewer;
     }
 
     // ============ Private ============

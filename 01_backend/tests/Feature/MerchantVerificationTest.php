@@ -194,6 +194,21 @@ class MerchantVerificationTest extends TestCase
     }
 
     /** @test */
+    public function merchant_cannot_review_its_own_business_verification(): void
+    {
+        $req = $this->svc->submit(
+            $this->merchant,
+            ['business_name' => 'متجر المراجعة الذاتية'],
+            $this->validDocs(),
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('FOUR_EYES_VIOLATION');
+
+        $this->svc->approve($req, $this->merchant->id);
+    }
+
+    /** @test */
     public function admin_approve_with_tier_updates_profile_tier(): void
     {
         $req = $this->svc->submit(
