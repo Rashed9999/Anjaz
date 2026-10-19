@@ -39,7 +39,7 @@ class MuwathaqAccountOpeningService
 
             [$kind, $path, $tier, $vertical] = $this->resolvePath($user, $businessType);
 
-            return MuwathaqAccountOpeningApplication::query()->create([
+            $application = MuwathaqAccountOpeningApplication::query()->create([
                 'application_ulid' => (string) Str::ulid(),
                 'user_id' => $user->id,
                 'subject_kind' => $kind,
@@ -49,6 +49,12 @@ class MuwathaqAccountOpeningService
                 'status' => MuwathaqAccountOpeningApplication::STATUS_SUBMITTED,
                 'submitted_at' => now(),
             ]);
+
+            // التسجيل يُنشئ القضية محلياً أولاً ثم يضع رسالةً للإرسال بعد
+            // commit. لذلك لا يضيع الطلب إن تعطّل muwathaq.amialpay.com.
+            app(MuwathaqBridgeService::class)->recordApplication($application);
+
+            return $application;
         });
     }
 

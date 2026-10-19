@@ -186,3 +186,10 @@ Schedule::command('amial:kyc:scan-expiry')
     ->dailyAt('03:00')
     ->withoutOverlapping()
     ->description('AMIAL-KYC: رادارُ انتهاء الهويّة — يُنذر ويَسِم ولا يُجمّد');
+
+// AMIAL-MUWATHAQ-BRIDGE-001 — إعادة إرسال صندوق فتح الحساب إلى بوابة
+// المراجعة. لا يفتح هذا أي حساب ولا ينشئ محفظة؛ القرار العائد وحده يفعل ذلك.
+Schedule::command('muwathaq:dispatch-pending')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->description('AMIAL-MUWATHAQ: Deliver pending account-opening cases');

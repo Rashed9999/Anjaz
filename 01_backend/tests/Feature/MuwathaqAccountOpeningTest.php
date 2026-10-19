@@ -5,10 +5,14 @@ namespace Tests\Feature;
 use App\Http\Middleware\VerifyMuwathaqSignature;
 use App\Models\EMoney;
 use App\Models\MuwathaqAccountOpeningApplication;
+use App\Models\MuwathaqApplicationSubmission;
 use App\Models\User;
+use App\Services\Muwathaq\MuwathaqBridgeService;
 use App\Services\Muwathaq\MuwathaqAccountOpeningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class MuwathaqAccountOpeningTest extends TestCase
@@ -31,6 +35,44 @@ class MuwathaqAccountOpeningTest extends TestCase
         $this->assertNull($standard->requested_tier);
         $this->assertDatabaseMissing('e_money', ['user_id' => $female->id]);
         $this->assertDatabaseMissing('e_money', ['user_id' => $male->id]);
+        $this->assertDatabaseHas('muwathaq_application_submissions', ['application_id' => $women->id, 'status' => 'pending']);
+        $this->assertDatabaseHas('muwathaq_application_submissions', ['application_id' => $standard->id, 'status' => 'pending']);
+    }
+
+    /** @test */
+    public function account_opening_is_delivered_to_the_subdomain_with_an_idempotent_signed_minimal_payload(): void
+    {
+        Http::fake(['https://muwathaq.test/*' => Http::response(['accepted' => true], 202)]);
+        config([
+            'muwathaq.base_url' => 'https://muwathaq.test',
+            'muwathaq.bridge_secret' => 'core-to-muwathaq-secret',
+        ]);
+        $user = User::factory()->create([
+            'type' => CUSTOMER_TYPE,
+            'gender' => 'female',
+            'transaction_pin' => '3819',
+        ]);
+        $application = app(MuwathaqAccountOpeningService::class)->submitFor($user);
+        $submission = MuwathaqApplicationSubmission::query()->where('application_id', $application->id)->firstOrFail();
+
+        // قد يكون طابور الاختبار sync قد سلّمه بعد commit؛ استدعاء deliver
+        // الثاني آمن ولا يرسل الحدث مرتين.
+        app(MuwathaqBridgeService::class)->deliver($submission->id);
+
+        $this->assertSame('delivered', $submission->fresh()->status);
+        $this->assertSame(202, $submission->fresh()->response_status);
+        Http::assertSent(function (ClientRequest $request) use ($submission): bool {
+            $body = $request->body();
+            $timestamp = $request->header('X-Amial-Timestamp');
+            $expected = hash_hmac('sha256', $timestamp.'.'.$body, 'core-to-muwathaq-secret');
+
+            return $request->url() === 'https://muwathaq.test/api/v1/internal/applications'
+                && $request->header('Idempotency-Key') === $submission->event_ulid
+                && hash_equals($expected, (string) $request->header('X-Amial-Signature'))
+                && str_contains($body, 'account_opening.submitted')
+                && !str_contains($body, 'transaction_pin')
+                && !str_contains($body, 'password');
+        });
     }
 
     /** @test */
