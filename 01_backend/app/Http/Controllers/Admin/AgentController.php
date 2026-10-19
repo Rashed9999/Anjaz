@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
-use App\Models\EMoney;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Traits\UploadSizeHelperTrait;
@@ -23,7 +22,6 @@ class AgentController extends Controller
 
     public function __construct(
         private User        $user,
-        private EMoney      $eMoney,
         private Transaction $transaction
     )
     {
@@ -132,12 +130,20 @@ class AgentController extends Controller
             $user->unique_id = $user->id . mt_rand(1111, 99999);
             $user->save();
 
-            $emoney = $this->eMoney;
-            $emoney->user_id = $user->id;
-            $emoney->save();
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'agent_number')
+                && trim((string) $user->agent_number) === '') {
+                $user->agent_number = 'AG-'.str_pad((string) $user->id, 6, '0', STR_PAD_LEFT);
+                $user->save();
+            }
+
+            \App\Models\AgentProfile::firstOrCreate(['user_id' => $user->id], [
+                'status' => 'pending_approval',
+                'zone_code' => \App\Services\ZoneAssignmentService::ZONE_UNKNOWN,
+            ]);
+            app(\App\Services\Muwathaq\MuwathaqAccountOpeningService::class)->submitFor($user);
         });
 
-        Toastr::success(translate('Agent Added Successfully!'));
+        Toastr::success('تم إنشاء الوكيل وإرسال طلبه التشغيلي إلى موثّق.');
         return redirect(route('admin.agent.list'));
     }
 

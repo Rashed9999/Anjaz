@@ -107,6 +107,7 @@ class UnifiedAuthService
         }
 
         $this->assertUserActive($user);
+        $this->assertAccountOpeningApproved($user);
 
         return $this->issueToken($user, 'customer', $request, [], $phone);
     }
@@ -146,6 +147,9 @@ class UnifiedAuthService
             throw new \RuntimeException('بيانات الدخول غير صحيحة');
         }
 
+        // موظف نقطة البيع لا يصبح طريقاً خلفياً إلى منشأة لم تعتمد بعد.
+        $this->assertAccountOpeningApproved($merchant);
+
         // رمز الموظف يحدد حساب الموظف، لا جهاز نقطة البيع.
         if ($posNumber) {
             $posUser = PosUser::active()
@@ -182,6 +186,7 @@ class UnifiedAuthService
         }
 
         $this->assertUserActive($merchant);
+        $this->assertAccountOpeningApproved($merchant);
 
         return $this->issueToken($merchant, 'merchant', $request, [], $merchantNumber);
     }
@@ -209,6 +214,7 @@ class UnifiedAuthService
         }
 
         $this->assertUserActive($agent);
+        $this->assertAccountOpeningApproved($agent);
 
         // توليد OTP + token مؤقت
         // AMIAL-OTP-SPLIT-001: وكيلُ العرض وحده يأخذ الرمزَ الثابت.
@@ -271,6 +277,8 @@ class UnifiedAuthService
         if (!$agent) {
             throw new \RuntimeException('الحساب غير موجود');
         }
+
+        $this->assertAccountOpeningApproved($agent);
 
         Cache::forget($this->otpCacheKey($otpToken));
         return $this->issueToken($agent, 'agent', $request, [], $agent->agent_number ?? null);
@@ -373,6 +381,23 @@ class UnifiedAuthService
         if (isset($user->security_hold_until) && $user->security_hold_until && $user->security_hold_until->isFuture()) {
             throw new \RuntimeException('الحساب موقوف مؤقتاً لأسباب أمنية');
         }
+    }
+
+    /** الحسابات القديمة بلا طلب تبقى عاملة؛ الطلب الجديد لا يصدر له token قبل اعتماده. */
+    private function assertAccountOpeningApproved(User $user): void
+    {
+        $application = \App\Models\MuwathaqAccountOpeningApplication::query()
+            ->where('user_id', $user->id)
+            ->first();
+        if ($application === null || $application->status === 'approved') {
+            return;
+        }
+
+        throw new \RuntimeException(
+            $application->status === 'rejected'
+                ? 'لم يُعتمد طلب فتح الحساب. راجع التعليمات في موثّق.'
+                : 'طلب فتح الحساب ما زال لدى موثّق للمراجعة.'
+        );
     }
 
     /**

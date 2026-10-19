@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\CentralLogics\helpers;
 use App\Http\Controllers\Controller;
-use App\Models\EMoney;
 use App\Models\PhoneVerification;
 use App\Models\User;
 use App\Traits\UploadSizeHelperTrait;
@@ -21,7 +20,6 @@ class RegisterController extends Controller
     public function __construct(
         private User $user,
         private PhoneVerification $phoneVerification,
-        private EMoney $eMoney
     ){}
 
     // $verifiedEmail is supplied ONLY by EmailRegistrationController after
@@ -57,7 +55,7 @@ class RegisterController extends Controller
             'family_name' => ['required', 'string', 'min:2', 'max:80', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
             'l_name' => 'sometimes|nullable|string|max:80',
             'image' => 'nullable|image|max:'. $this->maxImageSizeKB .'|mimes:' . implode(',', array_column(IMAGE_EXTENSIONS, 'key')),
-            'gender' => 'required',
+            'gender' => 'required|in:male,female,Male,Female',
             'occupation' => 'nullable',
             'dial_country_code' => 'required',
             'phone' => [
@@ -210,9 +208,15 @@ class RegisterController extends Controller
         $signaturePath = $this->storeSignature($request->input('signature'));
 
         // AMIAL-REG-ROLES: نوع الحساب المطلوب (افتراضياً عميل)
+        if ($request->input('account_type') === 'agent') {
+            return response()->json(['errors' => [[
+                'code' => 'AGENT_SELF_REGISTRATION_CLOSED',
+                'message' => 'حساب الوكيل يُنشأ من الإدارة ثم تُسلَّم بيانات الدخول.',
+            ]]], 403);
+        }
+
         $accountType = match ($request->input('account_type')) {
             'merchant' => MERCHANT_TYPE,
-            'agent' => AGENT_TYPE,
             default => CUSTOMER_TYPE,
         };
         if ($accountType === MERCHANT_TYPE) {
@@ -229,7 +233,8 @@ class RegisterController extends Controller
         }
 
         $loginNumbers = ['agent_number' => null, 'merchant_number' => null];
-        DB::transaction(function () use ($request, $verify, $phone, $phoneOwnershipVerified, $signaturePath, $accountType, &$loginNumbers) {
+        $application = null;
+        DB::transaction(function () use ($request, $verify, $phone, $phoneOwnershipVerified, $signaturePath, $accountType, &$loginNumbers, &$application) {
             $verify?->delete();
 
             // A reused controller must never mutate the previous registrant.
@@ -432,10 +437,6 @@ class RegisterController extends Controller
                 ]);
             }
 
-            $emoney = $this->eMoney->newInstance();
-            $emoney->user_id = $user->id;
-            $emoney->save();
-
             // AMIAL-REG-ROLES: سجلات التاجر — رقم دخوله + ملف غير موثّق
             if ($accountType === MERCHANT_TYPE) {
                 $mr = new \App\Models\Merchant();
@@ -474,6 +475,9 @@ class RegisterController extends Controller
             if ($accountType === AGENT_TYPE) {
                 $loginNumbers['agent_number'] = $user->agent_number;
             }
+
+            $application = app(\App\Services\Muwathaq\MuwathaqAccountOpeningService::class)
+                ->submitFor($user, $accountType === MERCHANT_TYPE ? (string) $request->input('business_type') : null);
 
             $dossierType = $accountType === MERCHANT_TYPE ? 'merchant' : 'customer';
             $dossierService = app(\App\Services\RegistrationDossierService::class);
@@ -523,12 +527,10 @@ class RegisterController extends Controller
             // أرقام الدخول للتاجر/الوكيل — يعرضها التطبيق في شاشة النجاح
             'agent_number' => $loginNumbers['agent_number'],
             'merchant_number' => $loginNumbers['merchant_number'],
-            // AMIAL-PROGRESSIVE-KYC-LOGIN-001 — العميل يبدأ نشطاً Tier 0،
-            // لا نسمّيه «قيد المراجعة» قبل أن يرسل أصلاً طلب ترقية.
-            'verification_status' => $accountType === CUSTOMER_TYPE
-                ? 'active_unverified'
-                : 'unverified',
-            'kyc_tier' => 0,
+            'verification_status' => 'submitted',
+            'wallet_created' => false,
+            'muwathaq_application_ulid' => $application?->application_ulid,
+            'verification_path' => $application?->verification_path,
             'requires_pin_setup' => !$request->filled('transaction_pin'),
         ], 200);
     }
@@ -577,6 +579,11 @@ class RegisterController extends Controller
 
     public function agentRegistration(Request $request): JsonResponse
     {
+        return response()->json(['errors' => [[
+            'code' => 'AGENT_SELF_REGISTRATION_CLOSED',
+            'message' => 'حساب الوكيل يُنشأ من الإدارة ثم تُسلَّم بيانات الدخول.',
+        ]]], 410);
+
         $check = $this->validateUploadedFile($request, ['image']);
         if ($check !== true) {
             return $check;

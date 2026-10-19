@@ -223,6 +223,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
             // AMIAL-API-ACCESS-001 — مصادقة الشركاء بمفتاح API
             'amial.api-key' => \App\Http\Middleware\AuthenticateApiKey::class,
             'amial.agent' => \App\Http\Middleware\EnsureAgent::class,  // AMIAL-FIX-004
+            // قناة قرار فتح الحساب بين «موثّق» وأميال باي فقط.
+            'muwathaq.signature' => \App\Http\Middleware\VerifyMuwathaqSignature::class,
 
             // Amial Pay — الحارس المخفي (Application-level IDS)
             'amial.sentinel' => SecuritySentinel::class,

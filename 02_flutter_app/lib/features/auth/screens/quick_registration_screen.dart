@@ -7,9 +7,7 @@ import 'package:amial_pay/data/api/secure_storage_helper.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/features/auth/controllers/unified_auth_controller.dart';
-import 'package:amial_pay/features/auth/screens/role_router.dart';
 import 'package:amial_pay/features/auth/widgets/governorate_picker.dart';
-import 'package:amial_pay/features/kyc_verification/domain/customer_verification_level.dart';
 import 'package:amial_pay/features/kyc_verification/screens/customer_verification_review_screen.dart';
 import 'package:amial_pay/features/kyc_verification/widgets/yemen_residence_picker.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -59,6 +57,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   bool _residenceSubmitted = false;
 
   String _dialCode = '+967';
+  String? _gender;
   String? _emailChallengeId;
   String? _emailVerificationToken;
   int _emailResendSeconds = 0;
@@ -205,6 +204,10 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         _snack('${entry.key} يحتوي على أحرف غير صالحة.');
         return false;
       }
+    }
+    if (_gender == null) {
+      _snack('اختر الجنس ليحدد النظام مسار فتح الحساب الصحيح.');
+      return false;
     }
     final digits = _phone.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.length < 7) {
@@ -355,6 +358,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           'father_name': _fatherName.text.trim(),
           'grandfather_name': _grandfatherName.text.trim(),
           'family_name': _familyName.text.trim(),
+          'gender': _gender,
           'dial_country_code': _dialCode,
           'phone': _phone.text.trim(),
           'email': _normalizedEmail,
@@ -379,24 +383,10 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       }
 
       final data = Map<String, dynamic>.from(registerBody['data'] as Map);
-      final accessToken = data['access_token']?.toString();
       _accountCreated = true;
       _emailTimer?.cancel();
-
-      if (accessToken != null && accessToken.isNotEmpty) {
-        await _adoptSession(accessToken);
-        await _loadResidenceOptions();
-        if (!mounted) return;
-        setState(() => _step = 2);
-        await _requestPhoneOtp(silentSuccess: true);
-      } else {
-        if (!mounted) return;
-        setState(() => _step = 4);
-        _snack(
-          'تم إنشاء الحساب، لكن تعذر بدء الجلسة تلقائياً. سجّل الدخول لإكمال التفعيل.',
-          error: false,
-        );
-      }
+      if (!mounted) return;
+      setState(() => _step = 4);
     } catch (_) {
       _snack('حدث خطأ في الاتصال أثناء إنشاء الحساب.');
     } finally {
@@ -662,11 +652,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   }
 
   void _finish() {
-    if (_accountCreated) {
-      RoleRouter.navigateToHome('customer');
-    } else {
-      Get.back();
-    }
+    Get.back();
   }
 
   @override
@@ -968,6 +954,21 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
                 ),
               ),
             ),
+          DropdownButtonFormField<String>(
+            value: _gender,
+            decoration: InputDecoration(
+              labelText: 'الجنس *',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'female', child: Text('أنثى')),
+              DropdownMenuItem(value: 'male', child: Text('ذكر')),
+            ],
+            onChanged: (value) => setState(() => _gender = value),
+          ),
+          const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1077,7 +1078,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         _card([
           _title(
             'تأكيد البريد',
-            'أرسلنا رمزاً من 6 أرقام إلى $_normalizedEmail. بعد نجاحه ننشئ المحفظة مباشرة.',
+            'أرسلنا رمزاً من 6 أرقام إلى $_normalizedEmail. بعد نجاحه نرسل طلب فتح الحساب إلى موثّق.',
             Icons.mark_email_read_outlined,
           ),
           _field(
@@ -1288,12 +1289,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   }
 
   Widget _successStep() {
-    final verificationState = CustomerVerificationLevel.fromTier(0);
-    final message = !_phoneVerified
-        ? 'تم إنشاء حسابك. أثبت ملكية الهاتف لاحقاً للانتقال إلى عميل موثق جزئيا.'
-        : _residenceSubmitted
-            ? 'تم إنشاء حسابك وإثبات هاتفك، وبيانات السكن الآن في المراجعة. اعتماد السكن يرفع حالة التوثيق، وتوفر الخدمات يعتمد على نطاق التشغيل.'
-            : 'تم إنشاء حسابك وإثبات هاتفك. بقي تسجيل السكن ورفع إثباته.';
+    const message = 'استلم موثّق طلب فتح الحساب. لن تُنشأ محفظة أو تتاح حركة مالية قبل قرار الاعتماد. عند الحاجة إلى معلومات إضافية سيظهر لك الطلب من مسار التحقق.';
 
     return _page(children: [
       _card([
@@ -1310,7 +1306,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         ),
         const SizedBox(height: 18),
         const Text(
-          'محفظتك جاهزة',
+          'طلب فتح الحساب قيد المراجعة',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w900,
@@ -1338,7 +1334,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'حالة توثيقك الحالية: ${verificationState.label}. حدود المال وسياسة التشغيل تُطبّق من الخادم.',
+                  'اختيار الجنس يحدد المسار تلقائياً: المسار المتدرج مخصص للحسابات النسائية، والحساب القياسي للذكور. لا تختار مستوى توثيق بنفسك.',
                   style: const TextStyle(fontSize: 13, height: 1.5),
                 ),
               ),
@@ -1346,7 +1342,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           ),
         ),
         const SizedBox(height: 18),
-        _primaryButton('الدخول إلى أميال باي', _finish),
+        _primaryButton('العودة لتسجيل الدخول', _finish),
       ]),
     ]);
   }

@@ -507,7 +507,7 @@ class AdminHubController extends Controller
             'phone' => 'required|string|min:5|max:20',
             'password' => 'required|string|min:8|max:255',
             'pin' => 'nullable|digits:4',
-            'gender' => 'nullable|in:male,female,other',
+            'gender' => 'nullable|in:male,female',
             'date_of_birth' => 'nullable|date|before:today',
             'email' => 'required|email|max:255',
             'name_en' => ['nullable', 'string', 'max:150', 'regex:/^[A-Za-z\s.\-\x27]+$/'],
@@ -561,6 +561,21 @@ class AdminHubController extends Controller
 
         $v->after(function ($v) use ($request, $type) {
             if (!in_array($type, [CUSTOMER_TYPE, MERCHANT_TYPE], true)) return;
+            $womenProgressive = $type === CUSTOMER_TYPE
+                && $request->input('gender') === 'female';
+
+            // مسار المرأة المتدرج يبدأ بعنوان/هاتف وقرار موثّق، لا بصورة
+            // شخصية مفروضة من مسار الحساب المصرفي القياسي.
+            if ($womenProgressive) {
+                foreach (['gender' => 'الجنس', 'address' => 'العنوان',
+                    'residence_district' => 'المديرية'] as $field => $label) {
+                    if (!$request->filled($field)) $v->errors()->add($field, $label . ' مطلوب في طلب فتح الحساب');
+                }
+                if (!$request->boolean('declaration_accepted')) {
+                    $v->errors()->add('declaration_accepted', 'إقرار صحة البيانات وموافقة صاحبة الحساب مطلوبان');
+                }
+                return;
+            }
             foreach (['gender' => 'الجنس', 'date_of_birth' => 'تاريخ الميلاد', 'identification_type' => 'نوع الهوية',
                 'identification_number' => 'رقم الهوية', 'address' => 'العنوان', 'residence_district' => 'المديرية',
                 'income_source' => 'مصدر الدخل', 'account_purpose' => 'الغرض من الحساب'] as $field => $label) {
@@ -590,7 +605,8 @@ class AdminHubController extends Controller
 
         $schema = \Illuminate\Support\Facades\Schema::class;
         $dossierReference = null;
-        $user = DB::transaction(function () use ($request, $type, $phone, $schema, &$dossierReference) {
+        $application = null;
+        $user = DB::transaction(function () use ($request, $type, $phone, $schema, &$dossierReference, &$application) {
             $user = new User();
             $user->f_name = $request->input('f_name');
             $user->l_name = $request->input('l_name', '');
@@ -659,12 +675,6 @@ class AdminHubController extends Controller
             }
             $user->save();
 
-            EMoney::firstOrCreate(['user_id' => $user->id], [
-                'current_balance' => '0.0000', 'held_balance' => '0.0000',
-                'pending_balance' => '0.0000', 'charge_earned' => '0.0000',
-                'zone_code' => 'SOUTH', 'version' => 1,
-            ]);
-
             if ($type === MERCHANT_TYPE) {
                 // سجلّ Merchant القديم (تعتمد عليه شاشات 6cash المتبقية)
                 $mr = \App\Models\Merchant::where('user_id', $user->id)->first() ?? new \App\Models\Merchant();
@@ -719,6 +729,19 @@ class AdminHubController extends Controller
                     ->ensureFor($user);
             }
 
+            if ($type === AGENT_TYPE) {
+                \App\Models\AgentProfile::firstOrCreate(['user_id' => $user->id], [
+                    'status' => 'pending_approval',
+                    'zone_code' => ZoneAssignmentService::ZONE_UNKNOWN,
+                ]);
+            }
+
+            $application = app(\App\Services\Muwathaq\MuwathaqAccountOpeningService::class)
+                ->submitFor(
+                    $user,
+                    $type === MERCHANT_TYPE ? (string) $request->input('business_type') : null,
+                );
+
             // الوثائق تدخل طابور التحقق من الخدمة الموحدة نفسها؛ لا نكتب
             // مسارات صور في الحساب ولا نخلق أرشيفاً موازياً لها.
             if (in_array($type, [CUSTOMER_TYPE, MERCHANT_TYPE], true)) {
@@ -752,8 +775,13 @@ class AdminHubController extends Controller
         app(AuditService::class)->record([
             'actor_type' => 'admin', 'actor_user_id' => $request->user()?->id,
             'subject_type' => 'user', 'subject_id' => $user->id,
-            'action' => 'ADMIN_CREATE_USER', 'decision_code' => 'USER_CREATED',
-            'context' => ['type' => $type, 'opening_dossier' => in_array($type, [CUSTOMER_TYPE, MERCHANT_TYPE], true)], 'severity' => 'info',
+            'action' => 'ADMIN_CREATE_USER', 'decision_code' => 'MUWATHAQ_ACCOUNT_OPENING_SUBMITTED',
+            'context' => [
+                'type' => $type,
+                'opening_dossier' => in_array($type, [CUSTOMER_TYPE, MERCHANT_TYPE], true),
+                'muwathaq_application_ulid' => $application?->application_ulid,
+                'verification_path' => $application?->verification_path,
+            ], 'severity' => 'info',
         ]);
 
         // أرقام الدخول التي يسلّمها الأدمن لصاحب الحساب — التطبيق يطلبها:
@@ -772,7 +800,10 @@ class AdminHubController extends Controller
             'agent_number' => $user->agent_number ?? null,
             'merchant_number' => $merchantNumber,
             'opening_dossier_reference' => $dossierReference,
-            'message' => "تم إنشاء الحساب وملف فتحه قيد مراجعة الامتثال — {$loginHint}",
+            'wallet_created' => false,
+            'muwathaq_application_ulid' => $application?->application_ulid,
+            'verification_path' => $application?->verification_path,
+            'message' => "تم إنشاء طلب فتح الحساب في موثّق — {$loginHint}",
         ], 201);
     }
 

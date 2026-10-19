@@ -67,6 +67,13 @@ class LoginController extends Controller
             return response()->json(response_formatter(AUTH_LOGIN_401, null, Helpers::error_processor($validator)), 401);
         }
 
+        if ($this->hasPendingMuwathaqOpening($user)) {
+            return response()->json(['errors' => [[
+                'code' => 'ACCOUNT_OPENING_PENDING',
+                'message' => 'طلب فتح الحساب ما زال لدى موثّق للمراجعة.',
+            ]]], 423);
+        }
+
         if(isset($user->temp_block_time) && Carbon::parse($user->temp_block_time)->DiffInSeconds() <= $tempBlockTime){
             $time = $tempBlockTime - Carbon::parse($user->temp_block_time)->DiffInSeconds();
 
@@ -100,6 +107,14 @@ class LoginController extends Controller
         }
 
         $user->save();
+    }
+
+    private function hasPendingMuwathaqOpening(User $user): bool
+    {
+        return \App\Models\MuwathaqAccountOpeningApplication::query()
+            ->where('user_id', $user->id)
+            ->where('status', '!=', 'approved')
+            ->exists();
     }
 
     public function agentLogin(Request $request): JsonResponse
@@ -144,6 +159,13 @@ class LoginController extends Controller
         if (!Hash::check($request['password'], $user['password'])) {
             self::updateUserHitCount($user);
             return response()->json(response_formatter(AUTH_LOGIN_401, null, Helpers::error_processor($validator)), 401);
+        }
+
+        if ($this->hasPendingMuwathaqOpening($user)) {
+            return response()->json(['errors' => [[
+                'code' => 'ACCOUNT_OPENING_PENDING',
+                'message' => 'طلب الوكيل ما زال لدى موثّق للمراجعة.',
+            ]]], 423);
         }
 
         if(isset($user->temp_block_time) && Carbon::parse($user->temp_block_time)->DiffInSeconds() <= $tempBlockTime){

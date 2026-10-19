@@ -3,22 +3,20 @@
 namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\EMoney;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\EmailIdentityService;
-use App\Services\Kyc\KycPrivacyService;
 use App\Services\Kyc\LegalNameService;
 use App\Services\LegalTermsService;
 use App\Services\Otp\EmailOtpService;
 use App\Services\ZoneAssignmentService;
+use App\Services\Muwathaq\MuwathaqAccountOpeningService;
 use App\Support\Phone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -37,6 +35,7 @@ class ProgressiveRegistrationController extends Controller
         private readonly AuditService $audit,
         private readonly LegalTermsService $legalTerms,
         private readonly LegalNameService $legalNames,
+        private readonly MuwathaqAccountOpeningService $muwathaq,
     ) {}
 
     public function register(Request $request): JsonResponse
@@ -48,6 +47,8 @@ class ProgressiveRegistrationController extends Controller
             'father_name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
             'grandfather_name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
             'family_name' => ['required', 'string', 'min:2', 'max:80', 'regex:/^[\pL\pM\s\-\x27]+$/u'],
+            // ليس اختيار سياسة خصوصية في الواجهة: يحدد الخادم المسار تلقائياً.
+            'gender' => ['required', 'in:male,female'],
             'dial_country_code' => ['required', 'string', 'max:8'],
             'phone' => ['required', 'string', 'min:5', 'max:20'],
             'email' => ['required', 'email', 'max:255'],
@@ -110,7 +111,8 @@ class ProgressiveRegistrationController extends Controller
         $family = trim((string) $request->input('family_name'));
 
         try {
-            $user = DB::transaction(function () use ($request, $email, $phone, $given, $father, $grandfather, $family): User {
+            $application = null;
+            $user = DB::transaction(function () use ($request, $email, $phone, $given, $father, $grandfather, $family, &$application): User {
                 $challenge = $this->otp->consumeVerification(
                     (string) $request->input('email_challenge_id'),
                     $email,
@@ -140,6 +142,7 @@ class ProgressiveRegistrationController extends Controller
                 $user->dial_country_code = (string) $request->input('dial_country_code');
                 $user->phone = $phone;
                 $user->email = $email;
+                $user->gender = (string) $request->input('gender');
                 $user->image = null;
                 $user->password = bcrypt((string) $request->input('password'));
                 $user->type = defined('CUSTOMER_TYPE') ? CUSTOMER_TYPE : 2;
@@ -192,9 +195,8 @@ class ProgressiveRegistrationController extends Controller
                     $user->save();
                 }
 
-                EMoney::firstOrCreate(['user_id' => $user->id]);
                 $this->identities->markCurrentEmailVerified($user);
-                app(KycPrivacyService::class)->ensure($user);
+                $application = $this->muwathaq->submitFor($user);
 
                 // checkbox التسجيل يصبح قبولاً حقيقياً للإصدار القانوني الحالي،
                 // لا مجرد boolean في سجل التدقيق. إن لم يُنشر إصدار بعد فلا
@@ -224,8 +226,8 @@ class ProgressiveRegistrationController extends Controller
                     'actor_user_id' => (int) $user->id,
                     'subject_type' => 'user',
                     'subject_id' => (string) $user->id,
-                    'action' => 'BASIC_WALLET_CREATED',
-                    'decision_code' => 'PROGRESSIVE_KYC_TIER_0',
+                    'action' => 'ACCOUNT_OPENING_SUBMITTED',
+                    'decision_code' => 'MUWATHAQ_ACCOUNT_OPENING',
                     'severity' => 'info',
                     'context' => [
                         'registration_mode' => 'quick',
@@ -233,6 +235,8 @@ class ProgressiveRegistrationController extends Controller
                         'legal_name_status' => 'declared',
                         'email_verified' => true,
                         'phone_verified' => false,
+                        'verification_path' => $application->verification_path,
+                        'application_ulid' => $application->application_ulid,
                         'terms_accepted' => true,
                         'legal_version' => $currentTerm?->version,
                         'credentials_separated' => true,
@@ -259,34 +263,20 @@ class ProgressiveRegistrationController extends Controller
             throw $e;
         }
 
-        $token = null;
-        try {
-            $token = $user->createToken('AmialBasicWallet-' . Str::ulid())->accessToken;
-        } catch (\Throwable $e) {
-            \Log::warning('Quick registration token issue failed', [
-                'user_id' => $user->id, 'error' => $e->getMessage(),
-            ]);
-        }
-
         return response()->json([
             'success' => true,
-            'message' => 'مبروك، تم إنشاء محفظة أميال باي.',
+            'message' => 'تم إرسال طلب فتح الحساب إلى موثّق للمراجعة.',
             'data' => [
                 'user_id' => (int) $user->id,
-                'wallet_created' => true,
+                'wallet_created' => false,
+                'account_status' => 'submitted',
+                'muwathaq_application_ulid' => $application?->application_ulid,
+                'verification_path' => $application?->verification_path,
                 'transaction_pin_configured' => true,
-                'kyc_tier' => 0,
-                'tier_name' => 'عميل غير موثق',
                 'declared_legal_name' => (string) $user->declared_legal_name,
                 'legal_name_status' => (string) $user->legal_name_status,
-                'access_token' => $token,
-                'token_type' => $token ? 'Bearer' : null,
-                'next_steps' => [
-                    'verify_phone',
-                    'verify_residence',
-                    'upgrade_identity_optional',
-                ],
-                'financial_status' => 'pending_phone_and_residence_verification',
+                'next_steps' => ['await_muwathaq_review'],
+                'financial_status' => 'wallet_not_created_until_approved',
             ],
         ], 201);
     }
