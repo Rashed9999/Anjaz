@@ -7,6 +7,7 @@ use App\Models\KycDocument;
 use App\Models\User;
 use App\Services\Kyc\KycForensicWatermarkService;
 use App\Services\KycDocumentService;
+use App\Services\Verification\AccountVerificationDecisionService;
 use App\Support\YemenGovernorates;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -140,38 +141,32 @@ class KycDocumentController extends Controller
      * محافظة السكن إلزامية هنا حتى لا تُرسل المنصة رسالة نجاح لحساب تبقى
      * منطقته UNKNOWN، فيصبح موثَّقاً ظاهرياً وعاجزاً عن استقبال التحويلات.
      */
-    public function activateAccount(Request $request, int $id): JsonResponse
+    public function activateAccount(
+        Request $request,
+        int $id,
+        AccountVerificationDecisionService $decisions,
+    ): JsonResponse
     {
         $request->validate([
-            'target_tier' => ['required', 'integer', Rule::in([2])],
+            'target_tier' => ['required', 'integer', Rule::in([2, 3])],
             'governorate' => ['required', 'string', Rule::in(YemenGovernorates::codes())],
         ]);
 
-        $account = User::findOrFail($id);
-        $governorate = (string) $request->input('governorate');
+        $account = User::query()
+            ->whereIn('type', [CUSTOMER_TYPE, MERCHANT_TYPE, AGENT_TYPE])
+            ->findOrFail($id);
 
         try {
-            // افحص التسلسل قبل أي كتابة جانبية؛ رفض القفز لا يجب أن يغيّر
-            // حتى محافظة السكن في الحساب.
-            app(\App\Services\KycTierService::class)
-                ->assertSequentialVerificationDecision(
-                    $account,
-                    (int) $request->input('target_tier'),
-                );
-
-            // لا تُخمن المحافظة من الاسم أو رقم الهاتف. هذا اختيار مراجع
-            // ظاهر ومراجَع في ملف الهوية، ثم ZoneAssignmentService يحوّله
-            // إلى المنطقة التشغيلية ويسجل الأثر.
-            $account = \Illuminate\Support\Facades\DB::transaction(function () use ($account, $governorate, $request) {
-                $account->residence_governorate = $governorate;
-                $account->save();
-                return $this->kyc->decideAccountVerification(
-                    user: $account,
-                    reviewer: $request->user(),
-                    approve: true,
-                    targetTier: (int) $request->input('target_tier'),
-                );
-            });
+            // هذا مدخل توافق لواجهة قديمة فقط. لا يملك منطق قرار خاصاً:
+            // المسار الحديث والقديم يمران من الخدمة المركزية نفسها، بما في
+            // ذلك المراجع المخول، التسلسل، الخصوصية، التنبيهات، وسجل القضية.
+            $account = $decisions->decide(
+                account: $account,
+                reviewer: $request->user(),
+                approve: true,
+                targetTier: (int) $request->input('target_tier'),
+                requestedGovernorate: (string) $request->input('governorate'),
+            );
         } catch (DomainException $e) {
             return response()->json([
                 'success' => false,

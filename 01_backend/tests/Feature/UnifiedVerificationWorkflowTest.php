@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\AgentProfile;
 use App\Models\User;
+use App\Services\Verification\AccountVerificationDecisionService;
 use App\Services\Verification\VerificationCaseService;
+use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -115,5 +117,62 @@ class UnifiedVerificationWorkflowTest extends TestCase
             'verification_case_id' => $case->id,
             'event_type' => 'agent_operating_approved',
         ]);
+    }
+
+    /** @test */
+    public function merchant_identity_decision_does_not_finalise_its_business_case(): void
+    {
+        $merchant = User::factory()->create([
+            'type' => MERCHANT_TYPE,
+            'is_kyc_verified' => 1,
+        ]);
+        $reviewer = User::factory()->create(['type' => ADMIN_TYPE]);
+
+        app(VerificationCaseService::class)->recordAccountDecision(
+            subject: $merchant,
+            reviewer: $reviewer,
+            approved: true,
+            targetLevel: 2,
+        );
+
+        $case = DB::table('kyc_verification_cases')->where('user_id', $merchant->id)->first();
+        $this->assertNotNull($case);
+        $this->assertNotSame('approved', $case->workflow_status,
+            'قرار هوية المالك لا يجوز أن يعتمد المنشأة أو القضية التجارية كاملة.');
+        $this->assertNull($case->final_decided_at,
+            'اعتماد هوية المالك سجّل قراراً نهائياً لمسار المنشأة بالخطأ.');
+        $this->assertDatabaseHas('verification_case_steps', [
+            'verification_case_id' => $case->id,
+            'step_key' => 'owner_identity',
+            'status' => 'approved',
+            'reviewed_by' => $reviewer->id,
+        ]);
+        $this->assertDatabaseHas('verification_case_events', [
+            'verification_case_id' => $case->id,
+            'event_type' => 'identity_decision_approved',
+        ]);
+
+        $snapshot = app(VerificationCaseService::class)->snapshot($merchant->fresh());
+        $this->assertNotSame('approved', $snapshot['status']);
+        $final = collect($snapshot['steps'])->firstWhere('key', 'final_activation');
+        $this->assertSame('review', $final['status'] ?? null);
+    }
+
+    /** @test */
+    public function a_non_admin_cannot_issue_an_identity_decision_through_the_central_service(): void
+    {
+        $account = User::factory()->create(['type' => CUSTOMER_TYPE]);
+        $nonReviewer = User::factory()->create(['type' => MERCHANT_TYPE]);
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('KYC_REVIEWER_REQUIRED');
+
+        app(AccountVerificationDecisionService::class)->decide(
+            account: $account,
+            reviewer: $nonReviewer,
+            approve: false,
+            targetTier: 2,
+            reason: 'سبب رفض واضح',
+        );
     }
 }

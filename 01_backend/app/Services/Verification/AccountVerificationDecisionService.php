@@ -35,6 +35,8 @@ class AccountVerificationDecisionService
         ?string $requestedGovernorate = null,
         ?string $reason = null,
     ): User {
+        $this->assertIdentityReviewer($account, $reviewer);
+
         if ($approve && !in_array($targetTier, [2, 3], true)) {
             throw new DomainException('KYC_TIER_TARGET_INVALID');
         }
@@ -104,9 +106,7 @@ class AccountVerificationDecisionService
         if ((int) $agent->type !== AGENT_TYPE) {
             throw new DomainException('AGENT_ACCOUNT_REQUIRED');
         }
-        if ((int) $agent->id === (int) $reviewer->id) {
-            throw new DomainException('FOUR_EYES_VIOLATION');
-        }
+        $this->assertIdentityReviewer($agent, $reviewer);
         if (!$approve && mb_strlen(trim((string) $reason)) < 5) {
             throw new DomainException('AGENT_SUSPENSION_REASON_REQUIRED');
         }
@@ -151,5 +151,16 @@ class AccountVerificationDecisionService
 
             return $profile->fresh();
         });
+    }
+
+    /** قرار الهوية/التشغيل لا يصدره صاحب الحساب ولا أي دور غير إداري. */
+    private function assertIdentityReviewer(User $account, User $reviewer): void
+    {
+        if ((int) $account->id === (int) $reviewer->id) {
+            throw new DomainException('FOUR_EYES_VIOLATION');
+        }
+        if ((int) $reviewer->type !== ADMIN_TYPE) {
+            throw new DomainException('KYC_REVIEWER_REQUIRED');
+        }
     }
 }

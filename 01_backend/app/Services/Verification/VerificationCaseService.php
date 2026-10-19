@@ -52,11 +52,18 @@ class VerificationCaseService
         $firstOpen = collect($steps)->first(fn (array $step) => !in_array(
             $step['status'], [self::STATUS_COMPLETE, self::STATUS_APPROVED], true
         ));
-        $workflow = $case->workflow_status;
-        if (!in_array($workflow, [self::STATUS_APPROVED, self::STATUS_REJECTED], true)) {
+        // لا تعني حالة خطوةٍ مرفوضة أن القضية كلها حُسمت نهائياً. هذا مهم
+        // خصوصاً للتاجر والوكيل: رفض الهوية الشخصية أو طلب استكمال المنشأة
+        // يظل قابلاً للتصحيح، ولا يجوز أن يتحول إلى «رفض نهائي» للقضية.
+        $hasFinalDecision = $case->final_decided_at !== null;
+        $workflow = $hasFinalDecision ? $case->workflow_status : null;
+        if (!$hasFinalDecision) {
             $workflow = $firstOpen ? (string) $firstOpen['status'] : self::STATUS_COMPLETE;
             $case->forceFill([
-                'workflow_status' => $workflow,
+                // تحفظ الحالة التشغيلية القابلة للاستئناف، أما الرفض فيظل
+                // وصفاً للخطوة المعنية فقط إلى أن يصدر قرار نهائي صريح.
+                'workflow_status' => $workflow === self::STATUS_REJECTED
+                    ? self::STATUS_ACTION_REQUIRED : $workflow,
                 'current_step' => $firstOpen['key'] ?? null,
             ])->save();
         }
@@ -184,6 +191,41 @@ class VerificationCaseService
         DB::transaction(function () use ($subject, $reviewer, $approved, $targetLevel, $reason) {
             $case = $this->ensure($subject);
             $case = VerificationCase::query()->lockForUpdate()->findOrFail($case->id);
+
+            // فقط العميل الفردي يساوي قرار هويته «القرار النهائي للقضية».
+            // للتاجر والوكيل يُسجل قرار الهوية في خطوته الخاصة؛ اعتماد
+            // المنشأة أو تشغيل الوكيل يبقيان قرارين مستقلين ولا يُغلقان
+            // تلقائياً بمجرد اعتماد الهوية.
+            if (in_array((string) $case->subject_kind, ['merchant', 'agent'], true)) {
+                $identityStep = $this->identityRequirementKey($case);
+                VerificationCaseStep::query()->updateOrCreate(
+                    ['verification_case_id' => $case->id, 'step_key' => $identityStep],
+                    [
+                        'step_order' => $this->requirementOrder($case, $identityStep),
+                        'status' => $approved ? self::STATUS_APPROVED : self::STATUS_REJECTED,
+                        'completed_at' => $approved ? now() : null,
+                        'reviewed_by' => (int) $reviewer->id,
+                        'reviewed_at' => now(),
+                        'review_note' => $reason,
+                        'evidence_snapshot' => [
+                            'scope' => 'personal_identity',
+                            'target_level' => $targetLevel,
+                        ],
+                    ],
+                );
+                VerificationCaseEvent::create([
+                    'verification_case_id' => $case->id,
+                    'actor_user_id' => (int) $reviewer->id,
+                    'event_type' => $approved ? 'identity_decision_approved' : 'identity_decision_rejected',
+                    'details' => [
+                        'scope' => 'personal_identity',
+                        'target_level' => $targetLevel,
+                        'reason_provided' => filled($reason),
+                    ],
+                ]);
+                return;
+            }
+
             $previousStatus = (string) $case->workflow_status;
             $case->forceFill([
                 'target_level' => max((int) $case->target_level, $targetLevel),
@@ -357,7 +399,7 @@ class VerificationCaseService
             $assessment = match ($key) {
                 'contact' => $this->contactAssessment($subject, $case->subject_kind !== 'customer'),
                 'residence' => $this->residenceAssessment($subject),
-                'identity', 'owner_identity' => $this->identityAssessment($usable, $pending),
+                'identity', 'owner_identity' => $this->identityAssessment($subject, $case, $key, $usable, $pending),
                 'address_proof' => $this->documentAssessment($usable, $pending, KycDocument::TYPE_ADDRESS_PROOF, 'ارفع دليل عنوان صالحاً ضمن ملف KYC.'),
                 'ownership' => $this->ownershipAssessment($subject),
                 'establishment' => $this->establishmentAssessment($merchantRequest, false),
@@ -422,10 +464,38 @@ class VerificationCaseService
     }
 
     /** @param callable(string):bool $usable @param callable(string):bool $pending */
-    private function identityAssessment(callable $usable, callable $pending): array
+    private function identityAssessment(
+        User $subject,
+        VerificationCase $case,
+        string $stepKey,
+        callable $usable,
+        callable $pending,
+    ): array
     {
         $complete = $usable(KycDocument::TYPE_ID_FRONT) && $usable(KycDocument::TYPE_ID_BACK);
         $underReview = $pending(KycDocument::TYPE_ID_FRONT) || $pending(KycDocument::TYPE_ID_BACK);
+
+        // للتاجر والوكيل قرار الهوية الشخصي مستقل عن قرار المنشأة أو ملف
+        // التشغيل. نحتفظ بأثره في خطوة الهوية نفسها ولا نخلطه مع
+        // final_activation للقضية التجارية/التشغيلية.
+        if (in_array((int) ($subject->is_kyc_verified ?? 0), [1, 2], true)) {
+            $decision = VerificationCaseStep::query()
+                ->where('verification_case_id', $case->id)
+                ->where('step_key', $stepKey)
+                ->first();
+            if ($decision && in_array($decision->status, [self::STATUS_APPROVED, self::STATUS_REJECTED], true)) {
+                return [
+                    'status' => $decision->status,
+                    'reason' => $decision->status === self::STATUS_REJECTED ? $decision->review_note : null,
+                    'evidence' => [
+                        'front_usable' => $usable(KycDocument::TYPE_ID_FRONT),
+                        'back_usable' => $usable(KycDocument::TYPE_ID_BACK),
+                        'personal_identity_decided' => true,
+                    ],
+                ];
+            }
+        }
+
         return [
             'status' => $complete ? self::STATUS_COMPLETE : ($underReview ? self::STATUS_REVIEW : self::STATUS_ACTION_REQUIRED),
             'reason' => $complete ? null : ($underReview ? 'وثائق الهوية بانتظار المراجعة.' : 'ارفع وجهي وثيقة الهوية.'),
@@ -537,6 +607,13 @@ class VerificationCaseService
     /** @return array<string,mixed> */
     private function finalAssessment(VerificationCase $case): array
     {
+        // `workflow_status` وحده قد يكون إسقاطاً مرحلياً من نسخة أقدم أو
+        // من خطوة رفض قابلة للاستئناف. القرار النهائي لا يُعتد به إلا مع
+        // طابعه ومراجعه في final_decided_at.
+        if ($case->final_decided_at === null) {
+            return ['status' => self::STATUS_REVIEW, 'reason' => 'ينتظر قرار الاعتماد النهائي من المفوض.'];
+        }
+
         return match ((string) $case->workflow_status) {
             self::STATUS_APPROVED => ['status' => self::STATUS_APPROVED],
             self::STATUS_REJECTED => ['status' => self::STATUS_REJECTED, 'reason' => $case->final_reason],
@@ -635,12 +712,26 @@ class VerificationCaseService
         return count($requirements) + 1;
     }
 
+    private function identityRequirementKey(VerificationCase $case): string
+    {
+        $requirements = $this->policyFor($case)?->requirements ?? $this->defaultRequirementsFor($case);
+        foreach ($requirements as $requirement) {
+            if (in_array($requirement['key'] ?? null, ['identity', 'owner_identity'], true)) {
+                return (string) $requirement['key'];
+            }
+        }
+
+        return 'identity';
+    }
+
     private function eventSummary(string $eventType): string
     {
         return match ($eventType) {
             'risk_review_completed' => 'أُثبتت مراجعة المخاطر ضمن القرار النهائي.',
             'identity_case_approved' => 'اعتماد نهائي لتوثيق الهوية.',
             'identity_case_rejected' => 'رفض نهائي لطلب توثيق الهوية.',
+            'identity_decision_approved' => 'اعتمدت هوية صاحب الحساب؛ لا يعني ذلك اعتماد المنشأة أو تشغيل الوكيل.',
+            'identity_decision_rejected' => 'رُفض قرار هوية صاحب الحساب؛ يبقى مسار المنشأة أو تشغيل الوكيل مستقلاً.',
             'merchant_verification_approved' => 'اعتماد توثيق المنشأة؛ لا يعني اعتماد هوية الشخص.',
             'merchant_verification_rejected' => 'رُفض طلب توثيق المنشأة.',
             'merchant_verification_resubmission_required' => 'طُلب من التاجر استكمال بيانات أو أدلة المنشأة.',

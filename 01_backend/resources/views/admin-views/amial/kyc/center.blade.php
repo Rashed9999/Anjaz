@@ -269,7 +269,8 @@
         const blocked = ev.blockers || [];
         const options = GOVERNORATES.map(g => '<option value="' + esc(g.code) + '"' +
             (g.code === a.governorate ? ' selected' : '') + '>' + esc(g.name) + '</option>').join('');
-        return '<section class="vc-section" id="vc-decision"><h5>✅ القرار النهائي وترقية الحساب</h5>' +
+        return '<section class="vc-section" id="vc-decision"><h5>🪪 قرار هوية صاحب الحساب (KYC)</h5>' +
+            '<p class="small text-muted">هذا القرار يخص هوية الشخص وحدها؛ لا يعتمد المنشأة التجارية ولا يشغّل الوكيل تلقائياً.</p>' +
             blockers(blocked, 'ما يمنع الاعتماد الآن', 'warning') +
             '<div class="small mb-2">المستوى المطلوب: <strong>' + a.target_tier +
             '</strong> · إثبات ملكية الهوية: <strong>' +

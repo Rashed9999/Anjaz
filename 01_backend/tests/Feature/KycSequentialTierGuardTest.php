@@ -195,6 +195,24 @@ class KycSequentialTierGuardTest extends TestCase
         );
     }
 
+    public function test_legacy_activation_route_delegates_to_the_central_decision_service(): void
+    {
+        $source = (string) file_get_contents(
+            app_path('Http/Controllers/Api/V1/Amial/KycDocumentController.php')
+        );
+
+        $this->assertStringContainsString(
+            'AccountVerificationDecisionService $decisions',
+            $source,
+            'مسار التوافق يملك قرار KYC مستقلاً عن الخدمة المركزية.'
+        );
+        $this->assertStringContainsString(
+            '$decisions->decide(',
+            $source,
+            'مسار التوافق لا يمر من منطق قرار الهوية المركزي.'
+        );
+    }
+
     public function test_direct_customer_tier_mutation_is_closed(): void
     {
         $user = $this->customerAt(0);
