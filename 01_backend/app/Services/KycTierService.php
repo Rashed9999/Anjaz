@@ -6,6 +6,7 @@ use App\CentralLogics\Helpers;
 use App\Models\EMoney;
 use App\Models\User;
 use App\Services\Kyc\ResidenceVerificationService;
+use App\Services\Kyc\CustomerVerificationJourneyService;
 use App\Support\YemenGovernorates;
 use DomainException;
 use Illuminate\Support\Carbon;
@@ -72,12 +73,7 @@ class KycTierService
         if ($status['tier'] >= 2 && !$status['is_verified']) {
             // طلب توثيق أعلى لا يلغي «موثق جزئيا» إن كان مكتمل الشروط:
             // الهاتف مثبت + السكن معتمد. نطاق التشغيل لا يحدد حالة KYC.
-            $residence = app(ResidenceVerificationService::class)->forUser($user);
-
-            return (bool) ($user->is_phone_verified ?? false)
-                && ($residence['status'] ?? null) === ResidenceVerificationService::STATUS_VERIFIED
-                    ? 1
-                    : 0;
+            return app(CustomerVerificationJourneyService::class)->tierOneReady($user) ? 1 : 0;
         }
         if ($status['tier'] >= 1 && !(bool) ($user->is_phone_verified ?? false)) return 0;
 
@@ -85,8 +81,7 @@ class KycTierService
         // حصلت على tier=1 قبل إصلاح المسار، نحسبها 🟤 حتى يوجد سكن
         // معتمد. نطاق التشغيل منفصل عن حالة التوثيق.
         if ($status['tier'] === 1) {
-            $residence = app(ResidenceVerificationService::class)->forUser($user);
-            if (($residence['status'] ?? null) !== ResidenceVerificationService::STATUS_VERIFIED) {
+            if (!app(CustomerVerificationJourneyService::class)->tierOneReady($user)) {
                 return 0;
             }
         }

@@ -86,16 +86,17 @@ class VerificationCaseService
 
         $kind = $this->subjectKind($subject);
         $vertical = $this->merchantVertical($subject);
-        $policy = $this->resolvePolicy($kind, $vertical);
+        $targetLevel = $kind === 'customer' ? $this->resolveTargetLevel($subject) : null;
+        $policy = $this->resolvePolicy($kind, $vertical, $targetLevel);
 
-        return DB::transaction(function () use ($subject, $kind, $vertical, $policy) {
+        return DB::transaction(function () use ($subject, $kind, $vertical, $targetLevel, $policy) {
             $case = VerificationCase::query()->firstOrCreate(
                 ['user_id' => (int) $subject->id],
                 [
                     'case_ulid' => (string) Str::ulid(),
                     'subject_kind' => $kind,
                     'merchant_vertical' => $vertical,
-                    'target_level' => $policy?->target_level ?? 1,
+                    'target_level' => $targetLevel ?? $policy?->target_level ?? 1,
                     'policy_version' => $policy?->policy_version,
                     'workflow_status' => 'collecting',
                 ],
@@ -107,6 +108,9 @@ class VerificationCaseService
             if (!$case->case_ulid) $changes['case_ulid'] = (string) Str::ulid();
             if (!$case->subject_kind) $changes['subject_kind'] = $kind;
             if ($case->merchant_vertical !== $vertical) $changes['merchant_vertical'] = $vertical;
+            if ($targetLevel !== null && (int) $case->target_level !== $targetLevel) {
+                $changes['target_level'] = $targetLevel;
+            }
             if ($policy && (!$case->policy_version || $case->policy_version !== $policy->policy_version)) {
                 $changes['policy_version'] = $policy->policy_version;
                 $changes['target_level'] = $policy->target_level ?? 1;
@@ -351,9 +355,10 @@ class VerificationCaseService
         foreach ($requirements as $order => $requirement) {
             $key = (string) ($requirement['key'] ?? 'unknown');
             $assessment = match ($key) {
-                'contact' => $this->contactAssessment($subject),
+                'contact' => $this->contactAssessment($subject, $case->subject_kind !== 'customer'),
                 'residence' => $this->residenceAssessment($subject),
                 'identity', 'owner_identity' => $this->identityAssessment($usable, $pending),
+                'address_proof' => $this->documentAssessment($usable, $pending, KycDocument::TYPE_ADDRESS_PROOF, 'ارفع دليل عنوان صالحاً ضمن ملف KYC.'),
                 'ownership' => $this->ownershipAssessment($subject),
                 'establishment' => $this->establishmentAssessment($merchantRequest, false),
                 'quick_sale_location' => $this->establishmentAssessment($merchantRequest, true),
@@ -390,13 +395,16 @@ class VerificationCaseService
     }
 
     /** @return array<string,mixed> */
-    private function contactAssessment(User $user): array
+    private function contactAssessment(User $user, bool $emailRequired = true): array
     {
         $phone = (bool) ($user->is_phone_verified ?? false);
         $email = (bool) ($user->is_email_verified ?? false);
+        $complete = $phone && (!$emailRequired || $email);
         return [
-            'status' => $phone && $email ? self::STATUS_COMPLETE : self::STATUS_ACTION_REQUIRED,
-            'reason' => $phone && $email ? null : 'يلزم إثبات رقم الهاتف والبريد الإلكتروني المرتبطين بالحساب.',
+            'status' => $complete ? self::STATUS_COMPLETE : self::STATUS_ACTION_REQUIRED,
+            'reason' => $complete ? null : ($emailRequired
+                ? 'يلزم إثبات رقم الهاتف والبريد الإلكتروني المرتبطين بالحساب.'
+                : 'يلزم إثبات رقم الهاتف المرتبط بالحساب.'),
             'evidence' => ['phone_verified' => $phone, 'email_verified' => $email],
         ];
     }
@@ -422,6 +430,16 @@ class VerificationCaseService
             'status' => $complete ? self::STATUS_COMPLETE : ($underReview ? self::STATUS_REVIEW : self::STATUS_ACTION_REQUIRED),
             'reason' => $complete ? null : ($underReview ? 'وثائق الهوية بانتظار المراجعة.' : 'ارفع وجهي وثيقة الهوية.'),
             'evidence' => ['front_usable' => $usable(KycDocument::TYPE_ID_FRONT), 'back_usable' => $usable(KycDocument::TYPE_ID_BACK)],
+        ];
+    }
+
+    /** @param callable(string):bool $usable @param callable(string):bool $pending */
+    private function documentAssessment(callable $usable, callable $pending, string $type, string $missingReason): array
+    {
+        return [
+            'status' => $usable($type) ? self::STATUS_COMPLETE : ($pending($type) ? self::STATUS_REVIEW : self::STATUS_ACTION_REQUIRED),
+            'reason' => $usable($type) ? null : ($pending($type) ? 'المستند بانتظار المراجعة.' : $missingReason),
+            'evidence' => ['usable' => $usable($type), 'pending' => $pending($type)],
         ];
     }
 
@@ -558,7 +576,11 @@ class VerificationCaseService
 
     private function policyFor(VerificationCase $case): ?VerificationRequirementPolicy
     {
-        return $this->resolvePolicy((string) $case->subject_kind, $case->merchant_vertical);
+        return $this->resolvePolicy(
+            (string) $case->subject_kind,
+            $case->merchant_vertical,
+            (int) $case->target_level,
+        );
     }
 
     /** @return array<int,array{key:string,label:string}> */
@@ -586,10 +608,18 @@ class VerificationCaseService
             'admin_staff' => [
                 ['key' => 'staff_security', 'label' => 'المصادقة الثنائية والدور التشغيلي'],
             ],
-            default => [
+            default => (int) $case->target_level >= 3 ? [
                 ['key' => 'contact', 'label' => 'تأكيد الهاتف والبريد'],
                 ['key' => 'residence', 'label' => 'إثبات محل الإقامة الحالي'],
                 ['key' => 'identity', 'label' => 'توثيق وثيقة الهوية'],
+                ['key' => 'address_proof', 'label' => 'دليل العنوان ضمن ملف KYC'],
+                ['key' => 'ownership', 'label' => 'إثبات معزز لصاحب الهوية'],
+                ['key' => 'risk_review', 'label' => 'مراجعة المخاطر'],
+                ['key' => 'final_activation', 'label' => 'قرار الاعتماد النهائي'],
+            ] : [
+                ['key' => 'contact', 'label' => 'تأكيد رقم الهاتف'],
+                ['key' => 'residence', 'label' => 'إثبات محل الإقامة الحالي'],
+                ['key' => 'identity', 'label' => 'توثيق وجهي وثيقة الهوية'],
                 ['key' => 'risk_review', 'label' => 'مراجعة المخاطر'],
                 ['key' => 'final_activation', 'label' => 'قرار الاعتماد النهائي'],
             ],
@@ -620,18 +650,37 @@ class VerificationCaseService
         };
     }
 
-    private function resolvePolicy(string $kind, ?string $vertical): ?VerificationRequirementPolicy
+    /** تحديد المستوى المستهدف للعميل دون إسقاطه إلى سياسة نشاط أو وكيل. */
+    public function resolveTargetLevel(User $subject): int
+    {
+        $updateRequired = (int) ($subject->kyc_update_required ?? 0) === 1;
+        if ($updateRequired && (int) ($subject->kyc_update_previous_tier ?? 0) >= 2) {
+            return min(3, (int) $subject->kyc_update_previous_tier);
+        }
+
+        return (int) ($subject->kyc_tier ?? 0) >= 2 ? 3 : 2;
+    }
+
+    private function resolvePolicy(string $kind, ?string $vertical, ?int $targetLevel = null): ?VerificationRequirementPolicy
     {
         if (!Schema::hasTable('verification_requirement_policies')) return null;
+
+        // شروط العميل الفرد منصوص عليها مركزياً في رحلة KYC (Tier 0..3).
+        // لا نسمح لسياسة منشأة أو صف قديم أن يبدّل تعريف Tier 2 أو Tier 3.
+        if ($kind === 'customer') return null;
+
+        $baseQuery = VerificationRequirementPolicy::query()
+            ->where('subject_kind', $kind)
+            ->where('is_active', true);
         if ($vertical) {
-            $exact = VerificationRequirementPolicy::query()->where([
-                'subject_kind' => $kind, 'merchant_vertical' => $vertical, 'is_active' => true,
-            ])->latest('id')->first();
+            $exact = (clone $baseQuery)->where('merchant_vertical', $vertical)
+                ->when($targetLevel !== null, fn ($query) => $query->where('target_level', $targetLevel))
+                ->latest('id')->first();
             if ($exact) return $exact;
         }
-        return VerificationRequirementPolicy::query()->where([
-            'subject_kind' => $kind, 'is_active' => true,
-        ])->whereNull('merchant_vertical')->latest('id')->first();
+        return $baseQuery->whereNull('merchant_vertical')
+            ->when($targetLevel !== null, fn ($query) => $query->where('target_level', $targetLevel))
+            ->latest('id')->first();
     }
 
     private function subjectKind(User $user): string

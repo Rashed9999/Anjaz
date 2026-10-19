@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Services\KycTierService;
+use App\Services\Kyc\CustomerVerificationJourneyService;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -86,6 +87,17 @@ class KycSequentialTierGuardTest extends TestCase
         } catch (DomainException $e) {
             $this->assertStringContainsString('KYC_TIER_SEQUENCE_VIOLATION', $e->getMessage());
         }
+    }
+
+    public function test_customer_journey_keeps_tier_one_identity_free_and_tier_two_selfie_free(): void
+    {
+        $user = $this->customerAt(1);
+        $requirements = app(CustomerVerificationJourneyService::class)->requirementsFor($user, 2);
+
+        $this->assertSame(['tier1', 'identity_document'], array_column($requirements, 'code'));
+        $this->assertTrue($requirements[0]['complete']);
+        $this->assertFalse($requirements[1]['complete']);
+        $this->assertNotContains('selfie', array_column($requirements, 'code'));
     }
 
     public function test_verified_tier_two_can_target_tier_three(): void

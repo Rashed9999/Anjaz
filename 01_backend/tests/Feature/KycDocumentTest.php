@@ -232,7 +232,7 @@ class KycDocumentTest extends TestCase
 
         $this->assertFalse($c['complete']);
         $this->assertContains(KycDocument::TYPE_ID_BACK, $c['missing']);
-        $this->assertContains(KycDocument::TYPE_SELFIE, $c['missing']);
+        $this->assertNotContains(KycDocument::TYPE_SELFIE, $c['missing']);
         $this->assertNotContains(KycDocument::TYPE_ID_FRONT, $c['missing']);
     }
 
@@ -241,7 +241,7 @@ class KycDocumentTest extends TestCase
         $u = $this->customer();
         $admin = $this->reviewer();
 
-        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $t) {
+        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK] as $t) {
             $this->svc->approve($this->svc->upload($u, $t, $this->image()), $admin);
         }
 
@@ -262,10 +262,9 @@ class KycDocumentTest extends TestCase
         }
         $this->assertNotSame(1, (int) $u->fresh()->is_kyc_verified);
 
-        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $type) {
+        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK] as $type) {
             $this->svc->approve($this->svc->upload($u, $type, $this->image()), $admin);
         }
-        $this->establishKycOwnership($u, $admin);
 
         $verified = $this->svc->decideAccountVerification($u->fresh(), $admin, true);
         $this->assertSame(1, (int) $verified->is_kyc_verified);
@@ -278,14 +277,12 @@ class KycDocumentTest extends TestCase
         $admin = $this->reviewer();
         $u->forceFill(['kyc_update_required' => 1, 'kyc_update_requested_at' => now()])->save();
 
-        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $type) {
+        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK] as $type) {
             $this->svc->approve($this->svc->upload($u, $type, $this->image()), $admin);
         }
 
         $this->assertSame(1, (int) $u->fresh()->kyc_update_required,
             'اعتماد مستند مفرد لا يمسح طلب تحديث الحساب');
-        $this->establishKycOwnership($u, $admin);
-
         $verified = $this->svc->decideAccountVerification($u->fresh(), $admin, true);
         $this->assertSame(0, (int) $verified->kyc_update_required);
         $this->assertNull($verified->kyc_update_requested_at);

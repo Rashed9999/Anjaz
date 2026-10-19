@@ -271,9 +271,10 @@ class KycDocumentService
                 app(KycTierService::class)
                     ->assertSequentialVerificationDecision($account, $requiredTier);
 
-                // AMIAL-LEGAL-NAME-001 — Tier 2 لا يعتمد صور هوية بلا
-                // اسم أقره المراجع ومقارنته بالاسم الرباعي المصرّح به.
-                if ($requiredTier >= 2) {
+                // مطابقة الاسم المستخرج من الوثيقة حماية معززة للفئة الثالثة؛
+                // لا تحوّل Tier 2 إلى مسار OCR خفي. عقد Tier 2 هو وجها
+                // الوثيقة المعتمدان بعد Tier 1، بلا سيلفي أو OCR إلزامي.
+                if ($requiredTier >= 3) {
                     app(\App\Services\Kyc\LegalNameService::class)
                         ->assertIdentityNameReady($account);
                 }
@@ -338,7 +339,7 @@ class KycDocumentService
                 $account->kyc_tier = max((int) ($account->kyc_tier ?? 0), $requiredTier);
                 $account->kyc_tier_updated_at = now();
 
-                if ($requiredTier >= 2) {
+                if ($requiredTier >= 3) {
                     app(\App\Services\Kyc\LegalNameService::class)
                         ->verifyIdentityName($account, $reviewer);
                     // الخدمة حفظت الاسم القانوني الموثق؛ أعِد قفل الصف قبل

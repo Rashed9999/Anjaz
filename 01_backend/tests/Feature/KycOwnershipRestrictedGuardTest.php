@@ -17,7 +17,7 @@ use Tests\TestCase;
 /**
  * AMIAL-KYC-CENTRAL-GUARD-001 — أربعة أبواب فقط:
  *  1) الحاوية تستعمل الحارس فعلاً.
- *  2) اكتمال الصور لا يكفي من دون رقم هوية أقرّه إنسان.
+ *  2) Tier 2 يكتفي بوجهي الهوية المعتمدين؛ إثبات الملكية المعزز لـ Tier 3.
  *  3) الطابور المقيد لا يظهر في العام ولا يقرره موظف عام.
  *  4) التحقق الحضوري لا يُثبت من استدعاء خدمة بلا صلاحية.
  */
@@ -95,7 +95,6 @@ class KycOwnershipRestrictedGuardTest extends TestCase
         return [
             KycDocument::TYPE_ID_FRONT => $svc->upload($user, KycDocument::TYPE_ID_FRONT, $this->image('front.jpg')),
             KycDocument::TYPE_ID_BACK => $svc->upload($user, KycDocument::TYPE_ID_BACK, $this->image('back.jpg')),
-            KycDocument::TYPE_SELFIE => $svc->upload($user, KycDocument::TYPE_SELFIE, $this->image('selfie.jpg')),
         ];
     }
 
@@ -104,7 +103,7 @@ class KycOwnershipRestrictedGuardTest extends TestCase
         $this->assertInstanceOf(GuardedKycDocumentService::class, app(KycDocumentService::class));
     }
 
-    public function test_complete_documents_without_confirmed_identity_owner_roll_back_final_approval(): void
+    public function test_tier_two_approval_needs_front_and_back_but_not_ocr_or_selfie(): void
     {
         $svc = app(KycDocumentService::class);
         $user = $this->customer();
@@ -115,15 +114,10 @@ class KycOwnershipRestrictedGuardTest extends TestCase
             $svc->approve($doc, $reviewer);
         }
 
-        try {
-            $svc->decideAccountVerification($user, $reviewer, true);
-            $this->fail('اكتملت الصور فاعتمد الحساب بلا إثبات ملكية الهوية.');
-        } catch (DomainException $e) {
-            $this->assertStringContainsString('KYC_OWNERSHIP_NOT_PROVEN', $e->getMessage());
-        }
+        $verified = $svc->decideAccountVerification($user, $reviewer, true, 2);
 
-        $this->assertNotSame(1, (int) $user->fresh()->is_kyc_verified,
-            'فشل حارس الملكية بعد اعتماد الأب ولم تُرجع المعاملة قرار الحساب.');
+        $this->assertSame(1, (int) $verified->is_kyc_verified);
+        $this->assertSame(2, (int) $verified->kyc_tier);
     }
 
     public function test_reviewer_confirmed_national_id_plus_selfie_allows_final_approval(): void

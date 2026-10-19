@@ -76,6 +76,8 @@ class UnifiedVerificationWorkflowTest extends TestCase
 
         $snapshot = app(VerificationCaseService::class)->snapshot($customer);
 
+        $this->assertSame(2, (int) DB::table('kyc_verification_cases')
+            ->where('user_id', $customer->id)->value('target_level'));
         $this->assertSame(
             ['contact', 'residence', 'identity', 'risk_review', 'final_activation'],
             array_column($snapshot['steps'], 'key'),

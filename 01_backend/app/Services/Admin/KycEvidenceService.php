@@ -164,7 +164,9 @@ class KycEvidenceService
                 .implode('، ', $completeness['missing_fields']);
         }
 
-        if ($tier >= 2) {
+        // مطابقة الاسم المستخرج من الهوية شرط حماية معزز للفئة الثالثة،
+        // وليست مانعاً خفياً لـ Tier 2 الذي يكتفي بوجهي الهوية المعتمدين.
+        if ($tier >= 3) {
             try {
                 $this->legalNames->assertIdentityNameReady($user);
             } catch (\DomainException $e) {

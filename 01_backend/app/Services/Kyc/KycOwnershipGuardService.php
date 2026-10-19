@@ -12,29 +12,38 @@ use Illuminate\Support\Facades\Schema;
 /**
  * AMIAL-KYC-OWNERSHIP-002 — إثبات الملكية يتدرّج مع مستوى المخاطر.
  *
- * Tier 2: هاتف مملوك + وثيقة هوية معتمدة + رقم هوية أقرّه المراجع ويطابق
- * الرقم القانوني في الحساب. لا نفرض سيلفي على هذا المستوى.
+ * Tier 2: قرار الهوية الأساسي هو وجها وثيقة هوية معتمدان فقط. لا نفرض
+ * سيلفي أو OCR أو إقرار رقم الهوية على هذا المستوى.
  * Tier 3: نفس أساس الهوية، ثم إثبات أقوى لصاحبها (سيلفي مقيد أو Liveness
  * + Face Match حقيقي أو تحقق حضوري مخول).
  */
 class KycOwnershipGuardService
 {
-    public function __construct(private readonly KycPrivacyService $privacy) {}
+    public function __construct(
+        private readonly KycPrivacyService $privacy,
+        private readonly CustomerVerificationJourneyService $journey,
+    ) {}
 
     /** @return array{ready:bool,method:string,blockers:array<int,string>,evidence:array<string,mixed>} */
     public function assess(User $user, int $targetTier = 2): array
     {
         $targetTier = max(2, min(3, $targetTier));
-        $identity = $this->identityEvidence($user);
-
         if ($targetTier <= 2) {
+            $frontAndBack = $this->journey->identityDocumentsReady($user);
+            $blockers = $frontAndBack ? [] : ['يلزم اعتماد وجه وثيقة الهوية وظهرها أولاً.'];
+
             return [
-                'ready' => $identity['blockers'] === [],
-                'method' => 'identity_document_confirmed_id_phone',
-                'blockers' => $identity['blockers'],
-                'evidence' => $identity['evidence'] + ['target_tier' => 2],
+                'ready' => $blockers === [],
+                'method' => 'approved_id_front_and_back',
+                'blockers' => $blockers,
+                'evidence' => [
+                    'front_and_back_usable' => $frontAndBack,
+                    'target_tier' => 2,
+                ],
             ];
         }
+
+        $identity = $this->identityEvidence($user);
 
         $state = $this->privacy->forUser($user);
         $mode = (string) ($state['review_mode'] ?? KycPrivacyService::MODE_STANDARD);

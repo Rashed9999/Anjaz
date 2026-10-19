@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
 use App\Models\RegistrationDossier;
+use App\Services\Kyc\CustomerVerificationJourneyService;
 use App\Services\Kyc\KycAccountStatusService;
 use App\Services\Kyc\KycOwnershipGuardService;
 use App\Services\Kyc\KycPrivacyService;
 use App\Services\Kyc\ResidenceVerificationService;
 use App\Services\KycTierService;
-use App\Support\Kyc\KycProfileFields;
 use App\Services\Verification\VerificationCaseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,6 +31,7 @@ class VerificationStatusController extends Controller
         ResidenceVerificationService $residence,
         KycPrivacyService $privacy,
         KycOwnershipGuardService $ownership,
+        CustomerVerificationJourneyService $journey,
         VerificationCaseService $workflow,
     ): JsonResponse {
         $user = $request->user();
@@ -142,11 +143,8 @@ class VerificationStatusController extends Controller
             $user,
             $tiers,
             $tier,
-            $identity,
-            $phoneVerified,
-            $residenceVerified,
             $ownership,
-            $docs,
+            $journey,
         );
 
         return response()->json([
@@ -207,40 +205,11 @@ class VerificationStatusController extends Controller
         $user,
         KycTierService $tiers,
         array $tierInfo,
-        array $identity,
-        bool $phoneVerified,
-        bool $residenceVerified,
         KycOwnershipGuardService $ownership,
-        array $docs,
+        CustomerVerificationJourneyService $journey,
     ): array {
         $current = (int) $tierInfo['current_tier'];
-        $profileMissing = KycProfileFields::missingFor($user);
         $ownership3 = $ownership->assess($user, 3);
-        $addressDoc = $docs[KycDocument::TYPE_ADDRESS_PROOF] ?? null;
-
-        $requirements = [
-            1 => [
-                ['code' => 'phone', 'label' => 'إثبات ملكية رقم الهاتف', 'complete' => $phoneVerified],
-                ['code' => 'residence', 'label' => 'إثبات محل الإقامة الحالي', 'complete' => $residenceVerified],
-            ],
-            2 => [
-                ['code' => 'tier1', 'label' => 'استكمال متطلبات عميل موثق جزئيا', 'complete' => $current >= 1],
-                ['code' => 'identity_number', 'label' => 'بيانات الهوية القانونية وتواريخها', 'complete' =>
-                    trim((string) ($user->identification_number ?? '')) !== ''
-                    && trim((string) ($user->date_of_birth ?? '')) !== ''
-                    && trim((string) ($user->id_place_of_issue ?? '')) !== ''
-                    && trim((string) ($user->identification_issue_date ?? '')) !== ''
-                    && trim((string) ($user->identification_expiry_date ?? '')) !== ''
-                ],
-                ['code' => 'identity_document', 'label' => 'وجه وثيقة الهوية وظهرها — بلا سيلفي', 'complete' => ($identity['status'] ?? '') === 'verified'],
-            ],
-            3 => [
-                ['code' => 'tier2', 'label' => 'استكمال متطلبات عميل موثق بهوية', 'complete' => $current >= 2],
-                ['code' => 'profile', 'label' => 'إكمال بيانات اعرف عميلك التنظيمية', 'complete' => $profileMissing === []],
-                ['code' => 'address_proof', 'label' => 'دليل سكن/عنوان صالح ضمن ملف KYC', 'complete' => (bool) ($addressDoc['usable'] ?? false)],
-                ['code' => 'ownership', 'label' => 'صورة سيلفي حديثة لإثبات صاحب الهوية', 'complete' => (bool) ($ownership3['ready'] ?? false)],
-            ],
-        ];
 
         $descriptions = [
             1 => 'توثيق جزئي يفتح الاستخدام المالي الأساسي ضمن الحدود المعتمدة.',
@@ -251,14 +220,15 @@ class VerificationStatusController extends Controller
         $out = [];
         foreach ([1, 2, 3] as $level) {
             $limits = $tiers->getLimits($level);
+            $requirements = $journey->requirementsFor(
+                $user,
+                $level,
+                $level === 3 ? $ownership3 : null,
+            );
             $missing = array_values(array_map(
                 fn (array $r) => $r['label'],
-                array_filter($requirements[$level], fn (array $r) => !$r['complete'])
+                array_filter($requirements, fn (array $r) => !$r['complete'])
             ));
-
-            if ($level === 3 && $profileMissing !== []) {
-                $missing = array_values(array_unique(array_merge($missing, $profileMissing)));
-            }
 
             $out[] = [
                 'tier' => $level,
@@ -266,7 +236,7 @@ class VerificationStatusController extends Controller
                 'description' => $descriptions[$level],
                 'status' => $current >= $level ? 'completed' : 'incomplete',
                 'current' => $current === $level,
-                'requirements' => $requirements[$level],
+                'requirements' => $requirements,
                 'missing' => $missing,
                 'benefits' => $this->featureLabels($limits['allowed_features']),
                 'limits' => $this->limitView($limits),
