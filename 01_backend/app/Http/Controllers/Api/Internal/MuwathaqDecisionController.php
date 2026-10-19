@@ -27,6 +27,10 @@ class MuwathaqDecisionController extends Controller
             'context.verified_phone' => 'nullable|boolean',
             'context.verified_residence_governorate' => 'nullable|string|in:'
                 . implode(',', \App\Support\YemenGovernorates::codes()),
+            'context.verified_identity' => 'nullable|boolean',
+            'context.verified_owner_identity' => 'nullable|boolean',
+            'context.verified_business_requirements' => 'nullable|boolean',
+            'context.admin_provisioned' => 'nullable|boolean',
         ]);
         if ($validator->fails()) {
             return response()->json([

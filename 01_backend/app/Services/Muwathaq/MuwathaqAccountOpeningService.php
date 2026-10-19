@@ -142,8 +142,8 @@ class MuwathaqAccountOpeningService
 
         match ($application->subject_kind) {
             'customer' => $this->activateCustomer($user, $application),
-            'merchant' => $this->activateMerchant($user),
-            'agent' => $this->activateAgent($user),
+            'merchant' => $this->activateMerchant($user, $application),
+            'agent' => $this->activateAgent($user, $application),
             default => throw new DomainException('نوع طلب فتح الحساب غير مدعوم.'),
         };
 
@@ -178,6 +178,9 @@ class MuwathaqAccountOpeningService
             // إسقاط توافق فقط للحواجز المالية القديمة؛ المسار الحقيقي محفوظ في الطلب.
             $user->kyc_tier = max(1, (int) ($user->kyc_tier ?? 0));
         } else {
+            if (($context['verified_identity'] ?? false) !== true) {
+                throw new DomainException('لا يفعّل الحساب القياسي قبل إثبات الهوية من موثّق.');
+            }
             // الحساب القياسي للذكر ليس «Tier» في موثّق. القيمة 3 توافق انتقالية
             // للخدمات القديمة التي لا تزال تقرأ الحقل حتى تُنقل إلى هذا المصدر.
             $user->is_kyc_verified = 1;
@@ -187,8 +190,13 @@ class MuwathaqAccountOpeningService
         app(\App\Services\ZoneAssignmentService::class)->assignFromKyc($user, $governorate);
     }
 
-    private function activateMerchant(User $user): void
+    private function activateMerchant(User $user, ?MuwathaqAccountOpeningApplication $application = null): void
     {
+        $context = (array) ($application?->decision_context ?? []);
+        if (($context['verified_owner_identity'] ?? false) !== true
+            || ($context['verified_business_requirements'] ?? false) !== true) {
+            throw new DomainException('لا يفعّل التاجر قبل توثيق مالك المنشأة ومتطلبات قطاعه من موثّق.');
+        }
         $profile = MerchantProfile::query()->where('user_id', $user->id)->lockForUpdate()->first();
         if ($profile === null) {
             throw new DomainException('ملف التاجر غير موجود؛ لا يمكن تفعيل قطاع بلا ملف منشأة.');
@@ -200,8 +208,13 @@ class MuwathaqAccountOpeningService
         $user->save();
     }
 
-    private function activateAgent(User $user): void
+    private function activateAgent(User $user, ?MuwathaqAccountOpeningApplication $application = null): void
     {
+        $context = (array) ($application?->decision_context ?? []);
+        if (($context['admin_provisioned'] ?? false) !== true
+            || ($context['verified_owner_identity'] ?? false) !== true) {
+            throw new DomainException('لا يفعّل الوكيل قبل إثبات إنشائه الإداري وتوثيق هويته من موثّق.');
+        }
         $profile = AgentProfile::query()->where('user_id', $user->id)->lockForUpdate()->first();
         if ($profile === null) {
             throw new DomainException('ملف الوكيل التشغيلي غير موجود؛ ينشأ الوكيل من الإدارة فقط.');
@@ -218,6 +231,7 @@ class MuwathaqAccountOpeningService
         return array_filter($context, static fn ($value, $key) => in_array($key, [
             'policy_version', 'reviewer_reference', 'risk_band', 'notes_code',
             'verified_phone', 'verified_residence_governorate',
+            'verified_identity', 'verified_owner_identity', 'verified_business_requirements', 'admin_provisioned',
         ], true) && is_scalar($value), ARRAY_FILTER_USE_BOTH);
     }
 }

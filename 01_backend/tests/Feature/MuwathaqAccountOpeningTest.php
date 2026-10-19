@@ -111,6 +111,22 @@ class MuwathaqAccountOpeningTest extends TestCase
     }
 
     /** @test */
+    public function standard_customer_cannot_be_approved_without_identity_confirmation_from_muwathaq(): void
+    {
+        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'male']);
+        $application = app(MuwathaqAccountOpeningService::class)->submitFor($user);
+
+        $this->expectException(\DomainException::class);
+        app(MuwathaqAccountOpeningService::class)->receiveDecision(
+            $application->application_ulid,
+            MuwathaqAccountOpeningApplication::STATUS_APPROVED,
+            'muwathaq-standard-review-0001',
+            null,
+            ['verified_phone' => true, 'verified_residence_governorate' => 'YE-AD'],
+        );
+    }
+
+    /** @test */
     public function the_decision_channel_rejects_unsigned_or_stale_requests(): void
     {
         config(['muwathaq.decision_secret' => 'test-shared-secret']);
