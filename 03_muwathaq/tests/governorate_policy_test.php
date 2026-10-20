@@ -38,6 +38,7 @@ $ui = file_get_contents(__DIR__.'/../public/index.php');
 if ($ui === false
     || str_contains($ui, "if (\$governorate === '') \$governorate = 'YE-AD'")
     || !str_contains($ui, '<option value="">اختر المحافظة')
+    || str_contains($ui, 'select name="governorate" required')
 ) {
     fwrite(STDERR, "FAIL: reviewer UI may silently default to YE-AD.\n");
     exit(1);
