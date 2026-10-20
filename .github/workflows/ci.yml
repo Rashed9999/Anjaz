@@ -74,8 +74,10 @@ jobs:
       - name: فحص PHP وكشف تعارضات الدمج
         run: |
           ! rg -n '^(<<<<<<<|=======|>>>>>>>)' --glob '*.php' --glob '*.dart' .
-          find 01_backend/app 01_backend/tests 01_backend/routes 01_backend/database \
+          find 01_backend/app 01_backend/tests 01_backend/routes 01_backend/database 03_muwathaq \
             -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: اختبار سياسة المحافظة في موثّق
+        run: php 03_muwathaq/tests/governorate_policy_test.php
 
   # ──────────────────────────────────────────────────────────
   # 2) اختبارات الباكند الكاملة (PHPUnit) — القلب
