@@ -34,7 +34,7 @@ class SessionGuard with WidgetsBindingObserver {
   static final SessionGuard instance = SessionGuard._();
 
   /// مهلة السماح قبل اعتبار المغادرة حقيقية.
-  static const int graceSeconds = AppResumeState.resumeWindow.inSeconds;
+  static final int graceSeconds = AppResumeState.resumeWindow.inSeconds;
 
   /// مفتاح تعطيل مؤقّت — تستعمله التدفّقات التي تفتح نشاطاً خارجياً معروفاً
   /// ويُتوقّع أن تطول (مسح QR مثلاً). تُعاد التهيئة تلقائياً عند العودة.
