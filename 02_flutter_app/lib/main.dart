@@ -12,6 +12,7 @@ import 'package:get/get.dart';
 import 'package:amial_pay/features/language/controllers/localization_controller.dart';
 import 'package:amial_pay/features/setting/controllers/theme_controller.dart';
 import 'package:amial_pay/helper/amial_crash_reporter.dart';
+import 'package:amial_pay/helper/app_resume_state.dart';
 import 'package:amial_pay/helper/notification_helper.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/theme/dark_theme.dart';
@@ -86,6 +87,7 @@ Future<void> main() async {
   // AMIAL-SESSION-GUARD-001: مراقبة دورة حياة التطبيق — إغلاق الجلسة عند
   // إطفاء الشاشة أو ضغط زرّ البيت أو نقل التطبيق إلى نافذة.
   SessionGuard.instance.attach();
+  Get.find<AppResumeState>().attach();
 
   // ══════════════════════════════════════════════════════════════════
   // AMIAL-INSETS-001 — **شريطا النظام يُلوَّنان، وإلّا بقيا أسودين.**
@@ -134,7 +136,11 @@ class MyApp extends StatelessWidget {
           child: GetMaterialApp(
             // AMIAL-CRASH-001: مسار الشاشات يُرفق بالعطل — «انهار عند الدفع»
             // و«انهار عند الدفع قادماً من المسح» عطلان مختلفان في التشخيص.
-            navigatorObservers: [FlutterSmartDialog.observer, AmialCrashRouteObserver()],
+            navigatorObservers: [
+              FlutterSmartDialog.observer,
+              AmialCrashRouteObserver(),
+              Get.find<AppResumeState>(),
+            ],
             builder: FlutterSmartDialog.init(),
             title: AppConstants.appName,
             debugShowCheckedModeBanner: false,
