@@ -60,6 +60,8 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   String? _gender;
   String? _emailChallengeId;
   String? _emailVerificationToken;
+  String? _muwathaqPolicySummary;
+  bool _muwathaqPolicyLoading = false;
   int _emailResendSeconds = 0;
   Timer? _emailTimer;
 
@@ -271,8 +273,49 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     });
   }
 
+  Future<bool> _loadMuwathaqPolicy({bool showFailure = true}) async {
+    final gender = _gender;
+    if (gender == null) {
+      if (showFailure) _snack('اختر الجنس أولاً ليعرض موثّق متطلبات فتح الحساب.');
+      return false;
+    }
+
+    if (mounted) setState(() => _muwathaqPolicyLoading = true);
+    try {
+      final response = await Get.find<ApiClient>().getData(
+        '/api/v1/auth/account-opening/contract?account_type=customer&gender=$gender',
+      );
+      final body = response.body;
+      final data = body is Map && body['data'] is Map
+          ? Map<String, dynamic>.from(body['data'] as Map)
+          : null;
+      if (response.statusCode != 200 || body is! Map || body['success'] != true || data == null) {
+        if (showFailure) _snack(_responseMessage(response, 'تعذر تحميل سياسة موثّق.'));
+        return false;
+      }
+
+      final requirements = data['review_requirements'] is Map
+          ? Map<String, dynamic>.from(data['review_requirements'] as Map)
+          : <String, dynamic>{};
+      final labels = requirements.values
+          .map((value) => value.toString())
+          .where((value) => value.isNotEmpty)
+          .join(' · ');
+      if (mounted) {
+        setState(() => _muwathaqPolicySummary = labels);
+      }
+      return true;
+    } catch (_) {
+      if (showFailure) _snack('تعذر الاتصال بموثّق. حاول لاحقاً.');
+      return false;
+    } finally {
+      if (mounted) setState(() => _muwathaqPolicyLoading = false);
+    }
+  }
+
   Future<void> _requestEmailOtp() async {
     if (!_validateBasics() || _busy || _emailResendSeconds > 0) return;
+    if (!await _loadMuwathaqPolicy()) return;
     setState(() => _busy = true);
     try {
       final response = await Get.find<ApiClient>().postData(
@@ -966,8 +1009,34 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
               DropdownMenuItem(value: 'female', child: Text('أنثى')),
               DropdownMenuItem(value: 'male', child: Text('ذكر')),
             ],
-            onChanged: (value) => setState(() => _gender = value),
+            onChanged: (value) {
+              setState(() {
+                _gender = value;
+                _muwathaqPolicySummary = null;
+              });
+              if (value != null) _loadMuwathaqPolicy(showFailure: false);
+            },
           ),
+          if (_muwathaqPolicyLoading)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: LinearProgressIndicator(minHeight: 2),
+            )
+          else if (_muwathaqPolicySummary != null)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F8F4),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFCDE7D7)),
+              ),
+              child: Text(
+                'متطلبات موثّق بعد إرسال الطلب: $_muwathaqPolicySummary',
+                style: const TextStyle(fontSize: 12.5, height: 1.55),
+              ),
+            ),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
