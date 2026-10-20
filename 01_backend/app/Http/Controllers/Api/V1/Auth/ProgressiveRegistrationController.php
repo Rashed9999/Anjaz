@@ -11,6 +11,7 @@ use App\Services\LegalTermsService;
 use App\Services\Otp\EmailOtpService;
 use App\Services\ZoneAssignmentService;
 use App\Services\Muwathaq\MuwathaqAccountOpeningService;
+use App\Services\Muwathaq\MuwathaqRegistrationContractService;
 use App\Support\Phone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,6 +37,7 @@ class ProgressiveRegistrationController extends Controller
         private readonly LegalTermsService $legalTerms,
         private readonly LegalNameService $legalNames,
         private readonly MuwathaqAccountOpeningService $muwathaq,
+        private readonly MuwathaqRegistrationContractService $contracts,
     ) {}
 
     public function register(Request $request): JsonResponse
@@ -85,6 +87,18 @@ class ProgressiveRegistrationController extends Controller
                 'success' => false,
                 'errors' => $validator->errors(),
             ], 422);
+        }
+
+        // لا ننشئ حساباً إذا تعذر الحصول على سياسة موثّق المعتمدة.
+        // هذا يمنع اختلاف التطبيق عن البوابة عند تعديل سياسة النساء أو العميل القياسي.
+        try {
+            $contract = $this->contracts->resolve('customer', (string) $request->input('gender'));
+        } catch (\DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'code' => 'MUWATHAQ_POLICY_UNAVAILABLE',
+                'message' => $e->getMessage(),
+            ], 503);
         }
 
         $email = $this->identities->normalize((string) $request->input('email'));
@@ -197,6 +211,7 @@ class ProgressiveRegistrationController extends Controller
 
                 $this->identities->markCurrentEmailVerified($user);
                 $application = $this->muwathaq->submitFor($user);
+                $this->contracts->assertMatchesApplication($contract, $application);
 
                 // checkbox التسجيل يصبح قبولاً حقيقياً للإصدار القانوني الحالي،
                 // لا مجرد boolean في سجل التدقيق. إن لم يُنشر إصدار بعد فلا
