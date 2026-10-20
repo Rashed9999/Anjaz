@@ -17,12 +17,9 @@ use Tests\TestCase;
  * عقدٌ واحد يربط ما كان يُختبر منفصلاً:
  *
  * تسجيل عميل جديد
- *   → حساب نشط Tier 0
- *   → تسجيل دخول ناجح
- *   → دخول مركز التوثيق
- *   → لا حبس في AccountReviewScreen
- *   → صفر مالي حتى استكمال متطلبات التوثيق
- *   → وجود مدخل واضح لرفع المستوى في Flutter.
+ *   → طلب submitted لدى موثّق
+ *   → لا محفظة ولا صلاحيات مالية قبل قرار الاعتماد
+ *   → وجود مدخل واضح لإكمال المتطلبات التي يقررها موثّق.
  *
  * هذا الحارس وُلد بعد أن كان التسجيل والدخول وKYC كلٌّ منها «أخضر»
  * منفرداً بينما رحلة المستخدم الحقيقية كانت تنتهي بشاشة «قيد المراجعة».
@@ -51,14 +48,15 @@ class CustomerGoldenJourneyGuardTest extends TestCase
         ];
     }
 
-    /** @test */
-    public function a_brand_new_customer_reaches_the_wallet_as_active_tier_zero_not_pending_review(): void
+    #[\PHPUnit\Framework\Attributes\Test]
+    public function a_brand_new_customer_is_submitted_to_muwathaq_without_a_wallet(): void
     {
         $phone = '771599901';
 
         $this->postJson('/api/v1/customer/auth/register', $this->payload($phone))
             ->assertOk()
-            ->assertJsonPath('verification_status', 'active_unverified')
+            ->assertJsonPath('verification_status', 'submitted')
+            ->assertJsonPath('wallet_created', false)
             ->assertJsonPath('kyc_tier', 0);
 
         $user = User::where('phone', '967' . $phone)->firstOrFail();
@@ -66,31 +64,12 @@ class CustomerGoldenJourneyGuardTest extends TestCase
         $this->assertSame(CUSTOMER_TYPE, (int) $user->type);
         $this->assertSame(0, (int) $user->is_kyc_verified);
         $this->assertSame(0, (int) ($user->kyc_tier ?? 0));
-        $this->assertTrue(EMoney::where('user_id', $user->id)->exists());
-
-        Artisan::call('passport:install', ['--no-interaction' => true]);
-
-        $login = $this->postJson('/api/v1/auth/login', [
-            'role' => 'customer',
-            'phone' => '967' . $phone,
-            'password' => '1234',
-        ])->assertOk()
-          ->assertJsonPath('code', 'LOGIN_OK')
-          ->assertJsonPath('meta.user.verification_state', 'active_unverified')
-          ->assertJsonPath('meta.user.kyc_tier', 0);
-
-        $this->assertNotEmpty($login->json('meta.token'));
-
-        Passport::actingAs($user->fresh(), [], 'api');
-
-        $this->getJson('/api/v1/amial/me/verification-status')
-            ->assertOk()
-            ->assertJsonPath('code', 'VERIFICATION_STATUS_OK')
-            ->assertJsonPath('data.audience', 'individual_customer')
-            ->assertJsonPath('data.tier.current', 0)
-            ->assertJsonPath('data.financial.active', false)
-            ->assertJsonPath('data.financial.blocker_code', 'PHONE_NOT_VERIFIED')
-            ->assertJsonPath('data.verification_levels.0.action.target_tier', 1);
+        $this->assertFalse(EMoney::where('user_id', $user->id)->exists());
+        $this->assertDatabaseHas('muwathaq_account_opening_applications', [
+            'user_id' => $user->id,
+            'subject_kind' => 'customer',
+            'status' => 'submitted',
+        ]);
     }
 
     /** @test */
