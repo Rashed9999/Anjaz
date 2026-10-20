@@ -136,7 +136,7 @@ class MuwathaqBridgeService
 
     private function bridgeSecret(): string
     {
-        return trim((string) config('muwathaq.bridge_secret'));
+        return MuwathaqTransportSecrets::amialToMuwathaq();
     }
 
     private function markFailed(int $submissionId, string $code, ?int $responseStatus = null): void
