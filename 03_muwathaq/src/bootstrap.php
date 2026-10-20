@@ -23,6 +23,22 @@ final class Config
         }
         return $value;
     }
+
+    /**
+     * يقبل مفتاحاً مستقلاً للتدوير، أو يشتق مفتاح اتجاه من سر النقل الموحد.
+     * لا تُستعمل قيمة النقل مباشرةً كتوقيع في القناتين.
+     */
+    public static function transportSecret(string $specificKey, string $purpose): string
+    {
+        $specific = self::value($specificKey);
+        if ($specific !== null) {
+            return $specific;
+        }
+
+        $shared = self::required('MUWATHAQ_TRANSPORT_SECRET');
+
+        return hash_hmac('sha256', $purpose, $shared);
+    }
 }
 
 final class Database
@@ -178,7 +194,7 @@ final class Signature
 {
     public static function verifyAmialRequest(string $body): void
     {
-        $secret = Config::required('MUWATHAQ_BRIDGE_SECRET');
+        $secret = Config::transportSecret('MUWATHAQ_BRIDGE_SECRET', 'amial-to-muwathaq-v1');
         $timestamp = $_SERVER['HTTP_X_AMIAL_TIMESTAMP'] ?? '';
         $signature = $_SERVER['HTTP_X_AMIAL_SIGNATURE'] ?? '';
         if (!ctype_digit($timestamp) || abs(time() - (int) $timestamp) > 300) {
@@ -285,7 +301,7 @@ final class CoreDecisionClient
             'context' => json_decode((string) $case['decision_context_json'], true) ?: [],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         $timestamp = (string) time();
-        $signature = hash_hmac('sha256', $timestamp.'.'.$body, Config::required('MUWATHAQ_DECISION_SECRET'));
+        $signature = hash_hmac('sha256', $timestamp.'.'.$body, Config::transportSecret('MUWATHAQ_DECISION_SECRET', 'muwathaq-to-amial-v1'));
         $url = $base.'/api/v1/internal/muwathaq/applications/'.rawurlencode($case['core_application_ulid']).'/decision';
         $request = curl_init($url);
         curl_setopt_array($request, [
