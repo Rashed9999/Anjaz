@@ -97,6 +97,39 @@ CREATE TABLE IF NOT EXISTS muwathaq_cases (
   INDEX muwathaq_cases_delivery (core_delivery_status, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
+        $db->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS muwathaq_reviewer_credentials (
+  id TINYINT UNSIGNED PRIMARY KEY,
+  email VARCHAR(190) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+    }
+}
+
+final class ReviewerCredentials
+{
+    /** @return array{email:string,password_hash:string}|null */
+    public static function current(): ?array
+    {
+        $credential = Database::pdo()
+            ->query('SELECT email, password_hash FROM muwathaq_reviewer_credentials WHERE id = 1')
+            ->fetch();
+
+        return $credential ?: null;
+    }
+
+    public static function save(string $email, string $passwordHash): void
+    {
+        $statement = Database::pdo()->prepare(
+            'INSERT INTO muwathaq_reviewer_credentials (id,email,password_hash,created_at,updated_at)
+             VALUES (1,?,?,?,?)
+             ON DUPLICATE KEY UPDATE email=VALUES(email), password_hash=VALUES(password_hash), updated_at=VALUES(updated_at)'
+        );
+        $time = now();
+        $statement->execute([$email, $passwordHash, $time, $time]);
     }
 }
 
