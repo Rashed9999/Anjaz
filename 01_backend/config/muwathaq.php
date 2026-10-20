@@ -4,6 +4,9 @@ return [
     // بوابة المراجعة على النطاق الفرعي. يترك فارغاً قبل نشر موثّق؛ تبقى
     // الطلبات محفوظة في صندوق الإرسال ولا يُنشأ مسار تسجيل بديل للمستخدم.
     'base_url' => env('MUWATHAQ_BASE_URL'),
+    // سر نقل موحّد اختياري. يشتق منه النظام مفتاحين منفصلين لكل اتجاه.
+    // عند ضبط bridge_secret/decision_secret صراحةً تكون لهما الأولوية لتدوير آمن.
+    'transport_secret' => env('MUWATHAQ_TRANSPORT_SECRET'),
     'bridge_secret' => env('MUWATHAQ_BRIDGE_SECRET'),
     'timeout_seconds' => (int) env('MUWATHAQ_TIMEOUT_SECONDS', 10),
 
