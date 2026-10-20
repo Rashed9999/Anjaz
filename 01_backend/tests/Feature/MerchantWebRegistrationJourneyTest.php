@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Http\Controllers\Api\V1\Auth\EmailRegistrationController;
+use App\Http\Controllers\Api\V1\Auth\MerchantAccountOpeningController;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
+use App\Models\MuwathaqAccountOpeningApplication;
 use App\Models\User;
+use App\Services\Muwathaq\MuwathaqRegistrationContractService;
 use App\Services\Otp\EmailOtpService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -34,17 +36,38 @@ class MerchantWebRegistrationJourneyTest extends TestCase
             $this->messages[] = $request;
             return Http::response(['id' => 'merchant-mail-' . count($this->messages)], 200);
         }]);
+
+        // لا نختبر اتصال موثّق هنا؛ نختبر أن بوابة التاجر لا تعود إلى
+        // معالج KYC القديم وأنها تلتزم بعقد موثّق صحيح.
+        app()->instance(MuwathaqRegistrationContractService::class, new class extends MuwathaqRegistrationContractService {
+            public function resolve(string $accountType, ?string $gender = null, ?string $businessType = null): array
+            {
+                return [
+                    'policy_version' => 'merchant-v1-test',
+                    'subject_kind' => 'merchant',
+                    'verification_path' => 'merchant_sector',
+                    'registration_fields' => ['business_name', 'business_type', 'declared_owner_name', 'phone', 'verified_email', 'login_password', 'transaction_pin', 'terms_acceptance'],
+                    'review_requirements' => [
+                        'verified_owner_identity' => 'توثيق هوية مالك المنشأة',
+                        'verified_business_requirements' => 'توثيق بيانات المنشأة ونشاطها',
+                        'verified_residence' => 'تأكيد موقع النشاط أو العنوان التشغيلي',
+                    ],
+                    'sector' => ['code' => $businessType, 'purpose' => 'dashboard_and_operational_capabilities'],
+                ];
+            }
+        });
     }
 
     private function lastCode(): string
     {
         $message = $this->messages[array_key_last($this->messages)];
         $this->assertSame(1, preg_match('/(?<!\d)\d{6}(?!\d)/u', $message['text'], $match));
+
         return $match[0];
     }
 
     #[Test]
-    public function merchant_portal_exposes_registration_and_email_recovery_without_login(): void
+    public function merchant_portal_uses_muwathaq_contract_and_never_collects_legacy_documents(): void
     {
         $this->get('/merchant/register')->assertOk()
             ->assertSee('إنشاء حساب منشأة')
@@ -54,15 +77,17 @@ class MerchantWebRegistrationJourneyTest extends TestCase
             ->assertSee('تجارة جملة')
             ->assertSee('مطعم')
             ->assertSee('محطة وقود')
-            ->assertSee('/api/v1/auth/email-otp/request', false)
-            ->assertSee('/api/v1/auth/register/email', false);
+            ->assertSee('/api/v1/auth/account-opening/contract', false)
+            ->assertSee('/api/v1/auth/register/merchant', false)
+            ->assertDontSee('وجه الهوية')
+            ->assertDontSee('الصورة الشخصية');
 
         $this->get('/merchant/recover')->assertOk()
             ->assertSee('/api/v1/auth/password-reset/email', false);
     }
 
     #[Test]
-    public function verified_email_registration_creates_a_real_merchant_for_every_builtin_sector(): void
+    public function verified_email_registration_creates_a_pending_merchant_for_every_builtin_sector(): void
     {
         $matrix = [
             A::BIZ_QUICK_SALE => '779610101',
@@ -80,33 +105,27 @@ class MerchantWebRegistrationJourneyTest extends TestCase
                 $issued['challenge_id'], $email, 'registration', $this->lastCode()
             );
 
-            $response = app(EmailRegistrationController::class)->register(
-                Request::create('/api/v1/auth/register/email', 'POST', [
+            $response = app(MerchantAccountOpeningController::class)->register(
+                Request::create('/api/v1/auth/register/merchant', 'POST', [
                     'email' => $email,
                     'email_challenge_id' => $issued['challenge_id'],
                     'email_verification_token' => $token,
                     'dial_country_code' => '+967',
                     'phone' => $phone,
-                    'password' => '6392',
-                    'gender' => 'male',
-                    'f_name' => 'مالك',
+                    'password' => 'MerchantPass9!',
+                    'password_confirmation' => 'MerchantPass9!',
+                    'transaction_pin' => '5839',
+                    'given_name' => 'مالك',
                     'father_name' => 'محمد',
                     'grandfather_name' => 'علي',
                     'family_name' => 'التجريبي',
-                    'l_name' => 'التجريبي',
-                    'account_type' => 'merchant',
                     'store_name' => 'منشأة ' . $sector,
                     'business_type' => $sector,
-                    'origin_governorate' => 'YE-HD',
-                    'residence_governorate' => 'YE-HD',
-                    'residence_district' => 'المكلا',
-                    'residence_area' => 'وسط المدينة',
-                    'address' => 'حضرموت — المكلا',
-                    'declaration_accepted' => '1',
+                    'terms_accepted' => true,
                 ])
             );
 
-            $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+            $this->assertSame(201, $response->getStatusCode(), $response->getContent());
             $user = User::where('email_canonical', $email)->firstOrFail();
             $profile = MerchantProfile::where('user_id', $user->id)->firstOrFail();
             $store = Merchant::where('user_id', $user->id)->firstOrFail();
@@ -114,9 +133,17 @@ class MerchantWebRegistrationJourneyTest extends TestCase
             $this->assertSame(MERCHANT_TYPE, (int) $user->type);
             $this->assertSame(A::ROLE_MERCHANT, (string) $user->role);
             $this->assertSame(1, (int) $user->is_email_verified);
+            $this->assertSame(0, (int) $user->is_active);
             $this->assertSame($sector, (string) $profile->business_type);
-            $this->assertSame('unverified', (string) $profile->verification_status);
+            $this->assertSame('submitted', (string) $profile->verification_status);
             $this->assertNotEmpty($store->merchant_number);
+            $this->assertDatabaseHas('muwathaq_account_opening_applications', [
+                'user_id' => $user->id,
+                'subject_kind' => 'merchant',
+                'verification_path' => 'merchant_sector',
+                'business_type' => $sector,
+                'status' => 'submitted',
+            ]);
         }
     }
 
@@ -130,8 +157,6 @@ class MerchantWebRegistrationJourneyTest extends TestCase
             'password' => Hash::make('6392'),
             'email' => 'pending-merchant@example.test',
         ]);
-        // Merchant لا يعرّف $fillable عمداً: لا نوسّعه من أجل fixture.
-        // نُسنِد الحقول صراحة كما يفعل مسار الإنشاء الموثوق في التطبيق.
         $store = new Merchant();
         $store->user_id = $owner->id;
         $store->store_name = 'منشأة بانتظار المراجعة';
