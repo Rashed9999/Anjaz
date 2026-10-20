@@ -12,7 +12,7 @@ class VerifyMuwathaqSignature
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $secret = trim((string) config('muwathaq.decision_secret'));
+        $secret = \App\Services\Muwathaq\MuwathaqTransportSecrets::muwathaqToAmial();
         if ($secret === '') {
             return $this->error('MUWATHAQ_BRIDGE_NOT_CONFIGURED', 503);
         }
