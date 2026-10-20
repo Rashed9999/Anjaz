@@ -175,7 +175,7 @@ class MerchantAccountOpeningController extends Controller
 
                 MerchantProfile::query()->firstOrCreate(['user_id' => $user->id], [
                     'business_type' => $businessType,
-                    'verification_status' => 'submitted',
+                    'verification_status' => 'unverified', // ENUM state; Muwathaq application remains submitted
                     'zone_code' => ZoneAssignmentService::ZONE_UNKNOWN,
                     'subscription_plan' => AccessConstants::PLAN_FREE,
                 ]);
