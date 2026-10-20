@@ -79,6 +79,7 @@ import 'package:amial_pay/features/transaction_money/domain/reposotories/contact
 import 'package:amial_pay/features/verification/controllers/verification_controller.dart';
 import 'package:amial_pay/features/home/controllers/websitelink_controller.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/helper/app_resume_state.dart';
 import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
 import 'package:amial_pay/features/home/domain/reposotories/banner_repo.dart';
 import 'package:amial_pay/features/setting/domain/reposotories/faq_repo.dart';
@@ -118,6 +119,8 @@ Future<Map<String, Map<String, String>>> init() async {
   Get.lazyPut(() => uniqueId);
   Get.lazyPut(() => sharedPreferences);
   Get.lazyPut(() => deviceInfo);
+  // AMIAL-RESUME-001 — حالة الاستئناف الآمن تشترك في تفضيلات التطبيق.
+  Get.put(AppResumeState(sharedPreferences: sharedPreferences), permanent: true);
 
 
   Get.lazyPut(() => ApiClient(
