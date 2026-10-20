@@ -8,6 +8,7 @@ use Muwathaq\CoreDecisionClient;
 use Muwathaq\Database;
 use Muwathaq\HttpError;
 use Muwathaq\Policy;
+use Muwathaq\ReviewerCredentials;
 use Muwathaq\Signature;
 use function Muwathaq\assertCsrf;
 use function Muwathaq\csrf;
@@ -85,12 +86,14 @@ try {
         if ($method === 'POST') {
             assertCsrf();
             $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
-            $expected = mb_strtolower(Config::required('MUWATHAQ_REVIEWER_EMAIL'));
-            if (!hash_equals($expected, $email) || !password_verify((string) ($_POST['password'] ?? ''), Config::required('MUWATHAQ_REVIEWER_PASSWORD_HASH'))) {
+            $credential = ReviewerCredentials::current();
+            if ($credential === null
+                || !hash_equals(mb_strtolower($credential['email']), $email)
+                || !password_verify((string) ($_POST['password'] ?? ''), $credential['password_hash'])) {
                 layout('دخول المراجع', '<div class="card error">بيانات الدخول غير صحيحة.</div>'.loginForm());
             }
             session_regenerate_id(true);
-            $_SESSION['reviewer'] = $expected;
+            $_SESSION['reviewer'] = $credential['email'];
             redirect('/');
         }
         layout('دخول المراجع', loginForm());
