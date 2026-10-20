@@ -242,7 +242,8 @@ final class Policy
                 'version' => 'merchant-sector-v1',
                 'requirements' => [
                     'verified_owner_identity' => 'توثيق هوية مالك المنشأة',
-                    'verified_business_requirements' => 'استكمال متطلبات قطاع المنشأة',
+                    // القطاع يحدد لوحة العمل وقدراتها، لا قائمة وثائق مختلفة.
+                    'verified_business_requirements' => 'توثيق بيانات المنشأة ونشاطها',
                     'verified_residence' => 'تأكيد موقع النشاط أو العنوان التشغيلي',
                 ],
             ],
@@ -256,6 +257,67 @@ final class Policy
             ],
             default => throw new HttpError(422, 'UNKNOWN_POLICY_PATH', 'مسار التحقق غير مدعوم.'),
         };
+    }
+
+    /**
+     * عقد التسجيل هو ما تستهلكه واجهات أميال باي. المتطلبات في
+     * review_requirements قرار موثّق؛ أما registration_fields فهي الحد الأدنى
+     * لإنشاء طلب آمن ولا تتضمن وثائق أو بيانات KYC قديمة.
+     *
+     * @return array<string,mixed>
+     */
+    public static function registrationContract(array $selector): array
+    {
+        $kind = strtolower(trim((string) ($selector['subject_kind'] ?? '')));
+        $gender = strtolower(trim((string) ($selector['gender'] ?? '')));
+        $businessType = trim((string) ($selector['business_type'] ?? ''));
+
+        if ($kind === 'customer') {
+            if (!in_array($gender, ['female', 'male'], true)) {
+                throw new HttpError(422, 'GENDER_REQUIRED', 'يجب تحديد الجنس لاختيار سياسة العميل.');
+            }
+
+            $path = $gender === 'female' ? 'women_progressive' : 'standard_customer';
+            $policy = self::for(['verification_path' => $path]);
+
+            return [
+                'policy_version' => $policy['version'],
+                'subject_kind' => 'customer',
+                'verification_path' => $path,
+                'registration_fields' => [
+                    'declared_legal_name', 'gender', 'phone', 'verified_email',
+                    'login_password', 'transaction_pin', 'terms_acceptance',
+                ],
+                'review_requirements' => $policy['requirements'],
+                'sector' => null,
+            ];
+        }
+
+        if ($kind === 'merchant') {
+            if ($businessType === '') {
+                throw new HttpError(422, 'BUSINESS_TYPE_REQUIRED', 'اختر قطاع المنشأة قبل طلب عقد التسجيل.');
+            }
+            $policy = self::for(['verification_path' => 'merchant_sector']);
+
+            return [
+                'policy_version' => $policy['version'],
+                'subject_kind' => 'merchant',
+                'verification_path' => 'merchant_sector',
+                'registration_fields' => [
+                    'business_name', 'business_type', 'declared_owner_name',
+                    'phone', 'verified_email', 'login_password',
+                    'transaction_pin', 'terms_acceptance',
+                ],
+                'review_requirements' => $policy['requirements'],
+                'sector' => [
+                    'code' => $businessType,
+                    'purpose' => 'dashboard_and_operational_capabilities',
+                    'label' => 'القطاع يحدد لوحة المنشأة والصلاحيات التشغيلية بعد الاعتماد.',
+                ],
+            ];
+        }
+
+        throw new HttpError(422, 'UNSUPPORTED_ACCOUNT_TYPE', 'نوع فتح الحساب غير مدعوم.');
     }
 
     /** @return array<string,mixed> */
