@@ -133,9 +133,10 @@ try {
         foreach ($policy['requirements'] as $key => $label) $requirements .= '<div class="req"><label><input type="checkbox" name="affirmed[]" value="'.e($key).'" style="width:auto"> '.e($label).'</label></div>';
         $subject = $payload['subject'] ?? [];
         $content = '<a class="btn secondary" href="/">العودة للقضايا</a><div class="card"><h2>قضية '.e($case['case_ulid']).'</h2><p><span class="tag">'.e($case['status']).'</span> <span class="muted">سياسة '.e($policy['version']).'</span></p><div class="grid"><div><b>صاحب الطلب</b><br>'.e($applicant['legal_name'] ?? '—').'<br>'.e($applicant['phone'] ?? '—').'<br>'.e($applicant['email'] ?? '—').'</div><div><b>نوع الحساب</b><br>'.e($case['subject_kind']).'<br>'.e($case['verification_path']).'<br>'.e($case['business_type'] ?? '—').'</div><div><b>تفاصيل النشاط</b><br>'.e(json_encode($subject, JSON_UNESCAPED_UNICODE) ?: '—').'</div></div></div>';
-        $governorates = '';
+        // لا يجوز اعتماد المحافظة الافتراضية؛ على المراجع اختيارها صراحةً.
+        $governorates = '<option value="">اختر المحافظة بعد مراجعة أدلة الإقامة</option>';
         foreach (Policy::GOVERNORATES as $code => $name) $governorates .= '<option value="'.e($code).'">'.e($name).' ('.e($code).')</option>';
-        $content .= '<form method="post" action="/cases/'.e($case['case_ulid']).'/decision" class="card"><input type="hidden" name="_token" value="'.e(csrf()).'"><h3>قرار المراجع</h3><p class="muted">لا تعتمد إلا بعد رؤية الأدلة في موثّق وإقرار البنود التالية.</p>'.$requirements.'<label>القرار</label><select name="decision"><option value="under_review">قيد المراجعة</option><option value="needs_more_info">طلب استكمال</option><option value="approved">اعتماد</option><option value="rejected">رفض</option></select><label>محافظة الإقامة أو الموقع التشغيلي</label><select name="governorate">'.$governorates.'</select><label>ملاحظة للقرار</label><textarea name="reason" rows="3" maxlength="1000"></textarea><button class="btn" type="submit">حفظ القرار وإرساله لأميال باي</button></form>';
+        $content .= '<form method="post" action="/cases/'.e($case['case_ulid']).'/decision" class="card"><input type="hidden" name="_token" value="'.e(csrf()).'"><h3>قرار المراجع</h3><p class="muted">لا تعتمد إلا بعد رؤية الأدلة في موثّق وإقرار البنود التالية.</p>'.$requirements.'<label>القرار</label><select name="decision"><option value="under_review">قيد المراجعة</option><option value="needs_more_info">طلب استكمال</option><option value="approved">اعتماد</option><option value="rejected">رفض</option></select><label>محافظة الإقامة أو الموقع التشغيلي</label><select name="governorate">'.$governorates.'</select><p class="muted">اختيار المحافظة شرط للاعتماد فقط، ولا يلزم للرفض أو الاستكمال.</p><label>ملاحظة للقرار</label><textarea name="reason" rows="3" maxlength="1000"></textarea><button class="btn" type="submit">حفظ القرار وإرساله لأميال باي</button></form>';
         if ($case['decision']) $content .= '<div class="card"><b>آخر قرار:</b> '.e($case['decision']).' · حالة الإرسال لأميال باي: '.e($case['core_delivery_status']).'<br>'.e($case['core_last_error'] ?? '').'</div>';
         layout('مراجعة القضية', $content);
     }
@@ -147,8 +148,9 @@ try {
         if (in_array($case['status'], ['approved', 'rejected'], true)) throw new HttpError(409, 'FINAL_CASE', 'القضية حُسمت سابقاً ولا تقبل قراراً جديداً.');
         $decision = (string) ($_POST['decision'] ?? '');
         if (!in_array($decision, ['under_review', 'needs_more_info', 'approved', 'rejected'], true)) throw new HttpError(422, 'INVALID_DECISION', 'قرار غير صحيح.');
+        // سياسة موثّق ترفض الرمز الفارغ أو غير المعروف عند الاعتماد.
+        // تحديث الحالة أو الرفض لا يحتاجان تحديد محافظة.
         $governorate = trim((string) ($_POST['governorate'] ?? ''));
-        if ($governorate === '') $governorate = 'YE-AD';
         $context = $decision === 'approved' ? Policy::decisionContext($case, (array) ($_POST['affirmed'] ?? []), $governorate) : ['policy_version' => Policy::for($case)['version']];
         $reference = 'MWT-'.strtoupper(substr(hash('sha256', $case['case_ulid'].'|'.$decision.'|'.microtime(true)), 0, 20));
         $statement = Database::pdo()->prepare('UPDATE muwathaq_cases SET status=?,review_started_at=COALESCE(review_started_at,?),reviewer_identity=?,policy_version=?,decision=?,decision_reference=?,decision_reason=?,decision_context_json=?,core_delivery_status="pending",core_last_error=NULL,updated_at=? WHERE id=?');
@@ -166,10 +168,12 @@ try {
     throw new HttpError(404, 'NOT_FOUND', 'الصفحة غير موجودة.');
 } catch (HttpError $error) {
     if (str_starts_with($path, '/api/')) jsonResponse(['success' => false, 'code' => $error->errorCode, 'message' => $error->getMessage()], $error->status);
+    http_response_code($error->status);
     layout('خطأ', '<div class="card error">'.e($error->getMessage()).'</div>');
 } catch (Throwable $error) {
     error_log((string) $error);
     if (str_starts_with($path, '/api/')) jsonResponse(['success' => false, 'code' => 'INTERNAL_ERROR', 'message' => 'تعذر تنفيذ العملية.'], 500);
+    http_response_code(500);
     layout('خطأ تقني', '<div class="card error">تعذر تنفيذ العملية. راجع إعدادات الخدمة.</div>');
 }
 
