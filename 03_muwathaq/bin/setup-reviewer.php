@@ -18,20 +18,37 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     exit(1);
 }
 
-$stty = trim((string) shell_exec('stty -g'));
-if ($stty === '') {
-    fwrite(STDERR, "An interactive terminal is required.\n");
+function readHiddenPassword(string $prompt): string
+{
+    $stty = trim((string) shell_exec('stty -g'));
+    if ($stty === '') {
+        throw new RuntimeException('An interactive terminal is required.');
+    }
+
+    fwrite(STDOUT, $prompt);
+    shell_exec('stty -echo');
+    try {
+        return trim((string) fgets(STDIN));
+    } finally {
+        shell_exec('stty '.$stty);
+        fwrite(STDOUT, PHP_EOL);
+    }
+}
+
+try {
+    $password = readHiddenPassword("Reviewer password (minimum 12 characters): ");
+    $confirmation = readHiddenPassword("Confirm reviewer password: ");
+} catch (RuntimeException $error) {
+    fwrite(STDERR, $error->getMessage().PHP_EOL);
     exit(1);
 }
 
-fwrite(STDOUT, "Reviewer password (minimum 12 characters): ");
-shell_exec('stty -echo');
-$password = trim((string) fgets(STDIN));
-shell_exec('stty '.$stty);
-fwrite(STDOUT, PHP_EOL);
-
 if (mb_strlen($password) < 12) {
     fwrite(STDERR, "Password must contain at least 12 characters.\n");
+    exit(1);
+}
+if (!hash_equals($password, $confirmation)) {
+    fwrite(STDERR, "Passwords do not match; no account was changed.\n");
     exit(1);
 }
 
