@@ -38,20 +38,9 @@ class WebAuthController extends Controller
             ];
         }
 
-        $governorates = YemenGovernorates::all();
-        $regions = app(YemenRegionsService::class);
-        $districts = [];
-        foreach ($governorates as $governorate) {
-            try {
-                $districts[$governorate['code']] = $regions->districts($governorate['code']);
-            } catch (\Throwable) {
-                $districts[$governorate['code']] = [];
-            }
-        }
-
-        return view('merchant-web.register', compact(
-            'businessTypes', 'governorates', 'districts'
-        ));
+        // القطاع يختار تهيئة لوحة المنشأة بعد الاعتماد؛ لا نطلب عنواناً
+        // أو مستندات هنا لأن موثّق يملك متطلبات المراجعة.
+        return view('merchant-web.register', compact('businessTypes'));
     }
 
     public function recover(): View
