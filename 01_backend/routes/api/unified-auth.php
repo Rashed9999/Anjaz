@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Auth\AccountOpeningContractController;
 use App\Http\Controllers\Api\V1\Auth\EmailOtpController;
 use App\Http\Controllers\Api\V1\Auth\EmailRegistrationController;
 use App\Http\Controllers\Api\V1\Auth\ProgressiveRegistrationController;
@@ -21,6 +22,10 @@ Route::prefix('auth')->name('amial.auth.')->middleware(['amial.rate-limit:auth_l
         ->name('email-otp.request');
     Route::post('/email-otp/verify', [EmailOtpController::class, 'verifyCode'])
         ->name('email-otp.verify');
+
+    Route::get('/account-opening/contract', [AccountOpeningContractController::class, 'show'])
+        ->middleware('amial.rate-limit:registration_contract,30,1,true')
+        ->name('account-opening.contract');
 
     Route::post('/register/quick', [ProgressiveRegistrationController::class, 'register'])
         ->middleware('amial.rate-limit:quick_registration,5,10,true')
