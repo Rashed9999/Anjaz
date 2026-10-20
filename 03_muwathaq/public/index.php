@@ -136,7 +136,7 @@ try {
         // لا يجوز اعتماد المحافظة الافتراضية؛ على المراجع اختيارها صراحةً.
         $governorates = '<option value="">اختر المحافظة بعد مراجعة أدلة الإقامة</option>';
         foreach (Policy::GOVERNORATES as $code => $name) $governorates .= '<option value="'.e($code).'">'.e($name).' ('.e($code).')</option>';
-        $content .= '<form method="post" action="/cases/'.e($case['case_ulid']).'/decision" class="card"><input type="hidden" name="_token" value="'.e(csrf()).'"><h3>قرار المراجع</h3><p class="muted">لا تعتمد إلا بعد رؤية الأدلة في موثّق وإقرار البنود التالية.</p>'.$requirements.'<label>القرار</label><select name="decision"><option value="under_review">قيد المراجعة</option><option value="needs_more_info">طلب استكمال</option><option value="approved">اعتماد</option><option value="rejected">رفض</option></select><label>محافظة الإقامة أو الموقع التشغيلي</label><select name="governorate" required>'.$governorates.'</select><label>ملاحظة للقرار</label><textarea name="reason" rows="3" maxlength="1000"></textarea><button class="btn" type="submit">حفظ القرار وإرساله لأميال باي</button></form>';
+        $content .= '<form method="post" action="/cases/'.e($case['case_ulid']).'/decision" class="card"><input type="hidden" name="_token" value="'.e(csrf()).'"><h3>قرار المراجع</h3><p class="muted">لا تعتمد إلا بعد رؤية الأدلة في موثّق وإقرار البنود التالية.</p>'.$requirements.'<label>القرار</label><select name="decision"><option value="under_review">قيد المراجعة</option><option value="needs_more_info">طلب استكمال</option><option value="approved">اعتماد</option><option value="rejected">رفض</option></select><label>محافظة الإقامة أو الموقع التشغيلي</label><select name="governorate">'.$governorates.'</select><p class="muted">اختيار المحافظة شرط للاعتماد فقط، ولا يلزم للرفض أو الاستكمال.</p><label>ملاحظة للقرار</label><textarea name="reason" rows="3" maxlength="1000"></textarea><button class="btn" type="submit">حفظ القرار وإرساله لأميال باي</button></form>';
         if ($case['decision']) $content .= '<div class="card"><b>آخر قرار:</b> '.e($case['decision']).' · حالة الإرسال لأميال باي: '.e($case['core_delivery_status']).'<br>'.e($case['core_last_error'] ?? '').'</div>';
         layout('مراجعة القضية', $content);
     }
@@ -168,10 +168,12 @@ try {
     throw new HttpError(404, 'NOT_FOUND', 'الصفحة غير موجودة.');
 } catch (HttpError $error) {
     if (str_starts_with($path, '/api/')) jsonResponse(['success' => false, 'code' => $error->errorCode, 'message' => $error->getMessage()], $error->status);
+    http_response_code($error->status);
     layout('خطأ', '<div class="card error">'.e($error->getMessage()).'</div>');
 } catch (Throwable $error) {
     error_log((string) $error);
     if (str_starts_with($path, '/api/')) jsonResponse(['success' => false, 'code' => 'INTERNAL_ERROR', 'message' => 'تعذر تنفيذ العملية.'], 500);
+    http_response_code(500);
     layout('خطأ تقني', '<div class="card error">تعذر تنفيذ العملية. راجع إعدادات الخدمة.</div>');
 }
 
