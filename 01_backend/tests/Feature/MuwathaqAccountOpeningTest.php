@@ -190,4 +190,28 @@ class MuwathaqAccountOpeningTest extends TestCase
         );
     }
 
+
+    /** @test */
+    public function one_transport_secret_derives_distinct_directional_keys(): void
+    {
+        config([
+            'muwathaq.transport_secret' => 'shared-transport-secret',
+            'muwathaq.bridge_secret' => null,
+            'muwathaq.decision_secret' => null,
+        ]);
+
+        $this->assertSame(
+            hash_hmac('sha256', 'amial-to-muwathaq-v1', 'shared-transport-secret'),
+            \App\Services\Muwathaq\MuwathaqTransportSecrets::amialToMuwathaq(),
+        );
+        $this->assertSame(
+            hash_hmac('sha256', 'muwathaq-to-amial-v1', 'shared-transport-secret'),
+            \App\Services\Muwathaq\MuwathaqTransportSecrets::muwathaqToAmial(),
+        );
+        $this->assertNotSame(
+            \App\Services\Muwathaq\MuwathaqTransportSecrets::amialToMuwathaq(),
+            \App\Services\Muwathaq\MuwathaqTransportSecrets::muwathaqToAmial(),
+        );
+    }
+
 }
