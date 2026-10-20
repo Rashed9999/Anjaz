@@ -126,7 +126,7 @@ class ProgressiveRegistrationController extends Controller
 
         try {
             $application = null;
-            $user = DB::transaction(function () use ($request, $email, $phone, $given, $father, $grandfather, $family, &$application): User {
+            $user = DB::transaction(function () use ($request, $email, $phone, $given, $father, $grandfather, $family, $contract, &$application): User {
                 $challenge = $this->otp->consumeVerification(
                     (string) $request->input('email_challenge_id'),
                     $email,
