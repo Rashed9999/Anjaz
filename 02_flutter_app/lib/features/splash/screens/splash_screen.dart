@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/helper/app_resume_state.dart';
 import 'package:amial_pay/data/api/api_checker.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/features/splash/widgets/brand_splash_animation.dart';
@@ -84,7 +86,7 @@ class _SplashScreenState extends State<SplashScreen>
       );
     }
 
-    _route();
+    unawaited(_route());
   }
 
   @override
@@ -93,7 +95,24 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
+  bool _routeStarted = false;
+
   Future<void> _route() async {
+    if (_routeStarted) return;
+    _routeStarted = true;
+
+    // AMIAL-RESUME-001 — حين يعيد أندرويد إنشاء العملية خلال العودة
+    // القصيرة من تطبيق آخر، لا نعيد للمستخدم سبلاش/دخولاً ثم نطلب منه
+    // العثور على مكانه. ننتقل فوراً إلى الوجهة الآمنة المحفوظة، وتُحدّث
+    // الإعدادات في الخلفية. بعد المهلة تبقى سياسة SessionGuard كما هي.
+    if (_hasEligibleSessionResume()) {
+      _dataReady = true;
+      _animationDone = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _goIfReady());
+      unawaited(_refreshAfterFastResume());
+      return;
+    }
+
     // AMIAL-STARTUP-FLOW-001: بداية سريعة واحدة.
     // - لا تأخير صناعي (كانت ثانية كاملة فوق سبلاش النظام = «شاشتا شعار»).
     // - جلب الإعدادات بمهلة قصيرة، وسواء نجح أو فشل نُكمل (لا تعليق).
@@ -135,6 +154,30 @@ class _SplashScreenState extends State<SplashScreen>
     _goIfReady();
   }
 
+  bool _hasEligibleSessionResume() {
+    try {
+      return Get.find<AuthController>().isLoggedIn()
+          && Get.find<AppResumeState>().hasEligibleDestination;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _refreshAfterFastResume() async {
+    try {
+      await Get.find<SplashController>()
+          .getConfigData()
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // الاستئناف لا يتعطّل لمجرد أن الخادم بطيء.
+    }
+    try {
+      await Get.find<SplashController>().initSharedData();
+    } catch (_) {
+      // التفضيلات موجودة أصلاً من تهيئة DI؛ هذا تحديث احتياطي.
+    }
+  }
+
   /// **ولا يُنتقل إلّا مرّةً واحدة.**
   ///
   /// فالبياناتُ والحركةُ تنتهيان في أيّ ترتيب، وكلاهما ينادي هذه الدالّة.
@@ -147,7 +190,16 @@ class _SplashScreenState extends State<SplashScreen>
     if (!_dataReady || !_animationDone) return;
 
     _navigated = true;
-    Get.offNamed(RouteHelper.getUnifiedLoginRoute());
+    String destination = RouteHelper.getUnifiedLoginRoute();
+    try {
+      if (Get.find<AuthController>().isLoggedIn()) {
+        destination = Get.find<AppResumeState>().takeEligibleDestination()
+            ?? RouteHelper.getUnifiedLoginRoute();
+      }
+    } catch (_) {
+      // إن لم تكتمل تهيئة DI نستخدم باب الدخول المعتاد.
+    }
+    Get.offNamed(destination);
   }
 
   @override
