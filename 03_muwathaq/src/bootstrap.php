@@ -35,13 +35,30 @@ final class Database
             return self::$pdo;
         }
 
-        $host = Config::required('DB_HOST');
-        $port = Config::value('DB_PORT', '3306');
-        $database = Config::required('DB_DATABASE');
+        $databaseUrl = Config::value('DATABASE_URL');
+        if ($databaseUrl !== null) {
+            $connection = parse_url($databaseUrl);
+            $database = ltrim((string) ($connection['path'] ?? ''), '/');
+            $host = (string) ($connection['host'] ?? '');
+            $port = (string) ($connection['port'] ?? '3306');
+            $username = rawurldecode((string) ($connection['user'] ?? ''));
+            $password = rawurldecode((string) ($connection['pass'] ?? ''));
+
+            if (($connection['scheme'] ?? '') !== 'mysql' || $host === '' || $database === '' || $username === '') {
+                throw new RuntimeException('DATABASE_URL must be a valid mysql://user:password@host:port/database URL.');
+            }
+        } else {
+            $host = Config::required('DB_HOST');
+            $port = Config::value('DB_PORT', '3306');
+            $database = Config::required('DB_DATABASE');
+            $username = Config::required('DB_USERNAME');
+            $password = Config::required('DB_PASSWORD');
+        }
+
         self::$pdo = new PDO(
             "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4",
-            Config::required('DB_USERNAME'),
-            Config::required('DB_PASSWORD'),
+            $username,
+            $password,
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC],
         );
         self::migrate(self::$pdo);
