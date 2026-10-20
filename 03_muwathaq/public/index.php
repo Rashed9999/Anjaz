@@ -52,6 +52,16 @@ try {
         jsonResponse(['status' => 'ok', 'service' => 'muwathaq']);
     }
 
+    if ($path === '/api/v1/internal/registration-contract') {
+        if ($method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'الطريقة غير مسموحة.');
+        $body = file_get_contents('php://input') ?: '';
+        Signature::verifyAmialRequest($body);
+        $payload = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        $selector = $payload['selector'] ?? [];
+        if (!is_array($selector)) throw new HttpError(422, 'INVALID_SELECTOR', 'محدد سياسة فتح الحساب غير صالح.');
+        jsonResponse(['success' => true, 'data' => Policy::registrationContract($selector)]);
+    }
+
     if ($path === '/api/v1/internal/applications') {
         if ($method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'الطريقة غير مسموحة.');
         $body = file_get_contents('php://input') ?: '';
