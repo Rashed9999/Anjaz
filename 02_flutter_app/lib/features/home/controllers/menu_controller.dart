@@ -44,6 +44,7 @@ class MenuItemController extends GetxController implements GetxService{
 
   void selectHomePage({bool isUpdate = true}) {
     _currentTabIndex = 0;
+    _rememberTab('home');
     if(isUpdate) {
       update();
     }
