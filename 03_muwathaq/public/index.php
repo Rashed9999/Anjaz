@@ -152,7 +152,7 @@ try {
 
     throw new HttpError(404, 'NOT_FOUND', 'الصفحة غير موجودة.');
 } catch (HttpError $error) {
-    if (str_starts_with($path, '/api/')) jsonResponse(['success' => false, 'code' => $error->code, 'message' => $error->getMessage()], $error->status);
+    if (str_starts_with($path, '/api/')) jsonResponse(['success' => false, 'code' => $error->errorCode, 'message' => $error->getMessage()], $error->status);
     layout('خطأ', '<div class="card error">'.e($error->getMessage()).'</div>');
 } catch (Throwable $error) {
     error_log((string) $error);
