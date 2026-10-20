@@ -41,18 +41,22 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
-    public function customer_self_registration_creates_active_tier_zero_account(): void
+    public function customer_self_registration_creates_pending_application_without_wallet(): void
     {
         $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500001'))
             ->assertOk()
-            ->assertJsonPath('verification_status', 'active_unverified')
-            ->assertJsonPath('kyc_tier', 0);
+            ->assertJsonPath('verification_status', 'submitted')
+            ->assertJsonPath('wallet_created', false);
 
         $user = User::where('phone', '967771500001')->first();
         $this->assertNotNull($user);
         $this->assertSame(CUSTOMER_TYPE, (int) $user->type);
         $this->assertSame(0, (int) $user->is_kyc_verified);
-        $this->assertTrue(EMoney::where('user_id', $user->id)->exists());
+        $this->assertSame(0, (int) $user->kyc_tier);
+        $this->assertFalse(EMoney::where('user_id', $user->id)->exists());
+        $this->assertDatabaseHas('muwathaq_account_opening_applications', [
+            'user_id' => $user->id, 'status' => 'submitted',
+        ]);
     }
 
     /** @test */
@@ -146,16 +150,13 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
-    public function agent_self_registration_gets_agent_number(): void
+    public function agent_self_registration_is_forbidden(): void
     {
-        $resp = $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500004', [
+        $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500004', [
             'account_type' => 'agent',
-        ]))->assertOk()->json();
+        ]))->assertStatus(403)->assertJsonPath('errors.0.code', 'AGENT_SELF_REGISTRATION_CLOSED');
 
-        $this->assertNotEmpty($resp['agent_number']);
-        $user = User::where('phone', '967771500004')->first();
-        $this->assertSame(AGENT_TYPE, (int) $user->type);
-        $this->assertSame($resp['agent_number'], $user->agent_number);
+        $this->assertDatabaseMissing('users', ['phone' => '967771500004']);
     }
 
     /** @test */
