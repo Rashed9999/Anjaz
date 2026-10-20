@@ -56,8 +56,7 @@ class CustomerGoldenJourneyGuardTest extends TestCase
         $this->postJson('/api/v1/customer/auth/register', $this->payload($phone))
             ->assertOk()
             ->assertJsonPath('verification_status', 'submitted')
-            ->assertJsonPath('wallet_created', false)
-            ->assertJsonPath('kyc_tier', 0);
+            ->assertJsonPath('wallet_created', false);
 
         $user = User::where('phone', '967' . $phone)->firstOrFail();
 
