@@ -24,6 +24,16 @@ class RouteServiceProvider extends ServiceProvider
         $this->configureRateLimiting();
 
         $this->routes(function () {
+            // AMIAL-MUWATHAQ-BRIDGE-001 — قرارُ فتح الحساب لا يصل من تطبيق
+            // عميل أو متصفح؛ هذا المسار الداخلي وحده يقبله بعد HMAC موثّق.
+            Route::prefix('api/v1/internal/muwathaq')
+                ->middleware(['api', 'muwathaq.signature'])
+                ->post('applications/{applicationUlid}/decision', [
+                    \App\Http\Controllers\Api\Internal\MuwathaqDecisionController::class,
+                    'store',
+                ])
+                ->whereUlid('applicationUlid');
+
             Route::prefix('api/v1')
                 ->middleware('api')
                 ->namespace($this->namespace)
