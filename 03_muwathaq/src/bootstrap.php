@@ -278,7 +278,7 @@ final class CoreDecisionClient
 
 final class HttpError extends RuntimeException
 {
-    public function __construct(public readonly int $status, public readonly string $code, string $message)
+    public function __construct(public readonly int $status, public readonly string $errorCode, string $message)
     {
         parent::__construct($message);
     }
