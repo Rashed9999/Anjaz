@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/helper/app_resume_state.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SESSION-GUARD-001 — إغلاق الجلسة عند مغادرة التطبيق.
@@ -33,7 +34,7 @@ class SessionGuard with WidgetsBindingObserver {
   static final SessionGuard instance = SessionGuard._();
 
   /// مهلة السماح قبل اعتبار المغادرة حقيقية.
-  static const int graceSeconds = 20;
+  static const int graceSeconds = AppResumeState.resumeWindow.inSeconds;
 
   /// مفتاح تعطيل مؤقّت — تستعمله التدفّقات التي تفتح نشاطاً خارجياً معروفاً
   /// ويُتوقّع أن تطول (مسح QR مثلاً). تُعاد التهيئة تلقائياً عند العودة.
@@ -112,6 +113,7 @@ class SessionGuard with WidgetsBindingObserver {
       // مسح بيانات البصمة المحفوظة ليس مطلوباً هنا: الجلسة أُغلقت لغياب
       // المستخدم لا لخروجه، وهو يريد الدخول السريع عند عودته.
       final auth = Get.find<AuthController>();
+      try { Get.find<AppResumeState>().clear(); } catch (_) {}
       auth.updateToken(isLogOut: true);
       auth.logout();
     } catch (_) {/* الأولوية للخروج من الشاشة حتى لو فشل إبطال الرمز */}
