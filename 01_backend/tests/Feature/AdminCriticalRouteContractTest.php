@@ -29,6 +29,11 @@ class AdminCriticalRouteContractTest extends TestCase
             'admin.amial.merchants.verification.reject' => 'platform:platform.approvals.decide',
             'admin.amial.merchants.verification.resubmit' => 'platform:platform.approvals.decide',
 
+            // نقطة القرار الحديثة في مركز التوثيق الموحد؛ الأبواب القديمة باقية للتوافق.
+            'admin.amial.kyc.center.queue' => 'platform:platform.customers.kyc.view',
+            'admin.amial.kyc.center.merchant-decision' => 'platform:platform.approvals.decide',
+            'admin.amial.kyc.center.merchant-document' => 'platform:platform.merchants.compliance',
+
             'admin.amial.kyc.changes.page' => 'platform:platform.customers.kyc.view',
             'admin.amial.kyc.changes.open' => 'platform:platform.customers.kyc.request',
             'admin.amial.kyc.changes.decide' => 'platform:platform.approvals.decide',
@@ -57,16 +62,33 @@ class AdminCriticalRouteContractTest extends TestCase
             resource_path('views/admin-views/amial/customer/index.blade.php')
         );
 
-        foreach ([
-            'admin.amial.saher.index',
-            'admin.amial.merchants.verification.page',
-        ] as $name) {
-            $this->assertStringContainsString(
-                "route('{$name}')",
-                $general,
-                "المركز {$name} مبني لكن لا مدخل عام له في لوحة الإدارة"
-            );
-        }
+        $this->assertStringContainsString(
+            "route('admin.amial.saher.index')",
+            $general,
+            'رادار ساهر بلا مدخل في لوحة الإدارة'
+        );
+
+        // AMIAL-KYC-ONE-CENTER-001: توثيق المنشأة يظهر داخل مركز التحقق
+        // الموحّد، ولا نعيد إنشاء رابط مستقل يتجاوز ملف العميل وصلاحياته.
+        $this->assertStringContainsString(
+            "route('admin.amial.kyc.page')",
+            $general,
+            'مركز التوثيق الموحد بلا مدخل في لوحة الإدارة'
+        );
+
+        $verificationCenter = (string) file_get_contents(
+            resource_path('views/admin-views/amial/kyc/center.blade.php')
+        );
+        $this->assertStringContainsString(
+            'data-action="merchant-approve"',
+            $verificationCenter,
+            'لا يظهر قرار اعتماد المنشأة داخل مركز التوثيق الموحد'
+        );
+        $this->assertStringContainsString(
+            "/merchant-verification",
+            $verificationCenter,
+            'زر اعتماد المنشأة لا يصل إلى مسار القرار الموحد'
+        );
 
         // تحديث بيانات العميل أداة داخل مركز العملاء، لا مدخل عميل ثانٍ.
         $this->assertStringContainsString(
