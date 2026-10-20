@@ -40,6 +40,16 @@ class EmailRegistrationController extends Controller
             ]]], 409);
         }
 
+        // تسجيل المنشآت انتقل إلى /auth/register/merchant كي لا تمر
+        // الخانات والمستندات القديمة قبل عقد موثّق.
+        if ((string) $request->input('account_type') === 'merchant') {
+            return response()->json([
+                'success' => false,
+                'code' => 'MERCHANT_REGISTRATION_MOVED',
+                'message' => 'تسجيل المنشأة انتقل إلى مسار موثّق الجديد.',
+            ], 410);
+        }
+
         $v = Validator::make($request->all(), [
             'email' => 'required|email|max:255',
             'email_challenge_id' => 'required|string|size:26',
