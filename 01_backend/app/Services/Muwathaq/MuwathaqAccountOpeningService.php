@@ -205,6 +205,11 @@ class MuwathaqAccountOpeningService
         $profile->verified_at = now();
         $profile->save();
         $user->is_kyc_verified = 1;
+        // التسجيل الجديد يخلق مالك المنشأة غير نشط. لا تُفتح لوحة القطاع
+        // إلا عند قرار موثّق، ثم يقوم VerticalBootstrap بتقديم قدرات القطاع.
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'is_active')) {
+            $user->is_active = 1;
+        }
         $user->save();
     }
 
