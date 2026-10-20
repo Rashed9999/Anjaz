@@ -153,4 +153,41 @@ class MuwathaqAccountOpeningTest extends TestCase
         ], $body);
         $this->assertSame(401, $middleware->handle($stale, static fn () => response('', 204))->getStatusCode());
     }
+
+    /** @test */
+    public function signed_decision_route_is_registered_and_applies_a_review_status(): void
+    {
+        config(['muwathaq.decision_secret' => 'test-shared-secret']);
+        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female']);
+        $application = app(MuwathaqAccountOpeningService::class)->submitFor($user);
+        $body = json_encode([
+            'decision' => 'under_review',
+            'decision_reference' => 'muwathaq-route-review-0001',
+            'context' => ['policy_version' => 'muwathaq-1'],
+        ], JSON_THROW_ON_ERROR);
+        $stamp = (string) time();
+        $signature = hash_hmac('sha256', $stamp.'.'.$body, 'test-shared-secret');
+
+        $this->call(
+            'POST',
+            '/api/v1/internal/muwathaq/applications/'.$application->application_ulid.'/decision',
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_MUWATHAQ_TIMESTAMP' => $stamp,
+                'HTTP_X_MUWATHAQ_SIGNATURE' => $signature,
+            ],
+            $body,
+        )
+            ->assertOk()
+            ->assertJsonPath('code', 'MUWATHAQ_DECISION_APPLIED');
+
+        $this->assertSame(
+            'under_review',
+            $application->fresh()->status,
+        );
+    }
+
 }
