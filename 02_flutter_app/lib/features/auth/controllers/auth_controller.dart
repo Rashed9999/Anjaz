@@ -8,6 +8,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:phone_numbers_parser/phone_numbers_parser.dart';
 import 'package:amial_pay/helper/amial_crash_reporter.dart';
+import 'package:amial_pay/helper/app_resume_state.dart';
 import 'package:amial_pay/features/transaction_money/controllers/bootom_slider_controller.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/features/camera_verification/controllers/camera_screen_controller.dart';
@@ -414,6 +415,7 @@ class AuthController extends GetxController implements GetxService {
     if (response.statusCode == 200) {
       // AMIAL-CRASH-005: أعطال من يستعمل الجهاز بعده لا تُنسب إلى حسابه.
       await AmialCrashReporter.forgetIdentity();
+      try { Get.find<AppResumeState>().clear(); } catch (_) {}
 
       Get.offAllNamed(RouteHelper.getSplashRoute());
       _isLoading = false;
