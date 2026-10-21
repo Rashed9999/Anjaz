@@ -101,7 +101,10 @@ try {
         if (!is_array($evidence) || !is_int($evidence['id'] ?? null) || !is_string($evidence['kind'] ?? null)) {
             throw new HttpError(422, 'INVALID_EVIDENCE', 'بيانات الدليل غير صالحة.');
         }
-        $case = findCase($match[1]);
+        $lookup = Database::pdo()->prepare('SELECT * FROM muwathaq_cases WHERE core_application_ulid = ?');
+        $lookup->execute([$match[1]]);
+        $case = $lookup->fetch();
+        if (!$case) throw new HttpError(404, 'CASE_NOT_FOUND', 'قضية موثّق غير موجودة.');
         $items = $case['evidence_encrypted'] ? Cipher::decryptJson($case['evidence_encrypted']) : [];
         $items[(string) $evidence['kind']] = [
             'id' => $evidence['id'],
@@ -164,7 +167,7 @@ try {
                 .'<br><span class="muted">'.e($item['submitted_at'] ?? '').'</span></div>';
         }
         if ($evidenceHtml === '') $evidenceHtml = '<div class="alert">لم تصل أدلة إكمال من أميال باي بعد.</div>';
-        $content = '<a class="btn secondary" href="/">العودة للقضايا</a><div class="card"><h2>قضية '.e($case['case_ulid']).'</h2><p><span class="tag">'.e($case['status']).'</span> <span class="muted">سياسة '.e($policy['version']).'</span></p><div class="grid"><div><b>صاحب الطلب</b><br>'.e($applicant['legal_name'] ?? '—').'<br>'.e($applicant['phone'] ?? '—').'<br>'.e($applicant['email'] ?? '—').'</div><div><b>نوع الحساب</b><br>'.e($case['subject_kind']).'<br>'.e($case['verification_path']).'<br>'.e($case['business_type'] ?? '—').'</div><div><b>تفاصيل النشاط</b><br>'.e(json_encode($subject, JSON_UNESCAPED_UNICODE) ?: '—').'</div></div></div><div class="card"><h3>أدلة الإكمال الواردة</h3><p class="muted">لا تعتمد القضية لمجرد وصول ملخص؛ راجع المستند المشفر عبر قناة أميال المحمية قبل الإقرار.</p>'+'' . $evidenceHtml . '</div>';
+        $content = '<a class="btn secondary" href="/">العودة للقضايا</a><div class="card"><h2>قضية '.e($case['case_ulid']).'</h2><p><span class="tag">'.e($case['status']).'</span> <span class="muted">سياسة '.e($policy['version']).'</span></p><div class="grid"><div><b>صاحب الطلب</b><br>'.e($applicant['legal_name'] ?? '—').'<br>'.e($applicant['phone'] ?? '—').'<br>'.e($applicant['email'] ?? '—').'</div><div><b>نوع الحساب</b><br>'.e($case['subject_kind']).'<br>'.e($case['verification_path']).'<br>'.e($case['business_type'] ?? '—').'</div><div><b>تفاصيل النشاط</b><br>'.e(json_encode($subject, JSON_UNESCAPED_UNICODE) ?: '—').'</div></div></div><div class="card"><h3>أدلة الإكمال الواردة</h3><p class="muted">لا تعتمد القضية لمجرد وصول ملخص؛ راجع المستند المشفر عبر قناة أميال المحمية قبل الإقرار.</p>'.$evidenceHtml.'</div>';
         $governorates = '';
         foreach (Policy::GOVERNORATES as $code => $name) $governorates .= '<option value="'.e($code).'">'.e($name).' ('.e($code).')</option>';
         $content .= '<form method="post" action="/cases/'.e($case['case_ulid']).'/decision" class="card"><input type="hidden" name="_token" value="'.e(csrf()).'"><h3>قرار المراجع</h3><p class="muted">لا تعتمد إلا بعد رؤية الأدلة في موثّق وإقرار البنود التالية.</p>'.$requirements.'<label>القرار</label><select name="decision"><option value="under_review">قيد المراجعة</option><option value="needs_more_info">طلب استكمال</option><option value="approved">اعتماد</option><option value="rejected">رفض</option></select><label>محافظة الإقامة أو الموقع التشغيلي</label><select name="governorate">'.$governorates.'</select><label>ملاحظة للقرار</label><textarea name="reason" rows="3" maxlength="1000"></textarea><button class="btn" type="submit">حفظ القرار وإرساله لأميال باي</button></form>';
@@ -181,6 +184,14 @@ try {
         if (!in_array($decision, ['under_review', 'needs_more_info', 'approved', 'rejected'], true)) throw new HttpError(422, 'INVALID_DECISION', 'قرار غير صحيح.');
         $governorate = trim((string) ($_POST['governorate'] ?? ''));
         if ($governorate === '') $governorate = 'YE-AD';
+        if ($decision === 'approved' && $case['verification_path'] === 'women_progressive') {
+            $evidence = $case['evidence_encrypted'] ? Cipher::decryptJson($case['evidence_encrypted']) : [];
+            foreach (['phone', 'residence'] as $kind) {
+                if (($evidence[$kind]['state'] ?? null) !== 'submitted') {
+                    throw new HttpError(422, 'EVIDENCE_NOT_RECEIVED', 'لا يمكن اعتماد حساب نسائي قبل وصول دليل الهاتف والسكن إلى موثّق.');
+                }
+            }
+        }
         $context = $decision === 'approved' ? Policy::decisionContext($case, (array) ($_POST['affirmed'] ?? []), $governorate) : ['policy_version' => Policy::for($case)['version']];
         $reference = 'MWT-'.strtoupper(substr(hash('sha256', $case['case_ulid'].'|'.$decision.'|'.microtime(true)), 0, 20));
         $statement = Database::pdo()->prepare('UPDATE muwathaq_cases SET status=?,review_started_at=COALESCE(review_started_at,?),reviewer_identity=?,policy_version=?,decision=?,decision_reference=?,decision_reason=?,decision_context_json=?,core_delivery_status="pending",core_last_error=NULL,updated_at=? WHERE id=?');
