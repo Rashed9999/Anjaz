@@ -79,9 +79,29 @@ class AgentLifecycleChainTest extends TestCase
 
         $this->assertNotNull($agent, 'الوكيل لم يُنشأ');
         $this->assertSame(AGENT_TYPE, (int) $agent->type);
-        // بلا محفظةٍ لا يستطيع تمويل فرعٍ لاحقاً — والخطأ سيظهر بعد أسبوع.
+        // AMIAL-MUWATHAQ-AGENT-001 — إنشاء الوكيل من الإدارة يفتح ملفاً
+        // قيد المراجعة، لا محفظة قابلة للتمويل قبل قرار موثّق.
+        $this->assertNull(EMoney::where('user_id', $agent->id)->first(),
+            'إنشاء وكيل غير معتمد فتح له محفظة قبل موافقة موثّق');
+
+        $opening = \App\Models\MuwathaqAccountOpeningApplication::query()
+            ->where('user_id', $agent->id)->firstOrFail();
+        $this->assertSame('agent_operation', $opening->verification_path);
+        $this->assertSame('submitted', $opening->status);
+
+        // تمثيل نتيجة المراجعة في الاختبار فقط؛ لا يُستدعى هذا المسار من
+        // لوحة إنشاء الوكيل ولا يجوز تفعيله تلقائياً في الإنتاج.
+        app(\App\Services\Muwathaq\MuwathaqAccountOpeningService::class)->receiveDecision(
+            $opening->application_ulid,
+            \App\Models\MuwathaqAccountOpeningApplication::STATUS_APPROVED,
+            'agent-chain-approved-by-muwathaq',
+            'قرار مراجعة في بيئة الاختبار فقط',
+            ['policy_version' => 'agent-operation-v1',
+             'admin_provisioned' => true,
+             'verified_owner_identity' => true],
+        );
         $this->assertNotNull(EMoney::where('user_id', $agent->id)->first(),
-            'الوكيل أُنشئ بلا محفظة');
+            'وافق موثّق على الوكيل لكن المحفظة لم تُنشأ');
 
         // ══ ٢ ══ الوكيل يدخل بوّابته بهاتفه وكلمة سرّه ══════════════════
         //
