@@ -75,9 +75,16 @@ class AccountOpeningProgressController extends Controller
     {
         try {
             $application = $this->progress->authorize($applicationUlid, $this->accessToken($request));
-            return response()->json($callback($application));
         } catch (DomainException $e) {
             return response()->json(['success' => false, 'code' => 'OPENING_ACCESS_DENIED', 'message' => $e->getMessage()], 403);
+        }
+
+        try {
+            return response()->json($callback($application));
+        } catch (DomainException $e) {
+            // Evidence requirements and invalid OTP are validation problems,
+            // not expired or stolen completion sessions.
+            return response()->json(['success' => false, 'code' => 'OPENING_EVIDENCE_INVALID', 'message' => $e->getMessage()], 422);
         }
     }
 
