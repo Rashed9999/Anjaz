@@ -32,6 +32,8 @@ return new class extends Migration
             $table->string('file_sha256', 64)->nullable();
             $table->timestamp('submitted_at')->nullable();
             $table->timestamp('verified_at')->nullable();
+            $table->timestamp('muwathaq_delivered_at')->nullable();
+            $table->string('muwathaq_delivery_error', 160)->nullable();
             $table->timestamps();
 
             $table->unique(['application_id', 'kind'], 'muwathaq_opening_evidence_kind_unique');
