@@ -62,6 +62,7 @@ class CustomerOpeningResumeController extends Controller
         if ($user === null || !$opening || (int) ($user->is_email_verified ?? 0) !== 1
             || $user->trashed()
             || (int) ($user->is_temp_blocked ?? 0) === 1
+            || ($user->security_hold_until && $user->security_hold_until->isFuture())
             || !Hash::check((string) $request->input('password'), (string) $user->password)) {
             RateLimiter::hit($rateKey, 900);
             return response()->json([
