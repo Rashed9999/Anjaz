@@ -29,6 +29,11 @@ class AdminCriticalRouteContractTest extends TestCase
             'admin.amial.merchants.verification.reject' => 'platform:platform.approvals.decide',
             'admin.amial.merchants.verification.resubmit' => 'platform:platform.approvals.decide',
 
+            'admin.amial.muwathaq-openings.index' => 'platform:platform.approvals.decide',
+            'admin.amial.muwathaq-openings.list' => 'platform:platform.approvals.decide',
+            'admin.amial.muwathaq-openings.approve' => 'platform:platform.approvals.decide',
+            'admin.amial.muwathaq-openings.reject' => 'platform:platform.approvals.decide',
+
             'admin.amial.kyc.changes.page' => 'platform:platform.customers.kyc.view',
             'admin.amial.kyc.changes.open' => 'platform:platform.customers.kyc.request',
             'admin.amial.kyc.changes.decide' => 'platform:platform.approvals.decide',
@@ -59,7 +64,7 @@ class AdminCriticalRouteContractTest extends TestCase
 
         foreach ([
             'admin.amial.saher.index',
-            'admin.amial.merchants.verification.page',
+            'admin.amial.muwathaq-openings.index',
         ] as $name) {
             $this->assertStringContainsString(
                 "route('{$name}')",
