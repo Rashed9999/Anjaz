@@ -129,6 +129,28 @@ CREATE TABLE IF NOT EXISTS muwathaq_reviewer_credentials (
   updated_at DATETIME NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
+
+        $db->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS muwathaq_reviewer_audit_outbox (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  event_ulid VARCHAR(26) NOT NULL UNIQUE,
+  reviewer_identity VARCHAR(190) NOT NULL,
+  action VARCHAR(64) NOT NULL,
+  case_ulid VARCHAR(26) NULL,
+  core_application_ulid VARCHAR(26) NULL,
+  subject_kind VARCHAR(32) NULL,
+  payload_encrypted LONGTEXT NOT NULL,
+  delivery_status VARCHAR(24) NOT NULL DEFAULT 'pending',
+  attempts INT UNSIGNED NOT NULL DEFAULT 0,
+  delivered_at DATETIME NULL,
+  last_error VARCHAR(500) NULL,
+  occurred_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  INDEX muwathaq_audit_delivery (delivery_status, occurred_at),
+  INDEX muwathaq_audit_reviewer_time (reviewer_identity, occurred_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
     }
 }
 
@@ -439,6 +461,122 @@ final class CoreDecisionClient
         if ($response === false || $status < 200 || $status >= 300) {
             throw new RuntimeException('Core delivery failed'.($status ? " (HTTP {$status})" : '').($error ? ": {$error}" : ''));
         }
+    }
+}
+
+
+final class CoreOperationsClient
+{
+    /** @return array<string,mixed> */
+    public static function directory(string $list, string $query = ''): array
+    {
+        $url = rtrim(Config::required('AMIAL_CORE_BASE_URL'), '/').'/api/v1/internal/muwathaq/account-directory?'
+            .http_build_query(['list' => $list, 'q' => $query, 'limit' => 100]);
+        return self::request('GET', $url, '');
+    }
+
+    public static function recordAudit(array $event): void
+    {
+        $body = json_encode($event, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        self::request(
+            'POST',
+            rtrim(Config::required('AMIAL_CORE_BASE_URL'), '/').'/api/v1/internal/muwathaq/reviewer-audit-events',
+            $body,
+        );
+    }
+
+    /** @return array<string,mixed> */
+    private static function request(string $method, string $url, string $body): array
+    {
+        $timestamp = (string) time();
+        $signature = hash_hmac(
+            'sha256',
+            $timestamp.'.'.$body,
+            Config::transportSecret('MUWATHAQ_DECISION_SECRET', 'muwathaq-to-amial-v1'),
+        );
+        $request = curl_init($url);
+        curl_setopt_array($request, [
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_POSTFIELDS => $method === 'POST' ? $body : null,
+            CURLOPT_HTTPHEADER => [
+                'Accept: application/json',
+                'Content-Type: application/json',
+                'X-Muwathaq-Timestamp: '.$timestamp,
+                'X-Muwathaq-Signature: '.$signature,
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 10,
+        ]);
+        $response = curl_exec($request);
+        $status = (int) curl_getinfo($request, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($request);
+        curl_close($request);
+
+        if (!is_string($response) || $status < 200 || $status >= 300) {
+            throw new RuntimeException('Amial reviewer operations failed'.($status ? " (HTTP {$status})" : '').($error ? ": {$error}" : ''));
+        }
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            throw new RuntimeException('Amial reviewer operations returned invalid JSON.');
+        }
+        return $decoded;
+    }
+}
+
+/**
+ * Outbox محلي: أي تحرك للمراجعة يحفظ أولاً في موثّق ثم يرسل إلى أميال.
+ * بذلك لا يضيع سجل التدقيق عند انقطاع الاتصال بين التطبيقين.
+ */
+final class ReviewerAudit
+{
+    public static function record(string $reviewer, string $action, ?array $case = null, array $context = []): void
+    {
+        $event = [
+            'event_ulid' => strtoupper(substr(bin2hex(random_bytes(13)), 0, 26)),
+            'reviewer_identity' => $reviewer,
+            'action' => $action,
+            'application_ulid' => $case['core_application_ulid'] ?? null,
+            'case_ulid' => $case['case_ulid'] ?? null,
+            'subject_kind' => $case['subject_kind'] ?? null,
+            'context' => $context,
+            'occurred_at' => now(),
+        ];
+
+        $db = Database::pdo();
+        $time = now();
+        $db->prepare('INSERT INTO muwathaq_reviewer_audit_outbox (event_ulid,reviewer_identity,action,case_ulid,core_application_ulid,subject_kind,payload_encrypted,delivery_status,occurred_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,"pending",?,?,?)')
+            ->execute([
+                $event['event_ulid'], $reviewer, $action, $event['case_ulid'], $event['application_ulid'],
+                $event['subject_kind'], Cipher::encrypt(json_encode($event, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)),
+                $event['occurred_at'], $time, $time,
+            ]);
+        self::deliver((int) $db->lastInsertId());
+    }
+
+    public static function deliver(int $id): void
+    {
+        $db = Database::pdo();
+        $row = $db->prepare('SELECT * FROM muwathaq_reviewer_audit_outbox WHERE id = ?');
+        $row->execute([$id]);
+        $event = $row->fetch();
+        if (!$event || $event['delivery_status'] === 'delivered') return;
+
+        try {
+            CoreOperationsClient::recordAudit(Cipher::decryptJson($event['payload_encrypted']));
+            $db->prepare('UPDATE muwathaq_reviewer_audit_outbox SET delivery_status="delivered",attempts=attempts+1,delivered_at=?,last_error=NULL,updated_at=? WHERE id=?')
+                ->execute([now(), now(), $id]);
+        } catch (\Throwable $error) {
+            $db->prepare('UPDATE muwathaq_reviewer_audit_outbox SET delivery_status="pending",attempts=attempts+1,last_error=?,updated_at=? WHERE id=?')
+                ->execute([mb_substr($error->getMessage(), 0, 500), now(), $id]);
+        }
+    }
+
+    public static function dispatchPending(int $limit = 100): int
+    {
+        $db = Database::pdo();
+        $ids = $db->query('SELECT id FROM muwathaq_reviewer_audit_outbox WHERE delivery_status = "pending" ORDER BY id ASC LIMIT '.max(1, min(500, $limit)))->fetchAll();
+        foreach ($ids as $row) self::deliver((int) $row['id']);
+        return count($ids);
     }
 }
 
