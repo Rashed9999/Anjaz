@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\MuwathaqAccountOpeningApplication;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -91,9 +92,9 @@ class MuwathaqReviewerOperationsTest extends TestCase
             'reviewer_identity' => 'reviewer@example.test',
             'action' => 'directory_opened',
         ]);
-        $stored = (array) DB::table('muwathaq_reviewer_audit_events')
+        $stored = json_decode((string) DB::table('muwathaq_reviewer_audit_events')
             ->where('event_ulid', $event['event_ulid'])
-            ->value('context');
+            ->value('context'), true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame(['list' => 'merchant'], $stored);
     }
 
