@@ -7,17 +7,17 @@ use App\Support\YemenGovernorates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 
 /**
  * AMIAL-ZONE-001
  *
- * ZonePolicyService — تطبيق سياسة "SOUTH only" المذكورة في قسم 4 من الوثيقة.
+ * ZonePolicyService — الحارس المركزي لتغطية الخدمات المالية وسياسة المحافظات.
  *
  * المبادئ (من الوثيقة):
- *   - أي حساب بدون zone واضح: لا عمليات مالية.
- *   - أي عملية خارج SOUTH: ترفض من API.
- *   - خارج SOUTH: login + عرض الرصيد + سجل مسموحة.
- *     لكن: تحويل، فواتير، QR، cash-in/out، دفع آمن → مرفوضة.
+ *   - أي حساب بلا موقع إقامة أو نشاط موثق: لا عمليات مالية.
+ *   - التحويلات الداخلية متاحة بعد التحقق، لأنها لا تعبر نقداً.
+ *   - الخدمات النقدية تحددها سياسة المحافظات الفعالة المراجَعة.
  *   - IP/VPN: إشارات risk فقط، **ليست** الحُكم النهائي.
  *     الحُكم النهائي مبني على user.zone_code (يُعيَّن عند الـ KYC).
  *
