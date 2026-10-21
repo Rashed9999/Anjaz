@@ -459,7 +459,7 @@ class RegisterController extends Controller
                     'business_type' => (string) $request->input('business_type'),
                     // «قيد المراجعة» لا تصح قبل أن يرسل التاجر مستنداته.
                     'verification_status' => 'unverified',
-                    'zone_code' => 'SOUTH',
+                    'zone_code' => 'UNKNOWN',
                     'subscription_plan' => \App\Support\Access\AccessConstants::PLAN_FREE,
                 ]);
 

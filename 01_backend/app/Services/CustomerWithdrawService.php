@@ -37,7 +37,7 @@ class CustomerWithdrawService
         // السحب النقدي خدمة Tier 1+ للعميل الفردي. لا يمتد هذا الفحص إلى
         // الوكيل الذي ينفذ الصرف لاحقاً؛ له حدود وسياسات وكالة مستقلة.
         $this->assertIndividualCustomerTransactionAllowed($customer->id, $amount, 'cash_out');
-        $this->assertFinancialEligibility($customer->id);
+        $this->assertFinancialEligibility($customer->id, 'cash_out');
 
         $breakdown = app(FeeService::class)->calculate('CASH_OUT', $amount, ['applies_to' => 'customer']);
         $fee = $breakdown['fee'];

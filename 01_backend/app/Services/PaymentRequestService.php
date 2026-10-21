@@ -60,7 +60,7 @@ class PaymentRequestService
             throw new RuntimeException('خدمة طلب المال غير مفعّلة حالياً');
         }
 
-        $this->assertFinancialEligibility($requester->id);
+        $this->assertFinancialEligibility($requester->id, 'request_money');
         $this->enforceSanction($requester);
 
         // رمز أحادي الاستخدام يربط الطالب بالمستلم الذي عاينه في الشاشة.
@@ -440,7 +440,7 @@ class PaymentRequestService
         $feature = (int) ($requester->type ?? 0) === 3 ? 'merchant_pay' : 'send_money';
         $tiers->assertIndividualTransactionAllowed($payer, $amount, $feature);
         $tiers->assertIndividualCanReceive($requester, $amount);
-        $this->assertFinancialEligibility($payer->id);
+        $this->assertFinancialEligibility($payer->id, 'send_money');
         $this->enforceSanction($payer);
         $this->enforceZone($requester);
         $this->enforceSanction($requester);

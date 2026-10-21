@@ -152,8 +152,6 @@ class NorthZoneOperationsBlockedTest extends TestCase
         $this->wallet($receiver->id, '0.0000');
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('SOUTH');
-
         $this->txTrait()->customer_send_money_transaction($sender->id, $receiver->id, '100.0000', '2.0000');
     }
 
@@ -164,8 +162,6 @@ class NorthZoneOperationsBlockedTest extends TestCase
         $this->wallet($north->id, '1000.0000', 'NORTH');
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('SOUTH');
-
         // أي عملية مالية على مستخدم شمالي تُرفض من assertFinancialEligibility
         $this->txTrait()->customer_cash_out_transaction(
             from_user_id: $north->id,

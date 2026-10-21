@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
  *   - حركات الصندوق append-only مع balance_before/balance_after
  *   - مساهمة عضو = تحويل من محفظته إلى الصندوق (DB transaction واحد)
  *   - الصرف يحتاج موافقة owner (configurable)
- *   - SOUTH only — تطبق ZonePolicyService
+ *   - يلزم محل إقامة موثق؛ الصندوق حركة دفتر داخلية لا خدمة نقدية
  *   - إيصال PDF لكل مساهمة/صرف عبر ReceiptService
  */
 class FamilyFundService
@@ -47,9 +47,7 @@ class FamilyFundService
     ): FamilyFund {
         $this->kyc->assertIndividualFeatureAllowed($owner, 'family_fund');
 
-        if ($owner->zone_code !== 'SOUTH') {
-            throw new \RuntimeException('Only SOUTH users can create funds');
-        }
+        app(ZonePolicyService::class)->assertAllowed($owner, 'family_fund_contribute');
 
         return DB::transaction(function () use ($owner, $name, $description, $requireOwnerApproval, $targetAmount) {
             $fund = FamilyFund::create([
@@ -114,9 +112,7 @@ class FamilyFundService
         if (!$invitee) {
             throw new \RuntimeException('User with this phone is not registered');
         }
-        if ($invitee->zone_code !== 'SOUTH') {
-            throw new \RuntimeException('Invitee must be in SOUTH zone');
-        }
+        app(ZonePolicyService::class)->assertAllowed($invitee, 'family_fund_contribute');
 
         // لا يكفي أن يكون صاحب الصندوق Tier 2/3: المدعو نفسه عضو مالي
         // محتمل، لذلك يمرّ بالحارس قبل إنشاء سجل الدعوة.
@@ -213,9 +209,7 @@ class FamilyFundService
         ?string $note = null,
         ?string $idempotencyKey = null,
     ): FamilyFundTransaction {
-        if ($user->zone_code !== 'SOUTH') {
-            throw new \RuntimeException('Only SOUTH users can contribute');
-        }
+        app(ZonePolicyService::class)->assertAllowed($user, 'family_fund_contribute');
         if (!$fund->canContribute($user->id)) {
             throw new \RuntimeException('User is not allowed to contribute to this fund');
         }

@@ -74,7 +74,7 @@ class CustomerCreditSettleService
         );
 
         // نفس حراس العمليات المالية الأخرى: الحساب/المنطقة ثم AML قبل تحريك المال.
-        $this->assertFinancialEligibility((int) $customer->id);
+        $this->assertFinancialEligibility((int) $customer->id, 'merchant_payment');
         $this->screenAml(
             (int) $customer->id,
             $merchantId,

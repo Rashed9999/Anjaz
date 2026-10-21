@@ -101,47 +101,42 @@ trait TransactionTrait
      *
      * يرمي \RuntimeException عند الفشل (الـ middleware يجب أن يلتقطها قبل).
      */
-    protected function assertFinancialEligibility(int $userId): void
+    protected function assertFinancialEligibility(int $userId, string $action = 'send_money'): void
     {
         $user = User::find($userId);
         if (!$user) {
             throw new \RuntimeException("User {$userId} not found");
         }
 
-        // 1) security hold
         if ($user->security_hold_until && $user->security_hold_until->isFuture()) {
             $this->audit()->record([
                 'actor_type' => 'system',
                 'actor_user_id' => $userId,
                 'subject_type' => 'user',
-                'subject_id' => (string)$userId,
+                'subject_id' => (string) $userId,
                 'action' => 'TRANSACTION_BLOCKED_BY_HOLD',
                 'decision_code' => 'TX_SECURITY_HOLD',
-                'reason' => 'User is in security hold until ' . $user->security_hold_until,
+                'reason' => 'User is in security hold until '.$user->security_hold_until,
                 'severity' => 'warning',
             ]);
-            throw new \RuntimeException(
-                'Account is in security hold until ' . $user->security_hold_until->toIso8601String()
-            );
+            throw new \RuntimeException('Account is in security hold until '.$user->security_hold_until->toIso8601String());
         }
 
-        // 2) zone — احتياط (الـ middleware يجب أن يلتقطها أولاً)
-        $zone = $user->zone_code ?? 'UNKNOWN';
-        if ($zone !== 'SOUTH') {
+        $decision = app(\App\Services\ZonePolicyService::class)->authorize($user, $action);
+        if (!$decision['allowed']) {
             $this->audit()->record([
                 'actor_type' => 'system',
                 'actor_user_id' => $userId,
                 'subject_type' => 'user',
-                'subject_id' => (string)$userId,
-                'action' => 'TRANSACTION_BLOCKED_BY_ZONE',
-                'decision_code' => 'TX_ZONE_BLOCKED',
-                'reason' => "User zone={$zone} is not SOUTH",
-                'zone_code' => $zone,
+                'subject_id' => (string) $userId,
+                'action' => 'TRANSACTION_BLOCKED_BY_OPERATIONAL_COVERAGE',
+                'decision_code' => $decision['decision_code'],
+                'reason' => $decision['reason'],
+                'zone_code' => $decision['account_zone'],
                 'severity' => 'warning',
+                'context' => ['requested_action' => $action],
             ]);
-            throw new \RuntimeException(
-                "Financial operations only allowed in SOUTH zone (current: {$zone})"
-            );
+            throw new \RuntimeException($decision['reason'].' ['.$decision['decision_code'].']');
         }
     }
 
@@ -349,7 +344,7 @@ trait TransactionTrait
         // AMIAL-ZONE-001 hotfix (v0.7-A.1): فحص zone + security hold في بداية كل عملية
         // هذا defense-in-depth — الـ middleware amial.zone يجب أن يلتقطها أولاً،
         // لكن لو الـ controller استدعى الـ method مباشرة (مثل من admin panel)، فحص هنا يحميها.
-        $this->assertFinancialEligibility($from_user_id);
+        $this->assertFinancialEligibility($from_user_id, 'send_money');
 
         // ══════════════════════════════════════════════════════════════
         // AMIAL-TRANSFER-KIND-001 — **والمستلِمُ يُسأل عن نوعه هنا أيضاً.**

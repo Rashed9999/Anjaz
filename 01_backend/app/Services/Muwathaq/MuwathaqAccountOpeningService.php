@@ -227,8 +227,20 @@ class MuwathaqAccountOpeningService
         if ($profile === null) {
             throw new DomainException('ملف التاجر غير موجود؛ لا يمكن تفعيل قطاع بلا ملف منشأة.');
         }
+        $governorate = \App\Support\YemenGovernorates::codeFromName(
+            (string) ($context['verified_residence_governorate'] ?? '')
+        );
+        if ($governorate === null) {
+            throw new DomainException('لا يفعّل التاجر قبل تأكيد موقع النشاط من موثّق.');
+        }
+        $user->residence_governorate = $governorate;
+        $user->verified_residence_governorate = $governorate;
+        $user->residence_verified_at = now();
+        $user->save();
+        $zone = app(\App\Services\ZoneAssignmentService::class)->assignFromKyc($user, $governorate);
         $profile->verification_status = 'verified';
         $profile->verified_at = now();
+        $profile->zone_code = $zone;
         $profile->save();
         $user->is_kyc_verified = 1;
         // التسجيل الجديد يخلق مالك المنشأة غير نشط. لا تُفتح لوحة القطاع
@@ -250,7 +262,19 @@ class MuwathaqAccountOpeningService
         if ($profile === null) {
             throw new DomainException('ملف الوكيل التشغيلي غير موجود؛ ينشأ الوكيل من الإدارة فقط.');
         }
+        $governorate = \App\Support\YemenGovernorates::codeFromName(
+            (string) ($context['verified_residence_governorate'] ?? '')
+        );
+        if ($governorate === null) {
+            throw new DomainException('لا يفعّل الوكيل قبل تأكيد موقعه التشغيلي من موثّق.');
+        }
+        $user->residence_governorate = $governorate;
+        $user->verified_residence_governorate = $governorate;
+        $user->residence_verified_at = now();
+        $user->save();
+        $zone = app(\App\Services\ZoneAssignmentService::class)->assignFromKyc($user, $governorate);
         $profile->status = 'active';
+        $profile->zone_code = $zone;
         $profile->save();
         $user->is_kyc_verified = 1;
         $user->save();
