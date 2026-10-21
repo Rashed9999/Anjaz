@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\Muwathaq\MuwathaqOpeningProgressService;
+use App\Services\Muwathaq\MuwathaqEvidenceBridgeService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,7 +12,8 @@ use Illuminate\Support\Facades\Validator;
 
 class AccountOpeningProgressController extends Controller
 {
-    public function __construct(private readonly MuwathaqOpeningProgressService $progress) {}
+    public function __construct(private readonly MuwathaqOpeningProgressService $progress,
+        private readonly MuwathaqEvidenceBridgeService $bridge) {}
 
     public function show(Request $request, string $applicationUlid): JsonResponse
     {
@@ -27,7 +29,8 @@ class AccountOpeningProgressController extends Controller
         if ($validator->fails()) return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
 
         return $this->respond($request, $applicationUlid, function ($application) use ($request) {
-            $this->progress->confirmPilotPhone($application, (string) $request->input('code'));
+            $evidence = $this->progress->confirmPilotPhone($application, (string) $request->input('code'));
+            $this->bridge->tryDeliver($evidence);
             return ['success' => true, 'data' => $this->progress->status($application->fresh())];
         });
     }
@@ -45,7 +48,8 @@ class AccountOpeningProgressController extends Controller
         if ($validator->fails()) return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
 
         return $this->respond($request, $applicationUlid, function ($application) use ($request) {
-            $this->progress->submitResidence($application, $request->all(), $request->file('evidence'));
+            $evidence = $this->progress->submitResidence($application, $request->all(), $request->file('evidence'));
+            $this->bridge->tryDeliver($evidence);
             return ['success' => true, 'data' => $this->progress->status($application->fresh())];
         });
     }
