@@ -168,6 +168,10 @@ class MuwathaqOpeningProgressTest extends TestCase
             ['Authorization' => 'Bearer '.$token],
         )->assertOk()->assertJsonPath('data.next_steps.0', 'await_muwathaq_review');
         $this->assertFalse(EMoney::where('user_id', $user->id)->exists());
+        $this->postJson(
+            '/api/v1/auth/account-opening/'.$application->application_ulid.'/evidence/identity_document',
+            [], ['Authorization' => 'Bearer '.$token],
+        )->assertStatus(422)->assertJsonPath('code', 'OPENING_EVIDENCE_INVALID');
     }
 
     /** @test */
@@ -196,6 +200,12 @@ class MuwathaqOpeningProgressTest extends TestCase
 
         $this->getJson($url.'/status', ['Authorization' => 'Bearer '.$token])
             ->assertOk()->assertJsonPath('data.next_steps.0', 'submit_identity_document');
+
+        // An identity submission without a document is a 422 validation error,
+        // not a 403 security failure or an unexpected account activation.
+        $this->postJson($url.'/evidence/identity_document', [], [
+            'Authorization' => 'Bearer '.$token,
+        ])->assertStatus(422)->assertJsonPath('code', 'OPENING_EVIDENCE_INVALID');
 
         $this->withHeaders(['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json'])
             ->post($url.'/evidence/identity_document', [
