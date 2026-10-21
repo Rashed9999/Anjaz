@@ -60,6 +60,8 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   String? _gender;
   String? _emailChallengeId;
   String? _emailVerificationToken;
+  String? _openingApplicationUlid;
+  String? _openingAccessToken;
   String? _muwathaqPolicySummary;
   bool _muwathaqPolicyLoading = false;
   int _emailResendSeconds = 0;
@@ -426,10 +428,19 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       }
 
       final data = Map<String, dynamic>.from(registerBody['data'] as Map);
+      final applicationUlid = data['muwathaq_application_ulid']?.toString();
+      final openingToken = data['account_opening_access_token']?.toString();
+      if (applicationUlid == null || applicationUlid.length != 26 ||
+          openingToken == null || openingToken.length < 32) {
+        _snack('تم إنشاء الطلب لكن تعذر فتح جلسة إكمال موثّق. لا تسجل الدخول؛ أعد المحاولة من الدعم.');
+        return;
+      }
       _accountCreated = true;
+      _openingApplicationUlid = applicationUlid;
+      _openingAccessToken = openingToken;
       _emailTimer?.cancel();
       if (!mounted) return;
-      setState(() => _step = 4);
+      setState(() => _step = 2);
     } catch (_) {
       _snack('حدث خطأ في الاتصال أثناء إنشاء الحساب.');
     } finally {
@@ -459,56 +470,20 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   }
 
   Future<void> _requestPhoneOtp({bool silentSuccess = false}) async {
-    if (_busy && !silentSuccess) return;
-    if (!silentSuccess) setState(() => _busy = true);
-
-    try {
-      final response = await Get.find<ApiClient>().postData(
-        '/api/v1/customer/check-otp',
-        const <String, dynamic>{},
-      );
-
-      final ok = response.statusCode == 200 &&
-          response.body is Map &&
-          response.body['success'] == true &&
-          response.body['code']?.toString() == 'OTP_SENT';
-
-      if (!ok) {
-        _snack(
-          _responseMessage(
-            response,
-            'الحساب جاهز، لكن تعذر تجهيز رمز الهاتف الآن. يمكنك إكماله لاحقاً.',
-          ),
-        );
-        return;
-      }
-
-      final body = Map<String, dynamic>.from(response.body as Map);
-      final demoOtp = body['demo_otp']?.toString();
-
-      if (demoOtp != null && RegExp(r'^\d{6}$').hasMatch(demoOtp)) {
-        _phoneOtp.text = demoOtp;
-      }
-
-      if (!silentSuccess) {
-        _snack(
-          body['pilot_mode'] == true
-              ? 'وضع تجريبي: رمز الهاتف الحالي هو 123456'
-              : 'أرسلنا رمز التحقق إلى رقم هاتفك.',
-          error: false,
-        );
-      }
-    } catch (_) {
-      _snack('الحساب جاهز، لكن تعذر تجهيز رمز الهاتف الآن. يمكنك إكماله لاحقاً.');
-    } finally {
-      if (!silentSuccess && mounted) setState(() => _busy = false);
+    // لا نستخدم نقطة OTP القديمة: هذه الجلسة لا تملك Auth token، ولا يجوز
+    // أن تمنحها إياه. في بيئة التجربة فقط يوضح موثّق رمز الاختبار.
+    if (!silentSuccess) {
+      _snack('وضع تجريبي فقط: أدخل الرمز 123456. عند تشغيل مزود الرسائل سيصل رمز حقيقي.', error: false);
     }
   }
 
   Future<void> _verifyPhoneOtp() async {
     if (_busy) return;
-
-    if (!RegExp(r'^\d{6}$').hasMatch(_phoneOtp.text.trim())) {
+    if (_openingApplicationUlid == null || _openingAccessToken == null) {
+      _snack('جلسة إكمال موثّق غير متاحة. لا يمكن متابعة الطلب بأمان.');
+      return;
+    }
+    if (!RegExp(r'^\\d{6}$').hasMatch(_phoneOtp.text.trim())) {
       _snack('أدخل رمز الهاتف المكوّن من 6 أرقام.');
       return;
     }
@@ -516,27 +491,18 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     setState(() => _busy = true);
     try {
       final response = await Get.find<ApiClient>().postData(
-        '/api/v1/customer/verify-otp',
-        {'otp': _phoneOtp.text.trim()},
+        '/api/v1/auth/account-opening/$_openingApplicationUlid/phone/confirm',
+        {'code': _phoneOtp.text.trim()},
+        headers: {'Authorization': 'Bearer $_openingAccessToken'},
       );
-
-      if (response.statusCode != 200 || response.body is! Map) {
-        _snack(_responseMessage(response, 'رمز الهاتف غير صحيح.'));
+      if (response.statusCode != 200 || response.body is! Map ||
+          response.body['success'] != true) {
+        _snack(_responseMessage(response, 'رمز الهاتف غير صحيح أو انتهت جلسة الفتح.'));
         return;
       }
-
-      _phoneVerified = response.body['is_phone_verified'] == true;
-      if (!_phoneVerified) {
-        _snack(_responseMessage(response, 'لم يكتمل توثيق الهاتف.'));
-        return;
-      }
-
       if (!mounted) return;
       setState(() => _step = 3);
-      _snack(
-        'تم إثبات ملكية الهاتف. أكمل بيانات الميلاد والسكن وإثبات الإقامة.',
-        error: false,
-      );
+      _snack('وصل تأكيد الهاتف إلى موثّق. أكمل السكن وإثبات الإقامة.', error: false);
     } catch (_) {
       _snack('تعذر التحقق من رمز الهاتف.');
     } finally {
@@ -664,22 +630,25 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     setState(() => _busy = true);
 
     try {
+      if (_openingApplicationUlid == null || _openingAccessToken == null) {
+        _snack('جلسة إكمال موثّق غير متاحة.');
+        return false;
+      }
       final response = await Get.find<ApiClient>().postMultipartData(
-        '/api/v1/amial/me/kyc/residence',
+        '/api/v1/auth/account-opening/$_openingApplicationUlid/residence',
         {
-          'birth_governorate': _birthGovernorate!,
-          'residence_governorate': _residenceLocation.governorateCode!,
-          'residence_district_id': '${_residenceLocation.districtId!}',
-          'residence_area': _residenceArea.text.trim(),
+          'governorate': _residenceLocation.governorateCode!,
+          'district': _residenceLocation.districtName ?? '${_residenceLocation.districtId!}',
+          'area': _residenceArea.text.trim(),
           if (_residenceLandmark.text.trim().isNotEmpty)
-            'residence_landmark': _residenceLandmark.text.trim(),
+            'landmark': _residenceLandmark.text.trim(),
           'evidence_type': _evidenceType!,
-          'declaration_accepted': '1',
         },
         [MultipartBody('evidence', File(_residenceEvidence!.path))],
+        headers: {'Authorization': 'Bearer $_openingAccessToken'},
       );
 
-      if (response.statusCode != 201 ||
+      if (response.statusCode != 200 ||
           response.body is! Map ||
           response.body['success'] != true) {
         _snack(_responseMessage(response, 'تعذر إرسال إثبات السكن.'));
