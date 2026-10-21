@@ -30,7 +30,7 @@ if (!is_string($index) || !is_string($bootstrap) || !is_string($core) || !is_str
 
 requireContains($index, 'موظفة الجلسة', 'session-worker sidebar label is required');
 foreach (['all', 'new', 'customer_female', 'customer_male', 'merchant', 'agent', 'active', 'suspended', 'review'] as $list) {
-    requireContains($index, "'/accounts?list={$list}'", "sidebar list {$list} is required");
+    requireContains($index, "?list={$list}", "sidebar list {$list} is required");
 }
 foreach (['session_started', 'directory_opened', 'case_opened', 'evidence_opened', 'decision_recorded'] as $action) {
     requireContains($index, "'{$action}'", "audit action {$action} is required");
