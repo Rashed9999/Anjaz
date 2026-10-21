@@ -163,6 +163,9 @@ jobs:
       - name: سياسة موثّق — المحافظة صريحة قبل الاعتماد
         run: php 03_muwathaq/tests/governorate_policy_test.php
 
+      - name: موثّق — قوائم موظفة الجلسة وسجل التدقيق
+        run: php 03_muwathaq/tests/reviewer_operations_test.php
+
       - name: استكمال تسجيل التاجر وإرسال الأدلة إلى موثّق
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/MerchantWebRegistrationJourneyTest.php tests/Feature/MuwathaqOpeningProgressTest.php
