@@ -959,7 +959,15 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
+        children: [
+          ...children,
+          if (_accountCreated && _step >= 2 && _step <= 4)
+            TextButton.icon(
+              onPressed: _busy ? null : _resumeExistingOpening,
+              icon: const Icon(Icons.lock_reset_outlined),
+              label: const Text('استعادة جلسة الاستكمال إذا انتهت صلاحيتها'),
+            ),
+        ],
       ),
     );
   }
