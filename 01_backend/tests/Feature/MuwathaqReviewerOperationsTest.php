@@ -45,7 +45,8 @@ class MuwathaqReviewerOperationsTest extends TestCase
         $this->signedGet('/api/v1/internal/muwathaq/account-directory?list=customer_female')
             ->assertOk()
             ->assertJsonPath('meta.list', 'customer_female')
-            ->assertJsonFragment(['name' => $female->declared_legal_name ?: $female->f_name]);
+            ->assertJsonPath('data.0.account_type', 'customer')
+            ->assertJsonPath('data.0.customer_gender', 'female');
 
         $this->signedGet('/api/v1/internal/muwathaq/account-directory?list=new')
             ->assertOk()
@@ -61,7 +62,7 @@ class MuwathaqReviewerOperationsTest extends TestCase
             ->assertJsonFragment(['account_type' => 'agent'])
             ->assertJsonFragment(['account_type' => 'customer']);
 
-        $this->assertSame(1, $legacyAgent->fresh()->is_active);
+        $this->assertSame(1, (int) $legacyAgent->fresh()->is_active);
     }
 
     /** @test */
