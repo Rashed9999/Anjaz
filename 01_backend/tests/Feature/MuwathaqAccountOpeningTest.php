@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Middleware\VerifyMuwathaqSignature;
 use App\Models\EMoney;
 use App\Models\MuwathaqAccountOpeningApplication;
+use App\Models\MuwathaqOpeningEvidence;
 use App\Models\MuwathaqApplicationSubmission;
 use App\Models\User;
 use App\Services\Muwathaq\MuwathaqBridgeService;
@@ -81,6 +82,15 @@ class MuwathaqAccountOpeningTest extends TestCase
         $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female', 'kyc_tier' => 0]);
         $service = app(MuwathaqAccountOpeningService::class);
         $application = $service->submitFor($user);
+
+        foreach ([MuwathaqOpeningEvidence::PHONE, MuwathaqOpeningEvidence::RESIDENCE] as $kind) {
+            MuwathaqOpeningEvidence::query()->create([
+                'application_id' => $application->id,
+                'kind' => $kind,
+                'state' => MuwathaqOpeningEvidence::STATE_SUBMITTED,
+                'submitted_at' => now(),
+            ]);
+        }
 
         $approved = $service->receiveDecision(
             $application->application_ulid,
