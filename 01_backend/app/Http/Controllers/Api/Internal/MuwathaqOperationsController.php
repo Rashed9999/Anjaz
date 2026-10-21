@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Carbon;
 
 /**
  * واجهة موثّق الداخلية فقط.
@@ -138,9 +139,9 @@ final class MuwathaqOperationsController extends Controller
                         'phone' => $row->phone,
                         'email' => $row->email,
                     ],
-                    'submitted_at' => optional($row->submitted_at)->toIso8601String(),
-                    'muwathaq_decided_at' => optional($row->muwathaq_decided_at)->toIso8601String(),
-                    'admin_decided_at' => optional($row->admin_decided_at)->toIso8601String(),
+                    'submitted_at' => $row->submitted_at ? Carbon::parse($row->submitted_at)->toIso8601String() : null,
+                    'muwathaq_decided_at' => $row->muwathaq_decided_at ? Carbon::parse($row->muwathaq_decided_at)->toIso8601String() : null,
+                    'admin_decided_at' => $row->admin_decided_at ? Carbon::parse($row->admin_decided_at)->toIso8601String() : null,
                 ];
             })->values();
 
