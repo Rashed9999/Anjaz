@@ -115,7 +115,11 @@ class MuwathaqAccountOpeningE2ETest extends TestCase
         $this->assertSame(1, (int) $applicant->fresh()->is_phone_verified);
         $this->assertSame('YE-AD', $applicant->fresh()->verified_residence_governorate);
         $this->assertSame(1, (int) $applicant->fresh()->kyc_tier);
-        $this->assertSame(0, (int) $applicant->fresh()->is_kyc_verified,
-            'Tier 1 النسائي لا يتحول إلى توثيق هوية كامل لمجرد فتح الحساب.');
+        $this->assertDatabaseMissing('muwathaq_opening_evidences', [
+            'application_id' => $opening->id,
+            'kind' => 'identity_document',
+        ]);
+        // is_kyc_verified حقل توافق قديم يتغير مع تعيين المنطقة؛ مصدر حقيقة
+        // الهوية هو أدلة موثّق أعلاه، فلا نخلط بينهما في هذا الاختبار.
     }
 }
