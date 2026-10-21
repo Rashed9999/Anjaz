@@ -99,7 +99,7 @@ class AgentLifecycleChainTest extends TestCase
             context: [
                 'admin_provisioned' => true,
                 'verified_owner_identity' => true,
-                'verified_residence_governorate' => 'AD',
+                'verified_residence_governorate' => 'YE-AD',
             ],
         );
         $opening->receiveAdminDecision(
