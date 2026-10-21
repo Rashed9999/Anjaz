@@ -96,7 +96,7 @@ final class MuwathaqOperationsController extends Controller
 
         $needle = trim((string) $request->query('q', ''));
         if ($needle !== '') {
-            $like = '%'.str_replace(['\\\\', '%', '_'], ['\\\\\\\\', '\\\\%', '\\\\_'], $needle).'%';
+            $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $needle).'%';
             $query->where(function ($builder) use ($like): void {
                 $builder->where('opening.application_ulid', 'like', $like)
                     ->orWhere('user.phone', 'like', $like)
