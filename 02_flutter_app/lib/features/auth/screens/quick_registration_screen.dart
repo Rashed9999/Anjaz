@@ -70,6 +70,13 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   String? _birthGovernorate;
   YemenResidenceSelection _residenceLocation = const YemenResidenceSelection();
   XFile? _residenceEvidence;
+  XFile? _identityEvidence;
+  String? _verificationPath;
+  String? _openingStatus;
+  String? _decisionReason;
+  List<String> _nextOpeningSteps = const [];
+
+  bool get _requiresIdentity => _verificationPath == 'standard_customer';
   String? _evidenceType;
   List<Map<String, dynamic>> _evidenceOptions = const [];
 
@@ -97,18 +104,120 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           ? Map<String, dynamic>.from(body['data'] as Map) : null;
       if (data == null) return;
 
-      final steps = data['next_steps'] is List ? List<String>.from(data['next_steps']) : const <String>[];
-      if (!mounted) return;
-      setState(() {
-        _openingApplicationUlid = id;
-        _openingAccessToken = token;
-        _accountCreated = true;
-        _phoneVerified = !steps.contains('confirm_phone');
-        _residenceSubmitted = !steps.contains('submit_residence');
-        _step = steps.contains('confirm_phone') ? 2 : steps.contains('submit_residence') ? 3 : 4;
-      });
+      _adoptOpeningStatus(data, id, token);
     } catch (_) {
       // لا نمسح البيانات عند انقطاع الشبكة؛ قد يعود المستخدم فيكمل لاحقاً.
+    }
+  }
+
+  void _adoptOpeningStatus(Map<String, dynamic> data, String id, String token) {
+    final steps = data['next_steps'] is List
+        ? List<String>.from(data['next_steps']) : <String>[];
+    final path = data['verification_path']?.toString();
+    if (!mounted) return;
+    setState(() {
+      _openingApplicationUlid = id;
+      _openingAccessToken = token;
+      _accountCreated = true;
+      _verificationPath = path;
+      _gender = path == 'standard_customer' ? 'male'
+          : path == 'women_progressive' ? 'female' : _gender;
+      _openingStatus = data['status']?.toString();
+      _decisionReason = data['decision_reason']?.toString();
+      _nextOpeningSteps = steps;
+      _phoneVerified = !steps.contains('confirm_phone');
+      _residenceSubmitted = !steps.contains('submit_residence');
+      _step = steps.contains('confirm_phone') ? 2
+          : steps.contains('submit_residence') ? 3
+          : steps.contains('submit_identity_document') ? 4 : 5;
+    });
+  }
+
+  Future<void> _refreshOpeningStatus() async {
+    final id = _openingApplicationUlid, token = _openingAccessToken;
+    if (id == null || token == null) return;
+    try {
+      final response = await Get.find<ApiClient>().getData(
+        '/api/v1/auth/account-opening/$id/status',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final body = response.body;
+      if (response.statusCode == 403) {
+        _snack('انتهت جلسة الاستكمال. استعد طلبك بالبريد وكلمة المرور.');
+        return;
+      }
+      if (body is Map && body['success'] == true && body['data'] is Map) {
+        _adoptOpeningStatus(Map<String, dynamic>.from(body['data'] as Map), id, token);
+      } else {
+        _snack(_responseMessage(response, 'تعذر تحديث حالة الطلب.'));
+      }
+    } catch (_) {
+      _snack('تعذر الاتصال بموثّق لتحديث الحالة.');
+    }
+  }
+
+  Future<void> _resumeExistingOpening() async {
+    if (_busy) return;
+    final email = TextEditingController(text: _normalizedEmail);
+    final password = TextEditingController();
+    final credentials = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('استكمال طلب موجود'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('أدخل البريد المسجل وكلمة المرور لاستعادة جلسة استكمال موثّق. لن يُنشأ حساب جديد.'),
+          TextField(controller: email,
+            keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            decoration: const InputDecoration(labelText: 'البريد الإلكتروني')),
+          TextField(controller: password, obscureText: true,
+            decoration: const InputDecoration(labelText: 'كلمة المرور')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, {
+            'email': email.text.trim().toLowerCase(),
+            'password': password.text,
+          }), child: const Text('استعادة الطلب')),
+        ],
+      ),
+    );
+    email.dispose();
+    password.dispose();
+    if (credentials == null || !mounted) return;
+    if (credentials['email']?.isEmpty != false || credentials['password']?.isEmpty != false) {
+      _snack('أدخل البريد وكلمة المرور.');return;
+    }
+    setState(() => _busy = true);
+    try {
+      final response = await Get.find<ApiClient>().postData(
+        '/api/v1/auth/account-opening/resume', credentials,
+      );
+      final body=response.body;
+      if (response.statusCode != 200 || body is! Map
+          || body['success'] != true || body['data'] is! Map) {
+        _snack(_responseMessage(response, 'تعذر استعادة الطلب.'));return;
+      }
+      final data=Map<String, dynamic>.from(body['data'] as Map);
+      final id=data['application_ulid']?.toString();
+      final token=data['account_opening_access_token']?.toString();
+      if (id == null || id.length != 26) {
+        _snack('الطلب غير صالح للاستكمال.');return;
+      }
+      if (token == null || token.length < 32) {
+        _snack('الطلب حُسم بالفعل. حالته: '+(data['status']?.toString() ?? 'غير معروفة'));
+        return;
+      }
+      _openingApplicationUlid=id;
+      _openingAccessToken=token;
+      await _persistOpeningProgress();
+      await _refreshOpeningStatus();
+      _snack('تمت استعادة طلبك الحالي بأمان.', error: false);
+    } catch (_) {
+      _snack('تعذر استعادة طلب التوثيق. تحقق من الاتصال.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -483,6 +592,10 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _accountCreated = true;
       _openingApplicationUlid = applicationUlid;
       _openingAccessToken = openingToken;
+      _verificationPath = data['verification_path']?.toString();
+      _openingStatus = data['account_status']?.toString();
+      _nextOpeningSteps = ['confirm_phone', 'submit_residence',
+        if (_verificationPath == 'standard_customer') 'submit_identity_document'];
       await _persistOpeningProgress();
       _emailTimer?.cancel();
       if (!mounted) return;
@@ -547,8 +660,13 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         return;
       }
       if (!mounted) return;
-      setState(() => _step = 3);
-      _snack('وصل تأكيد الهاتف إلى موثّق. أكمل السكن وإثبات الإقامة.', error: false);
+      setState(() {
+        _phoneVerified = true;
+        _nextOpeningSteps = List<String>.from(_nextOpeningSteps)
+          ..remove('confirm_phone');
+        _step = 3;
+      });
+      _snack('تم تسجيل إثبات الهاتف. أكمل السكن وإثبات الإقامة.', error: false);
     } catch (_) {
       _snack('تعذر التحقق من رمز الهاتف.');
     } finally {
@@ -557,19 +675,9 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   }
 
   Future<void> _loadResidenceOptions() async {
-    try {
-      final response = await Get.find<ApiClient>()
-          .getData('/api/v1/amial/me/kyc/residence');
-      if (response.statusCode == 200 && response.body is Map) {
-        final options = response.body['evidence_options'];
-        if (options is List && options.isNotEmpty) {
-          _evidenceOptions = options
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-        }
-      }
-    } catch (_) {}
+    // Pending applicants do NOT have a wallet bearer token. The old
+    // /me/kyc/residence endpoint requires an authenticated financial account,
+    // so attempting it here always fails. Use safe opening-stage options.
     if (_evidenceOptions.isEmpty) {
       _evidenceOptions = _fallbackEvidence;
     }
@@ -662,10 +770,19 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     );
 
     if (confirmed == true && mounted) {
-      _residenceSubmitted = true;
-      setState(() => _step = 4);
+      setState(() {
+        _residenceSubmitted = true;
+        _nextOpeningSteps = List<String>.from(_nextOpeningSteps)
+          ..remove('submit_residence');
+        if (_requiresIdentity && !_nextOpeningSteps.contains('submit_identity_document')) {
+          _nextOpeningSteps.add('submit_identity_document');
+        }
+        _step = _requiresIdentity ? 4 : 5;
+      });
       _snack(
-        'تم إرسال طلب التوثيق الجزئي وحفظ نسخة مؤرشفة للمراجعة والطباعة.',
+        _requiresIdentity
+            ? 'تم إرسال إثبات السكن. ارفع وثيقة الهوية لاستكمال الطلب.'
+            : 'تم إرسال السكن؛ مسار المرأة الأولي لا يشترط الهوية أو السيلفي.',
         error: false,
       );
     }
@@ -721,7 +838,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         child: Column(
           children: [
             _header(context),
-            if (_step < 4) _progress(),
+            if (_step < 5) _progress(),
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
@@ -732,6 +849,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
                     1 => _emailStep(),
                     2 => _phoneStep(),
                     3 => _residenceStep(),
+                    4 => _requiresIdentity ? _identityStep() : _successStep(),
                     _ => _successStep(),
                   },
                 ),
@@ -778,7 +896,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'افتح محفظتك بخطوات بسيطة',
+                  'طلب فتح حساب في أميال باي',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w900,
                         color: AmialColors.textPrimary,
@@ -786,7 +904,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
                 ),
                 const SizedBox(height: 2),
                 const Text(
-                  'لا نطلب الهوية أو الصورة الشخصية عند إنشاء الحساب الأساسي.',
+                  'المتطلبات تختلف حسب مسار موثّق. لا محفظة قبل الاعتماد.',
                   style: TextStyle(fontSize: 12, color: AmialColors.textMuted),
                 ),
               ],
@@ -798,7 +916,8 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   }
 
   Widget _progress() {
-    const labels = ['الحساب', 'البريد', 'الهاتف', 'السكن'];
+    final labels = ['الحساب', 'البريد', 'الهاتف', 'السكن',
+      if (_requiresIdentity) 'الهوية'];
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(20, 2, 20, 16),
@@ -840,7 +959,15 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
+        children: [
+          ...children,
+          if (_accountCreated && _step >= 2 && _step <= 4)
+            TextButton.icon(
+              onPressed: _busy ? null : _resumeExistingOpening,
+              icon: const Icon(Icons.lock_reset_outlined),
+              label: const Text('استعادة جلسة الاستكمال إذا انتهت صلاحيتها'),
+            ),
+        ],
       ),
     );
   }
@@ -961,8 +1088,13 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         _card([
           _title(
             'حسابك الأساسي',
-            'أنشئ كلمة مرور للدخول وPIN مالياً مستقلاً. يمكنك توثيق الهوية ورفع الحدود لاحقاً من حسابك.',
+            'أنشئ كلمة مرور للدخول وPIN مالياً مستقلاً. يُحدد موثّق المتطلبات المناسبة لمسار حسابك قبل التفعيل.',
             Icons.account_balance_wallet_outlined,
+          ),
+          TextButton.icon(
+            onPressed: _busy ? null : _resumeExistingOpening,
+            icon: const Icon(Icons.assignment_return_outlined),
+            label: const Text('لدي طلب سابق — استكمال التوثيق'),
           ),
           Container(
             width: double.infinity,
@@ -1172,7 +1304,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
             maxLength: 6,
             formatters: [FilteringTextInputFormatter.digitsOnly],
           ),
-          _primaryButton('تحقق وأنشئ المحفظة', _verifyEmailAndCreate),
+          _primaryButton('تحقق وأرسل طلب فتح الحساب', _verifyEmailAndCreate),
           const SizedBox(height: 8),
           TextButton(
             onPressed: _busy || _emailResendSeconds > 0 ? null : _requestEmailOtp,
@@ -1223,7 +1355,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           ),
           const SizedBox(height: 8),
           TextButton(
-            onPressed: _busy ? null : () => setState(() => _step = 4),
+            onPressed: _busy ? null : () => setState(() => _step = 5),
             child: const Text('سأكمل إثبات الهاتف لاحقاً'),
           ),
         ]),
@@ -1365,15 +1497,110 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         _primaryButton('إرسال السكن للمراجعة', _submitResidence),
         const SizedBox(height: 8),
         TextButton(
-          onPressed: _busy ? null : () => setState(() => _step = 4),
+          onPressed: _busy ? null : () => setState(() => _step = 5),
           child: const Text('سأرفع إثبات السكن لاحقاً'),
         ),
       ]),
     ]);
   }
 
+  Future<void> _pickIdentityEvidence(ImageSource source) async {
+    try {
+      final selected = await ImagePicker().pickImage(
+        source: source, imageQuality: 88, maxWidth: 2200,
+      );
+      if (selected != null && mounted) {
+        setState(() => _identityEvidence = selected);
+      }
+    } catch (_) {
+      _snack('تعذر اختيار وثيقة الهوية.');
+    }
+  }
+
+  Future<void> _submitIdentityEvidence() async {
+    if (_busy) return;
+    if (!_requiresIdentity) {
+      _snack('وثيقة الهوية ليست مطلوبة في المستوى الأول لمسار المرأة.');
+      return;
+    }
+    if (_openingApplicationUlid == null || _openingAccessToken == null) {
+      _snack('جلسة موثّق غير متاحة. استعد طلبك أولاً.');
+      return;
+    }
+    if (_identityEvidence == null) {
+      _snack('أرفق صورة واضحة لوثيقة الهوية.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final response = await Get.find<ApiClient>().postMultipartData(
+        '/api/v1/auth/account-opening/$_openingApplicationUlid/evidence/identity_document',
+        <String, String>{},
+        [MultipartBody('evidence', File(_identityEvidence!.path))],
+        headers: {'Authorization': 'Bearer $_openingAccessToken'},
+      );
+      if (response.statusCode != 200 || response.body is! Map
+          || response.body['success'] != true) {
+        _snack(_responseMessage(response, 'لم تنجح عملية رفع الهوية.'));
+        return;
+      }
+      _identityEvidence = null;
+      if (!mounted) return;
+      setState(() {
+        _nextOpeningSteps = List<String>.from(_nextOpeningSteps)
+          ..remove('submit_identity_document');
+        _step = 5;
+      });
+      _snack('حُفظت وثيقة الهوية وأُرسلت للمراجعة. لم تُفعّل المحفظة بعد.',
+        error: false);
+    } catch (_) {
+      _snack('تعذر إرسال الهوية. تحقق من الاتصال وحاول ثانية.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _identityStep() => _page(children: [
+    _card([
+      _title('وثيقة هوية صاحب الحساب',
+        'مسار العميل الذكر يتطلب رفع وثيقة هوية بعد الهاتف والسكن. يراجعها موثّق قبل الاعتماد.',
+        Icons.badge_outlined),
+      const SizedBox(height: 12),
+      if (_identityEvidence != null)
+        const Text('تم اختيار الوثيقة. راجع وضوحها قبل الإرسال.'),
+      Row(children: [
+        Expanded(child: OutlinedButton.icon(
+          onPressed: _busy ? null : () => _pickIdentityEvidence(ImageSource.camera),
+          icon: const Icon(Icons.camera_alt_outlined),
+          label: const Text('التقاط الهوية'))),
+        const SizedBox(width: 8),
+        Expanded(child: OutlinedButton.icon(
+          onPressed: _busy ? null : () => _pickIdentityEvidence(ImageSource.gallery),
+          icon: const Icon(Icons.photo_library_outlined),
+          label: const Text('من المعرض'))),
+      ]),
+      const SizedBox(height: 16),
+      _primaryButton('إرسال الهوية إلى موثّق', _submitIdentityEvidence),
+      TextButton(onPressed: _busy ? null : () => setState(() => _step = 5),
+        child: const Text('سأرفع الهوية لاحقاً')),
+    ]),
+  ]);
+
   Widget _successStep() {
-    const message = 'استلم موثّق طلب فتح الحساب. لن تُنشأ محفظة أو تتاح حركة مالية قبل قرار الاعتماد. عند الحاجة إلى معلومات إضافية سيظهر لك الطلب من مسار التحقق.';
+    final pendingPhone = _nextOpeningSteps.contains('confirm_phone') || !_phoneVerified;
+    final pendingResidence = _nextOpeningSteps.contains('submit_residence') || !_residenceSubmitted;
+    final pendingIdentity = _requiresIdentity && _nextOpeningSteps.contains('submit_identity_document');
+    final message = _openingStatus == 'needs_more_info'
+        ? 'طلب موثّق استكمال أدلة. اقرأ سبب الطلب أدناه ثم حدّث الملف المناسب.'
+        : _openingStatus == 'approved'
+        ? 'تم اعتماد طلب فتح الحساب. يمكنك تسجيل الدخول الآن.'
+        : _openingStatus == 'awaiting_admin_approval'
+          ? 'وافق موثّق على الأدلة. بانتظار قرار الإدارة النهائي قبل فتح المحفظة.'
+          : _openingStatus == 'rejected'
+            ? 'تم رفض فتح الحساب. راجع السبب وتواصل مع الدعم.'
+            : (pendingPhone || pendingResidence || pendingIdentity)
+              ? 'طلبك محفوظ لكنه غير مكتمل. استخدم الأزرار أدناه لاستكمال الأدلة المطلوبة.'
+              : 'وصلت أدلة فتح الحساب للمراجعة. لن تُنشأ محفظة قبل موافقة موثّق والإدارة.';
 
     return _page(children: [
       _card([
@@ -1426,6 +1653,23 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           ),
         ),
         const SizedBox(height: 18),
+        if (_decisionReason != null && _decisionReason!.isNotEmpty)
+          Text(_decisionReason!, style: const TextStyle(color: AmialColors.red)),
+        if (pendingPhone)
+          _primaryButton('استكمال إثبات الهاتف', () => setState(() => _step = 2)),
+        if (pendingResidence)
+          _primaryButton('استكمال إثبات السكن', () => setState(() => _step = 3)),
+        if (pendingIdentity && !pendingPhone && !pendingResidence)
+          _primaryButton('رفع وثيقة هوية الذكر', () => setState(() => _step = 4)),
+        if (_openingStatus == 'needs_more_info') ...[
+          _primaryButton('إعادة مراجعة إثبات الهاتف', () => setState(() => _step = 2)),
+          _primaryButton('استكمال بيانات السكن', () => setState(() => _step = 3)),
+          if (_requiresIdentity)
+            _primaryButton('تصحيح وثيقة الهوية', () => setState(() => _step = 4)),
+        ],
+        _primaryButton('تحديث حالة الطلب', _refreshOpeningStatus),
+        TextButton(onPressed: _busy ? null : _resumeExistingOpening,
+          child: const Text('انتهت صلاحية الجلسة؟ استعد طلبك')),
         _primaryButton('العودة لتسجيل الدخول', _finish),
       ]),
     ]);

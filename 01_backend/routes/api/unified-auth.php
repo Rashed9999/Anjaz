@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\Auth\AccountOpeningContractController;
 use App\Http\Controllers\Api\V1\Auth\AccountOpeningProgressController;
+use App\Http\Controllers\Api\V1\Auth\CustomerOpeningResumeController;
 use App\Http\Controllers\Api\V1\Auth\EmailOtpController;
 use App\Http\Controllers\Api\V1\Auth\EmailRegistrationController;
 use App\Http\Controllers\Api\V1\Auth\MerchantAccountOpeningController;
@@ -29,6 +30,11 @@ Route::prefix('auth')->name('amial.auth.')->middleware(['amial.rate-limit:auth_l
     Route::get('/account-opening/contract', [AccountOpeningContractController::class, 'show'])
         ->middleware('amial.rate-limit:registration_contract,30,1,true')
         ->name('account-opening.contract');
+
+    // A verified applicant can resume the ORIGINAL pending case after 24h.
+    // Only a scoped evidence token is returned; no wallet or login authorization.
+    Route::post('/account-opening/resume', CustomerOpeningResumeController::class)
+        ->middleware('throttle:5,1')->name('account-opening.resume');
 
     Route::get('/account-opening/{applicationUlid}/status', [AccountOpeningProgressController::class, 'show'])
         ->middleware('amial.rate-limit:opening_progress,30,1,true')

@@ -28,6 +28,8 @@ use Illuminate\Support\Facades\Route;
 Route::get('/login', [Login::class, 'login'])->name('login');
 Route::post('/login', [Login::class, 'submit'])->middleware('throttle:10,1')->name('login.submit');
 Route::get('/register', [Login::class, 'register'])->middleware('throttle:30,1')->name('register');
+Route::get('/opening', [Login::class, 'opening'])->middleware('throttle:30,1')->name('opening');
+Route::post('/opening/resume', [Login::class, 'resumeOpening'])->middleware('throttle:10,1')->name('opening.resume');
 Route::get('/recover', [Login::class, 'recover'])->middleware('throttle:30,1')->name('recover');
 
 Route::middleware('merchant.web')->group(function () {
