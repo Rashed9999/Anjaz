@@ -16,11 +16,12 @@ function requireContains(string $source, string $needle, string $message): void
     }
 }
 
-$root = dirname(__DIR__, 2);
-$index = file_get_contents($root.'/public/index.php');
-$bootstrap = file_get_contents($root.'/src/bootstrap.php');
-$core = file_get_contents(dirname($root).'/01_backend/app/Http/Controllers/Api/Internal/MuwathaqOperationsController.php');
-$routes = file_get_contents(dirname($root).'/01_backend/routes/api/unified-auth.php');
+$muwathaqRoot = dirname(__DIR__);
+$repoRoot = dirname($muwathaqRoot);
+$index = file_get_contents($muwathaqRoot.'/public/index.php');
+$bootstrap = file_get_contents($muwathaqRoot.'/src/bootstrap.php');
+$core = file_get_contents($repoRoot.'/01_backend/app/Http/Controllers/Api/Internal/MuwathaqOperationsController.php');
+$routes = file_get_contents($repoRoot.'/01_backend/routes/api/unified-auth.php');
 
 if (!is_string($index) || !is_string($bootstrap) || !is_string($core) || !is_string($routes)) {
     fwrite(STDERR, "FAIL: reviewer operations source files could not be read\n");
