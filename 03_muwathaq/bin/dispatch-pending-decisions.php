@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Muwathaq\CoreDecisionClient;
 use Muwathaq\Database;
+use Muwathaq\ReviewerAudit;
 use function Muwathaq\now;
 
 require __DIR__.'/../src/bootstrap.php';
@@ -19,4 +20,10 @@ foreach ($cases as $case) {
         $db->prepare('UPDATE muwathaq_cases SET core_last_error=?,updated_at=? WHERE id=?')->execute([mb_substr($error->getMessage(), 0, 500), now(), $case['id']]);
         fwrite(STDERR, "Failed {$case['case_ulid']}: {$error->getMessage()}\n");
     }
+}
+
+
+$audits = ReviewerAudit::dispatchPending();
+if ($audits > 0) {
+    echo "Delivered {$audits} reviewer audit event(s)\n";
 }
