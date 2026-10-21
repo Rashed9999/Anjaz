@@ -22,7 +22,7 @@
   const root = document.getElementById('muwathaq-openings');
   const escape = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   try {
-    const response = await fetch(@json(route('admin.muwathaq-openings.list')), {headers:{Accept:'application/json'}});
+    const response = await fetch(@json(route('admin.amial.muwathaq-openings.list')), {headers:{Accept:'application/json'}});
     const {data=[]} = await response.json();
     if (!data.length) { root.innerHTML='<div class="alert alert-info mb-0">لا توجد طلبات بانتظار اعتماد الإدارة.</div>'; return; }
     root.innerHTML = '<table class="table table-hover"><thead><tr><th>الطلب</th><th>صاحب الحساب</th><th>المسار</th><th>قرار موثّق</th><th>الأدلة</th><th>قرار الإدارة</th></tr></thead><tbody>' + data.map(row => {
