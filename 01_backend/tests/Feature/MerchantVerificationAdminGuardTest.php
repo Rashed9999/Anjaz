@@ -216,7 +216,7 @@ class MerchantVerificationAdminGuardTest extends TestCase
     }
 
     /** @test */
-    public function a_complete_identity_does_lift_the_lock_through_the_one_door(): void
+    public function a_complete_identity_does_not_let_legacy_business_approval_decide_personal_identity(): void
     {
         $merchant = $this->merchant();
         $admin = $this->admin([]);
@@ -230,8 +230,8 @@ class MerchantVerificationAdminGuardTest extends TestCase
             ->postJson(route('admin.amial.merchants.verification.approve', $req->id))
             ->assertOk();
 
-        $this->assertSame(1, (int) $merchant->fresh()->is_kyc_verified,
-            'ملفُّ الهويّة مكتملٌ ومع ذلك بقي القفل — فالاعتمادُ اسمٌ بلا أثر');
+        $this->assertSame(0, (int) $merchant->fresh()->is_kyc_verified,
+            'اعتماد ملف المنشأة القديم لا يجوز أن يقرر هوية صاحبها؛ قرار الهوية يمر عبر موثّق.');
     }
 
     /** @test */
