@@ -880,8 +880,6 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           ),
           const SizedBox(width: 8),
-          TextButton(onPressed: _busy ? null : _resumeExistingOpening,
-            child: const Text('استكمال طلب سابق')),
           Container(
             width: 44,
             height: 44,
@@ -898,7 +896,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'افتح محفظتك بخطوات بسيطة',
+                  'طلب فتح حساب في أميال باي',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w900,
                         color: AmialColors.textPrimary,
@@ -906,7 +904,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
                 ),
                 const SizedBox(height: 2),
                 const Text(
-                  'لا نطلب الهوية أو الصورة الشخصية عند إنشاء الحساب الأساسي.',
+                  'المتطلبات تختلف حسب مسار موثّق. لا محفظة قبل الاعتماد.',
                   style: TextStyle(fontSize: 12, color: AmialColors.textMuted),
                 ),
               ],
@@ -1084,6 +1082,11 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
             'حسابك الأساسي',
             'أنشئ كلمة مرور للدخول وPIN مالياً مستقلاً. يُحدد موثّق المتطلبات المناسبة لمسار حسابك قبل التفعيل.',
             Icons.account_balance_wallet_outlined,
+          ),
+          TextButton.icon(
+            onPressed: _busy ? null : _resumeExistingOpening,
+            icon: const Icon(Icons.assignment_return_outlined),
+            label: const Text('لدي طلب سابق — استكمال التوثيق'),
           ),
           Container(
             width: double.infinity,
