@@ -98,14 +98,19 @@ const editable=['submitted','under_review','needs_more_info'].includes(s.status)
 document.getElementById('documents').classList.toggle('hidden',!editable);
 document.querySelectorAll('.step').forEach(step=>{
 const e=received.get(step.dataset.kind), result=step.querySelector('.result');
-result.textContent=e?.document_received?' ✓ تم استلام الملف، بانتظار مراجعة موثّق':' لم يُرفع المستند بعد';
+result.textContent=!e?.document_received?' لم يُرفع المستند بعد':
+e.delivered_to_muwathaq?' ✓ وصل الملف إلى موثّق للمراجعة':
+' ✓ حُفظ الملف بأمان، وينتظر إرساله إلى موثّق';
 step.querySelector('button').textContent=e?.document_received?'استبدال الملف':'رفع المستند';
 });
 const next=(s.next_steps||[]);document.getElementById('step-note').textContent=
 s.status==='awaiting_admin_approval'?'أكمل موثّق المراجعة. انتظر قرار الإدارة النهائي.':
 s.status==='approved'?'تم تفعيل الحساب بعد الاعتماد النهائي. يمكنك تسجيل الدخول.':
 s.status==='rejected'?'هذا الطلب مرفوض. تواصل مع الدعم بشأن القرار.':
-next.includes('await_muwathaq_review')?'اكتملت الملفات المطلوبة؛ انتظر مراجعة موثّق.':
+next.includes('await_muwathaq_review')?
+((s.evidence||[]).some(e=>!e.delivered_to_muwathaq)?
+'اكتملت الملفات وحُفظت بأمان. بعضها لا يزال ينتظر التسليم إلى موثّق، وستُعاد محاولة الإرسال.':
+'وصلت الملفات إلى موثّق؛ انتظر المراجعة.'):
 'الملفات الناقصة: '+next.filter(x=>x.startsWith('submit_')).length+' من أصل 3. ستظهر حالة كل ملف أعلاه.';
 }
 async function refresh(){
