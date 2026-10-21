@@ -675,19 +675,9 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   }
 
   Future<void> _loadResidenceOptions() async {
-    try {
-      final response = await Get.find<ApiClient>()
-          .getData('/api/v1/amial/me/kyc/residence');
-      if (response.statusCode == 200 && response.body is Map) {
-        final options = response.body['evidence_options'];
-        if (options is List && options.isNotEmpty) {
-          _evidenceOptions = options
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-        }
-      }
-    } catch (_) {}
+    // Pending applicants do NOT have a wallet bearer token. The old
+    // /me/kyc/residence endpoint requires an authenticated financial account,
+    // so attempting it here always fails. Use safe opening-stage options.
     if (_evidenceOptions.isEmpty) {
       _evidenceOptions = _fallbackEvidence;
     }
