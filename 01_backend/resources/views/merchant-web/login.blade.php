@@ -37,6 +37,7 @@
         </form>
         <div class="account-links">
             <a href="{{ route('merchant.web.register') }}">إنشاء حساب منشأة جديد</a>
+            <a href="{{ route('merchant.web.opening') }}">استكمال طلب منشأة قائم</a>
             <a href="{{ route('merchant.web.recover') }}">نسيت كلمة المرور؟</a>
         </div>
         <div class="foot">موظف نقطة البيع؟ استخدم تطبيق أميال باي بحسابك المستقل. <a href="{{ rtrim(config('app.url'), '/') }}">العودة إلى الموقع الرئيسي</a></div>
