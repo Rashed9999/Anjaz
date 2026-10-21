@@ -2,6 +2,7 @@ FROM php:8.4-fpm-alpine
 
 # ── System deps ─────────────────────────────────────────
 RUN apk add --no-cache \
+    bash \
     nginx \
     supervisor \
     mysql-client \
