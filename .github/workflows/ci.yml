@@ -74,7 +74,7 @@ jobs:
       - name: فحص PHP وكشف تعارضات الدمج
         run: |
           ! rg -n '^(<<<<<<<|=======|>>>>>>>)' --glob '*.php' --glob '*.dart' .
-          find 01_backend/app 01_backend/tests 01_backend/routes 01_backend/database \
+          find 01_backend/app 01_backend/tests 01_backend/routes 01_backend/database 03_muwathaq \
             -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
   # ──────────────────────────────────────────────────────────
@@ -157,6 +157,9 @@ jobs:
       - name: تحقق شاشتي الرسوم وسجل التدقيق ضد 500
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/FeeCentreScreensGuardTest.php tests/Feature/AuditScreenArabicAndFiltersTest.php
+
+      - name: سياسة موثّق — المحافظة صريحة قبل الاعتماد
+        run: php 03_muwathaq/tests/governorate_policy_test.php
 
       - name: رحلة العميل الذهبية — من التسجيل إلى Tier 0 ورفع التوثيق
         working-directory: 01_backend

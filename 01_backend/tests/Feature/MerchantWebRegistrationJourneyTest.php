@@ -135,7 +135,7 @@ class MerchantWebRegistrationJourneyTest extends TestCase
             $this->assertSame(1, (int) $user->is_email_verified);
             $this->assertSame(0, (int) $user->is_active);
             $this->assertSame($sector, (string) $profile->business_type);
-            $this->assertSame('submitted', (string) $profile->verification_status);
+            $this->assertSame('unverified', (string) $profile->verification_status);
             $this->assertNotEmpty($store->merchant_number);
             $this->assertDatabaseHas('muwathaq_account_opening_applications', [
                 'user_id' => $user->id,
