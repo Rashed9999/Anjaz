@@ -91,3 +91,12 @@ Route::get('/internal/muwathaq/applications/{applicationUlid}/evidences/{evidenc
     ->whereUlid('applicationUlid')
     ->whereNumber('evidenceId')
     ->name('amial.internal.muwathaq.evidence.document');
+
+// دليل الحسابات للتشغيل داخل موثّق فقط، وسجل تدقيقه append-only في أميال باي.
+Route::get('/internal/muwathaq/account-directory', [MuwathaqOperationsController::class, 'directory'])
+    ->middleware(['muwathaq.signature', 'throttle:60,1'])
+    ->name('amial.internal.muwathaq.account-directory');
+
+Route::post('/internal/muwathaq/reviewer-audit-events', [MuwathaqOperationsController::class, 'storeAuditEvent'])
+    ->middleware(['muwathaq.signature', 'throttle:120,1'])
+    ->name('amial.internal.muwathaq.reviewer-audit-events');
