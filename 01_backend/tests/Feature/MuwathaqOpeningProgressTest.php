@@ -28,7 +28,7 @@ class MuwathaqOpeningProgressTest extends TestCase
             'amial.otp.pilot_customer_phone_code' => '123456',
         ]);
 
-        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female']);
+        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female', 'is_phone_verified' => 0]);
         $application = app(MuwathaqAccountOpeningService::class)->submitFor($user);
         $token = app(MuwathaqOpeningProgressService::class)->issueAccessToken($application);
 
@@ -54,7 +54,7 @@ class MuwathaqOpeningProgressTest extends TestCase
     /** @test */
     public function evidence_collection_closes_after_a_final_decision(): void
     {
-        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female']);
+        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female', 'is_phone_verified' => 0]);
         $application = app(MuwathaqAccountOpeningService::class)->submitFor($user);
         $progress = app(MuwathaqOpeningProgressService::class);
         $progress->issueAccessToken($application);
@@ -80,7 +80,7 @@ class MuwathaqOpeningProgressTest extends TestCase
     /** @test */
     public function expired_opening_access_token_is_rejected(): void
     {
-        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female']);
+        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female', 'is_phone_verified' => 0]);
         $application = app(MuwathaqAccountOpeningService::class)->submitFor($user);
         $token = app(MuwathaqOpeningProgressService::class)->issueAccessToken($application);
         $application->forceFill(['opening_access_expires_at' => now()->subSecond()])->save();
