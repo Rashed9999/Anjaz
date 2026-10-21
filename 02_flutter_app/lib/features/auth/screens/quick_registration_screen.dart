@@ -483,7 +483,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _snack('جلسة إكمال موثّق غير متاحة. لا يمكن متابعة الطلب بأمان.');
       return;
     }
-    if (!RegExp(r'^\\d{6}$').hasMatch(_phoneOtp.text.trim())) {
+    if (!RegExp(r'^\d{6}$').hasMatch(_phoneOtp.text.trim())) {
       _snack('أدخل رمز الهاتف المكوّن من 6 أرقام.');
       return;
     }
