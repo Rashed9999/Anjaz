@@ -64,6 +64,8 @@ jobs:
           python3 01_backend/scripts/source-integrity.py
           python3 -B -m unittest discover -s 01_backend/scripts/tests -p 'test_*.py'
           bash -n 01_backend/scripts/verify.sh
+          bash -n 01_backend/scripts/smoke.sh
+          bash -n 03_muwathaq/scripts/smoke.sh
       # عدّ الأقواس النصّي لا يفهم heredoc أو regex أو المصفوفات المركبة
       # في PHP، فيعطي إنذارات كاذبة. php -l هو محلّل اللغة الحقيقي.
       - name: تثبيت PHP للفحص النحوي
@@ -164,6 +166,10 @@ jobs:
       - name: استكمال تسجيل التاجر وإرسال الأدلة إلى موثّق
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/MerchantWebRegistrationJourneyTest.php tests/Feature/MuwathaqOpeningProgressTest.php
+
+      - name: E2E موثّق — فتح الحساب حتى اعتماد الإدارة والمحفظة
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Feature/E2E/PlatformHttpStackE2ETest.php tests/Feature/E2E/MuwathaqAccountOpeningE2ETest.php
 
       - name: رحلة العميل الذهبية — من التسجيل إلى Tier 0 ورفع التوثيق
         working-directory: 01_backend
