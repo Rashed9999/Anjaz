@@ -193,3 +193,12 @@ Schedule::command('muwathaq:dispatch-pending')
     ->everyMinute()
     ->withoutOverlapping()
     ->description('AMIAL-MUWATHAQ: Deliver pending account-opening cases');
+
+
+// AMIAL-MUWATHAQ-EVIDENCE-001 — الأدلة تصل مستقلة عن إنشاء القضية.
+// إذا سبق رفع السكن تسليم القضية بسبب انقطاع لحظي، تعاد المحاولة تلقائياً؛
+// لا يعتمد الحساب من ملخص ناقص ولا تضيع الوثيقة المشفرة.
+Schedule::call(fn () => app(\App\Services\Muwathaq\MuwathaqEvidenceBridgeService::class)->dispatchPending())
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->description('AMIAL-MUWATHAQ: Deliver pending account-opening evidence');
