@@ -12,6 +12,7 @@ use App\Services\Otp\EmailOtpService;
 use App\Services\ZoneAssignmentService;
 use App\Services\Muwathaq\MuwathaqAccountOpeningService;
 use App\Services\Muwathaq\MuwathaqRegistrationContractService;
+use App\Services\Muwathaq\MuwathaqOpeningProgressService;
 use App\Support\Phone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,6 +39,7 @@ class ProgressiveRegistrationController extends Controller
         private readonly LegalNameService $legalNames,
         private readonly MuwathaqAccountOpeningService $muwathaq,
         private readonly MuwathaqRegistrationContractService $contracts,
+        private readonly MuwathaqOpeningProgressService $openingProgress,
     ) {}
 
     public function register(Request $request): JsonResponse
@@ -278,6 +280,8 @@ class ProgressiveRegistrationController extends Controller
             throw $e;
         }
 
+        $openingAccessToken = $this->openingProgress->issueAccessToken($application);
+
         return response()->json([
             'success' => true,
             'message' => 'تم إرسال طلب فتح الحساب إلى موثّق للمراجعة.',
@@ -286,11 +290,14 @@ class ProgressiveRegistrationController extends Controller
                 'wallet_created' => false,
                 'account_status' => 'submitted',
                 'muwathaq_application_ulid' => $application?->application_ulid,
+                // token مقيد بطلب الفتح فقط؛ لا يمثل جلسة دخول أو محفظة.
+                'account_opening_access_token' => $openingAccessToken,
+                'account_opening_access_expires_at' => $application?->fresh()->opening_access_expires_at?->toIso8601String(),
                 'verification_path' => $application?->verification_path,
                 'transaction_pin_configured' => true,
                 'declared_legal_name' => (string) $user->declared_legal_name,
                 'legal_name_status' => (string) $user->legal_name_status,
-                'next_steps' => ['await_muwathaq_review'],
+                'next_steps' => ['confirm_phone', 'submit_residence'],
                 'financial_status' => 'wallet_not_created_until_approved',
             ],
         ], 201);
