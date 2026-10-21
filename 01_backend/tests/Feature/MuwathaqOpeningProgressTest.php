@@ -21,7 +21,12 @@ class MuwathaqOpeningProgressTest extends TestCase
     /** @test */
     public function opening_access_token_is_scoped_and_cannot_be_guessed_or_used_as_a_login_token(): void
     {
-        config(['amial.otp.pilot_customer_phone_enabled' => true]);
+        // The test environment intentionally has no shared demo OTP configured.
+        // Explicitly enable the pilot code only for this isolated test.
+        config([
+            'amial.otp.pilot_customer_phone_enabled' => true,
+            'amial.otp.pilot_customer_phone_code' => '123456',
+        ]);
 
         $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female']);
         $application = app(MuwathaqAccountOpeningService::class)->submitFor($user);
@@ -96,6 +101,8 @@ class MuwathaqOpeningProgressTest extends TestCase
             'type' => MERCHANT_TYPE,
             'role' => A::ROLE_MERCHANT,
             'is_active' => 0,
+            'is_kyc_verified' => 0,
+            'is_phone_verified' => 0,
         ]);
         MerchantProfile::create([
             'user_id' => $owner->id,
