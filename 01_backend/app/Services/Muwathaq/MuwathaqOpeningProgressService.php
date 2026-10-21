@@ -77,6 +77,7 @@ class MuwathaqOpeningProgressService
 
     public function confirmPilotPhone(MuwathaqAccountOpeningApplication $application, string $code): MuwathaqOpeningEvidence
     {
+        $this->assertEvidenceCollectionOpen($application);
         $pilotCode = app(OtpPolicy::class)->pilotCustomerPhoneCode();
         if ($pilotCode === null) {
             throw new DomainException('إثبات الهاتف متوقف حتى يُضبط مزود رسائل حقيقي.');
@@ -110,6 +111,7 @@ class MuwathaqOpeningProgressService
         array $data,
         ?UploadedFile $document,
     ): MuwathaqOpeningEvidence {
+        $this->assertEvidenceCollectionOpen($application);
         $governorate = YemenGovernorates::codeFromName((string) ($data['governorate'] ?? ''));
         if ($governorate === null) {
             throw new DomainException('محافظة الإقامة غير صحيحة.');
@@ -170,6 +172,13 @@ class MuwathaqOpeningProgressService
         if ($steps === []) $steps[] = 'await_muwathaq_review';
 
         return $steps;
+    }
+
+    private function assertEvidenceCollectionOpen(MuwathaqAccountOpeningApplication $application): void
+    {
+        if ($application->isFinal()) {
+            throw new DomainException('صدر قرار نهائي لهذا الطلب؛ لا يمكن تعديل أدلته.');
+        }
     }
 
     private function markReadyForReview(MuwathaqAccountOpeningApplication $application): void
