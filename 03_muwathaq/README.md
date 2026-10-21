@@ -26,7 +26,13 @@
    php /var/www/bin/dispatch-pending-decisions.php
    ```
 
-7. افحص `https://muwathaq.amialpay.com/health` ثم سجل الدخول.
+7. افحص الصحة ثم شغّل فحص الدخان من طرفية النشر (لا يغير قضايا أو قرارات):
+
+   ```sh
+   bash scripts/smoke.sh https://muwathaq.amialpay.com
+   ```
+
+   ثم سجل دخول المراجع. لا تُعتمد النشرة إن أعاد السكربت رمز خروج غير صفري.
 
 بعد نجاح الصحة فقط، أضف إلى بيئة أميال باي:
 
