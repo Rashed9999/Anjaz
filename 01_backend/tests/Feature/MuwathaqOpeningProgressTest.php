@@ -136,4 +136,80 @@ class MuwathaqOpeningProgressTest extends TestCase
         $this->assertSame(0, (int) $owner->fresh()->is_kyc_verified);
     }
 
+
+    /** @test */
+    public function female_tier_one_does_not_require_an_identity_photo_or_selfie(): void
+    {
+        $user = User::factory()->create([
+            'type' => CUSTOMER_TYPE, 'gender' => 'female', 'is_active' => 0,
+        ]);
+        $application = app(MuwathaqAccountOpeningService::class)->submitFor($user);
+        $this->assertSame('women_progressive', $application->verification_path);
+        $required = app(\App\Services\Muwathaq\AccountOpeningEvidencePolicy::class)
+            ->requirements($application);
+        $this->assertSame(['phone', 'residence'], array_keys($required));
+        $token = app(MuwathaqOpeningProgressService::class)->issueAccessToken($application);
+        $this->getJson(
+            '/api/v1/auth/account-opening/'.$application->application_ulid.'/status',
+            ['Authorization' => 'Bearer '.$token],
+        )->assertOk()->assertJsonPath('data.next_steps.0', 'confirm_phone')
+            ->assertJsonPath('data.next_steps.1', 'submit_residence');
+
+        foreach (['phone', 'residence'] as $kind) {
+            MuwathaqOpeningEvidence::query()->create([
+                'application_id' => $application->id,
+                'kind' => $kind,
+                'state' => MuwathaqOpeningEvidence::STATE_SUBMITTED,
+                'submitted_at' => now(),
+            ]);
+        }
+        $this->getJson(
+            '/api/v1/auth/account-opening/'.$application->application_ulid.'/status',
+            ['Authorization' => 'Bearer '.$token],
+        )->assertOk()->assertJsonPath('data.next_steps.0', 'await_muwathaq_review');
+        $this->assertFalse(EMoney::where('user_id', $user->id)->exists());
+    }
+
+    /** @test */
+    public function male_customer_must_upload_identity_evidence_before_review(): void
+    {
+        config(['amial.encryption.pii_key' => base64_encode(str_repeat('x', 32))]);
+        Storage::fake('local');
+
+        $user = User::factory()->create([
+            'type' => CUSTOMER_TYPE, 'gender' => 'male', 'is_active' => 0,
+        ]);
+        $application = app(MuwathaqAccountOpeningService::class)->submitFor($user);
+        $this->assertSame('standard_customer', $application->verification_path);
+        $required = app(\App\Services\Muwathaq\AccountOpeningEvidencePolicy::class)
+            ->requirements($application);
+        $this->assertSame(['phone', 'residence', 'identity_document'], array_keys($required));
+
+        foreach (['phone', 'residence'] as $kind) {
+            MuwathaqOpeningEvidence::query()->create([
+                'application_id' => $application->id, 'kind' => $kind,
+                'state' => MuwathaqOpeningEvidence::STATE_SUBMITTED, 'submitted_at' => now(),
+            ]);
+        }
+        $token = app(MuwathaqOpeningProgressService::class)->issueAccessToken($application);
+        $url = '/api/v1/auth/account-opening/'.$application->application_ulid;
+
+        $this->getJson($url.'/status', ['Authorization' => 'Bearer '.$token])
+            ->assertOk()->assertJsonPath('data.next_steps.0', 'submit_identity_document');
+
+        $this->withHeaders(['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json'])
+            ->post($url.'/evidence/identity_document', [
+                'evidence' => UploadedFile::fake()->image('identity.png'),
+            ])->assertOk();
+
+        $this->getJson($url.'/status', ['Authorization' => 'Bearer '.$token])
+            ->assertOk()->assertJsonPath('data.next_steps.0', 'await_muwathaq_review');
+        $this->assertDatabaseHas('muwathaq_opening_evidences', [
+            'application_id' => $application->id,
+            'kind' => 'identity_document',
+            'state' => MuwathaqOpeningEvidence::STATE_SUBMITTED,
+        ]);
+        $this->assertFalse(EMoney::where('user_id', $user->id)->exists());
+    }
+
 }
