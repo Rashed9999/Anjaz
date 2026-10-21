@@ -42,6 +42,32 @@ class MuwathaqOpeningProgressTest extends TestCase
     }
 
     /** @test */
+    public function evidence_collection_closes_after_a_final_decision(): void
+    {
+        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female']);
+        $application = app(MuwathaqAccountOpeningService::class)->submitFor($user);
+        $progress = app(MuwathaqOpeningProgressService::class);
+        $progress->issueAccessToken($application);
+
+        foreach ([MuwathaqOpeningEvidence::PHONE, MuwathaqOpeningEvidence::RESIDENCE] as $kind) {
+            MuwathaqOpeningEvidence::query()->create([
+                'application_id' => $application->id,
+                'kind' => $kind,
+                'state' => MuwathaqOpeningEvidence::STATE_SUBMITTED,
+                'submitted_at' => now(),
+            ]);
+        }
+
+        app(MuwathaqAccountOpeningService::class)->receiveDecision(
+            $application->application_ulid, 'approved', 'muwathaq-final-0001', null,
+            ['verified_phone' => true, 'verified_residence_governorate' => 'YE-AD'],
+        );
+
+        $this->expectException(\DomainException::class);
+        $progress->confirmPilotPhone($application->fresh(), '123456');
+    }
+
+    /** @test */
     public function expired_opening_access_token_is_rejected(): void
     {
         $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female']);
