@@ -8,6 +8,7 @@ use App\Models\Agent\AgentStaff;
 use App\Models\EMoney;
 use App\Models\MuwathaqAccountOpeningApplication;
 use App\Models\MuwathaqOpeningEvidence;
+use App\Services\Muwathaq\MuwathaqAccountOpeningService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -90,7 +91,7 @@ class AgentLifecycleChainTest extends TestCase
             ]);
         }
 
-        $opening = app(AppServicesMuwathaqMuwathaqAccountOpeningService::class);
+        $opening = app(MuwathaqAccountOpeningService::class);
         $opening->receiveDecision(
             $application->application_ulid,
             MuwathaqAccountOpeningApplication::STATUS_APPROVED,
