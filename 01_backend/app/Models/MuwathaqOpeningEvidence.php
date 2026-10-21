@@ -16,13 +16,14 @@ class MuwathaqOpeningEvidence extends Model
 
     protected $fillable = [
         'application_id', 'kind', 'state', 'payload_encrypted', 'file_encrypted_path',
-        'file_mime', 'file_sha256', 'submitted_at', 'verified_at',
+        'file_mime', 'file_sha256', 'submitted_at', 'verified_at', 'muwathaq_delivered_at', 'muwathaq_delivery_error',
     ];
 
     protected $casts = [
         'application_id' => 'integer',
         'submitted_at' => 'datetime',
         'verified_at' => 'datetime',
+        'muwathaq_delivered_at' => 'datetime',
     ];
 
     public function application(): BelongsTo
