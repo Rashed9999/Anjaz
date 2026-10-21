@@ -6,6 +6,7 @@ use App\Models\AgentProfile;
 use App\Models\EMoney;
 use App\Models\MerchantProfile;
 use App\Models\MuwathaqAccountOpeningApplication;
+use App\Models\MuwathaqOpeningEvidence;
 use App\Models\User;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -175,6 +176,7 @@ class MuwathaqAccountOpeningService
         $user->residence_verified_at = now();
 
         if ($application->verification_path === self::PATH_WOMEN_PROGRESSIVE) {
+            $this->assertWomenTierOneEvidence($application);
             // إسقاط توافق فقط للحواجز المالية القديمة؛ المسار الحقيقي محفوظ في الطلب.
             $user->kyc_tier = max(1, (int) ($user->kyc_tier ?? 0));
         } else {
@@ -228,6 +230,20 @@ class MuwathaqAccountOpeningService
         $profile->save();
         $user->is_kyc_verified = 1;
         $user->save();
+    }
+
+    private function assertWomenTierOneEvidence(MuwathaqAccountOpeningApplication $application): void
+    {
+        $received = MuwathaqOpeningEvidence::query()
+            ->where('application_id', $application->id)
+            ->where('state', MuwathaqOpeningEvidence::STATE_SUBMITTED)
+            ->whereIn('kind', [MuwathaqOpeningEvidence::PHONE, MuwathaqOpeningEvidence::RESIDENCE])
+            ->pluck('kind')
+            ->all();
+
+        if (count(array_intersect([MuwathaqOpeningEvidence::PHONE, MuwathaqOpeningEvidence::RESIDENCE], $received)) !== 2) {
+            throw new DomainException('لا يفعّل حساب المرأة في المستوى الأول قبل وصول دليلي الهاتف والسكن إلى موثّق.');
+        }
     }
 
     private function safeContext(array $context): array
