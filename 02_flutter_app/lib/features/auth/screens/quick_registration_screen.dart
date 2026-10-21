@@ -592,6 +592,9 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _accountCreated = true;
       _openingApplicationUlid = applicationUlid;
       _openingAccessToken = openingToken;
+      _verificationPath = data['verification_path']?.toString();
+      _openingStatus = data['account_status']?.toString();
+      _nextOpeningSteps = const ['confirm_phone', 'submit_residence'];
       await _persistOpeningProgress();
       _emailTimer?.cancel();
       if (!mounted) return;
@@ -772,9 +775,11 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
 
     if (confirmed == true && mounted) {
       _residenceSubmitted = true;
-      setState(() => _step = 4);
+      setState(() => _step = _requiresIdentity ? 4 : 5);
       _snack(
-        'تم إرسال طلب التوثيق الجزئي وحفظ نسخة مؤرشفة للمراجعة والطباعة.',
+        _requiresIdentity
+            ? 'تم إرسال إثبات السكن. ارفع وثيقة الهوية لاستكمال الطلب.'
+            : 'تم إرسال السكن؛ مسار المرأة الأولي لا يشترط الهوية أو السيلفي.',
         error: false,
       );
     }
@@ -830,7 +835,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         child: Column(
           children: [
             _header(context),
-            if (_step < 4) _progress(),
+            if (_step < 5) _progress(),
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
@@ -841,6 +846,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
                     1 => _emailStep(),
                     2 => _phoneStep(),
                     3 => _residenceStep(),
+                    4 => _requiresIdentity ? _identityStep() : _successStep(),
                     _ => _successStep(),
                   },
                 ),
@@ -871,6 +877,8 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           ),
           const SizedBox(width: 8),
+          TextButton(onPressed: _busy ? null : _resumeExistingOpening,
+            child: const Text('استكمال طلب سابق')),
           Container(
             width: 44,
             height: 44,
@@ -907,7 +915,8 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   }
 
   Widget _progress() {
-    const labels = ['الحساب', 'البريد', 'الهاتف', 'السكن'];
+    final labels = ['الحساب', 'البريد', 'الهاتف', 'السكن',
+      if (_requiresIdentity) 'الهوية'];
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(20, 2, 20, 16),
@@ -1332,7 +1341,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           ),
           const SizedBox(height: 8),
           TextButton(
-            onPressed: _busy ? null : () => setState(() => _step = 4),
+            onPressed: _busy ? null : () => setState(() => _step = 5),
             child: const Text('سأكمل إثبات الهاتف لاحقاً'),
           ),
         ]),
@@ -1474,7 +1483,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         _primaryButton('إرسال السكن للمراجعة', _submitResidence),
         const SizedBox(height: 8),
         TextButton(
-          onPressed: _busy ? null : () => setState(() => _step = 4),
+          onPressed: _busy ? null : () => setState(() => _step = 5),
           child: const Text('سأرفع إثبات السكن لاحقاً'),
         ),
       ]),
