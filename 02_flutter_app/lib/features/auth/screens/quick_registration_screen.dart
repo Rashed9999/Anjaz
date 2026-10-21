@@ -1590,7 +1590,9 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     final pendingPhone = _nextOpeningSteps.contains('confirm_phone') || !_phoneVerified;
     final pendingResidence = _nextOpeningSteps.contains('submit_residence') || !_residenceSubmitted;
     final pendingIdentity = _requiresIdentity && _nextOpeningSteps.contains('submit_identity_document');
-    final message = _openingStatus == 'approved'
+    final message = _openingStatus == 'needs_more_info'
+        ? 'طلب موثّق استكمال أدلة. اقرأ سبب الطلب أدناه ثم حدّث الملف المناسب.'
+        : _openingStatus == 'approved'
         ? 'تم اعتماد طلب فتح الحساب. يمكنك تسجيل الدخول الآن.'
         : _openingStatus == 'awaiting_admin_approval'
           ? 'وافق موثّق على الأدلة. بانتظار قرار الإدارة النهائي قبل فتح المحفظة.'
@@ -1659,6 +1661,12 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           _primaryButton('استكمال إثبات السكن', () => setState(() => _step = 3)),
         if (pendingIdentity && !pendingPhone && !pendingResidence)
           _primaryButton('رفع وثيقة هوية الذكر', () => setState(() => _step = 4)),
+        if (_openingStatus == 'needs_more_info') ...[
+          _primaryButton('إعادة مراجعة إثبات الهاتف', () => setState(() => _step = 2)),
+          _primaryButton('استكمال بيانات السكن', () => setState(() => _step = 3)),
+          if (_requiresIdentity)
+            _primaryButton('تصحيح وثيقة الهوية', () => setState(() => _step = 4)),
+        ],
         _primaryButton('تحديث حالة الطلب', _refreshOpeningStatus),
         TextButton(onPressed: _busy ? null : _resumeExistingOpening,
           child: const Text('انتهت صلاحية الجلسة؟ استعد طلبك')),
