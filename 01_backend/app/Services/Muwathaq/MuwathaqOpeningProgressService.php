@@ -2,6 +2,7 @@
 
 namespace App\Services\Muwathaq;
 
+use App\Models\EMoney;
 use App\Models\MuwathaqAccountOpeningApplication;
 use App\Models\MuwathaqOpeningEvidence;
 use App\Services\EncryptedFileStorage;
@@ -72,7 +73,7 @@ class MuwathaqOpeningProgressService
             'requested_tier' => $application->requested_tier,
             'next_steps' => $this->nextSteps($application, $evidence),
             'evidence' => $evidence,
-            'wallet_created' => false,
+            'wallet_created' => EMoney::query()->where('user_id', $application->user_id)->exists(),
             'decision_reason' => $application->status === MuwathaqAccountOpeningApplication::STATUS_NEEDS_MORE_INFO
                 ? $application->decision_reason : null,
         ];
