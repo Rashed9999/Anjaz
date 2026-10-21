@@ -5,6 +5,7 @@ namespace App\Services\Muwathaq;
 use App\Models\MuwathaqAccountOpeningApplication;
 use App\Models\MuwathaqOpeningEvidence;
 use App\Services\EncryptedFileStorage;
+use App\Services\Otp\OtpPolicy;
 use App\Support\YemenGovernorates;
 use DomainException;
 use Illuminate\Http\UploadedFile;
@@ -76,10 +77,11 @@ class MuwathaqOpeningProgressService
 
     public function confirmPilotPhone(MuwathaqAccountOpeningApplication $application, string $code): MuwathaqOpeningEvidence
     {
-        if (!config('otp.pilot_customer_phone_enabled', false)) {
+        $pilotCode = app(OtpPolicy::class)->pilotCustomerPhoneCode();
+        if ($pilotCode === null) {
             throw new DomainException('إثبات الهاتف متوقف حتى يُضبط مزود رسائل حقيقي.');
         }
-        if (!hash_equals((string) config('otp.pilot_customer_phone_code', '123456'), trim($code))) {
+        if (!hash_equals($pilotCode, trim($code))) {
             throw new DomainException('رمز الهاتف غير صحيح.');
         }
 
