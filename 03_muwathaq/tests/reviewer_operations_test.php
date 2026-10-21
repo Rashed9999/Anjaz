@@ -36,10 +36,7 @@ foreach (['session_started', 'directory_opened', 'case_opened', 'evidence_opened
     requireContains($index, "'{$action}'", "audit action {$action} is required");
 }
 requireContains($index, 'findCaseForApplication', 'directory must resolve local case references');
-if (str_contains($index, 'href="/cases/'.e($row[\'application_ulid\']')) {
-    fwrite(STDERR, "FAIL: directory must not use Amial application ULID as a Muwathaq case URL\n");
-    exit(1);
-}
+requireContains($index, '$details = $case', 'directory must link only to the local Muwathaq case');
 
 requireContains($bootstrap, 'muwathaq_reviewer_audit_outbox', 'encrypted audit outbox is required');
 requireContains($bootstrap, 'final class CoreOperationsClient', 'signed Amial operations client is required');
