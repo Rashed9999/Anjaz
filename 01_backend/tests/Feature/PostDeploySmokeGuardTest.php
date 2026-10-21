@@ -48,6 +48,18 @@ class PostDeploySmokeGuardTest extends TestCase
     }
 
     /** @test */
+    public function deployed_amial_images_include_the_bash_runtime_required_by_the_smoke_gate(): void
+    {
+        foreach (['Dockerfile', 'Dockerfile.prod'] as $dockerfile) {
+            $this->assertMatchesRegularExpression(
+                '~apk add --no-cache\\s+\\\\?\\s*bash~',
+                $this->read($dockerfile),
+                "{$dockerfile} يشحن سكربت Smoke بصيغة Bash لكنه لا يشحن Bash نفسه."
+            );
+        }
+    }
+
+    /** @test */
     public function muwathaq_has_its_own_external_smoke_gate_and_it_is_documented(): void
     {
         $script = $this->read('../03_muwathaq/scripts/smoke.sh');
