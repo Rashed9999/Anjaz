@@ -1490,8 +1490,97 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     ]);
   }
 
+  Future<void> _pickIdentityEvidence(ImageSource source) async {
+    try {
+      final selected = await ImagePicker().pickImage(
+        source: source, imageQuality: 88, maxWidth: 2200,
+      );
+      if (selected != null && mounted) {
+        setState(() => _identityEvidence = selected);
+      }
+    } catch (_) {
+      _snack('تعذر اختيار وثيقة الهوية.');
+    }
+  }
+
+  Future<void> _submitIdentityEvidence() async {
+    if (_busy) return;
+    if (!_requiresIdentity) {
+      _snack('وثيقة الهوية ليست مطلوبة في المستوى الأول لمسار المرأة.');
+      return;
+    }
+    if (_openingApplicationUlid == null || _openingAccessToken == null) {
+      _snack('جلسة موثّق غير متاحة. استعد طلبك أولاً.');
+      return;
+    }
+    if (_identityEvidence == null) {
+      _snack('أرفق صورة واضحة لوثيقة الهوية.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final response = await Get.find<ApiClient>().postMultipartData(
+        '/api/v1/auth/account-opening/$_openingApplicationUlid/evidence/identity_document',
+        <String, String>{},
+        [MultipartBody('evidence', File(_identityEvidence!.path))],
+        headers: {'Authorization': 'Bearer $_openingAccessToken'},
+      );
+      if (response.statusCode != 200 || response.body is! Map
+          || response.body['success'] != true) {
+        _snack(_responseMessage(response, 'لم تنجح عملية رفع الهوية.'));
+        return;
+      }
+      _identityEvidence = null;
+      if (!mounted) return;
+      setState(() => _step = 5);
+      _snack('حُفظت وثيقة الهوية وأُرسلت للمراجعة. لم تُفعّل المحفظة بعد.',
+        error: false);
+    } catch (_) {
+      _snack('تعذر إرسال الهوية. تحقق من الاتصال وحاول ثانية.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _identityStep() => _page(children: [
+    _card([
+      _title('وثيقة هوية صاحب الحساب',
+        'مسار العميل الذكر يتطلب رفع وثيقة هوية بعد الهاتف والسكن. يراجعها موثّق قبل الاعتماد.',
+        Icons.badge_outlined),
+      const SizedBox(height: 12),
+      if (_identityEvidence != null)
+        const Text('تم اختيار الوثيقة. راجع وضوحها قبل الإرسال.'),
+      Row(children: [
+        Expanded(child: OutlinedButton.icon(
+          onPressed: _busy ? null : () => _pickIdentityEvidence(ImageSource.camera),
+          icon: const Icon(Icons.camera_alt_outlined),
+          label: const Text('التقاط الهوية'))),
+        const SizedBox(width: 8),
+        Expanded(child: OutlinedButton.icon(
+          onPressed: _busy ? null : () => _pickIdentityEvidence(ImageSource.gallery),
+          icon: const Icon(Icons.photo_library_outlined),
+          label: const Text('من المعرض'))),
+      ]),
+      const SizedBox(height: 16),
+      _primaryButton('إرسال الهوية إلى موثّق', _submitIdentityEvidence),
+      TextButton(onPressed: _busy ? null : () => setState(() => _step = 5),
+        child: const Text('سأرفع الهوية لاحقاً')),
+    ]),
+  ]);
+
   Widget _successStep() {
-    const message = 'استلم موثّق طلب فتح الحساب. لن تُنشأ محفظة أو تتاح حركة مالية قبل قرار الاعتماد. عند الحاجة إلى معلومات إضافية سيظهر لك الطلب من مسار التحقق.';
+    final pendingPhone = _nextOpeningSteps.contains('confirm_phone') || !_phoneVerified;
+    final pendingResidence = _nextOpeningSteps.contains('submit_residence') || !_residenceSubmitted;
+    final pendingIdentity = _requiresIdentity && _nextOpeningSteps.contains('submit_identity_document');
+    final message = _openingStatus == 'approved'
+        ? 'تم اعتماد طلب فتح الحساب. يمكنك تسجيل الدخول الآن.'
+        : _openingStatus == 'awaiting_admin_approval'
+          ? 'وافق موثّق على الأدلة. بانتظار قرار الإدارة النهائي قبل فتح المحفظة.'
+          : _openingStatus == 'rejected'
+            ? 'تم رفض فتح الحساب. راجع السبب وتواصل مع الدعم.'
+            : (pendingPhone || pendingResidence || pendingIdentity)
+              ? 'طلبك محفوظ لكنه غير مكتمل. استخدم الأزرار أدناه لاستكمال الأدلة المطلوبة.'
+              : 'وصلت أدلة فتح الحساب للمراجعة. لن تُنشأ محفظة قبل موافقة موثّق والإدارة.';
 
     return _page(children: [
       _card([
@@ -1544,6 +1633,17 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           ),
         ),
         const SizedBox(height: 18),
+        if (_decisionReason != null && _decisionReason!.isNotEmpty)
+          Text(_decisionReason!, style: const TextStyle(color: AmialColors.red)),
+        if (pendingPhone)
+          _primaryButton('استكمال إثبات الهاتف', () => setState(() => _step = 2)),
+        if (pendingResidence)
+          _primaryButton('استكمال إثبات السكن', () => setState(() => _step = 3)),
+        if (pendingIdentity && !pendingPhone && !pendingResidence)
+          _primaryButton('رفع وثيقة هوية الذكر', () => setState(() => _step = 4)),
+        _primaryButton('تحديث حالة الطلب', _refreshOpeningStatus),
+        TextButton(onPressed: _busy ? null : _resumeExistingOpening,
+          child: const Text('انتهت صلاحية الجلسة؟ استعد طلبك')),
         _primaryButton('العودة لتسجيل الدخول', _finish),
       ]),
     ]);
