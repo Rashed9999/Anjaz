@@ -81,6 +81,9 @@ class WebAuthController extends Controller
             ->where('user_id', $owner->id)->where('subject_kind', 'merchant')->first() : null;
 
         if (!$owner || (int) ($owner->is_email_verified ?? 0) !== 1
+            || (string) ($owner->role ?? '') !== A::ROLE_MERCHANT
+            || (int) ($owner->is_temp_blocked ?? 0) === 1
+            || ($owner->security_hold_until && \Illuminate\Support\Carbon::parse($owner->security_hold_until)->isFuture())
             || !Hash::check((string) $data['password'], (string) $owner->password)
             || !$opening) {
             RateLimiter::hit($key, 900);
