@@ -9,9 +9,9 @@
 # والـPHP وقاعدة موثّق وباب المراجع تعمل من خارج الحاوية.
 set -uo pipefail
 
-BASE="\${1:-\${MUWATHAQ_SMOKE_BASE:-https://muwathaq.amialpay.com}}"
-BASE="\${BASE%/}"
-TMPDIR="\$(mktemp -d)"
+BASE="${1:-${MUWATHAQ_SMOKE_BASE:-https://muwathaq.amialpay.com}}"
+BASE="${BASE%/}"
+TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
 PASS=0; FAIL=0
@@ -27,19 +27,19 @@ printf '\n\033[1mفحص دخان موثّق — %s\033[0m\n' "$BASE"
 printf '%s\n' "──────────────────────────────────────────────"
 
 # ① الصحة ليست مجرد إقلاع الحاوية: /health يستعلم قاعدة موثّق فعلاً.
-R=$(probe "$BASE/health" "$TMPDIR/health.json"); CODE="\${R%%|*}"; T="\${R##*|}"
+R=$(probe "$BASE/health" "$TMPDIR/health.json"); CODE="${R%%|*}"; T="${R##*|}"
 if [[ "$CODE" == "200" ]] && grep -qE '"status"\s*:\s*"ok"' "$TMPDIR/health.json" && grep -qE '"service"\s*:\s*"muwathaq"' "$TMPDIR/health.json"; then
-  ok "الصحة: PHP وقاعدة موثّق (\${T}s)"
+  ok "الصحة: PHP وقاعدة موثّق (${T}s)"
 else
-  bad "الصحة: رمز \${CODE} أو استجابة غير صالحة"
+  bad "الصحة: رمز ${CODE} أو استجابة غير صالحة"
 fi
 
 # ② باب المراجع صفحة عامة مقصودة، لكنه يجب أن يحمل CSRF ولا يكشف جلسةً.
-R=$(probe "$BASE/login" "$TMPDIR/login.html"); CODE="\${R%%|*}"
+R=$(probe "$BASE/login" "$TMPDIR/login.html"); CODE="${R%%|*}"
 if [[ "$CODE" == "200" ]] && grep -q 'name="_token"' "$TMPDIR/login.html" && grep -q 'type="password"' "$TMPDIR/login.html"; then
   ok "باب المراجع يعرض نموذجاً محمياً بـ CSRF"
 else
-  bad "باب المراجع: رمز \${CODE} أو نموذج CSRF مفقود"
+  bad "باب المراجع: رمز ${CODE} أو نموذج CSRF مفقود"
 fi
 
 # ③ الكوكي آمن في HTTPS؛ لا نطلب Secure عند تشغيل محلي عبر HTTP.
@@ -55,11 +55,11 @@ else
 fi
 
 # ④ صفحة خطأ نظيفة: لا stack trace أو أسرار في مسار غير موجود.
-R=$(probe "$BASE/__muwathaq_smoke_no_such_path__" "$TMPDIR/error.html"); CODE="\${R%%|*}"
+R=$(probe "$BASE/__muwathaq_smoke_no_such_path__" "$TMPDIR/error.html"); CODE="${R%%|*}"
 if [[ "$CODE" == "404" ]] && ! grep -qiE 'stack trace|vendor/|DB_PASSWORD|MUWATHAQ_.*SECRET|Fatal error' "$TMPDIR/error.html"; then
   ok "خطأ 404 لا يفشي أسراراً"
 else
-  bad "خطأ المسار: رمز \${CODE} أو إفشاء محتمل للتنقيح"
+  bad "خطأ المسار: رمز ${CODE} أو إفشاء محتمل للتنقيح"
 fi
 
 printf '%s\n' "──────────────────────────────────────────────"
