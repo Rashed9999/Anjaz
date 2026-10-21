@@ -9,6 +9,12 @@ class MuwathaqOpeningEvidence extends Model
 {
     public const PHONE = 'phone';
     public const RESIDENCE = 'residence';
+    public const IDENTITY_DOCUMENT = 'identity_document';
+    public const OWNERSHIP_ASSURANCE = 'ownership_assurance';
+    public const OWNER_IDENTITY = 'owner_identity';
+    public const BUSINESS_REGISTRATION = 'business_registration';
+    public const OPERATING_ADDRESS = 'operating_address';
+    public const ADMIN_PROVISIONING = 'admin_provisioning';
 
     public const STATE_SUBMITTED = 'submitted';
     public const STATE_VERIFIED = 'verified';

@@ -38,6 +38,10 @@ Route::prefix('auth')->name('amial.auth.')->middleware(['amial.rate-limit:auth_l
         ->middleware('amial.rate-limit:opening_progress,8,5,true')
         ->whereUlid('applicationUlid')
         ->name('account-opening.phone.confirm');
+    Route::post('/account-opening/{applicationUlid}/evidence/{kind}', [AccountOpeningProgressController::class, 'submitEvidence'])
+        ->middleware('amial.rate-limit:opening_progress,8,5,true')
+        ->whereUlid('applicationUlid')->where('kind', '[a-z_]{3,40}')
+        ->name('account-opening.evidence.submit');
     Route::post('/account-opening/{applicationUlid}/residence', [AccountOpeningProgressController::class, 'submitResidence'])
         ->middleware('amial.rate-limit:opening_progress,8,5,true')
         ->whereUlid('applicationUlid')

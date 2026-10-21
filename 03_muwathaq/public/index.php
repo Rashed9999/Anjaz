@@ -197,11 +197,16 @@ try {
         if (!in_array($decision, ['under_review', 'needs_more_info', 'approved', 'rejected'], true)) throw new HttpError(422, 'INVALID_DECISION', 'قرار غير صحيح.');
         $governorate = trim((string) ($_POST['governorate'] ?? ''));
         if ($governorate === '') $governorate = 'YE-AD';
-        if ($decision === 'approved' && $case['verification_path'] === 'women_progressive') {
+        if ($decision === 'approved') {
             $evidence = $case['evidence_encrypted'] ? Cipher::decryptJson($case['evidence_encrypted']) : [];
-            foreach (['phone', 'residence'] as $kind) {
+            foreach (Policy::evidenceKinds($case) as $kind) {
                 if (($evidence[$kind]['state'] ?? null) !== 'submitted') {
-                    throw new HttpError(422, 'EVIDENCE_NOT_RECEIVED', 'لا يمكن اعتماد حساب نسائي قبل وصول دليل الهاتف والسكن إلى موثّق.');
+                    throw new HttpError(422, 'EVIDENCE_NOT_RECEIVED', 'لا يمكن الاعتماد قبل وصول جميع الأدلة المطلوبة من أميال باي.');
+                }
+            }
+            foreach (Policy::documentEvidenceKinds($case) as $kind) {
+                if (empty($evidence[$kind]['document_received'])) {
+                    throw new HttpError(422, 'DOCUMENT_NOT_RECEIVED', 'هذا المسار يتطلب مستنداً محمياً لم يصل إلى موثّق.');
                 }
             }
         }

@@ -8,6 +8,7 @@ use App\Models\MuwathaqOpeningEvidence;
 use App\Services\EncryptedFileStorage;
 use App\Services\Otp\OtpPolicy;
 use App\Support\YemenGovernorates;
+use App\Services\Muwathaq\AccountOpeningEvidencePolicy;
 use DomainException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
@@ -110,6 +111,39 @@ class MuwathaqOpeningProgressService
         });
     }
 
+    public function submitEvidence(MuwathaqAccountOpeningApplication $application, string $kind, array $metadata, ?UploadedFile $document): MuwathaqOpeningEvidence
+    {
+        $this->assertEvidenceCollectionOpen($application);
+        $policy = app(AccountOpeningEvidencePolicy::class);
+        if (!$policy->accepts($application, $kind) || in_array($kind, [MuwathaqOpeningEvidence::PHONE, MuwathaqOpeningEvidence::RESIDENCE], true)) {
+            throw new DomainException('نوع الدليل غير مسموح لهذا الطلب.');
+        }
+        $rule = $policy->requirements($application)[$kind];
+        if ($rule['document'] && $document === null) throw new DomainException('هذا الدليل يتطلب إرفاق مستند.');
+        if ($kind === MuwathaqOpeningEvidence::OWNERSHIP_ASSURANCE
+            && !in_array((string) ($metadata['method'] ?? ''), ['in_person', 'biometric_consent'], true)) {
+            throw new DomainException('طريقة ضمان الملكية يجب أن تكون حضورية أو بيومترية بموافقة صريحة.');
+        }
+        $path = null; $mime = null; $sha256 = null;
+        if ($document !== null) {
+            if (!$document->isValid()) throw new DomainException('تعذر قراءة المستند.');
+            $path = app(EncryptedFileStorage::class)->encryptAndStore($document, 'muwathaq-opening-'.$kind);
+            $mime = (string) $document->getMimeType();
+            $sha256 = hash_file('sha256', (string) $document->getRealPath());
+        }
+        return DB::transaction(function () use ($application, $kind, $metadata, $path, $mime, $sha256) {
+            $evidence = MuwathaqOpeningEvidence::query()->updateOrCreate(
+                ['application_id' => $application->id, 'kind' => $kind],
+                ['state' => MuwathaqOpeningEvidence::STATE_SUBMITTED,
+                 'payload_encrypted' => Crypt::encryptString(json_encode(['metadata' => array_intersect_key($metadata, array_flip(['method','issuer','document_number_hint','note']))], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)),
+                 'file_encrypted_path' => $path, 'file_mime' => $mime, 'file_sha256' => $sha256,
+                 'submitted_at' => now(), 'verified_at' => null]
+            );
+            $this->markReadyForReview($application);
+            return $evidence;
+        });
+    }
+
     public function submitResidence(
         MuwathaqAccountOpeningApplication $application,
         array $data,
@@ -175,10 +209,14 @@ class MuwathaqOpeningProgressService
 
         $states = collect($evidence)->keyBy('kind');
         $steps = [];
-        if (!isset($states[MuwathaqOpeningEvidence::PHONE])) $steps[] = 'confirm_phone';
-        if (!isset($states[MuwathaqOpeningEvidence::RESIDENCE])) $steps[] = 'submit_residence';
+        foreach (app(AccountOpeningEvidencePolicy::class)->requirements($application) as $kind => $rule) {
+            $item = $states->get($kind);
+            if ($item === null || ($rule['document'] && empty($item['document_received']))) {
+                $steps[] = $kind === MuwathaqOpeningEvidence::PHONE ? 'confirm_phone'
+                    : ($kind === MuwathaqOpeningEvidence::RESIDENCE ? 'submit_residence' : 'submit_'.$kind);
+            }
+        }
         if ($steps === []) $steps[] = 'await_muwathaq_review';
-
         return $steps;
     }
 
@@ -191,14 +229,7 @@ class MuwathaqOpeningProgressService
 
     private function markReadyForReview(MuwathaqAccountOpeningApplication $application): void
     {
-        $required = [MuwathaqOpeningEvidence::PHONE, MuwathaqOpeningEvidence::RESIDENCE];
-        $present = MuwathaqOpeningEvidence::query()
-            ->where('application_id', $application->id)
-            ->whereIn('kind', $required)
-            ->pluck('kind')
-            ->all();
-
-        if (count(array_intersect($required, $present)) === count($required)) {
+        if (app(AccountOpeningEvidencePolicy::class)->missingKinds($application) === []) {
             $application->forceFill([
                 'status' => MuwathaqAccountOpeningApplication::STATUS_UNDER_REVIEW,
                 'evidence_completed_at' => now(),

@@ -346,6 +346,34 @@ final class Policy
         throw new HttpError(422, 'UNSUPPORTED_ACCOUNT_TYPE', 'نوع فتح الحساب غير مدعوم.');
     }
 
+    /** @return list<string> */
+    public static function evidenceKinds(array $case): array
+    {
+        return match ($case['verification_path']) {
+            'women_progressive' => match (max(1, min(3, (int) ($case['requested_tier'] ?? 1)))) {
+                1 => ['phone', 'residence'],
+                2 => ['phone', 'residence', 'identity_document'],
+                3 => ['phone', 'residence', 'identity_document', 'ownership_assurance'],
+            },
+            'standard_customer' => ['phone', 'residence', 'identity_document'],
+            'merchant_sector' => ['owner_identity', 'business_registration', 'operating_address'],
+            'agent_operation' => ['admin_provisioning', 'owner_identity', 'operating_address'],
+            default => [],
+        };
+    }
+
+    /** @return list<string> */
+    public static function documentEvidenceKinds(array $case): array
+    {
+        return match ($case['verification_path']) {
+            'women_progressive' => (int) ($case['requested_tier'] ?? 1) >= 2 ? ['identity_document'] : [],
+            'standard_customer' => ['identity_document'],
+            'merchant_sector' => ['owner_identity', 'business_registration', 'operating_address'],
+            'agent_operation' => ['owner_identity', 'operating_address'],
+            default => [],
+        };
+    }
+
     /** @return array<string,mixed> */
     public static function decisionContext(array $case, array $affirmed, string $governorate): array
     {

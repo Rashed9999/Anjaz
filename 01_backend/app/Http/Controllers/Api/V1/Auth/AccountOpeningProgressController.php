@@ -35,6 +35,23 @@ class AccountOpeningProgressController extends Controller
         });
     }
 
+    public function submitEvidence(Request $request, string $applicationUlid, string $kind): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'method' => ['nullable', 'string', 'max:40'],
+            'issuer' => ['nullable', 'string', 'max:80'],
+            'document_number_hint' => ['nullable', 'string', 'max:40'],
+            'note' => ['nullable', 'string', 'max:500'],
+            'evidence' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
+        ]);
+        if ($validator->fails()) return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
+        return $this->respond($request, $applicationUlid, function ($application) use ($request, $kind) {
+            $evidence = $this->progress->submitEvidence($application, $kind, $request->all(), $request->file('evidence'));
+            $this->bridge->tryDeliver($evidence);
+            return ['success' => true, 'data' => $this->progress->status($application->fresh())];
+        });
+    }
+
     public function submitResidence(Request $request, string $applicationUlid): JsonResponse
     {
         $validator = Validator::make($request->all(), [

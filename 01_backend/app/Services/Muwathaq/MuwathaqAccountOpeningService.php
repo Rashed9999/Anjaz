@@ -60,11 +60,7 @@ class MuwathaqAccountOpeningService
     }
 
     public function receiveDecision(
-        string $applicationUlid,
-        string $decision,
-        string $reference,
-        ?string $reason = null,
-        array $context = [],
+        string $applicationUlid, string $decision, string $reference, ?string $reason = null, array $context = [],
     ): MuwathaqAccountOpeningApplication {
         $allowed = [
             MuwathaqAccountOpeningApplication::STATUS_APPROVED,
@@ -72,42 +68,60 @@ class MuwathaqAccountOpeningService
             MuwathaqAccountOpeningApplication::STATUS_NEEDS_MORE_INFO,
             MuwathaqAccountOpeningApplication::STATUS_UNDER_REVIEW,
         ];
-        if (!in_array($decision, $allowed, true)) {
-            throw new DomainException('قرار موثّق غير معروف.');
-        }
+        if (!in_array($decision, $allowed, true)) throw new DomainException('قرار موثّق غير معروف.');
 
         return DB::transaction(function () use ($applicationUlid, $decision, $reference, $reason, $context) {
-            $application = MuwathaqAccountOpeningApplication::query()
-                ->where('application_ulid', $applicationUlid)
-                ->lockForUpdate()
-                ->first();
-            if ($application === null) {
-                throw new DomainException('طلب فتح الحساب غير موجود.');
-            }
+            $application = MuwathaqAccountOpeningApplication::query()->where('application_ulid', $applicationUlid)->lockForUpdate()->first();
+            if ($application === null) throw new DomainException('طلب فتح الحساب غير موجود.');
 
+            // إعادة التسليم آمنة ولا تجعل موافقة موثّق تفعّل المال.
             if ($application->isFinal()) {
-                if ($application->decision_reference === $reference && $application->status === $decision) {
-                    return $application;
-                }
+                if ($application->decision_reference === $reference
+                    && (($decision === MuwathaqAccountOpeningApplication::STATUS_APPROVED
+                        && $application->status === MuwathaqAccountOpeningApplication::STATUS_AWAITING_ADMIN_APPROVAL)
+                        || $application->status === $decision)) return $application;
                 throw new DomainException('هذا الطلب حُسم سابقاً ولا يقبل قراراً جديداً.');
             }
 
-            $application->status = $decision;
+            $application->status = $decision === MuwathaqAccountOpeningApplication::STATUS_APPROVED
+                ? MuwathaqAccountOpeningApplication::STATUS_AWAITING_ADMIN_APPROVAL : $decision;
             $application->decision_reference = $reference;
             $application->decision_reason = $reason;
             $application->decision_context = $this->safeContext($context);
-            $application->decided_at = in_array($decision, [
+            $application->muwathaq_decided_at = in_array($decision, [
                 MuwathaqAccountOpeningApplication::STATUS_APPROVED,
                 MuwathaqAccountOpeningApplication::STATUS_REJECTED,
             ], true) ? now() : null;
+            $application->decided_at = $decision === MuwathaqAccountOpeningApplication::STATUS_REJECTED ? now() : null;
             $application->save();
-
-            if ($decision === MuwathaqAccountOpeningApplication::STATUS_APPROVED) {
-                $this->activateApprovedApplication($application);
-                $application->refresh();
-            }
-
             return $application;
+        });
+    }
+
+    /** قرار التفعيل التشغيلي؛ هذه وحدها تنشئ المحفظة بعد موافقة موثّق. */
+    public function receiveAdminDecision(string $applicationUlid, bool $approved, int $adminId, ?string $reason = null): MuwathaqAccountOpeningApplication
+    {
+        if ($adminId <= 0) throw new DomainException('تعذر تحديد مدير الاعتماد.');
+        return DB::transaction(function () use ($applicationUlid, $approved, $adminId, $reason) {
+            $application = MuwathaqAccountOpeningApplication::query()->where('application_ulid', $applicationUlid)->lockForUpdate()->first();
+            if ($application === null) throw new DomainException('طلب فتح الحساب غير موجود.');
+            if ($application->status !== MuwathaqAccountOpeningApplication::STATUS_AWAITING_ADMIN_APPROVAL) {
+                throw new DomainException('هذا الطلب ليس في طابور اعتماد الإدارة.');
+            }
+            $application->admin_decided_by = $adminId;
+            $application->admin_decided_at = now();
+            $application->admin_decision_reason = $reason;
+            if (!$approved) {
+                $application->status = MuwathaqAccountOpeningApplication::STATUS_REJECTED;
+                $application->decided_at = now();
+                $application->save();
+                return $application;
+            }
+            $application->status = MuwathaqAccountOpeningApplication::STATUS_APPROVED;
+            $application->decided_at = now();
+            $application->save();
+            $this->activateApprovedApplication($application);
+            return $application->fresh();
         });
     }
 
@@ -139,6 +153,7 @@ class MuwathaqAccountOpeningService
 
     private function activateApprovedApplication(MuwathaqAccountOpeningApplication $application): void
     {
+        $this->assertEvidenceComplete($application);
         $user = User::query()->lockForUpdate()->findOrFail($application->user_id);
 
         match ($application->subject_kind) {
@@ -152,6 +167,12 @@ class MuwathaqAccountOpeningService
             'user_id' => $user->id,
             'currency' => \App\Support\Money\Currencies::BASE,
         ]);
+    }
+
+    private function assertEvidenceComplete(MuwathaqAccountOpeningApplication $application): void
+    {
+        $missing = app(AccountOpeningEvidencePolicy::class)->missingKinds($application);
+        if ($missing !== []) throw new DomainException('لا يمكن تفعيل الحساب قبل استلام أدلة: '.implode('، ', $missing).'.');
     }
 
     private function activateCustomer(User $user, MuwathaqAccountOpeningApplication $application): void
@@ -176,9 +197,12 @@ class MuwathaqAccountOpeningService
         $user->residence_verified_at = now();
 
         if ($application->verification_path === self::PATH_WOMEN_PROGRESSIVE) {
-            $this->assertWomenTierOneEvidence($application);
-            // إسقاط توافق فقط للحواجز المالية القديمة؛ المسار الحقيقي محفوظ في الطلب.
-            $user->kyc_tier = max(1, (int) ($user->kyc_tier ?? 0));
+            $tier = max(1, min(3, (int) ($application->requested_tier ?: 1)));
+            if ($tier >= 3 && ($context['verified_ownership_assurance'] ?? false) !== true) {
+                throw new DomainException('المستوى الثالث يتطلب ضمان ملكية حضوريًا أو بيومتريًا اختياريًا من موثّق.');
+            }
+            // توافق مؤقت لحواجز المال القديمة؛ لا يفرض صورة شخصية على المرأة.
+            $user->kyc_tier = max($tier, (int) ($user->kyc_tier ?? 0));
         } else {
             if (($context['verified_identity'] ?? false) !== true) {
                 throw new DomainException('لا يفعّل الحساب القياسي قبل إثبات الهوية من موثّق.');
@@ -252,7 +276,7 @@ class MuwathaqAccountOpeningService
         return array_filter($context, static fn ($value, $key) => in_array($key, [
             'policy_version', 'reviewer_reference', 'risk_band', 'notes_code',
             'verified_phone', 'verified_residence_governorate',
-            'verified_identity', 'verified_owner_identity', 'verified_business_requirements', 'admin_provisioned',
+            'verified_identity', 'verified_ownership_assurance', 'verified_owner_identity', 'verified_business_requirements', 'admin_provisioned',
         ], true) && is_scalar($value), ARRAY_FILTER_USE_BOTH);
     }
 }
