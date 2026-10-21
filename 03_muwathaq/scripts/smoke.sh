@@ -54,12 +54,28 @@ else
   bad "استجابة الدخول لا تضبط كوكي HttpOnly"
 fi
 
-# ④ صفحة خطأ نظيفة: لا stack trace أو أسرار في مسار غير موجود.
+# ④ مسار غير موجود لا يكشف أسراراً. بوابة موثّق محمية؛ الزائر غير
+# المسجل يُعاد عمداً إلى /login برمز 302/303 قبل عرض صفحة 404.
 R=$(probe "$BASE/__muwathaq_smoke_no_such_path__" "$TMPDIR/error.html"); CODE="${R%%|*}"
-if [[ "$CODE" == "404" ]] && ! grep -qiE 'stack trace|vendor/|DB_PASSWORD|MUWATHAQ_.*SECRET|Fatal error' "$TMPDIR/error.html"; then
+ERROR_HEADERS=$(curl -sSI --max-time 20 "$BASE/__muwathaq_smoke_no_such_path__" 2>/dev/null || true)
+if grep -qiE 'stack trace|vendor/|DB_PASSWORD|MUWATHAQ_.*SECRET|Fatal error' "$TMPDIR/error.html"; then
+  bad "خطأ المسار يفشي تفاصيل للتنقيح"
+elif [[ "$CODE" == "404" ]]; then
   ok "خطأ 404 لا يفشي أسراراً"
+elif [[ "$CODE" =~ ^30[23]$ ]] && grep -qiE '^location:[[:space:]]*/login/?[[:space:]]*
+
+printf '%s\n' "──────────────────────────────────────────────"
+if [[ $FAIL -eq 0 ]]; then
+  printf '\033[32m  نجح %d فحوص · موثّق جاهز\033[0m\n\n' "$PASS"
+  exit 0
+fi
+printf '\033[31m  فشل %d فحوص (ونجح %d)\033[0m\n' "$FAIL" "$PASS"
+printf '  لا تعتمد النشرة قبل أن يصير الفشل صفراً.\n\n'
+exit 1
+ <<<"$ERROR_HEADERS"; then
+  ok "المسار المحمي يعيد الزائر غير المسجل إلى الدخول بأمان"
 else
-  bad "خطأ المسار: رمز ${CODE} أو إفشاء محتمل للتنقيح"
+  bad "خطأ المسار: رمز ${CODE} أو توجيه غير آمن"
 fi
 
 printf '%s\n' "──────────────────────────────────────────────"
