@@ -1,5 +1,5 @@
 @extends('layouts.admin.app')
-@section('title', 'مركز التحقق والتوثيق الموحد')
+@section('title', 'ملفات التوثيق السابقة')
 @section('content')
 <style>
     .vc-card{background:var(--amial-surface,#fff);border:1px solid #dfe7ee;border-radius:15px}
@@ -20,9 +20,10 @@
     @media(min-width:992px){.vc-queue{max-height:78vh;overflow:auto}.vc-profile{max-height:78vh;overflow:auto}}
 </style>
 <div class="content container-fluid" id="verification-center" data-testid="unified-verification-center" dir="rtl">
+    <div class="alert alert-info">طلبات فتح الحساب الجديدة تُستكمل وتُراجع في <strong>موثّق</strong>، ثم تظهر الموافقات التشغيلية في <a href="{{ route('admin.amial.hub.muwathaq-openings.index') }}">اعتمادات موثّق النهائية</a>. هذه الصفحة مخصصة لملفات KYC السابقة والترقيات، وليست بابًا ثانيًا لاعتماد الحساب الجديد.</div>
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
-            <h2 class="page-header-title mb-1">🛡️ مركز التحقق والتوثيق الموحد</h2>
+            <h2 class="page-header-title mb-1">📂 مراجعة ملفات التوثيق السابقة</h2>
             <p class="text-muted mb-0">هوية صاحب الحساب، السكن، ووثائق المنشأة وقرار الاعتماد — من ملف واحد لا من طوابير متفرقة.</p>
         </div>
         <button class="btn btn-outline-primary" id="vc-refresh" type="button">↻ تحديث الحالات</button>

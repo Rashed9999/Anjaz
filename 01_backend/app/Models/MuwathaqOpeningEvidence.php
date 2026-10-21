@@ -47,6 +47,8 @@ class MuwathaqOpeningEvidence extends Model
             'document_received' => $this->file_encrypted_path !== null,
             'submitted_at' => $this->submitted_at?->toIso8601String(),
             'verified_at' => $this->verified_at?->toIso8601String(),
+            // Stored securely locally does not mean delivered to the reviewer.
+            'delivered_to_muwathaq' => $this->muwathaq_delivered_at !== null,
         ];
     }
 }

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Api\V1\Auth\MerchantAccountOpeningController;
 use App\Models\Merchant;
+use App\Models\EMoney;
 use App\Models\MerchantProfile;
 use App\Models\MuwathaqAccountOpeningApplication;
 use App\Models\User;
@@ -82,6 +83,15 @@ class MerchantWebRegistrationJourneyTest extends TestCase
             ->assertDontSee('وجه الهوية')
             ->assertDontSee('الصورة الشخصية');
 
+
+        $this->get('/merchant/opening')->assertOk()
+            ->assertSee('استكمال توثيق المنشأة')
+            ->assertSee('/api/v1/auth/account-opening/', false)
+            ->assertSee('owner_identity')
+            ->assertSee('business_registration')
+            ->assertSee('operating_address');
+
+        $this->get('/merchant/login')->assertOk()->assertSee('استكمال طلب منشأة قائم');
         $this->get('/merchant/recover')->assertOk()
             ->assertSee('/api/v1/auth/password-reset/email', false);
     }
@@ -137,6 +147,13 @@ class MerchantWebRegistrationJourneyTest extends TestCase
             $this->assertSame($sector, (string) $profile->business_type);
             $this->assertSame('unverified', (string) $profile->verification_status);
             $this->assertNotEmpty($store->merchant_number);
+            $body = $response->getData(true);
+            $this->assertNotEmpty($body['data']['account_opening_access_token'] ?? null);
+            $this->assertFalse(EMoney::where('user_id', $user->id)->exists());
+            $this->getJson(
+                '/api/v1/auth/account-opening/'.$body['data']['muwathaq_application_ulid'].'/status',
+                ['Authorization' => 'Bearer '.$body['data']['account_opening_access_token']],
+            )->assertOk()->assertJsonPath('data.next_steps.0', 'submit_owner_identity');
             $this->assertDatabaseHas('muwathaq_account_opening_applications', [
                 'user_id' => $user->id,
                 'subject_kind' => 'merchant',
@@ -177,4 +194,66 @@ class MerchantWebRegistrationJourneyTest extends TestCase
 
         $this->assertGuest('merchant_web');
     }
+
+    #[Test]
+    public function owner_can_resume_existing_pending_application_without_merchant_login_or_wallet(): void
+    {
+        $email = 'existing-pending-merchant@example.test';
+        $owner = User::factory()->create([
+            'type' => MERCHANT_TYPE, 'role' => A::ROLE_MERCHANT,
+            'email' => $email, 'email_canonical' => $email,
+            'is_email_verified' => 1, 'is_active' => 0,
+            'password' => Hash::make('MerchantSecurePass9!'),
+        ]);
+        MerchantProfile::create([
+            'user_id' => $owner->id,
+            'business_type' => A::BIZ_RETAIL,
+            'verification_status' => 'unverified',
+        ]);
+        $opening = app(\App\Services\Muwathaq\MuwathaqAccountOpeningService::class)
+            ->submitFor($owner, A::BIZ_RETAIL);
+
+        $url = '/merchant/opening/resume';
+        $this->postJson($url, ['email' => $email, 'password' => 'wrong-password'])
+            ->assertForbidden()->assertJsonPath('success', false);
+
+        $result = $this->postJson($url, [
+            'email' => $email, 'password' => 'MerchantSecurePass9!',
+        ])->assertOk()->assertJsonPath('data.application_ulid', $opening->application_ulid)->json();
+
+        $this->assertNotEmpty($result['data']['account_opening_access_token']);
+        $this->assertGuest('merchant_web');
+        $this->assertFalse(EMoney::where('user_id', $owner->id)->exists());
+
+        $this->getJson(
+            '/api/v1/auth/account-opening/'.$opening->application_ulid.'/status',
+            ['Authorization' => 'Bearer '.$result['data']['account_opening_access_token']],
+        )->assertOk()->assertJsonPath('data.status', 'submitted');
+
+        $this->post('/merchant/login', [
+            'identifier' => $email, 'password' => 'MerchantSecurePass9!',
+        ])->assertSessionHasErrors('identifier');
+    }
+
+    #[Test]
+    public function unverified_email_cannot_reissue_an_opening_token(): void
+    {
+        $email = 'unverified-merchant@example.test';
+        $owner = User::factory()->create([
+            'type' => MERCHANT_TYPE, 'role' => A::ROLE_MERCHANT,
+            'email' => $email, 'email_canonical' => $email,
+            'is_email_verified' => 0,
+            'password' => Hash::make('MerchantSecurePass9!'),
+        ]);
+        MerchantProfile::create([
+            'user_id' => $owner->id,
+            'business_type' => A::BIZ_RETAIL,
+            'verification_status' => 'unverified',
+        ]);
+        app(\App\Services\Muwathaq\MuwathaqAccountOpeningService::class)->submitFor($owner, A::BIZ_RETAIL);
+        $this->postJson('/merchant/opening/resume', [
+            'email' => $email, 'password' => 'MerchantSecurePass9!',
+        ])->assertForbidden()->assertJsonPath('success', false);
+    }
+
 }

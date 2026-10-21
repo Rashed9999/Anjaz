@@ -153,10 +153,15 @@ class KycRegulatoryFieldsTest extends TestCase
         $this->assertFalse((bool) $denied->fresh()->is_pep);
 
         foreach ([$denied, $declared] as $registrant) {
+            // Declaring PEP status must not shortcut opening review or mint a wallet.
             $this->assertSame(
-                1,
+                0,
                 \App\Models\EMoney::where('user_id', $registrant->id)->count(),
             );
+            $this->assertDatabaseHas('muwathaq_account_opening_applications', [
+                'user_id' => $registrant->id,
+                'status' => 'submitted',
+            ]);
         }
     }
 

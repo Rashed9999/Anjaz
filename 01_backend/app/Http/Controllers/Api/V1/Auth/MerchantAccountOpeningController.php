@@ -14,6 +14,7 @@ use App\Services\LegalTermsService;
 use App\Services\Merchant\MerchantNumberService;
 use App\Services\Muwathaq\MuwathaqAccountOpeningService;
 use App\Services\Muwathaq\MuwathaqRegistrationContractService;
+use App\Services\Muwathaq\MuwathaqOpeningProgressService;
 use App\Services\Otp\EmailOtpService;
 use App\Services\Vertical\VerticalBootstrapService;
 use App\Services\ZoneAssignmentService;
@@ -42,6 +43,7 @@ class MerchantAccountOpeningController extends Controller
         private readonly LegalTermsService $legalTerms,
         private readonly MuwathaqAccountOpeningService $muwathaq,
         private readonly MuwathaqRegistrationContractService $contracts,
+        private readonly MuwathaqOpeningProgressService $openingProgress,
         private readonly MerchantNumberService $merchantNumbers,
         private readonly VerticalBootstrapService $verticals,
         private readonly AuditService $audit,
@@ -232,6 +234,8 @@ class MerchantAccountOpeningController extends Controller
             throw $e;
         }
 
+        $openingToken = $this->openingProgress->issueAccessToken($application);
+
         return response()->json([
             'success' => true,
             'message' => 'تم إرسال طلب فتح المنشأة إلى موثّق. ستُفعّل لوحة القطاع بعد الاعتماد.',
@@ -241,6 +245,8 @@ class MerchantAccountOpeningController extends Controller
                 'wallet_created' => false,
                 'account_status' => 'submitted',
                 'muwathaq_application_ulid' => $application?->application_ulid,
+                'account_opening_access_token' => $openingToken,
+                'account_opening_access_expires_at' => $application->fresh()->opening_access_expires_at?->toIso8601String(),
                 'verification_path' => $application?->verification_path,
                 'business_type' => $businessType,
                 'policy_version' => $contract['policy_version'],

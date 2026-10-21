@@ -105,6 +105,16 @@ class UnifiedVerificationCenterController extends Controller
         $usersQuery = User::query()
             ->whereIn('type', $visibleTypes);
 
+        // New opening requests are decided exclusively by Muwathaq and the
+        // final administration gate. Exclude them from the historical KYC queue
+        // so the same applicant never receives two competing approval workflows.
+        if (Schema::hasTable('muwathaq_account_opening_applications')) {
+            $usersQuery->whereNotIn('users.id', function ($subquery) {
+                $subquery->select('user_id')->from('muwathaq_account_opening_applications')
+                    ->whereIn('status', ['submitted', 'under_review', 'needs_more_info', 'awaiting_admin_approval']);
+            });
+        }
+
         // البحث لا يتقيّد بآخر 150 تسجيلًا: يستطيع المراجع فتح طلبٍ أقدم
         // برقم الحساب أو الهاتف، ولو خرج من نافذة الطابور السريع.
         if ($q === '') {
@@ -489,6 +499,16 @@ class UnifiedVerificationCenterController extends Controller
         ]);
         $account = User::query()->whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE])
             ->findOrFail($id);
+        // Legacy identity decisions must not bypass an open Muwathaq case.
+        if (\App\Models\MuwathaqAccountOpeningApplication::query()
+            ->where('user_id', $account->id)
+            ->whereIn('status', ['submitted', 'under_review', 'needs_more_info', 'awaiting_admin_approval'])
+            ->exists()) {
+            return response()->json([
+                'success' => false, 'code' => 'MUWATHAQ_OPENING_IN_PROGRESS',
+                'message' => 'قرار فتح هذا الحساب يصدر من موثّق ثم بوابة الاعتماد النهائي، لا من التوثيق السابق.',
+            ], 409);
+        }
         $approved = (int) $input['status'] === 1;
 
         if (!$approved && mb_strlen(trim((string) ($input['reason'] ?? ''))) < 5) {
@@ -532,6 +552,15 @@ class UnifiedVerificationCenterController extends Controller
             'tier' => ['nullable', 'in:standard,premium,gold'],
         ]);
         $merchant = User::query()->where('type', MERCHANT_TYPE)->findOrFail($id);
+        if (\App\Models\MuwathaqAccountOpeningApplication::query()
+            ->where('user_id', $merchant->id)
+            ->whereIn('status', ['submitted', 'under_review', 'needs_more_info', 'awaiting_admin_approval'])
+            ->exists()) {
+            return response()->json([
+                'success' => false, 'code' => 'MUWATHAQ_OPENING_IN_PROGRESS',
+                'message' => 'هذا التاجر يتبع مراجعة موثّق، ولا يمكن اتخاذ قرار موازٍ من المسار القديم.',
+            ], 409);
+        }
         $verification = MerchantVerificationRequest::query()
             ->where('merchant_user_id', $merchant->id)->latest('id')->firstOrFail();
         $action = (string) $input['action'];
