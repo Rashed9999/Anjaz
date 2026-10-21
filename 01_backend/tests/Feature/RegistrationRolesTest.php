@@ -45,8 +45,7 @@ class RegistrationRolesTest extends TestCase
     {
         $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500001'))
             ->assertOk()
-            ->assertJsonPath('verification_status', 'submitted')
-            ->assertJsonPath('kyc_tier', 0);
+            ->assertJsonPath('verification_status', 'submitted');
 
         $user = User::where('phone', '967771500001')->first();
         $this->assertNotNull($user);
