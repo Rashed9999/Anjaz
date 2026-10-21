@@ -200,5 +200,6 @@ Schedule::command('muwathaq:dispatch-pending')
 // لا يعتمد الحساب من ملخص ناقص ولا تضيع الوثيقة المشفرة.
 Schedule::call(fn () => app(\App\Services\Muwathaq\MuwathaqEvidenceBridgeService::class)->dispatchPending())
     ->everyMinute()
+    ->name('muwathaq-deliver-pending-evidence')
     ->withoutOverlapping()
     ->description('AMIAL-MUWATHAQ: Deliver pending account-opening evidence');
