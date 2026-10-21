@@ -230,13 +230,32 @@ final class Policy
     public static function for(array $case): array
     {
         return match ($case['verification_path']) {
-            'women_progressive' => [
-                'version' => 'women-tier-1-v1',
-                'requirements' => [
-                    'verified_phone' => 'تأكيد ملكية رقم الهاتف',
-                    'verified_residence' => 'تأكيد محافظة الإقامة والعنوان',
+            'women_progressive' => match (max(1, min(3, (int) ($case['requested_tier'] ?? 1)))) {
+                1 => [
+                    'version' => 'women-tier-1-v1',
+                    'requirements' => [
+                        'verified_phone' => 'تأكيد ملكية رقم الهاتف',
+                        'verified_residence' => 'تأكيد محافظة الإقامة والعنوان',
+                    ],
                 ],
-            ],
+                2 => [
+                    'version' => 'women-tier-2-v1',
+                    'requirements' => [
+                        'verified_phone' => 'تأكيد ملكية رقم الهاتف',
+                        'verified_residence' => 'تأكيد محافظة الإقامة والعنوان',
+                        'verified_identity' => 'مراجعة وثيقة الهوية من دون اشتراط صورة شخصية',
+                    ],
+                ],
+                3 => [
+                    'version' => 'women-tier-3-v1',
+                    'requirements' => [
+                        'verified_phone' => 'تأكيد ملكية رقم الهاتف',
+                        'verified_residence' => 'تأكيد محافظة الإقامة والعنوان',
+                        'verified_identity' => 'مراجعة وثيقة الهوية',
+                        'verified_ownership_assurance' => 'ضمان ملكية متقدم: مراجعة حضورية أو خيار بيومتري بموافقة صاحبة الحساب',
+                    ],
+                ],
+            },
             'standard_customer' => [
                 'version' => 'standard-customer-v1',
                 'requirements' => [
@@ -346,6 +365,7 @@ final class Policy
             'verified_phone' => in_array('verified_phone', $affirmed, true),
             'verified_residence_governorate' => $governorate,
             'verified_identity' => in_array('verified_identity', $affirmed, true),
+            'verified_ownership_assurance' => in_array('verified_ownership_assurance', $affirmed, true),
             'verified_owner_identity' => in_array('verified_owner_identity', $affirmed, true),
             'verified_business_requirements' => in_array('verified_business_requirements', $affirmed, true),
             'admin_provisioned' => in_array('admin_provisioned', $affirmed, true),
