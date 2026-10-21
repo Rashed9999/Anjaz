@@ -216,22 +216,33 @@ class MerchantVerificationAdminGuardTest extends TestCase
     }
 
     /** @test */
-    public function a_complete_identity_does_lift_the_lock_through_the_one_door(): void
+    public function a_complete_identity_still_requires_a_separate_identity_decision(): void
     {
         $merchant = $this->merchant();
         $admin = $this->admin([]);
 
-        // «مكتمل» هنا يعني المستندات + إثبات أن صاحب الحساب هو صاحب الهوية،
-        // لا مجرد ثلاث صور معتمدة.
+        // اكتمال الأدلة لا يساوي صدور قرار هوية، حتى إذا قرر المراجع
+        // اعتماد المنشأة. يجب أن يبقى القفل المالي حتى الاعتماد المنفصل.
         $this->establishKycEvidence($merchant, 2, $admin);
         $req = $this->request($merchant);
 
         $this->actingAs($admin, 'user')
             ->postJson(route('admin.amial.merchants.verification.approve', $req->id))
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('identity.verified', false);
 
+        $this->assertSame('verified', $req->fresh()->status);
+        $this->assertSame('verified',
+            MerchantProfile::where('user_id', $merchant->id)->value('verification_status'));
+        $this->assertSame(0, (int) $merchant->fresh()->is_kyc_verified,
+            'اعتماد المنشأة وثّق هوية المالك تلقائياً دون قرار مستقل');
+
+        // باب الهوية الصريح وحده يرفع القفل بعد التحقق من الأدلة.
+        app(\App\Services\KycDocumentService::class)->decideAccountVerification(
+            $merchant->fresh(), $admin, true, 2,
+        );
         $this->assertSame(1, (int) $merchant->fresh()->is_kyc_verified,
-            'ملفُّ الهويّة مكتملٌ ومع ذلك بقي القفل — فالاعتمادُ اسمٌ بلا أثر');
+            'صدر قرار هوية صريح لكن حالة التحقق لم تُحدّث');
     }
 
     /** @test */

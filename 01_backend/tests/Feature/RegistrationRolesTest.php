@@ -41,18 +41,22 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
-    public function customer_self_registration_creates_active_tier_zero_account(): void
+    public function customer_self_registration_creates_pending_application_without_wallet(): void
     {
         $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500001'))
             ->assertOk()
-            ->assertJsonPath('verification_status', 'active_unverified')
-            ->assertJsonPath('kyc_tier', 0);
+            ->assertJsonPath('verification_status', 'submitted')
+            ->assertJsonPath('wallet_created', false);
 
         $user = User::where('phone', '967771500001')->first();
         $this->assertNotNull($user);
         $this->assertSame(CUSTOMER_TYPE, (int) $user->type);
         $this->assertSame(0, (int) $user->is_kyc_verified);
-        $this->assertTrue(EMoney::where('user_id', $user->id)->exists());
+        $this->assertSame(0, (int) $user->kyc_tier);
+        $this->assertFalse(EMoney::where('user_id', $user->id)->exists());
+        $this->assertDatabaseHas('muwathaq_account_opening_applications', [
+            'user_id' => $user->id, 'status' => 'submitted',
+        ]);
     }
 
     /** @test */
@@ -146,16 +150,13 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
-    public function agent_self_registration_gets_agent_number(): void
+    public function agent_self_registration_is_forbidden(): void
     {
-        $resp = $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500004', [
+        $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500004', [
             'account_type' => 'agent',
-        ]))->assertOk()->json();
+        ]))->assertStatus(403)->assertJsonPath('errors.0.code', 'AGENT_SELF_REGISTRATION_CLOSED');
 
-        $this->assertNotEmpty($resp['agent_number']);
-        $user = User::where('phone', '967771500004')->first();
-        $this->assertSame(AGENT_TYPE, (int) $user->type);
-        $this->assertSame($resp['agent_number'], $user->agent_number);
+        $this->assertDatabaseMissing('users', ['phone' => '967771500004']);
     }
 
     /** @test */
@@ -200,50 +201,36 @@ class RegistrationRolesTest extends TestCase
 
         // وبعدها يدخل من التطبيق برقم تاجره ويستخدم تشغيل قطاعه غير المالي.
         // حارس القبض المركزي يبقي استلام المال مقفلاً إلى اعتماد المنشأة.
-        Artisan::call('passport:install', ['--no-interaction' => true]);
+        // اعتماد هوية صاحب المنشأة في المسار القديم لا يعتمد طلب فتح
+        // الحساب لدى موثّق. لذلك يظل دخول التاجر غير متاح.
         $this->postJson('/api/v1/auth/login', [
             'role' => 'merchant',
             'merchant_number' => $resp['merchant_number'],
             'phone' => '967771500005',
             'password' => '1234',
-        ])->assertOk();
+        ])->assertStatus(401)->assertJsonPath('code', 'AUTH_FAILED');
 
-        \Laravel\Passport\Passport::actingAs($merchant->fresh(), [], 'api');
-
-        // ══════════════════════════════════════════════════════════════
-        // **التاجرُ ذو هوية مالك معتمدة يفتح بابَ قطاعه — لا بابَ غيره.**
-        //
-        // كان هذا السطرُ يشترط أن يفتح **تاجرُ صيدليّةٍ كاشيرَ البقالة**
-        // (`/merchant/cashier/products`)، وهو ما يمنعه عزلُ القطاعات
-        // عمداً بـ`PHARMACY_CASHIER_ONLY`: «استخدم كاشير الصيدلية لتبقى
-        // الوصفات والتشغيلات والصلاحية في الفاتورة».
-        //
-        // **والمقصودُ من الفحص باقٍ**: أنّ الحسابَ بعد اعتماد هوية مالكه يعمل
-        // فعلاً. فيُقاس على بابه هو — **ويُشترط معه أنّ البابَ الآخرَ
-        // مغلق**، فيصير السطرُ الذي كان يناقض العزلَ حارساً له.
-        // ══════════════════════════════════════════════════════════════
-        $this->getJson('/api/v1/amial/merchant/pharmacy')->assertOk();
-
-        $this->getJson('/api/v1/amial/merchant/cashier/products')
-            ->assertForbidden()
-            ->assertJsonPath('code', 'PHARMACY_CASHIER_ONLY');
+        $this->assertDatabaseHas('muwathaq_account_opening_applications', [
+            'user_id' => $merchant->id, 'status' => 'submitted',
+        ]);
+        $this->assertFalse(EMoney::where('user_id', $merchant->id)->exists(),
+            'لا تُنشأ محفظة المنشأة لمجرد اعتماد الهوية في المسار القديم');
     }
 
     /** @test AMIAL-VERIFY-GATE — استجابة الدخول تحمل حالة التوثيق لتوجيه التطبيق. */
-    public function login_response_exposes_verification_state(): void
+    public function customer_login_stays_blocked_while_muwathaq_opening_is_pending(): void
     {
         Artisan::call('passport:install', ['--no-interaction' => true]);
 
-        // عميل مسجَّل ذاتياً = نشط Tier 0 وليس حساباً محبوساً في المراجعة
+        // التسجيل يخلق طلب موثّق، ولا يسمح بالدخول قبل اعتماد فتح المحفظة.
         $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500007'))
             ->assertOk();
         $pending = User::where('phone', '967771500007')->first();
 
         $this->postJson('/api/v1/auth/login', [
             'role' => 'customer', 'phone' => '967771500007', 'password' => '1234',
-        ])->assertOk()->assertJsonPath('meta.user.verification_state', 'active_unverified')
-          ->assertJsonPath('meta.user.is_kyc_verified', 0)
-          ->assertJsonPath('meta.user.kyc_tier', 0);
+        ])->assertStatus(401)->assertJsonPath('code', 'AUTH_FAILED');
+        $this->assertFalse(EMoney::where('user_id', $pending->id)->exists());
 
         // بعد اعتماده من الأدمن = موثّق
         $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009200']);
@@ -263,7 +250,13 @@ class RegistrationRolesTest extends TestCase
 
         $this->postJson('/api/v1/auth/login', [
             'role' => 'customer', 'phone' => '967771500007', 'password' => '1234',
-        ])->assertOk()->assertJsonPath('meta.user.verification_state', 'verified');
+        ])->assertStatus(401)->assertJsonPath('code', 'AUTH_FAILED');
+
+        // القرار القديم بشأن الهوية لا يزيل حالة الانتظار في موثّق.
+        $this->assertDatabaseHas('muwathaq_account_opening_applications', [
+            'user_id' => $pending->id, 'status' => 'submitted',
+        ]);
+        $this->assertFalse(EMoney::where('user_id', $pending->id)->exists());
     }
 
     /** @test AMIAL-VERIFY-GATE — اعتماد الحساب يُنشئ إشعاراً داخل التطبيق. */
