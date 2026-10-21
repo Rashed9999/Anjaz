@@ -343,6 +343,15 @@ php artisan test --filter="PendingTransfer|RecipientVerification"
 bash scripts/smoke.sh https://amialpay.com
 ```
 
+وعند نشر موثّق أيضاً، من طرفية تطبيق **muwathaq** نفسه:
+
+```bash
+bash scripts/smoke.sh https://muwathaq.amialpay.com
+```
+
+فحص موثّق يثبت `/health` (PHP + قاعدة موثّق)، نموذج دخول المراجع وCSRF،
+كوكي الجلسة الآمن، وعدم إفشاء التنقيح في 404. لا يرسل أي قرار أو يعدّل قضية.
+
 سبعةُ فحوصٍ على **الخادم المنشور** لا على الشيفرة:
 
 | # | ما يُفحص | ما يمسكه ولا يمسكه غيرُه |
