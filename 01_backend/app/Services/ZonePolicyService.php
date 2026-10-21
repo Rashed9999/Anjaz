@@ -317,6 +317,17 @@ class ZonePolicyService
     }
 
     /**
+     * تستخدمه الخدمات الداخلية حتى لا يعيد كل منها كتابة شرط SOUTH خاص به.
+     */
+    public function assertAllowed(User $user, string $action): void
+    {
+        $decision = $this->authorize($user, $action);
+        if (!$decision['allowed']) {
+            throw new RuntimeException($decision['reason'].' ['.$decision['decision_code'].']');
+        }
+    }
+
+    /**
      * يحدد zone الطلب من إشارات الـ IP / Locale.
      * فقط إشارة — لا تُستخدم كحُكم نهائي (الوثيقة قسم 4).
      */
