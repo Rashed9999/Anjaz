@@ -92,6 +92,30 @@ try {
         jsonResponse(['accepted' => true, 'case_ulid' => $caseUlid, 'duplicate' => false], 202);
     }
 
+    if (preg_match('#^/api/v1/internal/applications/([0-9A-HJKMNP-TV-Z]{26})/evidence$#', $path, $match)) {
+        if ($method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'الطريقة غير مسموحة.');
+        $body = file_get_contents('php://input') ?: '';
+        Signature::verifyAmialRequest($body);
+        $payload = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        $evidence = $payload['evidence'] ?? null;
+        if (!is_array($evidence) || !is_int($evidence['id'] ?? null) || !is_string($evidence['kind'] ?? null)) {
+            throw new HttpError(422, 'INVALID_EVIDENCE', 'بيانات الدليل غير صالحة.');
+        }
+        $case = findCase($match[1]);
+        $items = $case['evidence_encrypted'] ? Cipher::decryptJson($case['evidence_encrypted']) : [];
+        $items[(string) $evidence['kind']] = [
+            'id' => $evidence['id'],
+            'kind' => $evidence['kind'],
+            'state' => (string) ($evidence['state'] ?? 'submitted'),
+            'document_received' => (bool) ($evidence['document_received'] ?? false),
+            'document_mime' => $evidence['document_mime'] ?? null,
+            'submitted_at' => $evidence['submitted_at'] ?? null,
+        ];
+        Database::pdo()->prepare('UPDATE muwathaq_cases SET evidence_encrypted=?,status=CASE WHEN status="submitted" THEN "under_review" ELSE status END,updated_at=? WHERE id=?')
+            ->execute([Cipher::encrypt(json_encode($items, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)), now(), $case['id']]);
+        jsonResponse(['accepted' => true], 202);
+    }
+
     if ($path === '/login') {
         if ($method === 'POST') {
             assertCsrf();
@@ -132,7 +156,15 @@ try {
         $requirements = '';
         foreach ($policy['requirements'] as $key => $label) $requirements .= '<div class="req"><label><input type="checkbox" name="affirmed[]" value="'.e($key).'" style="width:auto"> '.e($label).'</label></div>';
         $subject = $payload['subject'] ?? [];
-        $content = '<a class="btn secondary" href="/">العودة للقضايا</a><div class="card"><h2>قضية '.e($case['case_ulid']).'</h2><p><span class="tag">'.e($case['status']).'</span> <span class="muted">سياسة '.e($policy['version']).'</span></p><div class="grid"><div><b>صاحب الطلب</b><br>'.e($applicant['legal_name'] ?? '—').'<br>'.e($applicant['phone'] ?? '—').'<br>'.e($applicant['email'] ?? '—').'</div><div><b>نوع الحساب</b><br>'.e($case['subject_kind']).'<br>'.e($case['verification_path']).'<br>'.e($case['business_type'] ?? '—').'</div><div><b>تفاصيل النشاط</b><br>'.e(json_encode($subject, JSON_UNESCAPED_UNICODE) ?: '—').'</div></div></div>';
+        $evidence = $case['evidence_encrypted'] ? Cipher::decryptJson($case['evidence_encrypted']) : [];
+        $evidenceHtml = '';
+        foreach ($evidence as $item) {
+            $evidenceHtml .= '<div class="req"><b>'.e($item['kind'] ?? 'evidence').'</b> · '.e($item['state'] ?? 'submitted')
+                .(!empty($item['document_received']) ? ' · مرفق مشفّر محفوظ لدى أميال باي' : '')
+                .'<br><span class="muted">'.e($item['submitted_at'] ?? '').'</span></div>';
+        }
+        if ($evidenceHtml === '') $evidenceHtml = '<div class="alert">لم تصل أدلة إكمال من أميال باي بعد.</div>';
+        $content = '<a class="btn secondary" href="/">العودة للقضايا</a><div class="card"><h2>قضية '.e($case['case_ulid']).'</h2><p><span class="tag">'.e($case['status']).'</span> <span class="muted">سياسة '.e($policy['version']).'</span></p><div class="grid"><div><b>صاحب الطلب</b><br>'.e($applicant['legal_name'] ?? '—').'<br>'.e($applicant['phone'] ?? '—').'<br>'.e($applicant['email'] ?? '—').'</div><div><b>نوع الحساب</b><br>'.e($case['subject_kind']).'<br>'.e($case['verification_path']).'<br>'.e($case['business_type'] ?? '—').'</div><div><b>تفاصيل النشاط</b><br>'.e(json_encode($subject, JSON_UNESCAPED_UNICODE) ?: '—').'</div></div></div><div class="card"><h3>أدلة الإكمال الواردة</h3><p class="muted">لا تعتمد القضية لمجرد وصول ملخص؛ راجع المستند المشفر عبر قناة أميال المحمية قبل الإقرار.</p>'+'' . $evidenceHtml . '</div>';
         $governorates = '';
         foreach (Policy::GOVERNORATES as $code => $name) $governorates .= '<option value="'.e($code).'">'.e($name).' ('.e($code).')</option>';
         $content .= '<form method="post" action="/cases/'.e($case['case_ulid']).'/decision" class="card"><input type="hidden" name="_token" value="'.e(csrf()).'"><h3>قرار المراجع</h3><p class="muted">لا تعتمد إلا بعد رؤية الأدلة في موثّق وإقرار البنود التالية.</p>'.$requirements.'<label>القرار</label><select name="decision"><option value="under_review">قيد المراجعة</option><option value="needs_more_info">طلب استكمال</option><option value="approved">اعتماد</option><option value="rejected">رفض</option></select><label>محافظة الإقامة أو الموقع التشغيلي</label><select name="governorate">'.$governorates.'</select><label>ملاحظة للقرار</label><textarea name="reason" rows="3" maxlength="1000"></textarea><button class="btn" type="submit">حفظ القرار وإرساله لأميال باي</button></form>';
