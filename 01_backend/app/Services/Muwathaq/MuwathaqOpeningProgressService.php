@@ -25,6 +25,9 @@ class MuwathaqOpeningProgressService
 
     public function issueAccessToken(MuwathaqAccountOpeningApplication $application): string
     {
+        if ($application->isFinal()) {
+            throw new DomainException('لا تصدر جلسة إكمال لطلب صدر فيه قرار نهائي.');
+        }
         $plain = Str::random(80);
 
         $application->forceFill([
@@ -158,6 +161,10 @@ class MuwathaqOpeningProgressService
     /** @param array<int,array<string,mixed>> $evidence */
     private function nextSteps(MuwathaqAccountOpeningApplication $application, array $evidence): array
     {
+        if ($application->status === MuwathaqAccountOpeningApplication::STATUS_NEEDS_MORE_INFO) {
+            return ['resolve_muwathaq_request'];
+        }
+
         if (in_array($application->status, [
             MuwathaqAccountOpeningApplication::STATUS_APPROVED,
             MuwathaqAccountOpeningApplication::STATUS_REJECTED,
