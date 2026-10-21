@@ -113,6 +113,13 @@ CREATE TABLE IF NOT EXISTS muwathaq_cases (
   INDEX muwathaq_cases_delivery (core_delivery_status, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
+        // ترقيات ذاتية صغيرة للتطبيق المستقل. نتحمل وجود العمود عند إعادة التشغيل.
+        try {
+            $db->exec('ALTER TABLE muwathaq_cases ADD COLUMN evidence_encrypted LONGTEXT NULL AFTER payload_encrypted');
+        } catch (\PDOException) {
+            // العمود موجود غالباً؛ مخطط موثّق لا يعتمد على هجرة يدوية خارج التطبيق.
+        }
+
         $db->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS muwathaq_reviewer_credentials (
   id TINYINT UNSIGNED PRIMARY KEY,
