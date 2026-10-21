@@ -41,18 +41,18 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
-    public function customer_self_registration_creates_active_tier_zero_account(): void
+    public function customer_self_registration_creates_submitted_tier_zero_application_without_wallet(): void
     {
         $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500001'))
             ->assertOk()
-            ->assertJsonPath('verification_status', 'active_unverified')
+            ->assertJsonPath('verification_status', 'submitted')
             ->assertJsonPath('kyc_tier', 0);
 
         $user = User::where('phone', '967771500001')->first();
         $this->assertNotNull($user);
         $this->assertSame(CUSTOMER_TYPE, (int) $user->type);
         $this->assertSame(0, (int) $user->is_kyc_verified);
-        $this->assertTrue(EMoney::where('user_id', $user->id)->exists());
+        $this->assertFalse(EMoney::where('user_id', $user->id)->exists(), 'لا تُنشأ المحفظة قبل قرار موثّق ثم اعتماد الإدارة.');
     }
 
     /** @test */
@@ -146,124 +146,55 @@ class RegistrationRolesTest extends TestCase
     }
 
     /** @test */
-    public function agent_self_registration_gets_agent_number(): void
+    public function agent_self_registration_is_closed_and_creates_no_account(): void
     {
-        $resp = $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500004', [
+        $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500004', [
             'account_type' => 'agent',
-        ]))->assertOk()->json();
+        ]))->assertForbidden()
+            ->assertJsonPath('errors.0.code', 'AGENT_SELF_REGISTRATION_CLOSED');
 
-        $this->assertNotEmpty($resp['agent_number']);
-        $user = User::where('phone', '967771500004')->first();
-        $this->assertSame(AGENT_TYPE, (int) $user->type);
-        $this->assertSame($resp['agent_number'], $user->agent_number);
+        $this->assertDatabaseMissing('users', ['phone' => '967771500004']);
     }
 
     /** @test */
-    public function verification_panel_approves_identity_without_auto_approving_the_business(): void
+    public function merchant_registration_remains_unavailable_until_muwathaq_and_admin_final_approval(): void
     {
-        // تسجيل تاجر ذاتياً
         $resp = $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500005', [
             'account_type' => 'merchant',
             'store_name' => 'صيدلية النور',
             'business_type' => 'pharmacy',
-        ]))->assertOk()->json();
-        $merchant = User::where('phone', '967771500005')->first();
+        ]))->assertOk()
+            ->assertJsonPath('verification_status', 'submitted')
+            ->json();
 
-        // أدمن
-        // AMIAL-ADMIN-DOORS-001 — لوحةُ التحقّق صارت خلف `approvals.decide`:
-        // اعتمادُ حسابٍ جديدٍ قرارٌ لا قراءة.
-        $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009100']);
-        app(\App\Services\PlatformRoleService::class)
-            ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
-        $admin->refresh();
+        $merchant = User::where('phone', '967771500005')->firstOrFail();
+        $this->assertSame('unverified', MerchantProfile::where('user_id', $merchant->id)->value('verification_status'));
 
-        // يظهر في لوحة التحقق
-        $this->actingAs($admin, 'user')->get('/admin/amial/hub/verification')->assertOk();
-        $list = $this->actingAs($admin, 'user')
-            ->getJson('/admin/amial/hub/verification/list.json?filter=pending')
-            ->assertOk()->json();
-        $row = collect($list['data'])->firstWhere('id', $merchant->id);
-        $this->assertNotNull($row, 'الحساب المسجَّل ذاتياً يظهر في لوحة التحقق');
-        $this->assertSame('تاجر', $row['role']);
-        $this->assertSame('صيدلية النور', $row['store_name']);
-
-        // اعتماد الهوية يوثّق الحساب فقط. اعتماد المنشأة له أدلته وقراره
-        // المستقلّان؛ فلا يُفتح قبضٌ ماليّ بمجرد صور هوية المالك.
-        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
-        $this->establishKycEvidence($merchant);
-        $this->actingAs($admin, 'user')
-            ->postJson("/admin/amial/hub/users/{$merchant->id}/kyc", ['status' => 1])
-            ->assertOk();
-        $this->assertSame(1, (int) $merchant->fresh()->is_kyc_verified);
-        $this->assertSame('unverified',
-            MerchantProfile::where('user_id', $merchant->id)->value('verification_status'));
-
-        // وبعدها يدخل من التطبيق برقم تاجره ويستخدم تشغيل قطاعه غير المالي.
-        // حارس القبض المركزي يبقي استلام المال مقفلاً إلى اعتماد المنشأة.
         Artisan::call('passport:install', ['--no-interaction' => true]);
         $this->postJson('/api/v1/auth/login', [
             'role' => 'merchant',
             'merchant_number' => $resp['merchant_number'],
             'phone' => '967771500005',
             'password' => '1234',
-        ])->assertOk();
-
-        \Laravel\Passport\Passport::actingAs($merchant->fresh(), [], 'api');
-
-        // ══════════════════════════════════════════════════════════════
-        // **التاجرُ ذو هوية مالك معتمدة يفتح بابَ قطاعه — لا بابَ غيره.**
-        //
-        // كان هذا السطرُ يشترط أن يفتح **تاجرُ صيدليّةٍ كاشيرَ البقالة**
-        // (`/merchant/cashier/products`)، وهو ما يمنعه عزلُ القطاعات
-        // عمداً بـ`PHARMACY_CASHIER_ONLY`: «استخدم كاشير الصيدلية لتبقى
-        // الوصفات والتشغيلات والصلاحية في الفاتورة».
-        //
-        // **والمقصودُ من الفحص باقٍ**: أنّ الحسابَ بعد اعتماد هوية مالكه يعمل
-        // فعلاً. فيُقاس على بابه هو — **ويُشترط معه أنّ البابَ الآخرَ
-        // مغلق**، فيصير السطرُ الذي كان يناقض العزلَ حارساً له.
-        // ══════════════════════════════════════════════════════════════
-        $this->getJson('/api/v1/amial/merchant/pharmacy')->assertOk();
-
-        $this->getJson('/api/v1/amial/merchant/cashier/products')
-            ->assertForbidden()
-            ->assertJsonPath('code', 'PHARMACY_CASHIER_ONLY');
+        ])->assertUnauthorized()
+            ->assertJsonPath('code', 'AUTH_FAILED')
+            ->assertJsonPath('message', 'طلب فتح الحساب ما زال لدى موثّق للمراجعة.');
     }
 
-    /** @test AMIAL-VERIFY-GATE — استجابة الدخول تحمل حالة التوثيق لتوجيه التطبيق. */
-    public function login_response_exposes_verification_state(): void
+    /** @test AMIAL-VERIFY-GATE — الطلب لا يصبح جلسة قبل قرار موثّق واعتماد الإدارة. */
+    public function login_is_explicitly_blocked_while_muwathaq_review_is_pending(): void
     {
         Artisan::call('passport:install', ['--no-interaction' => true]);
 
-        // عميل مسجَّل ذاتياً = نشط Tier 0 وليس حساباً محبوساً في المراجعة
         $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500007'))
-            ->assertOk();
-        $pending = User::where('phone', '967771500007')->first();
+            ->assertOk()
+            ->assertJsonPath('verification_status', 'submitted');
 
         $this->postJson('/api/v1/auth/login', [
             'role' => 'customer', 'phone' => '967771500007', 'password' => '1234',
-        ])->assertOk()->assertJsonPath('meta.user.verification_state', 'active_unverified')
-          ->assertJsonPath('meta.user.is_kyc_verified', 0)
-          ->assertJsonPath('meta.user.kyc_tier', 0);
-
-        // بعد اعتماده من الأدمن = موثّق
-        $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009200']);
-        app(\App\Services\PlatformRoleService::class)
-            ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
-        $admin->refresh();
-        // العميل لا يقفز 0 → 2. نبني Tier 1 الحقيقي أولاً:
-        // هاتف مثبت + إقامة معتمدة، ثم هوية Tier 2.
-        $pending = $this->establishTierOnePrerequisite($pending);
-        $this->establishKycEvidence($pending, 2, $admin);
-        $this->actingAs($admin, 'user')
-            ->postJson("/admin/amial/hub/users/{$pending->id}/kyc", [
-                'status' => 1,
-                'target_tier' => 2,
-            ])
-            ->assertOk();
-
-        $this->postJson('/api/v1/auth/login', [
-            'role' => 'customer', 'phone' => '967771500007', 'password' => '1234',
-        ])->assertOk()->assertJsonPath('meta.user.verification_state', 'verified');
+        ])->assertUnauthorized()
+            ->assertJsonPath('code', 'AUTH_FAILED')
+            ->assertJsonPath('message', 'طلب فتح الحساب ما زال لدى موثّق للمراجعة.');
     }
 
     /** @test AMIAL-VERIFY-GATE — اعتماد الحساب يُنشئ إشعاراً داخل التطبيق. */
