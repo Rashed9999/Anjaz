@@ -70,6 +70,13 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   String? _birthGovernorate;
   YemenResidenceSelection _residenceLocation = const YemenResidenceSelection();
   XFile? _residenceEvidence;
+  XFile? _identityEvidence;
+  String? _verificationPath;
+  String? _openingStatus;
+  String? _decisionReason;
+  List<String> _nextOpeningSteps = const [];
+
+  bool get _requiresIdentity => _verificationPath == 'standard_customer';
   String? _evidenceType;
   List<Map<String, dynamic>> _evidenceOptions = const [];
 
@@ -97,18 +104,120 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           ? Map<String, dynamic>.from(body['data'] as Map) : null;
       if (data == null) return;
 
-      final steps = data['next_steps'] is List ? List<String>.from(data['next_steps']) : const <String>[];
-      if (!mounted) return;
-      setState(() {
-        _openingApplicationUlid = id;
-        _openingAccessToken = token;
-        _accountCreated = true;
-        _phoneVerified = !steps.contains('confirm_phone');
-        _residenceSubmitted = !steps.contains('submit_residence');
-        _step = steps.contains('confirm_phone') ? 2 : steps.contains('submit_residence') ? 3 : 4;
-      });
+      _adoptOpeningStatus(data, id, token);
     } catch (_) {
       // لا نمسح البيانات عند انقطاع الشبكة؛ قد يعود المستخدم فيكمل لاحقاً.
+    }
+  }
+
+  void _adoptOpeningStatus(Map<String, dynamic> data, String id, String token) {
+    final steps = data['next_steps'] is List
+        ? List<String>.from(data['next_steps']) : <String>[];
+    final path = data['verification_path']?.toString();
+    if (!mounted) return;
+    setState(() {
+      _openingApplicationUlid = id;
+      _openingAccessToken = token;
+      _accountCreated = true;
+      _verificationPath = path;
+      _gender = path == 'standard_customer' ? 'male'
+          : path == 'women_progressive' ? 'female' : _gender;
+      _openingStatus = data['status']?.toString();
+      _decisionReason = data['decision_reason']?.toString();
+      _nextOpeningSteps = steps;
+      _phoneVerified = !steps.contains('confirm_phone');
+      _residenceSubmitted = !steps.contains('submit_residence');
+      _step = steps.contains('confirm_phone') ? 2
+          : steps.contains('submit_residence') ? 3
+          : steps.contains('submit_identity_document') ? 4 : 5;
+    });
+  }
+
+  Future<void> _refreshOpeningStatus() async {
+    final id = _openingApplicationUlid, token = _openingAccessToken;
+    if (id == null || token == null) return;
+    try {
+      final response = await Get.find<ApiClient>().getData(
+        '/api/v1/auth/account-opening/$id/status',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final body = response.body;
+      if (response.statusCode == 403) {
+        _snack('انتهت جلسة الاستكمال. استعد طلبك بالبريد وكلمة المرور.');
+        return;
+      }
+      if (body is Map && body['success'] == true && body['data'] is Map) {
+        _adoptOpeningStatus(Map<String, dynamic>.from(body['data'] as Map), id, token);
+      } else {
+        _snack(_responseMessage(response, 'تعذر تحديث حالة الطلب.'));
+      }
+    } catch (_) {
+      _snack('تعذر الاتصال بموثّق لتحديث الحالة.');
+    }
+  }
+
+  Future<void> _resumeExistingOpening() async {
+    if (_busy) return;
+    final email = TextEditingController(text: _normalizedEmail);
+    final password = TextEditingController();
+    final credentials = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('استكمال طلب موجود'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('أدخل البريد المسجل وكلمة المرور لاستعادة جلسة استكمال موثّق. لن يُنشأ حساب جديد.'),
+          TextField(controller: email,
+            keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            decoration: const InputDecoration(labelText: 'البريد الإلكتروني')),
+          TextField(controller: password, obscureText: true,
+            decoration: const InputDecoration(labelText: 'كلمة المرور')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, {
+            'email': email.text.trim().toLowerCase(),
+            'password': password.text,
+          }), child: const Text('استعادة الطلب')),
+        ],
+      ),
+    );
+    email.dispose();
+    password.dispose();
+    if (credentials == null || !mounted) return;
+    if (credentials['email']?.isEmpty != false || credentials['password']?.isEmpty != false) {
+      _snack('أدخل البريد وكلمة المرور.');return;
+    }
+    setState(() => _busy = true);
+    try {
+      final response = await Get.find<ApiClient>().postData(
+        '/api/v1/auth/account-opening/resume', credentials,
+      );
+      final body=response.body;
+      if (response.statusCode != 200 || body is! Map
+          || body['success'] != true || body['data'] is! Map) {
+        _snack(_responseMessage(response, 'تعذر استعادة الطلب.'));return;
+      }
+      final data=Map<String, dynamic>.from(body['data'] as Map);
+      final id=data['application_ulid']?.toString();
+      final token=data['account_opening_access_token']?.toString();
+      if (id == null || id.length != 26) {
+        _snack('الطلب غير صالح للاستكمال.');return;
+      }
+      if (token == null || token.length < 32) {
+        _snack('الطلب حُسم بالفعل. حالته: '+(data['status']?.toString() ?? 'غير معروفة'));
+        return;
+      }
+      _openingApplicationUlid=id;
+      _openingAccessToken=token;
+      await _persistOpeningProgress();
+      await _refreshOpeningStatus();
+      _snack('تمت استعادة طلبك الحالي بأمان.', error: false);
+    } catch (_) {
+      _snack('تعذر استعادة طلب التوثيق. تحقق من الاتصال.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
