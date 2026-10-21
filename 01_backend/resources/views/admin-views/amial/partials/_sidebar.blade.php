@@ -90,6 +90,7 @@
                 // نقطة القرار الوحيدة: هوية صاحب الحساب، السكن، ومستندات المنشأة
                 // تُراجع من ملف واحد. لا يوجد رابط «توثيق تجار» موازٍ يكرر القرار.
                 ['🛡️ مركز التحقق والتوثيق الموحد', route('admin.amial.kyc.page'), 'platform.customers.kyc.view'],
+                ['✅ اعتمادات موثّق النهائية', route('admin.amial.muwathaq-openings.index'), 'platform.approvals.decide'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.aml.investigate'],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), 'platform.audit.view'],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],
