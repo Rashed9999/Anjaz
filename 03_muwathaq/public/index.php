@@ -65,6 +65,17 @@ function findCase(string $ulid): array
     return $case;
 }
 
+function findCaseForApplication(string $applicationUlid): ?array
+{
+    if (!preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/', $applicationUlid)) {
+        return null;
+    }
+    $statement = Database::pdo()->prepare('SELECT * FROM muwathaq_cases WHERE core_application_ulid = ?');
+    $statement->execute([$applicationUlid]);
+    $case = $statement->fetch();
+    return $case ?: null;
+}
+
 try {
     if ($path === '/health') {
         Database::pdo()->query('SELECT 1');
@@ -188,7 +199,11 @@ try {
             $html = '<div class="card"><div class="toolbar"><div><h2>'.e($labels[$list]).'</h2><p class="muted">البيانات التشغيلية تقرأ مباشرة من أميال باي. لا تُنسخ إلى موثّق.</p></div><form method="get"><input type="hidden" name="list" value="'.e($list).'"><input name="q" value="'.e($search).'" placeholder="بحث بالاسم أو الهاتف أو المرجع"><button class="btn" type="submit">بحث</button></form></div><table><tr><th>صاحب الحساب</th><th>النوع</th><th>الحالة</th><th class="hide-mobile">المسار/القطاع</th><th class="hide-mobile">تاريخ الطلب</th><th></th></tr>';
             foreach ($rows as $row) {
                 $applicant = (array) ($row['applicant'] ?? []);
-                $html .= '<tr><td><b>'.e($applicant['name'] ?? '—').'</b><br><span class="muted">'.e($applicant['phone'] ?? '—').'</span></td><td>'.e($row['account_type'] ?? '—').'<br><span class="muted">'.e($row['customer_gender'] ?? '').'</span></td><td><span class="tag '.e($row['operational_status'] ?? 'pending').'">'.e($row['operational_status'] ?? 'pending').'</span><br><span class="muted">'.e($row['opening_status'] ?? '').'</span></td><td class="hide-mobile">'.e($row['verification_path'] ?? '—').'<br><span class="muted">'.e($row['business_type'] ?? '').'</span></td><td class="hide-mobile">'.e($row['submitted_at'] ?? '—').'</td><td><a class="btn secondary" href="/cases/'.e($row['application_ulid'] ?? '').'">تفاصيل التحقق</a></td></tr>';
+                $case = findCaseForApplication((string) ($row['application_ulid'] ?? ''));
+                $details = $case
+                    ? '<a class="btn secondary" href="/cases/'.e($case['case_ulid']).'">تفاصيل التحقق</a>'
+                    : '<span class="muted">لم تصل قضية موثّق بعد</span>';
+                $html .= '<tr><td><b>'.e($applicant['name'] ?? '—').'</b><br><span class="muted">'.e($applicant['phone'] ?? '—').'</span></td><td>'.e($row['account_type'] ?? '—').'<br><span class="muted">'.e($row['customer_gender'] ?? '').'</span></td><td><span class="tag '.e($row['operational_status'] ?? 'pending').'">'.e($row['operational_status'] ?? 'pending').'</span><br><span class="muted">'.e($row['opening_status'] ?? '').'</span></td><td class="hide-mobile">'.e($row['verification_path'] ?? '—').'<br><span class="muted">'.e($row['business_type'] ?? '').'</span></td><td class="hide-mobile">'.e($row['submitted_at'] ?? '—').'</td><td>'.$details.'</td></tr>';
             }
             if ($rows === []) $html .= '<tr><td colspan="6" class="muted">لا توجد حسابات ضمن هذا التصنيف.</td></tr>';
             layout($labels[$list], $html.'</table></div>');
