@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Auth\AccountOpeningContractController;
+use App\Http\Controllers\Api\V1\Auth\AccountOpeningProgressController;
 use App\Http\Controllers\Api\V1\Auth\EmailOtpController;
 use App\Http\Controllers\Api\V1\Auth\EmailRegistrationController;
 use App\Http\Controllers\Api\V1\Auth\MerchantAccountOpeningController;
@@ -27,6 +28,19 @@ Route::prefix('auth')->name('amial.auth.')->middleware(['amial.rate-limit:auth_l
     Route::get('/account-opening/contract', [AccountOpeningContractController::class, 'show'])
         ->middleware('amial.rate-limit:registration_contract,30,1,true')
         ->name('account-opening.contract');
+
+    Route::get('/account-opening/{applicationUlid}/status', [AccountOpeningProgressController::class, 'show'])
+        ->middleware('amial.rate-limit:opening_progress,30,1,true')
+        ->whereUlid('applicationUlid')
+        ->name('account-opening.status');
+    Route::post('/account-opening/{applicationUlid}/phone/confirm', [AccountOpeningProgressController::class, 'confirmPhone'])
+        ->middleware('amial.rate-limit:opening_progress,8,5,true')
+        ->whereUlid('applicationUlid')
+        ->name('account-opening.phone.confirm');
+    Route::post('/account-opening/{applicationUlid}/residence', [AccountOpeningProgressController::class, 'submitResidence'])
+        ->middleware('amial.rate-limit:opening_progress,8,5,true')
+        ->whereUlid('applicationUlid')
+        ->name('account-opening.residence.submit');
 
     Route::post('/register/quick', [ProgressiveRegistrationController::class, 'register'])
         ->middleware('amial.rate-limit:quick_registration,5,10,true')
