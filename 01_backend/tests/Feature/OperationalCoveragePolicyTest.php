@@ -33,7 +33,7 @@ class OperationalCoveragePolicyTest extends TestCase
         $policy = app(ZonePolicyService::class);
 
         $this->assertTrue($policy->authorize($user, 'send_money')['allowed']);
-        $this->assertSame('CASH_COVERAGE_UNAVAILABLE', $policy->authorize($user, 'cash_out')['decision_code']);
+        $this->assertSame('TX_ZONE_BLOCKED', $policy->authorize($user, 'cash_out')['decision_code']);
 
         DB::table('operational_governorate_policies')->where('version', 99)->update([
             'governorate_codes' => json_encode(['YE-AD', 'YE-SN']),

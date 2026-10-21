@@ -231,6 +231,18 @@ class ZonePolicyService
         $accountZone = $user->zone_code ?? 'UNKNOWN';
         $requestZone = $this->detectRequestZone($request);
 
+        // القراءة متاحة دائماً؛ لا ينبغي أن يحجب طلب موثّق غير المكتمل
+        // الوصول إلى الحساب أو السجل.
+        if (in_array($action, self::READ_ACTIONS, true)) {
+            return [
+                'allowed' => true,
+                'decision_code' => 'ALLOWED_READ',
+                'reason' => 'Read-only action',
+                'account_zone' => $accountZone,
+                'request_zone' => $requestZone,
+            ];
+        }
+
         $coverage = $this->coverage($user);
 
         // غياب محل إقامة/نشاط موثق يمنع المال، لا فتح طلب موثّق أو مراجعته.
@@ -276,7 +288,7 @@ class ZonePolicyService
                 return $this->deny(
                     $user,
                     $action,
-                    'CASH_COVERAGE_UNAVAILABLE',
+                    'TX_ZONE_BLOCKED',
                     'Cash-boundary services are not enabled for the verified operating governorate',
                     $accountZone,
                     $requestZone,
