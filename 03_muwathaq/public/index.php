@@ -5,11 +5,13 @@ declare(strict_types=1);
 use Muwathaq\Cipher;
 use Muwathaq\Config;
 use Muwathaq\CoreEvidenceClient;
+use Muwathaq\CoreOperationsClient;
 use Muwathaq\CoreDecisionClient;
 use Muwathaq\Database;
 use Muwathaq\HttpError;
 use Muwathaq\Policy;
 use Muwathaq\ReviewerCredentials;
+use Muwathaq\ReviewerAudit;
 use Muwathaq\Signature;
 use function Muwathaq\assertCsrf;
 use function Muwathaq\csrf;
@@ -32,9 +34,25 @@ $path = rtrim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/
 function layout(string $title, string $content): never
 {
     $reviewer = reviewer();
+    $navigation = '';
+    if ($reviewer) {
+        $navigation = '<aside class="sidebar"><div class="brand">موثّق <small>مركز التحقق</small></div>'
+            .'<div class="session"><span>موظفة الجلسة</span><b>'.e($reviewer).'</b><a href="/logout">تسجيل الخروج</a></div>'
+            .'<nav><a href="/">الرئيسية</a><strong>الحسابات</strong>'
+            .'<a href="/accounts?list=all">كل الحسابات</a>'
+            .'<a href="/accounts?list=new">الحسابات الجديدة</a>'
+            .'<a href="/accounts?list=customer_female">عملاء — إناث</a>'
+            .'<a href="/accounts?list=customer_male">عملاء — ذكور</a>'
+            .'<a href="/accounts?list=merchant">حسابات التجار</a>'
+            .'<a href="/accounts?list=agent">حسابات الوكلاء</a>'
+            .'<a href="/accounts?list=active">الحسابات النشطة</a>'
+            .'<a href="/accounts?list=suspended">الحسابات الموقوفة</a>'
+            .'<a href="/accounts?list=review">حسابات قيد المراجعة</a>'
+            .'<strong>الرقابة</strong><a href="/audit">سجل نشاط الجلسة</a></nav></aside>';
+    }
     echo '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'.e($title).' | موثّق</title><style>
-    body{margin:0;background:#f3f6fa;color:#172033;font:15px Tahoma,Arial,sans-serif}.top{background:#0d2b61;color:#fff;padding:17px 6%;display:flex;justify-content:space-between;align-items:center}.top a{color:#fff;text-decoration:none}.wrap{max-width:1120px;margin:28px auto;padding:0 16px}.card{background:#fff;border:1px solid #e4e9f2;border-radius:14px;padding:20px;margin:16px 0;box-shadow:0 4px 18px #0d2b6110}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.stat{padding:16px;border-radius:12px;background:#f5f8fd}.muted{color:#667085}.tag{display:inline-block;padding:4px 9px;border-radius:20px;background:#e9eef7;font-size:12px}.pending{background:#fff2cc}.approved{background:#d9f5df}.rejected{background:#ffe1e1}.btn{display:inline-block;background:#1268d6;color:#fff;border:0;border-radius:8px;padding:10px 14px;cursor:pointer;text-decoration:none}.btn.danger{background:#b42318}.btn.secondary{background:#eef2f8;color:#172033}input,select,textarea{box-sizing:border-box;width:100%;padding:10px;border:1px solid #cfd8e6;border-radius:8px;margin:5px 0 12px}label{font-weight:bold}table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px solid #e9edf3;text-align:right}.alert{padding:12px;border-radius:8px;background:#fff2cc}.error{background:#ffe3e3}.req{padding:9px;background:#f7f9fc;border-radius:8px;margin:5px 0}@media(max-width:600px){table{font-size:12px}.hide-mobile{display:none}}
-    </style></head><body><header class="top"><a href="/">موثّق — مركز مراجعة فتح الحساب</a>'.($reviewer ? '<span>'.e($reviewer).' · <a href="/logout">خروج</a></span>' : '').'</header><main class="wrap">'.$content.'</main></body></html>';
+    *{box-sizing:border-box}body{margin:0;background:#f3f6fa;color:#172033;font:15px Tahoma,Arial,sans-serif}.shell{min-height:100vh;display:flex}.sidebar{width:254px;flex:0 0 254px;background:#0d2b61;color:#fff;padding:22px 14px}.brand{font-size:22px;font-weight:bold;padding:0 10px 20px}.brand small{display:block;font-size:12px;font-weight:normal;color:#b9c9e7;margin-top:4px}.session{border:1px solid #ffffff2a;border-radius:10px;padding:12px;margin:0 0 18px}.session span{display:block;color:#b9c9e7;font-size:12px}.session b{display:block;overflow-wrap:anywhere;margin:5px 0 10px}.session a{color:#fff;font-size:12px}.sidebar nav{display:grid;gap:3px}.sidebar nav strong{font-size:12px;color:#a9bee5;margin:12px 10px 3px}.sidebar nav a{color:#e9f0ff;text-decoration:none;padding:9px 10px;border-radius:7px}.sidebar nav a:hover{background:#ffffff1c}.page{min-width:0;flex:1}.top{background:#fff;border-bottom:1px solid #e4e9f2;padding:18px 5%;display:flex;justify-content:space-between;align-items:center}.top a{color:#0d2b61;text-decoration:none;font-weight:bold}.wrap{max-width:1240px;margin:28px auto;padding:0 20px}.card{background:#fff;border:1px solid #e4e9f2;border-radius:14px;padding:20px;margin:16px 0;box-shadow:0 4px 18px #0d2b6110}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.stat{padding:16px;border-radius:12px;background:#f5f8fd}.muted{color:#667085}.tag{display:inline-block;padding:4px 9px;border-radius:20px;background:#e9eef7;font-size:12px}.pending{background:#fff2cc}.approved,.active{background:#d9f5df}.rejected,.suspended{background:#ffe1e1}.btn{display:inline-block;background:#1268d6;color:#fff;border:0;border-radius:8px;padding:10px 14px;cursor:pointer;text-decoration:none}.btn.danger{background:#b42318}.btn.secondary{background:#eef2f8;color:#172033}input,select,textarea{box-sizing:border-box;width:100%;padding:10px;border:1px solid #cfd8e6;border-radius:8px;margin:5px 0 12px}label{font-weight:bold}table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px solid #e9edf3;text-align:right}.alert{padding:12px;border-radius:8px;background:#fff2cc}.error{background:#ffe3e3}.req{padding:9px;background:#f7f9fc;border-radius:8px;margin:5px 0}.toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.toolbar form{display:flex;gap:8px;align-items:end;flex:1}.toolbar input{margin:0;max-width:330px}@media(max-width:820px){.sidebar{width:100%;flex:none}.shell{display:block}.sidebar nav{grid-template-columns:repeat(2,minmax(0,1fr))}.sidebar nav strong{grid-column:1/-1}.wrap{padding:0 14px}.hide-mobile{display:none}}@media(max-width:480px){table{font-size:12px}.sidebar nav{grid-template-columns:1fr}}
+    </style></head><body><div class="shell">'.$navigation.'<section class="page"><header class="top"><a href="/">موثّق — مركز مراجعة فتح الحساب</a>'.($reviewer ? '<span class="muted">جلسة مراجعة داخلية</span>' : '').'</header><main class="wrap">'.$content.'</main></section></div></body></html>';
     exit;
 }
 
@@ -132,6 +150,7 @@ try {
             }
             session_regenerate_id(true);
             $_SESSION['reviewer'] = $credential['email'];
+            ReviewerAudit::record($credential['email'], 'session_started');
             redirect('/');
         }
         layout('دخول المراجع', loginForm());
@@ -152,8 +171,44 @@ try {
         layout('قضايا موثّق', $html.'</table></div>');
     }
 
+
+    if ($path === '/accounts') {
+        $list = (string) ($_GET['list'] ?? 'all');
+        $labels = [
+            'all' => 'كل الحسابات', 'new' => 'الحسابات الجديدة', 'customer_female' => 'عملاء — إناث',
+            'customer_male' => 'عملاء — ذكور', 'merchant' => 'حسابات التجار', 'agent' => 'حسابات الوكلاء',
+            'active' => 'الحسابات النشطة', 'suspended' => 'الحسابات الموقوفة', 'review' => 'حسابات قيد المراجعة',
+        ];
+        if (!array_key_exists($list, $labels)) throw new HttpError(404, 'ACCOUNT_LIST_NOT_FOUND', 'قائمة الحسابات غير موجودة.');
+        $search = trim((string) ($_GET['q'] ?? ''));
+        ReviewerAudit::record($reviewer, 'directory_opened', null, ['list' => $list]);
+        try {
+            $directory = CoreOperationsClient::directory($list, $search);
+            $rows = (array) ($directory['data'] ?? []);
+            $html = '<div class="card"><div class="toolbar"><div><h2>'.e($labels[$list]).'</h2><p class="muted">البيانات التشغيلية تقرأ مباشرة من أميال باي. لا تُنسخ إلى موثّق.</p></div><form method="get"><input type="hidden" name="list" value="'.e($list).'"><input name="q" value="'.e($search).'" placeholder="بحث بالاسم أو الهاتف أو المرجع"><button class="btn" type="submit">بحث</button></form></div><table><tr><th>صاحب الحساب</th><th>النوع</th><th>الحالة</th><th class="hide-mobile">المسار/القطاع</th><th class="hide-mobile">تاريخ الطلب</th><th></th></tr>';
+            foreach ($rows as $row) {
+                $applicant = (array) ($row['applicant'] ?? []);
+                $html .= '<tr><td><b>'.e($applicant['name'] ?? '—').'</b><br><span class="muted">'.e($applicant['phone'] ?? '—').'</span></td><td>'.e($row['account_type'] ?? '—').'<br><span class="muted">'.e($row['customer_gender'] ?? '').'</span></td><td><span class="tag '.e($row['operational_status'] ?? 'pending').'">'.e($row['operational_status'] ?? 'pending').'</span><br><span class="muted">'.e($row['opening_status'] ?? '').'</span></td><td class="hide-mobile">'.e($row['verification_path'] ?? '—').'<br><span class="muted">'.e($row['business_type'] ?? '').'</span></td><td class="hide-mobile">'.e($row['submitted_at'] ?? '—').'</td><td><a class="btn secondary" href="/cases/'.e($row['application_ulid'] ?? '').'">تفاصيل التحقق</a></td></tr>';
+            }
+            if ($rows === []) $html .= '<tr><td colspan="6" class="muted">لا توجد حسابات ضمن هذا التصنيف.</td></tr>';
+            layout($labels[$list], $html.'</table></div>');
+        } catch (Throwable $error) {
+            error_log((string) $error);
+            layout($labels[$list], '<div class="card error"><h2>تعذر جلب دليل الحسابات</h2><p>تحقق من اتصال موثّق الداخلي بأميال باي ثم أعد المحاولة.</p></div>');
+        }
+    }
+
+    if ($path === '/audit') {
+        $events = Database::pdo()->query('SELECT reviewer_identity,action,case_ulid,delivery_status,occurred_at FROM muwathaq_reviewer_audit_outbox ORDER BY id DESC LIMIT 200')->fetchAll();
+        $html = '<div class="card"><h2>سجل نشاط الجلسة</h2><p class="muted">يحفظ محلياً أولاً ثم يُرسل إلى سجل تدقيق أميال باي. لا يتضمن مستندات أو بيانات هوية.</p><table><tr><th>الموظفة</th><th>الإجراء</th><th>القضية</th><th>حالة الإرسال</th><th>الوقت</th></tr>';
+        foreach ($events as $event) $html .= '<tr><td>'.e($event['reviewer_identity']).'</td><td>'.e($event['action']).'</td><td>'.e($event['case_ulid'] ?? '—').'</td><td><span class="tag '.e($event['delivery_status']).'">'.e($event['delivery_status']).'</span></td><td>'.e($event['occurred_at']).'</td></tr>';
+        if ($events === []) $html .= '<tr><td colspan="5" class="muted">لا يوجد نشاط مسجل بعد.</td></tr>';
+        layout('سجل نشاط الجلسة', $html.'</table></div>');
+    }
+
     if (preg_match('#^/cases/([0-9A-F]{26})$#', $path, $match)) {
         $case = findCase($match[1]);
+        ReviewerAudit::record($reviewer, 'case_opened', $case);
         $payload = Cipher::decryptJson($case['payload_encrypted']);
         $applicant = $payload['applicant'] ?? [];
         $policy = Policy::for($case);
@@ -181,6 +236,7 @@ try {
 
     if (preg_match('#^/cases/([0-9A-F]{26})/evidence/([a-z_]+)/document$#', $path, $match)) {
         $case = findCase($match[1]);
+        ReviewerAudit::record($reviewer, 'evidence_opened', $case);
         $items = $case['evidence_encrypted'] ? Cipher::decryptJson($case['evidence_encrypted']) : [];
         $item = $items[$match[2]] ?? null;
         if (!is_array($item) || empty($item['document_received']) || !is_int($item['id'] ?? null)) {
@@ -215,6 +271,7 @@ try {
         $statement = Database::pdo()->prepare('UPDATE muwathaq_cases SET status=?,review_started_at=COALESCE(review_started_at,?),reviewer_identity=?,policy_version=?,decision=?,decision_reference=?,decision_reason=?,decision_context_json=?,core_delivery_status="pending",core_last_error=NULL,updated_at=? WHERE id=?');
         $statement->execute([$decision, now(), $reviewer, $context['policy_version'], $decision, $reference, trim((string) ($_POST['reason'] ?? '')) ?: null, json_encode($context, JSON_UNESCAPED_UNICODE), now(), $case['id']]);
         $case = findCase($match[1]);
+        ReviewerAudit::record($reviewer, 'decision_recorded', $case, ['decision' => $decision, 'delivery_status' => 'pending']);
         try {
             CoreDecisionClient::deliver($case);
             Database::pdo()->prepare('UPDATE muwathaq_cases SET core_delivery_status="delivered",core_delivered_at=?,core_last_error=NULL,updated_at=? WHERE id=?')->execute([now(), now(), $case['id']]);
