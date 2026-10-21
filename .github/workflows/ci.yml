@@ -170,9 +170,9 @@ jobs:
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/MerchantWebRegistrationJourneyTest.php tests/Feature/MuwathaqOpeningProgressTest.php
 
-      - name: E2E موثّق — فتح الحساب حتى اعتماد الإدارة والمحفظة
+      - name: E2E موثّق — فتح الحساب ودليل موظفة الجلسة وسجل التدقيق
         working-directory: 01_backend
-        run: php artisan test --compact tests/Feature/E2E/PlatformHttpStackE2ETest.php tests/Feature/E2E/MuwathaqAccountOpeningE2ETest.php
+        run: php artisan test --compact tests/Feature/E2E/PlatformHttpStackE2ETest.php tests/Feature/E2E/MuwathaqAccountOpeningE2ETest.php tests/Feature/MuwathaqReviewerOperationsTest.php
 
       - name: رحلة العميل الذهبية — من التسجيل إلى Tier 0 ورفع التوثيق
         working-directory: 01_backend
