@@ -16,13 +16,15 @@ class MuwathaqAccountOpeningApplication extends Model
 
     protected $fillable = [
         'application_ulid', 'user_id', 'subject_kind', 'verification_path',
-        'business_type', 'requested_tier', 'status', 'submitted_at', 'decided_at',
+        'business_type', 'requested_tier', 'status', 'opening_access_token_hash', 'opening_access_expires_at', 'evidence_completed_at', 'submitted_at', 'decided_at',
         'decision_reference', 'decision_reason', 'decision_context',
     ];
 
     protected $casts = [
         'user_id' => 'integer',
         'requested_tier' => 'integer',
+        'opening_access_expires_at' => 'datetime',
+        'evidence_completed_at' => 'datetime',
         'submitted_at' => 'datetime',
         'decided_at' => 'datetime',
         'decision_context' => 'array',
