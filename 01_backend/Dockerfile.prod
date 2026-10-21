@@ -43,6 +43,7 @@ RUN composer dump-autoload --optimize --no-dev --no-scripts --ignore-platform-re
 FROM php:8.4-fpm-alpine AS production
 
 RUN apk add --no-cache \
+    bash \
     nginx \
     supervisor \
     mysql-client \
