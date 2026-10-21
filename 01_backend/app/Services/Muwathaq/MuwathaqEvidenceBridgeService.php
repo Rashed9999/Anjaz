@@ -14,6 +14,23 @@ use Illuminate\Support\Facades\Http;
  */
 class MuwathaqEvidenceBridgeService
 {
+    public function dispatchPending(int $limit = 100): int
+    {
+        $ids = MuwathaqOpeningEvidence::query()
+            ->whereNull('muwathaq_delivered_at')
+            ->whereNotNull('submitted_at')
+            ->orderBy('id')
+            ->limit(max(1, min(500, $limit)))
+            ->pluck('id');
+
+        foreach ($ids as $id) {
+            $evidence = MuwathaqOpeningEvidence::query()->find($id);
+            if ($evidence !== null) $this->tryDeliver($evidence);
+        }
+
+        return $ids->count();
+    }
+
     public function tryDeliver(MuwathaqOpeningEvidence $evidence): void
     {
         $evidence->loadMissing('application');
