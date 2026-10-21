@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MuwathaqOpeningEvidence extends Model
 {
+    /** اسم الجدول لا يطابق جمع كلمة Evidence الافتراضي في Eloquent. */
+    protected $table = 'muwathaq_opening_evidences';
     public const PHONE = 'phone';
     public const RESIDENCE = 'residence';
     public const IDENTITY_DOCUMENT = 'identity_document';
