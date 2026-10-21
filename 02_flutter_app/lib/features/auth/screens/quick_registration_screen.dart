@@ -73,6 +73,51 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   String? _evidenceType;
   List<Map<String, dynamic>> _evidenceOptions = const [];
 
+  static const _openingIdKey = 'muwathaq_opening_application_ulid';
+  static const _openingTokenKey = 'muwathaq_opening_access_token';
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreOpeningProgress();
+  }
+
+  Future<void> _restoreOpeningProgress() async {
+    try {
+      final id = await SecureStorageHelper.instance.getSecure(_openingIdKey);
+      final token = await SecureStorageHelper.instance.getSecure(_openingTokenKey);
+      if (id == null || id.length != 26 || token == null || token.length < 32) return;
+
+      final response = await Get.find<ApiClient>().getData(
+        '/api/v1/auth/account-opening/$id/status',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final body = response.body;
+      final data = body is Map && body['success'] == true && body['data'] is Map
+          ? Map<String, dynamic>.from(body['data'] as Map) : null;
+      if (data == null) return;
+
+      final steps = data['next_steps'] is List ? List<String>.from(data['next_steps']) : const <String>[];
+      if (!mounted) return;
+      setState(() {
+        _openingApplicationUlid = id;
+        _openingAccessToken = token;
+        _accountCreated = true;
+        _phoneVerified = !steps.contains('confirm_phone');
+        _residenceSubmitted = !steps.contains('submit_residence');
+        _step = steps.contains('confirm_phone') ? 2 : steps.contains('submit_residence') ? 3 : 4;
+      });
+    } catch (_) {
+      // لا نمسح البيانات عند انقطاع الشبكة؛ قد يعود المستخدم فيكمل لاحقاً.
+    }
+  }
+
+  Future<void> _persistOpeningProgress() async {
+    if (_openingApplicationUlid == null || _openingAccessToken == null) return;
+    await SecureStorageHelper.instance.setSecure(_openingIdKey, _openingApplicationUlid!);
+    await SecureStorageHelper.instance.setSecure(_openingTokenKey, _openingAccessToken!);
+  }
+
   static const _fallbackEvidence = <Map<String, dynamic>>[
     {
       'code': 'lease_contract',
@@ -438,6 +483,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _accountCreated = true;
       _openingApplicationUlid = applicationUlid;
       _openingAccessToken = openingToken;
+      await _persistOpeningProgress();
       _emailTimer?.cancel();
       if (!mounted) return;
       setState(() => _step = 2);
