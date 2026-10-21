@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\Auth\ProgressiveRegistrationController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use App\Http\Controllers\Api\Internal\MuwathaqDecisionController;
 use App\Http\Controllers\Api\Internal\MuwathaqEvidenceDocumentController;
+use App\Http\Controllers\Api\Internal\MuwathaqOperationsController;
 use Illuminate\Support\Facades\Route;
 
 /**
