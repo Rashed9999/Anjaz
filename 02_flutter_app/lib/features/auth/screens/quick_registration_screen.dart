@@ -594,7 +594,8 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _openingAccessToken = openingToken;
       _verificationPath = data['verification_path']?.toString();
       _openingStatus = data['account_status']?.toString();
-      _nextOpeningSteps = const ['confirm_phone', 'submit_residence'];
+      _nextOpeningSteps = ['confirm_phone', 'submit_residence',
+        if (_verificationPath == 'standard_customer') 'submit_identity_document'];
       await _persistOpeningProgress();
       _emailTimer?.cancel();
       if (!mounted) return;
@@ -659,8 +660,13 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         return;
       }
       if (!mounted) return;
-      setState(() => _step = 3);
-      _snack('وصل تأكيد الهاتف إلى موثّق. أكمل السكن وإثبات الإقامة.', error: false);
+      setState(() {
+        _phoneVerified = true;
+        _nextOpeningSteps = List<String>.from(_nextOpeningSteps)
+          ..remove('confirm_phone');
+        _step = 3;
+      });
+      _snack('تم تسجيل إثبات الهاتف. أكمل السكن وإثبات الإقامة.', error: false);
     } catch (_) {
       _snack('تعذر التحقق من رمز الهاتف.');
     } finally {
@@ -774,8 +780,15 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     );
 
     if (confirmed == true && mounted) {
-      _residenceSubmitted = true;
-      setState(() => _step = _requiresIdentity ? 4 : 5);
+      setState(() {
+        _residenceSubmitted = true;
+        _nextOpeningSteps = List<String>.from(_nextOpeningSteps)
+          ..remove('submit_residence');
+        if (_requiresIdentity && !_nextOpeningSteps.contains('submit_identity_document')) {
+          _nextOpeningSteps.add('submit_identity_document');
+        }
+        _step = _requiresIdentity ? 4 : 5;
+      });
       _snack(
         _requiresIdentity
             ? 'تم إرسال إثبات السكن. ارفع وثيقة الهوية لاستكمال الطلب.'
@@ -1079,7 +1092,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         _card([
           _title(
             'حسابك الأساسي',
-            'أنشئ كلمة مرور للدخول وPIN مالياً مستقلاً. يمكنك توثيق الهوية ورفع الحدود لاحقاً من حسابك.',
+            'أنشئ كلمة مرور للدخول وPIN مالياً مستقلاً. يُحدد موثّق المتطلبات المناسبة لمسار حسابك قبل التفعيل.',
             Icons.account_balance_wallet_outlined,
           ),
           Container(
@@ -1290,7 +1303,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
             maxLength: 6,
             formatters: [FilteringTextInputFormatter.digitsOnly],
           ),
-          _primaryButton('تحقق وأنشئ المحفظة', _verifyEmailAndCreate),
+          _primaryButton('تحقق وأرسل طلب فتح الحساب', _verifyEmailAndCreate),
           const SizedBox(height: 8),
           TextButton(
             onPressed: _busy || _emailResendSeconds > 0 ? null : _requestEmailOtp,
@@ -1532,7 +1545,11 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       }
       _identityEvidence = null;
       if (!mounted) return;
-      setState(() => _step = 5);
+      setState(() {
+        _nextOpeningSteps = List<String>.from(_nextOpeningSteps)
+          ..remove('submit_identity_document');
+        _step = 5;
+      });
       _snack('حُفظت وثيقة الهوية وأُرسلت للمراجعة. لم تُفعّل المحفظة بعد.',
         error: false);
     } catch (_) {
