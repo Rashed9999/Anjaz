@@ -29,9 +29,19 @@ final class MuwathaqOperationsController extends Controller
         }
 
         $list = (string) $request->query('list', 'all');
-        $query = MuwathaqAccountOpeningApplication::query()
-            ->from('muwathaq_account_opening_applications as opening')
-            ->join('users as user', 'user.id', '=', 'opening.user_id')
+
+        // تختار لكل حساب آخر طلب فتح فقط. مصدر حقيقة الحساب هو users؛
+        // طلب موثّق يضيف حالة المراجعة ولا يستبعد الحسابات التشغيلية القديمة.
+        $latestOpening = DB::table('muwathaq_account_opening_applications')
+            ->selectRaw('user_id, MAX(id) AS id')
+            ->groupBy('user_id');
+
+        $query = DB::table('users as user')
+            ->leftJoinSub($latestOpening, 'latest_opening', static function ($join): void {
+                $join->on('latest_opening.user_id', '=', 'user.id');
+            })
+            ->leftJoin('muwathaq_account_opening_applications as opening', 'opening.id', '=', 'latest_opening.id')
+            ->whereIn('user.type', [1, 2, 3])
             ->select([
                 'opening.application_ulid',
                 'opening.subject_kind',
@@ -43,6 +53,7 @@ final class MuwathaqOperationsController extends Controller
                 'opening.muwathaq_decided_at',
                 'opening.admin_decided_at',
                 'user.id as user_id',
+                'user.type as user_type',
                 'user.f_name',
                 'user.father_name',
                 'user.family_name',
@@ -62,22 +73,32 @@ final class MuwathaqOperationsController extends Controller
                 MuwathaqAccountOpeningApplication::STATUS_NEEDS_MORE_INFO,
                 MuwathaqAccountOpeningApplication::STATUS_AWAITING_ADMIN_APPROVAL,
             ]),
-            'customer_female' => $query->where('opening.subject_kind', 'customer')->whereRaw('LOWER(user.gender) = ?', ['female']),
-            'customer_male' => $query->where('opening.subject_kind', 'customer')->whereRaw('LOWER(user.gender) = ?', ['male']),
-            'merchant' => $query->where('opening.subject_kind', 'merchant'),
-            'agent' => $query->where('opening.subject_kind', 'agent'),
-            'active' => $query->where('opening.status', MuwathaqAccountOpeningApplication::STATUS_APPROVED)
-                ->where(function ($q) { $q->whereNull('user.is_active')->orWhere('user.is_active', 1); }),
-            'suspended' => $query->where('opening.status', MuwathaqAccountOpeningApplication::STATUS_APPROVED)
-                ->where('user.is_active', 0),
+            'customer_female' => $query->where('user.type', 2)->whereRaw('LOWER(user.gender) = ?', ['female']),
+            'customer_male' => $query->where('user.type', 2)->whereRaw('LOWER(user.gender) = ?', ['male']),
+            'merchant' => $query->where('user.type', 3),
+            'agent' => $query->where('user.type', 1),
+            'active' => $query->where(function ($builder): void {
+                $builder->where(function ($approved): void {
+                    $approved->where('opening.status', MuwathaqAccountOpeningApplication::STATUS_APPROVED)
+                        ->where(function ($active): void {
+                            $active->whereNull('user.is_active')->orWhere('user.is_active', 1);
+                        });
+                })->orWhere(function ($legacy): void {
+                    $legacy->whereNull('opening.id')
+                        ->where(function ($active): void {
+                            $active->whereNull('user.is_active')->orWhere('user.is_active', 1);
+                        });
+                });
+            }),
+            'suspended' => $query->where('user.is_active', 0),
             default => null,
         };
 
         $needle = trim((string) $request->query('q', ''));
         if ($needle !== '') {
-            $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $needle).'%';
-            $query->where(function ($q) use ($like) {
-                $q->where('opening.application_ulid', 'like', $like)
+            $like = '%'.str_replace(['\\\\', '%', '_'], ['\\\\\\\\', '\\\\%', '\\\\_'], $needle).'%';
+            $query->where(function ($builder) use ($like): void {
+                $builder->where('opening.application_ulid', 'like', $like)
                     ->orWhere('user.phone', 'like', $like)
                     ->orWhere('user.email', 'like', $like)
                     ->orWhere('user.declared_legal_name', 'like', $like)
@@ -86,20 +107,26 @@ final class MuwathaqOperationsController extends Controller
         }
 
         $rows = $query->orderByDesc('opening.submitted_at')
+            ->orderByDesc('user.id')
             ->limit((int) $request->query('limit', 100))
             ->get()
             ->map(static function ($row): array {
                 $name = trim((string) ($row->declared_legal_name ?: implode(' ', array_filter([
                     $row->f_name, $row->father_name, $row->family_name ?: $row->l_name,
                 ]))));
-                $state = (string) $row->opening_status;
-                $operational = $state === MuwathaqAccountOpeningApplication::STATUS_APPROVED
-                    ? ((int) $row->is_active === 0 ? 'suspended' : 'active')
-                    : 'pending';
+                $state = $row->opening_status ? (string) $row->opening_status : 'legacy';
+                $operational = (int) $row->is_active === 0
+                    ? 'suspended'
+                    : ($state === 'legacy' || $state === MuwathaqAccountOpeningApplication::STATUS_APPROVED ? 'active' : 'pending');
+                $accountType = (string) ($row->subject_kind ?: match ((int) $row->user_type) {
+                    1 => 'agent',
+                    3 => 'merchant',
+                    default => 'customer',
+                });
 
                 return [
                     'application_ulid' => $row->application_ulid,
-                    'account_type' => $row->subject_kind,
+                    'account_type' => $accountType,
                     'customer_gender' => $row->gender,
                     'verification_path' => $row->verification_path,
                     'business_type' => $row->business_type,
