@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Muwathaq\Cipher;
 use Muwathaq\Config;
+use Muwathaq\CoreEvidenceClient;
 use Muwathaq\CoreDecisionClient;
 use Muwathaq\Database;
 use Muwathaq\HttpError;
@@ -162,17 +163,29 @@ try {
         $evidence = $case['evidence_encrypted'] ? Cipher::decryptJson($case['evidence_encrypted']) : [];
         $evidenceHtml = '';
         foreach ($evidence as $item) {
+            $documentLink = !empty($item['document_received']) && is_string($item['kind'] ?? null)
+                ? ' · <a href="/cases/'.e($case['case_ulid']).'/evidence/'.e($item['kind']).'/document" target="_blank" rel="noopener">عرض المستند الآمن</a>'
+                : '';
             $evidenceHtml .= '<div class="req"><b>'.e($item['kind'] ?? 'evidence').'</b> · '.e($item['state'] ?? 'submitted')
-                .(!empty($item['document_received']) ? ' · مرفق مشفّر محفوظ لدى أميال باي' : '')
-                .'<br><span class="muted">'.e($item['submitted_at'] ?? '').'</span></div>';
+                .$documentLink.'<br><span class="muted">'.e($item['submitted_at'] ?? '').'</span></div>';
         }
         if ($evidenceHtml === '') $evidenceHtml = '<div class="alert">لم تصل أدلة إكمال من أميال باي بعد.</div>';
-        $content = '<a class="btn secondary" href="/">العودة للقضايا</a><div class="card"><h2>قضية '.e($case['case_ulid']).'</h2><p><span class="tag">'.e($case['status']).'</span> <span class="muted">سياسة '.e($policy['version']).'</span></p><div class="grid"><div><b>صاحب الطلب</b><br>'.e($applicant['legal_name'] ?? '—').'<br>'.e($applicant['phone'] ?? '—').'<br>'.e($applicant['email'] ?? '—').'</div><div><b>نوع الحساب</b><br>'.e($case['subject_kind']).'<br>'.e($case['verification_path']).'<br>'.e($case['business_type'] ?? '—').'</div><div><b>تفاصيل النشاط</b><br>'.e(json_encode($subject, JSON_UNESCAPED_UNICODE) ?: '—').'</div></div></div><div class="card"><h3>أدلة الإكمال الواردة</h3><p class="muted">لا تعتمد القضية لمجرد وصول ملخص؛ راجع المستند المشفر عبر قناة أميال المحمية قبل الإقرار.</p>'.$evidenceHtml.'</div>';
+        $content = '<a class="btn secondary" href="/">العودة للقضايا</a><div class="card"><h2>قضية '.e($case['case_ulid']).'</h2><p><span class="tag">'.e($case['status']).'</span> <span class="muted">سياسة '.e($policy['version']).'</span></p><div class="grid"><div><b>صاحب الطلب</b><br>'.e($applicant['legal_name'] ?? '—').'<br>'.e($applicant['phone'] ?? '—').'<br>'.e($applicant['email'] ?? '—').'</div><div><b>نوع الحساب</b><br>'.e($case['subject_kind']).'<br>'.e($case['verification_path']).'<br>'.e($case['business_type'] ?? '—').'</div><div><b>تفاصيل النشاط</b><br>'.e(json_encode($subject, JSON_UNESCAPED_UNICODE) ?: '—').'</div></div></div><div class="card"><h3>أدلة الإكمال الواردة</h3><p class="muted">لا تعتمد القضية لمجرد وصول ملخص؛ افتح المستند عبر القناة المحمية ثم أقرّ بالمتطلبات.</p>'.$evidenceHtml.'</div>';
         $governorates = '';
         foreach (Policy::GOVERNORATES as $code => $name) $governorates .= '<option value="'.e($code).'">'.e($name).' ('.e($code).')</option>';
         $content .= '<form method="post" action="/cases/'.e($case['case_ulid']).'/decision" class="card"><input type="hidden" name="_token" value="'.e(csrf()).'"><h3>قرار المراجع</h3><p class="muted">لا تعتمد إلا بعد رؤية الأدلة في موثّق وإقرار البنود التالية.</p>'.$requirements.'<label>القرار</label><select name="decision"><option value="under_review">قيد المراجعة</option><option value="needs_more_info">طلب استكمال</option><option value="approved">اعتماد</option><option value="rejected">رفض</option></select><label>محافظة الإقامة أو الموقع التشغيلي</label><select name="governorate">'.$governorates.'</select><label>ملاحظة للقرار</label><textarea name="reason" rows="3" maxlength="1000"></textarea><button class="btn" type="submit">حفظ القرار وإرساله لأميال باي</button></form>';
         if ($case['decision']) $content .= '<div class="card"><b>آخر قرار:</b> '.e($case['decision']).' · حالة الإرسال لأميال باي: '.e($case['core_delivery_status']).'<br>'.e($case['core_last_error'] ?? '').'</div>';
         layout('مراجعة القضية', $content);
+    }
+
+    if (preg_match('#^/cases/([0-9A-F]{26})/evidence/([a-z_]+)/document$#', $path, $match)) {
+        $case = findCase($match[1]);
+        $items = $case['evidence_encrypted'] ? Cipher::decryptJson($case['evidence_encrypted']) : [];
+        $item = $items[$match[2]] ?? null;
+        if (!is_array($item) || empty($item['document_received']) || !is_int($item['id'] ?? null)) {
+            throw new HttpError(404, 'EVIDENCE_DOCUMENT_NOT_FOUND', 'مستند الدليل غير متاح لهذه القضية.');
+        }
+        CoreEvidenceClient::stream($case['core_application_ulid'], $item['id'], $reviewer);
     }
 
     if (preg_match('#^/cases/([0-9A-F]{26})/decision$#', $path, $match)) {
