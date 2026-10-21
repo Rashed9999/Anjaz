@@ -66,7 +66,7 @@
         <h2>تم إرسال طلب المنشأة إلى موثّق</h2>
         <p id="success-detail" class="lead"></p>
         <p class="hint">لن تُفعّل لوحة القطاع أو المحفظة قبل قرار الاعتماد.</p>
-        <a class="back" href="{{ route('merchant.web.login') }}">العودة إلى تسجيل الدخول</a>
+        <a class="back" href="{{ route('merchant.web.opening') }}">استكمال الوثائق ومتابعة الطلب ←</a>
     </section>
 </main>
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
@@ -116,8 +116,18 @@
             const data=new FormData(form); data.set('email_challenge_id',challengeId); data.set('email_verification_token',verificationToken); data.set('terms_accepted','1'); data.set('locale','ar');
             const r=await fetch('/api/v1/auth/register/merchant',{method:'POST',headers:{Accept:'application/json'},body:data});
             const b=await r.json(); if(!r.ok||!b.success)throw new Error(errorMessage(b));
+            // The applicant must be able to upload evidence immediately, before
+            // the first merchant login (which is intentionally blocked).
+            const openingId=b.data?.muwathaq_application_ulid, openingToken=b.data?.account_opening_access_token;
+            if(openingId&&openingToken){
+                sessionStorage.setItem('amial.merchant.opening.v1',JSON.stringify({
+                    application_ulid:openingId,token:openingToken
+                }));
+                window.location.assign(@json(route('merchant.web.opening')));
+                return;
+            }
             document.getElementById('form-card').classList.add('hidden'); document.getElementById('success-card').classList.remove('hidden');
-            document.getElementById('success-detail').textContent='رقم منشأتك: '+(b.data?.merchant_number||'—')+' · تم تسجيل الطلب بنجاح.';
+            document.getElementById('success-detail').textContent='رقم منشأتك: '+(b.data?.merchant_number||'—')+' · تم تسجيل الطلب. أكمل التوثيق من صفحة متابعة الطلب.';
         }catch(e){show(e.message,'error');}finally{busy(submit,false);}
     });
 })();
