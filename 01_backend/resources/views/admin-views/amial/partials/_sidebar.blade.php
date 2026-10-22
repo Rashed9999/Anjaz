@@ -87,11 +87,11 @@
         [
             'title' => 'الامتثال والرقابة',
             'icon' => '🛡️',
-            'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*', 'admin/amial/saher*'],
+            'match' => ['admin/amial/kyc*', 'admin/amial/muwathaq-openings*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*', 'admin/amial/saher*'],
             'links' => [
-                // موثّق هو شاشة مراجعة الهوية الوحيدة. أمّا الاعتماد هنا فهو
-                // تفعيلٌ تشغيلي لاحق للقرار، لا مراجعة KYC ثانية.
-                ['✅ الاعتماد التشغيلي بعد قرار موثّق', route('admin.amial.hub.muwathaq-openings.index'), 'platform.approvals.decide'],
+                // تعرض أميال باي التفاصيل فقط؛ القرار والتفعيل ينتهيان
+                // بقناة موثّق الموقّعة، لا بزر اعتماد ثانٍ في هذه اللوحة.
+                ['📋 موثّق — الحسابات الجديدة', route('admin.amial.hub.muwathaq-openings.index'), 'platform.customers.view'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.aml.investigate'],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), 'platform.audit.view'],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],
