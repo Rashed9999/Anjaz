@@ -826,10 +826,10 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     $hc = App\Http\Controllers\Admin\AdminHubController::class;
 
     // الصفحات
-    Route::get('/muwathaq-openings', [App\Http\Controllers\Admin\MuwathaqOpeningApprovalController::class, 'index'])->middleware('platform:platform.approvals.decide')->name('muwathaq-openings.index');
-    Route::get('/muwathaq-openings.json', [App\Http\Controllers\Admin\MuwathaqOpeningApprovalController::class, 'list'])->middleware('platform:platform.approvals.decide')->name('muwathaq-openings.list');
-    Route::post('/muwathaq-openings/{applicationUlid}/approve', [App\Http\Controllers\Admin\MuwathaqOpeningApprovalController::class, 'approve'])->whereUlid('applicationUlid')->middleware('platform:platform.approvals.decide')->name('muwathaq-openings.approve');
-    Route::post('/muwathaq-openings/{applicationUlid}/reject', [App\Http\Controllers\Admin\MuwathaqOpeningApprovalController::class, 'reject'])->whereUlid('applicationUlid')->middleware('platform:platform.approvals.decide')->name('muwathaq-openings.reject');
+    // مرآة الحسابات الجديدة داخل أميال باي: قراءة فقط. قرار الحساب لا يمر
+    // من لوحة الإدارة بل من موثّق عبر القناة الموقّعة.
+    Route::get('/muwathaq-openings', [App\Http\Controllers\Admin\MuwathaqOpeningApprovalController::class, 'index'])->middleware('platform:platform.customers.view')->name('muwathaq-openings.index');
+    Route::get('/muwathaq-openings.json', [App\Http\Controllers\Admin\MuwathaqOpeningApprovalController::class, 'list'])->middleware('platform:platform.customers.view')->name('muwathaq-openings.list');
     Route::get('/customers', [$hc, 'customers'])->middleware('platform:platform.customers.view')->name('customers');
     Route::get('/agents', [$hc, 'agents'])->middleware('platform:platform.customers.view')->name('agents');
     Route::get('/merchants', [$hc, 'merchants'])->middleware('platform:platform.customers.view')->name('merchants');
