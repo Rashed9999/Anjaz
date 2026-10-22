@@ -125,7 +125,7 @@ SQL);
         foreach ([
             "ALTER TABLE muwathaq_cases ADD COLUMN origin VARCHAR(32) NOT NULL DEFAULT 'amial_legacy' AFTER core_application_ulid",
             "ALTER TABLE muwathaq_cases ADD COLUMN created_by_identity VARCHAR(190) NULL AFTER origin",
-        ] as $sql) { try { $db->exec($sql); } catch (\\PDOException) {} }
+        ] as $sql) { try { $db->exec($sql); } catch (\PDOException) {} }
 
         $db->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS muwathaq_case_evidence (
