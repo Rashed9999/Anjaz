@@ -171,7 +171,7 @@ class OperatorWorkspaceGuardTest extends TestCase
         $customerCenter = (string) file_get_contents(
             resource_path('views/admin-views/amial/customer/index.blade.php')
         );
-        $this->assertStringContainsString('admin.amial.kyc.page', $customerCenter);
+        $this->assertStringContainsString('admin.amial.hub.muwathaq-openings.index', $customerCenter);
         $this->assertStringContainsString('admin.amial.kyc.changes.page', $customerCenter);
         // مركز أنظمة العميل اندمج تبويباً يحمل البيانات دون فتح صفحة ثانية.
         $this->assertStringContainsString('data-op="systems"', $customerCenter);
