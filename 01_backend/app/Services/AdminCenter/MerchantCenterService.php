@@ -8,6 +8,7 @@ use App\Models\EMoney;
 use App\Models\KycDocument;
 use App\Models\MuwathaqAccountOpeningApplication;
 use App\Models\MuwathaqOpeningEvidence;
+use App\Services\Muwathaq\MuwathaqEvidenceSummaryService;
 use App\Models\RegistrationDossier;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSale;
@@ -463,22 +464,10 @@ class MerchantCenterService
             ->with('evidences')
             ->latest('id')->first();
 
-        $kindLabels = [
-            MuwathaqOpeningEvidence::OWNER_IDENTITY => 'هوية مالك المنشأة',
-            MuwathaqOpeningEvidence::BUSINESS_REGISTRATION => 'السجل أو الترخيص التجاري',
-            MuwathaqOpeningEvidence::OPERATING_ADDRESS => 'إثبات الموقع التشغيلي',
-        ];
-        $openingEvidence = $opening === null ? [] : $opening->evidences
-            ->filter(fn (MuwathaqOpeningEvidence $e) => isset($kindLabels[$e->kind]))
-            ->map(fn (MuwathaqOpeningEvidence $e) => [
-                'kind' => $e->kind,
-                'label' => $kindLabels[$e->kind],
-                'state' => $e->state,
-                'received' => $e->file_encrypted_path !== null,
-                'delivered_to_muwathaq' => $e->muwathaq_delivered_at !== null,
-                'submitted_at' => $e->submitted_at?->format('Y-m-d H:i'),
-                'verified_at' => $e->verified_at?->format('Y-m-d H:i'),
-            ])->values()->all();
+        $evidenceSummary = $opening
+            ? app(MuwathaqEvidenceSummaryService::class)->forMerchant($opening)
+            : ['availability' => 'not_applicable', 'items' => []];
+        $openingEvidence = $evidenceSummary['items'];
 
         return [
             'kyc_status' => $p?->verification_status ?? 'pending',
@@ -494,9 +483,9 @@ class MerchantCenterService
                 'submitted_at' => $opening->submitted_at?->format('Y-m-d H:i'),
                 'decided_at' => $opening->decided_at?->format('Y-m-d H:i'),
                 // Case approval is not equivalent to per-document approval.
-                'evidence_visibility' => $openingEvidence === []
-                    ? 'not_mirrored_locally' : 'local_metadata',
+                'evidence_visibility' => $evidenceSummary['availability'],
             ],
+            'muwathaq_evidence_availability' => $evidenceSummary['availability'],
             'muwathaq_evidence' => $openingEvidence,
             'documents_count' => $docs->count(),
             'documents' => $docs->map(fn (KycDocument $d) => [
