@@ -539,22 +539,54 @@
                         + kv('حالة KYC', d.kyc_status) + kv('مستوى التحقق', d.verification_level)
                         + kv('تاريخ التوثيق', d.verified_at || 'لم يُوثَّق')
                         + '</div></div>')
-                    + card('الوثائق',
+                    + card('قضية فتح الحساب في موثّق',
+                        d.muwathaq_opening
+                            ? '<div class="card-body">'
+                                + '<div class="row">'
+                                + kv('مرجع الطلب', esc(d.muwathaq_opening.reference))
+                                + kv('قرار فتح الحساب', esc(({
+                                    submitted:'قُدّم الطلب', under_review:'قيد المراجعة',
+                                    needs_more_info:'يحتاج استكمال',
+                                    awaiting_admin_approval:'بانتظار اعتماد الإدارة',
+                                    approved:'معتمد', rejected:'مرفوض'
+                                  })[d.muwathaq_opening.status] || d.muwathaq_opening.status))
+                                + kv('تاريخ تقديم الطلب', esc(d.muwathaq_opening.submitted_at || '—'))
+                                + kv('تاريخ القرار', esc(d.muwathaq_opening.decided_at || '—'))
+                                + '</div></div>'
+                            : '<div class="card-body text-muted small">لا توجد قضية فتح حساب في موثّق مرتبطة بهذا التاجر؛ قد يكون حساباً أقدم.</div>',
+                        'قرار فتح الحساب منفصل عن سجل المستندات التاريخي. لا يغيّر هذا العرض صلاحيات التاجر.')
+                    + card('الأدلة الواردة عبر موثّق',
+                        table(['المستند','سجل الملف في أميال','وصل إلى موثّق','حالة الدليل','تاريخ الإرسال'],
+                            (d.muwathaq_evidence || []).map(v => '<tr><td>'
+                                + esc(v.label) + '</td><td>'
+                                + (v.received ? 'ملف محفوظ مشفراً' : 'بيانات إثبات بلا صورة محلية')
+                                + '</td><td>' + (v.delivered_to_muwathaq ? 'وصل' : 'لم يُثبت التسليم بعد')
+                                + '</td><td>' + esc(({
+                                    submitted:'مقدّم للمراجعة',
+                                    verified:'تم التحقق من الدليل',
+                                    rejected:'مرفوض'
+                                  })[v.state] || v.state) + '</td><td class="small">'
+                                + esc(v.submitted_at || '—') + '</td></tr>'),
+                            d.muwathaq_opening
+                                ? 'لا توجد نسخة محلية من بيانات الأدلة في أميال باي؛ افحص ملف القضية في موثّق.'
+                                : 'لا توجد قضية موثّق مرتبطة بهذا الحساب.'),
+                        'تُعرض البيانات الوصفية فقط. صور الهوية والملفات الأصلية لا تُكشف من هذا الجدول؛ اعتماد القضية لا يعني اعتماد كل مستند منفرداً.')
+                    + card('وثائق KYC القديمة أو الترقيات',
                         table(['النوع','الحالة','رُفعت','رُوجعت','تنتهي','سبب الرفض'],
                             d.documents.map(v => '<tr><td>' + esc(v.type) + '</td><td>'
                                 + esc(v.status) + '</td><td class="small">' + esc(v.uploaded_at)
                                 + '</td><td class="small">' + esc(v.reviewed_at || 'لم تُراجَع')
                                 + '</td><td class="small">' + esc(v.expires_at)
                                 + '</td><td class="small text-danger">' + esc(v.rejection_reason || '')
-                                + '</td></tr>'), 'لا وثائق مرفوعة'),
-                        'الامتثال قسم مستقل عن الاشتراك — ولا يُخلطان.')
-                    + card('ملفات التسجيل المؤرشفة',
+                                + '</td></tr>'), 'لا توجد وثائق في سجل KYC القديم'),
+                        'هذه ملفات توثيق قديمة أو تخص الترقيات، وليست أدلة طلب فتح الحساب في موثّق.')
+                    + card('ملفات التسجيل المؤرشفة (النظام السابق)',
                         table(['المرجع','المصدر','الحالة','ورقي','أنشئ'],
                             (d.registration_dossiers || []).map(v => '<tr><td class="font-monospace">'
                                 + esc(v.reference) + '</td><td>' + esc(v.source) + '</td><td>' + esc(v.state)
                                 + '</td><td>' + (v.has_paper_form ? 'نعم' : '—') + '</td><td class="small">'
-                                + esc(v.created_at || '—') + '</td></tr>'), 'لا ملف تسجيل مرتبط'),
-                        'النسخة الكاملة والطباعة في «ملفات التسجيل والأرشفة» وبصلاحية مستقلة.');
+                                + esc(v.created_at || '—') + '</td></tr>'), 'لا ملف مؤرشف في النظام السابق'),
+                        'أرشيف مستقل عن قضية فتح الحساب في موثّق؛ غيابه لا يعني غياب مستندات موثّق.');
             } catch (e) { failed(el, e); }
         },
 
