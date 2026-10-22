@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// AMIAL-PROGRESSIVE-KYC-APP-001
 ///
@@ -832,6 +833,33 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // مصدر إنشاء الهوية والحساب هو موثّق. هذه الشاشة لا تجمع كلمة مرور أو
+    // PIN ولا تستدعي أي endpoint ينشئ مستخدماً في أميال باي.
+    return Scaffold(
+      appBar: AppBar(title: const Text('فتح حساب')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const AmialBrandLogo(height: 88),
+            const SizedBox(height: 20),
+            const Text('فتح الحساب يتم عبر موثّق', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+            const SizedBox(height: 10),
+            const Text('موثّق يستلم بيانات الطلب وأدلته، وبعد الاعتماد يهيّئ أميال باي المحفظة ويرسل لك طريقة دخول آمنة.', textAlign: TextAlign.center),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: () async {
+                final ok = await launchUrl(Uri.parse('https://muwathaq.amialpay.com/open-account?type=customer'), mode: LaunchMode.externalApplication);
+                if (!ok && context.mounted) _snack('تعذر فتح بوابة موثّق.');
+              },
+              icon: const Icon(Icons.verified_user_outlined),
+              label: const Text('الانتقال إلى موثّق'),
+            ),
+          ]),
+        ),
+      ),
+    );
+    /* legacy registration flow retained temporarily for source history
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
       body: SafeArea(
@@ -1674,4 +1702,5 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       ]),
     ]);
   }
+    */
 }
