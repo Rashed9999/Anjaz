@@ -859,7 +859,6 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         ),
       ),
     );
-    /* legacy registration flow retained temporarily for source history
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
       body: SafeArea(
@@ -1702,5 +1701,4 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       ]),
     ]);
   }
-    */
 }
