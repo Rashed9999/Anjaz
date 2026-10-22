@@ -14,15 +14,15 @@ use Tests\TestCase;
  * Muwathaq E2E — رحلة فتح الحساب النسائي Tier 1 عبر حدود التطبيقين.
  *
  * التسجيل والمتابعة يصلان عبر HTTP في أميال باي. قرار موثّق يصل عبر قناة
- * HMAC الداخلية. ثم القرار التشغيلي للإدارة وحده ينشئ المحفظة. هذا يمنع
- * أخطر انحدار: إنشاء محفظة أو تفعيل مالي عند رفع الأدلة أو قرار المراجع وحده.
+ * HMAC الداخلية. قرار موثّق الموقّع هو القرار النهائي، وتُنشئ أميال باي
+ * المحفظة في المعاملة نفسها؛ لا توجد شاشة اعتماد إدارية مكررة.
  */
 class MuwathaqAccountOpeningE2ETest extends TestCase
 {
     use RefreshDatabase;
 
     /** @test */
-    public function female_tier_one_account_crosses_phone_residence_muwathaq_and_admin_gates_before_wallet_creation(): void
+    public function female_tier_one_account_is_activated_by_the_signed_muwathaq_decision(): void
     {
         config([
             'amial.otp.pilot_customer_phone_enabled' => true,
@@ -36,8 +36,6 @@ class MuwathaqAccountOpeningE2ETest extends TestCase
             'is_phone_verified' => 0,
             'kyc_tier' => 0,
         ]);
-        $admin = User::factory()->admin()->create();
-
         $openingService = app(MuwathaqAccountOpeningService::class);
         $progressService = app(MuwathaqOpeningProgressService::class);
         $opening = $openingService->submitFor($applicant);
@@ -99,18 +97,7 @@ class MuwathaqAccountOpeningE2ETest extends TestCase
             $decision,
         )->assertOk()
             ->assertJsonPath('code', 'MUWATHAQ_DECISION_APPLIED')
-            ->assertJsonPath('meta.status', MuwathaqAccountOpeningApplication::STATUS_AWAITING_ADMIN_APPROVAL);
-        $this->assertDatabaseMissing('e_money', ['user_id' => $applicant->id]);
-
-        // 5) اعتماد الإدارة هو البوابة النهائية الوحيدة التي تنشئ المحفظة.
-        $activated = $openingService->receiveAdminDecision(
-            $opening->application_ulid,
-            true,
-            $admin->id,
-            'اعتماد تشغيلي E2E',
-        );
-
-        $this->assertSame(MuwathaqAccountOpeningApplication::STATUS_APPROVED, $activated->status);
+            ->assertJsonPath('meta.status', MuwathaqAccountOpeningApplication::STATUS_APPROVED);
         $this->assertDatabaseHas('e_money', ['user_id' => $applicant->id]);
         $this->assertSame(1, (int) $applicant->fresh()->is_phone_verified);
         $this->assertSame('YE-AD', $applicant->fresh()->verified_residence_governorate);
