@@ -26,6 +26,12 @@ class RegisterController extends Controller
     // atomic proof consumption; request input never authorizes this argument.
     public function customerRegistration(Request $request, ?string $verifiedEmail = null): JsonResponse
     {
+        return response()->json([
+            'success' => false,
+            'code' => 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ',
+            'message' => 'إنشاء الحساب يتم حصراً عبر موثّق؛ أميال باي لا ينشئ حسابات جديدة.',
+            'muwathaq_url' => rtrim((string) config('muwathaq.base_url'), '/').'/open-account?type=customer',
+        ], 410);
         // التسجيل بمساعدة موظف لا يفتح محفظة خلف ظهر صاحب الرقم: يُستعاد
         // ما كتبه الموظف *قبل* التحقق، ثم يبقى OTP وPIN إلزاميين في هذا
         // المسار نفسه. مدخلات العميل الحالية تتقدّم دائماً على المسودة.
@@ -579,6 +585,12 @@ class RegisterController extends Controller
 
     public function agentRegistration(Request $request): JsonResponse
     {
+        return response()->json([
+            'success' => false,
+            'code' => 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ',
+            'message' => 'إنشاء الحساب يتم حصراً عبر موثّق؛ أميال باي لا ينشئ حسابات جديدة.',
+            'muwathaq_url' => rtrim((string) config('muwathaq.base_url'), '/').'/login',
+        ], 410);
         return response()->json(['errors' => [[
             'code' => 'AGENT_SELF_REGISTRATION_CLOSED',
             'message' => 'حساب الوكيل يُنشأ من الإدارة ثم تُسلَّم بيانات الدخول.',
