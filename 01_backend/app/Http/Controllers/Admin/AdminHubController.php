@@ -497,6 +497,12 @@ class AdminHubController extends Controller
      */
     public function storeUser(Request $request, string $slug): JsonResponse
     {
+        return response()->json([
+            'success' => false,
+            'code' => 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ',
+            'message' => 'إنشاء الحساب يتم حصراً عبر موثّق؛ أميال باي لا ينشئ حسابات جديدة.',
+            'muwathaq_url' => rtrim((string) config('muwathaq.base_url'), '/').'/open-account',
+        ], 410);
         $type = $this->typeFromSlug($slug);
         if ($type === null) return response()->json(['message' => 'unknown hub'], 404);
 
