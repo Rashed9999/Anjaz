@@ -59,16 +59,14 @@ class CustomerSystemsCenterService
         return [
             $this->system(
                 'kyc',
-                'التوثيق وKYC',
-                Schema::hasTable('kyc_documents') && $this->hasRoute('admin.amial.kyc.page'),
-                'لجنة التحقق، السكن، ملفات فتح الحساب، والتدرج 0→1→2→3.',
+                'موثّق — الحسابات الجديدة',
+                Schema::hasTable('muwathaq_account_opening_applications') && $this->hasRoute('admin.amial.hub.muwathaq-openings.index'),
+                'عرض آمن لطلبات فتح الحساب، والتفاصيل والقرار داخل نظام موثّق فقط.',
                 [
-                    ['label' => 'طلبات معلقة', 'value' => $this->count('kyc_documents', fn ($q) => $q->where('status', 'pending'))],
-                    ['label' => 'ملفات فتح الحساب', 'value' => $this->count('registration_dossiers')],
+                    ['label' => 'طلبات فتح الحساب', 'value' => $this->count('muwathaq_account_opening_applications', fn ($q) => $q->whereIn('status', ['submitted', 'under_review', 'needs_more_info']))],
                 ],
                 [
-                    $this->action('لجنة التحقق', 'admin.amial.kyc.page'),
-                    $this->action('ملفات فتح الحساب', 'admin.amial.registration-dossiers.page'),
+                    $this->action('الحسابات الجديدة في موثّق', 'admin.amial.hub.muwathaq-openings.index'),
                     $this->action('سجل التدقيق', 'admin.amial.audit.index'),
                 ],
             ),
@@ -121,7 +119,7 @@ class CustomerSystemsCenterService
                 ],
                 [
                     $this->action('أحداث الحارس', 'admin.amial.audit.index', ['action' => 'CUSTOMER_POLICY_BLOCKED']),
-                    $this->action('لجنة التحقق', 'admin.amial.kyc.page'),
+                    $this->action('الحسابات الجديدة في موثّق', 'admin.amial.hub.muwathaq-openings.index'),
                 ],
             ),
             $this->system(
