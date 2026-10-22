@@ -43,7 +43,7 @@ requireContains($index, 'اعتماد الحساب', 'approval option is require
 requireContains($index, 'رفض الحساب', 'rejection option is required');
 requireNotContains($index, '<aside class="sidebar">', 'the old multi-list sidebar must not return');
 requireNotContains($index, 'href="/accounts?', 'the old account-directory navigation must stay hidden');
-requireContains($index, "in_array($path, ['/accounts', '/audit'], true)", 'old UI URLs must redirect to the one queue');
+requireContains($index, "in_array(\$path, ['/accounts', '/audit'], true)", 'old UI URLs must redirect to the one queue');
 requireContains($index, "['approved', 'rejected']", 'reviewer endpoint must accept only approval or rejection');
 requireContains($index, "redirect('/');", 'a decision must return to the one queue');
 
