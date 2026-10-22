@@ -44,6 +44,12 @@ class ProgressiveRegistrationController extends Controller
 
     public function register(Request $request): JsonResponse
     {
+        return response()->json([
+            'success' => false,
+            'code' => 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ',
+            'message' => 'إنشاء الحساب يتم حصراً عبر موثّق؛ أميال باي لا ينشئ حسابات جديدة.',
+            'muwathaq_url' => rtrim((string) config('muwathaq.base_url'), '/').'/open-account?type=customer',
+        ], 410);
         $validator = Validator::make($request->all(), [
             // الاسم هنا ليس لقب عرض. هو الاسم القانوني المُصرّح به
             // الذي سنقارنه بإثبات السكن ثم الهوية.
