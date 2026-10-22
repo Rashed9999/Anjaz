@@ -63,7 +63,7 @@
                 default => 'customer',
             };
         @endphp
-        <li class="nav-item"><a class="nav-link" href="{{ route('admin.amial.kyc.page', ['role' => $verificationRole]) }}" id="kyc-unified-center-link">🛡️ مركز التحقق والتوثيق الموحد</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ route('admin.amial.hub.muwathaq-openings.index') }}" id="kyc-unified-center-link">🛡️ مركز التحقق والتوثيق الموحد</a></li>
     </ul>
 
     <div class="tab-content">
