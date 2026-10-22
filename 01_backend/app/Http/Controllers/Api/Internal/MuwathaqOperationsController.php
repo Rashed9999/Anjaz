@@ -166,7 +166,7 @@ final class MuwathaqOperationsController extends Controller
         $validator = Validator::make($request->all(), [
             'event_ulid' => ['required', 'string', 'size:26', 'regex:/^[0-9A-HJKMNP-TV-Z]{26}$/'],
             'reviewer_identity' => 'required|string|max:190',
-            'action' => 'required|string|in:session_started,directory_opened,case_opened,evidence_opened,decision_recorded',
+            'action' => 'required|string|in:session_started,directory_opened,case_opened,evidence_opened,decision_recorded,agent_opening_created',
             'application_ulid' => ['nullable', 'string', 'size:26', 'regex:/^[0-9A-HJKMNP-TV-Z]{26}$/'],
             'case_ulid' => ['nullable', 'string', 'size:26', 'regex:/^[0-9A-HJKMNP-TV-Z]{26}$/'],
             'subject_kind' => 'nullable|string|in:customer,merchant,agent',
