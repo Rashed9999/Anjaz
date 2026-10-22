@@ -29,10 +29,8 @@ class AdminCriticalRouteContractTest extends TestCase
             'admin.amial.merchants.verification.reject' => 'platform:platform.approvals.decide',
             'admin.amial.merchants.verification.resubmit' => 'platform:platform.approvals.decide',
 
-            'admin.amial.hub.muwathaq-openings.index' => 'platform:platform.approvals.decide',
-            'admin.amial.hub.muwathaq-openings.list' => 'platform:platform.approvals.decide',
-            'admin.amial.hub.muwathaq-openings.approve' => 'platform:platform.approvals.decide',
-            'admin.amial.hub.muwathaq-openings.reject' => 'platform:platform.approvals.decide',
+            'admin.amial.hub.muwathaq-openings.index' => 'platform:platform.customers.view',
+            'admin.amial.hub.muwathaq-openings.list' => 'platform:platform.customers.view',
 
             'admin.amial.kyc.changes.page' => 'platform:platform.customers.kyc.view',
             'admin.amial.kyc.changes.open' => 'platform:platform.customers.kyc.request',
