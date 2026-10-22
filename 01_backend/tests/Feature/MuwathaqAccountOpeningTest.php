@@ -77,7 +77,7 @@ class MuwathaqAccountOpeningTest extends TestCase
     }
 
     /** @test */
-    public function muwathaq_approval_waits_for_admin_and_only_admin_provisions_the_wallet(): void
+    public function signed_muwathaq_approval_activates_the_account_and_provisions_the_wallet(): void
     {
         $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female', 'kyc_tier' => 0]);
         $service = app(MuwathaqAccountOpeningService::class);
@@ -114,12 +114,8 @@ class MuwathaqAccountOpeningTest extends TestCase
             ],
         );
 
-        $this->assertSame(MuwathaqAccountOpeningApplication::STATUS_AWAITING_ADMIN_APPROVAL, $approved->status);
+        $this->assertSame(MuwathaqAccountOpeningApplication::STATUS_APPROVED, $approved->status);
         $this->assertSame($approved->id, $again->id);
-        $this->assertNull(EMoney::query()->where('user_id', $user->id)->first());
-
-        $activated = $service->receiveAdminDecision($application->application_ulid, true, 55, 'اعتماد تشغيلي');
-        $this->assertSame(MuwathaqAccountOpeningApplication::STATUS_APPROVED, $activated->status);
         $this->assertNotNull(EMoney::query()->where('user_id', $user->id)->first());
         $this->assertSame(1, (int) $user->fresh()->kyc_tier);
     }
@@ -130,17 +126,13 @@ class MuwathaqAccountOpeningTest extends TestCase
         $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'male']);
         $application = app(MuwathaqAccountOpeningService::class)->submitFor($user);
 
+        $this->expectException(\DomainException::class);
         app(MuwathaqAccountOpeningService::class)->receiveDecision(
             $application->application_ulid,
             MuwathaqAccountOpeningApplication::STATUS_APPROVED,
             'muwathaq-standard-review-0001',
             null,
             ['verified_phone' => true, 'verified_residence_governorate' => 'YE-AD'],
-        );
-
-        $this->expectException(\DomainException::class);
-        app(MuwathaqAccountOpeningService::class)->receiveAdminDecision(
-            $application->application_ulid, true, 55
         );
     }
 
