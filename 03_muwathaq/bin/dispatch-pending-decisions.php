@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Muwathaq\CoreDecisionClient;
+use Muwathaq\CoreProvisioningClient;
 use Muwathaq\Database;
 use Muwathaq\ReviewerAudit;
 use function Muwathaq\now;
@@ -13,7 +14,8 @@ $db = Database::pdo();
 $cases = $db->query("SELECT * FROM muwathaq_cases WHERE core_delivery_status = 'pending' AND decision IS NOT NULL ORDER BY updated_at ASC LIMIT 100")->fetchAll();
 foreach ($cases as $case) {
     try {
-        CoreDecisionClient::deliver($case);
+        if (($case['origin'] ?? 'amial_legacy') === 'muwathaq') CoreProvisioningClient::deliver($case);
+        else CoreDecisionClient::deliver($case);
         $db->prepare('UPDATE muwathaq_cases SET core_delivery_status="delivered",core_delivered_at=?,core_last_error=NULL,updated_at=? WHERE id=?')->execute([now(), now(), $case['id']]);
         echo "Delivered {$case['case_ulid']}\n";
     } catch (Throwable $error) {
