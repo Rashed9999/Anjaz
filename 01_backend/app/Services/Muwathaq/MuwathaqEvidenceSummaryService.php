@@ -48,7 +48,7 @@ final class MuwathaqEvidenceSummaryService
         }
 
         $baseUrl = trim((string) config('muwathaq.base_url'));
-        if ($baseUrl === '') {
+        if ($baseUrl === '' || MuwathaqTransportSecrets::amialToMuwathaq() === '') {
             return ['availability' => 'unavailable', 'items' => []];
         }
 
