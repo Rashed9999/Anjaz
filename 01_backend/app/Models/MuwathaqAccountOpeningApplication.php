@@ -16,7 +16,7 @@ class MuwathaqAccountOpeningApplication extends Model
     public const STATUS_REJECTED = 'rejected';
 
     protected $fillable = [
-        'application_ulid', 'user_id', 'subject_kind', 'verification_path',
+        'application_ulid', 'user_id', 'origin', 'subject_kind', 'verification_path',
         'business_type', 'requested_tier', 'status', 'opening_access_token_hash', 'opening_access_expires_at', 'evidence_completed_at', 'submitted_at', 'decided_at',
         'decision_reference', 'decision_reason', 'decision_context',
         'muwathaq_decided_at', 'admin_decided_by', 'admin_decided_at', 'admin_decision_reason',
@@ -24,6 +24,7 @@ class MuwathaqAccountOpeningApplication extends Model
 
     protected $casts = [
         'user_id' => 'integer',
+        'origin' => 'string',
         'requested_tier' => 'integer',
         'opening_access_expires_at' => 'datetime',
         'evidence_completed_at' => 'datetime',
