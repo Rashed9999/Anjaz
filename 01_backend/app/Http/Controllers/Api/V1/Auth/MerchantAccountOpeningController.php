@@ -51,6 +51,12 @@ class MerchantAccountOpeningController extends Controller
 
     public function register(Request $request): JsonResponse
     {
+        return response()->json([
+            'success' => false,
+            'code' => 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ',
+            'message' => 'إنشاء الحساب يتم حصراً عبر موثّق؛ أميال باي لا ينشئ حسابات جديدة.',
+            'muwathaq_url' => rtrim((string) config('muwathaq.base_url'), '/').'/open-account?type=merchant',
+        ], 410);
         $codes = implode(',', VerticalRegistry::codes());
         $validator = Validator::make($request->all(), [
             'store_name' => ['required', 'string', 'min:2', 'max:120'],
