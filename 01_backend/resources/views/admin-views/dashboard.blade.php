@@ -185,7 +185,7 @@
     @php
         $attention = $data['attention'] ?? [];
         $attentionItems = [
-            ['key' => 'kyc', 'label' => 'مستندات الهوية بانتظار المراجعة', 'icon' => '🪪', 'href' => route('admin.amial.kyc.page'), 'tone' => 'warning'],
+            ['key' => 'kyc', 'label' => 'مستندات الهوية بانتظار المراجعة', 'icon' => '🪪', 'href' => route('admin.amial.hub.muwathaq-openings.index'), 'tone' => 'warning'],
             ['key' => 'tickets', 'label' => 'تذاكر عالية الأولوية مفتوحة', 'icon' => '🎫', 'href' => route('admin.support-center.index', ['tab' => 'tickets']), 'tone' => 'danger'],
             ['key' => 'approvals', 'label' => 'طلبات تنتظر اعتماداً ثانياً', 'icon' => '✅', 'href' => route('admin.support-center.index', ['tab' => 'approvals']), 'tone' => 'warning'],
             ['key' => 'security', 'label' => 'تنبيهات أمان لم تُراجع', 'icon' => '🛡️', 'href' => route('admin.support-center.index', ['tab' => 'insider']), 'tone' => 'danger'],
