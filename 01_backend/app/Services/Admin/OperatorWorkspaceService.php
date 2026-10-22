@@ -56,7 +56,7 @@ class OperatorWorkspaceService
     {
         return [
             $this->card('kyc', 'طلبات هوية بحاجة مراجعة', 'platform.customers.kyc.view',
-                route('admin.amial.kyc.page'), 'warning', 'tio-user-add',
+                route('admin.amial.hub.muwathaq-openings.index'), 'warning', 'tio-user-add',
                 fn () => $this->pendingKyc(), $can),
 
             $this->card('aml', 'بلاغات امتثال مفتوحة', 'platform.audit.view',
@@ -137,7 +137,7 @@ class OperatorWorkspaceService
                         'at' => $d->created_at,
                         'state' => 'بحاجة مراجعة',
                         'tone' => 'warning',
-                        'url' => route('admin.amial.kyc.page'),
+                        'url' => route('admin.amial.hub.muwathaq-openings.index'),
                     ];
                 });
         }
