@@ -74,17 +74,16 @@ class MuwathaqAccountOpeningService
             $application = MuwathaqAccountOpeningApplication::query()->where('application_ulid', $applicationUlid)->lockForUpdate()->first();
             if ($application === null) throw new DomainException('طلب فتح الحساب غير موجود.');
 
-            // إعادة التسليم آمنة ولا تجعل موافقة موثّق تفعّل المال.
+            // القناة موقّعة، والمرجع يجعل إعادة التسليم آمنة: القرار نفسه
+            // لا ينشئ محفظة ثانية ولا يغيّر حالة حُسمت سابقاً.
             if ($application->isFinal()) {
-                if ($application->decision_reference === $reference
-                    && (($decision === MuwathaqAccountOpeningApplication::STATUS_APPROVED
-                        && $application->status === MuwathaqAccountOpeningApplication::STATUS_AWAITING_ADMIN_APPROVAL)
-                        || $application->status === $decision)) return $application;
+                if ($application->decision_reference === $reference && $application->status === $decision) {
+                    return $application;
+                }
                 throw new DomainException('هذا الطلب حُسم سابقاً ولا يقبل قراراً جديداً.');
             }
 
-            $application->status = $decision === MuwathaqAccountOpeningApplication::STATUS_APPROVED
-                ? MuwathaqAccountOpeningApplication::STATUS_AWAITING_ADMIN_APPROVAL : $decision;
+            $application->status = $decision;
             $application->decision_reference = $reference;
             $application->decision_reason = $reason;
             $application->decision_context = $this->safeContext($context);
@@ -92,8 +91,20 @@ class MuwathaqAccountOpeningService
                 MuwathaqAccountOpeningApplication::STATUS_APPROVED,
                 MuwathaqAccountOpeningApplication::STATUS_REJECTED,
             ], true) ? now() : null;
-            $application->decided_at = $decision === MuwathaqAccountOpeningApplication::STATUS_REJECTED ? now() : null;
+            $application->decided_at = in_array($decision, [
+                MuwathaqAccountOpeningApplication::STATUS_APPROVED,
+                MuwathaqAccountOpeningApplication::STATUS_REJECTED,
+            ], true) ? now() : null;
             $application->save();
+
+            // موثّق هو صاحب قرار فتح الحساب. بعد تحقق الأدلة والسياق الموقّع
+            // تفعّل أميال باي الحساب والمحفظة في المعاملة نفسها، بلا طابور
+            // إداري ثانٍ يكرر الاعتماد.
+            if ($decision === MuwathaqAccountOpeningApplication::STATUS_APPROVED) {
+                $this->activateApprovedApplication($application);
+                $application->refresh();
+            }
+
             return $application;
         });
     }
