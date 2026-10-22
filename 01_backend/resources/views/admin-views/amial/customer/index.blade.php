@@ -55,7 +55,7 @@
             @endif
             {{-- AMIAL-KYC-ONE-CENTER-001 — مركز موحد بدل ثلاثة أزرار متفرقة. --}}
             @if(auth('user')->user()?->hasPlatformPermission('platform.customers.kyc.view'))
-                <a class="btn btn-primary btn-sm" href="{{ route('admin.amial.kyc.page') }}"
+                <a class="btn btn-primary btn-sm" href="{{ route('admin.amial.hub.muwathaq-openings.index') }}"
                    data-testid="cc-kyc-unified-center">🛡️ مركز التحقق والهوية</a>
                 <button type="button" class="btn btn-outline-primary btn-sm js-cc-op"
                         data-op="changes" data-testid="cc-profile-changes">📝 طلبات تحديث البيانات</button>
@@ -1002,7 +1002,7 @@
                 <div class="card p-3 mt-3">
                     <h6>أدوات KYC المتخصصة</h6>
                     <div class="d-flex flex-wrap gap-2">
-                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.page') }}">لجنة التحقق والهوية</a>
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.hub.muwathaq-openings.index') }}">لجنة التحقق والهوية</a>
                         <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.residence.page') }}">إثبات الإقامة</a>
                         <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.kyc.changes.page') }}">طلبات تحديث البيانات</a>
                         <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.hub.verification') }}">طابور التحقق العام</a>
