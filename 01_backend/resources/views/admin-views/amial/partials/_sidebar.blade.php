@@ -26,6 +26,8 @@
 @php
     $u = auth('user')->user();
     $can = fn (?string $perm) => $perm === null || ($u && $u->hasPlatformPermission($perm));
+    // رابط موثّق مستقل عن جلسة الإدارة، ويُضبط من MUWATHAQ_BASE_URL.
+    $muwathaqUrl = rtrim(trim((string) config('muwathaq.base_url')), '/');
 
     // المجموعة: [العنوان، الأيقونة، أنماط المسار للفتح التلقائيّ، الروابط]
     //
@@ -87,10 +89,9 @@
             'icon' => '🛡️',
             'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*', 'admin/amial/saher*'],
             'links' => [
-                // نقطة القرار الوحيدة: هوية صاحب الحساب، السكن، ومستندات المنشأة
-                // تُراجع من ملف واحد. لا يوجد رابط «توثيق تجار» موازٍ يكرر القرار.
-                ['📂 مراجعة ملفات التوثيق السابقة', route('admin.amial.kyc.page'), 'platform.customers.kyc.view'],
-                ['✅ اعتمادات موثّق النهائية', route('admin.amial.hub.muwathaq-openings.index'), 'platform.approvals.decide'],
+                // موثّق هو شاشة مراجعة الهوية الوحيدة. أمّا الاعتماد هنا فهو
+                // تفعيلٌ تشغيلي لاحق للقرار، لا مراجعة KYC ثانية.
+                ['✅ الاعتماد التشغيلي بعد قرار موثّق', route('admin.amial.hub.muwathaq-openings.index'), 'platform.approvals.decide'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.aml.investigate'],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), 'platform.audit.view'],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],
@@ -170,6 +171,11 @@
             ],
         ],
     ];
+
+    // لا نعرض الزر إذا لم يُضبط عنوان موثّق بعد؛ زرٌ معطّل أسوأ من عدم ظهوره.
+    if ($muwathaqUrl !== '') {
+        array_unshift($groups[3]['links'], ['🔐 الدخول إلى نظام موثّق', $muwathaqUrl, 'platform.approvals.decide', '_blank']);
+    }
 @endphp
 
 {{-- لوحة القيادة التنفيذية تبقى خارج المجموعات: هي ما يُفتح أوّلاً كلّ صباح،
