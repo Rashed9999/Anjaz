@@ -7,6 +7,7 @@ use Muwathaq\Config;
 use Muwathaq\CoreEvidenceClient;
 use Muwathaq\CoreOperationsClient;
 use Muwathaq\CoreDecisionClient;
+use Muwathaq\CoreProvisioningClient;
 use Muwathaq\Database;
 use Muwathaq\HttpError;
 use Muwathaq\Policy;
@@ -45,6 +46,7 @@ function layout(string $title, string $content): never
             .'<a href="/accounts?list=customer_male">عملاء — ذكور</a>'
             .'<a href="/accounts?list=merchant">حسابات التجار</a>'
             .'<a href="/accounts?list=agent">حسابات الوكلاء</a>'
+            .'<a href="/accounts/new-agent">إنشاء وكيل</a>'
             .'<a href="/accounts?list=active">الحسابات النشطة</a>'
             .'<a href="/accounts?list=suspended">الحسابات الموقوفة</a>'
             .'<a href="/accounts?list=review">حسابات قيد المراجعة</a>'
@@ -74,6 +76,80 @@ function findCaseForApplication(string $applicationUlid): ?array
     $statement->execute([$applicationUlid]);
     $case = $statement->fetch();
     return $case ?: null;
+}
+
+/** ينشئ موثّق القضية والملف المشفّر؛ لا يكتب أي مستخدم أو محفظة في أميال باي. */
+function createMuwathaqOwnedCase(array $input, array $files, ?string $creator): array
+{
+    $kind = (string) ($input['subject_kind'] ?? '');
+    if (!in_array($kind, ['customer', 'merchant', 'agent'], true)) throw new HttpError(422, 'INVALID_ACCOUNT_TYPE', 'نوع الحساب غير صحيح.');
+    if ($kind === 'agent' && $creator === null) throw new HttpError(403, 'AGENT_INTERNAL_ONLY', 'إنشاء الوكيل متاح لموظفي موثّق فقط.');
+    $first = trim((string) ($input['f_name'] ?? ''));
+    $last = trim((string) ($input['l_name'] ?? ''));
+    $phone = trim((string) ($input['phone'] ?? ''));
+    $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
+    if (mb_strlen($first) < 2 || mb_strlen($last) < 2 || mb_strlen($phone) < 5 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        throw new HttpError(422, 'INVALID_APPLICANT', 'أكمل الاسم والهاتف والبريد الصحيحين.');
+    }
+    $gender = strtolower(trim((string) ($input['gender'] ?? '')));
+    $businessType = trim((string) ($input['business_type'] ?? ''));
+    $storeName = trim((string) ($input['store_name'] ?? ''));
+    if ($kind === 'customer' && !in_array($gender, ['male', 'female'], true)) throw new HttpError(422, 'GENDER_REQUIRED', 'حدد جنس العميل لاختيار سياسة التحقق.');
+    if ($kind === 'merchant' && ($businessType === '' || $storeName === '')) throw new HttpError(422, 'MERCHANT_DETAILS_REQUIRED', 'اسم المنشأة وقطاعها مطلوبان.');
+    $path = match ($kind) { 'agent' => 'agent_operation', 'merchant' => 'merchant_sector', default => $gender === 'female' ? 'women_progressive' : 'standard_customer' };
+    $tier = $path === 'women_progressive' ? max(1, min(3, (int) ($input['requested_tier'] ?? 1))) : null;
+    $applicationUlid = strtoupper(substr(bin2hex(random_bytes(13)), 0, 26));
+    $eventUlid = strtoupper(substr(bin2hex(random_bytes(13)), 0, 26));
+    $payload = [
+        'event_version' => 1, 'event_type' => 'account_opening.created_in_muwathaq',
+        'applicant' => ['f_name' => $first, 'l_name' => $last, 'legal_name' => trim($first.' '.$last), 'phone' => $phone, 'email' => $email, 'gender' => $gender ?: null],
+        'subject' => ['store_name' => $storeName ?: null, 'business_type' => $businessType ?: null, 'operating_address' => trim((string) ($input['operating_address'] ?? '')) ?: null],
+    ];
+    $db = Database::pdo(); $time = now();
+    $db->beginTransaction();
+    try {
+        $insert = $db->prepare('INSERT INTO muwathaq_cases (case_ulid,core_event_ulid,core_application_ulid,origin,created_by_identity,subject_kind,verification_path,business_type,requested_tier,status,payload_encrypted,received_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+        $caseUlid = strtoupper(substr(bin2hex(random_bytes(13)), 0, 26));
+        $insert->execute([$caseUlid,$eventUlid,$applicationUlid,'muwathaq',$creator,$kind,$path,$businessType ?: null,$tier,'submitted',Cipher::encrypt(json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)),$time,$time,$time]);
+        $caseId = (int) $db->lastInsertId();
+        $case = ['id'=>$caseId,'case_ulid'=>$caseUlid,'core_application_ulid'=>$applicationUlid,'subject_kind'=>$kind,'verification_path'=>$path,'business_type'=>$businessType ?: null,'requested_tier'=>$tier,'origin'=>'muwathaq'];
+        $evidence = [];
+        foreach (Policy::evidenceKinds($case) as $evidenceKind) {
+            $file = $files[$evidenceKind] ?? null;
+            $requiresDocument = in_array($evidenceKind, Policy::documentEvidenceKinds($case), true);
+            if ($requiresDocument && (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK)) {
+                throw new HttpError(422, 'EVIDENCE_REQUIRED', 'ارفع الدليل المطلوب: '.$evidenceKind.'.');
+            }
+            $encrypted = null; $mime = null; $sha = null;
+            if (is_array($file) && (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                if ((int) ($file['size'] ?? 0) > 5 * 1024 * 1024) throw new HttpError(422, 'EVIDENCE_TOO_LARGE', 'حجم كل مستند لا يتجاوز 5 ميغابايت.');
+                $raw = file_get_contents((string) $file['tmp_name']);
+                if ($raw === false) throw new HttpError(422, 'EVIDENCE_UNREADABLE', 'تعذر قراءة المستند المرفوع.');
+                $mime = (new finfo(FILEINFO_MIME_TYPE))->file((string) $file['tmp_name']) ?: 'application/octet-stream';
+                if (!in_array($mime, ['application/pdf','image/jpeg','image/png','image/webp'], true)) throw new HttpError(422, 'EVIDENCE_TYPE_INVALID', 'صيغة المستند يجب أن تكون PDF أو صورة JPEG/PNG/WebP.');
+                $encrypted = Cipher::encrypt($raw); $sha = hash('sha256', $raw);
+            }
+            $record = $db->prepare('INSERT INTO muwathaq_case_evidence (case_id,kind,state,payload_encrypted,document_encrypted,document_mime,document_sha256,submitted_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)');
+            $record->execute([$caseId,$evidenceKind,'submitted',Cipher::encrypt(json_encode(['declared_at'=>$time], JSON_THROW_ON_ERROR)),$encrypted,$mime,$sha,$time,$time,$time]);
+            $evidence[$evidenceKind] = ['id'=>(int)$db->lastInsertId(),'kind'=>$evidenceKind,'state'=>'submitted','document_received'=>$encrypted !== null,'document_mime'=>$mime,'submitted_at'=>$time];
+        }
+        $db->prepare('UPDATE muwathaq_cases SET evidence_encrypted=?,updated_at=? WHERE id=?')->execute([Cipher::encrypt(json_encode($evidence, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)),$time,$caseId]);
+        $db->commit();
+        return findCase($caseUlid);
+    } catch (Throwable $error) { if ($db->inTransaction()) $db->rollBack(); throw $error; }
+}
+
+function accountOpeningForm(string $kind, string $action, string $token, bool $internal = false): string
+{
+    $merchant = $kind === 'merchant'; $agent = $kind === 'agent';
+    $title = $agent ? 'إنشاء طلب وكيل' : ($merchant ? 'فتح حساب تاجر' : 'فتح حساب عميل');
+    $agentNote = $agent ? '<p class="alert">ينشأ الوكيل داخل موثّق فقط، ولا يصبح حسابه التشغيلي نشطاً قبل اعتماد مراجع آخر.</p>' : '';
+    $gender = $kind === 'customer' ? '<label>الجنس</label><select name="gender" required><option value="">اختر</option><option value="female">أنثى</option><option value="male">ذكر</option></select><label>مستوى البداية للعميلة</label><select name="requested_tier"><option value="1">المستوى 1</option><option value="2">المستوى 2</option><option value="3">المستوى 3</option></select>' : '';
+    $business = ($merchant || $agent) ? '<label>'.($agent ? 'اسم نقطة/نشاط الوكيل' : 'اسم المنشأة').'</label><input name="store_name" required><label>القطاع أو النشاط</label><input name="business_type" required><label>العنوان التشغيلي</label><textarea name="operating_address" required></textarea>' : '';
+    $fileKinds = $agent ? ['owner_identity'=>'هوية الوكيل','operating_address'=>'إثبات العنوان التشغيلي'] : ($merchant ? ['owner_identity'=>'هوية مالك المنشأة','business_registration'=>'السجل أو الترخيص','operating_address'=>'إثبات عنوان النشاط'] : ['identity_document'=>'وثيقة الهوية']);
+    if ($kind === 'customer') $fileKinds = ['identity_document'=>'وثيقة الهوية (مطلوبة للذكر أو مستوى 2/3 للأنثى)'];
+    $files=''; foreach ($fileKinds as $name=>$label) $files.='<label>'.$label.'</label><input type="file" name="'.$name.'" accept="application/pdf,image/jpeg,image/png,image/webp">';
+    return '<div class="card" style="max-width:720px;margin:30px auto"><h2>'.$title.'</h2>'.$agentNote.'<p class="muted">تُحفظ بيانات الطلب وأدلته مشفّرة في موثّق. لا تُنشأ محفظة أو بيانات دخول هنا.</p><form method="post" action="'.e($action).'" enctype="multipart/form-data"><input type="hidden" name="_token" value="'.e($token).'"><input type="hidden" name="subject_kind" value="'.e($kind).'"><label>الاسم الأول</label><input name="f_name" required><label>اسم العائلة</label><input name="l_name" required><label>الهاتف</label><input name="phone" inputmode="tel" required><label>البريد الإلكتروني</label><input type="email" name="email" required>'.$gender.$business.'<h3>أدلة التحقق</h3>'.$files.'<label><input type="checkbox" name="terms" value="1" required style="width:auto"> أقر بصحة البيانات وأوافق على مراجعتها من موثّق.</label><br><br><button class="btn" type="submit">إرسال طلب موثّق</button></form></div>';
 }
 
 try {
@@ -149,6 +225,23 @@ try {
         jsonResponse(['accepted' => true], 202);
     }
 
+
+    if ($path === '/open-account') {
+        if ($method === 'POST') {
+            assertCsrf();
+            if (empty($_POST['terms'])) throw new HttpError(422, 'TERMS_REQUIRED', 'يلزم قبول إقرار صحة البيانات.');
+            $kind = (string) ($_POST['subject_kind'] ?? '');
+            if (!in_array($kind, ['customer', 'merchant'], true)) throw new HttpError(403, 'PUBLIC_ACCOUNT_TYPE_FORBIDDEN', 'هذه البوابة تفتح حساب العميل أو التاجر فقط.');
+            $case = createMuwathaqOwnedCase($_POST, $_FILES, null);
+            redirect('/open-account?submitted='.rawurlencode($case['case_ulid']));
+        }
+        $submitted = trim((string) ($_GET['submitted'] ?? ''));
+        $message = $submitted !== '' ? '<div class="card"><h2>تم استلام طلبك</h2><p>مرجع موثّق: <b>'.e($submitted).'</b>. بعد الاعتماد فقط يهيئ أميال باي المحفظة ويرسل طريقة الدخول الآمنة.</p></div>' : '<div class="card"><h2>فتح حساب عبر موثّق</h2><a class="btn" href="/open-account?type=customer">حساب عميل</a> <a class="btn" href="/open-account?type=merchant">حساب تاجر</a></div>';
+        $type = (string) ($_GET['type'] ?? '');
+        if (in_array($type, ['customer','merchant'], true)) $message = accountOpeningForm($type, '/open-account', csrf());
+        layout('فتح حساب', $message);
+    }
+
     if ($path === '/login') {
         if ($method === 'POST') {
             assertCsrf();
@@ -170,6 +263,18 @@ try {
     if ($path === '/logout') { session_destroy(); redirect('/login'); }
 
     $reviewer = requireReviewer();
+
+    if ($path === '/accounts/new-agent') {
+        if ($method === 'POST') {
+            assertCsrf();
+            if (empty($_POST['terms'])) throw new HttpError(422, 'TERMS_REQUIRED', 'يلزم إقرار صحة بيانات الوكيل.');
+            $case = createMuwathaqOwnedCase($_POST, $_FILES, $reviewer);
+            ReviewerAudit::record($reviewer, 'agent_opening_created', $case);
+            redirect('/cases/'.$case['case_ulid']);
+        }
+        layout('إنشاء وكيل', accountOpeningForm('agent', '/accounts/new-agent', csrf(), true));
+    }
+
     if ($path === '/') {
         $db = Database::pdo();
         $counts = $db->query("SELECT status, COUNT(*) total FROM muwathaq_cases GROUP BY status")->fetchAll();
@@ -249,6 +354,18 @@ try {
         layout('مراجعة القضية', $content);
     }
 
+
+    if (preg_match('#^/cases/([0-9A-F]{26})/evidence/([a-z_]+)/document$#', $path, $match)) {
+        $case = findCase($match[1]);
+        if (($case['origin'] ?? 'amial_legacy') === 'muwathaq') {
+            ReviewerAudit::record($reviewer, 'evidence_opened', $case);
+            $statement = Database::pdo()->prepare('SELECT document_encrypted,document_mime FROM muwathaq_case_evidence WHERE case_id=? AND kind=?');
+            $statement->execute([$case['id'], $match[2]]); $document = $statement->fetch();
+            if (!$document || empty($document['document_encrypted'])) throw new HttpError(404, 'EVIDENCE_DOCUMENT_NOT_FOUND', 'المستند غير متاح.');
+            header('Content-Type: '.($document['document_mime'] ?: 'application/octet-stream')); header('X-Content-Type-Options: nosniff'); echo Cipher::decrypt($document['document_encrypted']); exit;
+        }
+    }
+
     if (preg_match('#^/cases/([0-9A-F]{26})/evidence/([a-z_]+)/document$#', $path, $match)) {
         $case = findCase($match[1]);
         ReviewerAudit::record($reviewer, 'evidence_opened', $case);
@@ -288,7 +405,8 @@ try {
         $case = findCase($match[1]);
         ReviewerAudit::record($reviewer, 'decision_recorded', $case, ['decision' => $decision, 'delivery_status' => 'pending']);
         try {
-            CoreDecisionClient::deliver($case);
+            if (($case['origin'] ?? 'amial_legacy') === 'muwathaq') CoreProvisioningClient::deliver($case);
+            else CoreDecisionClient::deliver($case);
             Database::pdo()->prepare('UPDATE muwathaq_cases SET core_delivery_status="delivered",core_delivered_at=?,core_last_error=NULL,updated_at=? WHERE id=?')->execute([now(), now(), $case['id']]);
         } catch (Throwable $error) {
             Database::pdo()->prepare('UPDATE muwathaq_cases SET core_delivery_status="pending",core_last_error=?,updated_at=? WHERE id=?')->execute([mb_substr($error->getMessage(), 0, 500), now(), $case['id']]);
