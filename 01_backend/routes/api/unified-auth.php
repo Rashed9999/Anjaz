@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use App\Http\Controllers\Api\Internal\MuwathaqDecisionController;
 use App\Http\Controllers\Api\Internal\MuwathaqEvidenceDocumentController;
 use App\Http\Controllers\Api\Internal\MuwathaqOperationsController;
+use App\Http\Controllers\Api\Internal\MuwathaqProvisioningController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -83,6 +84,10 @@ Route::post('/auth/email-otp/webhook', [EmailOtpController::class, 'webhook'])
     ->name('amial.auth.email-otp.webhook');
 
 // ليس API للتطبيق أو المتصفح. موثّق يوقّع الجسم الخام ووقت الإرسال بـ HMAC.
+Route::post('/internal/muwathaq/provisioning', [MuwathaqProvisioningController::class, 'store'])
+    ->middleware(['muwathaq.signature', 'throttle:20,1'])
+    ->name('amial.internal.muwathaq.provisioning');
+
 Route::post('/internal/muwathaq/applications/{applicationUlid}/decision', [MuwathaqDecisionController::class, 'store'])
     ->middleware(['muwathaq.signature', 'throttle:30,1'])
     ->name('amial.internal.muwathaq.application.decision');
