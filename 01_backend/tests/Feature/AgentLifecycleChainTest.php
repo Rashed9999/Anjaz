@@ -102,12 +102,7 @@ class AgentLifecycleChainTest extends TestCase
                 'verified_residence_governorate' => 'YE-AD',
             ],
         );
-        $opening->receiveAdminDecision(
-            $application->application_ulid,
-            true,
-            $this->admin->id,
-            'اعتماد اختبار مسار الوكيل',
-        );
+
     }
 
     /** @test */
