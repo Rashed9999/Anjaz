@@ -70,6 +70,7 @@ class MerchantWebRegistrationJourneyTest extends TestCase
     #[Test]
     public function merchant_portal_redirects_new_applicants_to_muwathaq_instead_of_collecting_legacy_documents(): void
     {
+        config(['muwathaq.base_url' => 'https://muwathaq.example.test']);
         $this->get('/merchant/register')->assertOk()
             ->assertSee('فتح حساب منشأة')
             ->assertSee('موثّق')
