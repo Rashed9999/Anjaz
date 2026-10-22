@@ -68,100 +68,48 @@ class MerchantWebRegistrationJourneyTest extends TestCase
     }
 
     #[Test]
-    public function merchant_portal_uses_muwathaq_contract_and_never_collects_legacy_documents(): void
+    public function merchant_portal_redirects_new_applicants_to_muwathaq_instead_of_collecting_legacy_documents(): void
     {
         $this->get('/merchant/register')->assertOk()
-            ->assertSee('إنشاء حساب منشأة')
-            ->assertSee('بيع سريع')
-            ->assertSee('تجزئة')
-            ->assertSee('صيدلية')
-            ->assertSee('تجارة جملة')
-            ->assertSee('مطعم')
-            ->assertSee('محطة وقود')
-            ->assertSee('/api/v1/auth/account-opening/contract', false)
-            ->assertSee('/api/v1/auth/register/merchant', false)
-            ->assertDontSee('وجه الهوية')
-            ->assertDontSee('الصورة الشخصية');
-
+            ->assertSee('فتح حساب منشأة')
+            ->assertSee('موثّق')
+            ->assertSee('/open-account?type=merchant', false)
+            ->assertDontSee('name="password"', false)
+            ->assertDontSee('name="id_card_front"', false);
 
         $this->get('/merchant/opening')->assertOk()
-            ->assertSee('استكمال توثيق المنشأة')
-            ->assertSee('/api/v1/auth/account-opening/', false)
-            ->assertSee('owner_identity')
-            ->assertSee('business_registration')
-            ->assertSee('operating_address');
+            ->assertSee('استكمال توثيق المنشأة');
 
-        $this->get('/merchant/login')->assertOk()->assertSee('استكمال طلب منشأة قائم');
-        $this->get('/merchant/recover')->assertOk()
-            ->assertSee('/api/v1/auth/password-reset/email', false);
+        $this->get('/merchant/login')->assertOk();
     }
 
     #[Test]
-    public function verified_email_registration_creates_a_pending_merchant_for_every_builtin_sector(): void
+    public function amial_legacy_creation_is_closed_for_every_sector(): void
     {
-        $matrix = [
-            A::BIZ_QUICK_SALE => '779610101',
-            A::BIZ_RETAIL => '779610102',
-            A::BIZ_PHARMACY => '779610103',
-            A::BIZ_WHOLESALE => '779610104',
-            A::BIZ_RESTAURANT => '779610105',
-            A::BIZ_FUEL => '779610106',
-        ];
-
-        foreach ($matrix as $sector => $phone) {
-            $email = $sector . '-' . $phone . '@example.test';
-            $issued = app(EmailOtpService::class)->issue($email, 'registration');
-            $token = app(EmailOtpService::class)->verify(
-                $issued['challenge_id'], $email, 'registration', $this->lastCode()
-            );
-
+        // موثّق هو المصدر الوحيد لإنشاء الحساب. إحياء تسجيل أميال القديم
+        // يعيد تكرار المنشآت وقرارات KYC والمحافظ قبل مراجعة موثّق.
+        foreach ([
+            A::BIZ_QUICK_SALE, A::BIZ_RETAIL, A::BIZ_PHARMACY,
+            A::BIZ_WHOLESALE, A::BIZ_RESTAURANT, A::BIZ_FUEL,
+        ] as $sector) {
+            $email = $sector.'@merchant-registration-closed.example.test';
             $response = app(MerchantAccountOpeningController::class)->register(
                 Request::create('/api/v1/auth/register/merchant', 'POST', [
                     'email' => $email,
-                    'email_challenge_id' => $issued['challenge_id'],
-                    'email_verification_token' => $token,
-                    'dial_country_code' => '+967',
-                    'phone' => $phone,
-                    'password' => 'MerchantPass9!',
-                    'password_confirmation' => 'MerchantPass9!',
-                    'transaction_pin' => '5839',
-                    'given_name' => 'مالك',
-                    'father_name' => 'محمد',
-                    'grandfather_name' => 'علي',
-                    'family_name' => 'التجريبي',
-                    'store_name' => 'منشأة ' . $sector,
                     'business_type' => $sector,
-                    'terms_accepted' => true,
-                ])
+                    'store_name' => 'منشأة تجريبية',
+                ]),
             );
 
-            $this->assertSame(201, $response->getStatusCode(), $response->getContent());
-            $user = User::where('email_canonical', $email)->firstOrFail();
-            $profile = MerchantProfile::where('user_id', $user->id)->firstOrFail();
-            $store = Merchant::where('user_id', $user->id)->firstOrFail();
-
-            $this->assertSame(MERCHANT_TYPE, (int) $user->type);
-            $this->assertSame(A::ROLE_MERCHANT, (string) $user->role);
-            $this->assertSame(1, (int) $user->is_email_verified);
-            $this->assertSame(0, (int) $user->is_active);
-            $this->assertSame($sector, (string) $profile->business_type);
-            $this->assertSame('unverified', (string) $profile->verification_status);
-            $this->assertNotEmpty($store->merchant_number);
-            $body = $response->getData(true);
-            $this->assertNotEmpty($body['data']['account_opening_access_token'] ?? null);
-            $this->assertFalse(EMoney::where('user_id', $user->id)->exists());
-            $this->getJson(
-                '/api/v1/auth/account-opening/'.$body['data']['muwathaq_application_ulid'].'/status',
-                ['Authorization' => 'Bearer '.$body['data']['account_opening_access_token']],
-            )->assertOk()->assertJsonPath('data.next_steps.0', 'submit_owner_identity');
-            $this->assertDatabaseHas('muwathaq_account_opening_applications', [
-                'user_id' => $user->id,
-                'subject_kind' => 'merchant',
-                'verification_path' => 'merchant_sector',
-                'business_type' => $sector,
-                'status' => 'submitted',
-            ]);
+            $this->assertSame(410, $response->getStatusCode());
+            $payload = $response->getData(true);
+            $this->assertSame('ACCOUNT_CREATION_OWNED_BY_MUWATHAQ', $payload['code']);
+            $this->assertSame('/open-account?type=merchant', $payload['muwathaq_url']);
+            $this->assertFalse(User::where('email_canonical', $email)->exists());
         }
+        $this->assertSame(0, Merchant::count());
+        $this->assertSame(0, EMoney::count());
+        $this->assertSame(0, MuwathaqAccountOpeningApplication::count());
     }
 
     #[Test]
