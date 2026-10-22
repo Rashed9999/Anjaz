@@ -23,6 +23,9 @@ else
   bad "الصحة: رمز ${CODE} أو استجابة غير صالحة"
 fi
 
+R=$(probe "$BASE/open-account" "$TMPDIR/open-account.html"); CODE="${R%%|*}"
+if [[ "$CODE" == '200' ]] && grep -q 'فتح حساب' "$TMPDIR/open-account.html"; then ok 'بوابة فتح الحساب من موثّق متاحة'; else bad "بوابة فتح الحساب: رمز ${CODE}"; fi
+
 R=$(probe "$BASE/login" "$TMPDIR/login.html"); CODE="${R%%|*}"
 if [[ "$CODE" == '200' ]] && grep -q 'name="_token"' "$TMPDIR/login.html" && grep -q 'type="password"' "$TMPDIR/login.html"; then
   ok 'باب المراجع يعرض نموذجاً محمياً بـ CSRF'
