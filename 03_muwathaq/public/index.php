@@ -168,6 +168,60 @@ try {
         jsonResponse(['success' => true, 'data' => Policy::registrationContract($selector)]);
     }
 
+    // Redacted metadata only, used by Amial's permission-gated merchant center.
+    // Never return decrypted photos, storage paths, document hashes or PII.
+    if ($path === '/api/v1/internal/evidence-summary') {
+        if ($method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'الطريقة غير مسموحة.');
+        $body = file_get_contents('php://input') ?: '';
+        Signature::verifyAmialRequest($body);
+        $payload = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        $applicationUlid = $payload['application_ulid'] ?? '';
+        if (!is_string($applicationUlid)
+            || !preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/', $applicationUlid)) {
+            throw new HttpError(422, 'INVALID_APPLICATION', 'مرجع طلب موثّق غير صالح.');
+        }
+        $case = findCaseForApplication($applicationUlid);
+        if (!$case) throw new HttpError(404, 'CASE_NOT_FOUND', 'ملف موثّق غير موجود.');
+        if (($case['subject_kind'] ?? '') !== 'merchant') {
+            throw new HttpError(403, 'MERCHANT_CASE_REQUIRED', 'هذا العرض مخصص لملف التاجر.');
+        }
+        $items = [];
+        if (($case['origin'] ?? 'amial_legacy') === 'muwathaq') {
+            $stmt = Database::pdo()->prepare(
+                'SELECT kind,state,(document_encrypted IS NOT NULL) AS document_received,submitted_at
+                 FROM muwathaq_case_evidence WHERE case_id=? ORDER BY id ASC LIMIT 12'
+            );
+            $stmt->execute([$case['id']]);
+            foreach ($stmt->fetchAll() as $item) {
+                $items[] = [
+                    'kind' => (string) $item['kind'],
+                    'state' => (string) $item['state'],
+                    'document_received' => (bool) $item['document_received'],
+                    'submitted_at' => $item['submitted_at'],
+                ];
+            }
+        } else {
+            $saved = $case['evidence_encrypted'] ? Cipher::decryptJson($case['evidence_encrypted']) : [];
+            foreach ($saved as $item) {
+                if (!is_array($item)) continue;
+                $items[] = [
+                    'kind' => (string) ($item['kind'] ?? ''),
+                    'state' => (string) ($item['state'] ?? 'submitted'),
+                    'document_received' => (bool) ($item['document_received'] ?? false),
+                    'submitted_at' => $item['submitted_at'] ?? null,
+                ];
+            }
+        }
+        jsonResponse([
+            'success' => true,
+            'data' => [
+                'application_ulid' => $applicationUlid,
+                'origin' => (string) ($case['origin'] ?? 'amial_legacy'),
+                'items' => $items,
+            ],
+        ]);
+    }
+
     if ($path === '/api/v1/internal/applications') {
         if ($method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'الطريقة غير مسموحة.');
         $body = file_get_contents('php://input') ?: '';
