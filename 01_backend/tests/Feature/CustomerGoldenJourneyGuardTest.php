@@ -49,35 +49,34 @@ class CustomerGoldenJourneyGuardTest extends TestCase
     }
 
     #[\PHPUnit\Framework\Attributes\Test]
-    public function a_brand_new_customer_is_submitted_to_muwathaq_without_a_wallet(): void
+    public function a_brand_new_customer_must_open_through_muwathaq_only(): void
     {
         $phone = '771599901';
 
+        // This route is retired; reopening it would circumvent the required
+        // verified-evidence and reviewer authorization in Muwathaq.
         $this->postJson('/api/v1/customer/auth/register', $this->payload($phone))
-            ->assertOk()
-            ->assertJsonPath('verification_status', 'submitted')
-            ->assertJsonPath('wallet_created', false);
+            ->assertStatus(410)
+            ->assertJsonPath('code', 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
 
-        $user = User::where('phone', '967' . $phone)->firstOrFail();
-
-        $this->assertSame(CUSTOMER_TYPE, (int) $user->type);
-        $this->assertSame(0, (int) $user->is_kyc_verified);
-        $this->assertSame(0, (int) ($user->kyc_tier ?? 0));
-        $this->assertFalse(EMoney::where('user_id', $user->id)->exists());
-        $this->assertDatabaseHas('muwathaq_account_opening_applications', [
-            'user_id' => $user->id,
-            'subject_kind' => 'customer',
-            'status' => 'submitted',
-        ]);
+        $this->assertFalse(User::where('phone', '967' . $phone)->exists());
+        $this->assertSame(0, EMoney::count());
+        $this->assertDatabaseCount('muwathaq_account_opening_applications', 0);
     }
 
-    /** @test */
+        /** @test */
     public function tier_zero_is_a_real_account_but_financially_zero(): void
     {
-        $this->postJson('/api/v1/customer/auth/register', $this->payload('771599902'))
-            ->assertOk();
-
-        $user = User::where('phone', '967771599902')->firstOrFail();
+        // Internal policy contract for a pending customer: the only public
+        // account-creation entry point remains Muwathaq.
+        $user = User::factory()->create([
+            'type' => CUSTOMER_TYPE,
+            'is_active' => 0,
+            'is_kyc_verified' => 0,
+            'kyc_tier' => 0,
+            'is_phone_verified' => 0,
+        ]);
+        $this->assertFalse(EMoney::where('user_id', $user->id)->exists());
         $tiers = app(KycTierService::class);
 
         foreach ([
