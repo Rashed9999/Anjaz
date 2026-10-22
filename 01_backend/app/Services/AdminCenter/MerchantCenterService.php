@@ -6,6 +6,8 @@ use App\Models\AdminCenter\MerchantDataAccessGrant;
 use App\Models\Branch;
 use App\Models\EMoney;
 use App\Models\KycDocument;
+use App\Models\MuwathaqAccountOpeningApplication;
+use App\Models\MuwathaqOpeningEvidence;
 use App\Models\RegistrationDossier;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSale;
@@ -453,12 +455,49 @@ class MerchantCenterService
         $docs = KycDocument::where('user_id', $m->id)
             ->orderByDesc('id')->limit(20)->get();
 
+        // The modern onboarding evidence is not stored in legacy kyc_documents.
+        // Show redacted, account-scoped metadata, never encrypted storage paths.
+        $opening = MuwathaqAccountOpeningApplication::query()
+            ->where('user_id', $m->id)
+            ->where('subject_kind', 'merchant')
+            ->with('evidences')
+            ->latest('id')->first();
+
+        $kindLabels = [
+            MuwathaqOpeningEvidence::OWNER_IDENTITY => 'هوية مالك المنشأة',
+            MuwathaqOpeningEvidence::BUSINESS_REGISTRATION => 'السجل أو الترخيص التجاري',
+            MuwathaqOpeningEvidence::OPERATING_ADDRESS => 'إثبات الموقع التشغيلي',
+        ];
+        $openingEvidence = $opening === null ? [] : $opening->evidences
+            ->filter(fn (MuwathaqOpeningEvidence $e) => isset($kindLabels[$e->kind]))
+            ->map(fn (MuwathaqOpeningEvidence $e) => [
+                'kind' => $e->kind,
+                'label' => $kindLabels[$e->kind],
+                'state' => $e->state,
+                'received' => $e->file_encrypted_path !== null,
+                'delivered_to_muwathaq' => $e->muwathaq_delivered_at !== null,
+                'submitted_at' => $e->submitted_at?->format('Y-m-d H:i'),
+                'verified_at' => $e->verified_at?->format('Y-m-d H:i'),
+            ])->values()->all();
+
         return [
             'kyc_status' => $p?->verification_status ?? 'pending',
             'verification_level' => $m->verification_level ?? 'basic',
             'verified_at' => $p?->verified_at?->format('Y-m-d'),
             // AMIAL-MERCHANT-PROFILE-NULL-001 — الغيابُ يُقال لا يُملأ.
             'has_profile' => $p !== null,
+            'muwathaq_opening' => $opening === null ? null : [
+                'reference' => $opening->application_ulid,
+                'status' => $opening->status,
+                'origin' => $opening->origin,
+                'verification_path' => $opening->verification_path,
+                'submitted_at' => $opening->submitted_at?->format('Y-m-d H:i'),
+                'decided_at' => $opening->decided_at?->format('Y-m-d H:i'),
+                // Case approval is not equivalent to per-document approval.
+                'evidence_visibility' => $openingEvidence === []
+                    ? 'not_mirrored_locally' : 'local_metadata',
+            ],
+            'muwathaq_evidence' => $openingEvidence,
             'documents_count' => $docs->count(),
             'documents' => $docs->map(fn (KycDocument $d) => [
                 'id' => $d->id,
