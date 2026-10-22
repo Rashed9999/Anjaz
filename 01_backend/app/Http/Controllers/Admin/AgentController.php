@@ -76,6 +76,10 @@ class AgentController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $muwathaq = rtrim((string) config('muwathaq.base_url'), '/');
+        if ($muwathaq !== '') return redirect()->away($muwathaq.'/accounts/new-agent')
+            ->with('warning', 'إنشاء الوكيل انتقل إلى موثّق؛ أميال باي لا ينشئ الوكلاء مباشرة.');
+        return redirect()->route('admin.agent.list')->with('error', 'بوابة موثّق غير مضبوطة؛ لا يمكن إنشاء وكيل من أميال باي.');
         $check = $this->validateUploadedFile($request, ['image']);
         if ($check !== true) {
             return $check;
