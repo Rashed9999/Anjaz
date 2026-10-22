@@ -73,9 +73,15 @@
                 <div class="card-header d-flex gap-2 flex-wrap align-items-center">
                     <input type="text" id="search-box" class="form-control" style="max-width:280px"
                            placeholder="بحث بالاسم أو الهاتف أو الرقم…">
-                    <button class="btn btn-primary ms-auto" data-bs-toggle="modal" data-bs-target="#modal-add">
-                        + إضافة {{ $hubType == 1 ? 'وكيل' : ($hubType == 3 ? 'تاجر' : 'عميل') }}
-                    </button>
+                    @php($muwathaqOpenUrl = rtrim((string) config('muwathaq.base_url'), '/'))
+                    @if($muwathaqOpenUrl !== '')
+                        <a class="btn btn-primary ms-auto" target="_blank" rel="noopener"
+                           href="{{ $hubType == 1 ? $muwathaqOpenUrl.'/accounts/new-agent' : $muwathaqOpenUrl.'/open-account?type='.($hubType == 3 ? 'merchant' : 'customer') }}">
+                            {{ $hubType == 1 ? 'إنشاء وكيل في موثّق' : ($hubType == 3 ? 'فتح طلب تاجر في موثّق' : 'فتح طلب عميل في موثّق') }}
+                        </a>
+                    @else
+                        <span class="text-danger ms-auto small">بوابة موثّق غير مضبوطة؛ لا يمكن إنشاء حساب من أميال باي.</span>
+                    @endif
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
