@@ -382,6 +382,11 @@ try {
         assertCsrf();
         $case = findCase($match[1]);
         if (in_array($case['status'], ['approved', 'rejected'], true)) throw new HttpError(409, 'FINAL_CASE', 'القضية حُسمت سابقاً ولا تقبل قراراً جديداً.');
+        // الوكيل ينشأ إدارياً في موثّق، لكن لا يجوز لمن أنشأه أن يعتمد ملفه.
+        if (($case['origin'] ?? '') === 'muwathaq' && $case['subject_kind'] === 'agent'
+            && !empty($case['created_by_identity']) && hash_equals((string) $case['created_by_identity'], $reviewer)) {
+            throw new HttpError(403, 'FOUR_EYES_REQUIRED', 'لا يمكن لمن أنشأ طلب الوكيل أن يعتمد أو يرفض الطلب نفسه.');
+        }
         $decision = (string) ($_POST['decision'] ?? '');
         if (!in_array($decision, ['under_review', 'needs_more_info', 'approved', 'rejected'], true)) throw new HttpError(422, 'INVALID_DECISION', 'قرار غير صحيح.');
         $governorate = trim((string) ($_POST['governorate'] ?? ''));
