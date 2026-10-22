@@ -120,6 +120,31 @@ SQL);
             // العمود موجود غالباً؛ مخطط موثّق لا يعتمد على هجرة يدوية خارج التطبيق.
         }
 
+        // قضايا موثّق المنشأة هنا هي المصدر الجديد للحقيقة. الحالات القديمة
+        // التي وصلت من أميال باي تبقى قابلة للمراجعة ولا تتغير.
+        foreach ([
+            "ALTER TABLE muwathaq_cases ADD COLUMN origin VARCHAR(32) NOT NULL DEFAULT 'amial_legacy' AFTER core_application_ulid",
+            "ALTER TABLE muwathaq_cases ADD COLUMN created_by_identity VARCHAR(190) NULL AFTER origin",
+        ] as $sql) { try { $db->exec($sql); } catch (\\PDOException) {} }
+
+        $db->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS muwathaq_case_evidence (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  case_id BIGINT UNSIGNED NOT NULL,
+  kind VARCHAR(40) NOT NULL,
+  state VARCHAR(24) NOT NULL DEFAULT 'submitted',
+  payload_encrypted LONGTEXT NULL,
+  document_encrypted LONGTEXT NULL,
+  document_mime VARCHAR(100) NULL,
+  document_sha256 VARCHAR(64) NULL,
+  submitted_at DATETIME NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  UNIQUE KEY muwathaq_case_evidence_kind (case_id, kind),
+  CONSTRAINT muwathaq_case_evidence_case_fk FOREIGN KEY (case_id) REFERENCES muwathaq_cases(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+
         $db->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS muwathaq_reviewer_credentials (
   id TINYINT UNSIGNED PRIMARY KEY,
@@ -201,16 +226,18 @@ final class Cipher
     }
 
     /** @return array<string,mixed> */
-    public static function decryptJson(string $encoded): array
+    public static function decrypt(string $encoded): string
     {
         $raw = base64_decode($encoded, true);
-        if ($raw === false || strlen($raw) < 29) {
-            throw new RuntimeException('Stored case payload is invalid.');
-        }
+        if ($raw === false || strlen($raw) < 29) throw new RuntimeException('Stored encrypted value is invalid.');
         $plain = openssl_decrypt(substr($raw, 28), 'aes-256-gcm', self::key(), OPENSSL_RAW_DATA, substr($raw, 0, 12), substr($raw, 12, 16));
-        if ($plain === false) {
-            throw new RuntimeException('Could not decrypt case payload.');
-        }
+        if ($plain === false) throw new RuntimeException('Could not decrypt stored value.');
+        return $plain;
+    }
+
+    public static function decryptJson(string $encoded): array
+    {
+        $plain = self::decrypt($encoded);
         $data = json_decode($plain, true);
         if (!is_array($data)) {
             throw new RuntimeException('Stored case JSON is invalid.');
@@ -464,6 +491,38 @@ final class CoreDecisionClient
     }
 }
 
+
+final class CoreProvisioningClient
+{
+    /** يرسل قرار تهيئة لا يتضمن كلمة مرور أو PIN أو صوراً خاماً. */
+    public static function deliver(array $case): void
+    {
+        $payload = Cipher::decryptJson($case['payload_encrypted']);
+        $body = json_encode([
+            'event_version' => 1,
+            'event_type' => 'account.approved',
+            'application_ulid' => $case['core_application_ulid'],
+            'decision_reference' => $case['decision_reference'],
+            'subject_kind' => $case['subject_kind'],
+            'verification_path' => $case['verification_path'],
+            'business_type' => $case['business_type'],
+            'requested_tier' => $case['requested_tier'] === null ? null : (int) $case['requested_tier'],
+            'applicant' => $payload['applicant'] ?? [],
+            'subject' => $payload['subject'] ?? [],
+            'decision_context' => json_decode((string) $case['decision_context_json'], true) ?: [],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        $timestamp = (string) time();
+        $signature = hash_hmac('sha256', $timestamp.'.'.$body, Config::transportSecret('MUWATHAQ_DECISION_SECRET', 'muwathaq-to-amial-v1'));
+        $request = curl_init(rtrim(Config::required('AMIAL_CORE_BASE_URL'), '/').'/api/v1/internal/muwathaq/provisioning');
+        curl_setopt_array($request, [
+            CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json', 'X-Muwathaq-Timestamp: '.$timestamp, 'X-Muwathaq-Signature: '.$signature],
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15,
+        ]);
+        $response = curl_exec($request); $status = (int) curl_getinfo($request, CURLINFO_RESPONSE_CODE); $error = curl_error($request); curl_close($request);
+        if ($response === false || $status < 200 || $status >= 300) throw new RuntimeException('Core provisioning failed'.($status ? " (HTTP {$status})" : '').($error ? ": {$error}" : ''));
+    }
+}
 
 final class CoreOperationsClient
 {
