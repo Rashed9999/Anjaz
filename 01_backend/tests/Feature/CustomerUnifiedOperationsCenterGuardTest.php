@@ -90,12 +90,14 @@ class CustomerUnifiedOperationsCenterGuardTest extends TestCase
             resource_path('views/admin-views/amial/partials/_sidebar.blade.php')
         );
 
-        // بعد دمج العميل والتاجر والوكيل، لم يعد قرارهم في صفحة قديمة ثانية.
+        // فتح الحساب يمر من موثّق؛ لا يبقى في الشريط مدخل KYC ثانٍ للقرار.
         $this->assertSame(
-            1,
+            0,
             substr_count($sidebar, "route('admin.amial.kyc.page')"),
-            'مركز التحقق والهوية يجب أن يكون باب المراجعة الوحيد في الشريط'
+            'لا يجب أن يعرض الشريط مدخل اعتماد KYC قديم'
         );
+        $this->assertStringContainsString('الدخول إلى نظام موثّق', $sidebar);
+        $this->assertStringContainsString('admin.amial.hub.muwathaq-openings.index', $sidebar);
         $center = (string) file_get_contents(
             app_path('Http/Controllers/Admin/UnifiedVerificationCenterController.php')
         );
