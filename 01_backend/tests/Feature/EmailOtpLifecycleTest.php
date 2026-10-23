@@ -302,37 +302,30 @@ class EmailOtpLifecycleTest extends TestCase
     }
 
     #[Test]
-    public function failed_registration_keeps_proof_and_email_registration_never_manufactures_phone_otp(): void
+    public function retired_email_registration_keeps_the_issued_proof_unconsumed(): void
     {
         $issued = $this->issue();
-        $token = app(EmailOtpService::class)->verify($issued['challenge_id'], 'recipient@example.com', 'registration', $this->code());
-        $data = [
-            'email' => 'recipient@example.com', 'email_challenge_id' => $issued['challenge_id'],
-            'email_verification_token' => $token, 'dial_country_code' => '+967', 'phone' => '779123987',
-            'password' => '6392', 'gender' => 'Male', 'account_type' => 'customer',
-        ];
-        DB::table('business_settings')->updateOrInsert(['key' => 'phone_verification'], ['value' => 1]);
-        $controller = app(EmailRegistrationController::class);
-        $failed = $controller->register(Request::create('/api/v1/auth/register/email', 'POST', $data));
-        $this->assertSame(403, $failed->getStatusCode());
+        $token = app(EmailOtpService::class)->verify(
+            $issued['challenge_id'], 'recipient@example.com', 'registration', $this->code()
+        );
+
+        $response = app(EmailRegistrationController::class)->register(Request::create(
+            '/api/v1/auth/register/email',
+            'POST',
+            [
+                'email' => 'recipient@example.com',
+                'email_challenge_id' => $issued['challenge_id'],
+                'email_verification_token' => $token,
+                'dial_country_code' => '+967',
+                'phone' => '779123987',
+                'password' => '6392',
+                'account_type' => 'customer',
+            ],
+        ));
+
+        $this->assertSame(410, $response->getStatusCode());
         $this->assertNull($this->row($issued['challenge_id'])->consumed_at);
         $this->assertDatabaseMissing('users', ['email_canonical' => 'recipient@example.com']);
-        // AMIAL-LEGAL-NAME-001: نجاح التسجيل الحديث يتطلب الاسم القانوني
-        // بأجزائه الأربعة. هذا الاختبار يختبر قابلية إعادة استخدام إثبات
-        // البريد بعد فشل الكتابة، لا التهرب من عقد الاسم القانوني.
-        $ok = $controller->register(Request::create('/api/v1/auth/register/email', 'POST', $data + [
-            'f_name' => 'Email',
-            'father_name' => 'Test',
-            'grandfather_name' => 'Account',
-            'family_name' => 'Owner',
-            'l_name' => 'Owner',
-        ]));
-        $this->assertSame(200, $ok->getStatusCode());
-        $user = User::where('email_canonical', 'recipient@example.com')->firstOrFail();
-        $this->assertSame(1, (int) $user->is_email_verified);
-        $this->assertNotNull($this->row($issued['challenge_id'])->consumed_at);
-        $this->assertSame((int) $user->id, (int) $this->row($issued['challenge_id'])->user_id);
-        $this->assertSame(0, DB::table('phone_verifications')->count());
     }
 
     #[Test]
@@ -357,7 +350,7 @@ class EmailOtpLifecycleTest extends TestCase
             'email' => 'phone-owner@example.com', 'verifiedEmail' => 'phone-owner@example.com',
             'email_authorized' => true,
         ]));
-        $this->assertSame(403, $response->getStatusCode());
+        $this->assertSame(410, $response->getStatusCode());
         $this->assertDatabaseMissing('users', ['email_canonical' => 'phone-owner@example.com']);
     }
 
