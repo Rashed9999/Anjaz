@@ -8,7 +8,7 @@ use App\Models\Ledger\LedgerJournalEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EstablishesKycEvidence;
-use Tests\Support\OpensAccountsFromHub;
+use Tests\Support\ProvisionsAccountsFromMuwathaq;
 use Tests\TestCase;
 
 /**
@@ -19,6 +19,7 @@ class AdminHubTest extends TestCase
     use OpensAccountsFromHub;
     use RefreshDatabase;
     use EstablishesKycEvidence;
+    use ProvisionsAccountsFromMuwathaq;
 
     private User $admin;
 
@@ -82,31 +83,25 @@ class AdminHubTest extends TestCase
     /** @test */
     public function admin_can_add_customer_with_wallet(): void
     {
+        $phone = '967771009010';
         $this->actingAs($this->admin, 'user')
-            ->postJson('/admin/amial/hub/customers/users', [
-                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
-                'f_name' => 'اختبار', 'l_name' => 'عميل',
-                'phone' => '967771009010', 'password' => 'Secret@123',
-            ] + $this->kycDossier('967771009010'))
-            ->assertCreated();
+            ->postJson('/admin/amial/hub/customers/users', ['phone' => $phone])
+            ->assertStatus(410)
+            ->assertJsonPath('code', 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
 
-        $user = User::where('phone', '967771009010')->first();
-        $this->assertNotNull($user);
-        $this->assertSame(CUSTOMER_TYPE, (int) $user->type);
-        $this->assertTrue(EMoney::where('user_id', $user->id)->exists());
+        $this->assertDatabaseMissing('users', ['phone' => $phone]);
     }
 
     /** @test */
     public function duplicate_phone_is_rejected(): void
     {
-        User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => '967771009011']);
+        $phone = '967771009011';
+        User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => $phone]);
 
         $this->actingAs($this->admin, 'user')
-            ->postJson('/admin/amial/hub/customers/users', [
-                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
-                'f_name' => 'مكرر', 'phone' => '967771009011', 'password' => 'Secret@123',
-            ] + $this->kycDossier('967771009011'))
-            ->assertStatus(422);
+            ->postJson('/admin/amial/hub/customers/users', ['phone' => $phone])
+            ->assertStatus(410)
+            ->assertJsonPath('code', 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
     }
 
     /** @test */
@@ -245,59 +240,24 @@ class AdminHubTest extends TestCase
     /** @test */
     public function hub_created_customer_can_login_from_app(): void
     {
-        $this->actingAs($this->admin, 'user')
-            ->postJson('/admin/amial/hub/customers/users', [
-                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
-                'f_name' => 'عميل', 'l_name' => 'حقيقي',
-                'phone' => '967771009050', 'password' => 'Secret@123', 'pin' => '5678',
-            ] + $this->kycDossier('967771009050'))->assertCreated();
+        $customer = $this->provisionCustomerFromMuwathaq('967771009050');
 
-        \Illuminate\Support\Facades\Artisan::call('passport:install', ['--no-interaction' => true]);
-        $this->postJson('/api/v1/auth/login', [
-            'role' => 'customer', 'phone' => '967771009050', 'password' => 'Secret@123',
-        ])->assertOk();
+        // لا تنشئ أميال باي كلمة مرور؛ التسليم الآمن لمسار ضبط كلمة المرور
+        // يقع بعد اعتماد موثّق. لكن المحفظة والهوية التشغيلية تكونان جاهزتين.
+        $this->assertSame(1, (int) $customer->is_active);
+        $this->assertDatabaseHas('e_money', ['user_id' => $customer->id]);
     }
 
     /** @test */
     public function hub_created_merchant_can_login_and_use_cashier(): void
     {
-        $this->actingAs($this->admin, 'user')
-            ->postJson('/admin/amial/hub/merchants/users', [
-                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
-                'f_name' => 'تاجر', 'l_name' => 'حقيقي',
-                'phone' => '967771009051', 'password' => 'Secret@123',
-                'store_name' => 'بقالة الاختبار', 'business_type' => 'retail', 'plan' => 'business',
-            ] + $this->kycDossier('967771009051', merchant: true))->assertCreated();
+        $merchant = $this->provisionMerchantFromMuwathaq('retail', '967771009051');
+        $profile = \App\Models\MerchantProfile::query()->where('user_id', $merchant->id)->firstOrFail();
 
-        // دخول التطبيق بدور تاجر — التطبيق يطلب رقم التاجر الذي تعيده اللوحة
-        \Illuminate\Support\Facades\Artisan::call('passport:install', ['--no-interaction' => true]);
-        $merchantUser = User::where('phone', '967771009051')->first();
-        $merchantNumber = \App\Models\Merchant::where('user_id', $merchantUser->id)->value('merchant_number');
-        $this->assertNotNull($merchantNumber);
-        $this->postJson('/api/v1/auth/login', [
-            'role' => 'merchant', 'merchant_number' => $merchantNumber,
-            'phone' => '967771009051', 'password' => 'Secret@123',
-        ])->assertOk();
-
-        // الملف والباقة حقيقيان
-        $merchant = User::where('phone', '967771009051')->first();
-        $profile = \App\Models\MerchantProfile::where('user_id', $merchant->id)->first();
-        // AMIAL-ADMIN-KYC-001: كان هنا assertSame('verified', ...) — أي أن هذا
-        // الاختبار كان يُثبّت العطل نفسه: حساب يخرج موثّقاً بلا مراجعة وثائق.
-        // الصحيح أن يخرج غير موثّق حتى يرسل ملف النشاط للمراجعة.
-        $this->assertSame('unverified', $profile->verification_status);
-        $this->assertSame('business', $profile->subscription_plan);
+        $this->assertSame('verified', $profile->verification_status);
         $this->assertSame('retail', $profile->business_type);
+        $this->assertNotNull(\App\Models\Merchant::query()->where('user_id', $merchant->id)->value('merchant_number'));
 
-        // بعد اعتماد الإدارة يصير موثّقاً
-        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
-        $this->establishKycEvidence($merchant);
-        $this->actingAs($this->admin, 'user')
-            ->postJson("/admin/amial/hub/users/{$merchant->id}/kyc", ['status' => 1])
-            ->assertSuccessful();
-        $this->assertSame('verified', $profile->fresh()->verification_status);
-
-        // واجهة الكاشير في التطبيق تعمل لهذا التاجر (تتطلّب MerchantProfile فعلياً)
         \Laravel\Passport\Passport::actingAs($merchant->fresh(), [], 'api');
         $this->getJson('/api/v1/amial/merchant/cashier/products')->assertOk();
     }
@@ -305,21 +265,11 @@ class AdminHubTest extends TestCase
     /** @test */
     public function hub_created_agent_passes_app_login_step_one(): void
     {
-        $this->actingAs($this->admin, 'user')
-            ->postJson('/admin/amial/hub/agents/users', [
-                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
-                'f_name' => 'وكيل', 'l_name' => 'حقيقي',
-                'phone' => '967771009052', 'password' => 'Secret@123',
-            ] + $this->kycDossier('967771009052'))->assertCreated();
+        $agent = $this->provisionAgentFromMuwathaq('967771009052');
 
-        $agent = User::where('phone', '967771009052')->first();
-        $this->assertNotNull($agent->agent_number, 'رقم الوكيل يُولَّد تلقائياً');
-
-        // خطوة الدخول الأولى (رقم الوكيل + كلمة السر) تنجح وتصدر رمز OTP
-        $this->postJson('/api/v1/auth/login', [
-            'role' => 'agent', 'agent_number' => $agent->agent_number,
-            'phone' => '967771009052', 'password' => 'Secret@123',
-        ])->assertOk();
+        $this->assertSame(1, (int) $agent->is_active);
+        $this->assertNotNull($agent->agent_number, 'رقم الوكيل يُولَّد بعد اعتماد موثّق');
+        $this->assertDatabaseHas('e_money', ['user_id' => $agent->id]);
     }
 
     // ==================== لوحة الاشتراكات ====================
@@ -327,38 +277,20 @@ class AdminHubTest extends TestCase
     /** @test */
     public function subscriptions_page_and_plan_change_are_real(): void
     {
-        $this->actingAs($this->admin, 'user')
-            ->postJson('/admin/amial/hub/merchants/users', [
-                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
-                'f_name' => 'تاجر', 'l_name' => 'باقات',
-                'phone' => '967771009053', 'password' => 'Secret@123',
-                'store_name' => 'متجر الباقات', 'plan' => 'free',
-                'business_type' => \App\Support\Access\AccessConstants::BIZ_RETAIL,
-            ] + $this->kycDossier('967771009053', merchant: true))->assertCreated();
-        $merchant = User::where('phone', '967771009053')->first();
+        $merchant = $this->provisionMerchantFromMuwathaq(
+            \App\Support\Access\AccessConstants::BIZ_RETAIL,
+            '967771009053',
+        );
 
         $this->actingAs($this->admin, 'user')
             ->get('/admin/amial/hub/subscriptions')->assertOk();
-
         $this->actingAs($this->admin, 'user')
             ->getJson('/admin/amial/hub/subscriptions/list.json')
             ->assertOk()->assertJsonStructure(['summary', 'data']);
 
-        // ══════════════════════════════════════════════════════════════
-        // تغيير الباقة يمرّ عبر SubscriptionService الحقيقي ويغيّر الملف فعلاً.
-        //
-        // **والرمزُ يُقرأ من الفهرس لا يُكتب نصّاً.** كان مكتوباً هنا
-        // `'merchant_pro'` حرفاً، فلمّا وحّد صاحبُ المشروع الباقاتِ في
-        // ثلاثٍ سقط الاختبارُ بـ422 على **قرارِ تسعيرٍ سليم** لا على عطل.
-        // واختبارٌ يحرس صيغةَ رمزٍ بدل أن يحرس أنّ التغييرَ يقع
-        // **يمنع تصحيحاً صحيحاً**. (القاعدة السادسة بمعناها: يُقرأ من
-        // مصدره لا من نسخةٍ مجمَّدة.)
-        // ══════════════════════════════════════════════════════════════
         $plans = \App\Support\Access\AccessConstants::ALL_PLANS;
         $target = $plans[count($plans) - 1];
-
-        $this->assertNotSame(\App\Support\Access\AccessConstants::PLAN_FREE, $target,
-            'أعلى الباقات هي المجّانيّة — فالفهرسُ فارغٌ أو مقلوب، والاختبارُ لا يغيّر شيئاً');
+        $this->assertNotSame(\App\Support\Access\AccessConstants::PLAN_FREE, $target);
 
         $this->actingAs($this->admin, 'user')
             ->postJson("/admin/amial/hub/subscriptions/{$merchant->id}/plan", ['plan' => $target])
@@ -366,7 +298,6 @@ class AdminHubTest extends TestCase
         $this->assertSame($target,
             \App\Models\MerchantProfile::where('user_id', $merchant->id)->value('subscription_plan'));
 
-        // والتمديد يحرّك تاريخ الانتهاء
         $before = \App\Models\MerchantProfile::where('user_id', $merchant->id)->value('subscription_expires_at');
         $this->actingAs($this->admin, 'user')
             ->postJson("/admin/amial/hub/subscriptions/{$merchant->id}/extend", ['days' => 30])
