@@ -926,6 +926,17 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->middleware('platform:platform.money.view')->name('finance.stats');
     Route::get('/finance/feed.json', [$hc, 'financeFeed'])
         ->middleware('platform:platform.money.view')->name('finance.feed');
+    $ppc = App\Http\Controllers\Admin\PlatformProfitPayoutController::class;
+    Route::get('/finance/profit-payouts.json', [$ppc, 'index'])
+        ->middleware('platform:platform.money.view')->name('finance.profit-payouts.index');
+    Route::post('/finance/profit-payouts', [$ppc, 'store'])
+        ->middleware('platform:platform.treasury.payout')->name('finance.profit-payouts.store');
+    Route::post('/finance/profit-payouts/{ulid}/mark-paid', [$ppc, 'markPaid'])
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.treasury.payout')
+        ->name('finance.profit-payouts.mark-paid');
+    Route::post('/finance/profit-payouts/{ulid}/confirm-cash', [$ppc, 'confirmCash'])
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.treasury.payout')
+        ->name('finance.profit-payouts.confirm-cash');
 
     // لوحة الاشتراكات (الباقات) — حقيقية عبر SubscriptionService
     Route::get('/subscriptions', [$hc, 'subscriptions'])->middleware('platform:platform.settings.manage')->name('subscriptions');

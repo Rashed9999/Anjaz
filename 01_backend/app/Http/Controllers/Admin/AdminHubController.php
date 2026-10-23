@@ -112,7 +112,9 @@ class AdminHubController extends Controller
 
     public function finance(): View
     {
-        return view('admin-views.amial.hub.finance');
+        return view('admin-views.amial.hub.finance', [
+            'canPayout' => (bool) auth()->user()?->hasPlatformPermission('platform.treasury.payout'),
+        ]);
     }
 
     // ==================== JSON: قوائم المستخدمين ====================

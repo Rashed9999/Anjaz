@@ -32,6 +32,7 @@ class CashHandoverService
         'agent_to_platform' => 'الوكيل سلّم نقداً لأميال',
         'platform_to_agent' => 'أميال سلّمت نقداً للوكيل',
         'platform_to_merchant' => 'أميال سلّمت نقداً للتاجر',
+        'platform_to_owner' => 'أميال سلّمت نقداً لمالك المنصّة',
     ];
 
     public const STATUSES = ['pending', 'confirmed', 'disputed', 'cancelled'];
