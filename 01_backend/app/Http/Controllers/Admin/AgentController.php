@@ -74,81 +74,16 @@ class AgentController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
-    {
+    public function store(Request $request): RedirectResponse{
         $muwathaq = rtrim((string) config('muwathaq.base_url'), '/');
-        if ($muwathaq !== '') return redirect()->away($muwathaq.'/accounts/new-agent')
+
+        if ($muwathaq === '') {
+            return redirect()->route('admin.agent.list')
+                ->with('error', 'بوابة موثّق غير مضبوطة؛ لا يمكن إنشاء وكيل من أميال باي.');
+        }
+
+        return redirect()->away($muwathaq.'/accounts/new-agent')
             ->with('warning', 'إنشاء الوكيل انتقل إلى موثّق؛ أميال باي لا ينشئ الوكلاء مباشرة.');
-        return redirect()->route('admin.agent.list')->with('error', 'بوابة موثّق غير مضبوطة؛ لا يمكن إنشاء وكيل من أميال باي.');
-        $check = $this->validateUploadedFile($request, ['image']);
-        if ($check !== true) {
-            return $check;
-        }
-
-        $request->validate([
-            'f_name' => 'required',
-            'l_name' => 'required',
-            'image' => 'required|image|max:'. $this->maxImageSizeKB .'|mimes:' . implode(',', array_column(IMAGE_EXTENSIONS, 'key')),
-            'email' => 'required|email|max:255',
-            'phone' => [
-                'required',
-                Rule::unique('users')->where(function ($query) {
-                    return $query->whereNull('deleted_at');
-                }),
-                'min:5',
-                'max:20',
-            ],
-            'country_code' => 'required',
-            'gender' => 'required',
-            'occupation' => 'required',
-            'password' => 'required|min:4|max:4',
-        ], [
-            'password.min' => translate('Password must contain 4 characters'),
-            'password.max' => translate('Password must contain 4 characters'),
-        ]);
-
-        $phone = $request->country_code . $request->phone;
-        $agent = $this->user->where(['phone' => $phone])->first();
-        if (isset($agent)) {
-            Toastr::warning(translate('This phone number is already taken'));
-            return back();
-        }
-
-        DB::transaction(function () use ($request, $phone) {
-            $user = $this->user;
-            $user->f_name = $request->f_name;
-            $user->l_name = $request->l_name;
-            $user->image = Helpers::upload('agent/', APPLICATION_IMAGE_FORMAT, $request->file('image'));
-            $user->email = $request->email;
-            $user->dial_country_code = $request->country_code;
-            $user->phone = $phone;
-            $user->gender = $request->gender;
-            $user->occupation = $request->occupation;
-            $user->password = bcrypt($request->password);
-            $user->type = AGENT_TYPE;
-            $user->referral_id = $request->referral_id ?? null;
-            $user->identification_image = json_encode([]);
-            $user->save();
-
-            $user->find($user->id);
-            $user->unique_id = $user->id . mt_rand(1111, 99999);
-            $user->save();
-
-            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'agent_number')
-                && trim((string) $user->agent_number) === '') {
-                $user->agent_number = 'AG-'.str_pad((string) $user->id, 6, '0', STR_PAD_LEFT);
-                $user->save();
-            }
-
-            \App\Models\AgentProfile::firstOrCreate(['user_id' => $user->id], [
-                'status' => 'pending_approval',
-                'zone_code' => \App\Services\ZoneAssignmentService::ZONE_UNKNOWN,
-            ]);
-            app(\App\Services\Muwathaq\MuwathaqAccountOpeningService::class)->submitFor($user);
-        });
-
-        Toastr::success('تم إنشاء الوكيل وإرسال طلبه التشغيلي إلى موثّق.');
-        return redirect(route('admin.agent.list'));
     }
 
     public function edit(int $id): View
