@@ -155,7 +155,7 @@ class ZoneEnforcementGapsTest extends TestCase
     {
         // كانت routes/api/v1/api.php خالية تماماً من amial.zone، وفيها
         // send-money وcash-out وadd-money وcash-in الوكيل.
-        $user = User::factory()->create(['type' => 2, 'zone_code' => 'NORTH']);
+        $user = User::factory()->outsideZone('NORTH')->create(['type' => 2]);
         EMoney::create([
             'user_id' => $user->id, 'current_balance' => '100000.0000',
             'held_balance' => '0.0000', 'pending_balance' => '0.0000',
