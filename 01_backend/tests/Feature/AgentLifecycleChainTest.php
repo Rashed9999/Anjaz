@@ -9,10 +9,12 @@ use App\Models\EMoney;
 use App\Models\MuwathaqAccountOpeningApplication;
 use App\Models\MuwathaqOpeningEvidence;
 use App\Services\Muwathaq\MuwathaqAccountOpeningService;
+use App\Services\Muwathaq\MuwathaqProvisioningService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Tests\Support\OpensAccountsFromHub;
 use Tests\TestCase;
 
@@ -67,6 +69,41 @@ class AgentLifecycleChainTest extends TestCase
         );
     }
 
+
+    /** Provisions an approved agent through the Muwathaq-only boundary. */
+    private function provisionAgent(string $phone, string $email, string $name): User
+    {
+        $applicationUlid = (string) Str::ulid();
+        $result = app(MuwathaqProvisioningService::class)->provisionApproved([
+            'event_version' => 1,
+            'event_type' => 'account.approved',
+            'application_ulid' => $applicationUlid,
+            'decision_reference' => 'MUW_AGENT_' . substr(str_replace('-', '', $applicationUlid), 0, 20),
+            'subject_kind' => 'agent',
+            'verification_path' => MuwathaqAccountOpeningService::PATH_AGENT_OPERATION,
+            'applicant' => [
+                'f_name' => $name,
+                'l_name' => 'للصرافة',
+                'phone' => $phone,
+                'dial_country_code' => '+967',
+                'email' => $email,
+            ],
+            'subject' => [
+                'store_name' => $name,
+                'operating_address' => 'عدن — مقر الوكيل',
+            ],
+            'decision_context' => [
+                'admin_provisioned' => true,
+                'verified_owner_identity' => true,
+                'verified_phone' => true,
+                'verified_residence_governorate' => 'YE-AD',
+            ],
+        ]);
+
+        return User::query()->findOrFail((int) $result['user_id']);
+    }
+
+
     /**
      * يحاكي قرار موثّق ثم اعتماد الإدارة؛ لا تُفتح محفظة الوكيل عند مجرد
      * إنشائه من لوحة الإدارة.
@@ -108,35 +145,23 @@ class AgentLifecycleChainTest extends TestCase
     /** @test */
     public function amial_creates_an_agent_who_opens_a_branch_hires_a_teller_and_serves_a_customer(): void
     {
-        // ══ ١ ══ أميال تُنشئ الوكيل من «مركز الوكلاء» ══════════════════
-        $this->actingAs($this->admin, 'user')
-            ->postJson(route('admin.amial.hub.users.store', ['slug' => 'agents']), [
-                'f_name' => 'العمقي', 'l_name' => 'للصرافة',
-                'phone' => '967771600001', 'password' => 'agent-pass-1',
-                'email' => 'agent-chain-company@example.test',
-            ] + $this->kycDossier('967771600001'))->assertCreated();
+        // ══ ١ ══ موثّق يعتمد الوكيل ثم يصل إلى أميال عبر القناة الموقّعة ══════════
+        $agent = $this->provisionAgent(
+            '967771600001',
+            'agent-chain-company@example.test',
+            'العمقي'
+        );
 
-        $agent = User::where('phone', '967771600001')->first();
-
-        $this->assertNotNull($agent, 'الوكيل لم يُنشأ');
         $this->assertSame(AGENT_TYPE, (int) $agent->type);
-        $this->approveAgentOpening($agent);
         $agent->refresh();
         // بلا محفظةٍ لا يستطيع تمويل فرعٍ لاحقاً — والخطأ سيظهر بعد أسبوع.
         $this->assertNotNull(EMoney::where('user_id', $agent->id)->first(),
             'الوكيل أُنشئ بلا محفظة');
 
-        // ══ ٢ ══ الوكيل يدخل بوّابته بهاتفه وكلمة سرّه ══════════════════
-        //
-        // هذه أوّل وصلةٍ لم تُختبر قطّ: حسابٌ أنشأته لوحةُ الإدارة، وبوّابةٌ
-        // مصادقتُها مستقلّة. ولو لم يعمل الدخول لبقي الوكيل بحسابٍ لا يفتح
-        // شيئاً — وهو ما لا تكشفه أيّ اختباراتٍ للطرفين منفصلَين.
-        $this->post(route('agent.login.submit'), [
-            'username' => '967771600001', 'password' => 'agent-pass-1',
-        ])->assertRedirect(route('agent.dashboard'));
-
-        // الجلسة على حارس البوّابة لا على حارس لوحة الإدارة: خلطُهما كان
-        // يُعطّل اللوحة بحلقة إعادة توجيه لا تنتهي.
+        // ══ ٢ ══ الوكيل المورّد من موثّق يفتح بوابته ══════════════════
+        // تسليم بيانات الدخول يجري عبر مسار إعادة التعيين؛ لا تحفظ الاختبارات
+        // كلمة مرور قابلة للاستعمال. نتحقق من حساب البوابة الذي يُنشأ له.
+        $this->portalAs($agent);
         $this->assertAuthenticated('agent_staff');
         $this->assertGuest('user');
 
@@ -276,15 +301,11 @@ class AgentLifecycleChainTest extends TestCase
      */
     public function a_brand_new_agent_with_no_staff_yet_still_gets_a_working_portal(): void
     {
-        $this->actingAs($this->admin, 'user')
-            ->postJson(route('admin.amial.hub.users.store', ['slug' => 'agents']), [
-                'f_name' => 'البسيري', 'l_name' => 'للصرافة',
-                'phone' => '967771600009', 'password' => 'agent-pass-9',
-                'email' => 'agent-chain-new-company@example.test',
-            ] + $this->kycDossier('967771600009'))->assertCreated();
-
-        $agent = User::where('phone', '967771600009')->first();
-        $this->approveAgentOpening($agent);
+        $agent = $this->provisionAgent(
+            '967771600009',
+            'agent-chain-new-company@example.test',
+            'البسيري'
+        );
         $agent->refresh();
 
         $this->assertSame(0, AgentStaff::where('agent_user_id', $agent->id)->count(),
