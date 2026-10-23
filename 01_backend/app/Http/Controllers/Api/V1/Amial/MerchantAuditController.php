@@ -73,6 +73,12 @@ class MerchantAuditController extends Controller
             $branchId = isset($context['branch_id']) && is_numeric($context['branch_id'])
                 ? (int) $context['branch_id'] : null;
 
+            $actorLabel = (int) $a->actor_user_id === (int) $user->id
+                ? 'مالك المنشأة'
+                : ($staffNames[$a->actor_user_id] ?? AuditVocabulary::actorType($a->actor_type));
+            $branchName = $branchId === null ? null : ($branchNames[$branchId] ?? 'فرع غير متاح');
+            $reasonText = $this->reasonLabel($a->reason);
+
             return [
                 'id' => $a->id,
                 'action' => $a->action,
@@ -81,15 +87,22 @@ class MerchantAuditController extends Controller
                 'decision_code' => $a->decision_code,
                 'decision_label' => $decision['label'],
                 'decision_tone' => $decision['tone'],
-                'reason' => $this->reasonLabel($a->reason),
+                'reason' => $reasonText,
                 'severity' => $a->severity ?? 'info',
                 'severity_label' => $severity['label'],
-                'actor_label' => (int) $a->actor_user_id === (int) $user->id
-                    ? 'مالك المنشأة'
-                    : ($staffNames[$a->actor_user_id] ?? AuditVocabulary::actorType($a->actor_type)),
+                'severity_hint' => $severity['hint'] ?? null,
+                'actor_label' => $actorLabel,
+                'narrative' => sprintf(
+                    'قام %s بتنفيذ «%s»%s — النتيجة: %s · الخطورة: %s',
+                    $actorLabel,
+                    $action['label'],
+                    $branchName ? " في «{$branchName}»" : '',
+                    $decision['label'],
+                    $severity['label']
+                ),
                 'branch' => $branchId === null ? null : [
                     'id' => $branchId,
-                    'name' => $branchNames[$branchId] ?? 'فرع غير متاح',
+                    'name' => $branchName,
                 ],
                 'details' => $this->details($context),
                 'transaction_id' => $a->transaction_id,
@@ -130,11 +143,10 @@ class MerchantAuditController extends Controller
 
     private function reasonLabel(?string $reason): ?string
     {
-        return match (trim((string) $reason)) {
-            'requester cancelled pending money request' => 'ألغى صاحب الطلب طلب المال المعلّق',
-            'withdraw_request' => 'طلب سحب قيد المراجعة',
-            default => $reason,
-        };
+        if ($reason === null || trim($reason) === '') {
+            return $reason;
+        }
+        return AuditVocabulary::reason($reason);
     }
 
     private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse

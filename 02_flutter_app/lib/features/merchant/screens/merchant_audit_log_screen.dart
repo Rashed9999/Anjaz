@@ -113,11 +113,15 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
         title: Text('${e['action_label'] ?? e['action'] ?? ''}',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text([
-          _status(e),
-          if (e['actor_label'] != null)
-            'audit_by_actor'.trParams({'name': '${e['actor_label']}'}),
-          if (e['branch'] is Map)
-            'audit_branch_name'.trParams({'name': '${(e['branch'] as Map)['name']}'}),
+          if (e['narrative'] != null && '${e['narrative']}'.trim().isNotEmpty)
+            '${e['narrative']}'
+          else ...[
+            _status(e),
+            if (e['actor_label'] != null)
+              'audit_by_actor'.trParams({'name': '${e['actor_label']}'}),
+            if (e['branch'] is Map)
+              'audit_branch_name'.trParams({'name': '${(e['branch'] as Map)['name']}'}),
+          ],
           if (e['reason'] != null && '${e['reason']}'.trim().isNotEmpty) '${e['reason']}',
           _dt('${e['created_at']}'),
         ].where((s) => s.isNotEmpty).join('\n'), style: const TextStyle(fontSize: 11)),
@@ -140,6 +144,10 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
         title: Text('${e['action_label'] ?? 'audit_details'.tr}'),
         content: SingleChildScrollView(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (e['narrative'] != null && '${e['narrative']}'.trim().isNotEmpty)
+              _detail('ملخّص الحدث', '${e['narrative']}'),
+            if (e['severity_hint'] != null && '${e['severity_hint']}'.trim().isNotEmpty)
+              _detail('معنى درجة الخطورة', '${e['severity_hint']}'),
             _detail('audit_status'.tr, _status(e)),
             _detail('audit_actor'.tr, '${e['actor_label'] ?? '—'}'),
             if (e['branch'] is Map) _detail('audit_branch'.tr, '${(e['branch'] as Map)['name'] ?? '—'}'),

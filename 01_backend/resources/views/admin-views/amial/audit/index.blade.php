@@ -306,12 +306,12 @@
                 <thead class="thead-light">
                 <tr>
                     <th>الوقت</th>
-                    <th>المنفِّذ</th>
-                    <th>الفعل</th>
+                    <th>مَن نفَّذ؟ (المنفِّذ)</th>
+                    <th>ماذا فعل؟ (الفعل والملخّص)</th>
+                    <th>على أيّ حساب؟ (الموضوع)</th>
                     <th>القرار</th>
-                    <th>الدرجة</th>
-                    <th>الموضوع</th>
-                    <th>السبب</th>
+                    <th>الخطورة</th>
+                    <th>السبب والتفاصيل</th>
                     <th></th>
                 </tr>
                 </thead>
@@ -322,28 +322,70 @@
                         $dec = V::decisionCode($d->decision_code);
                         $sev = V::severity($d->severity);
                         $toneClass = ['danger' => 'danger', 'success' => 'success'][$dec['tone']] ?? 'secondary';
+                        $rd = $rowDetails[$d->id] ?? [];
+                        $actorInfo = $rd['actor_info'] ?? null;
+                        $targetUser = $rd['target_user'] ?? null;
+                        $highlights = $rd['highlights'] ?? [];
+                        $reasonAr = $rd['reason_ar'] ?? V::reason($d->reason);
                     @endphp
                     <tr>
-                        <td>
+                        <td style="min-width:125px">
                             <small class="text-monospace" dir="ltr">{{ $d->created_at?->format('Y-m-d H:i:s') }}</small>
                             @if($d->created_at)
                                 <small class="text-muted d-block">{{ $d->created_at->diffForHumans() }}</small>
                             @endif
                         </td>
-                        <td>
-                            <div class="fw-bold small">{{ $actors[$d->actor_user_id] ?? '—' }}</div>
-                            <small class="text-muted">
-                                {{ V::actorType($d->actor_type) }}@if($d->actor_user_id)
-                                    <span class="text-monospace" dir="ltr">#{{ $d->actor_user_id }}</span>
+                        <td style="min-width:165px">
+                            @if($actorInfo)
+                                <a href="{{ route('admin.amial.hub.account', $actorInfo['id']) }}" class="fw-bold small d-block">
+                                    {{ $actorInfo['name'] }}
+                                </a>
+                                <span class="badge bg-light text-dark border">{{ $actorInfo['role_ar'] }}</span>
+                                <small class="text-muted text-monospace" dir="ltr">#{{ $actorInfo['id'] }}</small>
+                                @if(!empty($actorInfo['phone']))
+                                    <small class="text-muted d-block text-monospace" dir="ltr">{{ $actorInfo['phone'] }}</small>
                                 @endif
-                            </small>
+                            @else
+                                <div class="fw-bold small">{{ $actors[$d->actor_user_id] ?? V::actorType($d->actor_type) }}</div>
+                                <small class="text-muted">
+                                    {{ V::actorType($d->actor_type) }}@if($d->actor_user_id)
+                                        <span class="text-monospace" dir="ltr">#{{ $d->actor_user_id }}</span>
+                                    @endif
+                                </small>
+                            @endif
                         </td>
-                        <td>
+                        <td style="min-width:240px">
                             <div class="fw-bold small">{{ $act['label'] }}</div>
                             @if($act['translated'])
                                 <small class="text-muted text-monospace" dir="ltr">{{ $act['raw'] }}</small>
                             @else
                                 <small class="badge badge-soft-warning">بلا ترجمة</small>
+                            @endif
+                            @if(!empty($rd['narrative']))
+                                <div class="small text-secondary mt-1" style="line-height:1.4">
+                                    {{ $rd['narrative'] }}
+                                </div>
+                            @endif
+                        </td>
+                        <td style="min-width:175px">
+                            @if($targetUser)
+                                <a href="{{ route('admin.amial.hub.account', $targetUser['id']) }}" class="fw-bold small d-block">
+                                    {{ $targetUser['name'] }}
+                                </a>
+                                <span class="badge badge-soft-secondary">{{ $targetUser['role_ar'] }}</span>
+                                <small class="text-muted text-monospace" dir="ltr">#{{ $targetUser['id'] }}</small>
+                                @if(!empty($targetUser['phone']))
+                                    <small class="text-muted d-block text-monospace" dir="ltr">{{ $targetUser['phone'] }}</small>
+                                @endif
+                            @elseif($d->subject_type)
+                                <span class="badge badge-soft-secondary">{{ V::subjectType($d->subject_type) }}</span>
+                                @if(!empty($rd['subject_url']))
+                                    <a href="{{ $rd['subject_url'] }}" class="small d-block text-monospace" dir="ltr">{{ $d->subject_id }}</a>
+                                @else
+                                    <small class="text-muted d-block text-monospace" dir="ltr">{{ $d->subject_id }}</small>
+                                @endif
+                            @else
+                                <small class="text-muted">—</small>
                             @endif
                         </td>
                         <td>
@@ -352,16 +394,24 @@
                                 <small class="text-muted d-block text-monospace" dir="ltr">{{ $d->decision_code }}</small>
                             @endif
                         </td>
-                        <td><span class="badge {{ $sev['class'] }}">{{ $sev['label'] }}</span></td>
-                        <td>
-                            @if($d->subject_type)
-                                <span class="badge badge-soft-secondary">{{ V::subjectType($d->subject_type) }}</span>
-                                <small class="text-muted d-block text-monospace" dir="ltr">{{ $d->subject_id }}</small>
-                            @else
-                                <small class="text-muted">—</small>
+                        <td style="min-width:120px">
+                            <span class="badge {{ $sev['class'] }}" title="{{ $sev['hint'] ?? '' }}">{{ $sev['label'] }}</span>
+                            @if(!empty($sev['hint']))
+                                <small class="text-muted d-block mt-1" style="font-size:11px;line-height:1.3">
+                                    {{ \Illuminate\Support\Str::limit($sev['hint'], 45) }}
+                                </small>
                             @endif
                         </td>
-                        <td><small>{{ \Illuminate\Support\Str::limit($d->reason, 80) ?: '—' }}</small></td>
+                        <td style="min-width:210px">
+                            <div class="small">{{ \Illuminate\Support\Str::limit($reasonAr, 90) ?: '—' }}</div>
+                            @if($highlights !== [])
+                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                    @foreach($highlights as $hl)
+                                        <span class="badge bg-light text-dark border" style="font-size:11px">{{ $hl }}</span>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </td>
                         <td class="text-end">
                             <button class="btn btn-sm btn-outline-primary py-0 px-2"
                                     data-audit-open="{{ $d->id }}" data-testid="audit-open">
@@ -455,10 +505,24 @@
             const integrity =
                 `<span class="badge bg-${verdict[0]}">${verdict[1]}${esc(d.integrity.verdict_label)}</span>`;
 
-            const ctx = Object.keys(d.context || {}).length
-                ? `<pre class="bg-light p-3 small rounded mb-0" style="max-height:280px;overflow:auto" dir="ltr">${
-                    esc(JSON.stringify(d.context, null, 2))}</pre>`
-                : '<span class="text-muted small">لا سياق مسجَّل مع هذا القرار</span>';
+            const ctxRows = Array.isArray(d.context_rows) ? d.context_rows : [];
+            const ctxTable = ctxRows.length
+                ? `<div class="table-responsive"><table class="table table-sm table-bordered mb-2">
+                    <thead class="table-light"><tr><th style="width:38%">البند</th><th>القيمة المسجَّلة</th></tr></thead>
+                    <tbody>${ctxRows.map(r => `<tr>
+                        <td class="small fw-bold">${esc(r.label)}</td>
+                        <td class="small">${r.is_user && r.user_id
+                            ? `<a href="{{ url('admin/amial/hub/account') }}/${encodeURIComponent(r.user_id)}">${esc(r.value)}</a>`
+                            : esc(r.value)}</td>
+                    </tr>`).join('')}</tbody>
+                   </table></div>
+                   <details class="small"><summary class="text-muted" style="cursor:pointer">عرض JSON الخام (للمطوّرين)</summary>
+                   <pre class="bg-light p-2 small rounded mt-1 mb-0" style="max-height:200px;overflow:auto" dir="ltr">${
+                       esc(JSON.stringify(d.context, null, 2))}</pre></details>`
+                : (Object.keys(d.context || {}).length
+                    ? `<pre class="bg-light p-3 small rounded mb-0" style="max-height:280px;overflow:auto" dir="ltr">${
+                        esc(JSON.stringify(d.context, null, 2))}</pre>`
+                    : '<span class="text-muted small">لا سياق مسجَّل مع هذا القرار</span>');
 
             const actionCell = d.action_ar.translated
                 ? `<span class="fw-bold">${esc(d.action_ar.label)}</span>
@@ -466,23 +530,34 @@
                 : `<span class="fw-bold text-monospace" dir="ltr">${esc(d.action)}</span>
                    <span class="badge badge-soft-warning">بلا ترجمة</span>`;
 
+            const narrativeBox = d.narrative
+                ? `<div class="alert alert-light border mb-3">
+                     <div class="small text-muted mb-1">ملخّص الحدث بلغة واضحة:</div>
+                     <div class="fw-bold">${esc(d.narrative)}</div>
+                   </div>`
+                : '';
+
+            const sevCell = `<span class="badge ${esc(d.severity_ar.class)}">${esc(d.severity_ar.label)}</span>`
+                + (d.severity_ar.hint ? ` <span class="text-muted small">— ${esc(d.severity_ar.hint)}</span>` : '');
+
             body.innerHTML = `
+                ${narrativeBox}
                 ${row('الوقت', esc(d.created_at), true)}
-                ${row('المنفِّذ', actor)}
-                ${row('الفعل', actionCell)}
-                ${row('القرار', `<span class="badge badge-soft-secondary">${esc(d.decision_ar.label)}</span>
+                ${row('مَن نفَّذ؟ (المنفِّذ)', actor)}
+                ${row('ماذا فعل؟ (الفعل)', actionCell)}
+                ${row('على أيّ حساب / موضوع؟', `${subject} <span class="text-muted">· ${esc(d.subject.type_ar)}</span>`)}
+                ${row('القرار والنتيجة', `<span class="badge badge-soft-secondary">${esc(d.decision_ar.label)}</span>
                    <span class="text-muted text-monospace" dir="ltr">${esc(d.decision_code)}</span>`)}
-                ${row('الدرجة', `<span class="badge ${esc(d.severity_ar.class)}">${esc(d.severity_ar.label)}</span>`)}
-                ${row('الموضوع', `${subject} <span class="text-muted">· ${esc(d.subject.type_ar)}</span>`)}
-                ${row('السبب', esc(d.reason))}
-                ${row('المعاملة', d.transaction_id
+                ${row('درجةُ الخطورة ومعناها', sevCell)}
+                ${row('السبب الموثَّق', esc(d.reason_ar || d.reason))}
+                ${row('المعاملة المرتبطة', d.transaction_id
                     ? `<a href="{{ url('admin/transaction') }}?search=${encodeURIComponent(d.transaction_id)}">${esc(d.transaction_id)}</a>`
                     : null, true)}
-                ${row('النطاق', esc(d.zone_code), true)}
+                ${row('النطاق الجغرافي', esc(d.zone_code), true)}
                 ${row('معرّفُ القرار', esc(d.decision_id), true)}
                 ${row('مفتاحُ منع التكرار', esc(d.idempotency_key), true)}
                 ${row('معرّفُ التتبّع', esc(d.correlation_id), true)}
-                <div class="mt-3"><div class="text-muted small mb-1">السياق المسجَّل</div>${ctx}</div>
+                <div class="mt-3"><div class="text-muted small mb-1 fw-bold">تفاصيل العمليّة والأرقام المسجَّلة</div>${ctxTable}</div>
                 <div class="mt-3">
                   <div class="text-muted small mb-1">سلسلةُ التدقيق</div>
                   <div class="mb-2">${integrity}</div>
