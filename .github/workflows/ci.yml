@@ -228,7 +228,7 @@ jobs:
             # report. Re-run only for diagnostics so the CI log names it;
             # this does not turn the failed gate into a passing one.
             php artisan test --debug > phpunit_debug.txt 2>&1 || true
-            rg -n -i -C 2 'risky' phpunit_debug.txt || true
+            grep -ni -C 2 'risky' phpunit_debug.txt || true
             echo '::error::فشلت اختبارات PHPUnit — آخر 160 سطراً:'
             tail -n 160 phpunit_report.txt
             exit 1
