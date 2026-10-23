@@ -484,6 +484,15 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
         Route::get('/entries', [$lc, 'entries'])->name('entries');
         // AMIAL-RECON-NIGHTLY-001: تاريخُ المصالحات — القاعدة ١٢.
         Route::get('/reconciliation-runs', [$lc, 'reconciliationRuns'])->name('reconciliation-runs');
+        // هذه الأفعال المالية منفصلة عن القراءة: اقتراح موثق ثم اعتماد مستقل فقط.
+        Route::post('/reconciliation-cases/{caseUlid}/propose-correction', [$lc, 'proposeReconciliationCorrection'])
+            ->middleware('platform:platform.approvals.decide')
+            ->where('caseUlid', '[0-9A-HJKMNP-TV-Z]{26}')
+            ->name('reconciliation-cases.propose-correction');
+        Route::post('/reconciliation-cases/{caseUlid}/approve-correction', [$lc, 'approveReconciliationCorrection'])
+            ->middleware('platform:platform.approvals.decide')
+            ->where('caseUlid', '[0-9A-HJKMNP-TV-Z]{26}')
+            ->name('reconciliation-cases.approve-correction');
     });
 
 // ============ AMIAL-OTP-CENTER-001 — مركز التحقّق ============
