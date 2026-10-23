@@ -26,59 +26,59 @@ class _SupportScreenState extends State<SupportScreen> {
   String _selectedCategory = 'all';
 
   static const List<Map<String, String>> _categories = [
-    {'code': 'all', 'label': 'الكل'},
-    {'code': 'transfers', 'label': 'التحويلات والحوالات'},
-    {'code': 'holds', 'label': 'الأرصدة والحجوزات'},
-    {'code': 'security', 'label': 'الأمان وPIN والأجهزة'},
-    {'code': 'kyc', 'label': 'التوثيق والحدود'},
-    {'code': 'services', 'label': 'الدفع الآمن والتجار'},
+    {'code': 'all', 'label': 'support_category_all'},
+    {'code': 'transfers', 'label': 'support_category_transfers'},
+    {'code': 'holds', 'label': 'support_category_holds'},
+    {'code': 'security', 'label': 'support_category_security'},
+    {'code': 'kyc', 'label': 'support_category_kyc'},
+    {'code': 'services', 'label': 'support_category_services'},
   ];
 
   static const List<Map<String, String>> _quickAnswers = [
     {
       'category': 'transfers',
-      'q': 'حوّلت مبلغاً لرقم خاطئ، كيف أسترجع أموالي فوراً؟',
-      'a': 'إذا كانت الحوالة لا تزال داخل نافذة التراجع يمكنك إلغاؤها فوراً من سجل العمليات. وإذا اكتملت، تواصل مع الدعم برقم العملية لفتح «بلاغ تحويل لمستلم خاطئ»؛ سيحجز النظام المبلغ المتبقي في محفظة المستلم احترازياً، وما صُرف منه يُسجَّل ذمّة تُقتطع تلقائياً فور دخول أي رصيد لحسابه.',
+      'q': 'support_quick_wrong_transfer_q',
+      'a': 'support_quick_wrong_transfer_a',
     },
     {
       'category': 'transfers',
-      'q': 'الحوالة تظهر «معلّقة / قيد التسليم»، متى تصل للمستلم؟',
-      'a': 'تمر الحوالات بنافذة تراجع قصيرة لحمايتك من أخطاء الإدخال ثم تُسلَّم تلقائياً. لا تقم بإعادة إرسال الحوالة مرة ثانية؛ يمكنك تزويد الدعم برقم الحوالة للتحقق من عدّاد التسليم.',
+      'q': 'support_quick_pending_transfer_q',
+      'a': 'support_quick_pending_transfer_a',
     },
     {
       'category': 'holds',
-      'q': 'لماذا يختلف «الرصيد المتاح» عن «الرصيد الكلي» في محفظتي؟',
-      'a': 'الفرق يمثل مبالغ محجوزة مؤقتاً لعمليات جارية (حوالة في نافذة التراجع، صفقة دفع آمن لم تُستلم بعد، أو حجز احترازي لدعوى قائمة). يظهر لدى موظف الدعم تفصيل كل مبلغ محجوز وموعد الإفراج التلقائي عنه.',
+      'q': 'support_quick_available_balance_q',
+      'a': 'support_quick_available_balance_a',
     },
     {
       'category': 'holds',
-      'q': 'تم خصم مبلغ تلقائياً فور شحني للمحفظة، ما السبب؟',
-      'a': 'يحدث ذلك فقط إذا كانت على الحساب ذمّة مستحقة ناتجة عن استلام حوالة سابقة بالخطأ صدر بها قرار استرداد رسمي من فريق النزاعات.',
+      'q': 'support_quick_receivable_q',
+      'a': 'support_quick_receivable_a',
     },
     {
       'category': 'security',
-      'q': 'فقدت هاتفي أو سُرق، كيف أحمي أموالي دون تعطيل مصالحي؟',
-      'a': 'تواصل مع الدعم فوراً لحظر الجهاز المسروق وحده وإنهاء جلساته النشطة، أو لطلب تجميد مؤقت للحساب. وإذا فقدت الشريحة يمكنك تقديم طلب «استعادة الحساب» الموثّق.',
+      'q': 'support_quick_lost_phone_q',
+      'a': 'support_quick_lost_phone_a',
     },
     {
       'category': 'security',
-      'q': 'قُفل الرمز السري (PIN) بعد محاولات خاطئة أو نسيته، ماذا أفعل؟',
-      'a': 'يمكنك استعادة الرمز السري عبر بريدك الإلكتروني الموثّق من شاشة الأمان، أو طلب إعادة تعيين PIN عبر مركز الدعم (يخضع لموافقة ثنائية لحماية حسابك).',
+      'q': 'support_quick_pin_q',
+      'a': 'support_quick_pin_a',
     },
     {
       'category': 'kyc',
-      'q': 'كيف أعرف المتبقي من حدي اليومي والشهري وكيف أرفع السقف؟',
-      'a': 'تعتمد حدود التحويل والرصيد على فئة توثيق الهوية (KYC Tier). يمكنك رفع سقف حسابك باستكمال توثيق الهوية الوطنية وإثبات السكن من مركز التوثيق في التطبيق.',
+      'q': 'support_quick_limits_q',
+      'a': 'support_quick_limits_a',
     },
     {
       'category': 'services',
-      'q': 'كيف يحميني «الدفع الآمن» عند الشراء من تاجر أو فرد؟',
-      'a': 'يحجز نظام الدفع الآمن المبلغ في حساب ضمان مستقل ولا يُفرج عنه للبائع إلا بعد استلامك للبضاعة وإعطائه «كود التسليم» المكون من أرقام خاصة بك، وفي حال الخلاف يمكنك فتح نزاع وإرفاق الصور.',
+      'q': 'support_quick_safe_payment_q',
+      'a': 'support_quick_safe_payment_a',
     },
     {
       'category': 'services',
-      'q': 'انقطع الإنترنت أثناء الدفع لتاجر ولا أعرف هل خُصم المبلغ أم لا',
-      'a': 'لا تقم بإعادة الدفع مباشرة! يحتفظ التطبيق برقم تتبّع تشخيصي للمحاولة يمنع الخصم المكرر، ويمكن لموظف الدعم التحقق فوراً بالرقم التشخيصي هل وُلد قيد مالي أم لا.',
+      'q': 'support_quick_payment_network_q',
+      'a': 'support_quick_payment_network_a',
     },
   ];
 
@@ -145,7 +145,7 @@ class _SupportScreenState extends State<SupportScreen> {
           item['category'] == _selectedCategory;
       if (!matchesCat) return false;
       if (q.isEmpty) return true;
-      final hay = '${item['q']} ${item['a']}'.toLowerCase();
+      final hay = '${item['q']!.tr} ${item['a']!.tr}'.toLowerCase();
       return hay.contains(q);
     }).toList();
   }
@@ -184,8 +184,8 @@ class _SupportScreenState extends State<SupportScreen> {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
-            const Text(
-              'اختر وسيلة التواصل المناسبة أو ابحث في مركز الحلول الفورية.',
+            Text(
+              'support_contact_intro'.tr,
               textAlign: TextAlign.center,
               style: TextStyle(color: AmialColors.textSecondary),
             ),
@@ -244,15 +244,15 @@ class _SupportScreenState extends State<SupportScreen> {
               ],
             ],
             const SizedBox(height: 28),
-            const Text(
-              'مركز الحلول الفورية (الأموال والحسابات)',
+            Text(
+              'support_solutions_title'.tr,
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
             TextField(
               onChanged: (v) => setState(() => _searchQuery = v),
               decoration: InputDecoration(
-                hintText: 'ابحث عن مشكلتك: حوالة، رقم خاطئ، رصيد محجوز، رمز سري…',
+                hintText: 'support_solutions_search_hint'.tr,
                 prefixIcon: const Icon(Icons.search_rounded),
                 filled: true,
                 fillColor: Colors.white,
@@ -279,7 +279,7 @@ class _SupportScreenState extends State<SupportScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(left: 8),
                     child: ChoiceChip(
-                      label: Text(cat['label']!),
+                      label: Text(cat['label']!.tr),
                       selected: selected,
                       onSelected: (_) =>
                           setState(() => _selectedCategory = cat['code']!),
@@ -299,7 +299,7 @@ class _SupportScreenState extends State<SupportScreen> {
                 ),
                 child: ExpansionTile(
                   title: Text(
-                    item['q']!,
+                    item['q']!.tr,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -309,7 +309,7 @@ class _SupportScreenState extends State<SupportScreen> {
                   childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                   children: [
                     Text(
-                      item['a']!,
+                      item['a']!.tr,
                       style: const TextStyle(
                         fontSize: 13,
                         height: 1.5,
