@@ -38,22 +38,38 @@
             <div class="card p-3 mb-3">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                     <div>
-                        <h5 class="mb-1">دليل الدعم التشغيلي</h5>
+                        <h5 class="mb-1">دليل الدعم التشغيلي وموسوعة الـ 100 سؤال مصرفي</h5>
                         <div class="small text-muted">
-                            49 حالة تشغيلية: اكتب كلام العميل كما قاله، ثم اتبع التشخيص والخطوات والتصعيد.
+                            49 حالة تشغيلية أساسية + موسوعة الـ 100 سؤال مصرفي شاملة التشخيص وقدرة تحريك الحساب واتفاقية SLA.
                         </div>
                     </div>
-                    <span class="badge bg-dark" id="pb-count" data-testid="playbook-count">49 حالة</span>
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <select id="pb-scope" class="form-select form-select-sm" style="width:auto" data-testid="playbook-scope">
+                            <option value="top100">موسوعة الـ 100 سؤال مصرفي الشاملة</option>
+                            <option value="core49">الدليل القياسي (49 حالة)</option>
+                        </select>
+                        <span class="badge bg-dark" id="pb-count" data-testid="playbook-count">49 حالة</span>
+                    </div>
                 </div>
+                <div id="pb-summary-strip" class="row g-2 mb-3"></div>
                 <div class="row g-2">
-                    <div class="col-lg-8">
+                    <div class="col-lg-6">
                         <input type="text" id="pb-q" class="form-control"
-                               placeholder="مثال: الحوالة ما وصلت / جهاز جديد / الرمز ما وصل / دفعت للتاجر ويقول إنترنت"
+                               placeholder="مثال: الحوالة ما وصلت / خصم تلقائي / حدي اليومي / سرق جوالي / الدفع الآمن"
                                data-testid="playbook-search-input">
                     </div>
                     <div class="col-lg-3">
                         <select id="pb-category" class="form-select" data-testid="playbook-category">
                             <option value="">كل الأقسام</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-2">
+                        <select id="pb-action-mode" class="form-select" data-testid="playbook-action-mode">
+                            <option value="">كل أنماط تحريك الحساب</option>
+                            <option value="direct_support">تنفيذ مباشر من الدعم</option>
+                            <option value="four_eyes">موافقة ثنائية (4-Eyes)</option>
+                            <option value="guided_escalation">تصعيد موجَّه بـ SLA</option>
+                            <option value="self_service">حل ذاتي بتوجيه الدعم</option>
                         </select>
                     </div>
                     <div class="col-lg-1 d-grid">
@@ -91,6 +107,7 @@
                     <button class="btn btn-outline-primary" id="btn-tickets" data-testid="btn-tickets">تحديث</button>
                 </div>
                 <div id="tickets-list"></div>
+                <div id="ticket-detail-drawer" class="mt-3" data-testid="ticket-detail-drawer"></div>
             </div>
         </div>
 
@@ -147,6 +164,11 @@
     const CAN_FREEZE = @json($capabilities['freeze']);
     const CAN_RESET_PIN = @json($capabilities['reset_pin']);
     const CAN_KYC_REQUEST = @json($capabilities['kyc_request']);
+    const CAN_NOTES_CREATE = @json($capabilities['notes_create'] ?? false);
+    const CAN_LIFECYCLE_MANAGE = @json($capabilities['lifecycle_manage'] ?? false);
+    const CAN_LIMITS_UPDATE = @json($capabilities['limits_update'] ?? false);
+    const CAN_RISK_ESCALATE = @json($capabilities['risk_escalate'] ?? false);
+    const CAN_TICKETS_MANAGE = @json($capabilities['tickets'] ?? false);
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     async function get(path) {
@@ -165,6 +187,9 @@
     // ---------- دليل الدعم التشغيلي ----------
     const pbSearch = document.getElementById('pb-q');
     const pbCategory = document.getElementById('pb-category');
+    const pbScope = document.getElementById('pb-scope');
+    const pbActionMode = document.getElementById('pb-action-mode');
+    const pbSummaryStrip = document.getElementById('pb-summary-strip');
     const pbButton = document.getElementById('btn-playbooks');
     const pbResults = document.getElementById('playbook-results');
     const pbCount = document.getElementById('pb-count');
@@ -191,11 +216,14 @@
         if (!pbResults) return;
         const q = (pbSearch?.value || '').trim();
         const category = pbCategory?.value || '';
+        const scope = pbScope?.value || 'top100';
+        const actionMode = pbActionMode?.value || '';
         pbResults.innerHTML = '<div class="text-muted">جارٍ تحميل دليل الدعم…</div>';
 
         const params = new URLSearchParams();
         if (q) params.set('q', q);
         if (category) params.set('category', category);
+        if (actionMode) params.set('action_mode', actionMode);
 
         const j = await get('/playbooks?' + params.toString());
         if (!j.success) {
@@ -204,10 +232,26 @@
         }
 
         const m = j.meta || {};
-        if (pbCount) pbCount.textContent = `${m.matched ?? 0} من ${m.total_catalog ?? 49} حالة`;
+        const useTop100 = scope === 'top100' && Array.isArray(m.top100_playbooks);
+        const rows = useTop100 ? (m.top100_playbooks || []) : (m.playbooks || []);
+        const totalCount = useTop100 ? (m.top100_total ?? 100) : (m.total_catalog ?? 49);
+        const matchedCount = useTop100 ? (m.top100_matched ?? rows.length) : (m.matched ?? rows.length);
+
+        if (pbCount) pbCount.textContent = `${matchedCount} من ${totalCount} حالة`;
+
+        if (pbSummaryStrip && m.top100_summary) {
+            const s = m.top100_summary;
+            pbSummaryStrip.innerHTML = `
+                <div class="col-md-3 col-6"><div class="border rounded p-2 bg-light"><div class="small text-muted">إجمالي الأسئلة المصرفية</div><div class="fw-bold">${esc(s.total_questions)} سؤالاً (100% قابلة للتشخيص)</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2 bg-light"><div class="small text-muted">تنفيذ/تشخيص مباشر بالدعم</div><div class="fw-bold text-success">${esc(s.direct_support_action)} حالة</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2 bg-light"><div class="small text-muted">موافقة ثنائية (4-Eyes)</div><div class="fw-bold text-primary">${esc(s.four_eyes_action)} حالات</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2 bg-light"><div class="small text-muted">تصعيد موجَّه بـ SLA / ذاتي</div><div class="fw-bold text-dark">${esc((s.guided_escalation || 0) + (s.self_service_guided || 0))} حالة</div></div></div>
+            `;
+        }
 
         if (pbCategory && pbCategory.options.length === 1) {
-            Object.entries(m.categories || {}).forEach(([code, count]) => {
+            const cats = m.top100_categories || m.categories || {};
+            Object.entries(cats).forEach(([code, count]) => {
                 const option = document.createElement('option');
                 option.value = code;
                 option.textContent = `${PB_CATEGORY_LABELS[code] || code} (${count})`;
@@ -215,7 +259,6 @@
             });
         }
 
-        const rows = m.playbooks || [];
         if (!rows.length) {
             pbResults.innerHTML = '<div class="alert alert-secondary">لا توجد حالة مطابقة. افتح تذكرة بعنوان واضح ولا تخمّن الحل.</div>';
             return;
@@ -228,8 +271,16 @@
             : (txCategories.has(p.category) ? 'tx'
             : (ticketCategories.has(p.category) ? 'tickets' : 'search'));
 
+        const actionBadge = mode => ({
+            direct_support: ['success', 'تنفيذ/تشخيص مباشر'],
+            four_eyes: ['primary', 'موافقة ثنائية (4-Eyes)'],
+            guided_escalation: ['warning text-dark', 'تصعيد موجَّه بـ SLA'],
+            self_service: ['info text-dark', 'حل ذاتي بتوجيه الدعم'],
+        })[mode] || ['secondary', esc(mode || 'تشخيص')];
+
         pbResults.innerHTML = rows.map(p => {
             const status = PB_STATUS[p.readiness] || ['secondary', esc(p.readiness)];
+            const actB = actionBadge(p.action_mode);
             const steps = (p.steps || []).map((s, i) =>
                 `<li class="mb-1"><strong>${i + 1}.</strong> ${esc(s)}</li>`).join('');
             return `
@@ -237,15 +288,21 @@
                 <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                   <div>
                     <span class="badge bg-light text-dark border">#${esc(p.id)}</span>
+                    ${p.domain_ar ? `<span class="badge bg-secondary ms-1">${esc(p.domain_ar)}</span>` : ''}
                     <strong class="ms-1">${esc(p.question)}</strong>
                   </div>
-                  <span class="badge bg-${status[0]}">${status[1]}</span>
+                  <div class="d-flex gap-1 flex-wrap">
+                    <span class="badge bg-${actB[0]}">${actB[1]}</span>
+                    ${p.sla_hours ? `<span class="badge bg-dark">SLA: ${esc(p.sla_hours)} ساعة</span>` : ''}
+                    <span class="badge bg-${status[0]}">${status[1]}</span>
+                  </div>
                 </div>
                 <div class="card-body">
                   <div class="row g-3">
                     <div class="col-lg-5">
                       <div class="small text-muted mb-1">أين يبدأ الموظف؟</div>
-                      <div class="fw-semibold mb-3">${esc(p.diagnosis)}</div>
+                      <div class="fw-semibold mb-2">${esc(p.diagnosis)}</div>
+                      ${p.account_movement ? `<div class="small text-muted mb-1">آلية تحريك الحساب والحل:</div><div class="small fw-semibold text-primary mb-2">${esc(p.account_movement)}</div>` : ''}
                       <div class="small text-muted mb-1">الكلمات التي قد يقولها العميل</div>
                       <div>${(p.keywords || []).map(k => `<span class="badge bg-light text-dark border me-1 mb-1">${esc(k)}</span>`).join('')}</div>
                     </div>
@@ -278,6 +335,8 @@
     if (pbButton) pbButton.onclick = loadPlaybooks;
     if (pbSearch) pbSearch.addEventListener('keydown', e => { if (e.key === 'Enter') loadPlaybooks(); });
     if (pbCategory) pbCategory.addEventListener('change', loadPlaybooks);
+    if (pbScope) pbScope.addEventListener('change', loadPlaybooks);
+    if (pbActionMode) pbActionMode.addEventListener('change', loadPlaybooks);
     document.querySelector('[data-bs-target="#tab-playbooks"]')?.addEventListener('shown.bs.tab', loadPlaybooks);
 
     document.addEventListener('click', async function (e) {
@@ -463,24 +522,71 @@
         const j = await get('/customers/' + id);
         if (!j.success) { box.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`; return; }
         const m = j.meta, p = m.profile;
+        const diag = m.account_diagnosis || {can_transact: true, summary_ar: '', blockers: []};
+        const holds = (m.hold_breakdown && m.hold_breakdown.items) || [];
+        const lim = m.limits_usage || {};
+        const wtc = m.wrong_transfer_overview || {as_claimant: [], as_recipient: [], total_receivable_debt: '0.0000'};
+        const notes = m.notes || [];
+        const notifs = m.recent_notifications || [];
+        const safePays = m.safe_payments || [];
+
+        const diagHtml = (diag.blockers || []).length ? `
+            <div class="alert alert-danger mt-3 mb-2" data-testid="customer-account-diagnosis">
+                <div class="fw-bold mb-1">⚠ ${esc(diag.summary_ar)}</div>
+                <ul class="mb-0 ps-3 small">
+                    ${diag.blockers.map(b => `<li><strong>${esc(b.label_ar)}:</strong> ${esc(b.reason)} — <span class="text-dark">${esc(b.resolution_ar)}</span></li>`).join('')}
+                </ul>
+            </div>` : `<div class="alert alert-success py-2 mt-3 mb-2 small" data-testid="customer-account-diagnosis">✓ ${esc(diag.summary_ar || 'الحساب سليم وجاهز للعمليات المالية.')}</div>`;
+
+        const holdsHtml = holds.length ? `
+            <div class="card border-warning mt-3" data-testid="customer-hold-breakdown">
+                <div class="card-header py-2 bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
+                    <strong>تفصيل المبالغ المحجوزة والمعلّقة (${holds.length})</strong>
+                    <span class="badge bg-warning text-dark">إجمالي المحجوز: ${esc(m.wallet.held_balance ?? '0')}</span>
+                </div>
+                <div class="table-responsive"><table class="table table-sm mb-0">
+                    <thead><tr><th>نوع الحجز</th><th>المرجع</th><th>المبلغ</th><th>الحالة</th><th>موعد الإفراج التلقائي</th></tr></thead>
+                    <tbody>${holds.map(h => `
+                        <tr>
+                            <td>${esc(h.kind_ar)}</td>
+                            <td class="font-monospace small">${esc(h.reference)}</td>
+                            <td class="fw-bold">${esc(h.amount)}</td>
+                            <td>${esc(h.status_ar)}</td>
+                            <td class="small">${esc(h.expires_at || '—')}</td>
+                        </tr>`).join('')}</tbody>
+                </table></div>
+            </div>` : '';
+
+        const wtcDebtAlert = parseFloat(wtc.total_receivable_debt || '0') > 0 ? `
+            <div class="alert alert-warning py-2 mt-2 small" data-testid="customer-receivable-debt">
+                <strong>ذمّة استرداد تحويل خاطئ قائمة على هذا الحساب:</strong> ${esc(wtc.total_receivable_debt)} ريال — تُقتطع تلقائياً عند دخول أي رصيد جديد.
+            </div>` : '';
+
         box.innerHTML = `
         <div class="card p-3" data-testid="customer-360">
-            <div class="d-flex justify-content-between flex-wrap">
-                <h5>${esc(p.name)} <small class="text-muted">#${p.id} — ${esc(p.phone)}</small></h5>
-                <div>
+            <div class="d-flex justify-content-between flex-wrap gap-2">
+                <h5>${esc(p.name)} <small class="text-muted">#${p.id} — ${esc(p.phone)} (${esc(p.type_label || 'عميل')})</small></h5>
+                <div class="d-flex gap-1 align-items-center">
                     ${m.security.is_temp_blocked ? '<span class="badge bg-danger">مجمَّد مؤقتاً</span>' : '<span class="badge bg-success">نشط</span>'}
+                    ${p.lifecycle_state && p.lifecycle_state !== 'active' ? `<span class="badge bg-dark">${esc(p.lifecycle_state)}</span>` : ''}
                 </div>
             </div>
+
+            ${diagHtml}
+            ${wtcDebtAlert}
+
             <div class="row g-3 mt-1">
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">الرصيد</div><div class="fs-5 fw-bold">${esc(m.wallet.current_balance ?? '0')}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">معلَّق / محجوز</div><div>${esc(m.wallet.pending_balance ?? '0')} / ${esc(m.wallet.held_balance ?? '0')}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">KYC</div><div>${m.kyc.is_verified ? '✓ موثَّق' : '✗ غير موثَّق'} (فئة ${esc(m.kyc.tier ?? '—')})</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">الرصيد الكلي / المتاح</div><div class="fs-6 fw-bold">${esc(m.wallet.current_balance ?? '0')} <span class="text-success small">(متاح: ${esc(m.wallet.available_balance ?? m.wallet.current_balance ?? '0')})</span></div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">معلَّق / محجوز</div><div>${esc(m.wallet.pending_balance ?? '0')} / <span class="fw-bold text-danger">${esc(m.wallet.held_balance ?? '0')}</span></div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">KYC</div><div>${m.kyc.is_verified ? '✓ موثَّق' : '✗ غير موثَّق'} (فئة ${esc(m.kyc.tier ?? '—')}) ${m.kyc.update_required ? '<span class="badge bg-danger">تحديث مطلوب</span>' : ''}</div></div></div>
                 <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">PIN</div><div>${m.pin.is_set ? 'معيَّن' : 'غير معيَّن'}${m.pin.locked_until ? ' — مقفول' : ''} (${m.pin.failed_attempts} محاولات فاشلة)</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">الجلسات النشطة</div><div>${m.security.active_sessions}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">آخر نشاط</div><div>${esc(m.profile.last_active_at ?? '—')}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">تذاكر مفتوحة</div><div>${m.open_tickets}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">المنطقة</div><div>${esc(m.profile.zone_code ?? '—')}</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">المستهلك اليومي / المتبقي</div><div class="small fw-semibold" data-testid="customer-daily-limit">${esc(lim.daily_used ?? '0')} / متبقي: <span class="text-primary">${esc(lim.daily_remaining ?? '—')}</span> (سقف: ${esc(lim.max_daily_total ?? '—')})</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">المستهلك الشهري / المتبقي</div><div class="small fw-semibold" data-testid="customer-monthly-limit">${esc(lim.monthly_used ?? '0')} / متبقي: <span class="text-primary">${esc(lim.monthly_remaining ?? '—')}</span> (سقف: ${esc(lim.max_monthly_total ?? '—')})</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">الجلسات النشطة / آخر نشاط</div><div class="small">${m.security.active_sessions} جلسة · ${esc(m.profile.last_active_at ?? '—')}</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">تذاكر مفتوحة / المنطقة</div><div>${m.open_tickets} تذكرة · نطاق ${esc(m.profile.zone_code ?? '—')}</div></div></div>
             </div>
+
+            ${holdsHtml}
 
             <div class="mt-3 d-flex gap-2 flex-wrap">
                 ${CAN_FREEZE ? `<button class="btn btn-sm btn-outline-danger js-act" data-act="freeze" data-id="${p.id}" data-unfreeze="${m.security.is_temp_blocked ? 1 : ''}" data-testid="btn-freeze">
@@ -488,7 +594,11 @@
                 ${CAN_RESET_PIN ? `<button class="btn btn-sm btn-outline-warning js-act" data-act="reset-pin" data-id="${p.id}" data-testid="btn-reset-pin">إعادة تعيين PIN</button>` : ''}
                 ${CAN_DEVICE_CONTROL ? `<button class="btn btn-sm btn-outline-secondary js-act" data-act="revoke-sessions" data-id="${p.id}" data-testid="btn-revoke">إلغاء الجلسات المسجّلة</button>` : ''}
                 ${CAN_KYC_REQUEST ? `<button class="btn btn-sm btn-outline-info js-act" data-act="require-kyc" data-id="${p.id}" data-testid="btn-kyc">طلب تحديث الهوية</button>` : ''}
+                ${CAN_LIFECYCLE_MANAGE ? `<button class="btn btn-sm btn-outline-dark js-adv-act" data-adv="${p.lifecycle_state === 'suspended' ? 'activate' : 'suspend'}" data-id="${p.id}" data-testid="btn-lifecycle">${p.lifecycle_state === 'suspended' ? 'تفعيل الحساب' : 'إيقاف مؤقت (Suspend)'}</button>` : ''}
+                ${CAN_RISK_ESCALATE ? `<button class="btn btn-sm btn-outline-danger js-adv-act" data-adv="escalate_risk" data-id="${p.id}" data-testid="btn-risk-case">فتح قضية مخاطر (AML)</button>` : ''}
                 ${CAN_RECOVERY_VIEW ? `<a class="btn btn-sm btn-outline-dark" href="${RECOVERY_BASE}?status=all&user_id=${p.id}" data-testid="btn-recovery">متابعة استعادة الحساب</a>` : ''}
+                ${CAN_NOTES_CREATE ? `<button class="btn btn-sm btn-outline-secondary js-act" data-act="add-note" data-id="${p.id}" data-name="${esc(p.name)}" data-testid="btn-add-note">+ إضافة ملاحظة</button>` : ''}
+                ${CAN_TICKETS_MANAGE ? `<button class="btn btn-sm btn-warning text-dark js-act" data-act="guided-escalate" data-id="${p.id}" data-name="${esc(p.name)}" data-testid="btn-guided-escalate">⬆ تصعيد موجَّه للفريق المختص</button>` : ''}
                 <button class="btn btn-sm btn-primary js-act" data-act="open-ticket" data-id="${p.id}" data-name="${esc(p.name)}" data-testid="btn-open-ticket">+ فتح تذكرة</button>
             </div>
 
@@ -499,13 +609,51 @@
             </div>
             <div id="devices-box" class="mt-2"></div>` : ''}
 
-            <h6 class="mt-4">آخر العمليات</h6>
+            <div class="row g-3 mt-3">
+                <div class="col-lg-6">
+                    <h6>ملاحظات الدعم على العميل (${notes.length})</h6>
+                    <div class="border rounded p-2" style="max-height:180px;overflow-y:auto" data-testid="customer-notes-box">
+                        ${notes.map(n => `
+                            <div class="border-bottom py-1 small">
+                                ${n.is_pinned ? '<span class="badge bg-warning text-dark">مثبّتة</span> ' : ''}
+                                <strong>${esc(n.author)}:</strong> ${esc(n.body)}
+                                <div class="text-muted" style="font-size:11px">${esc(n.created_at)}</div>
+                            </div>`).join('') || '<div class="text-muted small">لا توجد ملاحظات مسجَّلة على هذا العميل.</div>'}
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <h6>آخر الإشعارات وسجل التسليم (${notifs.length})</h6>
+                    <div class="border rounded p-2" style="max-height:180px;overflow-y:auto" data-testid="customer-notifications-box">
+                        ${notifs.map(n => `
+                            <div class="border-bottom py-1 small d-flex justify-content-between">
+                                <span><strong>${esc(n.title)}</strong> — ${esc(n.body)}</span>
+                                <span class="text-nowrap ms-2">${n.is_read ? '<span class="badge bg-success">مقروء</span>' : '<span class="badge bg-secondary">أُرسل</span>'} <small class="text-muted">${esc(n.sent_at)}</small></span>
+                            </div>`).join('') || '<div class="text-muted small">لا توجد إشعارات حديثة.</div>'}
+                    </div>
+                </div>
+            </div>
+
+            ${safePays.length ? `
+            <h6 class="mt-3">صفقات الدفع الآمن (${safePays.length})</h6>
             <div class="table-responsive"><table class="table table-sm">
-                <thead><tr><th>المرجع</th><th>النوع</th><th>مدين</th><th>دائن</th><th>القرار</th><th>التاريخ</th></tr></thead>
+                <thead><tr><th>المرجع</th><th>الدور</th><th>المبلغ</th><th>الحالة</th><th>التاريخ</th></tr></thead>
+                <tbody>${safePays.map(sp => `<tr><td class="font-monospace small">${esc(sp.ulid)}</td><td>${esc(sp.role)}</td><td>${esc(sp.amount)}</td><td>${esc(sp.status_ar)}</td><td class="small">${esc(sp.created_at)}</td></tr>`).join('')}</tbody>
+            </table></div>` : ''}
+
+            <h6 class="mt-4">آخر العمليات (الصادرة والواردة)</h6>
+            <div class="table-responsive"><table class="table table-sm align-middle">
+                <thead><tr><th>المرجع</th><th>النوع</th><th>مدين</th><th>دائن</th><th>القرار</th><th>التاريخ</th><th></th></tr></thead>
                 <tbody>${(m.recent_transactions || []).map(t => `
-                    <tr><td class="font-monospace">${esc(t.transaction_id)}</td><td>${esc(t.type)}</td>
-                    <td>${esc(t.debit)}</td><td>${esc(t.credit)}</td><td>${esc(t.decision_code ?? '—')}</td><td class="small">${esc(t.created_at)}</td></tr>`).join('')
-                    || '<tr><td colspan="6" class="text-muted">لا عمليات</td></tr>'}</tbody>
+                    <tr>
+                        <td class="font-monospace">${esc(t.transaction_id)}</td>
+                        <td>${esc(t.type_ar || t.type)}</td>
+                        <td>${esc(t.debit)}</td>
+                        <td>${esc(t.credit)}</td>
+                        <td>${esc(t.decision_code ?? '—')}</td>
+                        <td class="small">${esc(t.created_at)}</td>
+                        <td><button type="button" class="btn btn-sm btn-outline-primary py-0" data-trace="${esc(t.transaction_id || t.id)}">التتبّع ←</button></td>
+                    </tr>`).join('')
+                    || '<tr><td colspan="7" class="text-muted">لا عمليات</td></tr>'}</tbody>
             </table></div>
         </div>`;
     };
@@ -540,6 +688,63 @@
         const ref = await dialog.request('رقم العملية المرتبطة (اختياري):', {title: 'فتح تذكرة دعم', okLabel: 'فتح التذكرة'}) || null;
         const j = await post('/tickets', {user_id: userId, subject: subject, transaction_ref: ref, category: 'other'});
         await dialog.show(j.success ? ('فُتحت التذكرة ' + j.meta.ticket.ticket_number) : (j.message || 'فشل'), j.success ? 'تم فتح التذكرة' : 'تعذّر فتح التذكرة');
+        if (j.success) loadCustomer(userId);
+    };
+
+    window.addCustomerNoteModal = async function (userId, name) {
+        const dialog = window.amialDialog;
+        const body = dialog
+            ? await dialog.request('اكتب ملاحظة الدعم على ملف العميل ' + name + ' (5 أحرف على الأقل):', {title: 'إضافة ملاحظة على ملف العميل', okLabel: 'حفظ الملاحظة'})
+            : prompt('اكتب ملاحظة الدعم على ملف العميل ' + name + ':');
+        if (!body || body.trim().length < 5) return;
+        const j = await post(`/customers/${userId}/note`, {body: body.trim(), pin: true});
+        if (dialog) await dialog.show(j.message || (j.success ? 'تم الحفظ' : 'فشل'), j.success ? 'تمت الإضافة' : 'تعذّر الحفظ');
+        if (j.success) loadCustomer(userId);
+    };
+
+    window.guidedEscalateModal = async function (userId, name) {
+        const dialog = window.amialDialog;
+        const team = prompt(
+            'اختر الفريق المختص للتصعيد للعميل ' + name + ':\n'
+            + 'supervisor = الإشراف والموافقات (فك تجميد / تصفير PIN)\n'
+            + 'security = عمليات الأمن (حظر جهاز مسروق / إنهاء جلسات)\n'
+            + 'risk = المخاطر ومكافحة الاحتيال (AML)\n'
+            + 'disputes = الفصل في النزاعات والاسترداد\n'
+            + 'finance = المالية ومطابقة الدفتر\n'
+            + 'compliance = الامتثال وتوثيق الهوية (KYC)',
+            'supervisor'
+        );
+        if (!team) return;
+        const action = prompt(
+            'اختر الإجراء المطلوب:\n'
+            + 'unfreeze_account | reset_pin | block_device | dispute_resolution | ledger_reconcile | kyc_expedite | aml_investigation',
+            team === 'security' ? 'block_device' : (team === 'finance' ? 'ledger_reconcile' : 'unfreeze_account')
+        );
+        if (!action) return;
+        const reason = dialog
+            ? await dialog.request('اشرح التشخيص والسبب (10 أحرف على الأقل — يُسجَّل في التذكرة والتدقيق):', {title: 'تصعيد موجَّه للفريق المختص', okLabel: 'إرسال التصعيد'})
+            : prompt('اشرح التشخيص والسبب (10 أحرف على الأقل):');
+        if (!reason || reason.trim().length < 10) return;
+        const j = await post(`/customers/${userId}/escalate`, {
+            target_team: team.trim(),
+            requested_action: action.trim(),
+            reason: reason.trim(),
+        });
+        if (dialog) await dialog.show(j.message || (j.success ? 'تم التصعيد' : 'فشل'), j.success ? 'تم إرسال التصعيد' : 'تعذّر التصعيد');
+        else alert(j.message || 'تم');
+        if (j.success) loadCustomer(userId);
+    };
+
+    window.doAdvancedAction = async function (userId, action) {
+        const dialog = window.amialDialog;
+        const reason = dialog
+            ? await dialog.request('سبب تنفيذ الإجراء «' + action + '» (10 أحرف على الأقل):', {title: 'تأكيد إجراء متقدم', okLabel: 'تنفيذ', danger: true})
+            : prompt('سبب تنفيذ الإجراء (10 أحرف على الأقل):');
+        if (!reason || reason.trim().length < 10) return;
+        const j = await post(`/customers/${userId}/advanced-action`, {action, reason: reason.trim()});
+        if (dialog) await dialog.show(j.message || (j.success ? 'تم' : 'فشل'), j.success ? 'تم الإجراء' : 'تعذّر الإجراء');
+        else alert(j.message || 'تم');
+        if (j.success) loadCustomer(userId);
     };
 
     // تفويض أحداث (CSP يمنع onclick المضمّنة): صفوف البحث + أزرار الإجراءات
@@ -547,10 +752,18 @@
         const row = e.target.closest('.js-user-row');
         if (row) { loadCustomer(parseInt(row.dataset.userId, 10)); return; }
 
+        const adv = e.target.closest('.js-adv-act');
+        if (adv) {
+            doAdvancedAction(parseInt(adv.dataset.id, 10), adv.dataset.adv);
+            return;
+        }
+
         const act = e.target.closest('.js-act');
         if (act) {
             const id = parseInt(act.dataset.id, 10);
             if (act.dataset.act === 'open-ticket') openTicket(id, act.dataset.name || '');
+            else if (act.dataset.act === 'add-note') addCustomerNoteModal(id, act.dataset.name || '');
+            else if (act.dataset.act === 'guided-escalate') guidedEscalateModal(id, act.dataset.name || '');
             else doAction(id, act.dataset.act, !!act.dataset.unfreeze);
         }
     });
@@ -785,6 +998,9 @@
 
     // ---------- التذاكر ----------
     document.getElementById('btn-tickets').onclick = loadTickets;
+    const TK_STATUS_AR = {open:'مفتوحة', investigating:'قيد التحقيق', waiting_customer:'بانتظار العميل', resolved:'محلولة', closed:'مغلقة'};
+    const TK_PRIORITY_AR = {urgent:'عاجلة (SLA: ساعتان)', high:'مرتفعة (SLA: 8 ساعات)', normal:'عادية (SLA: 24 ساعة)', low:'منخفضة (SLA: 48 ساعة)'};
+
     async function loadTickets() {
         const st = document.getElementById('tk-status').value;
         const box = document.getElementById('tickets-list');
@@ -792,18 +1008,127 @@
         const j = await get('/tickets' + (st ? '?status=' + st : ''));
         if (!j.success) { box.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`; return; }
         const rows = j.meta.tickets.map(t => `
-            <tr>
-                <td class="font-monospace">${esc(t.ticket_number)}</td>
+            <tr data-testid="ticket-row-${esc(t.id)}">
+                <td class="font-monospace fw-bold">${esc(t.ticket_number)}</td>
                 <td>${esc(t.user ? (t.user.f_name + ' ' + (t.user.l_name || '')) : t.user_id)}</td>
-                <td>${esc(t.subject)}</td>
-                <td><span class="badge bg-${({'open':'primary','investigating':'warning','waiting_customer':'secondary','resolved':'success','closed':'dark'})[t.status] || 'light'}">${esc(t.status)}</span></td>
-                <td>${esc(t.priority)}</td>
+                <td>${esc(t.subject)} ${t.transaction_ref ? `<span class="badge bg-light text-dark border font-monospace">${esc(t.transaction_ref)}</span>` : ''}</td>
+                <td><span class="badge bg-${({'open':'primary','investigating':'warning text-dark','waiting_customer':'secondary','resolved':'success','closed':'dark'})[t.status] || 'light'}">${esc(TK_STATUS_AR[t.status] || t.status)}</span></td>
+                <td class="small">${esc(TK_PRIORITY_AR[t.priority] || t.priority)}</td>
                 <td class="small">${esc(t.updated_at)}</td>
+                <td class="text-nowrap">
+                    <button type="button" class="btn btn-sm btn-outline-primary js-ticket-open" data-ticket-id="${esc(t.id)}" data-testid="btn-open-ticket-detail">إدارة / الخط الزمني</button>
+                </td>
             </tr>`).join('');
-        box.innerHTML = `<div class="table-responsive"><table class="table table-sm table-hover">
-            <thead><tr><th>الرقم</th><th>العميل</th><th>الموضوع</th><th>الحالة</th><th>الأولوية</th><th>آخر تحديث</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="6" class="text-muted">لا تذاكر</td></tr>'}</tbody></table></div>`;
+        box.innerHTML = `<div class="table-responsive"><table class="table table-sm table-hover align-middle">
+            <thead><tr><th>الرقم</th><th>العميل</th><th>الموضوع</th><th>الحالة</th><th>الأولوية وSLA</th><th>آخر تحديث</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="7" class="text-muted">لا تذاكر</td></tr>'}</tbody></table></div>`;
     }
+
+    window.openTicketDetail = async function (ticketId) {
+        const drawer = document.getElementById('ticket-detail-drawer');
+        if (!drawer) return;
+        drawer.innerHTML = '<div class="text-muted">جارٍ تحميل تفاصيل التذكرة…</div>';
+        const j = await get('/tickets/' + ticketId);
+        if (!j.success) { drawer.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`; return; }
+        const t = j.meta.ticket;
+        const events = (t.events || []).map(ev => `
+            <li class="list-group-item d-flex justify-content-between align-items-start small">
+                <div>
+                    <strong>${esc(ev.event_type)}</strong>
+                    ${ev.old_value || ev.new_value ? `<span class="text-muted">(${esc(ev.old_value || '—')} ← ${esc(ev.new_value || '—')})</span>` : ''}
+                    ${ev.note ? `<div class="mt-1">${esc(ev.note)}</div>` : ''}
+                </div>
+                <span class="text-muted text-nowrap ms-2">${esc(ev.created_at)}</span>
+            </li>`).join('');
+
+        drawer.innerHTML = `
+            <div class="card border-primary p-3">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                    <div>
+                        <h6 class="mb-1"><span class="font-monospace">${esc(t.ticket_number)}</span> — ${esc(t.subject)}</h6>
+                        <div class="small text-muted">
+                            العميل: ${esc(t.user ? (t.user.f_name + ' ' + (t.user.l_name || '') + ' (' + (t.user.phone || '') + ')') : t.user_id)}
+                            · الحالة: <strong>${esc(TK_STATUS_AR[t.status] || t.status)}</strong>
+                            · الأولوية: <strong>${esc(TK_PRIORITY_AR[t.priority] || t.priority)}</strong>
+                            ${t.transaction_ref ? ` · العملية: <button type="button" class="btn btn-link btn-sm p-0 font-monospace" data-trace="${esc(t.transaction_ref)}">${esc(t.transaction_ref)}</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+                ${t.description ? `<div class="border rounded p-2 bg-light small mb-3" style="white-space:pre-line">${esc(t.description)}</div>` : ''}
+                ${CAN_TICKETS_MANAGE ? `
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">تحديث الحالة</label>
+                        <select id="tk-detail-status" class="form-select form-select-sm">
+                            <option value="open" ${t.status === 'open' ? 'selected' : ''}>مفتوحة</option>
+                            <option value="investigating" ${t.status === 'investigating' ? 'selected' : ''}>قيد التحقيق</option>
+                            <option value="waiting_customer" ${t.status === 'waiting_customer' ? 'selected' : ''}>بانتظار العميل</option>
+                            <option value="resolved" ${t.status === 'resolved' ? 'selected' : ''}>محلولة</option>
+                            <option value="closed" ${t.status === 'closed' ? 'selected' : ''}>مغلقة</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">الأولوية</label>
+                        <select id="tk-detail-priority" class="form-select form-select-sm">
+                            <option value="low" ${t.priority === 'low' ? 'selected' : ''}>منخفضة</option>
+                            <option value="normal" ${t.priority === 'normal' ? 'selected' : ''}>عادية</option>
+                            <option value="high" ${t.priority === 'high' ? 'selected' : ''}>مرتفعة</option>
+                            <option value="urgent" ${t.priority === 'urgent' ? 'selected' : ''}>عاجلة</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1">ملاحظة الحل / التحديث</label>
+                        <input type="text" id="tk-detail-resolution" class="form-control form-control-sm" value="${esc(t.resolution_note || '')}" placeholder="خلاصة الإجراء أو الحل المقدم للعميل">
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button type="button" class="btn btn-sm btn-success js-ticket-save" data-ticket-id="${esc(t.id)}" data-testid="btn-save-ticket">حفظ التحديث</button>
+                    </div>
+                </div>
+                <div class="input-group input-group-sm mb-3">
+                    <input type="text" id="tk-detail-note" class="form-control" placeholder="إضافة ملاحظة متابعة في الخط الزمني للتذكرة…">
+                    <button type="button" class="btn btn-outline-primary js-ticket-add-note" data-ticket-id="${esc(t.id)}" data-testid="btn-add-ticket-note">+ إضافة ملاحظة</button>
+                </div>` : ''}
+                <h6 class="small fw-bold mb-2">الخط الزمني للتذكرة (${(t.events || []).length})</h6>
+                <ul class="list-group">${events || '<li class="list-group-item text-muted small">لا توجد أحداث</li>'}</ul>
+            </div>`;
+    };
+
+    document.addEventListener('click', async function (e) {
+        const openBtn = e.target.closest('.js-ticket-open');
+        if (openBtn) {
+            openTicketDetail(parseInt(openBtn.dataset.ticketId, 10));
+            return;
+        }
+        const saveBtn = e.target.closest('.js-ticket-save');
+        if (saveBtn) {
+            const id = parseInt(saveBtn.dataset.ticketId, 10);
+            const status = document.getElementById('tk-detail-status')?.value;
+            const priority = document.getElementById('tk-detail-priority')?.value;
+            const resolution_note = document.getElementById('tk-detail-resolution')?.value || null;
+            const j = await post(`/tickets/${id}/update`, {status, priority, resolution_note});
+            if (j.success) {
+                await loadTickets();
+                await openTicketDetail(id);
+            } else {
+                alert(j.message || 'تعذّر تحديث التذكرة');
+            }
+            return;
+        }
+        const noteBtn = e.target.closest('.js-ticket-add-note');
+        if (noteBtn) {
+            const id = parseInt(noteBtn.dataset.ticketId, 10);
+            const noteInput = document.getElementById('tk-detail-note');
+            const note = (noteInput?.value || '').trim();
+            if (!note) return;
+            const j = await post(`/tickets/${id}/note`, {note});
+            if (j.success) {
+                if (noteInput) noteInput.value = '';
+                await openTicketDetail(id);
+            } else {
+                alert(j.message || 'تعذّر إضافة الملاحظة');
+            }
+        }
+    });
 
     // ---------- الموافقات (Maker-Checker) ----------
     document.getElementById('btn-approvals').onclick = loadApprovals;

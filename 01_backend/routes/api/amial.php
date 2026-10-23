@@ -212,6 +212,10 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             Route::post('/customers/{id}/reset-pin', [$c, 'resetPin'])->where('id', '[0-9]+')->middleware('platform:platform.customers.reset_pin')->name('customers.reset-pin');
             Route::post('/customers/{id}/revoke-sessions', [$c, 'revokeSessions'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.revoke-sessions');
             Route::post('/customers/{id}/require-kyc', [$c, 'requireKyc'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.require-kyc');
+            Route::post('/customers/{id}/note', [$c, 'addCustomerNote'])->where('id', '[0-9]+')->middleware('platform:platform.customers.notes.create')->name('customers.note');
+            Route::post('/customers/{id}/escalate', [$c, 'escalateCustomerIssue'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('customers.escalate');
+            // الصلاحية الدقيقة تُفحَص داخل CustomerActionService بحسب action.
+            Route::post('/customers/{id}/advanced-action', [$c, 'executeAdvancedAction'])->where('id', '[0-9]+')->name('customers.advanced-action');
             // AMIAL-KYC-DOCS-001 — مراجعة مستندات الهوية.
             // الصلاحية نفسها المستعملة لطلب تحديث الهوية: من يطلب المستند
             // هو من يبتّ فيه، ولا معنى لفصلهما.

@@ -5,8 +5,10 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
-/// قناة الدعم الحقيقية. تقرأ من إعداد الدعم المخصص، لا من بيانات شركة
-/// قديمة أو فارغة في config، وتعرض سبباً واضحاً إن تعذر فتح تطبيق الاتصال.
+/// قناة الدعم الحقيقية + مركز الحلول الفورية للعميل.
+/// تقرأ من إعداد الدعم المخصص، لا من بيانات شركة قديمة أو فارغة في config،
+/// وتعرض سبباً واضحاً إن تعذر فتح تطبيق الاتصال، بالإضافة إلى دليل حلول
+/// ذاتي تفاعلي لأهم استفسارات الأموال والحسابات.
 class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key});
 
@@ -20,6 +22,65 @@ class _SupportScreenState extends State<SupportScreen> {
   String _email = '';
   bool _loading = true;
   bool _failed = false;
+  String _searchQuery = '';
+  String _selectedCategory = 'all';
+
+  static const List<Map<String, String>> _categories = [
+    {'code': 'all', 'label': 'الكل'},
+    {'code': 'transfers', 'label': 'التحويلات والحوالات'},
+    {'code': 'holds', 'label': 'الأرصدة والحجوزات'},
+    {'code': 'security', 'label': 'الأمان وPIN والأجهزة'},
+    {'code': 'kyc', 'label': 'التوثيق والحدود'},
+    {'code': 'services', 'label': 'الدفع الآمن والتجار'},
+  ];
+
+  static const List<Map<String, String>> _quickAnswers = [
+    {
+      'category': 'transfers',
+      'q': 'حوّلت مبلغاً لرقم خاطئ، كيف أسترجع أموالي فوراً؟',
+      'a': 'إذا كانت الحوالة لا تزال داخل نافذة التراجع يمكنك إلغاؤها فوراً من سجل العمليات. وإذا اكتملت، تواصل مع الدعم برقم العملية لفتح «بلاغ تحويل لمستلم خاطئ»؛ سيحجز النظام المبلغ المتبقي في محفظة المستلم احترازياً، وما صُرف منه يُسجَّل ذمّة تُقتطع تلقائياً فور دخول أي رصيد لحسابه.',
+    },
+    {
+      'category': 'transfers',
+      'q': 'الحوالة تظهر «معلّقة / قيد التسليم»، متى تصل للمستلم؟',
+      'a': 'تمر الحوالات بنافذة تراجع قصيرة لحمايتك من أخطاء الإدخال ثم تُسلَّم تلقائياً. لا تقم بإعادة إرسال الحوالة مرة ثانية؛ يمكنك تزويد الدعم برقم الحوالة للتحقق من عدّاد التسليم.',
+    },
+    {
+      'category': 'holds',
+      'q': 'لماذا يختلف «الرصيد المتاح» عن «الرصيد الكلي» في محفظتي؟',
+      'a': 'الفرق يمثل مبالغ محجوزة مؤقتاً لعمليات جارية (حوالة في نافذة التراجع، صفقة دفع آمن لم تُستلم بعد، أو حجز احترازي لدعوى قائمة). يظهر لدى موظف الدعم تفصيل كل مبلغ محجوز وموعد الإفراج التلقائي عنه.',
+    },
+    {
+      'category': 'holds',
+      'q': 'تم خصم مبلغ تلقائياً فور شحني للمحفظة، ما السبب؟',
+      'a': 'يحدث ذلك فقط إذا كانت على الحساب ذمّة مستحقة ناتجة عن استلام حوالة سابقة بالخطأ صدر بها قرار استرداد رسمي من فريق النزاعات.',
+    },
+    {
+      'category': 'security',
+      'q': 'فقدت هاتفي أو سُرق، كيف أحمي أموالي دون تعطيل مصالحي؟',
+      'a': 'تواصل مع الدعم فوراً لحظر الجهاز المسروق وحده وإنهاء جلساته النشطة، أو لطلب تجميد مؤقت للحساب. وإذا فقدت الشريحة يمكنك تقديم طلب «استعادة الحساب» الموثّق.',
+    },
+    {
+      'category': 'security',
+      'q': 'قُفل الرمز السري (PIN) بعد محاولات خاطئة أو نسيته، ماذا أفعل؟',
+      'a': 'يمكنك استعادة الرمز السري عبر بريدك الإلكتروني الموثّق من شاشة الأمان، أو طلب إعادة تعيين PIN عبر مركز الدعم (يخضع لموافقة ثنائية لحماية حسابك).',
+    },
+    {
+      'category': 'kyc',
+      'q': 'كيف أعرف المتبقي من حدي اليومي والشهري وكيف أرفع السقف؟',
+      'a': 'تعتمد حدود التحويل والرصيد على فئة توثيق الهوية (KYC Tier). يمكنك رفع سقف حسابك باستكمال توثيق الهوية الوطنية وإثبات السكن من مركز التوثيق في التطبيق.',
+    },
+    {
+      'category': 'services',
+      'q': 'كيف يحميني «الدفع الآمن» عند الشراء من تاجر أو فرد؟',
+      'a': 'يحجز نظام الدفع الآمن المبلغ في حساب ضمان مستقل ولا يُفرج عنه للبائع إلا بعد استلامك للبضاعة وإعطائه «كود التسليم» المكون من أرقام خاصة بك، وفي حال الخلاف يمكنك فتح نزاع وإرفاق الصور.',
+    },
+    {
+      'category': 'services',
+      'q': 'انقطع الإنترنت أثناء الدفع لتاجر ولا أعرف هل خُصم المبلغ أم لا',
+      'a': 'لا تقم بإعادة الدفع مباشرة! يحتفظ التطبيق برقم تتبّع تشخيصي للمحاولة يمنع الخصم المكرر، ويمكن لموظف الدعم التحقق فوراً بالرقم التشخيصي هل وُلد قيد مالي أم لا.',
+    },
+  ];
 
   @override
   void initState() {
@@ -77,8 +138,21 @@ class _SupportScreenState extends State<SupportScreen> {
     );
   }
 
+  List<Map<String, String>> get _filteredAnswers {
+    final q = _searchQuery.trim().toLowerCase();
+    return _quickAnswers.where((item) {
+      final matchesCat = _selectedCategory == 'all' ||
+          item['category'] == _selectedCategory;
+      if (!matchesCat) return false;
+      if (q.isEmpty) return true;
+      final hay = '${item['q']} ${item['a']}'.toLowerCase();
+      return hay.contains(q);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final answers = _filteredAnswers;
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('الدعم والمساعدة')),
@@ -111,11 +185,11 @@ class _SupportScreenState extends State<SupportScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'اختر وسيلة التواصل المناسبة. لا تُعرض أي وسيلة غير قابلة للاستخدام.',
+              'اختر وسيلة التواصل المناسبة أو ابحث في مركز الحلول الفورية.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AmialColors.textSecondary),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
             if (_loading)
               const Center(child: CircularProgressIndicator())
             else ...[
@@ -169,6 +243,83 @@ class _SupportScreenState extends State<SupportScreen> {
                 ),
               ],
             ],
+            const SizedBox(height: 28),
+            const Text(
+              'مركز الحلول الفورية (الأموال والحسابات)',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: InputDecoration(
+                hintText: 'ابحث عن مشكلتك: حوالة، رقم خاطئ، رصيد محجوز، رمز سري…',
+                prefixIcon: const Icon(Icons.search_rounded),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: AmialColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: AmialColors.border),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _categories.map((cat) {
+                  final selected = _selectedCategory == cat['code'];
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: ChoiceChip(
+                      label: Text(cat['label']!),
+                      selected: selected,
+                      onSelected: (_) =>
+                          setState(() => _selectedCategory = cat['code']!),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...answers.map(
+              (item) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AmialColors.border),
+                ),
+                child: ExpansionTile(
+                  title: Text(
+                    item['q']!,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AmialColors.textPrimary,
+                    ),
+                  ),
+                  childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  children: [
+                    Text(
+                      item['a']!,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.5,
+                        color: AmialColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),

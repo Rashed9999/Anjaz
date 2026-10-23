@@ -124,6 +124,11 @@ Route::group(['as' => 'admin.'], function () {
             Route::post('customers/{id}/reset-pin', [$sc, 'resetPin'])->where('id', '[0-9]+')->middleware('platform:platform.customers.reset_pin')->name('customers.reset-pin');
             Route::post('customers/{id}/revoke-sessions', [$sc, 'revokeSessions'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.revoke-sessions');
             Route::post('customers/{id}/require-kyc', [$sc, 'requireKyc'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.require-kyc');
+            Route::post('customers/{id}/note', [$sc, 'addCustomerNote'])->where('id', '[0-9]+')->middleware('platform:platform.customers.notes.create')->name('customers.note');
+            Route::post('customers/{id}/escalate', [$sc, 'escalateCustomerIssue'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('customers.escalate');
+            // لا تُحصر البوابة في lifecycle: `CustomerActionService` يفحص
+            // صلاحية كل فعل بدقة (مخاطر، حدود، دورة حياة) بعد التحقق من action.
+            Route::post('customers/{id}/advanced-action', [$sc, 'executeAdvancedAction'])->where('id', '[0-9]+')->name('customers.advanced-action');
             // AMIAL-DEVICE-TRUST-001: أجهزة العميل — تُحظر واحداً واحداً بدل
             // تجميد الحساب كلّه. والصلاحية نفسها المستعملة لإنهاء الجلسات:
             // كلاهما قطعُ وصولٍ لا مسٌّ بالمال.
