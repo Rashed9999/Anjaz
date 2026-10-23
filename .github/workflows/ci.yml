@@ -224,11 +224,11 @@ jobs:
           else:
               print('JUnit report unavailable; see process output below.')
           PY
-            # PHPUnit may fail on a risky test without encoding it in a JUnit
-            # report. Re-run only for diagnostics so the CI log names it;
-            # this does not turn the failed gate into a passing one.
-            php artisan test --debug > phpunit_debug.txt 2>&1 || true
-            cat phpunit_debug.txt
+            # A risky test is omitted from this JUnit report. Listing the
+            # suite is deterministic and inexpensive, so the failing progress
+            # marker can be mapped back to the precise test without rerunning
+            # the whole suite under verbose event logging.
+            ./vendor/bin/phpunit --list-tests
             echo '::error::فشلت اختبارات PHPUnit — آخر 160 سطراً:'
             tail -n 160 phpunit_report.txt
             exit 1
