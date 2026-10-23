@@ -82,41 +82,32 @@ class DemoOtpTest extends TestCase
         $this->assertSame('123456', config('app.amial_demo_otp'));
     }
 
-    public function test_registration_succeeds_with_the_demo_otp(): void
+    public function test_legacy_amial_registration_is_retired_even_with_the_demo_otp(): void
     {
-        $phone = $this->phone();
-
-        $this->postJson('/api/v1/customer/auth/register', $this->payload($phone, '123456'))
-            ->assertSuccessful();
-
-        $this->assertTrue(
-            User::whereIn('phone', \App\Support\Phone::variants('+967' . $phone))->exists(),
-            'يجب أن يُنشأ الحساب فعلاً لا أن يمرّ التحقّق وحده'
-        );
+        $this->postJson('/api/v1/customer/auth/register', $this->payload($this->phone(), '123456'))
+            ->assertStatus(410)
+            ->assertJsonPath('code', 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
     }
 
-    public function test_registration_rejects_a_wrong_otp(): void
+    public function test_legacy_registration_cannot_disclose_otp_validation_outside_muwathaq(): void
     {
         $this->postJson('/api/v1/customer/auth/register', $this->payload($this->phone(), '999999'))
-            ->assertJsonFragment(['code' => 'otp']);
+            ->assertStatus(410)
+            ->assertJsonPath('code', 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
     }
 
     public function test_demo_otp_can_be_switched_off_for_real_production(): void
     {
-        // يوجد الآن بابان ثابتان منفصلان عمداً:
-        // 1) demo_code لأرقام العرض فقط.
-        // 2) pilot_customer_phone_code لإثبات هاتف العميل مؤقتاً.
-        //
-        // اختبار «الإنتاج الحقيقي» يجب أن يطفئ الاثنين؛ إطفاء Demo وحده
-        // لا يطفئ قرار الـPilot ولا ينبغي أن يفعل ذلك ضمنياً.
         config([
+            'app.amial_demo_otp' => '',
             'amial.otp.demo_code' => '',
             'amial.otp.pilot_customer_phone_enabled' => false,
         ]);
         \App\Services\Otp\OtpPolicy::forget();
 
-        $this->postJson('/api/v1/customer/auth/register', $this->payload($this->phone(), '123456'))
-            ->assertJsonFragment(['code' => 'otp']);
+        $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => $this->phone()])
+            ->assertOk()
+            ->assertJsonMissing(['demo_otp' => '123456']);
     }
 
     public function test_check_phone_hands_the_demo_code_to_the_app(): void
@@ -127,17 +118,13 @@ class DemoOtpTest extends TestCase
             ->assertJsonPath('demo_otp', '123456');
     }
 
-    public function test_self_registration_still_awaits_admin_review(): void
+    public function test_no_amial_endpoint_can_create_a_customer_account(): void
     {
-        // الرمز التجريبي يفتح التسجيل، ولا يجوز أن يفتح التوثيق معه.
-        $phone = $this->phone();
+        $this->postJson('/api/v1/customer/auth/register', $this->payload($this->phone(), '123456'))
+            ->assertStatus(410)
+            ->assertJsonPath('muwathaq_url', '/open-account?type=customer');
 
-        $this->postJson('/api/v1/customer/auth/register', $this->payload($phone, '123456'))
-            ->assertSuccessful();
-
-        $user = User::whereIn('phone', \App\Support\Phone::variants('+967' . $phone))->first();
-        $this->assertNotNull($user);
-        $this->assertSame(0, (int) $user->is_kyc_verified);
+        $this->assertDatabaseCount('users', 0);
     }
 
     public function test_check_phone_survives_a_missing_verification_setting(): void
