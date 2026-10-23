@@ -298,6 +298,22 @@ final class FeeOperationRegistry
             // ══════════════════════════════════════════════════════════
 
             new FeeOperation(
+                code: 'DONATION',
+                labelAr: 'تبرّعٌ خيريّ',
+                labelEn: 'Charity donation',
+                category: 'other',
+                actors: ['customer'],
+                // الرسمُ (إن فُعّل) يُقتطع من حصيلة الجهة الخيرية، لا
+                // يُضاف فوق ما اختاره المتبرع؛ لذلك يبقى مبلغُ الخصم
+                // من محفظته هو مبلغُ التبرع الظاهر في الإيصال.
+                bearers: ['receiver', 'sender'],
+                agentCommission: false,
+                zoneScoped: true,
+                consumers: ['app/Services/DonationsService.php'],
+                owner: 'App\\Services\\DonationsService::donate',
+            ),
+
+            new FeeOperation(
                 code: 'REFUND',
                 labelAr: 'استرجاع مبلغ',
                 labelEn: 'Refund',
