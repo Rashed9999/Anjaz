@@ -32,8 +32,7 @@ class RegistrationRolesTest extends TestCase
             $response->assertStatus(410)
                 ->assertJsonPath('code', 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
 
-            $this->assertDatabaseMissing('users', ['phone' => $phone],
-                'المسار القديم أنشأ حساباً رغم أن موثّق هو جهة الإنشاء الوحيدة.');
+            $this->assertDatabaseMissing('users', ['phone' => $phone]);
         }
     }
 }
