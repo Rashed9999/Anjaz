@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\LedgerReportService;
+use App\Services\LedgerService;
+use App\Services\Reconciliation\ReconciliationCorrectionWorkflow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -126,6 +128,65 @@ class LedgerCenterController extends Controller
             'stale'        => !$last || \Illuminate\Support\Carbon::parse($last->ran_at)->lt(now()->subHours(30)),
             'blind_spots'  => app(\App\Services\Reconciliation\ReconciliationService::class)->blindSpots(),
         ]);
+    }
+
+    /**
+     * The maker documents a specific root cause and evidence. This changes no
+     * balance and creates no journal entry.
+     */
+    public function proposeReconciliationCorrection(Request $request, string $caseUlid): JsonResponse
+    {
+        $data = $request->validate([
+            'root_cause' => ['required', 'string', 'min:12', 'max:500'],
+            'evidence_reference' => ['required', 'string', 'min:12', 'max:1000'],
+        ]);
+
+        $case = app(ReconciliationCorrectionWorkflow::class)->propose(
+            $caseUlid,
+            $this->actorId($request),
+            trim($data['root_cause']),
+            trim($data['evidence_reference']),
+        );
+
+        return $this->ok([
+            'case_ulid' => $case->case_ulid,
+            'status' => $case->status,
+            'message' => 'سُجل اقتراح التسوية. يلزم اعتماد موظف آخر مستقل قبل إنشاء أي قيد.',
+        ]);
+    }
+
+    /**
+     * The checker must not be the maker. LedgerService rechecks the case under
+     * lock and posts one balanced, idempotent entry only if a variance remains.
+     */
+    public function approveReconciliationCorrection(Request $request, string $caseUlid): JsonResponse
+    {
+        $data = $request->validate([
+            'approval_note' => ['required', 'string', 'min:12', 'max:1000'],
+        ]);
+
+        $entry = app(ReconciliationCorrectionWorkflow::class)->approve(
+            $caseUlid,
+            $this->actorId($request),
+            trim($data['approval_note']),
+            app(LedgerService::class),
+        );
+
+        return $this->ok([
+            'case_ulid' => $caseUlid,
+            'journal_entry_id' => $entry?->id,
+            'message' => $entry
+                ? 'اعتمدت التسوية وسُجل قيد مزدوج متوازن قابل للتدقيق.'
+                : 'لم يظهر فرق عند الاعتماد؛ نُقلت القضية إلى التحقق ولا أُنشئ قيد.',
+        ]);
+    }
+
+    private function actorId(Request $request): int
+    {
+        $actor = $request->user('user') ?? auth('user')->user();
+        abort_unless($actor && (int) $actor->id > 0, 403);
+
+        return (int) $actor->id;
     }
 
     public function entries(Request $request): JsonResponse
