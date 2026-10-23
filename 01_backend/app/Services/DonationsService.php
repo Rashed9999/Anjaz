@@ -67,10 +67,16 @@ class DonationsService
             throw new \RuntimeException("الحد الأقصى للتبرع " . Helpers::money($maxAmount) . " ر.ي");
         }
 
-        // حساب الـ fee
-        $feePercent = (string)config('amial.donations.fee_percent', '1.0');
-        $feeMultiplier = bcdiv($feePercent, '100', 6);
-        $platformFee = bcmul($amountNormalized, $feeMultiplier, 4);
+        // AMIAL-UNIFIED-FEES-001 — التبرع عملية مالية مثل غيرها:
+        // إن وُجدت نسخة رسوم فعّالة لمنطقة المتبرع، تكون FeeService هي
+        // المصدر الوحيد للنسبة والحدود وسجل النسخة. قاعدة قديمة بلا نسخة
+        // تبقى على إعدادها السابق لحين تشغيل البذرة؛ لا نغيّر سعراً قائماً
+        // بصمت أثناء الترقية.
+        $feeQuote = $this->quoteDonationFee($donor, $amountNormalized);
+        $platformFee = $feeQuote['fee'];
+        if (bccomp($platformFee, $amountNormalized, 4) > 0) {
+            throw new \RuntimeException('رسم التبرع لا يمكن أن يتجاوز مبلغ التبرع');
+        }
         $netToCharity = MoneyService::sub($amountNormalized, $platformFee);
 
         // ====== Execute ======
@@ -86,7 +92,7 @@ class DonationsService
         $org = null;
 
         $donation = DB::transaction(function () use (
-            $donor, $campaign, $amountNormalized, $platformFee, $netToCharity, $isAnonymous, $message,
+            $donor, $campaign, $amountNormalized, $platformFee, $netToCharity, $feeQuote, $isAnonymous, $message,
             &$org,
         ) {
             // يُعاد تحميل كل طرف تحت القفل قبل خصم المال. فحص حالة الحملة
@@ -208,6 +214,10 @@ class DonationsService
                     'campaign_id' => $campaign->id,
                     'org_id' => $org->id,
                     'amount' => $amountNormalized,
+                    'platform_fee' => $platformFee,
+                    'fee_source' => $feeQuote['source'],
+                    'fee_scheme_id' => $feeQuote['scheme_id'],
+                    'fee_scheme_version' => $feeQuote['scheme_version'],
                     'is_anonymous' => $isAnonymous,
                 ],
             ]);
@@ -331,7 +341,7 @@ class DonationsService
                     'campaign_title' => $campaign->title_ar,
                     'is_anonymous' => $donation->is_anonymous,
                 ],
-                'zone_code' => 'SOUTH',
+                'zone_code' => (string) $donation->zone_code,
             ]);
             $donation->update(['receipt_id' => $receipt->id]);
         } catch (\Throwable $e) {
@@ -340,6 +350,50 @@ class DonationsService
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @return array{fee:string,source:string,scheme_id:?int,scheme_version:?int}
+     */
+    private function quoteDonationFee(User $donor, string $amount): array
+    {
+        $zoneCode = strtoupper(trim((string) $donor->zone_code));
+
+        // لا نُسقط منطقةً افتراضية هنا. التحقق اللاحق يفرض SOUTH حالياً،
+        // لكن هذا الحارس يبقي الخدمة صادقة إن توسّعت مناطق التبرع لاحقاً.
+        $hasActiveScheme = $zoneCode !== ''
+            && \App\Models\FeeScheme::query()
+                ->where('code', 'DONATION')
+                ->where('zone_code', $zoneCode)
+                ->where('applies_to', 'customer')
+                ->where('is_active', true)
+                ->exists();
+
+        if ($hasActiveScheme) {
+            $quote = app(FeeService::class)->calculate('DONATION', $amount, [
+                'applies_to' => 'customer',
+                'zone_code' => $zoneCode,
+            ]);
+
+            return [
+                'fee' => MoneyService::normalize((string) ($quote['fee'] ?? '0')),
+                'source' => 'fee_scheme',
+                'scheme_id' => isset($quote['scheme_id']) ? (int) $quote['scheme_id'] : null,
+                'scheme_version' => isset($quote['scheme_version']) ? (int) $quote['scheme_version'] : null,
+            ];
+        }
+
+        // توافقٌ انتقالـي فقط: القواعد المنشورة قبل مركز الرسوم كانت تقرأ
+        // هذه القيمة. تشغيل FeeSchemeSeeder ينقلها إلى نسخة قابلة للمراجعة.
+        $feePercent = (string) config('amial.donations.fee_percent', '1.0');
+        $fee = bcmul($amount, bcdiv($feePercent, '100', 6), 4);
+
+        return [
+            'fee' => MoneyService::normalize($fee),
+            'source' => 'legacy_config',
+            'scheme_id' => null,
+            'scheme_version' => null,
+        ];
     }
 
     private function assertEligibleDonor(User $donor, string $amount): void
