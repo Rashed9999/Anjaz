@@ -8,6 +8,7 @@ use App\Models\Ledger\LedgerJournalEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EstablishesKycEvidence;
+use Tests\Support\OpensAccountsFromHub;
 use Tests\Support\ProvisionsAccountsFromMuwathaq;
 use Tests\TestCase;
 
