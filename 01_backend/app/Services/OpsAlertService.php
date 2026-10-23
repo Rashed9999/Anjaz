@@ -272,6 +272,28 @@ class OpsAlertService
             . $payload['dashboardUrl'];
     }
 
+    /**
+     * Marks an incident resolved only after its own control has observed a
+     * healthy result. It never changes financial data and a later recurrence
+     * reopens the same fingerprint through raise().
+     */
+    public function resolve(string $key, string $resolution): void
+    {
+        try {
+            DB::table('system_errors')
+                ->where('fingerprint', hash('sha256', 'ops|' . $key))
+                ->where('status_flag', 'open')
+                ->update([
+                    'status_flag' => 'resolved',
+                    'message' => mb_substr('تمت المعالجة — ' . trim($resolution), 0, 2000),
+                    'updated_at' => now(),
+                ]);
+        } catch (\Throwable) {
+            // A monitor must not turn a clean reconciliation into a failed job
+            // merely because its incident register is temporarily unavailable.
+        }
+    }
+
     /** أثر بلا تنبيه خارجي. */
     public function note(string $key, string $title, string $detail): void
     {
