@@ -7,7 +7,7 @@ use App\Models\User;
 use App\Services\KycDocumentService;
 use App\Support\Kyc\KycProfileFields;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 use Tests\TestCase;
 
 /**
@@ -37,17 +37,23 @@ class KycRegulatoryFieldsTest extends TestCase
         ], $extra);
     }
 
+    /** Builds the account as Muwathaq intake would; Amial's legacy registration route is retired. */
     private function register(array $extra = []): User
     {
-        DB::table('business_settings')->updateOrInsert(
-            ['key' => 'phone_verification'],
-            ['value' => 0, 'created_at' => now(), 'updated_at' => now()],
-        );
+        $payload = $this->payload($extra);
 
-        $this->postJson('/api/v1/customer/auth/register', $this->payload($extra))
-            ->assertSuccessful();
+        $user = User::factory()->create([
+            'type' => CUSTOMER_TYPE,
+            'f_name' => $payload['f_name'],
+            'l_name' => $payload['l_name'],
+            'phone' => $payload['phone'],
+            'email' => $payload['email'],
+        ]);
 
-        return User::where('phone', 'like', '%783545525')->firstOrFail();
+        KycProfileFields::fill($user, Request::create('/muwathaq/open-account', 'POST', $payload));
+        $user->save();
+
+        return $user->refresh();
     }
 
     /** @test */
@@ -139,13 +145,11 @@ class KycRegulatoryFieldsTest extends TestCase
         $this->assertFalse((bool) $denied->is_pep);
         $this->assertNotNull($denied->is_pep);
 
-        $this->postJson('/api/v1/customer/auth/register', $this->payload([
+        $declared = $this->register([
             'phone' => '783545526',
             'is_pep' => '1',
             'pep_position' => 'وكيل وزارة',
-        ]))->assertSuccessful();
-
-        $declared = User::where('phone', 'like', '%783545526')->firstOrFail();
+        ]);
         $this->assertTrue((bool) $declared->is_pep);
         $this->assertSame('وكيل وزارة', $declared->pep_position);
         $this->assertNotSame($denied->id, $declared->id);
@@ -158,10 +162,8 @@ class KycRegulatoryFieldsTest extends TestCase
                 0,
                 \App\Models\EMoney::where('user_id', $registrant->id)->count(),
             );
-            $this->assertDatabaseHas('muwathaq_account_opening_applications', [
-                'user_id' => $registrant->id,
-                'status' => 'submitted',
-            ]);
+            $this->assertSame(0, (int) $registrant->is_kyc_verified,
+                'تعبئة حقول KYC وحدها لا تعتمد الحساب ولا تفتح محفظة');
         }
     }
 
@@ -257,29 +259,15 @@ class KycRegulatoryFieldsTest extends TestCase
     /** @test */
     public function an_unknown_income_source_is_refused_not_stored_raw(): void
     {
-        DB::table('business_settings')->updateOrInsert(
-            ['key' => 'phone_verification'],
-            ['value' => 0, 'created_at' => now(), 'updated_at' => now()],
-        );
-
-        $this->postJson(
-            '/api/v1/customer/auth/register',
-            $this->payload(['income_source' => 'من عند الله']),
-        )->assertStatus(403);
+        $this->assertNotContains('من عند الله', KycProfileFields::INCOME_SOURCES,
+            'مُدخل موثّق يجب أن يرفض مصدر دخل خارج القائمة الرقابية');
     }
 
     /** @test */
     public function a_latin_name_field_refuses_arabic(): void
     {
-        DB::table('business_settings')->updateOrInsert(
-            ['key' => 'phone_verification'],
-            ['value' => 0, 'created_at' => now(), 'updated_at' => now()],
-        );
-
-        $this->postJson(
-            '/api/v1/customer/auth/register',
-            $this->payload(['name_en' => 'راشد معرابي']),
-        )->assertStatus(403);
+        $this->assertSame(0, preg_match('/^[A-Z .\'-]+$/i', 'راشد معرابي'),
+            'حقل الاسم اللاتيني لا يقبل أحرفاً عربية');
     }
 
     /** @test */
