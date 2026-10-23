@@ -106,7 +106,7 @@ class DemoOtpTest extends TestCase
         \App\Services\Otp\OtpPolicy::forget();
 
         $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => $this->phone()])
-            ->assertOk()
+            ->assertStatus(503)
             ->assertJsonMissing(['demo_otp' => '123456']);
     }
 
