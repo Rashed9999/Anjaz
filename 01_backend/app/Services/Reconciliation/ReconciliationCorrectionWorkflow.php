@@ -85,6 +85,11 @@ class ReconciliationCorrectionWorkflow
                     'status' => 'verifying',
                     'action_taken' => $approvalNote . ' — لم يعد فرق ظاهر؛ بانتظار تحقق مستقل قبل الإغلاق.',
                 ])->save();
+            } else {
+                // LedgerService owns the posted correction and updates the
+                // case under the same database transaction. Refresh before
+                // writing the approval audit event so its state is truthful.
+                $case->refresh();
             }
 
             $this->audit(
