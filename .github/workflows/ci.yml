@@ -213,14 +213,22 @@ jobs:
           import xml.etree.ElementTree as ET
           report = Path('phpunit_report.xml')
           if report.exists():
-              for case in ET.parse(report).iter('testcase'):
-                  for problem in case:
-                      if problem.tag in ('failure', 'error'):
-                          print(f"FAILED: {case.get('class')}::{case.get('name')}")
-                          print('\n'.join((problem.text or problem.get('message', '')).splitlines()[:12])[:1800])
+              try:
+                  for case in ET.parse(report).iter('testcase'):
+                      for problem in case:
+                          if problem.tag in ('failure', 'error'):
+                              print(f"FAILED: {case.get('class')}::{case.get('name')}")
+                              print('\n'.join((problem.text or problem.get('message', '')).splitlines()[:12])[:1800])
+              except ET.ParseError:
+                  print('JUnit report was empty or malformed; collecting PHPUnit debug output below.')
           else:
               print('JUnit report unavailable; see process output below.')
           PY
+            # PHPUnit may fail on a risky test without encoding it in a JUnit
+            # report. Re-run only for diagnostics so the CI log names it;
+            # this does not turn the failed gate into a passing one.
+            php artisan test --debug > phpunit_debug.txt 2>&1 || true
+            rg -n -i -C 2 'risky' phpunit_debug.txt || true
             echo '::error::فشلت اختبارات PHPUnit — آخر 160 سطراً:'
             tail -n 160 phpunit_report.txt
             exit 1
