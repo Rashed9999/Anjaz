@@ -54,6 +54,9 @@ class FeeSchemeSeeder extends Seeder
             ['MERCHANT_POS',      'دفع تاجر POS',      'percent',            '0',      '0',    null,  null,  '0',      '0', 'merchant', 'sender'],
             ['SAFE_PAYMENT',      'الدفع الآمن',       'percent',            '1.5000', '0',    '100', null,  '0',      '0', 'customer', 'sender'],
             ['BILL_PAY',          'تسديد فاتورة',      'fixed',              '0',      '10',   null,  null,  '0',      '0', 'customer', 'sender'],
+            // رسم التبرع لا يضاف فوق ما يختاره المتبرع؛ هو حصة منصة
+            // مقتطعة من المبلغ نفسه قبل ترحيل صافي الحملة.
+            ['DONATION',          'تبرّع خيري',         'percent',            '1.0000', '0',    null,  null,  '0',      '0', 'customer', 'receiver'],
             ['SPLIT_BILL',        'تقسيم فاتورة',      'percent',            '0',      '0',    null,  null,  '0',      '0', 'customer', 'sender'],
             ['REFUND',            'استرجاع مبلغ',      'fixed',              '0',      '0',    null,  null,  '0',      '0', 'merchant', 'merchant'],
             ['FAMILY_FUND_CONTRIB','مساهمة صندوق عائلي','fixed',             '0',      '0',    null,  null,  '0',      '0', 'customer', 'sender'],
