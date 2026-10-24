@@ -4,7 +4,6 @@ namespace App\Services\MerchantIntegration;
 
 use DomainException;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -33,6 +32,27 @@ final class MerchantGateway
         $this->checkCaller($tenantId, null, $trustedActor, false);
         return $this->send('GET', $this->tenantPath($tenantId).'/products', [],
             $this->context($tenantId, $trustedActor, ['products.read']));
+    }
+
+    public function branchDirectory(string $tenantId, array $trustedActor): array
+    {
+        $this->checkCaller($tenantId, null, $trustedActor, false);
+        return $this->send('GET', $this->tenantPath($tenantId).'/branches', [],
+            $this->context($tenantId, $trustedActor, ['branches.read']));
+    }
+
+    public function createBranch(string $tenantId, string $name, array $trustedOwner): array
+    {
+        $this->checkCaller($tenantId, null, $trustedOwner, true);
+        return $this->send('POST', $this->tenantPath($tenantId).'/branches', ['name' => $name],
+            $this->context($tenantId, $trustedOwner, ['branches.write']));
+    }
+
+    public function cashSalesHistory(string $tenantId, string $branchId, array $trustedActor): array
+    {
+        $this->checkCaller($tenantId, $branchId, $trustedActor, false);
+        return $this->send('GET', $this->tenantPath($tenantId).'/branches/'.$this->segment($branchId).'/sales', [],
+            $this->context($tenantId, $trustedActor, ['sales.read']));
     }
 
     public function createProduct(string $tenantId, array $product, array $trustedOwner): array
@@ -69,6 +89,19 @@ final class MerchantGateway
             'actor_id' => 'amial-provisioning',
             'branch_ids' => [],
         ], ['merchant.provision']));
+    }
+
+    /** Only a verified, ordered Muwathaq decision relayed by Amial may call this. */
+    public function syncLifecycle(string $tenantId, string $eventId, int $sequence, string $status): array
+    {
+        if (! in_array($status, ['active', 'suspended'], true) || $sequence < 1) {
+            throw new InvalidArgumentException('Invalid lifecycle state or sequence');
+        }
+        return $this->send('POST', $this->tenantPath($tenantId).'/lifecycle', [
+            'event_id' => $eventId, 'sequence' => $sequence, 'status' => $status,
+        ], $this->context($tenantId, [
+            'actor_type' => 'system', 'actor_id' => 'amial-provisioning', 'branch_ids' => [],
+        ], ['merchant.lifecycle']));
     }
 
     public function isConfigured(): bool
@@ -142,7 +175,8 @@ final class MerchantGateway
         if ($branchId !== null) {
             $this->segment($branchId);
         }
-        if (! in_array($actor['actor_type'] ?? null, ['owner', 'cashier'], true)
+        if (! is_string($actor['tenant_id'] ?? null) || $actor['tenant_id'] !== $tenantId
+            || ! in_array($actor['actor_type'] ?? null, ['owner', 'cashier'], true)
             || ! is_string($actor['actor_id'] ?? null)
             || ! preg_match('/^[a-zA-Z0-9_-]{1,64}$/D', $actor['actor_id'])
             || $ownerOnly && ($actor['actor_type'] ?? null) !== 'owner'
