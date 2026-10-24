@@ -100,6 +100,38 @@ final class MerchantBridgeContractTest extends TestCase
         ));
     }
 
+
+    public function test_owner_portal_sso_grant_is_requested_server_side_only(): void
+    {
+        $this->enableBridge();
+        Http::fake([
+            'https://merchant-staging.internal/*' => Http::response([
+                'code' => 'MERCHANT_PORTAL_GRANT',
+                'redirect_path' => '/preview/sso/'.str_repeat('a', 64),
+                'expires_in_seconds' => 60,
+            ], 200),
+        ]);
+        $owner = $this->cashier();
+        $owner['actor_type'] = 'owner';
+        $response = app(MerchantGateway::class)->ownerPortalTicket('merchant_001', $owner);
+        $this->assertSame('MERCHANT_PORTAL_GRANT', $response['code']);
+        Http::assertSent(fn ($request) => $request->method() === 'POST'
+            && str_ends_with($request->url(),
+                '/api/v1/merchant/tenants/merchant_001/web-sso/grants'));
+    }
+
+    public function test_cashier_never_receives_merchant_owner_portal_ticket(): void
+    {
+        $this->enableBridge();
+        Http::fake();
+        $this->expectException(DomainException::class);
+        try {
+            app(MerchantGateway::class)->ownerPortalTicket('merchant_001', $this->cashier());
+        } finally {
+            Http::assertNothingSent();
+        }
+    }
+
     public function test_cashier_cannot_call_owner_only_product_write(): void
     {
         $this->enableBridge();
