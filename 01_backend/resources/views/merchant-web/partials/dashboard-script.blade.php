@@ -2706,26 +2706,65 @@
     ]);
     const supplierRows=s.suppliers||[],orders=o.orders||[],returnRows=returns.returns||[];
     const openShifts=(ops.open_shifts||[]).filter(x=>x.shift_type==='cashier');
-    grid([['علينا للموردين',money(s.totals?.total_debt||0)],['لنا عند الموردين',money(s.totals?.total_credit||0)],['صافي المستحق',money(s.totals?.net_payable||0)],['عدد الموردين',s.totals?.suppliers_count??supplierRows.length],['أوامر شراء نشطة',s.totals?.active_po_count??0],['مرتجعات معلقة',returnRows.filter(x=>x.status==='pending').length]]);
+    dashboardKpis([
+      ['علينا للموردين',money(s.totals?.total_debt||0),'◫','التزامات مستقلة عن نقد الوردية','gold'],
+      ['لنا عند الموردين',money(s.totals?.total_credit||0),'◉','رصيد دائن قابل للاستخدام أو التحصيل','blue'],
+      ['أوامر شراء نشطة',String(s.totals?.active_po_count??0),'▧','لا تزيد المخزون قبل الاستلام'],
+      ['مرتجعات معلقة',String(returnRows.filter(x=>x.status==='pending').length),'↶','بانتظار قرار الاعتماد',returnRows.some(x=>x.status==='pending')?'red':'']
+    ]);
 
-    const p=box('الموردون');
-    hint(p,'نُظهر ما علينا للمورد وما لنا عنده منفصلين. فائض المرتجع لا يضيع في ملاحظة؛ يصبح رصيداً لنا ويُستهلك تلقائياً في المشتريات التالية أو يُحصّل نقداً.');
-    table(p,[['المورد',x=>x.name],['الهاتف',x=>x.phone||'—'],['علينا',x=>money(x.current_debt)],['لنا',x=>money(x.current_credit||0)],['الصافي',x=>money(Number(x.current_debt||0)-Number(x.current_credit||0))],['الإجراءات',x=>buttons([action('كشف الحساب',()=>showSupplier(x.id)),Number(x.current_debt||0)>0?action('سداد نقدي',()=>paySupplier(x,openShifts),false):null,Number(x.current_debt||0)>0?action('سداد أميال',()=>paySupplierWallet(x),false):null,Number(x.current_credit||0)>0?action('تحصيل من المورد',()=>collectSupplierCredit(x,openShifts),false):null])]],supplierRows);
+    const hub=node('section',null,'procurement-hub');
+    const intro=node('header',null,'procurement-hub-head'),copy=node('div');
+    copy.append(node('span','مركز الشراء والتوريد','procurement-kicker'),node('h2','الموردون والمشتريات',''),node('p','تابع المورد، أنشئ أمر الشراء، وثّق الاستلام، وعالج المرتجع من مساحة واحدة. الأرصدة والمخزون لا تتحرك إلا وفق دورة الاعتماد الفعلية.',''));
+    const count=node('div',null,'procurement-counts');
+    count.append(node('strong',String(s.totals?.suppliers_count??supplierRows.length)),node('span','مورد مسجل'));
+    intro.append(copy,count);hub.append(intro);
 
-    const create=box('إضافة مورد');
-    form(create,[['name','اسم المورد'],['contact_person','مسؤول التواصل'],['phone','الهاتف','tel'],['email','البريد','email'],['address','العنوان'],['category','التصنيف'],['opening_balance','رصيد افتتاحي مستحق','number']],'حفظ المورد',d=>api('supplierCreate',d));
-
-    const ordersPanel=box('أوامر الشراء');
-    hint(ordersPanel,'المخزون لا يزيد عند إنشاء الأمر أو اعتماده؛ يزيد فقط عند تسجيل الاستلام الفعلي.');
-    table(ordersPanel,[['الأمر',x=>x.po_number],['المورد',x=>x.supplier?.name||'—'],['الإجمالي',x=>money(x.total_amount)],['الحالة',x=>poStatus(x.status)],['التاريخ',x=>x.created_at||'—'],['الإجراء',x=>purchaseOrderActions(x,openShifts)]],orders);
-
-    const createOrder=box('أمر شراء جديد');
+    const tabList=node('div',null,'procurement-tabs');tabList.setAttribute('role','tablist');tabList.setAttribute('aria-label','أقسام مركز المشتريات');
+    const panel=node('div',null,'procurement-panel');panel.setAttribute('role','tabpanel');panel.tabIndex=0;
+    const tabDefinitions=[
+      ['overview','نظرة عامة','ملخص التوريد'],
+      ['suppliers','الموردون',String(supplierRows.length)],
+      ['orders','أوامر الشراء',String(orders.length)],
+      ['returns','مرتجعات الشراء',String(returnRows.length)],
+    ];
+    const tabButtons=new Map();
     const products=productData.products||productData.items||productData.result?.products||[];
-    purchaseOrderCreator(createOrder,supplierRows,Array.isArray(products)?products:[]);
-
-    const returnsPanel=box('مرتجعات الشراء');
-    hint(returnsPanel,'المرتجع لا يحرّك المخزون أو الأصل أو الدين إلا بعد الاعتماد. إذا أعاد المورد نقداً يمكنك تحديد درج POS الذي دخل إليه المبلغ؛ والنقد الخارجي لا يغيّر أي وردية.');
-    table(returnsPanel,[['المرجع',x=>x.return_ulid],['المورد',x=>x.supplier?.name||'—'],['القيمة',x=>money(x.total_amount)],['التسوية',x=>x.settlement_type==='cash_refund'?'استرداد نقدي':'خصم من دين المورد'],['الحالة',x=>x.status==='pending'?'بانتظار الاعتماد':x.status==='approved'?'معتمد':'مرفوض'],['الإجراء',returnActions]],returnRows);
+    const render=(tab)=>{
+      panel.replaceChildren();
+      tabButtons.forEach((button,key)=>{const selected=key===tab;button.classList.toggle('active',selected);button.setAttribute('aria-selected',selected?'true':'false');button.tabIndex=selected?0:-1});
+      if(tab==='overview'){
+        const guide=node('section',null,'procurement-guide');
+        guide.append(node('h3','دورة الشراء الصحيحة'),node('p','أمر شراء ← اعتماد ← استلام فعلي ← سداد أو رصيد مورد ← مرتجع عند الحاجة. لا يتحول أمر مكتوب إلى مخزون أو مال من تلقاء نفسه.',''));
+        const steps=node('div',null,'procurement-flow');
+        [['١','أنشئ الأمر','تحديد المورد والأصناف والكميات.'],['٢','اعتمد ثم استلم','المخزون يرتفع عند الاستلام فقط.'],['٣','سوِّد الالتزام','نقداً أو بأميال باي وفق القيد الفعلي.'],['٤','عالج المرتجع','خصم من الدين أو استرداد موثق.']].forEach(([n,title,detail])=>{const item=node('div',null,'procurement-flow-step');item.append(node('span',n,'procurement-flow-number'),node('strong',title),node('small',detail));steps.append(item)});
+        guide.append(steps);panel.append(guide);
+        const recent=node('section',null,'workspace-surface');recent.append(node('h3','أحدث أوامر الشراء'));
+        table(recent,[['الأمر',x=>x.po_number],['المورد',x=>x.supplier?.name||'—'],['الإجمالي',x=>money(x.total_amount)],['الحالة',x=>poStatus(x.status)],['الإجراء',x=>purchaseOrderActions(x,openShifts)]],orders.slice(0,6));panel.append(recent);
+        return;
+      }
+      if(tab==='suppliers'){
+        const list=node('section',null,'workspace-surface');list.append(node('h3','دليل الموردين'));
+        hint(list,'ما علينا للمورد وما لنا عنده يظهران منفصلين؛ فائض المرتجع لا يضيع في ملاحظة بل يبقى رصيداً قابلاً للتتبع.');
+        table(list,[['المورد',x=>x.name],['الهاتف',x=>x.phone||'—'],['علينا',x=>money(x.current_debt)],['لنا',x=>money(x.current_credit||0)],['الصافي',x=>money(Number(x.current_debt||0)-Number(x.current_credit||0))],['الإجراءات',x=>buttons([action('كشف الحساب',()=>showSupplier(x.id)),Number(x.current_debt||0)>0?action('سداد نقدي',()=>paySupplier(x,openShifts),false):null,Number(x.current_debt||0)>0?action('سداد أميال',()=>paySupplierWallet(x),false):null,Number(x.current_credit||0)>0?action('تحصيل من المورد',()=>collectSupplierCredit(x,openShifts),false):null])]],supplierRows);
+        const create=node('section',null,'workspace-surface procurement-create');create.append(node('h3','إضافة مورد'));
+        form(create,[['name','اسم المورد'],['contact_person','مسؤول التواصل'],['phone','الهاتف','tel'],['email','البريد','email'],['address','العنوان'],['category','التصنيف'],['opening_balance','رصيد افتتاحي مستحق','number']],'حفظ المورد',d=>api('supplierCreate',d));panel.append(list,create);return;
+      }
+      if(tab==='orders'){
+        const list=node('section',null,'workspace-surface');list.append(node('h3','أوامر الشراء'));
+        hint(list,'المخزون لا يزيد عند إنشاء الأمر أو اعتماده؛ يزيد فقط عند تسجيل الاستلام الفعلي.');
+        table(list,[['الأمر',x=>x.po_number],['المورد',x=>x.supplier?.name||'—'],['الإجمالي',x=>money(x.total_amount)],['الحالة',x=>poStatus(x.status)],['التاريخ',x=>x.created_at||'—'],['الإجراء',x=>purchaseOrderActions(x,openShifts)]],orders);
+        const create=node('section',null,'workspace-surface procurement-create');create.append(node('h3','أمر شراء جديد'));purchaseOrderCreator(create,supplierRows,Array.isArray(products)?products:[]);panel.append(list,create);return;
+      }
+      const list=node('section',null,'workspace-surface');list.append(node('h3','مرتجعات الشراء'));
+      hint(list,'المرتجع لا يحرّك المخزون أو الأصل أو الدين إلا بعد الاعتماد. عند الاسترداد النقدي تحدد درج POS الذي دخل إليه المبلغ؛ النقد الخارجي لا يغير وردية.');
+      table(list,[['المرجع',x=>x.return_ulid],['المورد',x=>x.supplier?.name||'—'],['القيمة',x=>money(x.total_amount)],['التسوية',x=>x.settlement_type==='cash_refund'?'استرداد نقدي':'خصم من دين المورد'],['الحالة',x=>x.status==='pending'?'بانتظار الاعتماد':x.status==='approved'?'معتمد':'مرفوض'],['الإجراء',returnActions]],returnRows);panel.append(list);
+    };
+    tabDefinitions.forEach(([key,label,meta])=>{
+      const button=node('button',null,'procurement-tab');button.type='button';button.setAttribute('role','tab');button.dataset.tab=key;
+      button.append(node('span',label),node('small',meta));button.addEventListener('click',()=>render(key));tabButtons.set(key,button);tabList.append(button);
+    });
+    hub.append(tabList,panel);content.append(hub);render('overview');
   }
 
   const expenseLabels={rent:'إيجار',salary:'رواتب',utilities:'كهرباء ومياه',supplies:'مستلزمات',transport:'نقل',other:'أخرى'};
