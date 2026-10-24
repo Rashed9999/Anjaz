@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Merchant\WebAuthController as Login;
+use App\Http\Controllers\Merchant\WebActivationController as Activate;
 use App\Http\Controllers\Merchant\WebPortalController as Portal;
 use App\Http\Controllers\Merchant\WebDashboardController as Dashboard;
 use App\Http\Controllers\Merchant\WebSalesController as SalesDirectory;
@@ -31,6 +32,9 @@ Route::get('/register', [Login::class, 'register'])->middleware('throttle:30,1')
 Route::get('/opening', [Login::class, 'opening'])->middleware('throttle:30,1')->name('opening');
 Route::post('/opening/resume', [Login::class, 'resumeOpening'])->middleware('throttle:10,1')->name('opening.resume');
 Route::get('/recover', [Login::class, 'recover'])->middleware('throttle:30,1')->name('recover');
+Route::get('/activate', [Activate::class, 'show'])->middleware('throttle:30,1')->name('activate');
+Route::post('/activate/request', [Activate::class, 'requestCode'])->middleware('throttle:6,1')->name('activate.request');
+Route::post('/activate/complete', [Activate::class, 'complete'])->middleware('throttle:12,1')->name('activate.complete');
 
 Route::middleware('merchant.web')->group(function () {
     Route::get('/', [Portal::class, 'index'])->name('dashboard');
