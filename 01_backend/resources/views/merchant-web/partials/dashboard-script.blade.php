@@ -739,7 +739,17 @@
     );
     content.append(summary);
 
-    const p=box('قاعدة بيانات العملاء');
+    const hub=node('section',null,'customer-hub');
+    const hubHead=node('header',null,'customer-hub-head'),copy=node('div');
+    copy.append(node('span','مركز العملاء والتحصيل','customer-kicker'),node('h2','العملاء',''),node('p','ملف العميل، مبيعاته، حدّه الائتماني وسجلّه المالي في مكان واحد. لا يتحول وجود العميل إلى دين، ولا يتحول الدين إلى رصيد محفظة.',''));
+    const hubActions=node('div',null,'customer-hub-actions');
+    const addCustomer=node('button','إضافة عميل','customer-hub-action');addCustomer.type='button';addCustomer.onclick=()=>customerEditor();hubActions.append(addCustomer);
+    if(navigation.some(item=>item.tab==='debts'&&item.state==='available')){
+      const credits=node('button','الديون والتحصيل','customer-hub-action secondary');credits.type='button';credits.onclick=()=>load('debts');hubActions.append(credits);
+    }
+    hubHead.append(copy,hubActions);hub.append(hubHead);
+    const p=node('section',null,'workspace-surface customer-directory');p.append(node('h3','دليل العملاء'));
+    hub.append(p);content.append(hub);
     hint(p,actualSector==='pharmacy'
       ?'هذا ملف عملاء الصيدلية نفسه المستخدم أثناء البيع والوصفات؛ لا ننشئ نسخة عملاء موازية في الويب.'
       :actualSector==='wholesale'
@@ -751,8 +761,7 @@
     const tools=node('form',null,'product-tools'),searchLabel=node('label','بحث بالاسم أو الهاتف','field'),input=node('input');
     input.type='search';input.value=search;input.placeholder='اسم العميل أو رقم الهاتف';searchLabel.append(input);
     const go=node('button','بحث','action secondary');go.type='submit';
-    const add=node('button','+ إضافة عميل','action');add.type='button';add.onclick=()=>customerEditor();
-    tools.append(searchLabel,go,add);p.append(tools);
+    tools.append(searchLabel,go);p.append(tools);
     tools.addEventListener('submit',ev=>{ev.preventDefault();customers(input.value.trim()).catch(e=>message(e.message))});
 
     if(actualSector==='pharmacy'){
