@@ -34,7 +34,9 @@ $path = rtrim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/
 
 function layout(string $title, string $content): never
 {
-    $reviewer = reviewer();
+    // Public applicants never see a reviewer's internal sidebar or session.
+    $onboarding = str_starts_with(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/open-account');
+    $reviewer = $onboarding ? null : reviewer();
     $navigation = '';
     if ($reviewer) {
         $navigation = '<aside class="sidebar"><div class="brand">موثّق <small>مركز التحقق</small></div>'
@@ -149,7 +151,7 @@ function accountOpeningForm(string $kind, string $action, string $token, bool $i
     $fileKinds = $agent ? ['owner_identity'=>'هوية الوكيل','operating_address'=>'إثبات العنوان التشغيلي'] : ($merchant ? ['owner_identity'=>'هوية مالك المنشأة','business_registration'=>'السجل أو الترخيص','operating_address'=>'إثبات عنوان النشاط'] : ['identity_document'=>'وثيقة الهوية']);
     if ($kind === 'customer') $fileKinds = ['identity_document'=>'وثيقة الهوية (مطلوبة للذكر أو مستوى 2/3 للأنثى)'];
     $files=''; foreach ($fileKinds as $name=>$label) $files.='<label>'.$label.'</label><input type="file" name="'.$name.'" accept="application/pdf,image/jpeg,image/png,image/webp">';
-    return '<div class="card" style="max-width:720px;margin:30px auto"><h2>'.$title.'</h2>'.$agentNote.'<p class="muted">تُحفظ بيانات الطلب وأدلته مشفّرة في موثّق. لا تُنشأ محفظة أو بيانات دخول هنا.</p><form method="post" action="'.e($action).'" enctype="multipart/form-data"><input type="hidden" name="_token" value="'.e($token).'"><input type="hidden" name="subject_kind" value="'.e($kind).'"><label>الاسم الأول</label><input name="f_name" required><label>اسم العائلة</label><input name="l_name" required><label>الهاتف</label><input name="phone" inputmode="tel" required><label>البريد الإلكتروني</label><input type="email" name="email" required>'.$gender.$business.'<h3>أدلة التحقق</h3>'.$files.'<label><input type="checkbox" name="terms" value="1" required style="width:auto"> أقر بصحة البيانات وأوافق على مراجعتها من موثّق.</label><br><br><button class="btn" type="submit">إرسال طلب موثّق</button></form></div>';
+    return '<div class="card" style="max-width:720px;margin:30px auto"><h2>'.$title.'</h2>'.$agentNote.'<p class="muted">تُحفظ أدلة الطلب مشفّرة. بعد اعتماد موثّق يفعل صاحب الحساب دخوله في أميال باي عبر بريد التحقق ويختار كلمة المرور وPIN بنفسه.</p><form method="post" action="'.e($action).'" enctype="multipart/form-data"><input type="hidden" name="_token" value="'.e($token).'"><input type="hidden" name="subject_kind" value="'.e($kind).'"><label>الاسم الأول</label><input name="f_name" required><label>اسم العائلة</label><input name="l_name" required><label>الهاتف</label><input name="phone" inputmode="tel" required><label>البريد الإلكتروني</label><input type="email" name="email" required>'.$gender.$business.'<h3>أدلة التحقق</h3>'.$files.'<label><input type="checkbox" name="terms" value="1" required style="width:auto"> أقر بصحة البيانات وأوافق على مراجعتها من موثّق.</label><br><br><button class="btn" type="submit">إرسال طلب موثّق</button></form></div>';
 }
 
 try {
@@ -290,7 +292,7 @@ try {
             redirect('/open-account?submitted='.rawurlencode($case['case_ulid']));
         }
         $submitted = trim((string) ($_GET['submitted'] ?? ''));
-        $message = $submitted !== '' ? '<div class="card"><h2>تم استلام طلبك</h2><p>مرجع موثّق: <b>'.e($submitted).'</b>. بعد الاعتماد فقط يهيئ أميال باي المحفظة ويرسل طريقة الدخول الآمنة.</p></div>' : '<div class="card"><h2>فتح حساب عبر موثّق</h2><a class="btn" href="/open-account?type=customer">حساب عميل</a> <a class="btn" href="/open-account?type=merchant">حساب تاجر</a></div>';
+        $message = $submitted !== '' ? '<div class="card"><h2>تم استلام طلبك</h2><p>مرجع موثّق: <b>'.e($submitted).'</b>. بعد الموافقة يُنشئ أميال باي رقم التاجر والمحفظة. للتاجر: <a href="https://amialpay.com/merchant/activate">فعّل حسابك هنا برمز البريد</a> لتختار كلمة المرور وPIN بنفسك. لا يُرسل أي PIN أو كلمة مرور عبر موظف المراجعة.</p></div>' : '<div class="card"><h2>فتح حساب عبر موثّق</h2><a class="btn" href="/open-account?type=customer">حساب عميل</a> <a class="btn" href="/open-account?type=merchant">حساب تاجر</a></div>';
         $type = (string) ($_GET['type'] ?? '');
         if (in_array($type, ['customer','merchant'], true)) $message = accountOpeningForm($type, '/open-account', csrf());
         layout('فتح حساب', $message);
