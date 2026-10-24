@@ -4,4 +4,5 @@
 <body><main class="card"><h1>فتح حساب منشأة يتم عبر موثّق</h1><p class="lead">موثّق يستلم بيانات المنشأة وأدلتها ويعتمدها. بعد الاعتماد فقط يهيّئ أميال باي لوحة القطاع والمحفظة ويرسل طريقة الدخول الآمنة.</p>
 @php($muwathaq = rtrim((string) config('muwathaq.base_url'), '/'))
 @if($muwathaq !== '')<a class="btn" href="{{ $muwathaq }}/open-account?type=merchant">فتح طلب تاجر في موثّق</a>@else<p class="lead">بوابة موثّق غير مضبوطة حالياً. لا يمكن إنشاء حساب من أميال باي.</p>@endif
+<a class="back" href="{{ route('merchant.web.activate') }}">طلبك معتمد؟ فعّل كلمة المرور وPIN هنا</a>
 <a class="back" href="{{ route('merchant.web.login') }}">لدي حساب بالفعل ←</a></main></body></html>
