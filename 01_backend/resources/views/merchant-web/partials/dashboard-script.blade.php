@@ -1494,7 +1494,23 @@
       ['مصدر السجل',data.source||'—','◎','مصدر قطاع المنشأة الحقيقي','gold'],
     ]);
 
-    const p=box('سجل '+actualSectorName);
+    const hub=node('section',null,'sales-hub');
+    const hubHead=node('header',null,'sales-hub-head'),copy=node('div');
+    copy.append(node('span','مركز البيع والفواتير','sales-kicker'),node('h2',(titles.sales||'المبيعات'),'') ,node('p','راجع كل عملية من مصدر قطاعها الحقيقي، وافتح فاتورتها أو مرتجعها. طرق الدفع لا تُجمع في رصيد واحد لأنها تحمل التزامات تشغيلية ومالية مختلفة.',''));
+    const hubActions=node('div',null,'sales-hub-actions'),available=new Set(navigation.filter(item=>item.state==='available').map(item=>item.tab));
+    [['customers','العملاء'],['debts','الديون والتحصيل'],['returns','المرتجعات']].forEach(([tab,label])=>{
+      if(!available.has(tab))return;
+      const button=node('button',label,'sales-hub-action');button.type='button';button.addEventListener('click',()=>load(tab));hubActions.append(button);
+    });
+    hubHead.append(copy,hubActions);hub.append(hubHead);
+    const moneyPaths=node('div',null,'sales-money-paths');
+    [
+      ['نقد الوردية','يبقى في درج الوردية حتى الجرد والتسليم.','cash'],
+      ['مدفوعات أميال','تصل إلى محفظة المنشأة ويثبتها الدفتر.','wallet'],
+      ['بيع آجل','يسجل في ذمة العميل حتى التحصيل.','credit'],
+    ].forEach(([title,detail,tone])=>{const item=node('div',null,'sales-money-path '+tone);item.append(node('strong',title),node('small',detail));moneyPaths.append(item)});
+    hub.append(moneyPaths);
+    const p=node('section',null,'workspace-surface sales-directory');p.append(node('h3','سجل '+actualSectorName));hub.append(p);content.append(hub);
     hint(p,'الفلاتر تعمل على الخادم قبل الترقيم. نتائج الوقود والصيدلية والجملة لا تُقرأ من merchant_sales، وتفاصيل العملية تظل من محرك قطاعها الأصلي.');
 
     const ff=node('form',null,'filter-bar');
