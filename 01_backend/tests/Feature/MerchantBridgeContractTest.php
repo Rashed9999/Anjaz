@@ -22,6 +22,7 @@ final class MerchantBridgeContractTest extends TestCase
         return [
             'actor_type' => 'cashier',
             'actor_id' => 'pos_user_001',
+            'tenant_id' => 'merchant_001',
             'branch_ids' => ['branch_001'],
         ];
     }
@@ -69,6 +70,34 @@ final class MerchantBridgeContractTest extends TestCase
                     $signature
                 );
         });
+    }
+
+
+    public function test_cashier_cannot_forge_another_tenant_even_if_branch_matches(): void
+    {
+        $this->enableBridge();
+        Http::fake();
+        $this->expectException(DomainException::class);
+        try {
+            app(MerchantGateway::class)->branchCatalog('merchant_002', 'branch_001', $this->cashier());
+        } finally {
+            Http::assertNothingSent();
+        }
+    }
+
+    public function test_branch_directory_uses_scoped_read_and_remote_is_never_financial_core(): void
+    {
+        $this->enableBridge();
+        Http::fake([
+            'https://merchant-staging.internal/*' => Http::response([
+                'code' => 'BRANCHES', 'data' => [],
+            ], 200),
+        ]);
+        $r = app(MerchantGateway::class)->branchDirectory('merchant_001', $this->cashier());
+        $this->assertSame('BRANCHES', $r['code']);
+        Http::assertSent(fn ($request) => str_ends_with(
+            $request->url(), '/api/v1/merchant/tenants/merchant_001/branches'
+        ));
     }
 
     public function test_cashier_cannot_call_owner_only_product_write(): void
