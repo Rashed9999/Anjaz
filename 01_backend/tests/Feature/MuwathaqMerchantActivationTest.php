@@ -42,8 +42,11 @@ class MuwathaqMerchantActivationTest extends TestCase
             'is_email_verified' => 0, 'is_kyc_verified' => $approved ? 1 : 0,
             'password' => Hash::make(Str::random(64)),
         ]);
-        $merchant = Merchant::firstOrCreate(['user_id' => $user->id],
-            ['store_name' => 'متجر التجربة', 'address' => 'تعز']);
+        $merchant = new Merchant();
+        $merchant->user_id = $user->id;
+        $merchant->store_name = 'متجر التجربة';
+        $merchant->address = 'تعز';
+        $merchant->save();
         app(MerchantNumberService::class)->assignTo($merchant);
         MerchantProfile::create([
             'user_id' => $user->id,
