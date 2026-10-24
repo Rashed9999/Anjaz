@@ -84,6 +84,21 @@ class MerchantWebPortalTest extends TestCase
             ->assertSee("e.key.toLowerCase()==='k'", false);
     }
 
+    /** بطاقات مساحات العمل لا تعرض سوى العناصر التي حسمها خادم الاستحقاق. */
+    public function test_merchant_dashboard_exposes_entitlement_backed_workspace_directory(): void
+    {
+        $owner = $this->owner();
+
+        $this->actingAs($owner, 'merchant_web')
+            ->get('/merchant')
+            ->assertOk()
+            ->assertSee('function workspaceDirectoryCard()', false)
+            ->assertSee('مساحات العمل')
+            ->assertSee('تظهر المساحات المسموح بها فقط.')
+            ->assertSee("item.state==='available'", false)
+            ->assertSee("فتح '+item.label", false);
+    }
+
     /** نقطة البيع معالجٌ فوق الفرع والموظف والجهاز في النسخة المنشورة فعلياً. */
     public function test_owner_portal_exposes_guided_pos_setup_in_deployed_view(): void
     {
