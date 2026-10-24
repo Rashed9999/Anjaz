@@ -65,6 +65,25 @@ class MerchantWebPortalTest extends TestCase
             ->assertSee('جدول قابل للتمرير أفقياً', false);
     }
 
+    /**
+     * مساحة العمل الحديثة لا تُخفي التنقل خلف قائمة جانبية فقط: يجب أن
+     * يكون البحث والتنقل السريعان ظاهرين وقابلين للوصول من لوحة التاجر.
+     */
+    public function test_merchant_dashboard_exposes_keyboard_accessible_command_navigation(): void
+    {
+        $owner = $this->owner();
+
+        $this->actingAs($owner, 'merchant_web')
+            ->get('/merchant')
+            ->assertOk()
+            ->assertSee('id="merchant-command-trigger"', false)
+            ->assertSee('aria-controls="merchant-command-center"', false)
+            ->assertSee('aria-expanded="false"', false)
+            ->assertSee('فتح البحث والتنقل السريع', false)
+            ->assertSee('function openMerchantCommandCenter()', false)
+            ->assertSee("e.key.toLowerCase()==='k'", false);
+    }
+
     /** نقطة البيع معالجٌ فوق الفرع والموظف والجهاز في النسخة المنشورة فعلياً. */
     public function test_owner_portal_exposes_guided_pos_setup_in_deployed_view(): void
     {
