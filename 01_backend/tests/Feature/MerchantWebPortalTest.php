@@ -130,6 +130,20 @@ class MerchantWebPortalTest extends TestCase
             ->assertSee('returnActions', false);
     }
 
+    /** دليل العملاء يقود إلى التحصيل المتاح ولا يخلط الذمم برصيد المحفظة. */
+    public function test_merchant_customer_hub_links_to_real_credit_workspace(): void
+    {
+        $owner = $this->owner();
+
+        $this->actingAs($owner, 'merchant_web')
+            ->get('/merchant')
+            ->assertOk()
+            ->assertSee('مركز العملاء والتحصيل')
+            ->assertSee('لا يتحول وجود العميل إلى دين')
+            ->assertSee("credits.onclick=()=>load('debts')", false)
+            ->assertSee("item.tab==='debts'&&item.state==='available'", false);
+    }
+
     /** نقطة البيع معالجٌ فوق الفرع والموظف والجهاز في النسخة المنشورة فعلياً. */
     public function test_owner_portal_exposes_guided_pos_setup_in_deployed_view(): void
     {
