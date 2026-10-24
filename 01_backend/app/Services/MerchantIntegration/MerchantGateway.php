@@ -55,6 +55,18 @@ final class MerchantGateway
             $this->context($tenantId, $trustedActor, ['sales.read']));
     }
 
+    /**
+     * Server requests a short-lived, one-use SSO path for the merchant owner.
+     * Caller must redirect the owner's browser to Merchant HTTPS base + path.
+     * NEVER disclose this path to cashiers or unauthenticated clients.
+     */
+    public function ownerPortalTicket(string $tenantId, array $trustedOwner): array
+    {
+        $this->checkCaller($tenantId, null, $trustedOwner, true);
+        return $this->send('POST', $this->tenantPath($tenantId).'/web-sso/grants', [],
+            $this->context($tenantId, $trustedOwner, ['merchant.portal.login']));
+    }
+
     public function createProduct(string $tenantId, array $product, array $trustedOwner): array
     {
         $this->checkCaller($tenantId, null, $trustedOwner, true);
