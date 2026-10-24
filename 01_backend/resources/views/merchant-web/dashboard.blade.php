@@ -31,6 +31,14 @@
                 <p class="muted">{{ $storeName }} · أرقام التشغيل والمالية من مصادرها الفعلية داخل المنشأة</p>
             </div>
             <div class="top-tools">
+                <button type="button" class="command-trigger" id="merchant-command-trigger"
+                    aria-haspopup="dialog" aria-controls="merchant-command-center"
+                    aria-expanded="false"
+                    aria-label="فتح البحث والتنقل السريع">
+                    <span aria-hidden="true">⌕</span>
+                    <span>بحث وتنقّل</span>
+                    <kbd>Ctrl K</kbd>
+                </button>
                 <span class="live-pill">بيانات مباشرة</span>
                 <span class="badge">{{ $businessType }} · {{ $plan }}</span>
             </div>
