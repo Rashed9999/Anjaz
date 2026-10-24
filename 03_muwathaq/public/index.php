@@ -34,7 +34,9 @@ $path = rtrim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/
 
 function layout(string $title, string $content): never
 {
-    $reviewer = reviewer();
+    // Public applicants never see a reviewer's internal sidebar or session.
+    $onboarding = str_starts_with(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/open-account');
+    $reviewer = $onboarding ? null : reviewer();
     $navigation = '';
     if ($reviewer) {
         $navigation = '<aside class="sidebar"><div class="brand">موثّق <small>مركز التحقق</small></div>'
@@ -149,7 +151,7 @@ function accountOpeningForm(string $kind, string $action, string $token, bool $i
     $fileKinds = $agent ? ['owner_identity'=>'هوية الوكيل','operating_address'=>'إثبات العنوان التشغيلي'] : ($merchant ? ['owner_identity'=>'هوية مالك المنشأة','business_registration'=>'السجل أو الترخيص','operating_address'=>'إثبات عنوان النشاط'] : ['identity_document'=>'وثيقة الهوية']);
     if ($kind === 'customer') $fileKinds = ['identity_document'=>'وثيقة الهوية (مطلوبة للذكر أو مستوى 2/3 للأنثى)'];
     $files=''; foreach ($fileKinds as $name=>$label) $files.='<label>'.$label.'</label><input type="file" name="'.$name.'" accept="application/pdf,image/jpeg,image/png,image/webp">';
-    return '<div class="card" style="max-width:720px;margin:30px auto"><h2>'.$title.'</h2>'.$agentNote.'<p class="muted">تُحفظ بيانات الطلب وأدلته مشفّرة في موثّق. لا تُنشأ محفظة أو بيانات دخول هنا.</p><form method="post" action="'.e($action).'" enctype="multipart/form-data"><input type="hidden" name="_token" value="'.e($token).'"><input type="hidden" name="subject_kind" value="'.e($kind).'"><label>الاسم الأول</label><input name="f_name" required><label>اسم العائلة</label><input name="l_name" required><label>الهاتف</label><input name="phone" inputmode="tel" required><label>البريد الإلكتروني</label><input type="email" name="email" required>'.$gender.$business.'<h3>أدلة التحقق</h3>'.$files.'<label><input type="checkbox" name="terms" value="1" required style="width:auto"> أقر بصحة البيانات وأوافق على مراجعتها من موثّق.</label><br><br><button class="btn" type="submit">إرسال طلب موثّق</button></form></div>';
+    return '<div class="card" style="max-width:720px;margin:30px auto"><h2>'.$title.'</h2>'.$agentNote.'<p class="muted">تُحفظ أدلة الطلب مشفّرة. بعد اعتماد موثّق يفعل صاحب الحساب دخوله في أميال باي عبر بريد التحقق ويختار كلمة المرور وPIN بنفسه.</p><form method="post" action="'.e($action).'" enctype="multipart/form-data"><input type="hidden" name="_token" value="'.e($token).'"><input type="hidden" name="subject_kind" value="'.e($kind).'"><label>الاسم الأول</label><input name="f_name" required><label>اسم العائلة</label><input name="l_name" required><label>الهاتف</label><input name="phone" inputmode="tel" required><label>البريد الإلكتروني</label><input type="email" name="email" required>'.$gender.$business.'<h3>أدلة التحقق</h3>'.$files.'<label><input type="checkbox" name="terms" value="1" required style="width:auto"> أقر بصحة البيانات وأوافق على مراجعتها من موثّق.</label><br><br><button class="btn" type="submit">إرسال طلب موثّق</button></form></div>';
 }
 
 try {
@@ -290,7 +292,7 @@ try {
             redirect('/open-account?submitted='.rawurlencode($case['case_ulid']));
         }
         $submitted = trim((string) ($_GET['submitted'] ?? ''));
-        $message = $submitted !== '' ? '<div class="card"><h2>تم استلام طلبك</h2><p>مرجع موثّق: <b>'.e($submitted).'</b>. بعد الاعتماد فقط يهيئ أميال باي المحفظة ويرسل طريقة الدخول الآمنة.</p></div>' : '<div class="card"><h2>فتح حساب عبر موثّق</h2><a class="btn" href="/open-account?type=customer">حساب عميل</a> <a class="btn" href="/open-account?type=merchant">حساب تاجر</a></div>';
+        $message = $submitted !== '' ? '<div class="card"><h2>تم استلام طلبك</h2><p>مرجع موثّق: <b>'.e($submitted).'</b>. بعد الموافقة يُنشئ أميال باي رقم التاجر والمحفظة. للتاجر: <a href="https://amialpay.com/merchant/activate">فعّل حسابك هنا برمز البريد</a> لتختار كلمة المرور وPIN بنفسك. لا يُرسل أي PIN أو كلمة مرور عبر موظف المراجعة.</p></div>' : '<div class="card"><h2>فتح حساب عبر موثّق</h2><a class="btn" href="/open-account?type=customer">حساب عميل</a> <a class="btn" href="/open-account?type=merchant">حساب تاجر</a></div>';
         $type = (string) ($_GET['type'] ?? '');
         if (in_array($type, ['customer','merchant'], true)) $message = accountOpeningForm($type, '/open-account', csrf());
         layout('فتح حساب', $message);
@@ -404,7 +406,20 @@ try {
         $governorates = '<option value="">اختر المحافظة بعد مراجعة أدلة الإقامة</option>';
         foreach (Policy::GOVERNORATES as $code => $name) $governorates .= '<option value="'.e($code).'">'.e($name).' ('.e($code).')</option>';
         $content .= '<form method="post" action="/cases/'.e($case['case_ulid']).'/decision" class="card"><input type="hidden" name="_token" value="'.e(csrf()).'"><h3>قرار المراجع</h3><p class="muted">لا تعتمد إلا بعد رؤية الأدلة في موثّق وإقرار البنود التالية.</p>'.$requirements.'<label>القرار</label><select name="decision"><option value="under_review">قيد المراجعة</option><option value="needs_more_info">طلب استكمال</option><option value="approved">اعتماد</option><option value="rejected">رفض</option></select><label>محافظة الإقامة أو الموقع التشغيلي</label><select name="governorate">'.$governorates.'</select><p class="muted">اختيار المحافظة شرط للاعتماد فقط، ولا يلزم للرفض أو طلب الاستكمال.</p><label>ملاحظة للقرار</label><textarea name="reason" rows="3" maxlength="1000"></textarea><button class="btn" type="submit">حفظ القرار وإرساله لأميال باي</button></form>';
-        if ($case['decision']) $content .= '<div class="card"><b>آخر قرار:</b> '.e($case['decision']).' · حالة الإرسال لأميال باي: '.e($case['core_delivery_status']).'<br>'.e($case['core_last_error'] ?? '').'</div>';
+        if ($case['decision']) {
+            $delivered = ($case['core_delivery_status'] ?? '') === 'delivered';
+            $content .= '<div class="card"><b>آخر قرار:</b> '.e($case['decision'])
+                .' · <b>حالة وصول القرار إلى أميال باي:</b> '
+                .($delivered ? '<span class="tag approved">تم التسليم</span>' : '<span class="tag pending">لم يُؤكد تسليم القرار</span>')
+                .'<br>'.e($case['core_last_error'] ?? '').'</div>';
+            if ($case['status'] === 'approved' && !$delivered) {
+                $content .= '<div class="card alert"><b>لم يكتمل تفعيل الحساب في أميال باي</b>'
+                    .'<p>موافقة موثّق وحدها لا تعني إنشاء رقم تاجر أو محفظة. أعد إرسال قرار الاعتماد دون إنشاء طلب جديد.</p>'
+                    .'<form method="post" action="/cases/'.e($case['case_ulid']).'/retry-delivery">'
+                    .'<input type="hidden" name="_token" value="'.e(csrf()).'">'
+                    .'<button class="btn" type="submit">إعادة إرسال قرار الاعتماد إلى أميال باي</button></form></div>';
+            }
+        }
         layout('مراجعة القضية', $content);
     }
 
@@ -429,6 +444,37 @@ try {
             throw new HttpError(404, 'EVIDENCE_DOCUMENT_NOT_FOUND', 'مستند الدليل غير متاح لهذه القضية.');
         }
         CoreEvidenceClient::stream($case['core_application_ulid'], $item['id'], $reviewer);
+    }
+
+    if (preg_match('#^/cases/([0-9A-F]{26})/retry-delivery$#', $path, $match)) {
+        if ($method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'الطريقة غير مسموحة.');
+        assertCsrf();
+        $case = findCase($match[1]);
+        if (($case['status'] ?? '') !== 'approved') {
+            throw new HttpError(409, 'APPROVAL_REQUIRED', 'لا يمكن إعادة إرسال طلب غير معتمد.');
+        }
+        if (($case['core_delivery_status'] ?? '') === 'delivered') {
+            redirect('/cases/'.$match[1]);
+        }
+        if (strtotime((string) ($case['updated_at'] ?? '')) > time() - 15) {
+            throw new HttpError(429, 'RETRY_COOLDOWN', 'انتظر قليلاً قبل إعادة الإرسال.');
+        }
+        ReviewerAudit::record($reviewer, 'provisioning_retry_requested', $case);
+        try {
+            if (($case['origin'] ?? 'amial_legacy') === 'muwathaq') {
+                CoreProvisioningClient::deliver($case);
+            } else {
+                CoreDecisionClient::deliver($case);
+            }
+            Database::pdo()->prepare('UPDATE muwathaq_cases SET core_delivery_status="delivered",core_delivered_at=?,core_last_error=NULL,updated_at=? WHERE id=?')
+                ->execute([now(), now(), $case['id']]);
+            ReviewerAudit::record($reviewer, 'provisioning_retry_delivered', $case);
+        } catch (Throwable $error) {
+            Database::pdo()->prepare('UPDATE muwathaq_cases SET core_delivery_status="pending",core_last_error=?,updated_at=? WHERE id=?')
+                ->execute([mb_substr($error->getMessage(), 0, 500), now(), $case['id']]);
+            ReviewerAudit::record($reviewer, 'provisioning_retry_failed', $case);
+        }
+        redirect('/cases/'.$match[1]);
     }
 
     if (preg_match('#^/cases/([0-9A-F]{26})/decision$#', $path, $match)) {
