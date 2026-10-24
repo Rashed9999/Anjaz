@@ -59,6 +59,68 @@
     const rest=navigation.filter(item=>!seen.has(item.tab));
     if(rest.length){nav.append(node('div','المزيد','nav-section-title'));rest.forEach(appendItem)}
   }
+  function openMerchantCommandCenter(){
+    let layer=document.getElementById('merchant-command-layer');
+    if(layer){
+      layer.hidden=false;
+      document.body.classList.add('merchant-command-open');
+      document.getElementById('merchant-command-trigger')?.setAttribute('aria-expanded','true');
+      layer.querySelector('input')?.focus();
+      return;
+    }
+    const trigger=document.getElementById('merchant-command-trigger');
+    layer=node('div',null,'merchant-command-layer');
+    layer.id='merchant-command-layer';
+    const dialog=node('section',null,'merchant-command');
+    dialog.id='merchant-command-center';
+    dialog.setAttribute('role','dialog');
+    dialog.setAttribute('aria-modal','true');
+    dialog.setAttribute('aria-labelledby','merchant-command-title');
+    const head=node('div',null,'merchant-command-head');
+    const title=node('h2','ابحث أو انتقل إلى مساحة عمل','');title.id='merchant-command-title';
+    const close=node('button','×','merchant-command-close');close.type='button';close.setAttribute('aria-label','إغلاق البحث والتنقل السريع');
+    head.append(title,close);
+    const input=node('input');input.type='search';input.placeholder='اكتب اسم المساحة، مثل: مبيعات أو محفظة أو موردون';input.autocomplete='off';input.setAttribute('aria-label','البحث في مساحات عمل المنشأة');
+    const help=node('p','تظهر فقط المساحات المتاحة لمنشأتك وباقتك. اضغط Esc للإغلاق.','merchant-command-help');
+    const results=node('div',null,'merchant-command-results');
+    const groups={
+      overview:'نظرة عامة',sector:'التشغيل والمبيعات',sales:'التشغيل والمبيعات',returns:'التشغيل والمبيعات',products:'التشغيل والمبيعات',customers:'التشغيل والمبيعات',debts:'التشغيل والمبيعات',suppliers:'التشغيل والمبيعات',expenses:'التشغيل والمبيعات',assets:'التشغيل والمبيعات',
+      branches:'الفريق ونقاط البيع',posSetup:'الفريق ونقاط البيع',staff:'الفريق ونقاط البيع',devices:'الفريق ونقاط البيع',
+      wallet:'المالية والتقارير',reports:'المالية والتقارير',documents:'المالية والتقارير',settings:'إعدادات المنشأة',integrations:'إعدادات المنشأة',plans:'إعدادات المنشأة'
+    };
+    const available=()=>navigation.filter(item=>item.state==='available');
+    const render=(query='')=>{
+      const q=query.trim().toLocaleLowerCase('ar');
+      const rows=available().filter(item=>!q||item.label.toLocaleLowerCase('ar').includes(q)||(groups[item.tab]||'').toLocaleLowerCase('ar').includes(q));
+      results.replaceChildren();
+      if(!rows.length){results.append(node('p','لا توجد مساحة متاحة تطابق بحثك.','merchant-command-empty'));return}
+      rows.forEach(item=>{
+        const button=node('button',null,'merchant-command-item');button.type='button';
+        const copy=node('span');copy.append(node('strong',item.label),node('small',groups[item.tab]||'مساحة عمل'));
+        button.append(copy,node('span','فتح ←','merchant-command-open'));
+        button.addEventListener('click',()=>{closeMerchantCommandCenter();load(item.tab)});results.append(button);
+      });
+    };
+    close.addEventListener('click',()=>closeMerchantCommandCenter());
+    layer.addEventListener('click',event=>{if(event.target===layer)closeMerchantCommandCenter()});
+    input.addEventListener('input',()=>render(input.value));
+    input.addEventListener('keydown',event=>{if(event.key==='Enter'){const first=results.querySelector('button');if(first){event.preventDefault();first.click()}}});
+    dialog.append(head,input,help,results);layer.append(dialog);document.body.append(layer);render();
+    document.body.classList.add('merchant-command-open');
+    trigger?.setAttribute('aria-expanded','true');
+    requestAnimationFrame(()=>input.focus());
+    layer._merchantCommandTrigger=trigger;
+  }
+  function closeMerchantCommandCenter(){
+    const layer=document.getElementById('merchant-command-layer');
+    if(!layer||layer.hidden)return false;
+    layer.hidden=true;
+    document.body.classList.remove('merchant-command-open');
+    document.getElementById('merchant-command-trigger')?.setAttribute('aria-expanded','false');
+    layer._merchantCommandTrigger?.focus();
+    return true;
+  }
+  document.getElementById('merchant-command-trigger')?.addEventListener('click',openMerchantCommandCenter);
   function workspaceActions(panel,tabs){
     const available=new Map(navigation.map(item=>[item.tab,item.state==='available']));
     const names=new Map(navigation.map(item=>[item.tab,item.label]));
@@ -264,6 +326,36 @@
     hero.append(actions);return hero
   }
 
+  function operationalReadinessCard(setup={},counts={}){
+    const available=new Map(navigation.map(item=>[item.tab,item.state==='available']));
+    const steps=[];
+    if(available.get('branches'))steps.push(['فرع أو موقع تشغيل',Boolean(setup.has_branch),'branches','أضف الفرع الذي ستعمل منه نقاط البيع والفريق.']);
+    if(available.get('staff')){
+      steps.push(['دور تشغيلي',Boolean(setup.has_role),'staff','حدّد دوراً وصلاحياته قبل توزيع العمل على الموظفين.']);
+      steps.push(['موظف نقطة بيع',Boolean(setup.has_employee),'staff','أنشئ موظفاً مستقلاً بدلاً من مشاركة حساب المالك.']);
+    }
+    if(available.get('devices'))steps.push(['جهاز نقطة بيع',Boolean(setup.has_device),'devices','فعّل جهازاً واربطه بالتشغيل قبل بدء الوردية.']);
+    if(!steps.length)return null;
+
+    const completed=steps.filter(([,done])=>done).length;
+    const card=node('section',null,'readiness-card');
+    const head=node('div',null,'readiness-head'),copy=node('div');
+    copy.append(node('h3','تجهيز التشغيل',''),node('p','هذه قائمة تجهيز تشغيلية فقط؛ لا تمثل اعتماداً مالياً أو رصيداً.',''));
+    head.append(copy,node('span',completed+' من '+steps.length+' مكتمل','readiness-count'));card.append(head);
+    const list=node('div',null,'readiness-list');
+    steps.forEach(([label,done,tab,detail])=>{
+      const row=node('div',null,'readiness-row '+(done?'done':'pending'));
+      const state=node('span',done?'✓':'○','readiness-state');
+      const body=node('div',null,'readiness-copy');body.append(node('strong',label),node('small',done?'جاهز للتشغيل.':detail));
+      row.append(state,body);
+      if(!done){const go=node('button','إكمال','action secondary readiness-action');go.type='button';go.addEventListener('click',()=>load(tab));row.append(go)}
+      list.append(row);
+    });
+    card.append(list);
+    if(Number(counts.open_shifts||0)>0)card.append(node('p','لديك '+counts.open_shifts+' وردية مفتوحة حالياً؛ تابع الجرد والتسليم من مساحة التشغيل المرتبطة بها.','readiness-open-shifts'));
+    return card;
+  }
+
   async function overview(days=14){
     if(!actualSector){
       const data=await api('sectorTypes'),p=box('ابدأ بتحديد نشاط المنشأة');
@@ -283,7 +375,10 @@
     const todayCount=Number(sales.count||0),todayGross=Number(sales.gross||0),todayAvg=todayCount>0?todayGross/todayCount:0;
     const saleReturn=(movement.rows||[]).find(x=>x.code==='sale_return'),returnToday=saleReturn?.available?Number(saleReturn.total||0):null;
 
-    content.append(quickHero(d),dashboardPeriodBar(days));
+    content.append(quickHero(d));
+    const readiness=operationalReadinessCard(o.setup||{},counts);
+    if(readiness)content.append(readiness);
+    content.append(dashboardPeriodBar(days));
     const overviewKpis=[
       ['مبيعات اليوم',money(sales.gross),'↗',d.today_change_percent===null?'المقارنة تحتاج مبيعات أمس':((Number(d.today_change_percent)>=0?'+':'')+Number(d.today_change_percent).toFixed(1)+'% عن أمس')],
       ['عدد عمليات البيع',String(todayCount),'▧','متوسط الفاتورة '+money(todayAvg),'blue'],
@@ -3127,7 +3222,13 @@
   }
   menuToggle.addEventListener('click',()=>setMenu(!sidebar.classList.contains('open')));
   menuBackdrop.addEventListener('click',()=>{setMenu(false);menuToggle.focus()});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&sidebar.classList.contains('open')){setMenu(false);menuToggle.focus()}});
+  document.addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){
+      e.preventDefault();openMerchantCommandCenter();return;
+    }
+    if(e.key==='Escape'&&closeMerchantCommandCenter())return;
+    if(e.key==='Escape'&&sidebar.classList.contains('open')){setMenu(false);menuToggle.focus()}
+  });
   compactLayout.addEventListener('change',()=>setMenu(false));
   buildNavigation();
   load(active);
