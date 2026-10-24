@@ -114,6 +114,22 @@ class MerchantWebPortalTest extends TestCase
             ->assertSee("'devices')", false);
     }
 
+    /** المشتريات مساحة عمل واحدة فوق دورة التوريد الحقيقية، لا نماذج مبعثرة. */
+    public function test_merchant_procurement_workspace_keeps_real_purchase_stages_connected(): void
+    {
+        $owner = $this->owner();
+
+        $this->actingAs($owner, 'merchant_web')
+            ->get('/merchant')
+            ->assertOk()
+            ->assertSee('مركز الشراء والتوريد')
+            ->assertSee('دورة الشراء الصحيحة')
+            ->assertSee("['overview','نظرة عامة'", false)
+            ->assertSee("['orders','أوامر الشراء'", false)
+            ->assertSee('purchaseOrderCreator(create,supplierRows', false)
+            ->assertSee('returnActions', false);
+    }
+
     /** نقطة البيع معالجٌ فوق الفرع والموظف والجهاز في النسخة المنشورة فعلياً. */
     public function test_owner_portal_exposes_guided_pos_setup_in_deployed_view(): void
     {
