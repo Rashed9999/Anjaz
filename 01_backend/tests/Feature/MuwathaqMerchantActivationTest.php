@@ -13,10 +13,12 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use Tests\Support\ProvisionsAccountsFromMuwathaq;
 
 class MuwathaqMerchantActivationTest extends TestCase
 {
     use RefreshDatabase;
+    use ProvisionsAccountsFromMuwathaq;
 
     private array $emailMessages = [];
 
@@ -72,6 +74,25 @@ class MuwathaqMerchantActivationTest extends TestCase
         $this->assertMatchesRegularExpression('/(?<!\d)\d{6}(?!\d)/', $message['text']);
         preg_match('/(?<!\d)\d{6}(?!\d)/', $message['text'], $matches);
         return $matches[0];
+    }
+
+    #[Test]
+    public function signed_muwathaq_approval_provisions_merchant_number_before_email_claim(): void
+    {
+        $user = $this->provisionMerchantFromMuwathaq('retail', '967777186451', [
+            'email' => 'real-provisioning-merchant@example.test',
+            'store_name' => 'نشاط للتأكد',
+            'governorate' => 'YE-TA',
+        ]);
+        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $this->assertMatchesRegularExpression('/^[1-9]{6}$/', (string) $merchant->merchant_number);
+        $this->assertSame(1, (int) $user->is_active);
+        $this->assertSame(0, (int) $user->is_email_verified);
+        $this->assertSame('verified',
+            MerchantProfile::where('user_id', $user->id)->value('verification_status'));
+        $this->assertSame('muwathaq',
+            Opening::where('user_id', $user->id)->value('origin'));
+        $this->assertSame(1, Merchant::where('user_id', $user->id)->count());
     }
 
     #[Test]
