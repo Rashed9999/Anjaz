@@ -162,9 +162,15 @@ final class WebActivationController extends Controller
             );
         } catch (\InvalidArgumentException $error) {
             return response()->json(['success'=>false, 'message'=>'رمز PIN غير مسموح؛ اختر رمزاً غير متسلسل أو مكرر.'], 422);
-        } catch (\Throwable $error) {
+        } catch (RuntimeException $error) {
             return response()->json(['success'=>false,
-                'message'=>'تعذر التفعيل. تحقق من الرمز أو حالة الاعتماد.'], 422);
+                'message'=>'الرمز غير صالح أو انتهت صلاحيته، أو تغيرت حالة الاعتماد.'], 422);
+        } catch (\Throwable $error) {
+            // Infrastructure failures are NOT user OTP mistakes. Let the
+            // exception handler alert operators, without leaking internals to
+            // the public response or swallowing a server-side defect.
+            report($error);
+            throw $error;
         }
         RateLimiter::clear($key);
         return response()->json(['success' => true,
