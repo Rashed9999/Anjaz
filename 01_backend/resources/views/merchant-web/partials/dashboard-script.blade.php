@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 64503)
-Total output lines: 3272
+Warning: truncated output (original token count: 64620)
+Total output lines: 3279
 
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function(){
@@ -238,10 +238,17 @@ Total output lines: 3272
   function attentionCard(report={},counts={}){
     const card=node('section',null,'chart-card'),head=node('div',null,'chart-head');head.append(node('div'));head.firstChild.append(node('h3','يحتاج انتباهك'),node('small','تنبيهات تشغيلية مبنية على الحالة الحالية'));card.append(head);
     const list=node('div',null,'attention-list'),receivable=Number(report.receivables?.amount||0),open=Number(counts.open_shifts||0),devices=Number(counts.devices||0),live=Number(counts.active_device_sessions||0);
-    const add=(icon,title,detail,tone='')=>{const r=node('div',null,'attention-item'+(tone?' '+tone:''));r.append(node('span',icon,'att-icon'));const x=node('div');x.append(node('strong',title),node('small',detail));r.append(x);list.append(r)};
-    if(actualSector!=='quick_sale'&&receivable>0)add('◫','ذمم عملاء قائمة',money(receivable)+' ما زالت مستحقة على العملاء.','warn');
-    if(open>0)add('◷','ورديات مفتوحة',open+' وردية لم تُقفل بعد؛ راقب جرد الصندوق وتسليم النقد.','warn');
-    if(devices>0&&live<devices)add('▣','أجهزة غير متصلة',(devices-live)+' جهاز مرخص لا يملك جلسة نشطة الآن.');
+    const available=new Set(navigation.filter(item=>item.state==='available').map(item=>item.tab));
+    const add=(icon,title,detail,tone='',tab=null)=>{
+      const actionable=tab!==null&&available.has(tab),r=node(actionable?'button':'div','attention-item'+(tone?' '+tone:'')+(actionable?' attention-action':''));
+      if(actionable){r.type='button';r.setAttribute('aria-label','فتح '+(titles[tab]||title));r.addEventListener('click',()=>load(tab))}
+      r.append(node('span',icon,'att-icon'));const x=node('div');x.append(node('strong',title),node('small',detail));r.append(x);
+      if(actionable)r.append(node('span','فتح','attention-open'));
+      list.append(r)
+    };
+    if(actualSector!=='quick_sale'&&receivable>0)add('◫','ذمم عملاء قائمة',money(receivable)+' ما زالت مستحقة على العملاء.','warn','debts');
+    if(open>0)add('◷','ورديات مفتوحة',open+' وردية لم تُقفل بعد؛ راقب جرد الصندوق وتسليم النقد.','warn','sector');
+    if(devices>0&&live<devices)add('▣','أجهزة غير متصلة',(devices-live)+' جهاز مرخص لا يملك جلسة نشطة الآن.','','devices');
     if((actualSector==='quick_sale'||receivable===0)&&open===0&&(devices===0||live===devices))add('✓','التشغيل مستقر',actualSector==='quick_sale'?'لا توجد ورديات أو أجهزة تحتاج إجراءً فوريًا.':'لا توجد ذمم أو ورديات مفتوحة تحتاج إجراءً فوريًا.');
     card.append(list);return card
   }
@@ -450,9 +457,7 @@ Total output lines: 3272
     recentHead.lastChild.type='button';recentHead.lastChild.onclick=()=>load('sales');recent.append(recentHead);
     const rows=d.recent_sales||[];
     if(rows.length){
-      table(recent,[['الوقت',x=>x.occurred_at?new Date(x.occurred_at).toLocaleString('ar-YE'):'—'],['الفاتورة',x=>x.document_number||x.reference],['طريقة الدفع',x=>paymentLabel(x.payment_method)],['الحالة',x=>saleStatusLabel(x.status)],['القيمة',x=>money(x.amount)]],rows);
-    }else recent.append(node('div','لم تُسجل مبيعات في الفترة الحالية بعد.','dashboard-empty'));
-    recent.append(node('div','المصدر: '+(d.source||sa…44503 tokens truncated…e(p,[['الشهر',x=>x.period],['إهلاك الشهر',x=>money(x.amount)],['المتراكم',x=>money(x.accumulated_after)],['القيمة بعد الإهلاك',x=>money(x.book_value_after)]],data.depreciations||[]);
+      table(recent,[['الوق…44620 tokens truncated…e(p,[['الشهر',x=>x.period],['إهلاك الشهر',x=>money(x.amount)],['المتراكم',x=>money(x.accumulated_after)],['القيمة بعد الإهلاك',x=>money(x.book_value_after)]],data.depreciations||[]);
     if((data.adjustments||[]).length)table(p,[['التاريخ',x=>x.effective_on],['التعديل',x=>x.type==='supplier_return'?'رد للمورد':x.type],['الكمية',x=>x.quantity],['خفض التكلفة',x=>money(x.cost_amount)],['عكس الإهلاك',x=>money(x.depreciation_reversed)]],data.adjustments||[]);
     p.scrollIntoView({behavior:'smooth',block:'start'});
   }
