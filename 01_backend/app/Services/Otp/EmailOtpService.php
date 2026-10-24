@@ -23,12 +23,14 @@ class EmailOtpService
     public const PURPOSE_PASSWORD_RESET = 'password_reset';
     public const PURPOSE_PIN_RECOVERY = 'pin_recovery';
     public const PURPOSE_EMAIL_CHANGE = 'email_change';
+    public const PURPOSE_ACCOUNT_ACTIVATION = 'account_activation';
 
     public const PURPOSES = [
         self::PURPOSE_REGISTRATION,
         self::PURPOSE_PASSWORD_RESET,
         self::PURPOSE_PIN_RECOVERY,
         self::PURPOSE_EMAIL_CHANGE,
+        self::PURPOSE_ACCOUNT_ACTIVATION,
     ];
 
     public function normalizeEmail(string $email): string
@@ -448,6 +450,12 @@ class EmailOtpService
     private function emailCopy(string $purpose): array
     {
         return match ($purpose) {
+            self::PURPOSE_ACCOUNT_ACTIVATION => [
+                'subject' => 'رمز تفعيل حساب التاجر المعتمد — أميال باي',
+                'preheader' => 'تحقق من بريدك لإنشاء كلمة المرور ورمز PIN بعد اعتماد موثّق.',
+                'label' => 'تفعيل حساب التاجر',
+                'description' => 'بعد موافقة موثّق، استخدم الرمز لإثبات ملكية بريدك وتعيين كلمة مرور وPIN. لا ترسل الرمز لأي شخص.',
+            ],
             self::PURPOSE_REGISTRATION => [
                 'subject' => 'رمز التحقق لإنشاء حسابك في أميال باي',
                 'preheader' => 'أكمل التحقق من بريدك الإلكتروني لإنشاء حساب أميال باي بأمان.',
