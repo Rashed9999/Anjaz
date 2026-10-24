@@ -152,11 +152,12 @@ final class WebActivationController extends Controller
                     // as every other Amial account. No PIN/plain password in logs.
                     $this->pins->setPin($owner, (string) $data['pin']);
                     $owner->password = Hash::make((string) $data['password']);
-                    $owner->is_email_verified = 1;
-                    if (Schema::hasColumn('users', 'email_verified_at')) {
-                        $owner->email_verified_at = now();
-                    }
                     $owner->save();
+                    // Email verification is globally guarded by UserEmailIdentityObserver.
+                    // Apply the existing OTP-authorized identity transition instead of
+                    // directly bypassing or toggling the verified flag.
+                    app(\App\Services\EmailIdentityService::class)
+                        ->markCurrentEmailVerified($owner);
                     return (string) $merchant->merchant_number;
                 },
             );
