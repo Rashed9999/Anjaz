@@ -9,12 +9,23 @@ class CashierShift extends Model
     protected $table = 'cashier_shifts';
 
     protected $fillable = [
-        'merchant_user_id', 'pos_user_id', 'opening_float', 'expected_cash',
+        'merchant_user_id', 'branch_id', 'pos_user_id', 'opening_float', 'expected_cash',
         'counted_cash', 'variance', 'cash_sales', 'sales_count', 'status',
         'notes', 'opened_by', 'opened_at', 'closed_at', 'zone_code',
+        // AMIAL-SHIFT-GATE-001 — **وغيابُها هنا يُسقطها صامتاً**:
+        // `create()` يتجاهل ما ليس في القائمة بلا خطأ، فتُفتح الورديّةُ
+        // بلا اسمٍ وتُطبَع الفاتورةُ بلا فاتحها. (وقد عضّ هذا المشروعَ
+        // أربع مرّات.)
+        'opened_by_name', 'closed_by', 'closed_by_name', 'opened_by_role',
+
+        // AMIAL-SHIFT-DEVICE-001 — **على أيّ صندوقٍ فُتحت.**
+        // و`open_device_lock` يحمل الجهازَ ما دامت مفتوحةً ويُفرَّغ عند
+        // الإغلاق — فالقيدُ الفريدُ يمنع ورديّتين على صندوقٍ واحد.
+        'pos_device_id', 'open_device_lock',
     ];
 
     protected $casts = [
+        'branch_id' => 'integer',
         'opening_float' => 'decimal:2',
         'expected_cash' => 'decimal:2',
         'counted_cash' => 'decimal:2',

@@ -162,21 +162,31 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
             : const [],
         invoiceNo: '${payload['document_number'] ?? ''}',
         dateTime: issuedAt,
+        documentType: 'receipt_center_invoice',
+        documentId: '${widget.receiptId}',
+        documentNumber: '${payload['document_number'] ?? widget.receiptId}',
+        metadata: {'receipt_id': widget.receiptId},
       );
     } else {
-      result = await service.printWidget(ThermalVoucherWidget(
-        title: '${payload['title'] ?? 'سند عملية مالية'}',
-        documentNumber: '${payload['document_number'] ?? ''}',
-        amount: _number(payload['amount']),
-        fee: _number(payload['fee']),
-        finalAmount: _number(payload['final_amount']),
-        finalLabel: '${payload['final_label'] ?? 'الإجمالي'}',
-        transactionNumber: '${payload['transaction_number'] ?? '—'}',
-        verificationCode: '${payload['verification_code'] ?? ''}',
-        fromName: payload['from_name']?.toString(),
-        toName: payload['to_name']?.toString(),
-        issuedAt: issuedAt,
-      ));
+      result = await service.printWidget(
+        ThermalVoucherWidget(
+          title: '${payload['title'] ?? 'سند عملية مالية'}',
+          documentNumber: '${payload['document_number'] ?? ''}',
+          amount: _number(payload['amount']),
+          fee: _number(payload['fee']),
+          finalAmount: _number(payload['final_amount']),
+          finalLabel: '${payload['final_label'] ?? 'الإجمالي'}',
+          transactionNumber: '${payload['transaction_number'] ?? '—'}',
+          verificationCode: '${payload['verification_code'] ?? ''}',
+          fromName: payload['from_name']?.toString(),
+          toName: payload['to_name']?.toString(),
+          issuedAt: issuedAt,
+        ),
+        documentType: 'financial_voucher',
+        documentId: '${widget.receiptId}',
+        documentNumber: '${payload['document_number'] ?? widget.receiptId}',
+        metadata: {'receipt_id': widget.receiptId},
+      );
     }
 
     if (result.ok) {

@@ -8,6 +8,7 @@
     table { width: 100%; border-collapse: collapse; }
     .header { border-bottom: 3px solid #053391; padding-bottom: 12px; margin-bottom: 14px; }
     .brand { font-size: 20pt; font-weight: bold; color: #053391; }
+    .merchant-logo { max-width: 92px; max-height: 58px; object-fit: contain; margin-bottom: 5px; }
     .title { text-align: left; font-size: 24pt; font-weight: bold; color: #053391; }
     .muted { color: #667085; font-size: 9pt; }
     .meta td, .party td { border: 1px solid #d9e0ec; padding: 8px; vertical-align: top; }
@@ -21,12 +22,16 @@
     .summary td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
     .summary .grand td { background: #eaf1ff; border-top: 2px solid #053391; font-size: 13pt; color: #053391; font-weight: bold; }
     .notice { margin-top: 20px; padding: 10px; background: #f7f9fc; border-right: 3px solid #f4b223; color: #475467; }
+    .verify { margin-top: 18px; padding: 10px; border: 1px solid #d9e0ec; text-align: center; }
+    .verify img { width: 105px; height: 105px; }
+    .verify .code { direction: ltr; font-family: monospace; font-size: 8pt; word-break: break-all; }
     .footer { margin-top: 22px; border-top: 1px solid #d9e0ec; padding-top: 8px; color: #667085; text-align: center; font-size: 8.5pt; }
   </style>
 </head>
 <body>
   <table class="header"><tr>
     <td>
+      @if(!empty($merchantLogoData))<img class="merchant-logo" src="{{ $merchantLogoData }}" alt="شعار المنشأة">@endif
       <div class="brand">{{ $merchant?->store_name ?: 'منشأة التاجر' }}</div>
       @if(!empty($merchant?->merchant_number))<div class="muted">رقم التاجر: {{ $merchant->merchant_number }}</div>@endif
       @if(!empty($merchant?->address))<div class="muted">{{ $merchant->address }}</div>@endif
@@ -35,36 +40,68 @@
   </tr></table>
 
   <table class="meta"><tr>
-    <td><div class="k">رقم الفاتورة</div><div class="v left">SALE-{{ strtoupper(substr($sale->sale_ulid, -10)) }}</div></td>
-    <td><div class="k">تاريخ الإصدار</div><div class="v left">{{ $sale->created_at?->format('Y-m-d H:i') }}</div></td>
+    <td><div class="k">رقم الفاتورة</div><div class="v left">{{ $sale->invoice_number ?: $sale->sale_ulid }}</div></td>
+    <td><div class="k">تاريخ الإصدار</div><div class="v left">{{ $sale->created_at?->copy()->setTimezone('Asia/Riyadh')->format('Y-m-d H:i') }}</div></td>
     <td><div class="k">طريقة الدفع</div><div class="v">{{ $paymentLabel }}</div></td>
     <td><div class="k">الحالة</div><div class="v">{{ $statusLabel }}</div></td>
   </tr></table>
 
   <table class="party" style="margin-top:12px"><tr>
     <td><strong>العميل</strong><br>{{ $sale->customer_name ?: 'عميل نقدي' }}@if($sale->customer_phone)<br><span class="muted">{{ $sale->customer_phone }}</span>@endif</td>
-    <td><strong>مرجع البيع</strong><br><span class="left">{{ $sale->sale_ulid }}</span></td>
+    <td>
+      <strong>مرجع البيع</strong><br><span class="left">{{ $sale->sale_ulid }}</span>
+      @if(!empty($sale->paid_transaction_id))
+        <br><strong>مرجع دفع أميال</strong><br><span class="left">{{ $sale->paid_transaction_id }}</span>
+      @endif
+      @if(!empty($sale->settled_at))
+        <br><span class="muted">تمت التسوية: {{ $sale->settled_at?->format('Y-m-d H:i') }}</span>
+      @endif
+    </td>
   </tr></table>
 
-  <table class="items"><thead><tr>
-    <th style="width:6%">#</th><th>الصنف</th>
-    @if($vertical === 'retail')<th style="width:16%">الباركود</th>@endif
-    <th style="width:11%">الكمية</th><th style="width:16%">سعر الوحدة</th><th style="width:16%">الإجمالي</th>
-  </tr></thead><tbody>
-    @forelse($items as $i => $item)<tr>
-      <td class="center">{{ $i + 1 }}</td><td>{{ $item['name'] }}</td>
-      @if($vertical === 'retail')<td class="left">{{ $item['barcode'] ?: '—' }}</td>@endif
-      <td class="center">{{ rtrim(rtrim(number_format((float)$item['quantity'], 3, '.', ''), '0'), '.') }}</td>
-      <td class="left">{{ number_format((float)$item['unit_price'], 2) }}</td><td class="left"><strong>{{ number_format((float)$item['total'], 2) }}</strong></td>
-    </tr>@empty<tr><td colspan="{{ $vertical === 'retail' ? 6 : 5 }}" class="center">لا توجد بنود مسجلة</td></tr>@endforelse
-  </tbody></table>
+  @if($vertical === 'quick_sale')
+    <div class="notice">
+      بيع سريع بمبلغ مباشر — لا يتطلب هذا النوع أصنافاً أو باركوداً.
+      الإجمالي وطريقة التحصيل والمرجع أدناه هي بيانات العملية المالية.
+    </div>
+  @else
+    <table class="items"><thead><tr>
+      <th style="width:6%">#</th><th>الصنف</th>
+      @if($vertical === 'retail')<th style="width:16%">الباركود</th>@endif
+      <th style="width:11%">الكمية</th><th style="width:16%">سعر الوحدة</th><th style="width:16%">الإجمالي</th>
+    </tr></thead><tbody>
+      @forelse($items as $i => $item)<tr>
+        <td class="center">{{ $i + 1 }}</td><td>{{ $item['name'] }}</td>
+        @if($vertical === 'retail')<td class="left">{{ $item['barcode'] ?: '—' }}</td>@endif
+        <td class="center">{{ rtrim(rtrim(number_format((float)$item['quantity'], 3, '.', ''), '0'), '.') }}</td>
+        <td class="left">{{ number_format((float)$item['unit_price'], 2) }}</td><td class="left"><strong>{{ number_format((float)$item['total'], 2) }}</strong></td>
+      </tr>@empty<tr><td colspan="{{ $vertical === 'retail' ? 6 : 5 }}" class="center">لا توجد بنود مسجلة</td></tr>@endforelse
+    </tbody></table>
+  @endif
 
   <table class="summary">
     <tr><td>المجموع الفرعي</td><td class="left">{{ number_format((float)$subtotal, 2) }} ر.ي</td></tr>
     @if((float)$discount > 0)<tr><td>الخصم</td><td class="left">- {{ number_format((float)$discount, 2) }} ر.ي</td></tr>@endif
+    @if($sale->payment_method === 'mixed')
+      <tr><td>جزء نقدي</td><td class="left">{{ number_format((float)($sale->cash_amount ?? 0), 2) }} ر.ي</td></tr>
+      <tr><td>جزء أميال باي</td><td class="left">{{ number_format((float)($sale->wallet_amount ?? 0), 2) }} ر.ي</td></tr>
+    @endif
     <tr class="grand"><td>الإجمالي</td><td class="left">{{ number_format((float)$total, 2) }} ر.ي</td></tr>
   </table>
 
   @if($sale->status === 'credit_unpaid')<div class="notice">هذه فاتورة بيع آجل. يبقى السداد والتسوية مرتبطين بسجل الدين ولا تنشئ إعادة طباعة الفاتورة التزاماً جديداً.</div>@endif
+  @if($sale->status === 'pending_payment')<div class="notice">هذه العملية بانتظار إتمام دفع أميال باي، وليست إيصال قبض مكتملًا بعد.</div>@endif
+
+  <div class="verify">
+    @if(!empty($qrDataUri))
+      <img src="{{ $qrDataUri }}" alt="QR تحقق">
+    @endif
+    <div><strong>تحقق من أصالة الفاتورة</strong></div>
+    <div class="code">{{ $sale->sale_ulid }}</div>
+    @if(!empty($verificationUrl))
+      <div class="code">{{ $verificationUrl }}</div>
+    @endif
+  </div>
+
   <div class="footer">فاتورة إلكترونية محفوظة في سجل المنشأة. إعادة التنزيل أو الطباعة لا تنشئ عملية بيع أو دفع جديدة.</div>
 </body></html>

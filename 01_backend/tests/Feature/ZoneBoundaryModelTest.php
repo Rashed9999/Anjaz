@@ -246,6 +246,8 @@ class ZoneBoundaryModelTest extends TestCase
     {
         $user = User::factory()->create([
             'type' => CUSTOMER_TYPE, 'zone_code' => 'SOUTH', 'residence_governorate' => 'YE-SN',
+            // هذا الاختبار يضخ حركات رصد مجموعها أكبر من حد Tier 1.
+            'kyc_tier' => 3, 'is_kyc_verified' => 1,
         ]);
 
         foreach ([60000, 80000] as $amount) {
@@ -274,7 +276,10 @@ class ZoneBoundaryModelTest extends TestCase
 
     public function test_account_that_withdraws_is_not_flagged(): void
     {
-        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'zone_code' => 'SOUTH']);
+        $user = User::factory()->create([
+            'type' => CUSTOMER_TYPE, 'zone_code' => 'SOUTH',
+            'kyc_tier' => 3, 'is_kyc_verified' => 1,
+        ]);
 
         Transaction::create([
             'transaction_id' => (string) Str::ulid(), 'ref_trans_id' => (string) Str::ulid(),

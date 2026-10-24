@@ -24,8 +24,9 @@ class CashierRefundScreen extends StatefulWidget {
 class _CashierRefundScreenState extends State<CashierRefundScreen> {
   late final CashierRefundController c;
 
-  // كميات الإرجاع لكل صنف (بـ index)
+  // كميات وحالة الإرجاع لكل سطر بيع موثّق (بـ index).
   final Map<int, double> _returnQty = {};
+  final Map<int, String> _returnCondition = {};
   String _refundMethod = 'cash';
   final _reasonCtrl = TextEditingController();
   final _manualAmountCtrl = TextEditingController();
@@ -49,7 +50,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
     double sum = 0;
     for (var i = 0; i < items.length; i++) {
       final qty = _returnQty[i] ?? 0;
-      final price = double.tryParse('${items[i]['price'] ?? 0}') ?? 0;
+      final price = double.tryParse('${items[i]['unit_price'] ?? 0}') ?? 0;
       sum += qty * price;
     }
     return sum;
@@ -66,8 +67,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
 
   Future<void> _submit() async {
     final info = c.refundableInfo.value!;
-    final sale = info['sale'] as Map;
-    final items = (sale['items'] ?? []) as List;
+    final items = (info['lines'] ?? []) as List;
     final remaining = double.tryParse('${info['remaining'] ?? 0}') ?? 0;
 
     final amount = _finalAmount(items, remaining);
@@ -88,10 +88,13 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
       for (var i = 0; i < items.length; i++) {
         final q = _returnQty[i] ?? 0;
         if (q > 0) {
+          final condition = _returnCondition[i] ?? 'good';
           refundItems.add({
-            'name': items[i]['name'],
-            'qty': q,
-            'price': items[i]['price'],
+            'sale_item_id': items[i]['id'],
+            'quantity': q,
+            'condition': condition,
+            // التالف والمنتهي لا يعودان إلى الرف مهما كان اختيار الواجهة.
+            'restock': condition == 'good',
           });
         }
       }
@@ -108,13 +111,32 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
     if (!mounted) return;
     if (ok) {
       final status = c.lastRefund.value?['status'];
-      Get.back(result: true);
+      final ownerApproval = status == 'owner_approval_pending';
+      final refundApproval = status == 'pending_approval';
+
+      // طلب موافقة المالك لم ينفّذ المرتجع بعد، لذلك نبقي الشاشة مفتوحة
+      // حتى يعيد الكاشير الضغط على التأكيد بعد منح الإذن.
+      if (!ownerApproval) {
+        Get.back(result: true);
+      }
+
       Get.snackbar(
-        status == 'pending_approval' ? 'بانتظار الموافقة' : 'تم الاسترداد',
-        status == 'pending_approval'
-            ? 'تم إرسال المرتجع للإدارة للموافقة'
-            : 'تم تسجيل المرتجع بنجاح',
-        backgroundColor: Colors.green.shade100, colorText: Colors.green.shade800,
+        ownerApproval
+            ? 'بانتظار موافقة مالك المنشأة'
+            : refundApproval
+                ? 'بانتظار اعتماد المرتجع'
+                : 'تم الاسترداد',
+        ownerApproval
+            ? 'لم يُنفّذ المرتجع بعد. بعد موافقة المالك اضغط تأكيد مرة أخرى من هذه الشاشة.'
+            : refundApproval
+                ? 'تم إنشاء المرتجع وهو بانتظار الاعتماد المالي.'
+                : 'تم تسجيل المرتجع بنجاح',
+        backgroundColor: ownerApproval
+            ? Colors.orange.shade100
+            : Colors.green.shade100,
+        colorText: ownerApproval
+            ? Colors.orange.shade900
+            : Colors.green.shade800,
         snackPosition: SnackPosition.BOTTOM,
       );
     } else {
@@ -151,7 +173,9 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
         final refundedSoFar = '${info['refunded_so_far'] ?? '0'}';
         final fullyRefunded = info['fully_refunded'] == true;
         final available = ((info['available_methods'] ?? []) as List).cast<String>();
-        final items = (sale['items'] ?? []) as List;
+        // الخادم يعيد أسطر البيع الأصلية مع returned/refundable_quantity.
+        // لا نقرأ JSON الفاتورة القديم لأنّه لا يمنع إعادة الصنف مرتين.
+        final items = (info['lines'] ?? []) as List;
 
         if (fullyRefunded) {
           return Center(
@@ -297,7 +321,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'المرتجعات أكثر من 5,000 ر.ي تحتاج موافقة الإدارة',
+                    'قد تتطلب بعض المرتجعات إذن مالك المنشأة حسب صلاحية الموظف، والمبالغ الكبيرة تخضع أيضاً لاعتماد مالي.',
                     style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                   ),
                 ),
@@ -323,45 +347,98 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
   }
 
   Widget _itemTile(Map item, int index) {
-    final originalQty = double.tryParse('${item['qty'] ?? 0}') ?? 0;
-    final price = double.tryParse('${item['price'] ?? 0}') ?? 0;
+    final originalQty =
+        double.tryParse('${item['refundable_quantity'] ?? 0}') ?? 0;
+    final price = double.tryParse('${item['unit_price'] ?? 0}') ?? 0;
     final current = _returnQty[index] ?? 0;
+    final condition = _returnCondition[index] ?? 'good';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
-      child: Row(children: [
-        // عداد كمية الإرجاع
-        Row(children: [
-          IconButton(
-            icon: const Icon(Icons.remove_circle_outline),
-            onPressed: current > 0 ? () => setState(() => _returnQty[index] = current - 1) : null,
-          ),
-          Container(
-            width: 36,
-            alignment: Alignment.center,
-            child: Text('${current.toInt()}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          ),
-          IconButton(
-            icon: const Icon(Icons.add_circle, color: AmialColors.primary),
-            onPressed: current < originalQty ? () => setState(() => _returnQty[index] = current + 1) : null,
-          ),
-        ]),
-        const Spacer(),
-        // معلومات الصنف
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('${item['name']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 2),
-            Text('${price.toStringAsFixed(0)} ر.ي / قطعة',
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-            Text('الحد الأقصى: ${originalQty.toInt()}',
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            // عداد كمية الإرجاع
+            Row(children: [
+              IconButton(
+                icon: const Icon(Icons.remove_circle_outline),
+                onPressed: current > 0
+                    ? () => setState(() =>
+                        _returnQty[index] = (current - 1).clamp(0, originalQty).toDouble())
+                    : null,
+              ),
+              Container(
+                width: 36,
+                alignment: Alignment.center,
+                child: Text(
+                  current % 1 == 0
+                      ? current.toInt().toString()
+                      : current.toStringAsFixed(3),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              IconButton(
+                icon:
+                    const Icon(Icons.add_circle, color: AmialColors.primary),
+                onPressed: current < originalQty
+                    ? () => setState(() =>
+                        _returnQty[index] = (current + 1).clamp(0, originalQty).toDouble())
+                    : null,
+              ),
+            ]),
+            const Spacer(),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('${item['name']}',
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 2),
+                  Text('${price.toStringAsFixed(0)} ر.ي / قطعة',
+                      style: TextStyle(
+                          color: Colors.grey.shade600, fontSize: 12)),
+                  Text(
+                    'المتاح للإرجاع: ${originalQty % 1 == 0 ? originalQty.toInt() : originalQty.toStringAsFixed(3)}',
+                    style:
+                        TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
           ]),
-        ),
-      ]),
+          if (current > 0) ...[
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: condition,
+              decoration: InputDecoration(
+                labelText: 'حالة الصنف المرتجع',
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              items: const [
+                DropdownMenuItem(
+                    value: 'good', child: Text('سليم — يعود للمخزون')),
+                DropdownMenuItem(
+                    value: 'damaged', child: Text('تالف — لا يعود للمخزون')),
+                DropdownMenuItem(
+                    value: 'expired', child: Text('منتهي — لا يعود للمخزون')),
+              ],
+              onChanged: (v) =>
+                  setState(() => _returnCondition[index] = v ?? 'good'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

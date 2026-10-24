@@ -32,6 +32,18 @@ class MerchantVerificationController extends GetxController implements GetxServi
   final MerchantVerificationRepo repo;
   MerchantVerificationController({required this.repo});
 
+  /// تدخل شاشة اعتماد التاجر من أكثر من واجهة قطاعية. لا تفترض أن binding
+  /// عامّاً سبق تحميله؛ وإلا يفشل فتح الشاشة قبل أن يتمكن التاجر من إرسال ملفه.
+  static MerchantVerificationController ensureRegistered() {
+    if (Get.isRegistered<MerchantVerificationController>()) {
+      return Get.find<MerchantVerificationController>();
+    }
+
+    return Get.put(MerchantVerificationController(
+      repo: MerchantVerificationRepo(apiClient: Get.find<ApiClient>()),
+    ));
+  }
+
   /// الحالة الحالية: profile_status, tier, current_request, required_docs, optional_docs
   final Rx<Map<String, dynamic>?> status = Rx<Map<String, dynamic>?>(null);
   final RxBool isLoading = false.obs;

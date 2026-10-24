@@ -523,4 +523,81 @@ class AuditScreenArabicAndFiltersTest extends TestCase
         $this->assertStringContainsString('TX-KEEP', $csv);
         $this->assertStringNotContainsString('TX-DROP', $csv);
     }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  ⑥ القصّة الكاملة وتحديد الحساب المتأثّر وتفسير الخطورة والسياق
+    // ══════════════════════════════════════════════════════════════════
+
+    /** @test */
+    public function the_screen_resolves_who_did_what_to_which_account_with_narrative(): void
+    {
+        $actor = User::factory()->create([
+            'type' => ADMIN_TYPE, 'f_name' => 'خالد', 'l_name' => 'المشرف', 'phone' => '967770111222',
+        ]);
+        $victim = User::factory()->create([
+            'type' => CUSTOMER_TYPE, 'f_name' => 'سالم', 'l_name' => 'العميل', 'phone' => '967771333444',
+        ]);
+
+        $row = $this->seedRow([
+            'actor_type' => 'admin',
+            'actor_user_id' => $actor->id,
+            'subject_type' => 'user',
+            'subject_id' => (string) $victim->id,
+            'action' => 'CUSTOMER_FREEZE',
+            'decision_code' => 'FREEZE',
+            'severity' => 'critical',
+            'reason' => 'اشتباه في عمليّات الحساب بعد بلاغ',
+            'context' => json_encode(['customer_id' => $victim->id, 'amount' => '15000.0000'], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $r = $this->actingAs($this->auditor(), 'user')->get(route('admin.amial.audit.index'));
+        $r->assertOk();
+        $r->assertSee('خالد المشرف', false);
+        $r->assertSee('سالم العميل', false);
+        $r->assertSee('تجميدُ حساب عميل', false);
+        $r->assertSee('المبلغ: 15,000.00 ر.ي', false);
+
+        // والنافذة التفصيليّة تُعيد القصّة وجدول السياق المترجَم بالعربيّة
+        $detail = $this->actingAs($this->auditor(), 'user')
+            ->getJson(route('admin.amial.audit.show', $row->id))
+            ->assertOk();
+
+        $detail->assertJsonPath('data.actor.name', 'خالد المشرف');
+        $detail->assertJsonPath('data.subject.target_user.name', 'سالم العميل');
+        $this->assertStringContainsString('تجميدُ حساب عميل', (string) $detail->json('data.narrative'));
+        $this->assertNotEmpty($detail->json('data.context_rows'));
+    }
+
+    /** @test */
+    public function a_profile_identifier_is_not_mistaken_for_a_user_identifier(): void
+    {
+        $actor = User::factory()->create([
+            'type' => ADMIN_TYPE, 'f_name' => 'نورة', 'l_name' => 'المشرفة',
+        ]);
+        $unrelated = User::factory()->create([
+            'type' => CUSTOMER_TYPE, 'f_name' => 'حساب', 'l_name' => 'آخر',
+        ]);
+        $agent = User::factory()->create([
+            'type' => AGENT_TYPE, 'f_name' => 'سعيد', 'l_name' => 'الوكيل',
+        ]);
+
+        $row = $this->seedRow([
+            'actor_type' => 'admin',
+            'actor_user_id' => $actor->id,
+            // معرّف ملف الوكيل ليس بالضرورة معرّف مستخدم. نضع عمداً رقماً
+            // يطابق حساباً آخر كي يحرس الاختبار من رابط أو كشف هوية خاطئ.
+            'subject_type' => 'agent_profile',
+            'subject_id' => (string) $unrelated->id,
+            'action' => 'AGENT_OPERATIONAL_LIMITS_UPDATED',
+            'decision_code' => 'OK',
+            'context' => json_encode(['agent_user_id' => $agent->id], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $detail = $this->actingAs($this->auditor(), 'user')
+            ->getJson(route('admin.amial.audit.show', $row->id))
+            ->assertOk();
+
+        $detail->assertJsonPath('data.subject.target_user.name', 'سعيد الوكيل');
+        $this->assertStringNotContainsString('حساب آخر', (string) $detail->json('data.narrative'));
+    }
 }

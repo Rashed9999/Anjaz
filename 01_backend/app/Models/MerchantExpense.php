@@ -3,20 +3,29 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class MerchantExpense extends Model
 {
     protected $table = 'merchant_expenses';
 
     protected $fillable = [
-        'merchant_user_id', 'category', 'title', 'amount', 'spent_on',
-        'note', 'created_by', 'zone_code',
+        'expense_ulid', 'merchant_user_id', 'category', 'title', 'amount',
+        'payment_source', 'cashier_shift_id', 'status', 'spent_on',
+        'note', 'voided_at', 'void_reason', 'created_by', 'zone_code',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'cashier_shift_id' => 'integer',
         'spent_on' => 'date',
+        'voided_at' => 'datetime',
     ];
 
     public const CATEGORIES = ['rent', 'salary', 'utilities', 'supplies', 'transport', 'other'];
+
+    public function reversal(): HasOne
+    {
+        return $this->hasOne(MerchantExpenseReversal::class, 'expense_id');
+    }
 }

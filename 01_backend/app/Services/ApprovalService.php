@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\ApprovalRequest;
 use App\Models\User;
+use App\Services\Otp\EmailOtpService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * AMIAL-INSIDER-001 — خدمة Maker-Checker (أربع عيون).
@@ -70,23 +72,34 @@ class ApprovalService
      */
     public function approve(User $checker, int $requestId, ?string $note = null): ApprovalRequest
     {
-        // انتهاء الصلاحية يُعلَّم في معاملة مستقلة (الرمي داخل المعاملة
-        // الرئيسية كان سيتراجع عن التعليم نفسه)
         $probe = ApprovalRequest::findOrFail($requestId);
         if ($probe->status === 'pending' && $probe->expires_at && $probe->expires_at->isPast()) {
             DB::transaction(function () use ($requestId) {
                 ApprovalRequest::where('id', $requestId)->where('status', 'pending')
                     ->update(['status' => 'expired', 'decided_at' => now()]);
             });
+            app(PlatformProfitPayoutService::class)->markFailedOrExpired(
+                $requestId, \App\Models\PlatformProfitPayout::STATUS_EXPIRED, null, 'انتهت مهلة الاعتماد',
+            );
             throw new \DomainException('EXPIRED');
         }
 
         try {
             return $this->approveTx($checker, $requestId, $note);
         } catch (\DomainException $e) {
+            // قد تنتهي المهلة بين الفحص السريع أعلاه والقفل داخل المعاملة.
+            // لا نترك طلب صرف الأرباح محجوزاً إن كانت النتيجة النهائية EXPIRED.
+            if ($e->getMessage() === 'EXPIRED') {
+                DB::transaction(function () use ($requestId) {
+                    ApprovalRequest::where('id', $requestId)->where('status', 'pending')
+                        ->update(['status' => 'expired', 'decided_at' => now()]);
+                });
+                app(PlatformProfitPayoutService::class)->markFailedOrExpired(
+                    $requestId, \App\Models\PlatformProfitPayout::STATUS_EXPIRED, null, 'انتهت مهلة الاعتماد',
+                );
+            }
             throw $e;
         } catch (\Throwable $e) {
-            // فشل التنفيذ: المعاملة الرئيسية تراجعت — نعلّم failed في معاملة مستقلة
             DB::transaction(function () use ($requestId, $checker, $e) {
                 ApprovalRequest::where('id', $requestId)->where('status', 'pending')->update([
                     'status' => 'failed',
@@ -95,6 +108,10 @@ class ApprovalService
                     'decided_at' => now(),
                 ]);
             });
+            app(PlatformProfitPayoutService::class)->markFailedOrExpired(
+                $requestId, \App\Models\PlatformProfitPayout::STATUS_FAILED, $checker,
+                'فشل تنفيذ الاعتماد: '.$e->getMessage(),
+            );
             throw $e;
         }
     }
@@ -113,7 +130,6 @@ class ApprovalService
                 throw new \DomainException('SELF_APPROVAL_FORBIDDEN');
             }
             if ($req->expires_at && $req->expires_at->isPast()) {
-                // سباق نادر: انتهى بين الفحص والقفل — يُعلَّم في الطلب التالي
                 throw new \DomainException('EXPIRED');
             }
 
@@ -167,6 +183,10 @@ class ApprovalService
                 'decided_at' => now(),
             ]);
 
+            if ($req->action_type === 'platform_profit_payout') {
+                app(PlatformProfitPayoutService::class)->rejectFromApproval($req, $checker, $note);
+            }
+
             $this->audit->record([
                 'actor_type' => 'admin',
                 'actor_user_id' => $checker->id,
@@ -194,25 +214,52 @@ class ApprovalService
                 $u->temp_block_time = null;
                 $u->save();
             }),
-            'reset_pin' => tap($user, function (User $u) {
-                $u->transaction_pin = null;
-                $u->requires_pin_setup = true;
-                $u->pin_failed_attempts = 0;
-                $u->pin_locked_until = null;
-                $u->save();
+
+            // AMIAL-PIN-RECOVERY-002 — موظف الدعم لا يصفّر PIN ولا يرى بديلاً له.
+            // بعد اعتماد موظف ثانٍ يولّد الخادم OTP عشوائياً ويرسله إلى البريد
+            // الموثّق للعميل مباشرة. يبقى PIN الحالي كما هو حتى يثبت العميل
+            // ملكية البريد ثم يختار PIN جديداً بنفسه من endpoint الاستعادة.
+            'reset_pin' => tap($user, function (User $u) use ($req, $checker) {
+                $email = mb_strtolower(trim((string) $u->email));
+                if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    throw new \DomainException('PIN_RECOVERY_EMAIL_REQUIRED');
+                }
+                if (! app(EmailIdentityService::class)->matchesVerifiedUser($u, $email)) {
+                    throw new \DomainException('PIN_RECOVERY_EMAIL_NOT_VERIFIED');
+                }
+                if ((string) config('amial_otp.pin_recovery_channel', 'email') !== 'email') {
+                    throw new \DomainException('PIN_RECOVERY_EMAIL_DISABLED');
+                }
+
+                $issued = app(EmailOtpService::class)->issue(
+                    email: $email,
+                    purpose: EmailOtpService::PURPOSE_PIN_RECOVERY,
+                    userId: (int) $u->id,
+                    requestedByType: 'admin',
+                    requestedById: (int) $checker->id,
+                    meta: [
+                        'approval_request_id' => (int) $req->id,
+                        'approval_request_number' => (string) $req->request_number,
+                        'maker_admin_id' => (int) $req->maker_admin_id,
+                        'reason' => mb_substr((string) $req->reason, 0, 500),
+                    ],
+                    afterCommit: true,
+                );
+
+                // نُبقي فقط معرّف التحدّي وحالة الإرسال والبريد المقنّع؛ لا OTP.
+                $payload = (array) ($req->payload ?? []);
+                $payload['pin_recovery'] = [
+                    'challenge_id' => $issued['challenge_id'],
+                    'masked_email' => $issued['masked_email'],
+                    'delivery_status' => $issued['delivery_status'],
+                    'expires_in_seconds' => $issued['expires_in_seconds'],
+                ];
+                $req->payload = $payload;
+                $req->save();
             }),
-            // يُعاد فحص التسوية لحظة الاعتماد، لا لحظة فتح الطلب فقط:
-            // قد يصل مال أو يُفتح تحقيق بين المرحلتين.
+
             'close_customer' => $this->closures->close($user, $req->reason),
 
-            // AMIAL-TREASURY-MAKERCHECKER-001 — **الإصدارُ يقع هنا لا عند الطلب.**
-            //
-            // فالمالُ يُخلَق **لحظةَ الاعتماد** بيد المُراجِع، لا لحظةَ
-            // كتابة الطلب. وإصدارٌ يقع عند الطلب ثمّ «يُعتمَد» بعده ليس
-            // أربعَ عيونٍ — هو **توقيعٌ على أمرٍ واقع**.
-            //
-            // ويُعاد الفحصُ كلُّه هنا (‏انحرافُ محفظة الإدارة، ومنعُ
-            // التكرار بمرجع الإثبات) لأنّ الحالَ قد تتغيّر بين المرحلتين.
             'treasury_issuance' => app(\App\Services\PlatformTreasuryService::class)
                 ->issueAdminFloat(
                     amount: (string) (($req->payload['amount'] ?? '0')),
@@ -222,6 +269,10 @@ class ApprovalService
                     idempotencyKey: null,
                     fundingSource: (string) ($req->payload['funding_source'] ?? 'treasury_supply'),
                 ),
+
+            'platform_profit_payout' => app(PlatformProfitPayoutService::class)
+                ->approveFromApproval($req, $checker),
+
             'mark_customer_deceased' => tap($user, function (User $u) use ($req, $checker) {
                 $u->forceFill([
                     'lifecycle_state' => 'deceased',
@@ -232,8 +283,10 @@ class ApprovalService
 
                 if (Schema::hasTable('customer_death_cases')) {
                     DB::table('customer_death_cases')->where('approval_request_id', $req->id)->update([
-                        'status' => 'confirmed', 'reviewer_id' => $checker->id,
-                        'reviewed_at' => now(), 'updated_at' => now(),
+                        'status' => 'confirmed',
+                        'reviewer_id' => $checker->id,
+                        'reviewed_at' => now(),
+                        'updated_at' => now(),
                     ]);
                 }
             }),

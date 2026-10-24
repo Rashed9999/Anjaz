@@ -21,6 +21,9 @@ use Symfony\Component\Process\Process;
  */
 class TesseractOcrDriver implements OcrDriverInterface
 {
+    /** بطاقات الهوية ليست دائماً كتلة نص واحدة؛ النمط المتناثر ينقذ حقولاً في تخطيطات البطاقات. */
+    private const PAGE_SEGMENTATION_MODES = [6, 11];
+
     private ?bool $availableCache = null;
 
     public function __construct(
@@ -64,21 +67,48 @@ class TesseractOcrDriver implements OcrDriverInterface
             return OcrResult::failed('تعذّرت قراءة الملفّ', $this->name());
         }
 
+        $results = [];
+        $fallback = null;
+        // لا نفترض تخطيطاً واحداً للبطاقة: 6 لكتلة النص و11 للحقول المتناثرة.
+        // يظل السقف الكلي قريباً من الإعداد القائم بتقسيم مهلة القراءة.
+        $attemptTimeout = max(5, intdiv($this->timeout, count(self::PAGE_SEGMENTATION_MODES)));
+        foreach (self::PAGE_SEGMENTATION_MODES as $mode) {
+            $result = $this->readWithMode($absolutePath, $mode, $attemptTimeout);
+            $fallback ??= $result;
+            if ($result->usable()) {
+                $results[] = $result;
+            }
+        }
+
+        if ($results === []) {
+            return $fallback ?? OcrResult::failed('تعذّرت قراءة الصورة', $this->name());
+        }
+
+        usort($results, static function (OcrResult $a, OcrResult $b): int {
+            $confidence = $b->confidence <=> $a->confidence;
+            return $confidence !== 0 ? $confidence : mb_strlen($b->rawText) <=> mb_strlen($a->rawText);
+        });
+
+        return $results[0];
+    }
+
+    private function readWithMode(string $absolutePath, int $mode, int $timeout): OcrResult
+    {
         // `tsv` لا `txt`: الأوّل يُخرج ثقةً لكلّ كلمة، والثاني نصّاً مجرّداً
         // بلا مقياسٍ لجودته. ومنه يُشتقّ النصّ والثقة معاً بتشغيلةٍ واحدة.
         $process = new Process([
             $this->binary, $absolutePath, 'stdout',
             '-l', $this->languages,
-            '--psm', '6',        // كتلة نصّ موحّدة — يناسب بطاقات الهوية
+            '--psm', (string) $mode,
             'tsv',
         ]);
-        $process->setTimeout($this->timeout);
+        $process->setTimeout($timeout);
 
         try {
             $process->run();
         } catch (ProcessTimedOutException) {
             return OcrResult::failed(
-                "تجاوزت القراءة {$this->timeout} ثانية — الصورة كبيرة أو معطوبة",
+                "تجاوزت القراءة {$timeout} ثوانٍ — الصورة كبيرة أو معطوبة",
                 $this->name(),
             );
         } catch (\Throwable $e) {

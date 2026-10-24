@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
  * بمجرد توقيع عقد مع مزود حقيقي، يُكتب class جديد يُطبق
  * BillProviderInterface ويُسجَّل في الـ ServiceProvider بدل الـ Stub.
  */
-class StubProvider implements BillProviderInterface
+class StubProvider implements BillProviderInterface, BillProviderBalanceInterface
 {
     public function name(): string
     {
@@ -117,6 +117,18 @@ class StubProvider implements BillProviderInterface
             message: 'Reversal accepted',
             raw: ['original_ref' => $providerReference, 'reason' => $reason],
             latency: 100,
+        );
+    }
+
+    public function balance(): BillProviderBalanceResponse
+    {
+        return BillProviderBalanceResponse::available(
+            '1000000.0000',
+            'YER',
+            'Stub provider balance',
+            ['simulated' => true],
+            5,
+            200,
         );
     }
 }

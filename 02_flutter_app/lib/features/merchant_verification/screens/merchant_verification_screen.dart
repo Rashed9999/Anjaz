@@ -28,7 +28,7 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
   @override
   void initState() {
     super.initState();
-    c = Get.find<MerchantVerificationController>();
+    c = MerchantVerificationController.ensureRegistered();
     WidgetsBinding.instance.addPostFrameCallback((_) => c.load());
   }
 
@@ -55,8 +55,7 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
       _snack('اسم النشاط مطلوب');
       return;
     }
-    final required = ['id_card_front', 'id_card_back', 'commercial_register', 'store_photo'];
-    for (final key in required) {
+    for (final key in _requiredDocKeys()) {
       if (!_files.containsKey(key)) {
         _snack('الوثيقة "${_docLabel(key)}" مطلوبة');
         return;
@@ -82,6 +81,12 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
     } else {
       _snack(c.lastError.value.isEmpty ? 'فشل التقديم' : c.lastError.value);
     }
+  }
+
+  Set<String> _requiredDocKeys() {
+    final docs = c.status.value?['required_docs'];
+    if (docs is! List) return const <String>{};
+    return docs.map((doc) => doc.toString()).toSet();
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
@@ -128,8 +133,14 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
           return const Center(child: CircularProgressIndicator());
         }
         final s = c.status.value;
-        final profileStatus = s?['profile_status']?.toString() ?? 'unverified';
         final currentReq = s?['current_request'] as Map?;
+        final storedStatus = s?['profile_status']?.toString() ?? 'unverified';
+        // حسابات سابقة سُمّيت «قيد المراجعة» لحظة التسجيل رغم عدم وجود
+        // طلب. نعرض حقيقتها حتى لا يظن التاجر أن الإدارة تملك ملفاً خفياً.
+        final profileStatus = storedStatus == 'pending_review' && currentReq == null
+            ? 'unverified'
+            : storedStatus;
+        final requiredDocs = _requiredDocKeys();
         final adminNote = currentReq?['admin_note']?.toString();
 
         // إن كان verified فعلاً، أعرض رسالة فقط
@@ -181,21 +192,25 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
                 style: TextStyle(fontSize: 11, color: Colors.grey)),
             const SizedBox(height: 8),
 
-            _docCard('id_card_front', required: true),
-            _docCard('id_card_back', required: true),
-            _docCard('commercial_register', required: true),
-            _docCard('store_photo', required: true),
+            _docCard('id_card_front', required: requiredDocs.contains('id_card_front')),
+            _docCard('id_card_back', required: requiredDocs.contains('id_card_back')),
+            _docCard('commercial_register', required: requiredDocs.contains('commercial_register')),
+            _docCard('store_photo', required: requiredDocs.contains('store_photo')),
             _docCard('address_proof'),
             _docCard('profession_license'),
             _docCard('optional_document'),
 
             const SizedBox(height: 24),
             Obx(() => FilledButton.icon(
-              onPressed: c.isSubmitting.value ? null : _submit,
+              onPressed: c.isSubmitting.value || s == null ? null : _submit,
               icon: c.isSubmitting.value
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.send),
-              label: Text(profileStatus == 'resubmission_required' ? 'إعادة تقديم' : 'تقديم الطلب'),
+              label: Text(s == null
+                  ? 'جارٍ تحديد متطلبات نشاطك'
+                  : profileStatus == 'resubmission_required'
+                      ? 'إعادة تقديم'
+                      : 'تقديم الطلب'),
               style: FilledButton.styleFrom(
                 backgroundColor: AmialColors.primary,
                 minimumSize: const Size.fromHeight(52),

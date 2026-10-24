@@ -14,7 +14,7 @@
 | `Dockerfile.prod` | صورة Multi-stage محسَّنة | الإنتاج |
 | `docker-compose.yml` | Backend + MySQL + ngrok اختياري | الديمو المحلّي |
 | `docker-compose.prod.yml` | Backend + MySQL + Redis، بلا seeders | الإنتاج |
-| `.env.demo` | قيم تجريبية جاهزة | الديمو |
+| `.env.demo.example` | قالب ديمو آمن (يُنسخ محلياً إلى `.env.demo`) | الديمو |
 | `.env.production.example` | قالب فارغ آمن | الإنتاج (يُنسَخ لـ `.env.production`) |
 | `demo.sh` | تشغيل/إيقاف الديمو بأمر واحد | الديمو |
 | `deploy.sh` | نشر إنتاجي مع فحص صحّة + rollback | الإنتاج |
@@ -49,7 +49,7 @@ IP واحد — فتنهار حماية Rate Limiting وكشف الاحتيال 
 قبل هذه الجولة، لا يوجد أيّ `.gitignore` في المشروع. أيّ `git add .`
 كان سيرفع `.env` بكل أسراره (كلمة سرّ DB، مفاتيح WhatsApp) مباشرة.
 أُضيف `.gitignore` شامل يستثني كل الأسرار والملفّات المولَّدة، مع
-الإبقاء المتعمَّد على `.env.example`/`.env.demo` (قوالب آمنة بلا أسرار
+الإبقاء المتعمَّد على `.env.example`/`.env.demo.example` (قوالب آمنة بلا أسرار
 حقيقية).
 
 ### 3. `HealthCheckController::readiness()` كان يفرض Redis إلزامياً

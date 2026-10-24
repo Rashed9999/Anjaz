@@ -6,6 +6,10 @@ use App\Models\AdminCenter\MerchantDataAccessGrant;
 use App\Models\Branch;
 use App\Models\EMoney;
 use App\Models\KycDocument;
+use App\Models\MuwathaqAccountOpeningApplication;
+use App\Models\MuwathaqOpeningEvidence;
+use App\Services\Muwathaq\MuwathaqEvidenceSummaryService;
+use App\Models\RegistrationDossier;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSale;
 use App\Models\PosUser;
@@ -136,7 +140,7 @@ class MerchantCenterService
             'business_type' => $p?->business_type,
             'business_type_label' => $p === null
                 ? 'لا ملفَّ تاجرٍ لهذا الحساب'
-                : (A::BUSINESS_TYPE_LABELS[$p->business_type ?? ''] ?? '—'),
+                : (\App\Domain\Verticals\VerticalRegistry::labels()[$p->business_type ?? ''] ?? '—'),
             'has_profile' => $p !== null,
             'status' => (int) ($m->is_active ?? 0) === 1 ? 'active' : 'frozen',
             'status_ar' => (int) ($m->is_active ?? 0) === 1 ? 'نشط' : 'مجمَّد',
@@ -147,8 +151,8 @@ class MerchantCenterService
             'kyc_status' => $p?->verification_status ?? 'pending',
             'verification_level' => $m->verification_level ?? 'basic',
             'zone_code' => $m->zone_code,
-            'plan' => $p?->subscription_plan ?? A::PLAN_FREE,
-            'plan_name' => A::PLAN_LABELS[$p?->subscription_plan ?? A::PLAN_FREE] ?? '—',
+            'plan' => A::canonicalPlan($p?->subscription_plan),
+            'plan_name' => A::PLAN_LABELS[A::canonicalPlan($p?->subscription_plan)] ?? '—',
             'plan_expires' => $p?->subscription_expires_at?->format('Y-m-d'),
             // بياناتٌ تشغيليّةٌ **عدداً لا تفصيلاً**
             'branches_count' => Branch::where('merchant_user_id', $m->id)->count(),
@@ -204,7 +208,7 @@ class MerchantCenterService
             'sales_summary' => [
                 'count' => MerchantSale::where('merchant_user_id', $m->id)->count(),
                 'amount' => (string) MerchantSale::where('merchant_user_id', $m->id)
-                    ->sum('total_amount'),
+                    ->sum(\DB::raw('COALESCE(base_amount, total_amount)')),
                 'note' => 'إجمالي مبيعاته من نقطة بيعه — أميال لا تحفظ أصنافه',
             ],
         ];
@@ -452,12 +456,37 @@ class MerchantCenterService
         $docs = KycDocument::where('user_id', $m->id)
             ->orderByDesc('id')->limit(20)->get();
 
+        // The modern onboarding evidence is not stored in legacy kyc_documents.
+        // Show redacted, account-scoped metadata, never encrypted storage paths.
+        $opening = MuwathaqAccountOpeningApplication::query()
+            ->where('user_id', $m->id)
+            ->where('subject_kind', 'merchant')
+            ->with('evidences')
+            ->latest('id')->first();
+
+        $evidenceSummary = $opening
+            ? app(MuwathaqEvidenceSummaryService::class)->forMerchant($opening)
+            : ['availability' => 'not_applicable', 'items' => []];
+        $openingEvidence = $evidenceSummary['items'];
+
         return [
             'kyc_status' => $p?->verification_status ?? 'pending',
             'verification_level' => $m->verification_level ?? 'basic',
             'verified_at' => $p?->verified_at?->format('Y-m-d'),
             // AMIAL-MERCHANT-PROFILE-NULL-001 — الغيابُ يُقال لا يُملأ.
             'has_profile' => $p !== null,
+            'muwathaq_opening' => $opening === null ? null : [
+                'reference' => $opening->application_ulid,
+                'status' => $opening->status,
+                'origin' => $opening->origin,
+                'verification_path' => $opening->verification_path,
+                'submitted_at' => $opening->submitted_at?->format('Y-m-d H:i'),
+                'decided_at' => $opening->decided_at?->format('Y-m-d H:i'),
+                // Case approval is not equivalent to per-document approval.
+                'evidence_visibility' => $evidenceSummary['availability'],
+            ],
+            'muwathaq_evidence_availability' => $evidenceSummary['availability'],
+            'muwathaq_evidence' => $openingEvidence,
             'documents_count' => $docs->count(),
             'documents' => $docs->map(fn (KycDocument $d) => [
                 'id' => $d->id,
@@ -471,6 +500,13 @@ class MerchantCenterService
                 'expires_at' => optional($d->document_expires_at)?->format('Y-m-d')
                     ?? 'بلا تاريخ انتهاء',
             ])->all(),
+            'registration_dossiers' => RegistrationDossier::query()
+                ->where('subject_user_id', $m->id)->latest()->limit(10)->get()
+                ->map(fn (RegistrationDossier $d) => [
+                    'reference' => $d->reference, 'source' => $d->source, 'state' => $d->state,
+                    'has_paper_form' => (bool) $d->paper_form_encrypted_path,
+                    'created_at' => $d->created_at?->format('Y-m-d H:i'),
+                ])->all(),
         ];
     }
 

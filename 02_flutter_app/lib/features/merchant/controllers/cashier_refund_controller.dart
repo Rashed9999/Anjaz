@@ -55,8 +55,28 @@ class CashierRefundController extends GetxController implements GetxService {
         if (reason != null && reason.isNotEmpty) 'reason': reason,
       };
       final r = await repo.create(saleUlid, body);
+
+      // 202 له حالتان مختلفتان:
+      // ① مرتجع مالي كبير أُنشئ فعلاً وبانتظار موافقة إدارية.
+      // ② صلاحية الكاشير نفسها تحتاج إذن مالك لمرة واحدة، ولم يُنشأ
+      //    المرتجع بعد. لا يجوز عرض الثانية كأن المال عاد.
+      if (r.statusCode == 202 &&
+          r.body is Map &&
+          r.body['code'] == 'APPROVAL_PENDING') {
+        final approval = Map<String, dynamic>.from(
+          (r.body['meta']?['approval'] ?? {}) as Map,
+        );
+        lastRefund.value = {
+          'status': 'owner_approval_pending',
+          'approval_request_id': approval['request_id'],
+        };
+        return true;
+      }
+
       if (_ok(r) || r.statusCode == 202) {
-        lastRefund.value = Map<String, dynamic>.from((r.body['meta']?['refund'] ?? {}) as Map);
+        lastRefund.value = Map<String, dynamic>.from(
+          (r.body['meta']?['refund'] ?? {}) as Map,
+        );
         return true;
       }
       lastError.value = _msg(r) ?? 'فشل إنشاء المرتجع';

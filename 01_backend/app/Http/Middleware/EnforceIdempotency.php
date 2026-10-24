@@ -65,6 +65,7 @@ class EnforceIdempotency
             // بحقّ، ولا تُدَّعى.
             $key = (string) \Illuminate\Support\Str::ulid();
         }
+        $request->attributes->set('amial.idempotency_key', $key);
 
         $userId = $request->user()?->id;
         $endpoint = $request->method() . ' ' . $request->path();
@@ -120,7 +121,10 @@ class EnforceIdempotency
 
         if ($status >= 200 && $status < 300) {
             // نجاح — نخزن للـ replay
-            $transactionId = $responseBody['data']['transaction_id'] ?? $responseBody['transaction_id'] ?? null;
+            $transactionId = $responseBody['data']['transaction_id']
+                ?? $responseBody['data']['order']['order_ulid']
+                ?? $responseBody['transaction_id']
+                ?? null;
             $this->idempotency->complete(
                 key: $key,
                 userId: $userId,

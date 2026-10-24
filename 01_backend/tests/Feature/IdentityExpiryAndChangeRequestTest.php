@@ -408,14 +408,17 @@ class IdentityExpiryAndChangeRequestTest extends TestCase
     }
 
     /** @test */
-    public function the_sidebar_links_to_it(): void
+    public function the_customer_center_links_to_change_requests(): void
     {
-        // **وصفحةٌ لا يُوصل إليها ليست مبنيّة** — والمسارُ المسجَّلُ ليس
-        // ظهوراً. (القاعدة الثانية عشرة.)
-        $this->assertStringContainsString('kyc.changes.page',
-            file_get_contents(resource_path(
-                'views/admin-views/amial/partials/_sidebar.blade.php')),
-            'الشاشةُ مبنيّةٌ ولا رابطَ يقود إليها');
+        $view = file_get_contents(resource_path(
+            'views/admin-views/amial/customer/index.blade.php'
+        ));
+
+        $this->assertStringContainsString(
+            'kyc.changes.page',
+            $view,
+            'Profile change requests are not reachable from the unified customer center'
+        );
     }
 
     /** @test */

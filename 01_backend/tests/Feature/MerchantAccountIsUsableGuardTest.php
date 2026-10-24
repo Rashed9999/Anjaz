@@ -3,11 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\Merchant\MerchantRole;
+use App\Models\Merchant\MerchantUserRole;
+use App\Models\PosUser;
 use App\Models\User;
 use App\Services\PlatformRoleService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Tests\Support\ProvisionsAccountsFromMuwathaq;
 use Tests\TestCase;
 
 /**
@@ -33,6 +37,7 @@ use Tests\TestCase;
 class MerchantAccountIsUsableGuardTest extends TestCase
 {
     use RefreshDatabase;
+    use ProvisionsAccountsFromMuwathaq;
 
     protected function setUp(): void
     {
@@ -49,23 +54,10 @@ class MerchantAccountIsUsableGuardTest extends TestCase
     }
 
     /** يُنشئ تاجراً من **زرّ اللوحة نفسِه** — لا من المصنع. */
-    private function createFromAdminPanel(string $businessType, string $phone): User
+    /** A merchant arrives only through a signed approved Muwathaq event. */
+    private function createFromMuwathaq(string $businessType, string $phone): User
     {
-        $this->actingAs($this->operator(), 'user')
-            ->postJson('/admin/amial/hub/merchants/users', [
-                'f_name' => 'صاحب',
-                'l_name' => 'الحساب',
-                'phone' => $phone,
-                'store_name' => 'منشأة الاختبار',
-                'business_type' => $businessType,
-                'password' => 'Passw0rd!2026',
-            ])->assertCreated();
-
-        $user = User::where('phone', 'like', '%' . ltrim($phone, '0') . '%')->latest('id')->first();
-
-        $this->assertNotNull($user, 'اللوحةُ ردّت بنجاح ولا حسابَ في القاعدة');
-
-        return $user;
+        return $this->provisionMerchantFromMuwathaq($businessType, $phone);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -77,7 +69,7 @@ class MerchantAccountIsUsableGuardTest extends TestCase
         foreach ([A::BIZ_FUEL => '967771000101',
                   A::BIZ_PHARMACY => '967771000102',
                   A::BIZ_RETAIL => '967771000103'] as $type => $phone) {
-            $merchant = $this->createFromAdminPanel($type, $phone);
+            $merchant = $this->createFromMuwathaq($type, $phone);
 
             $profile = MerchantProfile::where('user_id', $merchant->id)->first();
 
@@ -101,7 +93,7 @@ class MerchantAccountIsUsableGuardTest extends TestCase
      */
     public function test_the_owner_owns_his_vertical_without_any_role_row(): void
     {
-        $merchant = $this->createFromAdminPanel(A::BIZ_FUEL, '967771000201');
+        $merchant = $this->createFromMuwathaq(A::BIZ_FUEL, '967771000201');
 
         $data = $this->actingAs($merchant, 'api')
             ->getJson('/api/v1/amial/merchant/fuel/me/permissions')
@@ -114,6 +106,55 @@ class MerchantAccountIsUsableGuardTest extends TestCase
             'المالكُ بلا صلاحيّات — الشاشةُ تُفتح فارغةً');
     }
 
+    /**
+     * الربط القديم كموظف أو POS لا يسبق ملف التاجر. بدونه يُرى مالك المحطة
+     * «موظفاً بلا دور»، فتظهر له رسالة الصورة نفسها رغم أن حسابه صحيح.
+     */
+    public function test_a_merchant_profile_wins_over_a_stale_staff_assignment(): void
+    {
+        $merchant = $this->createFromMuwathaq(A::BIZ_FUEL, '967771000211');
+        $otherMerchant = $this->createFromMuwathaq(A::BIZ_FUEL, '967771000212');
+
+        $role = MerchantRole::where('merchant_user_id', $otherMerchant->id)->firstOrFail();
+        MerchantUserRole::create([
+            'merchant_user_id' => $otherMerchant->id,
+            'user_id' => $merchant->id,
+            'merchant_role_id' => $role->id,
+            'is_active' => true,
+        ]);
+
+        $data = $this->actingAs($merchant, 'api')
+            ->getJson('/api/v1/amial/merchant/fuel/me/permissions')
+            ->assertOk()->json('data');
+
+        $this->assertTrue($data['is_owner'],
+            'ربط موظف قديم سلب مالك المحطة ملكيته وأفرغ لوحته');
+        $this->assertNotEmpty($data['permissions']);
+    }
+
+    /** ونفس الحارس لربط نقطة بيع قديم — المساران كانا يسلبان الملكية. */
+    public function test_a_merchant_profile_wins_over_a_stale_pos_assignment(): void
+    {
+        $merchant = $this->createFromMuwathaq(A::BIZ_FUEL, '967771000221');
+        $otherMerchant = $this->createFromMuwathaq(A::BIZ_FUEL, '967771000222');
+
+        PosUser::create([
+            'user_id' => $merchant->id,
+            'merchant_user_id' => $otherMerchant->id,
+            'pos_number' => 'STALE-OWNER-LINK',
+            'display_name' => 'ربط قديم',
+            'is_active' => true,
+        ]);
+
+        $data = $this->actingAs($merchant, 'api')
+            ->getJson('/api/v1/amial/merchant/fuel/me/permissions')
+            ->assertOk()->json('data');
+
+        $this->assertTrue($data['is_owner'],
+            'ربط POS قديم سلب مالك المحطة ملكيته وأفرغ لوحته');
+        $this->assertNotEmpty($data['permissions']);
+    }
+
     // ══════════════════════════════════════════════════════════════════
     //  ③ سجلُّ القطاع — الشكوى نفسُها
     // ══════════════════════════════════════════════════════════════════
@@ -123,7 +164,7 @@ class MerchantAccountIsUsableGuardTest extends TestCase
      */
     public function test_a_fuel_account_opens_its_station_console(): void
     {
-        $merchant = $this->createFromAdminPanel(A::BIZ_FUEL, '967771000301');
+        $merchant = $this->createFromMuwathaq(A::BIZ_FUEL, '967771000301');
 
         // سجلُّ المحطّة يُبنى مع الحساب — لا عند أوّل فتح.
         $this->assertDatabaseHas('fuel_stations', ['merchant_user_id' => $merchant->id]);
@@ -142,7 +183,7 @@ class MerchantAccountIsUsableGuardTest extends TestCase
      */
     public function test_a_legacy_fuel_account_heals_itself_on_first_open(): void
     {
-        $merchant = $this->createFromAdminPanel(A::BIZ_FUEL, '967771000401');
+        $merchant = $this->createFromMuwathaq(A::BIZ_FUEL, '967771000401');
 
         // نُعيد العطلَ عمداً: نحذف سجلَّ المحطّة كما كانت الحساباتُ القديمة.
         \DB::table('fuel_stations')->where('merchant_user_id', $merchant->id)->delete();
@@ -157,7 +198,7 @@ class MerchantAccountIsUsableGuardTest extends TestCase
 
     public function test_a_pharmacy_account_opens_its_console(): void
     {
-        $merchant = $this->createFromAdminPanel(A::BIZ_PHARMACY, '967771000501');
+        $merchant = $this->createFromMuwathaq(A::BIZ_PHARMACY, '967771000501');
 
         $this->assertDatabaseHas('pharmacies', ['merchant_user_id' => $merchant->id]);
     }
@@ -173,7 +214,7 @@ class MerchantAccountIsUsableGuardTest extends TestCase
      */
     public function test_the_owner_finds_staff_roles_ready_to_assign(): void
     {
-        $merchant = $this->createFromAdminPanel(A::BIZ_FUEL, '967771000601');
+        $merchant = $this->createFromMuwathaq(A::BIZ_FUEL, '967771000601');
 
         $roles = $this->actingAs($merchant, 'api')
             ->getJson('/api/v1/amial/merchant/fuel/roles')
@@ -191,7 +232,7 @@ class MerchantAccountIsUsableGuardTest extends TestCase
     /** **ولا تُكتب البذرةُ فوق تعديلات المالك** عند أوّل نداءٍ ثانٍ. */
     public function test_seeding_twice_does_not_duplicate_or_overwrite(): void
     {
-        $merchant = $this->createFromAdminPanel(A::BIZ_FUEL, '967771000701');
+        $merchant = $this->createFromMuwathaq(A::BIZ_FUEL, '967771000701');
 
         $before = \App\Models\Merchant\MerchantRole::where('merchant_user_id', $merchant->id)->count();
 

@@ -41,6 +41,12 @@ class TransferPayloadContractTest extends TestCase
     {
         $user = User::factory()->create(array_merge([
             'zone_code' => 'SOUTH',
+            // **العمودان يتحرّكان معاً في المسار الحقيقيّ**
+            // (`KycDocumentService:249-250` يضبط `is_kyc_verified` و
+            // `kyc_tier` في نفس الحفظ)، فمُثبَّتٌ يضبط أحدَهما وحدَه
+            // **يصنع حالةً لا وجودَ لها في الإنتاج** — ثمّ يسقط حين
+            // يُفحص العمودُ الآخر، فيُقرأ عطلَ شيفرةٍ وهو عطلُ تجهيز.
+            'is_kyc_verified' => 1,
             'kyc_tier' => 3,
             'sanction_status' => 'clear',
             'sanction_checked' => true,

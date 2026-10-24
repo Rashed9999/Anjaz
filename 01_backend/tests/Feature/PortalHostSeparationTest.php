@@ -62,6 +62,7 @@ class PortalHostSeparationTest extends TestCase
         $u = new User();
         $u->forceFill([
             'f_name' => 'البسيري', 'l_name' => 'للصرافة', 'phone' => $phone,
+            'email' => 'portal-company-' . $phone . '@example.test',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
             'is_kyc_verified' => 1, 'is_active' => 1,
         ])->save();

@@ -27,6 +27,7 @@ class EMoney extends Model
     // AMIAL-REFACTOR-CORE-001: $fillable بدل $guarded = []
     protected $fillable = [
         'user_id',
+        'currency',
         'current_balance',
         'charge_earned',
         'pending_balance',
@@ -37,6 +38,7 @@ class EMoney extends Model
 
     protected $casts = [
         'user_id' => 'integer',
+        'currency' => 'string',
         // AMIAL-REFACTOR-CORE-001: decimal:4 بدل float:4
         // Laravel يعيد القيمة كـ string — هذا متعمد ليُستهلك مع bcmath
         'current_balance' => 'decimal:4',
@@ -64,6 +66,58 @@ class EMoney extends Model
         return $query->where('user_id', $userId)->lockForUpdate();
     }
 
+    // ═════════════════════════════════════════════════════════════════
+    // AMIAL-MULTI-CURRENCY-002 — **محفظةٌ لكلّ عملة، وصمتٌ يعني الريال.**
+    //
+    // **الثمنُ الذي كان سيُدفع:** في المشروع **١٦٤ موضعاً** تستعلم
+    // `e_money`، وكلُّها كُتبت حين كان للمستخدم محفظةٌ واحدة. فمجرّدُ
+    // إضافة صفٍّ بالدولار يجعل `EMoney::where('user_id', $x)->first()`
+    // تُرجع **أيَّ المحفظتين** — وعهدةُ الوكيل والتسويةُ والمصالحةُ
+    // والحدودُ كلُّها تقرأ بهذه الصيغة.
+    //
+    // **ولا يمسكه مُصرِّفٌ ولا اختبار**: الصيغةُ سليمة، والصفُّ سليم،
+    // والرقمُ يُقرأ — لكنّه من المحفظة الخطأ. ويظهر بعد أن يُنشئ أوّلُ
+    // تاجرٍ محفظةَ دولار، أي في الإنتاج لا هنا.
+    //
+    // **فالافتراضُ يُثبَّت في النموذج لا في ١٦٤ نداءً**: نطاقٌ عامٌّ يقصر
+    // كلَّ استعلامٍ على الريال، ومن أراد غيرَه **يقوله صراحةً**. فالشيفرةُ
+    // القائمةُ تعني اليومَ ما كانت تعنيه أمس، حرفاً بحرف.
+    // ═════════════════════════════════════════════════════════════════
+
+    /** اسمُ النطاق — يُنزَع بالاسم نفسِه. */
+    public const BASE_SCOPE = 'amial_base_currency';
+
+    protected static function bootedCurrencyScope(): void
+    {
+        static::addGlobalScope(self::BASE_SCOPE, function (Builder $q) {
+            $q->where($q->getModel()->getTable().'.currency', \App\Support\Money\Currencies::BASE);
+        });
+    }
+
+    /**
+     * محفظةُ عملةٍ بعينها. `EMoney::inCurrency('USD')->where('user_id', $x)`
+     *
+     * **ويُطبَّع الرمزُ فيرمي على المجهول** — فمحفظةٌ بعملةٍ لا نعرفها
+     * تُنشأ ولا يجدها أحدٌ بعد ذلك، والمالُ فيها يختفي عن كلّ تقرير.
+     */
+    public function scopeInCurrency(Builder $query, string $code): Builder
+    {
+        return $query->withoutGlobalScope(self::BASE_SCOPE)
+            ->where($query->getModel()->getTable().'.currency', \App\Support\Money\Currencies::normalize($code));
+    }
+
+    /**
+     * كلُّ العملات — **للعرض والجرد لا للحساب.**
+     *
+     * فجمعُ أرصدةٍ بعملاتٍ مختلفةٍ في رقمٍ واحدٍ كذبةٌ حسابيّة: ١٠٠ دولارٍ
+     * و١٠٠ ريالٍ ليسا ٢٠٠ من شيء. من ناداها يجمع بالعملة أو يحوّل بسعرٍ
+     * مذكورِ المصدر.
+     */
+    public function scopeAnyCurrency(Builder $query): Builder
+    {
+        return $query->withoutGlobalScope(self::BASE_SCOPE);
+    }
+
     /**
      * AMIAL-ZONE-001 (preparation): فلتر المحافظ ضمن zone معينة.
      */
@@ -79,6 +133,14 @@ class EMoney extends Model
      */
     protected static function booted(): void
     {
+        self::bootedCurrencyScope();
+
+        // **والعملةُ تُحرَس عند الحفظ**: رمزٌ خارج القائمة يُنشئ محفظةً لا
+        // يجدها أحدٌ بعد ذلك — لا تقريرٌ ولا مصالحةٌ ولا شاشة.
+        static::saving(function (EMoney $wallet) {
+            \App\Support\Money\Currencies::normalize($wallet->currency ?? \App\Support\Money\Currencies::BASE);
+        });
+
         static::saving(function (EMoney $wallet) {
             if ($wallet->current_balance < 0) {
                 throw new \LogicException(

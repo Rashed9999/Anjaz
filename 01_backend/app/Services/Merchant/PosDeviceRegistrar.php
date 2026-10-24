@@ -42,6 +42,9 @@ class PosDeviceRegistrar
     /** الحدُّ مستنفَد. */
     public const RESULT_LIMIT = 'limit_reached';
 
+    /** هويّة التثبيت نفسها ما زالت مقعداً نشطاً لمنشأة أخرى. */
+    public const RESULT_OTHER_MERCHANT = 'assigned_to_other_merchant';
+
     /**
      * يُسجّل جهازاً أو يُعيد المعروفَ منها.
      *
@@ -58,6 +61,35 @@ class PosDeviceRegistrar
             // **القفلُ على صفّ التاجر** — لا على جدول الأجهزة: فالمقعدُ
             // مورِدُ التاجر، والمتنافسون عليه طلباتُه هو.
             DB::table('users')->where('id', $merchant->id)->lockForUpdate()->first();
+
+            // **هوية تثبيت واحدة لا تكون مقعداً نشطاً لمنشأتين.**
+            //
+            // كانت هذه القاعدة في نقطة التفعيل وحدها؛ لكن التسجيل المباشر
+            // و`/pair` يمران بالمُسجّل نفسه، فتركها خارجَه يصنع باباً
+            // ثانياً يتجاوزها. نبحث بالمفتاح الحالي ومفاتيح التدوير السابقة
+            // حتى لا يصبح تدوير المفتاح طريقةً لتكرار الجهاز.
+            $hashes = [PosDevice::hashUuid($deviceUuid)];
+            foreach (PosDevice::previousKeys() as $key) {
+                $hashes[] = PosDevice::hashUuid($deviceUuid, $key);
+            }
+
+            $foreignActive = PosDevice::whereIn(
+                    'device_uuid_hash',
+                    array_values(array_unique($hashes)),
+                )
+                ->where('merchant_user_id', '!=', $merchant->id)
+                ->whereNull('revoked_at')
+                ->where('is_active', true)
+                ->exists();
+
+            if ($foreignActive) {
+                return [
+                    'result' => self::RESULT_OTHER_MERCHANT,
+                    'device' => null,
+                    'used' => PosDevice::activeSeats($merchant->id),
+                    'max' => $max,
+                ];
+            }
 
             // **البحثُ يمرّ بـ`locate` ولا يُجزّئ هنا** — فمصدرُ الهويّة
             // واحد. ولو جُزّئ في هذا الملفّ لعرف الجهازَ بالمفتاح الحاليّ
@@ -209,6 +241,32 @@ class PosDeviceRegistrar
         // اللحظة التي يُحتاج فيها صدقُها. والبوّابةُ تفحص أيضاً في كلّ
         // طلب (حزامان: أحدُهما يختم، والآخرُ يمنع لو أفلت الختم).
         \App\Models\Merchant\PosDeviceSession::endAllForDevice((int) $device->id);
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-SHIFT-DEVICE-001 — **وورديّةٌ مفتوحةٌ على جهازٍ ملغىً
+        // عهدةُ نقدٍ في يدٍ مجهولة.**
+        //
+        // الإلغاءُ كان يُنهي الجلساتِ ويخلي المقعد، **وتبقى الورديّةُ
+        // مفتوحةً إلى الأبد**: لا أحدَ يستطيع إقفالَها (الجهازُ لا
+        // يستجيب)، ولا تدخل تقريراً، وقفلُها يشغل الصندوقَ فلا يُفتَح
+        // عليه غيرُها. أي أنّ إلغاءَ جهازٍ مسروقٍ **يُعطّل الصندوق**.
+        //
+        // **ولا تُقفَل بمبلغٍ مخترَع.** إقفالُها بصفرٍ يكتب فرقاً كاذباً
+        // في سجلٍّ ماليّ، وبالمتوقَّع يُخفي السرقةَ التي أُلغي الجهازُ
+        // بسببها. فتُوسَم `abandoned` — **حالةٌ ثالثةٌ تُقال ولا تُحسَب
+        // جرداً** (القاعدة السابعة) — ويُحرَّر القفلُ فيعمل الصندوقُ
+        // البديل، ويبقى الأثرُ كاملاً لمن يجرد بيده.
+        // ══════════════════════════════════════════════════════════════
+        \App\Models\CashierShift::where('open_device_lock', (int) $device->id)
+            ->update([
+                'status' => 'abandoned',
+                'open_device_lock' => null,
+                'closed_at' => now(),
+                'closed_by' => $byUserId,
+                'closed_by_name' => 'أُلغي الجهاز',
+                'notes' => 'أُلغي الجهازُ والورديّةُ مفتوحة — تُجرَد يدويّاً، '
+                    .'ولم يُحتسَب لها فرقٌ لأنّ الدرجَ لم يُعَدّ.',
+            ]);
     }
 
     /**
@@ -221,7 +279,7 @@ class PosDeviceRegistrar
     {
         $profile = \App\Models\MerchantProfile::where('user_id', $merchant->id)->first();
 
-        $plan = $profile?->subscription_plan ?? A::PLAN_FREE;
+        $plan = A::canonicalPlan($profile?->subscription_plan);
 
         // **الاشتراكُ المنتهي يعود مجّانيّاً** — كما في `FeatureAccessService`.
         if ($plan !== A::PLAN_FREE

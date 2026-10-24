@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Models\PaymentRequest;
+use App\Models\PosUser;
+use App\Models\User;
 use App\Services\PaymentRequestService;
 use App\Services\RecipientVerificationService;
 use App\Services\TransactionPinService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -77,8 +80,11 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
         if ($v->fails()) return $this->validationError($v);
 
         try {
+            // موظف المنشأة أو موظف POS ينشئ رمز التحصيل نيابةً عن محفظة
+            // المنشأة، لا عن محفظته الشخصية. وإلا ظهر QR صحيح وذهب المال
+            // إلى الموظف بدلاً من التاجر.
             $req = $this->service->create(
-                requester: $request->user(),
+                requester: $this->commerceRequester($request->user()),
                 amount: (string)$request->input('amount'),
                 recipientPhone: $request->input('recipient_phone'),
                 recipientName: $request->input('recipient_name'),
@@ -168,9 +174,10 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
             if (($requester->zone_code ?? 'UNKNOWN') !== 'SOUTH') {
                 throw new \RuntimeException('خدمة طلب المال غير متاحة في منطقتك الحالية');
             }
-            if ((int) $requester->is_kyc_verified !== 1) {
-                throw new \RuntimeException('أكمل توثيق حسابك قبل طلب المال');
-            }
+            // العميل Tier 1 يملك الخدمة الأساسية؛ لا نربط هذه المعاينة
+            // بعلم KYC الكامل القديم.
+            app(\App\Services\KycTierService::class)
+                ->assertIndividualFeatureAllowed($requester, 'receive_money');
 
             // المصدر المركزي نفسه المستخدم قبل التحويل: اسم ورقم مقنّعان
             // + token أحادي الاستخدام. لا نعيد بناء بحث هاتف أضعف هنا.
@@ -186,9 +193,9 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
             if (!(bool) $recipient->is_active) {
                 throw new \RuntimeException('حساب العميل موقوف حالياً');
             }
-            if ((int) $recipient->is_kyc_verified !== 1) {
-                throw new \RuntimeException('حساب العميل غير موثّق لاستقبال الطلب');
-            }
+            app(\App\Services\KycTierService::class)
+                ->assertIndividualFeatureAllowed($recipient, 'send_money');
+
             return $this->ok([
                 // مفاتيح found/name باقية لتوافق النسخة السابقة.
                 'found' => true,
@@ -214,7 +221,7 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
         $page = (int)$request->query('page', 1);
 
         $paginated = $this->service->listForUser(
-            $request->user(), $direction, $status, $page
+            $this->commerceRequester($request->user()), $direction, $status, $page
         );
 
         return $this->ok([
@@ -358,7 +365,7 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
         if (!$req) return $this->error('NOT_FOUND', 'الطلب غير موجود', 404);
 
         try {
-            $cancelled = $this->service->cancel($request->user(), $req);
+            $cancelled = $this->service->cancel($this->commerceRequester($request->user()), $req);
         } catch (\InvalidArgumentException $e) {
             return $this->error('FORBIDDEN', $e->getMessage(), 403);
         } catch (\RuntimeException $e) {
@@ -449,5 +456,24 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
         }
 
         return $this->ok($result, 'PAID', 'تم الدفع');
+    }
+
+    /**
+     * يحدّد صاحب محفظة التجارة لجلسة الموظف. حساب الموظف يعرّف الفاعل
+     * وصلاحياته، لكنّ QR البيع والتحصيل يجب أن يودع في محفظة المنشأة.
+     */
+    private function commerceRequester(User $actor): User
+    {
+        $pos = PosUser::where('user_id', $actor->id)->where('is_active', true)->first();
+        if ($pos !== null) {
+            return User::findOrFail($pos->merchant_user_id);
+        }
+
+        $merchantId = DB::table('merchant_user_roles')
+            ->where('user_id', $actor->id)
+            ->where('is_active', true)
+            ->value('merchant_user_id');
+
+        return $merchantId ? User::findOrFail($merchantId) : $actor;
     }
 }

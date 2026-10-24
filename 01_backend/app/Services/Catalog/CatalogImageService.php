@@ -82,14 +82,36 @@ class CatalogImageService
         try {
             $out = $this->downscale($src);
 
-            $name = Str::ulid() . '.webp';
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-PROD-DEFECTS-001 — **WebP ليس مضموناً في كلّ بناءِ GD.**
+            //
+            // كان يُنادى `imagewebp()` مباشرةً، وخادمُ الإنتاج بُني بـGD
+            // **بلا WebP** — فيخرج `Call to undefined function
+            // imagewebp()`. وهو **خطأٌ فادحٌ لا استثناءٌ يُلتقط**: يسقط
+            // رفعُ الصورة كلَّه بـ٥٠٠، وقد بلّغ عنه مركزُ الأعطال على
+            // `/admin/amial/charity/uploads`.
+            //
+            // **ولا يظهر هنا إطلاقاً**: بناءُ GD في هذه الحاوية يدعمه،
+            // فالشيفرةُ سليمةٌ محلّيّاً ومكسورةٌ على الخادم. وهذا صنفٌ
+            // لا يمسكه اختبارٌ يجري في بيئةٍ واحدة.
+            //
+            // **والبديلُ JPEG لا رسالةُ خطأ**: صورةُ المنتج غرضُها أن
+            // تُعرَض؛ ورفضُ الرفع لأنّ صيغةَ الضغط غيرُ متاحةٍ يُعطّل
+            // الكتالوجَ كلَّه على أمرٍ لا يخصّ صاحبَه.
+            // ══════════════════════════════════════════════════════════
+            $webp = function_exists('imagewebp');
+            $name = Str::ulid() . ($webp ? '.webp' : '.jpg');
             $dir = storage_path('app/public/' . self::DIR);
 
             if (! is_dir($dir)) {
                 mkdir($dir, 0755, true);
             }
 
-            if (! imagewebp($out, $dir . '/' . $name, self::QUALITY)) {
+            $saved = $webp
+                ? imagewebp($out, $dir . '/' . $name, self::QUALITY)
+                : imagejpeg($out, $dir . '/' . $name, self::QUALITY);
+
+            if (! $saved) {
                 throw new RuntimeException('تعذّر حفظُ الصورة');
             }
 

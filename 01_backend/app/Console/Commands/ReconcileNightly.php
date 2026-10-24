@@ -54,6 +54,16 @@ class ReconcileNightly extends Command
             $this->alert_($r);
         }
 
+        // A clean, completed reconciliation is the only event allowed to
+        // resolve this alarm. A deploy, a retry, or an operator click cannot
+        // clear a financial incident by itself.
+        if ($r['status'] === 'clean') {
+            app(OpsAlertService::class)->resolve(
+                'recon.nightly_diverged',
+                'أظهر تشغيل مصالحة مكتمل عدم وجود فروق في المحافظ أو الدفتر أو الخزائن.'
+            );
+        }
+
         return self::SUCCESS;
     }
 

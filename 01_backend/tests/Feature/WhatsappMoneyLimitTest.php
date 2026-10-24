@@ -226,7 +226,7 @@ class WhatsappMoneyLimitTest extends TestCase
     public function the_screen_is_reachable_from_the_sidebar(): void
     {
         $html = $this->actingAs($this->admin(), 'user')
-            ->get(route('admin.dashboard'))->assertOk()->getContent();
+            ->get(route('admin.amial.workspace.index'))->assertOk()->getContent();
 
         $this->assertStringContainsString('/admin/amial/whatsapp/limits', $html,
             'لا رابطَ إلى حدود البوت من أيّ صفحةٍ يمرّ بها المدير');

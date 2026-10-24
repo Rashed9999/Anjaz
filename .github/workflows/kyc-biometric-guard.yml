@@ -1,0 +1,146 @@
+name: أميال باي — حارس KYC Biometric
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - '01_backend/app/Services/Kyc/Biometric/**'
+      - '01_backend/app/Services/Kyc/KycPrivacyService.php'
+      - '01_backend/app/Services/KycTierService.php'
+      - '01_backend/app/Services/KycDocumentService.php'
+      - '01_backend/database/migrations/*legal_name*'
+      - '01_backend/tests/Feature/CustomerLegalNameLifecycleTest.php'
+      - '02_flutter_app/lib/features/auth/screens/quick_registration_screen.dart'
+      - '01_backend/app/Http/Controllers/Api/V1/RegisterController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Auth/ProgressiveRegistrationController.php'
+      - '01_backend/app/Http/Controllers/Admin/KycResidenceAdminController.php'
+      - '01_backend/app/Services/Kyc/ProfileChangeRequestService.php'
+      - '01_backend/app/Services/Kyc/ResidenceVerificationService.php'
+      - '01_backend/app/Services/Kyc/LegalNameService.php'
+      - '01_backend/app/Services/Admin/KycEvidenceService.php'
+      - '01_backend/app/Http/Controllers/Admin/AdminHubController.php'
+      - '01_backend/routes/admin/amial.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/KycDocumentController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/VerificationStatusController.php'
+      - '01_backend/tests/Feature/KycRegulatoryLimitsTest.php'
+      - '01_backend/tests/Feature/KycSequentialTierGuardTest.php'
+      - '01_backend/app/Services/DonationsService.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/KycBiometricWebhookController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/KycPrivacyController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/SafePaymentController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/FamilyFundController.php'
+      - '01_backend/app/Http/Controllers/Admin/KycPrivacyAdminController.php'
+      - '01_backend/config/amial_kyc.php'
+      - '01_backend/database/migrations/*kyc_biometric*'
+      - '01_backend/routes/api/kyc-biometric-webhook.php'
+      - '01_backend/routes/api/kyc-privacy.php'
+      - '01_backend/tests/Feature/KycBiometricProviderRuntimeTest.php'
+      - '01_backend/tests/Feature/KycCrossTierServiceGuardTest.php'
+      - '.github/workflows/kyc-biometric-guard.yml'
+  pull_request:
+    branches: ['**']
+    paths:
+      - '01_backend/app/Services/Kyc/Biometric/**'
+      - '01_backend/app/Services/Kyc/KycPrivacyService.php'
+      - '01_backend/app/Services/KycTierService.php'
+      - '01_backend/app/Services/KycDocumentService.php'
+      - '01_backend/database/migrations/*legal_name*'
+      - '01_backend/tests/Feature/CustomerLegalNameLifecycleTest.php'
+      - '02_flutter_app/lib/features/auth/screens/quick_registration_screen.dart'
+      - '01_backend/app/Http/Controllers/Api/V1/RegisterController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Auth/ProgressiveRegistrationController.php'
+      - '01_backend/app/Http/Controllers/Admin/KycResidenceAdminController.php'
+      - '01_backend/app/Services/Kyc/ProfileChangeRequestService.php'
+      - '01_backend/app/Services/Kyc/ResidenceVerificationService.php'
+      - '01_backend/app/Services/Kyc/LegalNameService.php'
+      - '01_backend/app/Services/Admin/KycEvidenceService.php'
+      - '01_backend/app/Http/Controllers/Admin/AdminHubController.php'
+      - '01_backend/routes/admin/amial.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/KycDocumentController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/VerificationStatusController.php'
+      - '01_backend/tests/Feature/KycRegulatoryLimitsTest.php'
+      - '01_backend/tests/Feature/KycSequentialTierGuardTest.php'
+      - '01_backend/app/Services/DonationsService.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/KycBiometricWebhookController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/KycPrivacyController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/SafePaymentController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/FamilyFundController.php'
+      - '01_backend/app/Http/Controllers/Admin/KycPrivacyAdminController.php'
+      - '01_backend/config/amial_kyc.php'
+      - '01_backend/database/migrations/*kyc_biometric*'
+      - '01_backend/routes/api/kyc-biometric-webhook.php'
+      - '01_backend/routes/api/kyc-privacy.php'
+      - '01_backend/tests/Feature/KycBiometricProviderRuntimeTest.php'
+      - '01_backend/tests/Feature/KycCrossTierServiceGuardTest.php'
+      - '.github/workflows/kyc-biometric-guard.yml'
+
+concurrency:
+  group: kyc-biometric-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused:
+    name: KYC Biometric — اختبار مركز
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: amial_pay_testing
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping" --health-interval=10s
+          --health-timeout=5s --health-retries=10
+
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: amial_pay_testing
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: array
+
+    defaults:
+      run:
+        working-directory: 01_backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, gd, zip, bcmath, intl, exif, pcntl
+          coverage: none
+
+      - name: Composer
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: بيئة الاختبار
+        run: |
+          cp .env.example .env
+          mkdir -p storage/framework/{cache/data,sessions,views} storage/logs storage/app/public bootstrap/cache
+          php artisan key:generate
+          php artisan passport:keys --force
+          echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
+          echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
+
+      - name: حارس Cross-Tier لخدمات العميل
+        run: php artisan test --compact tests/Feature/KycCrossTierServiceGuardTest.php
+
+      - name: حارس حدود مستويات التوثيق المالية
+        run: php artisan test --compact tests/Feature/KycRegulatoryLimitsTest.php
+
+      - name: حارس تسلسل مستويات العميل 0 → 1 → 2 → 3
+        run: php artisan test --compact tests/Feature/KycSequentialTierGuardTest.php
+
+      - name: حارس الاسم القانوني من التسجيل إلى الهوية
+        run: php artisan test --compact tests/Feature/CustomerLegalNameLifecycleTest.php
+
+      - name: حارس Runtime البيومتري
+        run: php artisan test --compact tests/Feature/KycBiometricProviderRuntimeTest.php

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -16,6 +17,8 @@ import 'package:amial_pay/features/setting/controllers/profile_screen_controller
 import 'package:amial_pay/features/requested_money/controllers/requested_money_controller.dart';
 import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
 import 'package:amial_pay/features/history/controllers/transaction_history_controller.dart';
+import 'package:amial_pay/features/bill_pay/controllers/bill_pay_controller.dart';
+import 'package:amial_pay/features/bill_pay/screens/bill_pay_history_screen.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/util/app_constants.dart';
 import 'package:open_file/open_file.dart';
@@ -23,12 +26,180 @@ import 'package:open_file/open_file.dart';
 
 
 class NotificationHelper {
+  static bool _isBillPaymentType(dynamic type) => const {
+        'bill_payment_success',
+        'bill_payment_pending',
+        'bill_payment_failed',
+      }.contains(type?.toString());
+  /// هذا هو القناة الوحيدة لإشعارات أميال على Android. يطابق المعرّف
+  /// المعلن في AndroidManifest وFCM، فلا يفقد إشعار الخلفية صوته بسبب
+  /// إنشاء قناة باسم مختلف عن القناة التي يرسل إليها الخادم.
+  static const String androidChannelId = 'amial_pay_default';
+  static const AndroidNotificationChannel _androidChannel =
+      AndroidNotificationChannel(
+    androidChannelId,
+    'إشعارات أميال باي',
+    description: 'تنبيهات العمليات والطلبات المهمة',
+    importance: Importance.max,
+    playSound: true,
+    sound: RawResourceAndroidNotificationSound('notification'),
+  );
+
+  static Future<void> _ensureAndroidChannel(
+      FlutterLocalNotificationsPlugin plugin) async {
+    final android = plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    await android?.createNotificationChannel(_androidChannel);
+  }
+
+  // AMIAL-NOTIFY-DEEPLINK-002 — إشعار cold-start يبقى معلّقاً حتى
+  // ينجح تسجيل الدخول. لا نفتح بيانات مالية فوق شاشة الدخول ولا نرمي الحدث.
+  static NotificationBody? _pendingInitialNotification;
+
+  static void setPendingInitialNotification(NotificationBody? body) {
+    _pendingInitialNotification = body;
+  }
+
+  static Future<bool> consumePendingInitialNotification() async {
+    final body = _pendingInitialNotification;
+    if (body == null) return false;
+
+    // consume-once: الضغط نفسه لا يعيد فتح الشاشة عند rebuild أو login ثانٍ.
+    _pendingInitialNotification = null;
+    await _routeNotificationBody(body);
+    return true;
+  }
+
+  static Future<void> _openNotificationCenter() async {
+    try {
+      await Get.find<NotificationController>().getNotificationList(true);
+    } catch (_) {
+      // القائمة ستُحمّل من الشاشة نفسها إن لم يكن controller جاهزاً بعد.
+    }
+
+    final MenuItemController menuItemController = Get.find();
+    if (Get.currentRoute != RouteHelper.navbar) {
+      Get.toNamed(RouteHelper.getNavBarRoute(selectedPage: 'notification'));
+    } else {
+      menuItemController.selectNotificationPage();
+    }
+  }
+
+  static Future<void> _routeNotificationBody(NotificationBody notificationBody) async {
+    final String? type = notificationBody.type;
+    if (type == null || type.isEmpty || type == 'general') {
+      await _openNotificationCenter();
+      return;
+    }
+
+    final TransactionHistoryController transactionHistoryController = Get.find();
+
+    if (transactionHistoryController.transactionType.contains(type)) {
+      final int index = transactionHistoryController.transactionType.indexOf(type);
+      transactionHistoryController.setIndex(index, reload: true);
+      await transactionHistoryController.getTransactionData(
+        1,
+        transactionType: transactionHistoryController.transactionType[index],
+      );
+
+      final MenuItemController menuItemController = Get.find();
+      if (Get.currentRoute != RouteHelper.navbar) {
+        Get.toNamed(RouteHelper.getNavBarRoute(selectedPage: 'history'));
+      } else {
+        menuItemController.selectHistoryPage();
+      }
+      return;
+    }
+
+    if (type == 'add_money_bonus') {
+      transactionHistoryController.setIndex(
+        transactionHistoryController.transactionType.indexOf('add_money'),
+        reload: false,
+      );
+      final MenuItemController menuItemController = Get.find();
+      if (Get.currentRoute != RouteHelper.navbar) {
+        Get.toNamed(RouteHelper.getNavBarRoute(selectedPage: 'history'));
+      } else {
+        menuItemController.selectHistoryPage();
+      }
+      return;
+    }
+
+    if (_isBillPaymentType(type)) {
+      await Get.find<BillPayController>().loadOrders();
+      Get.to(() => const BillPayHistoryScreen());
+      return;
+    }
+
+    if (type == 'payment_request_received') {
+      Get.to(() => const IncomingRequestsScreen());
+      return;
+    }
+
+    if (type == 'payment_request_declined') {
+      Get.to(() => const OutgoingRequestsScreen());
+      return;
+    }
+
+    if (type == 'request_money') {
+      Get.to(() => const RequestedMoneyListScreen(requestType: RequestType.request));
+      return;
+    }
+
+    if (type == 'send_request_money') {
+      Get.to(() => const RequestedMoneyListScreen(requestType: RequestType.sendRequest));
+      return;
+    }
+
+    final RequestedMoneyController requestedMoneyController = Get.find();
+    if (type == 'denied_money') {
+      requestedMoneyController.setIndex(2, isUpdate: false);
+      Get.to(() => const RequestedMoneyListScreen(
+        requestType: RequestType.sendRequest,
+        isFromNotification: true,
+      ));
+      return;
+    }
+
+    if (type == 'withdraw_money_denied') {
+      requestedMoneyController.setIndex(2, isUpdate: false);
+      Get.to(() => const RequestedMoneyListScreen(
+        requestType: RequestType.withdraw,
+        isFromNotification: true,
+      ));
+      return;
+    }
+
+    if (type == 'withdraw_money_approved') {
+      requestedMoneyController.setIndex(1, isUpdate: false);
+      Get.to(() => const RequestedMoneyListScreen(
+        requestType: RequestType.withdraw,
+        isFromNotification: true,
+      ));
+      return;
+    }
+
+    // أي نوع جديد (KYC/دين/أمان/اشتراك...) يفتح المصدر الصحيح العام
+    // بدلاً من ربطه خطأً بصندوق «طلبات الأموال» القديم.
+    await _openNotificationCenter();
+  }
+
+  /// تهيئة آمنة للعامل الخلفي: بلا GetX أو تنقل، فقط قناة النظام وعرضه.
+  static Future<void> initializeBackground(
+      FlutterLocalNotificationsPlugin plugin) async {
+    const settings = InitializationSettings(
+      android: AndroidInitializationSettings('notification_icon'),
+      iOS: DarwinInitializationSettings(),
+    );
+    await plugin.initialize(settings);
+    await _ensureAndroidChannel(plugin);
+  }
 
   static Future<void> initialize(FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin) async {
     var androidInitialize = const AndroidInitializationSettings('notification_icon');
     var iOSInitialize = const DarwinInitializationSettings();
     var initializationsSettings = InitializationSettings(android: androidInitialize, iOS: iOSInitialize);
-    flutterLocalNotificationsPlugin.initialize(initializationsSettings, onDidReceiveNotificationResponse: (NotificationResponse notificationResponse) async {
+    await flutterLocalNotificationsPlugin.initialize(initializationsSettings, onDidReceiveNotificationResponse: (NotificationResponse notificationResponse) async {
 
 
       try{
@@ -67,6 +238,10 @@ class NotificationHelper {
             }else{
               menuItemController.selectHistoryPage();
             }
+
+          }else if(_isBillPaymentType(notificationBody.type)){
+            await Get.find<BillPayController>().loadOrders();
+            Get.to(()=> const BillPayHistoryScreen());
 
           }else if(notificationBody.type == 'payment_request_received'){
             // AMIAL-REQUEST-DIRECT-003 — **إشعارٌ يصل ولا يقود إلى شيء.**
@@ -107,6 +282,13 @@ class NotificationHelper {
 
           }else if (notificationBody.type == 'download' && notificationBody.filePath != null) {
             await OpenFile.open(notificationBody.filePath!);
+          }else{
+            await Get.find<NotificationController>().getNotificationList(true);
+            if(Get.currentRoute != RouteHelper.navbar){
+              Get.toNamed(RouteHelper.getNavBarRoute(selectedPage: 'notification'));
+            }else{
+              menuItemController.selectNotificationPage();
+            }
           }
 
         }
@@ -116,9 +298,10 @@ class NotificationHelper {
 
 
     });
+    await _ensureAndroidChannel(flutterLocalNotificationsPlugin);
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('onMessage: ${message.notification!.title}/${message.notification!.body}/${message.notification!.titleLocKey} \n ${message.data}');
+      debugPrint('onMessage: ${message.notification?.title ?? message.data['title']}/${message.notification?.body ?? message.data['body']} \n ${message.data}');
 
 
       showNotification(message, flutterLocalNotificationsPlugin);
@@ -128,6 +311,9 @@ class NotificationHelper {
 
       if(message.data['type'] == 'general'){
         Get.find<NotificationController>().getNotificationList(true);
+
+      }else if(_isBillPaymentType(message.data['type'])){
+        Get.find<BillPayController>().loadOrders();
 
       }else if(message.data['type'] == 'payment_request_received'){
         // الطلب الجديد ينتمي إلى payment_requests لا صندوق 6cash القديم.
@@ -153,13 +339,13 @@ class NotificationHelper {
         }
 
       } else{
-        Get.find<RequestedMoneyController>().getRequestedMoneyList(true);
+        Get.find<NotificationController>().getNotificationList(true);
       }
 
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-      debugPrint('onMessageOpenedApp: ${message.notification!.title}/${message.notification!.body}/${message.notification!.titleLocKey} \n ${message.data}');
+      debugPrint('onMessageOpenedApp: ${message.notification?.title ?? message.data['title']}/${message.notification?.body ?? message.data['body']} \n ${message.data}');
 
 
       await Get.find<ProfileController>().getProfileData(reload: true);
@@ -169,6 +355,9 @@ class NotificationHelper {
 
       if(message.data['type'] == 'general'){
         await Get.find<NotificationController>().getNotificationList(true);
+
+      }else if(_isBillPaymentType(message.data['type'])){
+        await Get.find<BillPayController>().loadOrders();
 
       }else if(message.data['type'] == 'payment_request_received'){
         await Get.find<PaymentRequestController>().loadList('incoming', status: 'pending');
@@ -197,7 +386,7 @@ class NotificationHelper {
         await transactionHistoryController.getRecentTransactionList();
 
       }else{
-        await Get.find<RequestedMoneyController>().getRequestedMoneyList(true);
+        await Get.find<NotificationController>().getNotificationList(true);
       }
 
 
@@ -233,6 +422,10 @@ class NotificationHelper {
             }
 
 
+          }else if(_isBillPaymentType(notificationBody.type)){
+            await Get.find<BillPayController>().loadOrders();
+            Get.to(()=> const BillPayHistoryScreen());
+
           }else if(notificationBody.type == 'payment_request_received'){
             // AMIAL-REQUEST-DIRECT-003 — **إشعارٌ يصل ولا يقود إلى شيء.**
             //
@@ -265,6 +458,13 @@ class NotificationHelper {
             requestedMoneyController.setIndex(1, isUpdate: false);
             Get.to(()=> const RequestedMoneyListScreen(requestType: RequestType.withdraw, isFromNotification: true));
 
+          }else{
+            await Get.find<NotificationController>().getNotificationList(true);
+            if(Get.currentRoute != RouteHelper.navbar){
+              Get.toNamed(RouteHelper.getNavBarRoute(selectedPage: 'notification'));
+            }else{
+              menuItemController.selectNotificationPage();
+            }
           }
 
         }
@@ -298,33 +498,42 @@ class NotificationHelper {
   }
 
   static Future<void> showNotification(RemoteMessage message, FlutterLocalNotificationsPlugin? fln) async {
-    String? title;
-    String? body;
+    final plugin = fln;
+    if (plugin == null) return;
+    final notification = message.notification;
+    final notificationTitle = notification?.title?.trim();
+    final title = message.data['title']?.toString().trim().isNotEmpty == true
+        ? message.data['title'].toString()
+        : notificationTitle?.isNotEmpty == true
+            ? notificationTitle!
+            : AppConstants.appName;
+    final body = message.data['body']?.toString().trim().isNotEmpty == true
+        ? message.data['body'].toString()
+        : notification?.body ?? 'لديك إشعار جديد من أميال باي';
     String? orderID;
     String? image;
     String playLoad = jsonEncode(message.data);
 
-    title = message.data['title'];
-    body = message.data['body'];
     orderID = message.data['order_id'];
-    image = (message.data['image'] != null && message.data['image'].isNotEmpty)
-        ? message.data['image'].startsWith('http') ? message.data['image']
-        : '${AppConstants.baseUrl}/storage/app/public/notification/${message.data['image']}' : null;
+    final imageValue = message.data['image']?.toString().trim() ?? '';
+    image = imageValue.isNotEmpty
+        ? imageValue.startsWith('http') ? imageValue
+        : '${AppConstants.baseUrl}/storage/app/public/notification/$imageValue' : null;
 
     if(image != null && image.isNotEmpty) {
       try{
-        await showBigPictureNotificationHiddenLargeIcon(title, body, orderID, image, fln!, payload: playLoad);
+        await showBigPictureNotificationHiddenLargeIcon(title, body, orderID, image, plugin, payload: playLoad);
       }catch(e) {
-        await showBigTextNotification(title, body!, orderID, fln!, payload: playLoad);
+        await showBigTextNotification(title, body, orderID, plugin, payload: playLoad);
       }
     }else {
-      await showBigTextNotification(title, body!, orderID, fln!, payload: playLoad);
+      await showBigTextNotification(title, body, orderID, plugin, payload: playLoad);
     }
   }
 
   static Future<void> showTextNotification(String title, String body, String orderID, FlutterLocalNotificationsPlugin fln) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
-      AppConstants.appName, AppConstants.appName, playSound: true,
+      androidChannelId, 'إشعارات أميال باي', playSound: true,
       importance: Importance.max, priority: Priority.max, sound: RawResourceAndroidNotificationSound('notification'),
     );
     const NotificationDetails platformChannelSpecifics = NotificationDetails(android: androidPlatformChannelSpecifics);
@@ -337,7 +546,7 @@ class NotificationHelper {
       contentTitle: title, htmlFormatContentTitle: true,
     );
     AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
-      AppConstants.appName, AppConstants.appName, importance: Importance.max,
+      androidChannelId, 'إشعارات أميال باي', importance: Importance.max,
       styleInformation: bigTextStyleInformation, priority: Priority.max, playSound: true,
       sound: const RawResourceAndroidNotificationSound('notification'),
     );
@@ -354,7 +563,7 @@ class NotificationHelper {
       summaryText: body, htmlFormatSummaryText: true,
     );
     final AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
-      AppConstants.appName, AppConstants.appName,
+      androidChannelId, 'إشعارات أميال باي',
       largeIcon: FilePathAndroidBitmap(largeIconPath), priority: Priority.max, playSound: true,
       styleInformation: bigPictureStyleInformation, importance: Importance.max,
       sound: const RawResourceAndroidNotificationSound('notification'),
@@ -380,12 +589,18 @@ class NotificationHelper {
 
 
 
-Future<dynamic> myBackgroundMessageHandler(RemoteMessage message) async {
-  debugPrint("onBackground: ${message.notification!.title}/${message.notification!.body}/${message.notification!.titleLocKey}");
-  // var androidInitialize = const AndroidInitializationSettings('notification_icon');
-  // var iOSInitialize = const DarwinInitializationSettings();
-  // var initializationsSettings = InitializationSettings(android: androidInitialize, iOS: iOSInitialize);
-  // FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  // flutterLocalNotificationsPlugin.initialize(initializationsSettings);
-  // NotificationHelper.showNotification(message, flutterLocalNotificationsPlugin);
+@pragma('vm:entry-point')
+Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {
+    // قد تكون Firebase مهيّأة بالفعل في isolate الاختبار؛ نكمل عرض الإشعار.
+  }
+  try {
+    final plugin = FlutterLocalNotificationsPlugin();
+    await NotificationHelper.initializeBackground(plugin);
+    await NotificationHelper.showNotification(message, plugin);
+  } catch (error) {
+    debugPrint('AMIAL-FCM background notification failed: $error');
+  }
 }

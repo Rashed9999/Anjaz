@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
  *   - حركات الصندوق append-only مع balance_before/balance_after
  *   - مساهمة عضو = تحويل من محفظته إلى الصندوق (DB transaction واحد)
  *   - الصرف يحتاج موافقة owner (configurable)
- *   - SOUTH only — تطبق ZonePolicyService
+ *   - يلزم محل إقامة موثق؛ الصندوق حركة دفتر داخلية لا خدمة نقدية
  *   - إيصال PDF لكل مساهمة/صرف عبر ReceiptService
  */
 class FamilyFundService
@@ -32,6 +32,7 @@ class FamilyFundService
         private readonly FinancialGuardService $guard,
         private readonly AuditService $audit,
         private readonly ReceiptService $receipts,
+        private readonly KycTierService $kyc,
     ) {}
 
     /**
@@ -44,9 +45,9 @@ class FamilyFundService
         bool $requireOwnerApproval = true,
         ?string $targetAmount = null, // AMIAL-FUND-002: المبلغ المستهدف
     ): FamilyFund {
-        if ($owner->zone_code !== 'SOUTH') {
-            throw new \RuntimeException('Only SOUTH users can create funds');
-        }
+        $this->kyc->assertIndividualFeatureAllowed($owner, 'family_fund');
+
+        app(ZonePolicyService::class)->assertAllowed($owner, 'family_fund_contribute');
 
         return DB::transaction(function () use ($owner, $name, $description, $requireOwnerApproval, $targetAmount) {
             $fund = FamilyFund::create([
@@ -111,9 +112,12 @@ class FamilyFundService
         if (!$invitee) {
             throw new \RuntimeException('User with this phone is not registered');
         }
-        if ($invitee->zone_code !== 'SOUTH') {
-            throw new \RuntimeException('Invitee must be in SOUTH zone');
-        }
+        app(ZonePolicyService::class)->assertAllowed($invitee, 'family_fund_contribute');
+
+        // لا يكفي أن يكون صاحب الصندوق Tier 2/3: المدعو نفسه عضو مالي
+        // محتمل، لذلك يمرّ بالحارس قبل إنشاء سجل الدعوة.
+        $this->kyc->assertIndividualFeatureAllowed($inviter, 'family_fund');
+        $this->kyc->assertIndividualFeatureAllowed($invitee, 'family_fund');
 
         // فحص duplicate
         $existing = FamilyFundMember::where('fund_id', $fund->id)
@@ -162,6 +166,8 @@ class FamilyFundService
      */
     public function acceptInvitation(FamilyFundMember $member, User $user): bool
     {
+        $this->kyc->assertIndividualFeatureAllowed($user, 'family_fund');
+
         if ($member->user_id !== $user->id) {
             throw new \RuntimeException('Cannot accept invitation for another user');
         }
@@ -203,9 +209,7 @@ class FamilyFundService
         ?string $note = null,
         ?string $idempotencyKey = null,
     ): FamilyFundTransaction {
-        if ($user->zone_code !== 'SOUTH') {
-            throw new \RuntimeException('Only SOUTH users can contribute');
-        }
+        app(ZonePolicyService::class)->assertAllowed($user, 'family_fund_contribute');
         if (!$fund->canContribute($user->id)) {
             throw new \RuntimeException('User is not allowed to contribute to this fund');
         }
@@ -218,6 +222,8 @@ class FamilyFundService
         if (bccomp($amountNormalized, '0', 4) <= 0) {
             throw new \RuntimeException('Amount must be positive');
         }
+
+        $this->kyc->assertIndividualTransactionAllowed($user, $amountNormalized, 'family_fund');
 
         // فحص حد المساهمة اليومي إن وُجد
         if ($fund->max_member_contribution_per_day) {
@@ -334,6 +340,10 @@ class FamilyFundService
 
         $amountNormalized = MoneyService::normalize($amount);
 
+        $this->kyc->assertIndividualFeatureAllowed($proposer, 'family_fund');
+        $this->kyc->assertIndividualFeatureAllowed($beneficiary, 'family_fund');
+        $this->kyc->assertIndividualCanReceive($beneficiary, $amountNormalized);
+
         if (bccomp($amountNormalized, (string)$fund->balance, 4) > 0) {
             throw new \RuntimeException('Insufficient fund balance');
         }
@@ -398,6 +408,10 @@ class FamilyFundService
         if (!$beneficiary) {
             throw new \RuntimeException('Beneficiary no longer exists');
         }
+
+        $this->kyc->assertIndividualFeatureAllowed($approver, 'family_fund');
+        $this->kyc->assertIndividualFeatureAllowed($beneficiary, 'family_fund');
+        $this->kyc->assertIndividualCanReceive($beneficiary, (string) $tx->amount);
 
         return DB::transaction(function () use ($tx, $fund, $approver, $beneficiary) {
             // إعادة فحص الرصيد (قد تغير منذ المقترح)

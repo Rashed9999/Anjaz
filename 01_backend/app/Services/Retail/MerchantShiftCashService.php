@@ -37,9 +37,12 @@ class MerchantShiftCashService
      */
     public const REASON_DIRECTION = [
         'expense' => 'out',           // مصروف
+        'expense_reversal' => 'in',   // عكس مصروف قبل إغلاق الوردية
         'cash_drop' => 'out',         // تسليم للخزنة
         'refund' => 'out',            // استرجاع للعميل
         'supplier_payment' => 'out',  // دفع لمورّد من الدرج
+        'supplier_refund' => 'in',    // استرداد نقدي من مورّد
+        'asset_disposal_proceeds' => 'in', // متحصلات بيع/استبعاد أصل
         'cash_in' => 'in',            // إيداع نقد
         'change_fund' => 'in',        // فكّة
         'owner_injection' => 'in',    // ضخّ من المالك
@@ -47,9 +50,12 @@ class MerchantShiftCashService
 
     public const REASON_AR = [
         'expense' => 'مصروف',
+        'expense_reversal' => 'عكس مصروف',
         'cash_drop' => 'تسليم للخزنة',
         'refund' => 'استرجاع',
         'supplier_payment' => 'دفع لمورّد',
+        'supplier_refund' => 'استرداد من مورّد',
+        'asset_disposal_proceeds' => 'متحصلات أصل',
         'cash_in' => 'إيداع نقد',
         'change_fund' => 'فكّة',
         'owner_injection' => 'ضخّ من المالك',
@@ -151,10 +157,12 @@ class MerchantShiftCashService
             ->orderBy('id')->get()
             ->map(fn (ShiftCashMovement $m) => [
                 'id' => (int) $m->id,
+                'uuid' => (string) $m->uuid,
                 'direction' => $m->direction,
                 'reason' => $m->reason,
                 'reason_ar' => self::REASON_AR[$m->reason] ?? $m->reason,
                 'amount' => (string) $m->amount,
+                'reference' => $m->reference,
                 'note' => $m->note,
                 'actor' => trim(($m->actor->f_name ?? '') . ' ' . ($m->actor->l_name ?? '')) ?: null,
                 'created_at' => $m->created_at?->toIso8601String(),

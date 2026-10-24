@@ -57,11 +57,19 @@ class AuditDecisionsController extends Controller
 
         $decisions = $query->paginate(50)->withQueryString();
 
-        // **الأسماءُ تُجلب دفعةً واحدة** — لا استعلاماً لكلّ صفّ.
-        // (خمسون صفّاً × استعلامٍ لكلٍّ = خمسون رحلةً إلى القاعدة.)
-        $actors = User::whereIn('id', collect($decisions->items())
-            ->pluck('actor_user_id')->filter()->unique()->all())
-            ->pluck('f_name', 'id');
+        // AMIAL-AUDIT-HUMAN-READABLE-001: جلب أسماء وأرقام هواتف وأدوار
+        // كلٍّ من المنفِّذين (actors) والحسابات المتأثّرة (subjects + context users)
+        // في استعلامٍ واحدٍ مجمَّع بلا N+1.
+        $usersById = $this->resolveUsersForDecisions($decisions->items());
+        $actors = [];
+        foreach ($usersById as $uid => $uInfo) {
+            $actors[$uid] = $uInfo['name'];
+        }
+
+        $rowDetails = [];
+        foreach ($decisions->items() as $d) {
+            $rowDetails[$d->id] = $this->buildRowPresentation($d, $usersById);
+        }
 
         // إحصاءات سريعة (آخر 24h)
         $stats24h = AuditDecision::where('created_at', '>=', now()->subHours(24))
@@ -73,17 +81,14 @@ class AuditDecisionsController extends Controller
         return view('admin-views.amial.audit.index', [
             'decisions' => $decisions,
             'actors' => $actors,
+            'usersById' => $usersById,
+            'rowDetails' => $rowDetails,
             'stats_24h' => $stats24h,
             'chain' => $this->chainStatus(),
-            // **`transaction_id` كان مبنيّاً في `filtered()` ولا مدخلَ له.**
-            //
-            // القاعدة الثانية عشرة: مبنيٌّ ولا يُوصَل إليه. المرشِّحُ يعمل
-            // منذ كُتب، ولا حقلَ في النموذج ولا هو في هذه القائمة — فحتّى
-            // من مرّره في العنوان لم يَرَه يعود في الحقل بعد الفلترة.
             'filters' => $request->only([
                 'decision_code', 'severity', 'actor_user_id', 'action',
                 'subject_type', 'subject_id', 'date_from', 'date_to',
-                'transaction_id', 'q', 'zone_code', 'domain', 'integrity',
+                'transaction_id', 'correlation_id', 'q', 'zone_code', 'domain', 'integrity',
             ]),
             'domains' => \App\Support\AuditVocabulary::DOMAINS,
             'actions_by_domain' => $this->actionsPresent(),
@@ -179,31 +184,35 @@ class AuditDecisionsController extends Controller
             return response()->json(['success' => false, 'message' => 'القرار غير موجود'], 404);
         }
 
-        $actor = $d->actor_user_id ? User::find($d->actor_user_id, ['id', 'f_name', 'l_name', 'phone', 'type']) : null;
+        $usersById = $this->resolveUsersForDecisions([$d]);
+        $presentation = $this->buildRowPresentation($d, $usersById);
+        $actorInfo = $d->actor_user_id ? ($usersById[(int) $d->actor_user_id] ?? null) : null;
+        $ctx = $this->readableContext($d);
 
         return response()->json(['success' => true, 'data' => [
             'id' => (int) $d->id,
             'decision_id' => $d->decision_id,
             'created_at' => (string) $d->created_at,
             'action' => $d->action,
-            // **العربيّةُ تُحسب في الخادم لا في المتصفّح.**
-            // فمعجمٌ ثانٍ في جافاسكربت يفترق عن الأوّل بعد أسبوعين،
-            // فيقرأ الجدولُ شيئاً واللوحُ شيئاً آخرَ للصفّ نفسِه.
             'action_ar' => \App\Support\AuditVocabulary::action($d->action),
             'decision_code' => $d->decision_code,
             'decision_ar' => \App\Support\AuditVocabulary::decisionCode($d->decision_code),
             'severity' => $d->severity,
             'severity_ar' => \App\Support\AuditVocabulary::severity($d->severity),
             'reason' => $d->reason,
+            'reason_ar' => $presentation['reason_ar'],
+            'narrative' => $presentation['narrative'],
             'zone_code' => $d->zone_code,
             'transaction_id' => $d->transaction_id,
             'idempotency_key' => $d->idempotency_key,
+            'correlation_id' => $d->correlation_id,
 
-            'actor' => $actor ? [
-                'id' => (int) $actor->id,
-                'name' => trim(($actor->f_name ?? '') . ' ' . ($actor->l_name ?? '')) ?: 'بلا اسم',
-                'phone' => $actor->phone,
-                'type' => (int) $actor->type,
+            'actor' => $actorInfo ? [
+                'id' => (int) $actorInfo['id'],
+                'name' => $actorInfo['name'],
+                'phone' => $actorInfo['phone'],
+                'type' => $actorInfo['type'],
+                'role_ar' => $actorInfo['role_ar'],
             ] : null,
             'actor_type' => $d->actor_type,
             'actor_type_ar' => \App\Support\AuditVocabulary::actorType($d->actor_type),
@@ -212,12 +221,13 @@ class AuditDecisionsController extends Controller
                 'type' => $d->subject_type,
                 'type_ar' => \App\Support\AuditVocabulary::subjectType($d->subject_type),
                 'id' => $d->subject_id,
-                'label' => $this->subjectLabel($d),
-                // **ورابطٌ يُنقر** — رقمٌ لا يُفضي إلى شيءٍ ليس تتبّعاً.
-                'url' => $this->subjectUrl($d),
+                'label' => $presentation['subject_label'],
+                'url' => $presentation['subject_url'],
+                'target_user' => $presentation['target_user'],
             ],
 
-            'context' => $this->readableContext($d),
+            'context' => $ctx,
+            'context_rows' => \App\Support\AuditVocabulary::formatContextEntries($ctx, $usersById),
 
             // **سلسلةُ البصمات — تُتحقَّق لا تُعرض فقط.**
             'integrity' => $this->verifyOne($d),
@@ -253,7 +263,7 @@ class AuditDecisionsController extends Controller
             fputcsv($out, ['المعرّف', 'الوقت', 'المنفِّذ', 'صفةُ المنفِّذ',
                 'الفعل', 'رمزُ الفعل', 'القرار', 'رمزُ القرار', 'الدرجة',
                 'الموضوع', 'نوعُ الموضوع (رمز)', 'معرّفُ الموضوع',
-                'المعاملة', 'النطاق', 'السبب', 'بصمةُ السجلّ']);
+                'المعاملة', 'معرّفُ التتبّع', 'النطاق', 'السبب', 'بصمةُ السجلّ']);
 
             foreach ($rows as $r) {
                 $action = \App\Support\AuditVocabulary::action($r->action);
@@ -272,6 +282,7 @@ class AuditDecisionsController extends Controller
                     $r->subject_type,
                     $r->subject_id,
                     $r->transaction_id,
+                    $r->correlation_id,
                     $r->zone_code,
                     $r->reason,
                     $r->entry_hash,
@@ -535,6 +546,9 @@ class AuditDecisionsController extends Controller
         if ($tx = $request->query('transaction_id')) {
             $query->where('transaction_id', $tx);
         }
+        if ($correlation = trim((string) $request->query('correlation_id', ''))) {
+            $query->where('correlation_id', $correlation);
+        }
 
         if ($zone = $request->query('zone_code')) {
             $query->where('zone_code', $zone);
@@ -553,7 +567,8 @@ class AuditDecisionsController extends Controller
                 $w->where('reason', 'like', $like)
                     ->orWhere('action', 'like', $like)
                     ->orWhere('decision_code', 'like', $like)
-                    ->orWhere('decision_id', 'like', $like);
+                    ->orWhere('decision_id', 'like', $like)
+                    ->orWhere('correlation_id', 'like', $like);
             });
         }
 
@@ -648,5 +663,179 @@ class AuditDecisionsController extends Controller
         }
 
         return is_array($ctx) ? $ctx : [];
+    }
+
+    /**
+     * يجمع كلّ معرّفات المستخدمين (المنفِّذين + الحسابات الهدف في subject_id وcontext)
+     * ويجلب أسماءهم وأرقام هواتفهم وأدوارهم باستعلامٍ واحد.
+     *
+     * @param iterable<int,AuditDecision> $items
+     * @return array<int,array{id:int,name:string,phone:?string,type:int,role_ar:string}>
+     */
+    private function resolveUsersForDecisions(iterable $items): array
+    {
+        $ids = [];
+        // لا يعامل أيُّ معرّفٍ كمعرّف مستخدم لمجرّد أنه رقم. ملفات التاجر
+        // والوكيل لها مفاتيح مستقلة في بعض المسارات؛ والربط الخاطئ هنا أسوأ
+        // من إبقاء الموضوع بلا اسم، لأنه قد يكشف أو ينسب القرار إلى حساب آخر.
+        // في تلك الحالات لا نحلّ الحساب إلا من مفتاح صريح في context، مثل
+        // merchant_user_id أو agent_user_id.
+        $userSubjectTypes = ['user', 'wallet', 'merchant', 'pin', 'password', 'operator'];
+        $contextUserKeys = [
+            'customer_id', 'customer_user_id', 'subject_user_id', 'user_id',
+            'wallet_user_id', 'merchant_user_id', 'to_user_id', 'from_user_id',
+            'recipient_user_id', 'receiver_id', 'agent_id', 'agent_user_id',
+            'requester_user_id', 'claimant_user_id', 'disputed_user_id',
+            'maker_admin_id', 'checker_admin_id', 'beneficiary_id',
+        ];
+
+        foreach ($items as $d) {
+            if ($d->actor_user_id) {
+                $ids[] = (int) $d->actor_user_id;
+            }
+            if (in_array((string) $d->subject_type, $userSubjectTypes, true)
+                && is_numeric($d->subject_id) && (int) $d->subject_id > 0) {
+                $ids[] = (int) $d->subject_id;
+            }
+            $ctx = $this->readableContext($d);
+            foreach ($contextUserKeys as $k) {
+                if (isset($ctx[$k]) && is_numeric($ctx[$k]) && (int) $ctx[$k] > 0) {
+                    $ids[] = (int) $ctx[$k];
+                }
+            }
+        }
+
+        $ids = array_values(array_unique(array_filter($ids)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $users = User::whereIn('id', $ids)->get(['id', 'f_name', 'l_name', 'phone', 'type', 'role']);
+        $out = [];
+        foreach ($users as $u) {
+            $fullName = trim(($u->f_name ?? '') . ' ' . ($u->l_name ?? ''));
+            $roleAr = match ((int) ($u->type ?? -1)) {
+                0 => 'إداريّ',
+                1 => 'وكيل',
+                2 => 'عميل',
+                3 => 'تاجر',
+                4 => 'موظّف نقطة بيع',
+                default => \App\Support\AuditVocabulary::actorType((string) ($u->role ?? '')),
+            };
+            $out[(int) $u->id] = [
+                'id' => (int) $u->id,
+                'name' => $fullName !== '' ? $fullName : ('مستخدم #' . $u->id),
+                'phone' => $u->phone,
+                'type' => (int) ($u->type ?? -1),
+                'role_ar' => $roleAr,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * يبني ملخّص الصفّ للعرض المباشر في الجدول والنافذة:
+     * المنفِّذ، الحساب المتأثّر، الجملة التفسيريّة، أبرز الأرقام من السياق، والسبب بالعربيّة.
+     *
+     * @param array<int,array{id:int,name:string,phone:?string,type:int,role_ar:string}> $usersById
+     * @return array<string,mixed>
+     */
+    private function buildRowPresentation(AuditDecision $d, array $usersById): array
+    {
+        $ctx = $this->readableContext($d);
+        $actorInfo = $d->actor_user_id ? ($usersById[(int) $d->actor_user_id] ?? null) : null;
+
+        // استخراج الحساب المتأثّر (من subject_id أو من حقول context)
+        $targetUser = null;
+        $userSubjectTypes = ['user', 'wallet', 'merchant', 'pin', 'password', 'operator'];
+        if (in_array((string) $d->subject_type, $userSubjectTypes, true)
+            && is_numeric($d->subject_id) && (int) $d->subject_id > 0) {
+            $uid = (int) $d->subject_id;
+            $targetUser = $usersById[$uid] ?? [
+                'id' => $uid, 'name' => 'حساب #' . $uid, 'phone' => null, 'type' => -1, 'role_ar' => 'حساب',
+            ];
+        } else {
+            foreach (['customer_id', 'customer_user_id', 'subject_user_id', 'to_user_id',
+                      'recipient_user_id', 'receiver_id', 'merchant_user_id', 'wallet_user_id',
+                      'user_id', 'agent_user_id'] as $ck) {
+                if (isset($ctx[$ck]) && is_numeric($ctx[$ck]) && (int) $ctx[$ck] > 0) {
+                    $uid = (int) $ctx[$ck];
+                    if (isset($usersById[$uid])) {
+                        $targetUser = $usersById[$uid];
+                        break;
+                    }
+                }
+            }
+        }
+
+        $subjectLabel = $this->subjectLabel($d);
+        if ($targetUser && !empty($targetUser['name'])) {
+            $subjectLabel = sprintf('%s: %s (#%d)',
+                \App\Support\AuditVocabulary::subjectType($d->subject_type),
+                $targetUser['name'],
+                $targetUser['id']
+            );
+        }
+
+        $subjectUrl = $this->subjectUrl($d);
+        if ($subjectUrl === null && $targetUser && !empty($targetUser['id'])) {
+            $subjectUrl = route('admin.amial.hub.account', (int) $targetUser['id']);
+        }
+
+        // أبرز الأرقام والتفاصيل السريعة من السياق لعرضها مباشرةً في الجدول
+        $highlights = [];
+        if (isset($ctx['amount']) && is_numeric($ctx['amount'])) {
+            $highlights[] = 'المبلغ: ' . number_format((float) $ctx['amount'], 2) . ' ر.ي';
+        } elseif (isset($ctx['amount_yer']) && is_numeric($ctx['amount_yer'])) {
+            $highlights[] = 'المبلغ: ' . number_format((float) $ctx['amount_yer'], 2) . ' ر.ي';
+        }
+        if (isset($ctx['required']) && is_numeric($ctx['required'])) {
+            $highlights[] = 'المطلوب: ' . number_format((float) $ctx['required'], 2) . ' ر.ي';
+        }
+        if (isset($ctx['available']) && is_numeric($ctx['available'])) {
+            $highlights[] = 'المتاح: ' . number_format((float) $ctx['available'], 2) . ' ر.ي';
+        }
+        if (isset($ctx['charge']) && is_numeric($ctx['charge']) && (float) $ctx['charge'] > 0) {
+            $highlights[] = 'الرسم: ' . number_format((float) $ctx['charge'], 2) . ' ر.ي';
+        }
+        if (!empty($ctx['old_zone']) && !empty($ctx['new_zone'])) {
+            $highlights[] = 'النطاق: ' . $ctx['old_zone'] . ' ← ' . $ctx['new_zone'];
+        }
+        if (!empty($ctx['case_number'])) {
+            $highlights[] = 'القضيّة: ' . $ctx['case_number'];
+        }
+        if (!empty($ctx['approval_request_number'])) {
+            $highlights[] = 'طلب الاعتماد: ' . $ctx['approval_request_number'];
+        }
+        if (!empty($ctx['plan'])) {
+            $pl = \App\Support\Access\AccessConstants::PLAN_LABELS[$ctx['plan']] ?? $ctx['plan'];
+            $highlights[] = 'الباقة: ' . $pl;
+        }
+
+        $reasonAr = \App\Support\AuditVocabulary::reason($d->reason);
+
+        $narrative = \App\Support\AuditVocabulary::narrative(
+            actionCode: (string) $d->action,
+            decisionCode: $d->decision_code,
+            severityCode: $d->severity,
+            actorType: $d->actor_type,
+            actorInfo: $actorInfo,
+            targetInfo: $targetUser
+                ? ($targetUser + ['subject_label' => $subjectLabel])
+                : ['name' => '', 'role_ar' => '', 'id' => null, 'phone' => null, 'subject_label' => $subjectLabel],
+            context: $ctx,
+            reason: $reasonAr,
+        );
+
+        return [
+            'actor_info' => $actorInfo,
+            'target_user' => $targetUser,
+            'subject_label' => $subjectLabel,
+            'subject_url' => $subjectUrl,
+            'highlights' => array_slice($highlights, 0, 4),
+            'reason_ar' => $reasonAr,
+            'narrative' => $narrative,
+        ];
     }
 }

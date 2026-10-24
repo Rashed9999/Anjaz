@@ -26,6 +26,7 @@ class MerchantPayRepo extends GetxService {
     String? note,
     required String pin,
     required String idempotencyKey,
+    required String correlationId,
   }) {
     return apiClient.postData(
       '/api/v1/amial/merchant/pay',
@@ -39,6 +40,7 @@ class MerchantPayRepo extends GetxService {
         'pin': pin,
       },
       idempotencyKey: idempotencyKey,
+      correlationId: correlationId,
     );
   }
 }

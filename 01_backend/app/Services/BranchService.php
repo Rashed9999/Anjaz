@@ -4,9 +4,13 @@ namespace App\Services;
 
 use App\Exceptions\UsageLimitExceededException;
 use App\Models\Branch;
+use App\Models\CashierShift;
+use App\Models\Merchant\PosDevice;
+use App\Models\PosUser;
 use App\Models\MerchantProfile;
 use App\Models\User;
 use App\Support\Access\AccessConstants as A;
+use App\Services\Retail\StockService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -20,6 +24,8 @@ use Illuminate\Support\Facades\DB;
  */
 class BranchService
 {
+    public function __construct(private readonly StockService $stock) {}
+
     /**
      * إنشاء فرع جديد مع فحص حدّ الخطّة.
      *
@@ -44,7 +50,7 @@ class BranchService
             // هل هذا أوّل فرع؟ → اجعله الافتراضي
             $hasAny = Branch::where('merchant_user_id', $merchant->id)->exists();
 
-            return Branch::create([
+            $branch = Branch::create([
                 'merchant_user_id' => $merchant->id,
                 'name' => $name,
                 'code' => $data['code'] ?? null,
@@ -55,6 +61,10 @@ class BranchService
                 'is_default' => !$hasAny, // الأوّل يصبح افتراضياً
                 'settings' => $data['settings'] ?? null,
             ]);
+
+            $this->syncInventoryLocation($merchant, $branch);
+
+            return $branch->fresh();
         });
     }
 
@@ -67,16 +77,54 @@ class BranchService
         $plan = $this->planFor($merchant);
         if (A::maxBranches($plan) === 0) return null;
 
-        $existing = Branch::where('merchant_user_id', $merchant->id)
-            ->where('is_default', true)->first();
-        if ($existing) return $existing;
+        return DB::transaction(function () use ($merchant) {
+            $branch = Branch::where('merchant_user_id', $merchant->id)
+                ->where('is_default', true)
+                ->lockForUpdate()
+                ->first();
 
-        return Branch::create([
-            'merchant_user_id' => $merchant->id,
-            'name' => 'الفرع الرئيسي',
-            'is_active' => true,
-            'is_default' => true,
-        ]);
+            if ($branch === null) {
+                $branch = Branch::create([
+                    'merchant_user_id' => $merchant->id,
+                    'name' => 'الفرع الرئيسي',
+                    'is_active' => true,
+                    'is_default' => true,
+                ]);
+            }
+
+            // ترقية تاجر من «أعمال» (بلا فروع) إلى «مؤسسة» لا يجوز أن
+            // تقطع يومه التشغيلي. قبل وجود الفروع كانت null تعني المنشأة
+            // الرئيسية؛ بعد إنشاء الفرع الافتراضي نحول *الحالة الحية*
+            // إلى المعنى الصريح نفسه:
+            //
+            //   موظف POS بلا فرع  -> الفرع الرئيسي
+            //   جهاز POS بلا فرع  -> الفرع الرئيسي
+            //   وردية مفتوحة      -> الفرع الرئيسي
+            //
+            // لا نعيد كتابة التاريخ المالي كله داخل ترقية الاشتراك؛
+            // المبيعات القديمة ذات branch_id=null تبقى «إرث المنشأة
+            // الرئيسية»، لكن الوردية الجارية تستمر بلا مطالبة الكاشير
+            // بفتح وردية ثانية ولا يصبح الجهاز فجأة «بلا فرع».
+            PosUser::where('merchant_user_id', $merchant->id)
+                ->where('is_active', true)
+                ->whereNull('branch_id')
+                ->update(['branch_id' => $branch->id]);
+
+            PosDevice::where('merchant_user_id', $merchant->id)
+                ->where('is_active', true)
+                ->whereNull('revoked_at')
+                ->whereNull('branch_id')
+                ->update(['branch_id' => $branch->id]);
+
+            CashierShift::where('merchant_user_id', $merchant->id)
+                ->where('status', 'open')
+                ->whereNull('branch_id')
+                ->update(['branch_id' => $branch->id]);
+
+            $this->syncInventoryLocation($merchant, $branch);
+
+            return $branch->fresh();
+        });
     }
 
     public function update(Branch $branch, array $data): Branch
@@ -97,6 +145,12 @@ class BranchService
             'manager_pos_user_id', 'is_active', 'settings',
         ])));
         $branch->save();
+
+        $merchant = User::find($branch->merchant_user_id);
+        if ($merchant) {
+            $this->syncInventoryLocation($merchant, $branch);
+        }
+
         return $branch->fresh();
     }
 
@@ -110,7 +164,13 @@ class BranchService
             throw new \LogicException('لا يمكن حذف الفرع الافتراضي');
         }
         // ملاحظة: لاحقاً نضيف فحص أنّ الفرع لا يحوي عمليات نشطة
-        return (bool) $branch->delete();
+        $deleted = (bool) $branch->delete();
+
+        if ($deleted && $this->usesSharedRetailStock((int) $branch->merchant_user_id)) {
+            $this->stock->deactivateBranchLocation($branch);
+        }
+
+        return $deleted;
     }
 
     /**
@@ -128,6 +188,12 @@ class BranchService
                 ->update(['is_default' => false]);
             $branch->is_default = true;
             $branch->save();
+
+            $merchant = User::find($branch->merchant_user_id);
+            if ($merchant) {
+                $this->syncInventoryLocation($merchant, $branch);
+            }
+
             return $branch->fresh();
         });
     }
@@ -145,7 +211,7 @@ class BranchService
      * يتحقّق من حدّ الخطّة قبل إنشاء فرع.
      * @throws UsageLimitExceededException
      */
-    public function ensureWithinPlanLimit(User $merchant): void
+    private function ensureWithinPlanLimit(User $merchant): void
     {
         $plan = $this->planFor($merchant);
         $max = A::maxBranches($plan);
@@ -171,11 +237,36 @@ class BranchService
 
     // ============ Helpers ============
 
+    /**
+     * التجزئة والبيع السريع والمطعم تشترك في MerchantProduct/StockService.
+     * القطاعات ذات محركات مخزون مستقلة لا ننشئ لها مواقع مخزون موازية.
+     */
+    private function usesSharedRetailStock(int $merchantUserId): bool
+    {
+        $vertical = MerchantProfile::where('user_id', $merchantUserId)
+            ->value('business_type');
+
+        return in_array($vertical, [
+            A::BIZ_RETAIL,
+            A::BIZ_QUICK_SALE,
+            A::BIZ_RESTAURANT,
+        ], true);
+    }
+
+    private function syncInventoryLocation(User $merchant, Branch $branch): void
+    {
+        if (! $this->usesSharedRetailStock($merchant->id)) {
+            return;
+        }
+
+        $this->stock->syncBranchLocation($branch);
+    }
+
     private function planFor(User $merchant): string
     {
         $profile = MerchantProfile::where('user_id', $merchant->id)->first();
         if (!$profile) return A::PLAN_FREE;
-        $plan = $profile->subscription_plan ?? A::PLAN_FREE;
+        $plan = A::canonicalPlan($profile->subscription_plan);
         if ($plan !== A::PLAN_FREE
             && $profile->subscription_expires_at !== null
             && $profile->subscription_expires_at->isPast()) {

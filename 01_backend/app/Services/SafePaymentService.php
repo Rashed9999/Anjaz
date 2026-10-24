@@ -93,9 +93,8 @@ class SafePaymentService
         if ($buyer->id === $seller->id) {
             throw new \RuntimeException('Buyer and seller cannot be the same user');
         }
-        if ($buyer->zone_code !== 'SOUTH' || $seller->zone_code !== 'SOUTH') {
-            throw new \RuntimeException('Both parties must be in SOUTH zone');
-        }
+        app(ZonePolicyService::class)->assertAllowed($buyer, 'safe_payment_fund');
+        app(ZonePolicyService::class)->assertAllowed($seller, 'safe_payment_release');
 
         $amountNormalized = MoneyService::normalize($amount);
         if (bccomp($amountNormalized, '1.0000', 4) < 0) {

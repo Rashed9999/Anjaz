@@ -71,6 +71,51 @@
         </div>
     </div>
 
+    {{-- AMIAL-PLATFORM-PROFIT-PAYOUT-001 — لا محفظةَ رابعة: الإيراد في الدفتر
+         والصرف طلبٌ خاضع لأربع عيون، ثمّ دفع موثّق من خزينة المنصّة. --}}
+    <div class="card stat-card mb-4" id="profit-payout-card">
+        <div class="card-header d-flex align-items-center gap-2 flex-wrap">
+            <span class="fw-bold">خزينة وأرباح المنصّة</span>
+            <span class="badge bg-warning text-dark">طلب ← اعتماد ثانٍ ← دفع مثبت</span>
+            <a class="small ms-auto" href="{{ url('admin/support-center') }}">مركز الموافقات</a>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 mb-4">
+                <div class="col-md-3 col-6"><small class="text-muted d-block">إيراد غير مخصّص</small><strong id="pp-revenue">…</strong></div>
+                <div class="col-md-3 col-6"><small class="text-muted d-block">محجوز لطلبات الاعتماد</small><strong class="text-warning" id="pp-reserved">…</strong></div>
+                <div class="col-md-3 col-6"><small class="text-muted d-block">متاح لطلب صرف</small><strong class="text-success" id="pp-available">…</strong></div>
+                <div class="col-md-3 col-6"><small class="text-muted d-block">مستحق معتمد لم يُدفع</small><strong id="pp-payable">…</strong></div>
+                <div class="col-md-6 col-6"><small class="text-muted d-block">نقد الخزينة المركزي</small><strong id="pp-cash">…</strong></div>
+                <div class="col-md-6 col-6"><small class="text-muted d-block">رصيد البنك المركزي</small><strong id="pp-bank">…</strong></div>
+            </div>
+
+            @if($canPayout)
+            <div class="border rounded p-3 mb-4 bg-light">
+                <div class="fw-semibold mb-2">طلب صرف ربح المنصّة</div>
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2"><label class="form-label">المبلغ</label><input class="form-control" type="number" min="1" id="pp-amount" dir="ltr"></div>
+                    <div class="col-md-2"><label class="form-label">الطريقة</label><select class="form-select" id="pp-method"><option value="cash">نقدي</option><option value="bank">تحويل بنكي</option></select></div>
+                    <div class="col-md-3"><label class="form-label">المستفيد</label><input class="form-control" id="pp-beneficiary" maxlength="200" placeholder="اسم مالك/مستفيد الصرف"></div>
+                    <div class="col-md-5"><label class="form-label">مرجع الوجهة</label><input class="form-control" id="pp-destination" maxlength="500" placeholder="رقم حساب أو موقع التسليم"></div>
+                    <div class="col-md-9"><label class="form-label">سبب الطلب</label><input class="form-control" id="pp-note" maxlength="500" placeholder="سبب موثق للصرف"></div>
+                    <div class="col-md-3"><button class="btn btn-warning w-100" id="pp-request">إرسال للاعتماد</button></div>
+                </div>
+                <div class="small mt-2"><span class="text-danger" id="pp-error"></span><span class="text-success" id="pp-ok"></span></div>
+            </div>
+            @else
+            <div class="alert alert-light border small">تملك صلاحية القراءة فقط. طلب الصرف والدفع يتطلبان صلاحية خزينة الأرباح.</div>
+            @endif
+
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light"><tr><th>الطلب</th><th>المستفيد/الطريقة</th><th>المبلغ</th><th>الحالة</th><th>مرجع الاعتماد</th><th>الأثر</th></tr></thead>
+                    <tbody id="pp-tbody"><tr><td colspan="6" class="text-center text-muted py-3">جارٍ التحميل…</td></tr></tbody>
+                </table>
+            </div>
+            <p class="small text-muted mb-0 mt-3">يُصرف النقد من <code>TREASURY_CASH_RESERVE</code> والبنك من <code>TREASURY_BANK</code> فقط؛ لا يتأثر احتياطي تسويات الوكلاء <code>CASH_RESERVE</code>.</p>
+        </div>
+    </div>
+
     {{-- البثّ الحيّ لحركة المال --}}
     <div class="card stat-card">
         <div class="card-header d-flex align-items-center">
@@ -97,6 +142,7 @@
 (function () {
     const csrf = document.querySelector('meta[name="csrf-token"]').content;
     const base = '{{ url('admin/amial/hub') }}';
+    const canPayout = @json($canPayout);
     const fmt = (n) => Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 2});
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -113,6 +159,73 @@
             document.getElementById('s-agents').textContent = fmt(j.agents_balance) + ' ر.ي';
             document.getElementById('s-merchants').textContent = fmt(j.merchants_balance) + ' ر.ي';
         } catch (e) { /* الشبكة — المحاولة التالية بعد 10 ثوانٍ */ }
+    }
+
+    // ===== أرباح المنصّة وخزينتها =====
+    const payoutStatus = {
+        pending_approval: ['bg-warning text-dark', 'بانتظار الاعتماد'], approved: ['bg-info text-dark', 'معتمد — ينتظر الدفع'],
+        paid: ['bg-success', 'مدفوع'], rejected: ['bg-danger', 'مرفوض'], expired: ['bg-secondary', 'منتهي'], failed: ['bg-danger', 'فشل التنفيذ']
+    };
+    const payoutRow = (p) => {
+        const st = payoutStatus[p.status] || ['bg-secondary', p.status];
+        const approval = p.approval ? esc(p.approval.request_number) : '—';
+        let action = '—';
+        if (canPayout && p.status === 'approved') action = `<button class="btn btn-sm btn-primary pp-pay" data-ulid="${esc(p.payout_ulid)}">تسجيل الدفع</button>`;
+        if (canPayout && p.status === 'paid' && p.payout_method === 'cash' && p.handover_ulid) action = `<button class="btn btn-sm btn-outline-success pp-confirm" data-ulid="${esc(p.payout_ulid)}">تأكيد الاستلام</button>`;
+        return `<tr><td><code>${esc(p.payout_ulid)}</code><br><small class="text-muted">${esc(p.created_at || '')}</small></td>
+            <td>${esc(p.beneficiary_name)}<br><small>${p.payout_method === 'cash' ? 'نقدي' : 'بنكي'}</small></td>
+            <td class="fw-bold">${fmt(p.amount)} ر.ي</td><td><span class="badge ${st[0]}">${st[1]}</span></td>
+            <td>${approval}</td><td>${action}</td></tr>`;
+    };
+    async function loadProfitPayouts() {
+        try {
+            const r = await fetch(`${base}/finance/profit-payouts.json`, {headers: {'Accept': 'application/json'}});
+            const j = await r.json(); if (!r.ok || !j.success) throw new Error(j.message || 'تعذر تحميل الخزينة');
+            const s = j.meta.summary;
+            document.getElementById('pp-revenue').textContent = fmt(s.revenue_unallocated) + ' ر.ي';
+            document.getElementById('pp-reserved').textContent = fmt(s.reserved_for_approval) + ' ر.ي';
+            document.getElementById('pp-available').textContent = fmt(s.available_to_request) + ' ر.ي';
+            document.getElementById('pp-payable').textContent = fmt(s.approved_payable) + ' ر.ي';
+            document.getElementById('pp-cash').textContent = fmt(s.treasury_cash_available) + ' ر.ي';
+            document.getElementById('pp-bank').textContent = fmt(s.treasury_bank_available) + ' ر.ي';
+            document.getElementById('pp-tbody').innerHTML = j.meta.requests.length ? j.meta.requests.map(payoutRow).join('') : '<tr><td colspan="6" class="text-center text-muted py-3">لا توجد طلبات صرف</td></tr>';
+        } catch (e) { document.getElementById('pp-tbody').innerHTML = `<tr><td colspan="6" class="text-center text-danger py-3">${esc(e.message)}</td></tr>`; }
+    }
+    if (canPayout) {
+        document.getElementById('pp-request').addEventListener('click', async () => {
+            const err = document.getElementById('pp-error'), ok = document.getElementById('pp-ok'); err.textContent = ''; ok.textContent = '';
+            if (!window.confirm('سيُنشأ طلب اعتماد فقط ولن يتحرك مال الآن. متابعة؟')) return;
+            try {
+                const r = await fetch(`${base}/finance/profit-payouts`, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Idempotency-Key': crypto.randomUUID()}, body: JSON.stringify({
+                    amount: document.getElementById('pp-amount').value, payout_method: document.getElementById('pp-method').value,
+                    beneficiary_name: document.getElementById('pp-beneficiary').value, destination_reference: document.getElementById('pp-destination').value,
+                    request_note: document.getElementById('pp-note').value,
+                })});
+                const j = await r.json(); if (!r.ok || !j.success) throw new Error(j.message || 'فشل إنشاء الطلب');
+                ok.textContent = `${j.message} (${j.meta.approval_request.request_number})`;
+                ['pp-amount','pp-beneficiary','pp-destination','pp-note'].forEach(id => document.getElementById(id).value = ''); loadProfitPayouts();
+            } catch (e) { err.textContent = e.message; }
+        });
+        document.getElementById('pp-tbody').addEventListener('click', async (event) => {
+            const button = event.target.closest('button'); if (!button) return;
+            const ulid = button.dataset.ulid;
+            try {
+                let url, body;
+                if (button.classList.contains('pp-pay')) {
+                    const payment = window.prompt('مرجع الدفع/التحويل:'); if (!payment) return;
+                    const proof = window.prompt('مرجع الإثبات (إيصال/سند):'); if (!proof) return;
+                    const location = window.prompt('موقع التسليم (للنقد، اختياري):') || '';
+                    if (!window.confirm('تأكيد الدفع سيُرحّل القيد المالي. متابعة؟')) return;
+                    url = `${base}/finance/profit-payouts/${ulid}/mark-paid`; body = {payment_reference: payment, proof_reference: proof, location};
+                } else if (button.classList.contains('pp-confirm')) {
+                    if (!window.confirm('هل تؤكد أنك استلمت النقد فعلاً؟')) return;
+                    url = `${base}/finance/profit-payouts/${ulid}/confirm-cash`; body = {note: 'تأكيد استلام نقدي من شاشة الخزينة'};
+                } else return;
+                const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Idempotency-Key': crypto.randomUUID()}, body: JSON.stringify(body)});
+                const j = await r.json(); if (!r.ok || !j.success) throw new Error(j.message || 'فشلت العملية');
+                loadProfitPayouts(); loadFeed();
+            } catch (e) { alert(e.message); }
+        });
     }
 
     // ===== البثّ الحيّ =====
@@ -186,9 +299,10 @@
         } catch (err) { errEl.textContent = err.message; }
     });
 
-    loadStats(); loadFeed();
+    loadStats(); loadFeed(); loadProfitPayouts();
     setInterval(loadFeed, 5000);
     setInterval(loadStats, 10000);
+    setInterval(loadProfitPayouts, 10000);
 })();
 </script>
 @endpush

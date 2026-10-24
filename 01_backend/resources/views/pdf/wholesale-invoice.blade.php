@@ -33,6 +33,7 @@
             color: #053391;
             margin: 0 0 4px 0;
         }
+        .merchant-logo { max-width: 92px; max-height: 58px; object-fit: contain; margin-bottom: 5px; }
         .business-meta {
             font-size: 9pt;
             color: #6B7280;
@@ -212,7 +213,7 @@
             font-size: 9pt;
             color: #9CA3AF;
         }
-        .footer .stamp {
+        .verify-qr { width: 105px; height: 105px; margin: 8px auto 4px; }\n        .verify-code { direction: ltr; font-family: monospace; font-size: 8pt; color: #6B7280; word-break: break-all; }\n        .footer .stamp {
             display: inline-block;
             padding: 6px 16px;
             border: 2px dashed #D1D5DB;
@@ -253,6 +254,7 @@
 {{-- ================= Header ================= --}}
 <div class="header">
     <div class="header-right">
+        @if(!empty($merchantLogoData))<img class="merchant-logo" src="{{ $merchantLogoData }}" alt="شعار المنشأة">@endif
         <div class="business-name">{{ $business->business_name ?? 'منشأة الجملة' }}</div>
         @if($business->commercial_register)
             <div class="business-meta">س.ت: {{ $business->commercial_register }}</div>
@@ -300,7 +302,10 @@
         <div class="info-label">معلومات الفاتورة</div>
         <div class="meta-line"><strong>تاريخ الإصدار:</strong> {{ $invoice->invoice_date?->format('Y-m-d') }}</div>
         <div class="meta-line"><strong>تاريخ الاستحقاق:</strong> {{ $invoice->due_date?->format('Y-m-d') }}</div>
-        <div class="meta-line"><strong>نوع الدفع:</strong> {{ $invoice->payment_type === 'cash' ? 'نقد' : 'آجل' }}</div>
+        <div class="meta-line"><strong>نوع الدفع:</strong> {{ $invoice->payment_type === 'amial_pay' ? 'أميال باي' : ($invoice->payment_type === 'cash' ? 'نقد' : 'آجل') }}</div>
+        @if($invoice->payment_type === 'amial_pay' && $invoice->paid_transaction_id)
+            <div class="meta-line"><strong>مرجع أميال:</strong> {{ $invoice->paid_transaction_id }}</div>
+        @endif
         @if($salesRep)
             <div class="meta-line"><strong>المندوب:</strong> {{ $salesRep->full_name }}</div>
         @endif
@@ -426,7 +431,7 @@
 
 {{-- ================= Footer ================= --}}
 <div class="footer">
-    <div>شكراً لتعاملكم معنا</div>
+    <div>شكراً لتعاملكم معنا</div>\n    @if(!empty($qrDataUri))<img class="verify-qr" src="{{ $qrDataUri }}" alt="QR تحقق">@endif\n    <div><strong>تحقق من أصالة الفاتورة</strong></div>\n    <div class="verify-code">{{ $invoice->invoice_ulid }}</div>\n    <div class="verify-code">{{ $verificationUrl }}</div>
     @if($invoice->status === 'paid')
         <div class="stamp" style="border-color: #059669; color: #059669;">✓ مدفوعة بالكامل</div>
     @elseif($invoice->status === 'voided')

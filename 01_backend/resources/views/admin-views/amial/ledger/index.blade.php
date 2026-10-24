@@ -210,6 +210,43 @@
     </div>
 </div>
 
+
+@if(auth('user')->user()?->hasPlatformPermission('platform.approvals.decide'))
+<div class="modal fade" id="lg-recon-action-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" id="lg-recon-action-form">
+            <div class="modal-header">
+                <h5 class="modal-title" id="lg-recon-action-title">مراجعة قضية المطابقة</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3" id="lg-recon-action-help"></p>
+                <div id="lg-recon-proposal-fields">
+                    <label class="form-label">السبب الجذري المحدد</label>
+                    <textarea class="form-control mb-3" id="lg-recon-root-cause" rows="3" minlength="12" maxlength="500"
+                        placeholder="مثال: حركات سابقة لتفعيل الترحيل لم تُرحّل إلى الدفتر."></textarea>
+                    <label class="form-label">مرجع الأدلة</label>
+                    <textarea class="form-control" id="lg-recon-evidence" rows="3" minlength="12" maxlength="1000"
+                        placeholder="رقم تقرير أو قيود/معاملات تمّت مراجعتها؛ لا تضع بيانات حساسة غير لازمة."></textarea>
+                </div>
+                <div id="lg-recon-approval-fields" class="d-none">
+                    <label class="form-label">ملاحظة الاعتماد المستقل</label>
+                    <textarea class="form-control" id="lg-recon-approval-note" rows="4" minlength="12" maxlength="1000"
+                        placeholder="أؤكد مراجعة السبب والأدلة وأنني لست مقدّم الاقتراح."></textarea>
+                </div>
+                <div class="alert alert-warning small mt-3 mb-0">
+                    لا يُنشئ الاقتراح أي حركة مالية. الاعتماد المستقل فقط ينشئ قيداً مزدوجاً متوازناً إن بقي الفرق قائماً.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">إلغاء</button>
+                <button type="submit" class="btn btn-danger" id="lg-recon-action-submit">متابعة</button>
+            </div>
+        </form>
+    </div>
+</div>
+@endif
+
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const BASE = '{{ url('admin/amial/ledger') }}';
@@ -231,6 +268,28 @@
     async function get(path) {
         const r = await fetch(BASE + path, {headers: {'Accept': 'application/json'}});
         return r.json();
+    }
+
+    const canDecideReconciliation = @json((bool) auth('user')->user()?->hasPlatformPermission('platform.approvals.decide'));
+    const csrfToken = '{{ csrf_token() }}';
+
+    async function post(path, payload) {
+        const r = await fetch(BASE + path, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            body: JSON.stringify(payload),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.success) {
+            const errors = Object.values(data.errors || {}).flat().join(' ') || data.message || 'تعذّر تنفيذ الإجراء.';
+            throw new Error(errors);
+        }
+        return data;
     }
 
     const tile = (label, value, sub, cls) => `
@@ -502,16 +561,26 @@
             const j = await get('/reconciliation-cases');
             const items = j.success ? (j.meta.items || []) : [];
             const severity = s => s === 'critical' ? 'danger' : (s === 'high' ? 'warning text-dark' : 'secondary');
+            const action = c => {
+                if (!canDecideReconciliation || c.case_type !== 'wallet') return '—';
+                if (c.status === 'pending_approval') {
+                    return `<button class="btn btn-sm btn-danger js-lg-recon-action" data-action="approve" data-case="${esc(c.case_ulid)}">اعتماد مستقل</button>`;
+                }
+                if (!['corrected', 'closed', 'verifying'].includes(c.status)) {
+                    return `<button class="btn btn-sm btn-outline-primary js-lg-recon-action" data-action="propose" data-case="${esc(c.case_ulid)}">اقتراح تسوية</button>`;
+                }
+                return '—';
+            };
             box.innerHTML = `<div class="table-responsive"><table class="table table-sm" data-testid="lg-recon-cases-table">
-                <thead class="thead-light"><tr><th>القضية</th><th>الموضوع</th><th class="text-end">الفرق</th><th>الفرضية</th><th>الحالة</th><th>التكرار</th><th>آخر رصد</th></tr></thead>
+                <thead class="thead-light"><tr><th>القضية</th><th>الموضوع</th><th class="text-end">الفرق</th><th>الفرضية</th><th>الحالة</th><th>التكرار</th><th>آخر رصد</th><th>الإجراء</th></tr></thead>
                 <tbody>${items.map(c => `<tr class="${c.severity === 'critical' ? 'table-danger' : ''}">
                     <td class="font-monospace small">${esc(c.case_ulid)}</td>
                     <td class="small">${esc(c.subject_label || (c.subject_user_id ? 'عميل #' + c.subject_user_id : '—'))}
                         <div class="text-muted" style="font-size:.75rem">${esc(c.case_type)}</div></td>
                     <td class="text-end fw-bold">${money(c.difference)}</td><td class="small">${esc(c.root_cause || 'بانتظار التصنيف')}</td>
                     <td><span class="badge bg-${severity(c.severity)}">${esc(c.status)}</span></td>
-                    <td>${esc(c.detection_count)}</td><td class="small">${esc(c.last_detected_at || '—')}</td>
-                </tr>`).join('') || '<tr><td colspan="7" class="text-muted text-center py-3">لا قضايا مسجّلة بعد؛ تُنشأ من التشغيل الليلي، لا من العرض اليدوي.</td></tr>'}</tbody>
+                    <td>${esc(c.detection_count)}</td><td class="small">${esc(c.last_detected_at || '—')}</td><td>${action(c)}</td>
+                </tr>`).join('') || '<tr><td colspan="8" class="text-muted text-center py-3">لا قضايا مسجّلة بعد؛ تُنشأ من التشغيل الليلي، لا من العرض اليدوي.</td></tr>'}</tbody>
             </table></div>`;
         } catch (error) {
             box.innerHTML = '<div class="alert alert-warning py-2 small">تعذّر تحميل قضايا المطابقة.</div>';
@@ -685,6 +754,51 @@
         const tab = document.querySelector('[data-bs-target="#lg-entries"]');
         if (tab && window.bootstrap) new bootstrap.Tab(tab).show();
     }
+
+    let activeReconAction = null;
+    document.addEventListener('click', function (event) {
+        const button = event.target.closest('.js-lg-recon-action');
+        if (!button || !canDecideReconciliation) return;
+
+        activeReconAction = {caseUlid: button.dataset.case, action: button.dataset.action};
+        const proposing = activeReconAction.action === 'propose';
+        document.getElementById('lg-recon-action-title').textContent = proposing ? 'اقتراح تسوية موثقة' : 'اعتماد تسوية مستقل';
+        document.getElementById('lg-recon-action-help').textContent = proposing
+            ? 'وثّق سبب الفرق ورابط الدليل. لن يُنشأ أي قيد في هذه الخطوة.'
+            : 'لا يجوز أن تكون أنت مقدم الاقتراح. سيُنشأ قيد متوازن فقط إن ظل الفرق قائماً.';
+        document.getElementById('lg-recon-proposal-fields').classList.toggle('d-none', !proposing);
+        document.getElementById('lg-recon-approval-fields').classList.toggle('d-none', proposing);
+        document.getElementById('lg-recon-action-submit').textContent = proposing ? 'إرسال للاعتماد' : 'اعتماد وتنفيذ';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('lg-recon-action-modal')).show();
+    });
+
+    const reconForm = document.getElementById('lg-recon-action-form');
+    if (reconForm) reconForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        if (!activeReconAction) return;
+
+        const submit = document.getElementById('lg-recon-action-submit');
+        submit.disabled = true;
+        try {
+            if (activeReconAction.action === 'propose') {
+                await post(`/reconciliation-cases/${activeReconAction.caseUlid}/propose-correction`, {
+                    root_cause: document.getElementById('lg-recon-root-cause').value.trim(),
+                    evidence_reference: document.getElementById('lg-recon-evidence').value.trim(),
+                });
+            } else {
+                await post(`/reconciliation-cases/${activeReconAction.caseUlid}/approve-correction`, {
+                    approval_note: document.getElementById('lg-recon-approval-note').value.trim(),
+                });
+            }
+            bootstrap.Modal.getInstance(document.getElementById('lg-recon-action-modal')).hide();
+            await loadRecon();
+        } catch (error) {
+            alert(error.message || 'تعذّر تنفيذ الإجراء.');
+        } finally {
+            submit.disabled = false;
+        }
+    });
+
 })();
 </script>
 @endsection

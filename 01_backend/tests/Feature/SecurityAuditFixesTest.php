@@ -97,4 +97,25 @@ class SecurityAuditFixesTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->policy->enforceFinancialPolicy($user, 'send_money', '100');
     }
+
+    /** @test */
+    public function pii_keys_have_no_source_code_fallback_and_production_refuses_missing_keys(): void
+    {
+        $config = (string) file_get_contents(config_path('amial.php'));
+        $entrypoint = (string) file_get_contents(base_path('docker/entrypoint.sh'));
+
+        $this->assertMatchesRegularExpression(
+            "/'pii_key'\\s*=>\\s*env\\('AMIAL_PII_ENCRYPTION_KEY'\\)/",
+            $config,
+            'مفتاح الهوية عاد بقيمة بديلة في المصدر؛ من يقرأ المستودع يفك البيانات',
+        );
+        $this->assertMatchesRegularExpression(
+            "/'blind_index_key'\\s*=>\\s*env\\('AMIAL_PII_BLIND_INDEX_KEY'\\)/",
+            $config,
+            'مفتاح فهرس الهوية عاد بقيمة بديلة في المصدر',
+        );
+        $this->assertStringContainsString('AMIAL-PII-KEY-GATE-001', $entrypoint);
+        $this->assertStringContainsString('AMIAL_PII_ENCRYPTION_KEY', $entrypoint);
+        $this->assertStringContainsString('AMIAL_PII_BLIND_INDEX_KEY', $entrypoint);
+    }
 }
