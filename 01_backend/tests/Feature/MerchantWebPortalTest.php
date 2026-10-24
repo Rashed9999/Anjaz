@@ -99,6 +99,21 @@ class MerchantWebPortalTest extends TestCase
             ->assertSee("فتح '+item.label", false);
     }
 
+    /** التنبيه التشغيلي يقود إلى مساحة مصرح بها، ولا يلتف على الاستحقاق. */
+    public function test_merchant_dashboard_only_makes_available_attention_actions_clickable(): void
+    {
+        $owner = $this->owner();
+
+        $this->actingAs($owner, 'merchant_web')
+            ->get('/merchant')
+            ->assertOk()
+            ->assertSee("const available=new Set(navigation.filter(item=>item.state==='available')", false)
+            ->assertSee("const actionable=tab!==null&&available.has(tab)", false)
+            ->assertSee("add('◫','ذمم عملاء قائمة'", false)
+            ->assertSee("'debts')", false)
+            ->assertSee("'devices')", false);
+    }
+
     /** نقطة البيع معالجٌ فوق الفرع والموظف والجهاز في النسخة المنشورة فعلياً. */
     public function test_owner_portal_exposes_guided_pos_setup_in_deployed_view(): void
     {
