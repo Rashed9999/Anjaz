@@ -88,10 +88,15 @@ final class MerchantGateway
      * It does not issue a wallet or authorize money transfers.
      */
     public function provisionApprovedMerchant(
-        string $tenantId, string $amialAccountId, string $branchId, string $branchName
+        string $tenantId, string $amialAccountId, string $branchId, string $branchName,
+        string $merchantNumber, string $approvalEventId, string $approvedAt
     ): array {
         return $this->send('POST', '/api/v1/merchant/provision', [
             'tenant_id' => $this->segment($tenantId),
+            'merchant_number' => $merchantNumber,
+            'approval_event_id' => $approvalEventId,
+            'approval_source' => 'muwathaq_approved',
+            'approved_at' => $approvedAt,
             'owner_amial_account_id' => $this->segment($amialAccountId),
             'approved' => true,
             'branch_id' => $this->segment($branchId),
