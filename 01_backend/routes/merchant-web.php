@@ -38,7 +38,7 @@ Route::middleware('merchant.web')->group(function () {
 
     // نفس وحدات API المستخدمة في التطبيق، دون نسخ منطق التجارة أو الدفتر.
     // يُطبّق فحص ملكية المنشأة أولاً في merchant.web، ثم فحص الباقة في كل باب.
-    Route::prefix('data')->name('data.')->group(function () {
+    Route::prefix('data')->name('data.')->middleware('merchant.legacy-commercial-fence')->group(function () {
         Route::get('/overview', [Operations::class, 'summary'])->name('overview');
         Route::get('/dashboard-v2', [Dashboard::class, 'show'])->name('dashboard-v2');
         Route::prefix('/report-exports')->name('report-exports.')->group(function () {
