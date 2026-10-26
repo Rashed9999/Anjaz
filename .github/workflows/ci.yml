@@ -156,6 +156,11 @@ jobs:
           echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
           echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
 
+      # Isolated, database-free transport/security regression checks for staged Merchant SSO.
+      - name: Merchant Workspace bridge HTTPS and signed contract
+        working-directory: 01_backend
+        run: php artisan test --compact tests/Unit/MerchantWorkspaceBridgeTest.php
+
       - name: تحقق شاشتي الرسوم وسجل التدقيق ضد 500
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/FeeCentreScreensGuardTest.php tests/Feature/AuditScreenArabicAndFiltersTest.php
