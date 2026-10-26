@@ -25,6 +25,7 @@ final class MuwathaqProvisioningService {
    $app=MuwathaqAccountOpeningApplication::query()->create(['application_ulid'=>$e['application_ulid'],'user_id'=>$u->id,'origin'=>'muwathaq','subject_kind'=>$kind,'verification_path'=>$e['verification_path'],'business_type'=>$e['business_type']??null,'requested_tier'=>$e['requested_tier']??null,'status'=>MuwathaqAccountOpeningApplication::STATUS_APPROVED,'submitted_at'=>now(),'decided_at'=>now(),'muwathaq_decided_at'=>now(),'decision_reference'=>$e['decision_reference'],'decision_context'=>$this->context((array)$e['decision_context']),'evidence_completed_at'=>now()]);
    $this->activate($u,$app); EMoney::query()->firstOrCreate(['user_id'=>$u->id,'currency'=>\App\Support\Money\Currencies::BASE]);
    app(AuditService::class)->record(['actor_type'=>'system','actor_user_id'=>null,'subject_type'=>'user','subject_id'=>$u->id,'action'=>'MUWATHAQ_ACCOUNT_PROVISIONED','decision_code'=>'MUWATHAQ_APPROVED','context'=>['application_ulid'=>$e['application_ulid'],'subject_kind'=>$kind,'decision_reference'=>$e['decision_reference']],'severity'=>'info']);
+   if($kind==='merchant') app(\App\Services\Merchant\MerchantWorkspaceOutbox::class)->recordFor($u);
    return ['user_id'=>$u->id,'duplicate'=>false,'access_delivery'=>'password_reset_required'];
   });
  }

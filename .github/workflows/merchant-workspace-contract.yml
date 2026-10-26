@@ -1,0 +1,53 @@
+name: Merchant workspace approval and delivery contract
+on:
+  pull_request:
+  push:
+    branches: [fix/merchant-workspace-outbox]
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: amial_workspace_testing
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping" --health-interval=10s
+          --health-timeout=5s --health-retries=10
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: amial_workspace_testing
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+    defaults:
+      run:
+        working-directory: 01_backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, gd, zip, bcmath, intl, exif, pcntl
+          coverage: none
+      - run: composer install --prefer-dist --no-progress --no-interaction
+      - name: Prepare isolated test application
+        run: |
+          cp .env.example .env
+          mkdir -p storage/framework/{cache/data,sessions,views} storage/logs storage/app/public bootstrap/cache
+          php artisan key:generate
+          php artisan passport:keys --force
+      - name: Approval, rollback, retry, ordering, and transport
+        run: php artisan test --compact tests/Feature/MerchantWorkspaceOutboxTest.php tests/Unit/MerchantWorkspaceBridgeTest.php
+      - name: Independent Muwathaq policies
+        run: |
+          php ../03_muwathaq/tests/governorate_policy_test.php
+          php ../03_muwathaq/tests/reviewer_operations_test.php
