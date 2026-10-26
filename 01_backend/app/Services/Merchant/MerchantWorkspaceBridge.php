@@ -112,7 +112,7 @@ final class MerchantWorkspaceBridge
             'X-Amial-Nonce' => $nonce,
             'X-Amial-Context' => $encodedContext,
             'X-Amial-Signature' => $signature,
-        ])->post($baseUrl.$path);
+        ])->send('POST', $baseUrl.$path);
 
         $response->throw();
 
