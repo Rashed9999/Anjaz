@@ -45,15 +45,16 @@ final class MerchantWorkspaceOutboxTest extends TestCase
         $outbox = app(MerchantWorkspaceOutbox::class);
         $outbox->recordFor($owner);
         $this->enableTransport();
-        Http::fake(['*' => Http::response(['error' => 'unavailable'], 503)]);
-        $this->assertSame(0, $outbox->deliverPending());
-        $this->assertDatabaseHas('merchant_workspace_events', ['kind' => 'provision', 'attempts' => 1, 'delivered_at' => null]);
-        $this->assertDatabaseHas('merchant_workspace_events', ['kind' => 'lifecycle', 'attempts' => 0]);
-        Http::fake(function ($request) {
+        $attempt = 0;
+        Http::fake(function ($request) use (&$attempt) {
+            if (++$attempt === 1) return Http::response(['error' => 'unavailable'], 503);
             $tenant = json_decode(base64_decode(strtr($request->header('X-Amial-Context')[0], '-_', '+/')), true)['tenant_id'];
             return Http::response(['code' => str_ends_with($request->url(), '/provision')
                 ? 'MERCHANT_PROVISIONED' : 'MERCHANT_LIFECYCLE_ACCEPTED', 'tenant_id' => $tenant]);
         });
+        $this->assertSame(0, $outbox->deliverPending());
+        $this->assertDatabaseHas('merchant_workspace_events', ['kind' => 'provision', 'attempts' => 1, 'delivered_at' => null]);
+        $this->assertDatabaseHas('merchant_workspace_events', ['kind' => 'lifecycle', 'attempts' => 0]);
         $this->assertSame(2, $outbox->deliverPending());
         $this->assertSame(0, $outbox->deliverPending());
         $this->assertSame(0, DB::table('merchant_workspace_events')->whereNull('delivered_at')->count());
