@@ -11,6 +11,7 @@ use App\Support\Phone;
 use App\Domain\Verticals\VerticalRegistry as VR;
 use App\Support\YemenGovernorates;
 use App\Services\Geo\YemenRegionsService;
+use App\Services\Merchant\MerchantWorkspaceBridge;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -145,6 +146,12 @@ class WebAuthController extends Controller
             ? MerchantProfile::where('user_id', $owner->id)->first()
             : null;
 
+        // Resolve through the owner, even when the login identifier was a phone
+        // number or an email rather than the merchant number.
+        $merchant = $owner
+            ? Merchant::where('user_id', $owner->id)->first()
+            : null;
+
         if (!$owner || !Hash::check((string) $input['password'], (string) $owner->password)
             || (int) $owner->is_active !== 1
             || (int) ($owner->is_temp_blocked ?? 0) === 1
@@ -173,7 +180,15 @@ class WebAuthController extends Controller
         Auth::guard('merchant_web')->login($owner, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        return redirect()->route('merchant.web.dashboard');
+        // The bridge is disabled by default. If the isolated workspace is not
+        // ready, the verified owner continues to the legacy portal unchanged.
+        $workspaceRedirect = $merchant
+            ? app(MerchantWorkspaceBridge::class)->redirectFor($owner, $merchant, $profile)
+            : null;
+
+        return $workspaceRedirect !== null
+            ? redirect()->away($workspaceRedirect)
+            : redirect()->route('merchant.web.dashboard');
     }
 
     public function logout(Request $request): RedirectResponse
