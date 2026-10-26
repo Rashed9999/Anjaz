@@ -192,6 +192,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'checkDeviceId' => CheckDeviceId::class,
             'merchant' => MerchantMiddleware::class,
             'merchant.web' => \App\Http\Middleware\MerchantWebMiddleware::class,
+            'merchant.legacy-commercial-fence' => \App\Http\Middleware\LegacyMerchantCommercialWriteFence::class,
 
             // Amial Pay v0.6
             'amial.idempotency' => EnforceIdempotency::class,
