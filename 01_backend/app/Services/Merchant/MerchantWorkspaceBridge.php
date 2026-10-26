@@ -25,7 +25,18 @@ final class MerchantWorkspaceBridge
 
         $baseUrl = rtrim((string) config('amial.merchant_workspace.base_url', ''), '/');
         $secret = (string) config('amial.merchant_workspace.integration_secret', '');
-        if ($baseUrl === '' || strlen($secret) < 32 || ! $profile->isVerified()) {
+        // Never send owner identity assertions or an integration signature
+        // over plaintext HTTP, through URL user-info, or to an unexpected path.
+        $parts = parse_url($baseUrl);
+        if (strlen($secret) < 32 || ! $profile->isVerified()
+            || ! filter_var($baseUrl, FILTER_VALIDATE_URL)
+            || ! is_array($parts)
+            || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || empty($parts['host'])
+            || isset($parts['user'], $parts['pass'])
+            || isset($parts['user']) || isset($parts['pass'])
+            || isset($parts['query']) || isset($parts['fragment'])
+            || ! in_array($parts['path'] ?? '', ['', '/'], true)) {
             return null;
         }
 
@@ -82,7 +93,10 @@ final class MerchantWorkspaceBridge
         } catch (\Throwable $exception) {
             Log::warning('Merchant workspace SSO bridge failed; using the legacy portal.', [
                 'merchant_id' => $merchant->getKey(),
-                'exception' => $exception->getMessage(),
+                // Never log provider responses or signed request URLs: they can contain secrets.
+                'exception_class' => $exception::class,
+                'http_status' => $exception instanceof \Illuminate\Http\Client\RequestException
+                    ? $exception->response->status() : null,
             ]);
 
             return null;
@@ -106,7 +120,8 @@ final class MerchantWorkspaceBridge
         $canonical = $timestamp."\n".$nonce."\nPOST\n".$path."\n".$encodedContext."\n".hash('sha256', $body);
         $signature = hash_hmac('sha256', $canonical, $secret);
 
-        $response = Http::withBody($body, 'application/json')->withHeaders([
+        $response = Http::connectTimeout(2)->timeout(6)->withoutRedirecting()
+            ->withBody($body, 'application/json')->withHeaders([
             'Accept' => 'application/json',
             'X-Amial-Timestamp' => $timestamp,
             'X-Amial-Nonce' => $nonce,
