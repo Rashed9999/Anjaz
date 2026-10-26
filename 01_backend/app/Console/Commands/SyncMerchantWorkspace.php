@@ -18,6 +18,10 @@ final class SyncMerchantWorkspace extends Command
         });
         $count = $outbox->deliverPending((int) $this->option('limit'));
         $this->info('Delivered merchant workspace events: '.$count);
+        if ($outbox->failedDeliveries() > 0) {
+            $this->error('Merchant workspace delivery failures: '.$outbox->failedDeliveries());
+            return self::FAILURE;
+        }
         return self::SUCCESS;
     }
 }

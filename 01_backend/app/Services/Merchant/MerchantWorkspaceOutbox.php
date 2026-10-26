@@ -9,25 +9,32 @@ use Illuminate\Support\Str;
 /** Commercial access messages only. Never creates accounts, wallets, or approvals. */
 final class MerchantWorkspaceOutbox
 {
+    private int $failedDeliveries = 0;
+
+    public function failedDeliveries(): int { return $this->failedDeliveries; }
+
     public function recordFor(User $owner): void
     {
         DB::transaction(function () use ($owner): void {
             // Serialize snapshots for this merchant, including concurrent approvals/reconciliation.
             $merchant = Merchant::where('user_id', $owner->id)->lockForUpdate()->first();
             $opening = MuwathaqAccountOpeningApplication::where('user_id', $owner->id)
-                ->where('subject_kind', 'merchant')->where('status', 'approved')
-                ->whereNotNull('muwathaq_decided_at')->latest('muwathaq_decided_at')->first();
-            if (! $merchant || ! $opening || ! $merchant->merchant_number || ! $merchant->store_name) {
+                ->where('subject_kind', 'merchant')->latest('id')->first();
+            if (! $merchant || ! $merchant->merchant_number || ! $merchant->store_name) {
                 return; // Historical merchants need an explicit approval mapping; never manufacture one.
             }
             $tenant = 'legacy_merchant_'.$merchant->getKey();
             $branch = $tenant.'_main';
-            $active = (bool) $owner->fresh()->is_active
+            $approved = $opening && $opening->status === 'approved' && $opening->muwathaq_decided_at !== null;
+            $active = $approved && (bool) $owner->fresh()->is_active
+                && (int) $owner->is_temp_blocked !== 1
                 && MerchantProfile::where('user_id', $owner->id)->where('verification_status', 'verified')->exists();
             $state = $active ? 'active' : 'suspended';
             $last = DB::table('merchant_workspace_events')->where('tenant_id', $tenant)->latest('id')->first();
             if (! $last) {
-                $this->append($tenant, $branch, 'provision', 'active', [
+                if (! $approved) return;
+                $this->append($tenant, $branch, 'provision', $state, [
+                    'access_status' => $state,
                     'tenant_id' => $tenant, 'merchant_number' => (string) $merchant->merchant_number,
                     'approval_event_id' => (string) $opening->application_ulid,
                     'approval_source' => 'muwathaq_approved',
@@ -35,6 +42,7 @@ final class MerchantWorkspaceOutbox
                     'owner_amial_account_id' => (string) $owner->id, 'approved' => true,
                     'branch_id' => $branch, 'branch_name' => (string) $merchant->store_name,
                 ]);
+                return;
             }
             if (($last->state ?? 'active') !== $state) {
                 $this->append($tenant, $branch, 'lifecycle', $state, ['status' => $state]);
@@ -60,14 +68,18 @@ final class MerchantWorkspaceOutbox
         }
     }
 
-    /** A failed head blocks later events so suspension/reactivation cannot reorder. */
+    /** Preserve order per merchant; a failed merchant must not block other merchants. */
     public function deliverPending(int $limit = 100): int
     {
+        $this->failedDeliveries = 0;
         if (! config('amial.merchant_workspace.enabled', false)) return 0;
         $delivered = 0;
+        $blocked = [];
+        $afterId = 0;
         for ($i = 0; $i < max(1, min(500, $limit)); $i++) {
-            $result = DB::transaction(function (): ?bool {
+            $result = DB::transaction(function () use ($blocked, $afterId): ?array {
                 $row = DB::table('merchant_workspace_events')->whereNull('delivered_at')
+                    ->where('id', '>', $afterId)->whereNotIn('tenant_id', $blocked)
                     ->orderBy('id')->lockForUpdate()->first();
                 if (! $row) return null;
                 $path = $row->kind === 'provision' ? '/api/v1/merchant/provision'
@@ -83,17 +95,19 @@ final class MerchantWorkspaceOutbox
                     DB::table('merchant_workspace_events')->where('id', $row->id)->update([
                         'attempts' => $row->attempts + 1, 'delivered_at' => now(), 'failure_code' => null, 'updated_at' => now(),
                     ]);
-                    return true;
+                    return ['delivered' => true, 'tenant' => $row->tenant_id, 'id' => $row->id];
                 } catch (\Throwable $e) {
                     // Do not persist provider bodies, signed URLs, passwords or exception messages.
                     DB::table('merchant_workspace_events')->where('id', $row->id)->update([
                         'attempts' => $row->attempts + 1, 'failure_code' => 'DELIVERY_FAILED', 'updated_at' => now(),
                     ]);
-                    return false;
+                    return ['delivered' => false, 'tenant' => $row->tenant_id, 'id' => $row->id];
                 }
             }, 1);
-            if ($result !== true) break;
-            $delivered++;
+            if ($result === null) break;
+            $afterId = $result['id'];
+            if ($result['delivered']) $delivered++;
+            else { $blocked[] = $result['tenant']; $this->failedDeliveries++; }
         }
         return $delivered;
     }

@@ -76,7 +76,16 @@ class MerchantAdminActionService
 
         try {
             // ③ التنفيذ داخل معاملة
-            $after = DB::transaction(static fn () => $work());
+            $after = DB::transaction(static function () use ($work, $action, $merchantUserId) {
+                $after = $work();
+                if (in_array($action, ['account.freeze', 'account.unfreeze'], true)) {
+                    $merchant = User::find($merchantUserId);
+                    if ($merchant && (int) $merchant->type === MERCHANT_TYPE) {
+                        app(\App\Services\Merchant\MerchantWorkspaceOutbox::class)->recordFor($merchant);
+                    }
+                }
+                return $after;
+            });
 
             return MerchantAdminAction::create($base + [
                 'after_state' => is_array($after) ? $after : ['result' => $after],
@@ -230,3 +239,4 @@ class MerchantAdminActionService
         return $prefix . '-' . now()->format('ymd') . '-' . strtoupper(Str::random(6));
     }
 }
+

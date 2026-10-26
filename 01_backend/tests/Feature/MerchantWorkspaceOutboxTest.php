@@ -50,6 +50,33 @@ final class MerchantWorkspaceOutboxTest extends TestCase
         $this->assertDatabaseCount('merchant_workspace_events', 1);
     }
 
+
+    public function test_admin_freeze_and_unfreeze_are_recorded_before_the_next_poll(): void
+    {
+        $owner = $this->provisionMerchantFromMuwathaq(AccessConstants::BIZ_RETAIL, '777390015');
+        $actor = User::factory()->create(['type' => ADMIN_TYPE, 'role' => 'admin']);
+        $actions = app(\App\Services\AdminCenter\MerchantAdminActionService::class);
+        foreach ([0, 1] as $active) {
+            $actions->perform($actor, $owner->id, $active ? 'account.unfreeze' : 'account.freeze',
+                'اختبار انتقال حالة التاجر', [], function () use ($owner, $active) {
+                    $owner->is_active = $active;
+                    $owner->save();
+                    return ['is_active' => $active];
+                });
+        }
+        $states = DB::table('merchant_workspace_events')->where('kind', 'lifecycle')
+            ->orderBy('id')->pluck('state')->all();
+        $this->assertSame(['suspended', 'active'], $states);
+    }
+
+    public function test_sync_command_reports_attempted_delivery_failure(): void
+    {
+        $this->provisionMerchantFromMuwathaq(AccessConstants::BIZ_RETAIL, '777390016');
+        $this->enableTransport();
+        Http::fake(['*' => Http::response([], 503)]);
+        $this->artisan('merchant:workspace-sync')->assertExitCode(1);
+    }
+
     private function enableTransport(): void
     {
         config()->set('amial.merchant_workspace.enabled', true);
