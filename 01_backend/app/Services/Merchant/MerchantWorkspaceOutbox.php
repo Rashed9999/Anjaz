@@ -18,16 +18,15 @@ final class MerchantWorkspaceOutbox
         DB::transaction(function () use ($owner): void {
             // Serialize snapshots for this merchant, including concurrent approvals/reconciliation.
             $merchant = Merchant::where('user_id', $owner->id)->lockForUpdate()->first();
-            $opening = MuwathaqAccountOpeningApplication::where('user_id', $owner->id)
-                ->where('subject_kind', 'merchant')->latest('id')->first();
+            $access = app(MerchantWorkspaceAccess::class);
+            $opening = $access->latestOpening($owner);
             if (! $merchant || ! $merchant->merchant_number || ! $merchant->store_name) {
                 return; // Historical merchants need an explicit approval mapping; never manufacture one.
             }
             $tenant = 'legacy_merchant_'.$merchant->getKey();
             $branch = $tenant.'_main';
-            $approved = $opening && $opening->status === 'approved' && $opening->muwathaq_decided_at !== null;
-            $active = $approved && (bool) $owner->fresh()->is_active
-                && (int) $owner->is_temp_blocked !== 1
+            $approved = $access->approved($opening);
+            $active = $approved && $access->operational($owner->fresh())
                 && MerchantProfile::where('user_id', $owner->id)->where('verification_status', 'verified')->exists();
             $state = $active ? 'active' : 'suspended';
             $last = DB::table('merchant_workspace_events')->where('tenant_id', $tenant)->latest('id')->first();
@@ -85,8 +84,18 @@ final class MerchantWorkspaceOutbox
                 $path = $row->kind === 'provision' ? '/api/v1/merchant/provision'
                     : '/api/v1/merchant/tenants/'.$row->tenant_id.'/lifecycle';
                 try {
+                    $payload = json_decode($row->payload, true, 512, JSON_THROW_ON_ERROR);
+                    if ($row->kind === 'provision' && ($payload['access_status'] ?? 'active') === 'active') {
+                        $owner = User::find($payload['owner_amial_account_id']);
+                        // An old active snapshot may narrow access at delivery, never widen it.
+                        // Replays cannot reactivate an existing tenant: lifecycle owns that transition.
+                        if (! $owner || ! app(MerchantWorkspaceAccess::class)->permitsLogin($owner)
+                            || ! MerchantProfile::where('user_id', $owner->id)->where('verification_status', 'verified')->exists()) {
+                            $payload['access_status'] = 'suspended';
+                        }
+                    }
                     $response = app(MerchantWorkspaceBridge::class)->deliverEvent($path,
-                        json_decode($row->payload, true, 512, JSON_THROW_ON_ERROR),
+                        $payload,
                         json_decode($row->actor_context, true, 512, JSON_THROW_ON_ERROR));
                     $expected = $row->kind === 'provision' ? 'MERCHANT_PROVISIONED' : 'MERCHANT_LIFECYCLE_ACCEPTED';
                     if (($response['code'] ?? '') !== $expected || ($response['tenant_id'] ?? '') !== $row->tenant_id) {

@@ -153,6 +153,7 @@ class WebAuthController extends Controller
             : null;
 
         if (!$owner || !Hash::check((string) $input['password'], (string) $owner->password)
+            || !app(\App\Services\Merchant\MerchantWorkspaceAccess::class)->permitsLogin($owner, true)
             || (int) $owner->is_active !== 1
             || (int) ($owner->is_temp_blocked ?? 0) === 1
             || !$profile) {
@@ -199,3 +200,4 @@ class WebAuthController extends Controller
         return redirect()->route('merchant.web.login');
     }
 }
+

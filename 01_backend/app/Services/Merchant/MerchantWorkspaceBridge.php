@@ -56,15 +56,10 @@ final class MerchantWorkspaceBridge
             return null;
         }
 
-        $opening = MuwathaqAccountOpeningApplication::query()
-            ->where('user_id', $owner->id)
-            ->where('subject_kind', 'merchant')
-            ->where('status', MuwathaqAccountOpeningApplication::STATUS_APPROVED)
-            ->whereNotNull('muwathaq_decided_at')
-            ->latest('muwathaq_decided_at')
-            ->first();
+        $access = app(MerchantWorkspaceAccess::class);
+        $opening = $access->latestOpening($owner);
 
-        if (! $opening || ! $merchant->merchant_number || ! $merchant->store_name) {
+        if (! $access->permitsLogin($owner) || ! $opening || ! $merchant->merchant_number || ! $merchant->store_name) {
             return null;
         }
 

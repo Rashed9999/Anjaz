@@ -77,6 +77,53 @@ final class MerchantWorkspaceOutboxTest extends TestCase
         $this->artisan('merchant:workspace-sync')->assertExitCode(1);
     }
 
+
+    public function test_web_login_rejects_a_security_hold_even_with_valid_credentials(): void
+    {
+        $owner = $this->provisionMerchantFromMuwathaq(AccessConstants::BIZ_RETAIL, '777390017');
+        $owner->password = \Illuminate\Support\Facades\Hash::make('TestPass!234');
+        $owner->security_hold_until = now()->addHour();
+        $owner->save();
+        $this->from('/merchant/login')->post('/merchant/login', [
+            'identifier' => $owner->email, 'password' => 'TestPass!234',
+        ])->assertSessionHasErrors('identifier');
+        $this->assertGuest('merchant_web');
+        app(MerchantWorkspaceOutbox::class)->recordFor($owner);
+        $this->assertDatabaseHas('merchant_workspace_events', ['kind' => 'lifecycle', 'state' => 'suspended']);
+    }
+
+    public function test_web_login_cannot_use_a_historical_approval_after_current_rejection(): void
+    {
+        $owner = $this->provisionMerchantFromMuwathaq(AccessConstants::BIZ_RETAIL, '777390018');
+        $owner->password = \Illuminate\Support\Facades\Hash::make('TestPass!234');
+        $owner->save();
+        $case = \App\Models\MuwathaqAccountOpeningApplication::where('user_id', $owner->id)->first();
+        $case->status = 'rejected';
+        $case->save();
+        $this->from('/merchant/login')->post('/merchant/login', [
+            'identifier' => $owner->email, 'password' => 'TestPass!234',
+        ])->assertSessionHasErrors('identifier');
+        $this->assertGuest('merchant_web');
+    }
+
+    public function test_queued_active_provision_is_narrowed_if_merchant_is_frozen_before_delivery(): void
+    {
+        $owner = $this->provisionMerchantFromMuwathaq(AccessConstants::BIZ_RETAIL, '777390019');
+        $owner->is_active = 0;
+        $owner->save();
+        $outbox = app(MerchantWorkspaceOutbox::class);
+        $outbox->recordFor($owner);
+        $this->enableTransport();
+        Http::fake(function ($request) {
+            if (! str_ends_with($request->url(), '/provision')) return Http::response([], 503);
+            $payload = json_decode($request->body(), true);
+            $this->assertSame('suspended', $payload['access_status']);
+            return Http::response(['code' => 'MERCHANT_PROVISIONED', 'tenant_id' => $payload['tenant_id']]);
+        });
+        $this->assertSame(1, $outbox->deliverPending());
+        $this->assertSame(1, $outbox->failedDeliveries());
+    }
+
     private function enableTransport(): void
     {
         config()->set('amial.merchant_workspace.enabled', true);
