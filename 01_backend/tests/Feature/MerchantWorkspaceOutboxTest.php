@@ -14,6 +14,42 @@ final class MerchantWorkspaceOutboxTest extends TestCase
 {
     use RefreshDatabase, ProvisionsAccountsFromMuwathaq;
 
+    public function test_failure_for_one_merchant_does_not_block_another_merchants_events(): void
+    {
+        $this->provisionMerchantFromMuwathaq(AccessConstants::BIZ_RETAIL, '777390011');
+        $second = $this->provisionMerchantFromMuwathaq(AccessConstants::BIZ_RETAIL, '777390012');
+        $secondTenant = 'legacy_merchant_'.Merchant::where('user_id', $second->id)->value('id');
+        $this->enableTransport();
+        Http::fake(function ($request) use ($secondTenant) {
+            $context = json_decode(base64_decode(strtr($request->header('X-Amial-Context')[0], '-_', '+/')), true);
+            return $context['tenant_id'] !== $secondTenant ? Http::response([], 409)
+                : Http::response(['code' => 'MERCHANT_PROVISIONED', 'tenant_id' => $secondTenant]);
+        });
+        $this->assertSame(1, app(MerchantWorkspaceOutbox::class)->deliverPending());
+    }
+
+    public function test_a_newer_nonapproved_case_suspends_an_existing_workspace(): void
+    {
+        $owner = $this->provisionMerchantFromMuwathaq(AccessConstants::BIZ_RETAIL, '777390013');
+        $case = \App\Models\MuwathaqAccountOpeningApplication::where('user_id', $owner->id)->first();
+        $case->status = 'rejected';
+        $case->save();
+        app(MerchantWorkspaceOutbox::class)->recordFor($owner);
+        $this->assertDatabaseHas('merchant_workspace_events', ['kind' => 'lifecycle', 'state' => 'suspended']);
+    }
+
+    public function test_initially_suspended_snapshot_carries_its_state_in_provisioning(): void
+    {
+        $owner = $this->provisionMerchantFromMuwathaq(AccessConstants::BIZ_RETAIL, '777390014');
+        DB::table('merchant_workspace_events')->delete(); // isolated test database only
+        $owner->is_active = 0;
+        $owner->save();
+        app(MerchantWorkspaceOutbox::class)->recordFor($owner);
+        $event = DB::table('merchant_workspace_events')->first();
+        $this->assertSame('suspended', json_decode($event->payload, true)['access_status'] ?? null);
+        $this->assertDatabaseCount('merchant_workspace_events', 1);
+    }
+
     private function enableTransport(): void
     {
         config()->set('amial.merchant_workspace.enabled', true);
