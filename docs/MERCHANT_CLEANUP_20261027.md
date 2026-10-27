@@ -17,6 +17,7 @@ amial-impact, amial-architect, amial-laravel, amial-api-contract-auditor, amial-
 - Source integrity: 3,080 source files, zero failures after deletion.
 - Changed PHP syntax and git diff whitespace checked locally.
 - Dedicated GitHub job runs the merchant route/login/bridge tests on PHP 8.4 and isolated MySQL. The full repository workflow remains enabled.
+- The dedicated CI initially exposed an existing stale customer-directory assertion (old zero-argument JS signature and old heading). Updated it to check the current API binding, directory heading and search control; the existing live customer API assertion is retained.
 - Local full core suite is unavailable on PHP 8.3: the existing lock file requires PHP 8.4.1+ for several packages. The lock is preserved rather than weakened to make local setup pass.
 
 ## Not verified
