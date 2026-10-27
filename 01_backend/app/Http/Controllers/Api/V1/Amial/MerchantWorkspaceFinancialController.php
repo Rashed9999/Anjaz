@@ -73,6 +73,7 @@ final class MerchantWorkspaceFinancialController extends Controller
             (int) $owner->id,
             $request->input('search'),
             $request->input('filter'),
+            (int) $request->input('page', 1),
         );
 
         return response()->json(['success' => true, 'code' => 'OK', 'message' => '', 'data' => [
