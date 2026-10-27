@@ -23,6 +23,17 @@ class MerchantOperationSurfaceTest extends TestCase
         }
     }
 
+    public function test_active_owner_portal_and_financial_contracts_remain_registered(): void
+    {
+        $routes = app('router')->getRoutes();
+        foreach (['merchant.web.login', 'merchant.web.dashboard', 'merchant.web.data.wallet',
+            'merchant.web.data.debts', 'merchant.web.data.debts.collect.wallet.confirm'] as $name) {
+            $this->assertNotNull($routes->getByName($name), $name);
+        }
+        $this->assertContains('merchant.web', $routes->getByName('merchant.web.data.wallet')->gatherMiddleware());
+        $this->assertArrayNotHasKey('merchant', app('router')->getMiddleware());
+    }
+
     public function test_the_mobile_merchant_api_remains_registered(): void
     {
         $route = app('router')->getRoutes()->getByName('amial.merchant.quote');

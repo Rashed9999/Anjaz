@@ -76,11 +76,8 @@ class RouteServiceProvider extends ServiceProvider
                 ->middleware(['api', 'auth:api', 'trackLastActiveAt', 'amial.pos-device'])
                 ->group(base_path('routes/api/kyc-privacy.php'));
 
-            // AMIAL-AUDIT-ORPHAN-002: أُزيل تسجيل routes/merchant.php —
-            // لوحة التاجر الويبيّة من قالب 6cash. قوالبها كلّها محذوفة، فكل
-            // صفحاتها ترمي 500، ولا شيء خارجها يشير إليها (مراجعها الوحيدة
-            // متحكّماتها نفسها). تاجر أميال يعمل من التطبيق عبر
-            // /api/v1/amial/merchant/* — وهي حيّة ومختبَرة.
+            // Retired 6Cash merchant portal and unused controllers were removed.
+            // Current merchant-web login, cashier APIs and money authority remain registered.
 
             // AMIAL-CLEANUP: أُزيل تسجيل routes/install.php (معالج تثبيت 6cash)
 
