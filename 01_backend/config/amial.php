@@ -503,6 +503,8 @@ return [
         'integration_secret' => env('AMIAL_MERCHANT_WORKSPACE_SECRET', ''),
         'issuer' => env('AMIAL_MERCHANT_WORKSPACE_ISSUER', 'amial-pay'),
         'audience' => env('AMIAL_MERCHANT_WORKSPACE_AUDIENCE', 'amial-merchant'),
+        'read_issuer' => env('AMIAL_MERCHANT_READ_ISSUER', 'amial-merchant'),
+        'read_audience' => env('AMIAL_MERCHANT_READ_AUDIENCE', 'amial-pay'),
     ],
 
     /*
