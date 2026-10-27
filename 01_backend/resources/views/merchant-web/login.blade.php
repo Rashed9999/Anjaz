@@ -26,7 +26,7 @@
         @if($errors->any())
             <div class="error" role="alert">{{ $errors->first() }}</div>
         @endif
-        <form method="post" action="{{ route('merchant.web.login.submit') }}" autocomplete="on">
+        <form id="merchant-login-form" method="post" action="{{ route('merchant.web.login.submit') }}" autocomplete="on">
             @csrf
             <label for="identifier">رقم التاجر أو الهاتف أو البريد الإلكتروني</label>
             <input id="identifier" name="identifier" value="{{ old('identifier') }}" required autofocus maxlength="160" autocomplete="username">
@@ -42,5 +42,25 @@
         </div>
         <div class="foot">موظف نقطة البيع؟ استخدم تطبيق أميال باي بحسابك المستقل. <a href="{{ rtrim(config('app.url'), '/') }}">العودة إلى الموقع الرئيسي</a></div>
     </main>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
+(function () {
+    const form = document.getElementById('merchant-login-form');
+    const button = form.querySelector('button[type="submit"]');
+    window.addEventListener('pageshow', function () {
+        form.dataset.submitting = '0';
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+    });
+    form.addEventListener('submit', function (event) {
+        if (form.dataset.submitting === '1') {
+            event.preventDefault();
+            return;
+        }
+        form.dataset.submitting = '1';
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+    });
+})();
+</script>
 </body>
 </html>

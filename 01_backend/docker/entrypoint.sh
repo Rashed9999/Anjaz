@@ -212,6 +212,8 @@ mkdir -p storage/app/mpdf storage/app/private \
 # إلى 500 قاسٍ (شوهد في التحويل وتنزيل PDF).
 touch storage/logs/laravel.log 2>/dev/null || true
 chmod -R 777 storage bootstrap/cache 2>/dev/null || true
+# Passport keys must not inherit the broad storage permissions.
+chmod 600 storage/app/passport/oauth-*.key 2>/dev/null || true
 chmod 666 storage/logs/laravel.log 2>/dev/null || true
 chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
 
