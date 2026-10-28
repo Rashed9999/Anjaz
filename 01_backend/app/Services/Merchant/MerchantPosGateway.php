@@ -102,7 +102,12 @@ final class MerchantPosGateway
         if (($result['code'] ?? null) !== 'CASH_SALE_RECORDED' || ! is_array($result['data'] ?? null)) {
             throw new RuntimeException('MERCHANT_INVALID_SALE_RESPONSE');
         }
+        $receiptItems = $result['data']['items'] ?? null;
+        if (! is_array($receiptItems) || $receiptItems === []) {
+            throw new RuntimeException('MERCHANT_INVALID_RECEIPT_RESPONSE');
+        }
         return [
+            'items' => $receiptItems,
             'sale_ulid' => (string) $result['data']['sale_id'],
             'total_amount' => (string) $result['data']['total'],
             'payment_method' => 'cash',

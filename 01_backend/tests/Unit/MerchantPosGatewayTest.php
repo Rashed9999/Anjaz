@@ -95,13 +95,17 @@ final class MerchantPosGatewayTest extends TestCase
         Http::fake(['https://merchant-stage.example.test/*' => Http::response([
             'code' => 'CASH_SALE_RECORDED',
             'data' => ['sale_id'=>'20000000-0000-4000-8000-000000000001',
-                'total'=>'240.0000','replayed'=>false],
+                'total'=>'240.0000','replayed'=>false,
+                'items'=>[['name'=>'مياه','qty'=>12,'price'=>'20.0000','line_total'=>'240.0000',
+                    'merchant_product_id'=>'10000000-0000-4000-8000-000000000002']]],
         ], 201)]);
         $line = ['product_id' => '10000000-0000-4000-8000-000000000002', 'quantity' => 12];
         $sale = $svc->cashSale($this->owner(17), null, [$line],
             '12345678-1234-4234-8234-123456789abc', 'cashier', '991');
         $this->assertSame('240.0000', $sale['total_amount']);
         $this->assertSame('amial-merchant', $sale['source']);
+        $this->assertSame('مياه', $sale['items'][0]['name']);
+        $this->assertSame('20.0000', $sale['items'][0]['price']);
         Http::assertSent(static function (OutgoingRequest $request) use ($line): bool {
             $body = json_decode($request->body(), true);
             $h = fn (string $k): string => (string) ($request->header($k)[0] ?? '');
