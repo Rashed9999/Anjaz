@@ -66,6 +66,8 @@ final class MerchantWorkspaceBridge
                 'approved' => true,
                 'branch_id' => $branchId,
                 'branch_name' => (string) $merchant->store_name,
+                ... (in_array($profile->business_type, ['quick_sale', 'wholesale', 'fuel', 'retail', 'restaurant', 'pharmacy'], true)
+                    ? ['business_type' => $profile->business_type] : []),
             ], [
                 'actor_type' => 'system',
                 'actor_id' => 'amial-pay',
