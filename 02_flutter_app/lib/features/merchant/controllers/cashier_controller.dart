@@ -173,7 +173,7 @@ class CashierController extends GetxController implements GetxService {
       {int? productId, String? merchantProductId, int quantity = 1}) {
     if (quantity <= 0) return;
     final newEngine = merchantProductId != null;
-    if (cart.isNotEmpty && cart.first.merchantProductId != null != newEngine) {
+    if (cart.isNotEmpty && (cart.first.merchantProductId != null) != newEngine) {
       lastError.value = 'لا يمكن خلط منتجات أميال التاجر مع كاشير أميال باي القديم في سلة واحدة.';
       return;
     }
