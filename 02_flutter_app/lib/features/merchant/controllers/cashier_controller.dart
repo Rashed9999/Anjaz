@@ -33,6 +33,7 @@ class CashierController extends GetxController implements GetxService {
   // المنتجات
   final RxList<Map<String, dynamic>> products = <Map<String, dynamic>>[].obs;
   final RxBool isLoadingProducts = false.obs;
+  final RxBool usingIndependentCatalog = false.obs;
 
   // السلة (محلية)
   final RxList<CartLine> cart = <CartLine>[].obs;
@@ -61,8 +62,15 @@ class CashierController extends GetxController implements GetxService {
       if (_ok(r)) {
         final list = (r.body['meta']?['products'] ?? []) as List;
         products.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        usingIndependentCatalog.value = r.body['meta']?['catalog_source'] == 'amial-merchant';
+      } else {
+        products.clear(); // never show stale legacy data on independent-catalog failure
+        lastError.value = _msg(r) ?? 'تعذّر جلب الأصناف من الخادم';
       }
-    } catch (_) {} finally {
+    } catch (_) {
+      products.clear();
+      lastError.value = 'تعذّر الاتصال بخدمة الأصناف';
+    } finally {
       isLoadingProducts.value = false;
     }
   }

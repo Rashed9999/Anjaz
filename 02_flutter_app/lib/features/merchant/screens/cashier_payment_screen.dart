@@ -90,7 +90,11 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCurrencies();
+    if (c.containsIndependentProducts) {
+      _method = 'cash';
+    } else {
+      _loadCurrencies();
+    }
   }
 
   Future<void> _loadCurrencies() async {
@@ -927,10 +931,10 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           const SizedBox(height: 12),
 
           // ====== عملة القبض (تظهر لمن فعّل أكثر من عملة) ======
-          if (_acceptedCurrencies.length > 1) _currencyPicker(),
+          if (!c.containsIndependentProducts && _acceptedCurrencies.length > 1) _currencyPicker(),
 
           // ====== خصم / كوبون (باقة ستارتر فأعلى) ======
-          if (!widget.freeAmount) AccessGate(feature: 'promotions', child: Align(
+          if (!widget.freeAmount && !c.containsIndependentProducts) AccessGate(feature: 'promotions', child: Align(
             alignment: Alignment.centerRight,
             child: _discount > 0
                 ? TextButton.icon(
@@ -950,7 +954,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           const SizedBox(height: 10),
 
           // ====== نقاط الولاء (باقة الأعمال فأعلى) ======
-          if (!widget.freeAmount) AccessGate(feature: 'loyalty', child: _loyaltyCard()),
+          if (!widget.freeAmount && !c.containsIndependentProducts) AccessGate(feature: 'loyalty', child: _loyaltyCard()),
 
           // ====== المبلغ المستلم والباقي (نقداً فقط) ======
           //
@@ -995,16 +999,22 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           // فاختيارُها مع الدولار يُسجّل بيعةً بعملةٍ لم يدفع بها الزبون.
           // وزرٌّ معروضٌ يُفترَض أنّه يعمل — فإخفاؤه أصدقُ من رفضٍ بعد
           // الضغط والزبونُ واقف. (والسببُ مكتوبٌ في بطاقة العملة أعلاه.)
+          if (c.containsIndependentProducts)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Text('أصناف أميال التاجر: الدفع النقدي فقط في هذا الإصدار التجريبي. لن يُخصم مبلغ من المحفظة.',
+                  style: TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold)),
+            ),
           MerchantPaymentMethodPicker(
             layout: MerchantPaymentPickerLayout.cards,
             selectedValue: _method,
             onChanged: _busy ? null : (value) => setState(() => _method = value),
             options: [
               MerchantPaymentOption.cash,
-              if (_methodAllowedInCurrency('amial_pay'))
+              if (!c.containsIndependentProducts && _methodAllowedInCurrency('amial_pay'))
                 MerchantPaymentOption.amialPay,
-              if (!widget.freeAmount) MerchantPaymentOption.credit,
-              if (!widget.freeAmount && _methodAllowedInCurrency('mixed'))
+              if (!widget.freeAmount && !c.containsIndependentProducts) MerchantPaymentOption.credit,
+              if (!widget.freeAmount && !c.containsIndependentProducts && _methodAllowedInCurrency('mixed'))
                 MerchantPaymentOption.mixed,
             ],
           ),
@@ -1015,7 +1025,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           // مشتركٍ فلا يفترق عن نصّ الصيدليّة بعد أوّل تعديل.
           if (!widget.freeAmount && _method == 'credit') const CreditSaleNotice(),
 
-          if (!widget.freeAmount && _methodAllowedInCurrency('corporate'))
+          if (!widget.freeAmount && !c.containsIndependentProducts && _methodAllowedInCurrency('corporate'))
             AccessGate(feature: 'corporate_accounts', child: _methodCard(
               value: 'corporate',
               icon: Icons.business_center_outlined,
