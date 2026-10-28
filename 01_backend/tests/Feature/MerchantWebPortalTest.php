@@ -39,6 +39,44 @@ class MerchantWebPortalTest extends TestCase
         return $u->fresh();
     }
 
+    public function test_opted_in_approved_retail_owner_provisions_merchant_and_receives_single_use_login(): void
+    {
+        $owner = $this->owner();
+        \App\Models\MuwathaqAccountOpeningApplication::create([
+            'user_id' => $owner->id,
+            'application_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'origin' => 'merchant-web',
+            'subject_kind' => 'merchant',
+            'verification_path' => 'merchant_sector',
+            'business_type' => 'retail',
+            'status' => 'approved',
+            'submitted_at' => now(), 'decided_at' => now(),
+            'muwathaq_decided_at' => now(),
+        ]);
+        config()->set('amial.merchant_pos_bridge.enabled', true);
+        config()->set('amial.merchant_pos_bridge.owner_ids', [(string) $owner->id]);
+        config()->set('amial.merchant_pos_bridge.base_url', 'https://merchant-stage.example.test');
+        config()->set('amial.merchant_pos_bridge.secret', str_repeat('s', 48));
+        \Illuminate\Support\Facades\Http::fakeSequence()
+            ->push(['code' => 'MERCHANT_PROVISIONED'], 200)
+            ->push(['code' => 'MERCHANT_PORTAL_GRANT',
+                'redirect_path' => '/preview/sso/'.str_repeat('a', 64)], 200);
+
+        $this->post('/merchant/login', [
+            'identifier' => 'WEB-101', 'password' => 'Merchant!2026',
+        ])->assertRedirect('https://merchant-stage.example.test/preview/sso/'.str_repeat('a', 64));
+
+        \Illuminate\Support\Facades\Http::assertSentCount(2);
+        \Illuminate\Support\Facades\Http::assertSent(static function ($request) use ($owner): bool {
+            if (! str_ends_with($request->url(), '/api/v1/merchant/provision')) return false;
+            $payload = json_decode($request->body(), true);
+            return $payload['tenant_id'] === 'legacy_merchant_'.$owner->id
+                && $payload['owner_amial_account_id'] === (string) $owner->id
+                && $payload['approval_source'] === 'muwathaq_approved'
+                && $payload['business_type'] === 'retail';
+        });
+    }
+
     public function test_merchant_can_sign_in_with_merchant_number_and_open_owner_dashboard(): void
     {
         $this->owner();
