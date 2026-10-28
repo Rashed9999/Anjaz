@@ -39,7 +39,7 @@ final class MerchantPosGatewayTest extends TestCase
     public function test_signed_cashier_scan_keeps_provisioned_tenant_branch_and_unsigned_mobile_secret_private(): void
     {
         $svc = $this->configured();
-        Http::fake(['merchant-stage.example.test/*' => Http::response([
+        Http::fake(['https://merchant-stage.example.test/*' => Http::response([
             'code' => 'BARCODE_FOUND', 'data' => [
                 'product_id' => '10000000-0000-4000-8000-000000000001',
                 'sku' => 'MILK-1', 'name' => 'حليب',
@@ -75,7 +75,7 @@ final class MerchantPosGatewayTest extends TestCase
     public function test_independent_catalog_products_keep_uuid_for_flutter_cart(): void
     {
         $svc = $this->configured();
-        Http::fake(['merchant-stage.example.test/*' => Http::response([
+        Http::fake(['https://merchant-stage.example.test/*' => Http::response([
             'code' => 'BRANCH_CATALOG', 'data' => [
                 ['id' => '10000000-0000-4000-8000-000000000002',
                     'sku' => 'SKU-2','name' => 'مياه',
@@ -92,7 +92,7 @@ final class MerchantPosGatewayTest extends TestCase
     public function test_cash_sale_is_signed_and_merchant_price_is_authoritative(): void
     {
         $svc = $this->configured();
-        Http::fake(['merchant-stage.example.test/*' => Http::response([
+        Http::fake(['https://merchant-stage.example.test/*' => Http::response([
             'code' => 'CASH_SALE_RECORDED',
             'data' => ['sale_id'=>'20000000-0000-4000-8000-000000000001',
                 'total'=>'240.0000','replayed'=>false],
@@ -131,7 +131,7 @@ final class MerchantPosGatewayTest extends TestCase
     public function test_http_downtime_never_uses_legacy_product_as_fallback(): void
     {
         $svc = $this->configured();
-        Http::fake(['merchant-stage.example.test/*' => Http::response(['code'=>'DOWN'],503)]);
+        Http::fake(['https://merchant-stage.example.test/*' => Http::response(['code'=>'DOWN'],503)]);
         $this->expectExceptionMessage('MERCHANT_POS_SERVICE_UNAVAILABLE');
         $svc->lookup($this->owner(17), null, '6291000000011', 'cashier', '991');
     }
@@ -139,7 +139,7 @@ final class MerchantPosGatewayTest extends TestCase
     public function test_http_not_found_is_safe_miss_not_legacy_fallback(): void
     {
         $svc = $this->configured();
-        Http::fake(['merchant-stage.example.test/*' => Http::response(['code'=>'BARCODE_NOT_FOUND'],404)]);
+        Http::fake(['https://merchant-stage.example.test/*' => Http::response(['code'=>'BARCODE_NOT_FOUND'],404)]);
         $this->assertNull($svc->lookup($this->owner(17), null, '6291000000011', 'cashier', '991'));
     }
 }
