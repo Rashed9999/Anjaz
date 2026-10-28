@@ -152,6 +152,11 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant, , , $branch] = $ctx;
 
+        if (app(MerchantPosGateway::class)->enabledFor($merchant)) {
+            return $this->error('MERCHANT_PRODUCT_WRITE_MOVED',
+                'أضف المنتج وباركوده من لوحة أميال التاجر المستقلة؛ لن ننسخه في قاعدة الكاشير القديمة.', 409);
+        }
+
         try {
             $product = $this->cashier->addProduct($merchant, $v->validated());
         } catch (\DomainException $e) {
@@ -253,6 +258,11 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
+
+        if (app(MerchantPosGateway::class)->enabledFor($merchant)) {
+            return $this->error('MERCHANT_PRODUCT_WRITE_MOVED',
+                'عدّل المنتج في أميال التاجر المستقلة؛ تعديل الصنف القديم سيؤدي إلى اختلاف بيانات الكاشير.', 409);
+        }
 
         try {
             $product = $this->cashier->updateProduct($merchant, $id, $v->validated());
