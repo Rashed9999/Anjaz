@@ -804,6 +804,41 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
      *
      * المسار لا يقرأ شيئاً من Flutter: التاجر وPOS لا يملكان إلا فاتورتهما.
      */
+    /** Server-authoritative printable PDF: paid, fulfilled, correct tenant. */
+    public function downloadWalletOrderInvoice(Request $request, string $order)
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posId, , $branch] = $ctx;
+        $gateway = app(MerchantPosGateway::class);
+        if (! $gateway->enabledFor($merchant) || ! $gateway->approved($merchant)) {
+            return $this->error('MERCHANT_WALLET_NOT_ENABLED', 'حساب التاجر غير مفعّل.', 403);
+        }
+        try {
+            $type = $posId === null ? 'owner' : 'cashier';
+            $receipt = $gateway->walletReceipt($merchant, $branch, $order,
+                $type, (string) ($posId ?? $merchant->id));
+            $storeName = (string) (\App\Models\Merchant::where('user_id', $merchant->id)
+                ->value('store_name') ?: 'منشأة أميال');
+            $html = view('pdf.merchant-wallet-pos-receipt', compact('receipt', 'storeName'))->render();
+            $pdf = \App\Support\ArabicPdf::render($html, ['format' => 'A4', 'margin' => 12]);
+            return response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Length' => (string) strlen($pdf),
+                'Content-Disposition' => 'attachment; filename="amial-wallet-'.$order.'.pdf"',
+                'Cache-Control' => 'private, no-store',
+                'Content-Encoding' => 'identity',
+            ]);
+        } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('Merchant wallet PDF unavailable', [
+                'owner_id' => $merchant->id, 'order' => $order,
+                'error_type' => get_class($exception),
+            ]);
+            return $this->error('MERCHANT_RECEIPT_NOT_READY',
+                'لا يوجد إيصال مدفوع ومكتمل لهذا البيع أو تعذّر توليد الملف.', 503);
+        }
+    }
+
     public function downloadInvoice(Request $request, string $ulid)
     {
         $ctx = $this->resolveMerchantPos($request);

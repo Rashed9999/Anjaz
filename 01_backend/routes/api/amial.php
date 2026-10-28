@@ -682,6 +682,8 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
                 ->middleware(['amial.rate-limit:cashier_sale,120,1', 'amial.shift'])->name('wallet-orders.prepare');
             Route::post('/wallet-orders/{order}/complete', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'completeWalletOrder'])
                 ->whereUuid('order')->name('wallet-orders.complete');
+            Route::get('/wallet-orders/{order}/invoice', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'downloadWalletOrderInvoice'])
+                ->whereUuid('order')->name('wallet-orders.invoice');
             Route::post('/wallet-orders/payment-requests/{requestId}/cancel', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'cancelWalletPaymentRequest'])
                 ->whereNumber('requestId')->name('wallet-orders.qr-cancel');
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'recordSale'])
