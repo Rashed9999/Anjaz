@@ -320,6 +320,61 @@ class CashierController extends GetxController implements GetxService {
     activeTicket.value = '';
   }
 
+  /// Full-wallet independent journey; server prices stock and issues QR.
+  Future<Map<String, dynamic>?> prepareWalletOrder({
+    required String requestKey,
+    required double expectedTotal,
+  }) async {
+    lastError.value = '';
+    if (cart.isEmpty || !cart.every((line) => line.merchantProductId != null)) {
+      lastError.value = 'هذه العملية مخصصة لسلة أميال التاجر فقط.';
+      return null;
+    }
+    try {
+      final r = await repo.prepareWalletOrder({
+        'request_key': requestKey,
+        'expected_total': expectedTotal.toStringAsFixed(4),
+        'items': cart.map((line) => {
+          'merchant_product_id': line.merchantProductId,
+          'qty': line.qty,
+        }).toList(),
+      });
+      if (_ok(r)) return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      lastError.value = _msg(r) ?? 'تعذّر حجز المنتجات لدى أميال التاجر';
+    } catch (_) {
+      lastError.value = 'لا اتصال بخدمة التاجر. لم يُعرض QR ولم يُحصل أي مبلغ.';
+    }
+    return null;
+  }
+
+  /// Only confirms an already-paid QR, never charges the wallet again.
+  Future<Map<String, dynamic>?> completeWalletOrder(
+      String orderId, String paidTransactionId) async {
+    lastError.value = '';
+    try {
+      final r = await repo.completeWalletOrder(orderId, paidTransactionId);
+      if (_ok(r)) {
+        final meta = Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+        return Map<String, dynamic>.from((meta['sale'] ?? {}) as Map);
+      }
+      lastError.value = _msg(r) ?? 'دُفع المبلغ لكن تعذّر ربطه بفواتير التاجر. لا تطلب الدفع مرة أخرى.';
+    } catch (_) {
+      lastError.value = 'قد اكتمل تحصيل المحفظة. تعذّر تأكيد الفاتورة؛ احتفظ بالمرجع $paidTransactionId والطلب $orderId.';
+    }
+    return null;
+  }
+
+  Future<bool> cancelWalletPaymentRequest(int id) async {
+    try {
+      final r = await repo.cancelWalletPaymentRequest(id);
+      if (_ok(r)) return true;
+      lastError.value = _msg(r) ?? 'لا يمكن إلغاء QR مدفوع';
+    } catch (_) {
+      lastError.value = 'تعذر إلغاء طلب التحصيل؛ تحقق من حالته قبل المغادرة.';
+    }
+    return false;
+  }
+
   // ---- تسجيل البيع ----
   /// method: cash | credit | amial_pay
   Future<Map<String, dynamic>?> recordSale({

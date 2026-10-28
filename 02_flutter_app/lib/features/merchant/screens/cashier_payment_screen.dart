@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:uuid/uuid.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
@@ -740,6 +741,61 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   /// أميال باي: يعرض QR بمبلغ ثابت يمسحه العميل ويدفع من محفظته، ثم يُسجَّل
   /// البيع مربوطاً بمرجع الدفع وتُفتح الفاتورة تلقائياً (استقبال حقيقي).
   Future<void> _amialPay() async {
+    if (c.containsIndependentProducts) {
+      if (_discount != 0 || _redeemPoints != 0 || _promotionId != null ||
+          !_isBaseCurrency) {
+        _snack('بيع أميال التاجر بالمحفظة لا يدعم الخصم أو عملة غير الريال بعد.');
+        return;
+      }
+      final key = const Uuid().v4(); // stable across QR retries
+      setState(() => _busy = true);
+      final prepared = await c.prepareWalletOrder(
+          requestKey: key, expectedTotal: _net);
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (prepared == null) {
+        _snack(c.lastError.value);
+        return;
+      }
+      final order = Map<String, dynamic>.from((prepared['order'] ?? {}) as Map);
+      final orderId = (order['id'] ?? '').toString();
+      final serverTotal = double.tryParse('${order['total'] ?? ''}');
+      if (orderId.isEmpty || serverTotal == null || serverTotal <= 0) {
+        _snack('لم يؤكد خادم التاجر مبلغ الطلب — لا تعرض QR.');
+        return;
+      }
+      var firstQrRead = true;
+      Get.to(() => AmialQrCollectScreen(
+        amount: serverTotal,
+        title: 'تحصيل محفظة أميال — أميال التاجر',
+        note: 'سداد طلب تاجر $orderId',
+        createPaymentRequest: (amount, note) async {
+          if (firstQrRead) {
+            firstQrRead = false;
+            return prepared;
+          }
+          return c.prepareWalletOrder(requestKey: key, expectedTotal: _net);
+        },
+        cancelPaymentRequest: c.cancelWalletPaymentRequest,
+        onPaid: (transactionId) async {
+          final sale = await c.completeWalletOrder(orderId, transactionId);
+          if (sale == null) {
+            Get.snackbar('تم التحصيل من المحفظة', c.lastError.value,
+                duration: const Duration(seconds: 12));
+            return false;
+          }
+          c.clearCart();
+          Get.off(() => CashierReceiptScreen(
+            sale: sale,
+            total: serverTotal,
+            method: 'amial_pay',
+            invoiceTitle: 'إيصال بيع أميال التاجر — مدفوع بالمحفظة',
+          ));
+          return true;
+        },
+      ));
+      return;
+    }
     Get.to(() => AmialQrCollectScreen(
           amount: _net,
           note: widget.freeAmount ? 'بيع سريع' : 'دفع مشتريات',
@@ -1011,7 +1067,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             onChanged: _busy ? null : (value) => setState(() => _method = value),
             options: [
               MerchantPaymentOption.cash,
-              if (!c.containsIndependentProducts && _methodAllowedInCurrency('amial_pay'))
+              if (_methodAllowedInCurrency('amial_pay'))
                 MerchantPaymentOption.amialPay,
               if (!widget.freeAmount && !c.containsIndependentProducts) MerchantPaymentOption.credit,
               if (!widget.freeAmount && !c.containsIndependentProducts && _methodAllowedInCurrency('mixed'))
