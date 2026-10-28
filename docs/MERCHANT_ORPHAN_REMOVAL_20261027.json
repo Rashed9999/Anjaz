@@ -1,0 +1,47 @@
+{
+  "source_commit": "22c6e5ba138c93a5e9044b3b77431b47348fe98d",
+  "deleted": [
+    {
+      "path": "01_backend/routes/merchant.php",
+      "sha256": "0af3caaeaf0204d3322389c2358c9418cb97222758e1d3f639858864792fcd5b",
+      "reason": "Unregistered 6Cash portal; no external runtime callers after bootstrap alias removal."
+    },
+    {
+      "path": "01_backend/app/Http/Middleware/MerchantMiddleware.php",
+      "sha256": "4822d6fa18885a149000d218e95a5a6c99af299e17d6f118496cb177859465f1",
+      "reason": "Unregistered 6Cash portal; no external runtime callers after bootstrap alias removal."
+    },
+    {
+      "path": "01_backend/app/Http/Controllers/Merchant/Auth/LoginController.php",
+      "sha256": "72589614bb89cb76bd2dbd43cb2968c84f0f4aebc859c4f5b7c8a2172bfb545a",
+      "reason": "Unregistered 6Cash portal; no external runtime callers after bootstrap alias removal."
+    },
+    {
+      "path": "01_backend/app/Http/Controllers/Merchant/BusinessSettingsController.php",
+      "sha256": "2af56650f97bf92abda81eeda93c923ec8a9104b8aa5558cf27f2b1acbc32a14",
+      "reason": "Unregistered 6Cash portal; no external runtime callers after bootstrap alias removal."
+    },
+    {
+      "path": "01_backend/app/Http/Controllers/Merchant/DashboardController.php",
+      "sha256": "a5a4570ae073151da501c4ff93a6776faa64c75173949991caf7914b52b66503",
+      "reason": "Unregistered 6Cash portal; no external runtime callers after bootstrap alias removal."
+    },
+    {
+      "path": "01_backend/app/Http/Controllers/Merchant/TransactionController.php",
+      "sha256": "7dc5c368e89604987c77a09b878d6c08ee3432b9dbf35ff77b44eb42c262c1f5",
+      "reason": "Unregistered 6Cash portal; no external runtime callers after bootstrap alias removal."
+    },
+    {
+      "path": "01_backend/app/Http/Controllers/Merchant/WithdrawController.php",
+      "sha256": "a13d020430c9712b21b832de0caa8ea2e7700f8d16d95f2f8a1e9d5670bb03d0",
+      "reason": "Unregistered 6Cash portal; no external runtime callers after bootstrap alias removal."
+    }
+  ],
+  "retained": [
+    "routes/merchant-web.php",
+    "routes/api/amial.php",
+    "app/Http/Middleware/MerchantWebMiddleware.php",
+    "all operational money, approval, membership and POS services"
+  ],
+  "restoration": "Restore these paths from source_commit using git restore --source; no data migration is involved."
+}

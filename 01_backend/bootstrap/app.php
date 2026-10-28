@@ -33,7 +33,6 @@ use App\Http\Middleware\{AdminMiddleware,
     EnforceZonePolicy,
     InactiveAuthCheck,
     EnforceUsageLimit,
-    MerchantMiddleware,
     PerUserRateLimit,
     RedirectIfAuthenticated,
     RequirePermission,
@@ -196,7 +195,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'inactiveAuthCheck' => InactiveAuthCheck::class,
             'deviceVerify' => DeviceVerifyMiddleware::class,
             'checkDeviceId' => CheckDeviceId::class,
-            'merchant' => MerchantMiddleware::class,
             'merchant.web' => \App\Http\Middleware\MerchantWebMiddleware::class,
 
             // Amial Pay v0.6

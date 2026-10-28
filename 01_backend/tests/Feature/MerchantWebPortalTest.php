@@ -379,8 +379,10 @@ class MerchantWebPortalTest extends TestCase
 
         $this->get('/merchant')
             ->assertOk()
-            ->assertSee('async function customers()', false)
-            ->assertSee('قاعدة بيانات العملاء')
+            // Verify the directory's live API binding and current UI, not the old zero-argument JS signature.
+            ->assertSee('routes.sectorCustomers', false)
+            ->assertSee('دليل العملاء')
+            ->assertSee('بحث بالاسم أو الهاتف')
             ->assertSee('staffPerformance')
             ->assertSee('إنشاء دور مخصص');
     }

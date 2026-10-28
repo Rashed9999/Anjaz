@@ -1,0 +1,51 @@
+name: Merchant cleanup contract
+on:
+  pull_request:
+  push:
+    branches: [chore/merchant-orphan-cleanup-20261026]
+permissions:
+  contents: read
+jobs:
+  merchant-contract:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: amial_cleanup_testing
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping" --health-interval=10s
+          --health-timeout=5s --health-retries=10
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: amial_cleanup_testing
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+    defaults:
+      run:
+        working-directory: 01_backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, gd, zip, bcmath, intl, exif, pcntl
+          coverage: none
+      - run: composer install --prefer-dist --no-progress --no-interaction
+      - name: Prepare isolated environment
+        run: |
+          cp .env.example .env
+          mkdir -p storage/framework/{cache/data,sessions,views} storage/logs storage/app/public bootstrap/cache
+          php artisan key:generate
+          php artisan passport:keys --force
+          echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
+          echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
+      - name: Owner portal, mobile route and signed bridge regressions
+        run: php artisan test --compact tests/Feature/MerchantOperationSurfaceTest.php tests/Feature/MerchantWebPortalTest.php tests/Unit/MerchantWorkspaceBridgeTest.php
