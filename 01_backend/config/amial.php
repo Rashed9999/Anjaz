@@ -495,18 +495,6 @@ return [
         'merchant' => env('AMIAL_MERCHANT_HOST', ''),
     ],
 
-    // External workspace bridge. Keep disabled until the isolated service,
-    // signed S2S secret and provisioning flow have all passed staging checks.
-    'merchant_workspace' => [
-        'enabled' => filter_var(env('AMIAL_MERCHANT_WORKSPACE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
-        'base_url' => env('AMIAL_MERCHANT_WORKSPACE_URL', ''),
-        'integration_secret' => env('AMIAL_MERCHANT_WORKSPACE_SECRET', ''),
-        'issuer' => env('AMIAL_MERCHANT_WORKSPACE_ISSUER', 'amial-pay'),
-        'audience' => env('AMIAL_MERCHANT_WORKSPACE_AUDIENCE', 'amial-merchant'),
-        'read_issuer' => env('AMIAL_MERCHANT_READ_ISSUER', 'amial-merchant'),
-        'read_audience' => env('AMIAL_MERCHANT_READ_AUDIENCE', 'amial-pay'),
-    ],
-
     /*
     |--------------------------------------------------------------------
     | AMIAL-OTP-SPLIT-001 — رمزُ العرض لأرقامه وحدها

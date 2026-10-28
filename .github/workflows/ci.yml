@@ -159,7 +159,7 @@ jobs:
       # Isolated, database-free transport/security regression checks for staged Merchant SSO.
       - name: Merchant Workspace bridge HTTPS and signed contract
         working-directory: 01_backend
-        run: php artisan test --compact tests/Unit/MerchantWorkspaceBridgeTest.php
+        run: php artisan test --compact tests/Feature/MerchantOperationSurfaceTest.php
 
       - name: تحقق شاشتي الرسوم وسجل التدقيق ضد 500
         working-directory: 01_backend
