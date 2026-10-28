@@ -53,6 +53,17 @@ class CashierRepo extends GetxService {
     return apiClient.postData('$_base/sales', data);
   }
 
+  Future<Response> prepareWalletOrder(Map<String, dynamic> data) =>
+      apiClient.postData('$_base/wallet-orders', data);
+
+  Future<Response> completeWalletOrder(String orderId, String transactionId) =>
+      apiClient.postData('$_base/wallet-orders/$orderId/complete',
+          {'paid_transaction_id': transactionId});
+
+  Future<Response> cancelWalletPaymentRequest(int id) =>
+      apiClient.postData('$_base/wallet-orders/payment-requests/$id/cancel', {});
+
+
   Future<Response> settleCredit(int saleId, {String? paidTransactionId}) {    return apiClient.postData('$_base/sales/$saleId/settle',
         {'paid_transaction_id': ?paidTransactionId});
   }

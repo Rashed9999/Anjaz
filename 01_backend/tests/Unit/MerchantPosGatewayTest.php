@@ -119,6 +119,82 @@ final class MerchantPosGatewayTest extends TestCase
         });
     }
 
+    public function test_wallet_journey_reserves_before_payment_and_only_system_asserts_paid_reference(): void
+    {
+        $svc = $this->configured();
+        $owner = $this->owner(17);
+        $order = '20000000-0000-4000-8000-000000000017';
+        $product = '10000000-0000-4000-8000-000000000017';
+        Http::fake([
+            'https://merchant-stage.example.test/*' => Http::sequence()
+                ->push(['code'=>'ORDER_RESERVED', 'data'=>[
+                    'id'=>$order,'status'=>'reserved',
+                    'payment_method'=>'amial_pay',
+                    'total'=>'1500.0000',
+                    'expires_at'=>now()->addMinutes(15)->toIso8601String(),
+                ]], 201)
+                ->push(['code'=>'MERCHANT_ORDER', 'data'=>[
+                    'id'=>$order,'status'=>'reserved','payment_method'=>'amial_pay',
+                    'total'=>'1500.0000',
+                ]], 200)
+                ->push(['code'=>'ORDER_PAYMENT_AUTHORIZED','data'=>[
+                    'order_id'=>$order,'payment_status'=>'authorized',
+                ]], 201)
+                ->push(['code'=>'ORDER_FULFILLED','data'=>[
+                    'id'=>$order,'status'=>'fulfilled','payment_status'=>'authorized',
+                ]], 201)
+                ->push(['code'=>'WALLET_POS_RECEIPT','data'=>[
+                    'order_id'=>$order,'sale_ulid'=>$order,'payment_method'=>'amial_pay',
+                    'paid_transaction_id'=>'AMIALTXN123456789012',
+                    'items'=>[['merchant_product_id'=>$product,'name'=>'قهوة','qty'=>2,'price'=>'750.0000']],
+                    'total_amount'=>'1500.0000',
+                ]], 200),
+        ]);
+        $reserved = $svc->reserveWalletOrder($owner, null, [
+            ['product_id'=>$product,'quantity'=>2],
+        ], 'test_wallet_order_key_000001', 'cashier', '991');
+        $this->assertSame($order, $reserved['id']);
+        $this->assertSame('1500.0000', $reserved['total']);
+        $sourceOrder = $svc->walletOrder($owner, null, $order, 'cashier', '991');
+        $this->assertSame($order, $sourceOrder['id']);
+        $svc->authorizeWalletOrder($owner, null, $order, 'AMIALTXN123456789012', '1500.0000');
+        $svc->fulfillWalletOrder($owner, null, $order, 'cashier', '991');
+        $receipt = $svc->walletReceipt($owner, null, $order, 'cashier', '991');
+        $this->assertSame('amial_pay', $receipt['payment_method']);
+        $this->assertSame('AMIALTXN123456789012', $receipt['paid_transaction_id']);
+        Http::assertSentCount(5);
+
+        Http::assertSent(static function (OutgoingRequest $request) use ($order): bool {
+            if (! str_contains($request->url(), "/orders/{$order}/payment-receipts/amial")) return false;
+            $body = json_decode($request->body(), true);
+            $encoded = $request->header('X-Amial-Context')[0] ?? '';
+            $ctx = json_decode(base64_decode(strtr($encoded, '-_', '+/'), true) ?: '', true);
+            return $request->method() === 'POST'
+                && $body['amount'] === '1500.0000'
+                && $body['payment_reference'] === 'AMIALTXN123456789012'
+                && $body['provider'] === 'amial_pay'
+                && $ctx['actor_type'] === 'system'
+                && $ctx['actor_id'] === 'amial-pay'
+                && $ctx['scopes'] === ['orders.payment.record'];
+        });
+    }
+
+    public function test_payment_authorization_failure_never_fulfills_or_fakes_a_receipt(): void
+    {
+        $svc = $this->configured();
+        Http::fake(['https://merchant-stage.example.test/*' => Http::response([
+            'code'=>'MERCHANT_NOT_READY',
+        ], 503)]);
+        $this->expectExceptionMessage('MERCHANT_POS_SERVICE_UNAVAILABLE');
+        try {
+            $svc->authorizeWalletOrder($this->owner(17), null,
+                '20000000-0000-4000-8000-000000000017',
+                'AMIALTXN123456789012', '1500.0000');
+        } finally {
+            Http::assertSentCount(1);
+        }
+    }
+
     public function test_unmapped_branch_and_insecure_endpoint_fail_closed_before_http(): void
     {
         $svc = $this->configured();

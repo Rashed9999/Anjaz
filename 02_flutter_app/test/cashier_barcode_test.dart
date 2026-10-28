@@ -126,6 +126,69 @@ void main() {
     expect(c.cart, isEmpty);
   });
 
+  test('سلة مستقلة تحجز أصناف المحفظة قبل عرض QR بمبلغ الخادم', () async {
+    const id = '10000000-0000-4000-8000-000000000031';
+    c.addProductToCart({
+      'id': id, 'name': 'صنف', 'price': '100.0000',
+      'source': 'amial-merchant',
+    }, quantity: 2);
+    when(() => repo.prepareWalletOrder(any())).thenAnswer((invocation) async {
+      final sent = invocation.positionalArguments.single as Map;
+      expect(sent['expected_total'], '200.0000');
+      expect(sent['items'], [
+        {'merchant_product_id': id, 'qty': 2},
+      ]);
+      return Response(statusCode: 200, body: {
+        'success': true,
+        'meta': {
+          'order': {'id': '20000000-0000-4000-8000-000000000031', 'total': '200.0000'},
+          'request': {'id': 777, 'short_code': 'QR-123456'},
+          'short_code': 'QR-123456',
+        },
+      });
+    });
+    final prepared = await c.prepareWalletOrder(
+        requestKey: 'aaaa0000-0000-4000-8000-000000000031',
+        expectedTotal: 200);
+    expect(prepared?['short_code'], 'QR-123456');
+    expect(c.cart.first.merchantProductId, id);
+    expect(c.cartTotal, 200);
+  });
+
+  test('تأكيد الدفع يقرأ إيصال الخادم ولا يمسح السلة إذا فشل', () async {
+    const id = '10000000-0000-4000-8000-000000000032';
+    c.addProductToCart({
+      'id': id, 'name': 'صنف', 'price': '125.0000',
+      'source': 'amial-merchant',
+    });
+    when(() => repo.completeWalletOrder(any(), any())).thenAnswer((_) async =>
+        Response(statusCode: 503, body: {
+          'success': false,
+          'message': 'تم تحصيل المحفظة، يلزم مطابقة إيصال التاجر',
+        }));
+    final bad = await c.completeWalletOrder(
+        '20000000-0000-4000-8000-000000000032', 'AMIALTXN123456789012');
+    expect(bad, isNull);
+    expect(c.cart.length, 1);
+    expect(c.lastError.value, contains('تم تحصيل'));
+
+    when(() => repo.completeWalletOrder(any(), any())).thenAnswer((_) async =>
+        Response(statusCode: 200, body: {
+          'success': true,
+          'meta': {
+            'sale': {
+              'order_id': '20000000-0000-4000-8000-000000000032',
+              'payment_method': 'amial_pay',
+              'items': [{'name':'صنف','qty':1,'price':'125.0000'}],
+            },
+          },
+        }));
+    final receipt = await c.completeWalletOrder(
+        '20000000-0000-4000-8000-000000000032', 'AMIALTXN123456789012');
+    expect(receipt?['payment_method'], 'amial_pay');
+    expect(c.cart.length, 1); // UI clears only after confirmed receipt
+  });
+
   test('عرض السعر يُحترم (offer_price) عند الإضافة', () {
     c.addProductToCart({'id': 7, 'name': 'سكر', 'price': '500', 'offer_price': '450'});
     expect(c.cart.first.price, 450);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Concerns\DeniesByPlan;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
+use App\Models\PaymentRequest;
 use App\Models\MerchantSale;
 use App\Models\PosUser;
 use App\Models\User;
@@ -13,6 +14,9 @@ use App\Services\CashierSaleInvoicePdfService;
 use App\Services\BranchResolverService;
 use App\Services\Merchant\MerchantPermissionService;
 use App\Services\Merchant\MerchantPosGateway;
+use App\Services\MerchantPaymentReferenceService;
+use App\Services\MoneyService;
+use App\Services\PaymentRequestService;
 use App\Support\Merchant\MerchantPermissions as P;
 use App\Support\Access\AccessConstants as A;
 use DomainException;
@@ -276,6 +280,158 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             return $this->error('BARCODE_CONFLICT', $e->getMessage(), 422);
         }
         return $this->ok(['product' => $product], 'PRODUCT_UPDATED', 'تم التحديث');
+    }
+
+    /**
+     * AMM-WALLET-JOURNEY-001. Reserve independently priced products BEFORE QR.
+     * The QR is created in the actual merchant wallet, never the POS employee.
+     */
+    public function prepareWalletOrder(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'request_key' => 'required|uuid',
+            'expected_total' => 'required|string|regex:/^[0-9]+(\\.[0-9]{1,4})?$/D',
+            'items' => 'required|array|min:1|max:60',
+            'items.*.merchant_product_id' => 'required|uuid',
+            'items.*.qty' => 'required|integer|min:1|max:10000',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posUserId, , $branch] = $ctx;
+        $gateway = app(MerchantPosGateway::class);
+        if (! $gateway->enabledFor($merchant) || ! $gateway->approved($merchant)
+            || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {
+            return $this->error('MERCHANT_WALLET_NOT_ENABLED', 'منشأة التجزئة غير مفعّلة لمسار محفظة أميال التاجر.', 403);
+        }
+        $actorType = $posUserId === null ? 'owner' : 'cashier';
+        $actorId = (string) ($posUserId ?? $merchant->id);
+        $lines = array_map(static fn (array $line): array => [
+            'product_id' => $line['merchant_product_id'],
+            'quantity' => (int) $line['qty'],
+        ], $v->validated()['items']);
+
+        try {
+            $order = $gateway->reserveWalletOrder($merchant, $branch, $lines,
+                (string) $request->input('request_key'), $actorType, $actorId);
+
+            if (MoneyService::compare((string) $order['total'], (string) $request->input('expected_total')) !== 0) {
+                return $this->error('MERCHANT_POS_PRICE_CHANGED',
+                    'تغيّرت أسعار المنتجات؛ حدّث السلة قبل عرض رمز الدفع.', 409);
+            }
+            if (! in_array($order['status'] ?? null, ['reserved', 'ready_to_fulfill', 'fulfilled'], true)) {
+                return $this->error('MERCHANT_WALLET_ORDER_UNAVAILABLE', 'طلب التاجر غير قابل للتحصيل.', 409);
+            }
+
+            $note = 'AMM_ORDER:'.$order['id'];
+            $qr = PaymentRequest::query()->where('requester_user_id', $merchant->id)
+                ->where('note', $note)->whereIn('status', ['pending', 'paid'])
+                ->orderByDesc('id')->first();
+
+            if (! $qr || ($qr->status === 'pending' && ! $qr->expires_at?->isFuture())) {
+                // QR's lifespan must NOT exceed the stock reservation.
+                $qr = app(PaymentRequestService::class)->create(
+                    requester: $merchant,
+                    amount: (string) $order['total'],
+                    note: $note,
+                    shareMethod: 'qr',
+                );
+                $qr->expires_at = now()->addMinutes(4)->min(
+                    \Illuminate\Support\Carbon::parse($order['expires_at']));
+                $qr->save();
+            }
+            if (MoneyService::compare((string) $qr->amount, (string) $order['total']) !== 0) {
+                return $this->error('MERCHANT_WALLET_QR_AMOUNT_MISMATCH',
+                    'طلب الدفع لا يطابق قيمة المنتجات.', 409);
+            }
+            return $this->ok([
+                'order' => $order, 'request' => $qr,
+                'short_code' => $qr->short_code,
+            ], 'MERCHANT_WALLET_ORDER_PREPARED', 'تم حجز المنتجات وتجهيز رمز محفظة المنشأة');
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->error('MERCHANT_WALLET_PREPARE_FAILED',
+                'تعذر تجهيز البيع دون خصم أي مبلغ: '.$e->getMessage(), 503);
+        }
+    }
+
+    /**
+     * Only a PAID Amial Pay PaymentRequest belonging to this merchant AND
+     * exact reserved order is accepted. Client-provided totals are ignored.
+     * Remote payment event, fulfillment and receipt are retryable/idempotent.
+     */
+    public function completeWalletOrder(Request $request, string $order): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'paid_transaction_id' => 'required|string|regex:/^[A-Za-z0-9_-]{12,128}$/D',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posUserId, , $branch] = $ctx;
+        $gateway = app(MerchantPosGateway::class);
+        if (! $gateway->enabledFor($merchant) || ! $gateway->approved($merchant)
+            || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {
+            return $this->error('MERCHANT_WALLET_NOT_ENABLED', 'لا يمكن اعتماد دفع لمنشأة غير مفعّلة.', 403);
+        }
+        $actorType = $posUserId === null ? 'owner' : 'cashier';
+        $actorId = (string) ($posUserId ?? $merchant->id);
+        $reference = (string) $request->input('paid_transaction_id');
+
+        try {
+            $sourceOrder = $gateway->walletOrder($merchant, $branch, $order, $actorType, $actorId);
+            $payment = PaymentRequest::query()->where('paid_transaction_id', $reference)
+                ->where('requester_user_id', $merchant->id)->where('status', 'paid')
+                ->where('note', 'AMM_ORDER:'.$order)->first();
+            if (! $payment) {
+                return $this->error('PAYMENT_NOT_MATCHED_TO_ORDER',
+                    'مرجع المحفظة لم يُدفع لهذا الطلب أو يخص منشأة أخرى.', 409);
+            }
+            app(MerchantPaymentReferenceService::class)->assertPaidForMerchant(
+                $merchant, $reference, (string) $sourceOrder['total']);
+            if (MoneyService::compare((string) $payment->amount, (string) $sourceOrder['total']) !== 0) {
+                return $this->error('PAYMENT_AMOUNT_MISMATCH', 'مرجع الدفع لا يطابق إجمالي الخادم.', 409);
+            }
+
+            $gateway->authorizeWalletOrder($merchant, $branch, $order,
+                $reference, (string) $sourceOrder['total']);
+            $gateway->fulfillWalletOrder($merchant, $branch, $order, $actorType, $actorId);
+            $receipt = $gateway->walletReceipt($merchant, $branch, $order, $actorType, $actorId);
+            if (($receipt['paid_transaction_id'] ?? null) !== $reference) {
+                throw new \RuntimeException('MERCHANT_WALLET_RECEIPT_REFERENCE_MISMATCH');
+            }
+
+            return $this->ok(['sale' => $receipt], 'MERCHANT_WALLET_SALE_COMPLETED',
+                'التحصيل مؤكد والمخزون خُصم وإيصال البيع جاهز للطباعة');
+        } catch (\RuntimeException $e) {
+            // Financial debit may ALREADY have happened. Never retry payment
+            // here; operators must reconcile this exact order/reference.
+            return $this->error('PAYMENT_CAPTURED_COMMERCIAL_SYNC_PENDING',
+                'تحقق من الطلب ومرجع الدفع قبل أي تحصيل آخر. مرجع: '.$reference.
+                '، طلب: '.$order.'. سبب المزامنة: '.$e->getMessage(), 503);
+        }
+    }
+
+    /** Cancel only an unpaid QR belonging to this merchant and independent order. */
+    public function cancelWalletPaymentRequest(Request $request, int $requestId): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $gateway = app(MerchantPosGateway::class);
+        if (! $gateway->enabledFor($merchant) || ! $gateway->approved($merchant)) {
+            return $this->error('MERCHANT_WALLET_NOT_ENABLED', 'لا يمكنك إلغاء تحصيل هذه المنشأة.', 403);
+        }
+        $qr = PaymentRequest::query()->whereKey($requestId)
+            ->where('requester_user_id', $merchant->id)
+            ->where('note', 'like', 'AMM_ORDER:%')->first();
+        if (! $qr) return $this->error('PAYMENT_REQUEST_NOT_FOUND', 'رمز الدفع غير موجود.', 404);
+        try {
+            app(PaymentRequestService::class)->cancel($merchant, $qr);
+            return $this->ok([], 'MERCHANT_WALLET_QR_CANCELLED', 'أُلغي رمز التحصيل غير المدفوع.');
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->error('PAYMENT_REQUEST_CANCEL_DENIED', $e->getMessage(), 409);
+        }
     }
 
     public function recordSale(Request $request): JsonResponse
@@ -648,6 +804,41 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
      *
      * المسار لا يقرأ شيئاً من Flutter: التاجر وPOS لا يملكان إلا فاتورتهما.
      */
+    /** Server-authoritative printable PDF: paid, fulfilled, correct tenant. */
+    public function downloadWalletOrderInvoice(Request $request, string $order)
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posId, , $branch] = $ctx;
+        $gateway = app(MerchantPosGateway::class);
+        if (! $gateway->enabledFor($merchant) || ! $gateway->approved($merchant)) {
+            return $this->error('MERCHANT_WALLET_NOT_ENABLED', 'حساب التاجر غير مفعّل.', 403);
+        }
+        try {
+            $type = $posId === null ? 'owner' : 'cashier';
+            $receipt = $gateway->walletReceipt($merchant, $branch, $order,
+                $type, (string) ($posId ?? $merchant->id));
+            $storeName = (string) (\App\Models\Merchant::where('user_id', $merchant->id)
+                ->value('store_name') ?: 'منشأة أميال');
+            $html = view('pdf.merchant-wallet-pos-receipt', compact('receipt', 'storeName'))->render();
+            $pdf = \App\Support\ArabicPdf::render($html, ['format' => 'A4', 'margin' => 12]);
+            return response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Length' => (string) strlen($pdf),
+                'Content-Disposition' => 'attachment; filename="amial-wallet-'.$order.'.pdf"',
+                'Cache-Control' => 'private, no-store',
+                'Content-Encoding' => 'identity',
+            ]);
+        } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('Merchant wallet PDF unavailable', [
+                'owner_id' => $merchant->id, 'order' => $order,
+                'error_type' => get_class($exception),
+            ]);
+            return $this->error('MERCHANT_RECEIPT_NOT_READY',
+                'لا يوجد إيصال مدفوع ومكتمل لهذا البيع أو تعذّر توليد الملف.', 503);
+        }
+    }
+
     public function downloadInvoice(Request $request, string $ulid)
     {
         $ctx = $this->resolveMerchantPos($request);

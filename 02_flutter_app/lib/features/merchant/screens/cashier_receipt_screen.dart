@@ -251,7 +251,11 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
   /// PDF من الخادم، لا تحويل صورة الشاشة إلى ملف باسم PDF.
   Future<void> _downloadPdf() async {
     final ulid = _ref;
-    if (!RegExp(r'^[A-Z0-9]{26}$').hasMatch(ulid)) {
+    final independent = widget.sale['source'] == 'amial-merchant';
+    final validId = independent
+        ? RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(ulid)
+        : RegExp(r'^[A-Z0-9]{26}$').hasMatch(ulid);
+    if (!validId) {
       _snack('رقم الفاتورة غير صالح للتنزيل');
       return;
     }
@@ -259,7 +263,10 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     try {
       String? failure;
       final path = await Get.find<ApiClient>().downloadFile(
-        widget.invoicePath ?? '/api/v1/amial/merchant/cashier/sales/$ulid/invoice',
+        widget.invoicePath ??
+            (independent
+                ? '/api/v1/amial/merchant/cashier/wallet-orders/$ulid/invoice'
+                : '/api/v1/amial/merchant/cashier/sales/$ulid/invoice'),
         fileName: 'amial_invoice_$ulid.pdf',
         onError: (message) => failure = message,
       );
