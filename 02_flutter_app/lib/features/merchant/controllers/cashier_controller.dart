@@ -270,7 +270,14 @@ class CashierController extends GetxController implements GetxService {
           return 'error';
         }
         lastScannedQuantity = pack.toInt();
+        final before = cart.fold<int>(0, (total, line) => total + line.qty);
         addProductToCart(p, quantity: lastScannedQuantity);
+        final after = cart.fold<int>(0, (total, line) => total + line.qty);
+        // Mixed-engine rejection must never show a false "✓ added" in camera.
+        if (after - before != lastScannedQuantity) {
+          lastError.value = 'تعذّر إضافة الصنف إلى السلة؛ لا تخلط كاشير أميال التاجر مع أصناف أميال باي.';
+          return 'error';
+        }
         return 'added';
       }
       if (r.statusCode == 404) return 'not_found';

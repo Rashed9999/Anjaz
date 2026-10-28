@@ -210,6 +210,10 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
+        if (app(MerchantPosGateway::class)->enabledFor($merchant)) {
+            return $this->error('MERCHANT_PRODUCT_WRITE_MOVED',
+                'إضافة منتج من الكتالوج العام تتم من لوحة أميال التاجر بعد ربطه، وليس من قاعدة الكاشير القديمة.', 409);
+        }
 
         $catalog = app(\App\Services\Catalog\ProductCatalogService::class);
 
@@ -287,9 +291,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         }
         // An opted-in retail merchant must NEVER sell a new Merchant UUID through
         // the legacy integer product IDs. Amial Pay continues to own wallet/QR.
-        if (config('amial.merchant_pos_bridge.enabled', false)
-            && is_array($request->input('items'))
-            && $request->input('items') !== []) {
+        if (config('amial.merchant_pos_bridge.enabled', false)) {
             $scope = $this->resolveMerchantPos($request);
             if ($scope instanceof JsonResponse) return $scope;
             [$merchant, $posUserId, , $branch] = $scope;
@@ -302,6 +304,12 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                 if (! $gateway->approved($merchant)
                     || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {
                     return $this->error('MERCHANT_POS_NOT_APPROVED', 'الكاشير المستقل غير معتمد لهذا النشاط.', 403);
+                }
+                // Opted-in retail owners must not create empty-cart or old-ID
+                // sales in 6Cash while their catalog/stock lives in Merchant.
+                if (! $hasMerchantIds) {
+                    return $this->error('MERCHANT_POS_CART_NOT_MIGRATED',
+                        'الكاشير المستقل يقبل أصناف أميال التاجر فقط؛ لا بيع بمبلغ حر أو منتج قديم.', 409);
                 }
                 $v = Validator::make($request->all(), [
                     'payment_method' => 'required|in:cash',
