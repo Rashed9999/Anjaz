@@ -48,4 +48,4 @@ jobs:
           echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
           echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
       - name: Owner portal, mobile route and removed bridge regressions
-        run: php artisan test --compact tests/Feature/MerchantOperationSurfaceTest.php tests/Feature/MerchantWebPortalTest.php
+        run: php artisan test --compact tests/Feature/MerchantOperationSurfaceTest.php tests/Feature/MerchantWebPortalTest.php tests/Unit/MerchantPosGatewayTest.php
