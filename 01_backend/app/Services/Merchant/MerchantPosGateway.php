@@ -162,6 +162,102 @@ final class MerchantPosGateway
     }
 
     /**
+     * The Merchant service prices lines and reserves stock BEFORE Amial Pay QR
+     * collection. A mobile price is never a financial authorization.
+     */
+    public function reserveWalletOrder(User $owner, ?Branch $branch, array $lines,
+        string $key, string $actorType, string $actorId): array
+    {
+        $tenant = $this->tenantId($owner);
+        $branchId = $this->branchId($owner, $branch);
+        $path = '/api/v1/merchant/tenants/'.$tenant.'/branches/'.$branchId.'/orders';
+        $result = $this->send('POST', $path, [
+            'request_key' => $key, 'payment_method' => 'amial_pay',
+            'currency' => 'YER', 'reservation_seconds' => 900,
+            'lines' => $lines,
+        ], $owner, $branch, $actorType, $actorId, ['sales.create']);
+
+        $order = $result['data'] ?? null;
+        if (($result['code'] ?? null) !== 'ORDER_RESERVED' || ! is_array($order)
+            || ! is_string($order['id'] ?? null)
+            || ! preg_match('/^[a-f0-9-]{36}$/D', $order['id'])
+            || ($order['payment_method'] ?? null) !== 'amial_pay'
+            || ! preg_match('/^[0-9]+\\.[0-9]{4}$/D', (string) ($order['total'] ?? ''))) {
+            throw new RuntimeException('MERCHANT_INVALID_WALLET_ORDER_RESPONSE');
+        }
+        return $order;
+    }
+
+    public function walletOrder(User $owner, ?Branch $branch, string $orderId,
+        string $actorType, string $actorId): array
+    {
+        $path = $this->orderPath($owner, $branch, $orderId);
+        $result = $this->send('GET', $path, [], $owner, $branch,
+            $actorType, $actorId, ['sales.read']);
+        if (($result['code'] ?? null) !== 'MERCHANT_ORDER' || ! is_array($result['data'] ?? null)
+            || ($result['data']['id'] ?? null) !== $orderId
+            || ($result['data']['payment_method'] ?? null) !== 'amial_pay') {
+            throw new RuntimeException('MERCHANT_INVALID_WALLET_ORDER_RESPONSE');
+        }
+        return $result['data'];
+    }
+
+    /**
+     * Only Amial Pay's backend may assert an already-paid wallet reference.
+     * Merchant's signed receipt endpoint is globally replay-protected.
+     */
+    public function authorizeWalletOrder(User $owner, ?Branch $branch, string $orderId,
+        string $paidTransactionId, string $amount): void
+    {
+        $result = $this->send('POST', $this->orderPath($owner, $branch, $orderId)
+            .'/payment-receipts/amial', [
+                'provider' => 'amial_pay',
+                'payment_reference' => $paidTransactionId,
+                'correlation_id' => 'order_'.str_replace('-', '', $orderId),
+                'currency' => 'YER',
+                'amount' => $amount,
+            ], $owner, $branch, 'system', 'amial-pay', ['orders.payment.record']);
+        if (($result['code'] ?? null) !== 'ORDER_PAYMENT_AUTHORIZED') {
+            throw new RuntimeException('MERCHANT_WALLET_AUTHORIZATION_FAILED');
+        }
+    }
+
+    public function fulfillWalletOrder(User $owner, ?Branch $branch, string $orderId,
+        string $actorType, string $actorId): void
+    {
+        $result = $this->send('POST', $this->orderPath($owner, $branch, $orderId)
+            .'/fulfill', [], $owner, $branch, $actorType, $actorId, ['sales.fulfill']);
+        if (($result['code'] ?? null) !== 'ORDER_FULFILLED'
+            || ($result['data']['status'] ?? null) !== 'fulfilled') {
+            throw new RuntimeException('MERCHANT_WALLET_FULFILLMENT_FAILED');
+        }
+    }
+
+    public function walletReceipt(User $owner, ?Branch $branch, string $orderId,
+        string $actorType, string $actorId): array
+    {
+        $result = $this->send('GET', $this->orderPath($owner, $branch, $orderId)
+            .'/pos-receipt', [], $owner, $branch, $actorType, $actorId, ['sales.read']);
+        $data = $result['data'] ?? null;
+        if (($result['code'] ?? null) !== 'WALLET_POS_RECEIPT'
+            || ! is_array($data) || ($data['order_id'] ?? null) !== $orderId
+            || ! is_array($data['items'] ?? null) || $data['items'] === []
+            || ($data['payment_method'] ?? null) !== 'amial_pay') {
+            throw new RuntimeException('MERCHANT_INVALID_WALLET_RECEIPT');
+        }
+        return $data;
+    }
+
+    private function orderPath(User $owner, ?Branch $branch, string $orderId): string
+    {
+        if (! preg_match('/^[a-f0-9-]{36}$/D', $orderId)) {
+            throw new RuntimeException('MERCHANT_INVALID_WALLET_ORDER_ID');
+        }
+        return '/api/v1/merchant/tenants/'.$this->tenantId($owner)
+            .'/branches/'.$this->branchId($owner, $branch).'/orders/'.$orderId;
+    }
+
+    /**
      * @param array<string,mixed> $body
      * @param list<string> $scopes
      * @return array<string,mixed>|null
