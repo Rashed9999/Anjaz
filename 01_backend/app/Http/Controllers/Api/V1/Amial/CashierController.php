@@ -12,6 +12,7 @@ use App\Services\CashierService;
 use App\Services\CashierSaleInvoicePdfService;
 use App\Services\BranchResolverService;
 use App\Services\Merchant\MerchantPermissionService;
+use App\Services\Merchant\MerchantPosGateway;
 use App\Support\Merchant\MerchantPermissions as P;
 use App\Support\Access\AccessConstants as A;
 use DomainException;
@@ -52,7 +53,27 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
     {
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, , , $branch] = $ctx;
+        [$merchant, $posUserId, , $branch] = $ctx;
+
+        $gateway = app(MerchantPosGateway::class);
+        if ($gateway->enabledFor($merchant)) {
+            if (! $gateway->approved($merchant) || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {
+                return $this->error('MERCHANT_POS_NOT_APPROVED', 'نقطة البيع المستقلة تحتاج اعتماد المنشأة ونشاط التجزئة.', 403);
+            }
+            try {
+                $all = $gateway->catalog($merchant, $branch, $posUserId === null ? 'owner' : 'cashier',
+                    (string) ($posUserId ?? $merchant->id));
+                $search = mb_substr(trim((string) $request->query('search', '')), 0, 100);
+                if ($search !== '') {
+                    $all = array_values(array_filter($all, static fn (array $p): bool =>
+                        str_contains(mb_strtolower((string) $p['name']), mb_strtolower($search))
+                        || str_contains(mb_strtolower((string) $p['sku']), mb_strtolower($search))));
+                }
+                return $this->ok(['products' => $all, 'catalog_source' => 'amial-merchant']);
+            } catch (\RuntimeException $e) {
+                return $this->error('MERCHANT_POS_CATALOG_UNAVAILABLE', 'تعذر جلب المنتجات من أميال التاجر: '.$e->getMessage(), 503);
+            }
+        }
 
         return $this->ok(['products' => $this->cashier->listProducts(
             $merchant,
@@ -74,7 +95,23 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, , , $branch] = $ctx;
+        [$merchant, $posUserId, , $branch] = $ctx;
+
+        $gateway = app(MerchantPosGateway::class);
+        if ($gateway->enabledFor($merchant)) {
+            if (! $gateway->approved($merchant) || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {
+                return $this->error('MERCHANT_POS_NOT_APPROVED', 'نقطة البيع المستقلة غير معتمدة.', 403);
+            }
+            try {
+                $hit = $gateway->lookup($merchant, $branch, trim((string) $request->input('barcode')),
+                    $posUserId === null ? 'owner' : 'cashier', (string) ($posUserId ?? $merchant->id));
+                if ($hit === null) return $this->error('MERCHANT_BARCODE_NOT_FOUND',
+                    'هذا الباركود غير مسجل في أميال التاجر؛ أضفه من لوحة التاجر أولًا.', 422);
+                return $this->ok($hit);
+            } catch (\RuntimeException $e) {
+                return $this->error('MERCHANT_POS_SCAN_UNAVAILABLE', 'تعذر فحص الباركود في أميال التاجر: '.$e->getMessage(), 503);
+            }
+        }
 
         try {
             $hit = app(\App\Services\MerchantProductBarcodeService::class)->find(
@@ -229,6 +266,54 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
     public function recordSale(Request $request): JsonResponse
     {
+        // An opted-in retail merchant must NEVER sell a new Merchant UUID through
+        // the legacy integer product IDs. Amial Pay continues to own wallet/QR.
+        if (config('amial.merchant_pos_bridge.enabled', false)
+            && is_array($request->input('items'))
+            && $request->input('items') !== []) {
+            $scope = $this->resolveMerchantPos($request);
+            if ($scope instanceof JsonResponse) return $scope;
+            [$merchant, $posUserId, , $branch] = $scope;
+            $gateway = app(MerchantPosGateway::class);
+            if ($gateway->enabledFor($merchant)) {
+                if (! $gateway->approved($merchant)
+                    || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {
+                    return $this->error('MERCHANT_POS_NOT_APPROVED', 'الكاشير المستقل غير معتمد لهذا النشاط.', 403);
+                }
+                $v = Validator::make($request->all(), [
+                    'payment_method' => 'required|in:cash',
+                    'currency' => 'sometimes|in:YER',
+                    'client_uuid' => 'required|uuid',
+                    'items' => 'required|array|min:1|max:60',
+                    'items.*.merchant_product_id' => 'required|uuid',
+                    'items.*.qty' => 'required|integer|min:1|max:10000',
+                ]);
+                if ($v->fails()) return $this->validationError($v);
+                if ($request->filled('paid_transaction_id') || $request->filled('held_ticket_ulid')
+                    || (float) $request->input('discount_amount', 0) > 0
+                    || (float) $request->input('redeem_points', 0) > 0
+                    || $request->filled('cash_amount') || $request->filled('wallet_amount')
+                    || $request->filled('promotion_id') || $request->filled('corporate_account_id')) {
+                    return $this->error('MERCHANT_POS_PAYMENT_UNSUPPORTED',
+                        'الربط الحالي يدعم البيع النقدي للمنتجات المستقلة دون خصومات أو دفعات محفظة.', 422);
+                }
+                $items = $v->validated()['items'];
+                $lines = array_map(static fn (array $row): array => [
+                    'product_id' => $row['merchant_product_id'],
+                    'quantity' => (int) $row['qty'],
+                ], $items);
+                try {
+                    $sale = $gateway->cashSale($merchant, $branch, $lines,
+                        (string) $request->input('client_uuid'),
+                        $posUserId === null ? 'owner' : 'cashier', (string) ($posUserId ?? $merchant->id));
+                    return $this->ok(['sale' => $sale], 'SALE_RECORDED', 'تم البيع النقدي في أميال التاجر');
+                } catch (\RuntimeException $e) {
+                    return $this->error('MERCHANT_POS_SALE_FAILED',
+                        'لم يُؤكَّد البيع النقدي في أميال التاجر: '.$e->getMessage(),
+                        $e->getMessage() === 'MERCHANT_POS_CONFLICT' ? 409 : 503);
+                }
+            }
+        }
         $v = Validator::make($request->all(), [
             'total' => 'required|numeric|min:0.01',
             'payment_method' => 'required|in:cash,credit,amial_pay,corporate,mixed',

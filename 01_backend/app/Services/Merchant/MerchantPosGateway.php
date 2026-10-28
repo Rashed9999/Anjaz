@@ -152,7 +152,7 @@ final class MerchantPosGateway
         ];
         try {
             $http = Http::connectTimeout(2)->timeout(6)->withoutRedirecting()->withHeaders($headers);
-            $response = $method === 'POST' ? $http->withBody($rawBody, 'application/json')->post($base.$path)
+            $response = $method === 'POST' ? $http->withBody($rawBody, 'application/json')->send('POST', $base.$path)
                 : $http->get($base.$path);
         } catch (ConnectionException) {
             throw new RuntimeException('MERCHANT_POS_SERVICE_UNAVAILABLE');

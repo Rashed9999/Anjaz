@@ -495,6 +495,15 @@ return [
         'merchant' => env('AMIAL_MERCHANT_HOST', ''),
     ],
 
+    // Opt-in merchant-by-merchant: never expose the integration secret to Flutter.
+    // Disabled unless TLS, signed S2S, Muwathaq approval, branch and stock parity are verified.
+    'merchant_pos_bridge' => [
+        'enabled' => filter_var(env('AMIAL_MERCHANT_POS_BRIDGE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'base_url' => env('AMIAL_MERCHANT_POS_URL', ''),
+        'secret' => env('AMIAL_MERCHANT_POS_SECRET', ''),
+        'owner_ids' => array_filter(array_map('trim', explode(',', (string) env('AMIAL_MERCHANT_POS_OWNER_IDS', '')))),
+    ],
+
     /*
     |--------------------------------------------------------------------
     | AMIAL-OTP-SPLIT-001 — رمزُ العرض لأرقامه وحدها
