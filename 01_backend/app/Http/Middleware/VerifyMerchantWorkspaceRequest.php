@@ -46,7 +46,7 @@ final class VerifyMerchantWorkspaceRequest
             || ! is_string($context['tenant_id'] ?? null)
             || ! is_int($context['iat'] ?? null) || abs(time() - $context['iat']) > 300
             || ! is_int($context['exp'] ?? null) || $context['exp'] < time() || $context['exp'] > time() + 90
-            || ($context['scopes'] ?? null) !== ['merchant.financial.read']) {
+            || ! in_array($context['scopes'] ?? null, [['merchant.financial.read'], ['merchant.sector.read']], true)) {
             return $fail('INVALID_INTEGRATION_CONTEXT');
         }
 

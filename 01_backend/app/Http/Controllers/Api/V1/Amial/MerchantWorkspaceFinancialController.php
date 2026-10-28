@@ -9,6 +9,7 @@ use App\Models\Merchant;
 use App\Models\MerchantProfile;
 use App\Models\User;
 use App\Services\CustomerCreditService;
+use App\Services\Merchant\MerchantSectorDashboardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -33,7 +34,7 @@ final class MerchantWorkspaceFinancialController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'section' => ['required', 'in:wallet,debts'],
+            'section' => ['required', 'in:wallet,debts,sector'],
             'search' => ['sometimes', 'nullable', 'string', 'max:100'],
             'filter' => ['sometimes', 'nullable', 'in:debtors,over_limit,paid_up'],
             'page' => ['sometimes', 'integer', 'min:1', 'max:100000'],
@@ -43,6 +44,22 @@ final class MerchantWorkspaceFinancialController extends Controller
                 'success' => false, 'code' => 'VALIDATION_ERROR', 'message' => 'البيانات غير صالحة',
                 'errors' => $validator->errors(), 'meta' => (object) [],
             ], 422);
+        }
+
+        $section = $request->input('section');
+        $scope = $section === 'sector' ? 'merchant.sector.read' : 'merchant.financial.read';
+        if (($context['scopes'] ?? null) !== [$scope]) {
+            return response()->json(['success' => false, 'code' => 'MERCHANT_SCOPE_INVALID'], 403);
+        }
+        if ($section === 'sector') {
+            if (! in_array($profile->business_type, ['quick_sale', 'wholesale', 'fuel'], true)) {
+                return response()->json(['success' => false, 'code' => 'MERCHANT_SECTOR_UNSUPPORTED'], 422);
+            }
+            $snapshot = app(MerchantSectorDashboardService::class)->build($owner);
+            return response()->json(['success' => true, 'code' => 'OK', 'message' => '',
+                'data' => ['vertical' => $profile->business_type, 'cards' => $snapshot['cards'] ?? [],
+                    'configured' => $snapshot['meta']['configured'] ?? true],
+                'errors' => (object) [], 'meta' => ['as_of' => now()->toIso8601String()]]);
         }
 
         if ($request->input('section') === 'wallet') {
