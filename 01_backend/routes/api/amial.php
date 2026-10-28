@@ -677,6 +677,13 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             Route::post('/held/{ulid}/void', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'heldVoid'])
                 ->where('ulid', '[0-9A-Z]{26}')->name('held.void');
 
+            // Full independent retail wallet journey: reserve → merchant-wallet QR → verify paid → fulfill → printable receipt.
+            Route::post('/wallet-orders', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'prepareWalletOrder'])
+                ->middleware(['amial.rate-limit:cashier_sale,120,1', 'amial.shift'])->name('wallet-orders.prepare');
+            Route::post('/wallet-orders/{order}/complete', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'completeWalletOrder'])
+                ->whereUuid('order')->name('wallet-orders.complete');
+            Route::post('/wallet-orders/payment-requests/{requestId}/cancel', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'cancelWalletPaymentRequest'])
+                ->whereNumber('requestId')->name('wallet-orders.qr-cancel');
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'recordSale'])
                 ->middleware(['amial.rate-limit:cashier_sale,120,1', 'amial.shift'])->name('sales');
             Route::post('/sales/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'settleCredit'])->name('sales.settle');
