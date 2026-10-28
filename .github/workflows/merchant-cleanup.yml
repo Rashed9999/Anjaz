@@ -2,7 +2,7 @@ name: Merchant cleanup contract
 on:
   pull_request:
   push:
-    branches: [chore/merchant-orphan-cleanup-20261026]
+    branches: [claude/project-code-review-yjagv, chore/merchant-orphan-cleanup-20261026]
 permissions:
   contents: read
 jobs:
