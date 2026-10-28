@@ -266,6 +266,15 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
     public function recordSale(Request $request): JsonResponse
     {
+        $items = $request->input('items', []);
+        // Never let a UUID product be billed by the legacy name/price-only path,
+        // even when the Merchant integration switch is OFF.
+        $hasMerchantIds = is_array($items) && collect($items)->contains(
+            static fn ($line): bool => is_array($line) && array_key_exists('merchant_product_id', $line)
+        );
+        if ($hasMerchantIds && ! config('amial.merchant_pos_bridge.enabled', false)) {
+            return $this->error('MERCHANT_POS_BRIDGE_DISABLED', 'تعذر تأكيد ربط الكاشير بمنتجات أميال التاجر.', 503);
+        }
         // An opted-in retail merchant must NEVER sell a new Merchant UUID through
         // the legacy integer product IDs. Amial Pay continues to own wallet/QR.
         if (config('amial.merchant_pos_bridge.enabled', false)
@@ -275,6 +284,10 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             if ($scope instanceof JsonResponse) return $scope;
             [$merchant, $posUserId, , $branch] = $scope;
             $gateway = app(MerchantPosGateway::class);
+            if ($hasMerchantIds && ! $gateway->enabledFor($merchant)) {
+                return $this->error('MERCHANT_POS_NOT_ENABLED_FOR_OWNER',
+                    'معرّف الصنف المستقل غير مسموح لهذا التاجر.', 403);
+            }
             if ($gateway->enabledFor($merchant)) {
                 if (! $gateway->approved($merchant)
                     || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {

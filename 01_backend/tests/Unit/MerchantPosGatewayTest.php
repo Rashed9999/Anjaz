@@ -128,6 +128,20 @@ final class MerchantPosGatewayTest extends TestCase
         }
     }
 
+    public function test_post_gateway_rejects_wrong_owner_and_disallows_plain_http(): void
+    {
+        $svc = $this->configured(17);
+        $this->assertFalse($svc->enabledFor($this->owner(25)));
+        Http::fake();
+        config()->set('amial.merchant_pos_bridge.base_url', 'http://merchant-stage.example.test');
+        $this->expectExceptionMessage('MERCHANT_POS_BRIDGE_NOT_CONFIGURED');
+        try {
+            $svc->catalog($this->owner(17), null, 'cashier', '991');
+        } finally {
+            Http::assertNothingSent();
+        }
+    }
+
     public function test_http_downtime_never_uses_legacy_product_as_fallback(): void
     {
         $svc = $this->configured();
