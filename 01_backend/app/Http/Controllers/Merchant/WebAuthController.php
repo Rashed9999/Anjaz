@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Merchant;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
+use App\Services\Merchant\MerchantPosGateway;
 use App\Models\User;
 use App\Support\Access\AccessConstants as A;
 use App\Support\Phone;
@@ -178,6 +179,21 @@ class WebAuthController extends Controller
         RateLimiter::clear($key);
         Auth::guard('merchant_web')->login($owner, $request->boolean('remember'));
         $request->session()->regenerate();
+
+        $posGateway = app(MerchantPosGateway::class);
+        if ($posGateway->enabledFor($owner)) {
+            try {
+                if (! $merchant) throw new \RuntimeException('MERCHANT_PROFILE_MISSING');
+                return redirect()->away($posGateway->ownerRedirect($owner, $merchant, $profile));
+            } catch (\RuntimeException $e) {
+                \Illuminate\Support\Facades\Log::warning('Independent Merchant pilot SSO failed', [
+                    'owner_id' => $owner->id, 'error' => $e->getMessage(),
+                ]);
+                return redirect()->route('merchant.web.login')->withErrors([
+                    'identifier' => 'تعذر الدخول الآمن إلى أميال التاجر المستقل؛ أبلغ الدعم ولا تستخدم اللوحة القديمة لتسجيل منتجات مكررة.',
+                ]);
+            }
+        }
 
         return redirect()->route('merchant.web.dashboard');
     }

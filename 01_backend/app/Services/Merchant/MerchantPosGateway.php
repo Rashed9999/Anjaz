@@ -3,6 +3,7 @@
 namespace App\Services\Merchant;
 
 use App\Models\Branch;
+use App\Models\Merchant;
 use App\Models\MerchantProfile;
 use App\Models\MuwathaqAccountOpeningApplication;
 use App\Models\User;
@@ -33,6 +34,50 @@ final class MerchantPosGateway
                 ->where('subject_kind', 'merchant')
                 ->where('status', MuwathaqAccountOpeningApplication::STATUS_APPROVED)
                 ->whereNotNull('muwathaq_decided_at')->exists();
+    }
+
+    /**
+     * Verified owner sign-in -> signed provisioning -> one-use Merchant SSO.
+     * The independent login always follows the Muwathaq approval; no self-provision.
+     */
+    public function ownerRedirect(User $owner, Merchant $merchant, MerchantProfile $profile): string
+    {
+        if (! $this->enabledFor($owner) || ! $profile->isVerified() || ! $this->approved($owner)) {
+            throw new RuntimeException('MERCHANT_POS_OWNER_NOT_APPROVED');
+        }
+        $opening = MuwathaqAccountOpeningApplication::query()
+            ->where('user_id', $owner->getKey())->where('subject_kind', 'merchant')
+            ->where('status', MuwathaqAccountOpeningApplication::STATUS_APPROVED)
+            ->whereNotNull('muwathaq_decided_at')->latest('muwathaq_decided_at')->first();
+        if (! $opening || ! $merchant->merchant_number || ! $merchant->store_name
+            || $profile->business_type !== 'retail') {
+            throw new RuntimeException('MERCHANT_POS_OWNER_DATA_INVALID');
+        }
+        $tenant = $this->tenantId($owner);
+        $branch = $tenant.'_main';
+        $provision = $this->send('POST', '/api/v1/merchant/provision', [
+            'tenant_id' => $tenant,
+            'merchant_number' => (string) $merchant->merchant_number,
+            'approval_event_id' => (string) $opening->application_ulid,
+            'approval_source' => 'muwathaq_approved',
+            'approved_at' => $opening->muwathaq_decided_at->toIso8601String(),
+            'owner_amial_account_id' => (string) $owner->getKey(),
+            'approved' => true,
+            'business_type' => 'retail',
+            'branch_id' => $branch,
+            'branch_name' => (string) $merchant->store_name,
+        ], $owner, null, 'system', 'amial-pay', ['merchant.provision']);
+        if (($provision['code'] ?? null) !== 'MERCHANT_PROVISIONED') {
+            throw new RuntimeException('MERCHANT_POS_PROVISION_FAILED');
+        }
+        $grant = $this->send('POST',
+            '/api/v1/merchant/tenants/'.$tenant.'/web-sso/grants',
+            [], $owner, null, 'owner', (string) $owner->getKey(), ['merchant.portal.login']);
+        $path = $grant['redirect_path'] ?? null;
+        if (! is_string($path) || ! preg_match('#^/preview/sso/[a-f0-9]{64}$#D', $path)) {
+            throw new RuntimeException('MERCHANT_POS_BAD_SSO_GRANT');
+        }
+        return rtrim((string) config('amial.merchant_pos_bridge.base_url'), '/').$path;
     }
 
     public function tenantId(User $owner): string
