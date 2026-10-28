@@ -29,6 +29,11 @@ on:
         options:
           - full_ci
           - apk_only
+      deploy_coolify:
+        description: 'نشر خادم أميال باي يدويًا فقط بعد اكتمال اختبارات الإنتاج والموافقة'
+        required: true
+        default: false
+        type: boolean
       build_type:
         description: 'installable يضمن APK قابلاً للتثبيت؛ release_strict يتطلب مفتاح التوقيع الثابت'
         required: true
@@ -630,7 +635,9 @@ jobs:
     needs: [structural, backend, docker]
     # **ولا نشرَ من زرّ بناء APK** — انظر `AMIAL-CI-APK-002` أعلاه.
     if: >-
-      (github.event_name != 'workflow_dispatch' || inputs.run_mode == 'full_ci')
+      github.event_name == 'workflow_dispatch'
+      && inputs.run_mode == 'full_ci'
+      && inputs.deploy_coolify == true
       && github.ref == 'refs/heads/claude/project-code-review-yjagv'
     steps:
       - name: نداء خطّاف النشر
