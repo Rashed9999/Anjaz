@@ -17,6 +17,22 @@ use JsonException;
  */
 final class MerchantWorkspaceBridge
 {
+    /** Durable outbox transport; credentials stay server-side. */
+    public function deliverEvent(string $path, array $payload, array $context): array
+    {
+        $url = rtrim((string) config('amial.merchant_workspace.base_url'), '/');
+        $secret = (string) config('amial.merchant_workspace.integration_secret');
+        $parts = parse_url($url);
+        if (! config('amial.merchant_workspace.enabled', false) || strlen($secret) < 32
+            || ! is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host'])
+            || isset($parts['user']) || isset($parts['pass']) || isset($parts['query'])
+            || isset($parts['fragment']) || ! in_array($parts['path'] ?? '', ['', '/'], true)
+            || ! preg_match('#^/api/v1/merchant/(provision|tenants/[a-zA-Z0-9_-]{1,64}/lifecycle)$#D', $path)) {
+            throw new \RuntimeException('Merchant workspace transport is not configured safely.');
+        }
+        return $this->post($url, $secret, $path, $payload, $context);
+    }
+
     public function redirectFor(User $owner, Merchant $merchant, MerchantProfile $profile): ?string
     {
         if (! (bool) config('amial.merchant_workspace.enabled', false)) {
@@ -40,15 +56,10 @@ final class MerchantWorkspaceBridge
             return null;
         }
 
-        $opening = MuwathaqAccountOpeningApplication::query()
-            ->where('user_id', $owner->id)
-            ->where('subject_kind', 'merchant')
-            ->where('status', MuwathaqAccountOpeningApplication::STATUS_APPROVED)
-            ->whereNotNull('muwathaq_decided_at')
-            ->latest('muwathaq_decided_at')
-            ->first();
+        $access = app(MerchantWorkspaceAccess::class);
+        $opening = $access->latestOpening($owner);
 
-        if (! $opening || ! $merchant->merchant_number || ! $merchant->store_name) {
+        if (! $access->permitsLogin($owner) || ! $opening || ! $merchant->merchant_number || ! $merchant->store_name) {
             return null;
         }
 
@@ -132,6 +143,9 @@ final class MerchantWorkspaceBridge
         ])->send('POST', $baseUrl.$path);
 
         $response->throw();
+        if (! $response->successful()) {
+            throw new \RuntimeException('Merchant workspace returned a non-success status.');
+        }
 
         $json = $response->json();
         if (! is_array($json)) {
@@ -156,3 +170,4 @@ final class MerchantWorkspaceBridge
         return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
     }
 }
+
