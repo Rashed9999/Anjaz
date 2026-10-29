@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
 use App\Services\Merchant\MerchantPosGateway;
+use App\Services\Merchant\MerchantWorkspaceBridge;
 use App\Models\User;
 use App\Support\Access\AccessConstants as A;
 use App\Support\Phone;
@@ -195,7 +196,12 @@ class WebAuthController extends Controller
             }
         }
 
-        return redirect()->route('merchant.web.dashboard');
+        $workspaceRedirect = $merchant
+            ? app(MerchantWorkspaceBridge::class)->redirectFor($owner, $merchant, $profile)
+            : null;
+        return $workspaceRedirect !== null
+            ? redirect()->away($workspaceRedirect)
+            : redirect()->route('merchant.web.dashboard');
     }
 
     public function logout(Request $request): RedirectResponse

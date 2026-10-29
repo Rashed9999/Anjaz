@@ -497,6 +497,15 @@ return [
 
     // Opt-in merchant-by-merchant: never expose the integration secret to Flutter.
     // Disabled unless TLS, signed S2S, Muwathaq approval, branch and stock parity are verified.
+    'merchant_workspace' => [
+        'enabled' => filter_var(env('AMIAL_MERCHANT_WORKSPACE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'base_url' => env('AMIAL_MERCHANT_WORKSPACE_URL', ''),
+        'integration_secret' => env('AMIAL_MERCHANT_WORKSPACE_SECRET', ''),
+        'issuer' => env('AMIAL_MERCHANT_WORKSPACE_ISSUER', 'amial-pay'),
+        'audience' => env('AMIAL_MERCHANT_WORKSPACE_AUDIENCE', 'amial-merchant'),
+        'read_issuer' => env('AMIAL_MERCHANT_READ_ISSUER', 'amial-merchant'),
+        'read_audience' => env('AMIAL_MERCHANT_READ_AUDIENCE', 'amial-pay'),
+    ],
     'merchant_pos_bridge' => [
         'enabled' => filter_var(env('AMIAL_MERCHANT_POS_BRIDGE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'base_url' => env('AMIAL_MERCHANT_POS_URL', ''),
