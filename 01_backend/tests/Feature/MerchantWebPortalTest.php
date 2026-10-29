@@ -67,13 +67,43 @@ class MerchantWebPortalTest extends TestCase
         ])->assertRedirect('https://merchant-stage.example.test/preview/sso/'.str_repeat('a', 64));
 
         \Illuminate\Support\Facades\Http::assertSentCount(2);
-        \Illuminate\Support\Facades\Http::assertSent(static function ($request) use ($owner): bool {
+        $merchantId = \App\Models\Merchant::where('user_id', $owner->id)->value('id');
+        \Illuminate\Support\Facades\Http::assertSent(static function ($request) use ($owner, $merchantId): bool {
             if (! str_ends_with($request->url(), '/api/v1/merchant/provision')) return false;
             $payload = json_decode($request->body(), true);
-            return $payload['tenant_id'] === 'legacy_merchant_'.$owner->id
+            return $payload['tenant_id'] === 'legacy_merchant_'.$merchantId
                 && $payload['owner_amial_account_id'] === (string) $owner->id
                 && $payload['approval_source'] === 'muwathaq_approved'
                 && $payload['business_type'] === 'retail';
+        });
+    }
+
+    public function test_non_pos_pilot_owner_keeps_existing_independent_workspace_login(): void
+    {
+        $owner = $this->owner();
+        MerchantProfile::where('user_id', $owner->id)->update(['business_type' => A::BIZ_QUICK_SALE]);
+        \App\Models\MuwathaqAccountOpeningApplication::create([
+            'user_id' => $owner->id, 'application_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'origin' => 'merchant-web', 'subject_kind' => 'merchant',
+            'verification_path' => 'merchant_sector', 'business_type' => A::BIZ_QUICK_SALE,
+            'status' => 'approved', 'submitted_at' => now(), 'decided_at' => now(),
+            'muwathaq_decided_at' => now(),
+        ]);
+        config()->set('amial.merchant_pos_bridge.enabled', false);
+        config()->set('amial.merchant_workspace.enabled', true);
+        config()->set('amial.merchant_workspace.base_url', 'https://merchant.example.test');
+        config()->set('amial.merchant_workspace.integration_secret', str_repeat('s', 48));
+        \Illuminate\Support\Facades\Http::fakeSequence()
+            ->push(['code' => 'MERCHANT_PROVISIONED'], 200)
+            ->push(['redirect_path' => '/preview/sso/'.str_repeat('b', 64)], 200);
+        $this->post('/merchant/login', ['identifier' => 'WEB-101', 'password' => 'Merchant!2026'])
+            ->assertRedirect('https://merchant.example.test/preview/sso/'.str_repeat('b', 64));
+        $merchantId = Merchant::where('user_id', $owner->id)->value('id');
+        \Illuminate\Support\Facades\Http::assertSent(static function ($request) use ($merchantId): bool {
+            if (! str_ends_with($request->url(), '/api/v1/merchant/provision')) return false;
+            $payload = json_decode($request->body(), true);
+            return $payload['tenant_id'] === 'legacy_merchant_'.$merchantId
+                && $payload['business_type'] === A::BIZ_QUICK_SALE;
         });
     }
 

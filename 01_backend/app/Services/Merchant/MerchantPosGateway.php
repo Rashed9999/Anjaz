@@ -49,7 +49,8 @@ final class MerchantPosGateway
             ->where('user_id', $owner->getKey())->where('subject_kind', 'merchant')
             ->where('status', MuwathaqAccountOpeningApplication::STATUS_APPROVED)
             ->whereNotNull('muwathaq_decided_at')->latest('muwathaq_decided_at')->first();
-        if (! $opening || ! $merchant->merchant_number || ! $merchant->store_name
+        if (! $opening || (string) $merchant->user_id !== (string) $owner->getKey()
+            || ! $merchant->merchant_number || ! $merchant->store_name
             || $profile->business_type !== 'retail') {
             throw new RuntimeException('MERCHANT_POS_OWNER_DATA_INVALID');
         }
@@ -82,7 +83,12 @@ final class MerchantPosGateway
 
     public function tenantId(User $owner): string
     {
-        return 'legacy_merchant_'.$owner->getKey();
+        $merchant = $owner->merchant;
+        if (! $merchant || ! $merchant->getKey()
+            || (string) $merchant->user_id !== (string) $owner->getKey()) {
+            throw new RuntimeException('MERCHANT_POS_OWNER_DATA_INVALID');
+        }
+        return 'legacy_merchant_'.$merchant->getKey();
     }
 
     /** Pilot supports only the independently provisioned MAIN branch. */

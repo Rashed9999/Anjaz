@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Branch;
+use App\Models\Merchant;
 use App\Models\User;
 use App\Services\Merchant\MerchantPosGateway;
 use Illuminate\Http\Client\Request as OutgoingRequest;
@@ -15,6 +16,10 @@ final class MerchantPosGatewayTest extends TestCase
     {
         $owner = new User();
         $owner->id = $id;
+        $merchant = new Merchant();
+        $merchant->id = $id + 100;
+        $merchant->user_id = $id;
+        $owner->setRelation('merchant', $merchant);
         return $owner;
     }
 
@@ -34,6 +39,25 @@ final class MerchantPosGatewayTest extends TestCase
         $this->assertFalse($svc->enabledFor($this->owner(18)));
         config()->set('amial.merchant_pos_bridge.enabled', false);
         $this->assertFalse($svc->enabledFor($this->owner(17)));
+    }
+
+    public function test_missing_or_foreign_merchant_identity_fails_closed(): void
+    {
+        $gateway = $this->configured();
+        $owner = $this->owner(17);
+        $owner->setRelation('merchant', null);
+        try {
+            $gateway->tenantId($owner);
+            $this->fail('Missing merchant must not produce a tenant identity');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('MERCHANT_POS_OWNER_DATA_INVALID', $e->getMessage());
+        }
+        $other = new Merchant();
+        $other->id = 118;
+        $other->user_id = 18;
+        $owner->setRelation('merchant', $other);
+        $this->expectExceptionMessage('MERCHANT_POS_OWNER_DATA_INVALID');
+        $gateway->tenantId($owner);
     }
 
     public function test_signed_cashier_scan_keeps_provisioned_tenant_branch_and_unsigned_mobile_secret_private(): void
@@ -58,13 +82,13 @@ final class MerchantPosGatewayTest extends TestCase
             $nonce = $h('X-Amial-Nonce');
             $ctx = $h('X-Amial-Context');
             $decoded = json_decode(base64_decode(strtr($ctx, '-_', '+/'), true) ?: '', true);
-            $path = '/api/v1/merchant/tenants/legacy_merchant_17/branches/legacy_merchant_17_main/catalog/barcodes/6291000000011';
+            $path = '/api/v1/merchant/tenants/legacy_merchant_117/branches/legacy_merchant_117_main/catalog/barcodes/6291000000011';
             $canonical = $timestamp."\n".$nonce."\nGET\n".$path."\n".$ctx."\n".hash('sha256', '');
             return $request->method() === 'GET'
                 && $request->url() === 'https://merchant-stage.example.test'.$path
                 && is_array($decoded)
-                && $decoded['tenant_id'] === 'legacy_merchant_17'
-                && $decoded['branch_ids'] === ['legacy_merchant_17_main']
+                && $decoded['tenant_id'] === 'legacy_merchant_117'
+                && $decoded['branch_ids'] === ['legacy_merchant_117_main']
                 && $decoded['actor_type'] === 'cashier'
                 && $decoded['actor_id'] === '991'
                 && $decoded['scopes'] === ['products.read']
@@ -109,7 +133,7 @@ final class MerchantPosGatewayTest extends TestCase
         Http::assertSent(static function (OutgoingRequest $request) use ($line): bool {
             $body = json_decode($request->body(), true);
             $h = fn (string $k): string => (string) ($request->header($k)[0] ?? '');
-            $path = '/api/v1/merchant/tenants/legacy_merchant_17/branches/legacy_merchant_17_main/cash-sales';
+            $path = '/api/v1/merchant/tenants/legacy_merchant_117/branches/legacy_merchant_117_main/cash-sales';
             $canon = $h('X-Amial-Timestamp')."\n".$h('X-Amial-Nonce')."\nPOST\n".
                 $path."\n".$h('X-Amial-Context')."\n".hash('sha256', $request->body());
             return $request->method() === 'POST'

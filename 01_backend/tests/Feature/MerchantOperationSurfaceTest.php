@@ -34,12 +34,14 @@ class MerchantOperationSurfaceTest extends TestCase
         $this->assertArrayNotHasKey('merchant', app('router')->getMiddleware());
     }
 
-    public function test_abandoned_merchant_workspace_bridge_is_unregistered(): void
+    public function test_independent_merchant_financial_bridge_remains_signed(): void
     {
         $routes = app('router')->getRoutes();
 
-        $this->assertNull($routes->getByName('amial.merchant-workspace.financial'));
-        $this->assertArrayNotHasKey('amial.merchant-workspace.signature', app('router')->getMiddleware());
+        $route = $routes->getByName('amial.merchant-workspace.financial');
+        $this->assertNotNull($route);
+        $this->assertContains('amial.merchant-workspace.signature', $route->gatherMiddleware());
+        $this->assertArrayHasKey('amial.merchant-workspace.signature', app('router')->getMiddleware());
     }
 
     public function test_the_mobile_merchant_api_remains_registered(): void
