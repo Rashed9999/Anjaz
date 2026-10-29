@@ -88,7 +88,7 @@ class LoyaltyService
     /**
      * استبدال نقاط بخصم بالريال. يعيد قيمة الخصم (ر.ي). يرمي عند عدم الكفاية.
      */
-    public function redeem(User $merchant, string $phone, float $points, ?int $createdBy = null): array
+    public function redeem(User $merchant, string $phone, float $points, ?int $createdBy = null, ?string $saleUlid = null): array
     {
         $program = LoyaltyProgram::where('merchant_user_id', $merchant->id)->where('is_active', true)->first();
         if (!$program) throw new RuntimeException('برنامج الولاء غير مُفعّل');
@@ -97,7 +97,7 @@ class LoyaltyService
             throw new RuntimeException('الحدّ الأدنى للاستبدال ' . (int) $program->min_redeem_points . ' نقطة');
         }
 
-        return DB::transaction(function () use ($merchant, $phone, $points, $program, $createdBy) {
+        return DB::transaction(function () use ($merchant, $phone, $points, $program, $createdBy, $saleUlid) {
             $account = $this->lockAccount($merchant, $phone, null);
             if ((float) $account->points_balance < $points) {
                 throw new RuntimeException('رصيد النقاط غير كافٍ (المتاح: ' . (float) $account->points_balance . ')');
@@ -112,7 +112,12 @@ class LoyaltyService
                 'type' => 'redeem',
                 'points' => -$points,
                 'balance_after' => $account->points_balance,
-                'note' => 'استبدال نقاط بخصم',
+                // **الحركةُ تُوسَم ببيعتها.** واستبدالٌ بلا بيعةٍ لا
+                // يُراجَع ولا يُعرَف على أيّ فاتورةٍ نزل خصمُه.
+                'sale_ulid' => $saleUlid,
+                'note' => $saleUlid !== null
+                    ? 'استبدال نقاط على فاتورة'
+                    : 'استبدال نقاط بخصم (خارج البيع)',
                 'created_by' => $createdBy ?? $merchant->id,
             ]);
 

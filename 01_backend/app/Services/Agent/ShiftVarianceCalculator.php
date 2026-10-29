@@ -51,7 +51,7 @@ class ShiftVarianceCalculator
      *
      * @return array{0:Carbon,1:Carbon}
      */
-    public function dayWindow(string $date): array
+    private function dayWindow(string $date): array
     {
         return [
             Carbon::parse($date)->startOfDay(),

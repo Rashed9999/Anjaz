@@ -81,6 +81,22 @@ class AgentNetworkServiceTest extends TestCase
     }
 
     /** @test */
+    public function cash_out_uses_its_own_daily_limit_not_cash_in_limit()
+    {
+        $agent = $this->makeAgent([
+            'daily_cash_in_limit' => '90000',
+            'daily_cash_out_limit' => '15000',
+            'single_transaction_limit' => '20000',
+        ]);
+
+        $this->service->recordFloatMovement($agent->id, 'cash_out', '10000');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('حدك اليومي للسحب النقدي');
+        $this->service->assertCashOutAllowed($agent->id, '10000');
+    }
+
+    /** @test */
     public function agent_without_profile_uses_safe_default_limit()
     {
         // إصلاح أمني: الوكيل بلا profile لم يعد بلا حدود (fail-open) — يخضع لحدّ افتراضي آمن

@@ -25,7 +25,7 @@ const DEFAULT_401 = [
 
 const DEFAULT_403 = [
     'response_code' => 'default_403',
-    'message' => 'access denied'
+    'message' => 'لا تملك صلاحية الوصول إلى هذه الخدمة'
 ];
 const DEFAULT_404 = [
     'response_code' => 'default_404',

@@ -10,7 +10,7 @@ class BillProviderRequest extends Model
     protected $table = 'bill_provider_requests';
     public $timestamps = false;
     protected $fillable = [
-        'order_id', 'provider_id', 'request_type',
+        'order_id', 'provider_id', 'correlation_id', 'request_type',
         'request_payload', 'response_payload',
         'http_status', 'latency_ms', 'was_successful', 'error_message',
         'created_at',

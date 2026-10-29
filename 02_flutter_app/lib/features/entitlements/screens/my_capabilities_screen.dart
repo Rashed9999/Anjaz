@@ -43,7 +43,13 @@ class _MyCapabilitiesScreenState extends State<MyCapabilitiesScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('خدماتي'),
+        // AMIAL-CAP-HOME-001 — **شاشتان بعنوانٍ واحد.**
+        //
+        // كانت تُسمّى «خدماتي» — وهو عنوانُ `MyServicesScreen` نفسِه،
+        // وكلتاهما يفتحهما التاجرُ من درجه في الجلسة نفسِها. فيرى
+        // شاشتين مختلفتين تماماً بالاسم ذاته، **والدرجُ يسمّي هذه
+        // «مزايا الباقة»** — ثلاثةُ أسماءٍ لشيئين.
+        title: const Text('مزايا باقتي'),
         backgroundColor: AmialColors.background,
         elevation: 0,
       ),

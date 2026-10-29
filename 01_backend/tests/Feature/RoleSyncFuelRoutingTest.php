@@ -22,6 +22,7 @@ class RoleSyncFuelRoutingTest extends TestCase
     public function creating_a_merchant_with_only_type_auto_fills_role(): void
     {
         $u = new User();
+        $u->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $u->f_name = 'ماجد';
         $u->phone = '967777200004';
         $u->password = bcrypt('Pass@2026');
@@ -35,6 +36,7 @@ class RoleSyncFuelRoutingTest extends TestCase
     public function fuel_merchant_access_exposes_merchant_role_and_fuel_type(): void
     {
         $u = new User();
+        $u->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $u->f_name = 'ماجد';
         $u->phone = '967777200004';
         $u->password = bcrypt('Pass@2026');
@@ -62,6 +64,7 @@ class RoleSyncFuelRoutingTest extends TestCase
     public function agent_and_admin_roles_are_auto_filled(): void
     {
         $agent = new User();
+        $agent->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $agent->f_name = 'وكيل';
         $agent->phone = '967777900009';
         $agent->password = bcrypt('x');
@@ -70,6 +73,7 @@ class RoleSyncFuelRoutingTest extends TestCase
         $this->assertSame(A::ROLE_AGENT, $agent->fresh()->role);
 
         $admin = new User();
+        $admin->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $admin->f_name = 'مدير';
         $admin->phone = '967777000009';
         $admin->password = bcrypt('x');
@@ -82,6 +86,7 @@ class RoleSyncFuelRoutingTest extends TestCase
     public function explicit_role_is_not_overwritten(): void
     {
         $u = new User();
+        $u->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $u->f_name = 'سوبر';
         $u->phone = '967777000010';
         $u->password = bcrypt('x');
@@ -96,6 +101,7 @@ class RoleSyncFuelRoutingTest extends TestCase
     public function backfill_command_fixes_legacy_user_role(): void
     {
         $u = new User();
+        $u->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $u->f_name = 'قديم';
         $u->phone = '967777200077';
         $u->password = bcrypt('x');

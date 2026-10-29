@@ -101,6 +101,26 @@ final class WholesaleAccessPolicyService
                 'permission' => P::WHOLESALE_STOCK_ADJUST,
                 'capabilities' => [$cap(A::F_INVENTORY)],
             ],
+            'unit.view' => [
+                'label' => 'عرض وحدات بيع المنتج',
+                'permission' => P::WHOLESALE_PRODUCT_VIEW,
+                'capabilities' => [$cap(A::F_INVENTORY)],
+            ],
+            'unit.manage' => [
+                'label' => 'إدارة وحدات بيع المنتج',
+                'permission' => P::WHOLESALE_PRODUCT_MANAGE,
+                'capabilities' => [$cap(A::F_INVENTORY)],
+            ],
+            'lot.view' => [
+                'label' => 'عرض دفعات المنتج',
+                'permission' => P::WHOLESALE_PRODUCT_VIEW,
+                'capabilities' => [$cap(A::F_INVENTORY)],
+            ],
+            'lot.receive' => [
+                'label' => 'استلام دفعة مخزون',
+                'permission' => P::WHOLESALE_STOCK_ADJUST,
+                'capabilities' => [$cap(A::F_INVENTORY)],
+            ],
             'stock_alert.view' => [
                 'label' => 'تنبيهات قرب النفاد',
                 'permission' => P::WHOLESALE_PRODUCT_VIEW,
@@ -145,6 +165,28 @@ final class WholesaleAccessPolicyService
                 'label' => 'إبطال فاتورة',
                 'permission' => P::WHOLESALE_INVOICE_VOID,
                 'capabilities' => [$cap(A::F_WHOLESALE_INVOICES)],
+            ],
+            'payment_request.cancel' => [
+                'label' => 'إلغاء طلب تحصيل أميال باي',
+                'permission' => P::WHOLESALE_INVOICE_CREATE,
+                'capabilities' => [$cap(A::F_WHOLESALE_INVOICES)],
+            ],
+
+            // Returns are a separate operational flow, never an invoice void.
+            'return.view' => [
+                'label' => 'عرض مرتجعات الجملة',
+                'permission' => P::WHOLESALE_RETURN_VIEW,
+                'capabilities' => [$cap(A::F_REFUNDS)],
+            ],
+            'return.request' => [
+                'label' => 'طلب مرتجع جملة',
+                'permission' => P::WHOLESALE_RETURN_REQUEST,
+                'capabilities' => [$cap(A::F_REFUNDS)],
+            ],
+            'return.resolve' => [
+                'label' => 'اعتماد أو رفض مرتجع جملة',
+                'permission' => P::WHOLESALE_RETURN_APPROVE,
+                'capabilities' => [$cap(A::F_REFUNDS)],
             ],
 
             // collection — قبض الدين القائم لا يُقفل تجارياً.
@@ -229,6 +271,25 @@ final class WholesaleAccessPolicyService
         if (preg_match('~^products/\d+/adjust-stock$~', $relative)) {
             return $method === 'POST' ? 'stock.adjust' : null;
         }
+        if (preg_match('~^products/\d+/units$~', $relative)) {
+            return match ($method) {
+                'GET' => 'unit.view',
+                'POST' => 'unit.manage',
+                default => null,
+            };
+        }
+        if (preg_match('~^products/\d+/lots$~', $relative)) {
+            return match ($method) {
+                'GET' => 'lot.view',
+                'POST' => 'lot.receive',
+                default => null,
+            };
+        }
+        if (preg_match('~^products/\d+/quote$~', $relative)) {
+            // التسعير جزء من إنشاء الفاتورة: لا يفيد عرض المنتج وحده أن
+            // يعرف شريحة عميل أو يطلب سعراً قابلاً للتنفيذ.
+            return $method === 'GET' ? 'invoice.create' : null;
+        }
         if (preg_match('~^products/\d+/prices$~', $relative)) {
             return match ($method) {
                 'GET' => 'price.view',
@@ -258,17 +319,33 @@ final class WholesaleAccessPolicyService
                 default => null,
             };
         }
+        if ($relative === 'invoices/amial-payment-request' && $method === 'POST') {
+            return 'invoice.create';
+        }
         if (preg_match('~^invoices/\d+/collect$~', $relative)) {
             return $method === 'POST' ? 'collection.record' : null;
         }
         if (preg_match('~^invoices/\d+/void$~', $relative)) {
             return $method === 'POST' ? 'invoice.void' : null;
         }
+        if (preg_match('~^invoices/\d+/amial-payment-request$~', $relative)) {
+            return $method === 'POST' ? 'collection.record' : null;
+        }
         if (preg_match('~^invoices/\d+(/pdf)?$~', $relative)) {
             return $method === 'GET' ? 'invoice.view' : null;
         }
 
         if ($relative === 'collections') return $method === 'GET' ? 'collection.view' : null;
+        if (preg_match('~^payment-requests/\d+/cancel$~', $relative)) {
+            return $method === 'POST' ? 'payment_request.cancel' : null;
+        }
+        if ($relative === 'returns') return $method === 'GET' ? 'return.view' : null;
+        if (preg_match('~^invoices/\d+/returns$~', $relative)) {
+            return $method === 'POST' ? 'return.request' : null;
+        }
+        if (preg_match('~^returns/\d+/resolve$~', $relative)) {
+            return $method === 'POST' ? 'return.resolve' : null;
+        }
         if ($relative === 'sales-reps') {
             return match ($method) {
                 'GET' => 'rep.view',

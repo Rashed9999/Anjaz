@@ -20,6 +20,10 @@ class CustomerMiddleware
             return $next($request);
         }
 
-        abort(response()->json(['message' => 'Access forbidden.'], 403));
+        abort(response()->json([
+            'success' => false,
+            'code' => 'CUSTOMER_ACCESS_REQUIRED',
+            'message' => 'هذه الخدمة متاحة لحساب العميل فقط.',
+        ], 403));
     }
 }

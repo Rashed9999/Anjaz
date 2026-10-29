@@ -5,6 +5,7 @@ namespace App\Traits;
 use App\Models\User;
 use App\Services\KycTierService;
 use App\Services\SanctionScreeningService;
+use App\Services\ZonePolicyService;
 use RuntimeException;
 
 /**
@@ -41,7 +42,7 @@ trait EnforcesFinancialPolicy
         ?string $amount = null,
     ): void {
         // 1) Zone check — المستخدم في المنطقة التشغيلية المسموحة
-        $this->enforceZone($user);
+        $this->enforceZone($user, $this->actionForFeature($feature));
 
         // 2) Sanction check — غير محظور
         $this->enforceSanction($user);
@@ -55,21 +56,19 @@ trait EnforcesFinancialPolicy
     /**
      * فحص المنطقة فقط (للعمليات التي لا تخص KYC مثل عرض).
      */
-    protected function enforceZone(User $user): void
+    protected function enforceZone(User $user, string $action = 'send_money'): void
     {
-        $zone = $user->zone_code ?? 'UNKNOWN';
+        app(ZonePolicyService::class)->assertAllowed($user, $action);
+    }
 
-        if ($zone === 'UNKNOWN' || empty($zone)) {
-            throw new RuntimeException(
-                'حسابك غير مُعيَّن لمنطقة تشغيلية. أكمل التوثيق لتفعيل العمليات المالية.'
-            );
-        }
-
-        if ($zone !== 'SOUTH') {
-            throw new RuntimeException(
-                'العمليات المالية متاحة في الجنوب فقط حالياً. منطقتك: ' . $this->zoneNameAr($zone)
-            );
-        }
+    private function actionForFeature(string $feature): string
+    {
+        return match ($feature) {
+            'safe_payment' => 'safe_payment_fund',
+            'family_fund' => 'family_fund_contribute',
+            'merchant_pay' => 'merchant_payment',
+            default => $feature,
+        };
     }
 
     /**
@@ -105,7 +104,10 @@ trait EnforcesFinancialPolicy
      */
     protected function enforceKycTier(User $user, string $feature, string $amount): void
     {
-        app(KycTierService::class)->assertTransactionAllowed($user, $amount, $feature);
+        // هذا trait مشترك أيضاً بين التاجر والوكيل وPOS؛ لا نحملهم Tier
+        // العميل الفردي. المسارات الخاصة بالعميل تُفحص، والبقية تبقى تحت
+        // سياساتها التشغيلية المستقلة.
+        app(KycTierService::class)->assertIndividualTransactionAllowed($user, $amount, $feature);
     }
 
     private function zoneNameAr(string $zone): string

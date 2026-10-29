@@ -4,15 +4,15 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:camera/camera.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:amial_pay/common/models/notification_body.dart';
 import 'package:amial_pay/features/language/controllers/localization_controller.dart';
 import 'package:amial_pay/features/setting/controllers/theme_controller.dart';
 import 'package:amial_pay/helper/amial_crash_reporter.dart';
+import 'package:amial_pay/helper/app_resume_state.dart';
 import 'package:amial_pay/helper/notification_helper.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/theme/dark_theme.dart';
@@ -67,33 +67,56 @@ Future<void> main() async {
     // (‏وضعٌ صامتٌ أو منعٌ صريح)، وتعطيلُ التطبيق كلِّه أسوأُ من كليهما.
   }
 
-  int? orderID;
-  NotificationBody? body;
+  // AMIAL-NOTIFY-DEEPLINK-002 — نحفظ إشعار cold-start حتى ينجح
+  // تسجيل الدخول، ثم NotificationHelper يفتحه مرة واحدة إلى وجهته الصحيحة.
+  // لا بيانات مالية تُفتح قبل المصادقة، ولا يُرمى الإشعار كما كان سابقاً.
   try {
-    final RemoteMessage? remoteMessage = await FirebaseMessaging.instance.getInitialMessage();
+    final RemoteMessage? remoteMessage =
+        await FirebaseMessaging.instance.getInitialMessage();
     if (remoteMessage != null) {
-      body = NotificationHelper.convertNotification(remoteMessage.data);
+      NotificationHelper.setPendingInitialNotification(
+        NotificationHelper.convertNotification(remoteMessage.data),
+      );
     }
     await NotificationHelper.initialize(flutterLocalNotificationsPlugin);
     FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
-  }catch(e, s) {
-    // AMIAL-CRASH-001: كان يُبتلع صامتاً. وفشلُ التهيئة هنا يعني أن كل
-    // إشعارات هذا الجهاز صامتة — عطل جسيم لا أثر له في الواجهة إطلاقاً.
+  } catch (e, s) {
     AmialCrashReporter.record(e, s, reason: 'تهيئة الإشعارات');
   }
 
   // AMIAL-SESSION-GUARD-001: مراقبة دورة حياة التطبيق — إغلاق الجلسة عند
   // إطفاء الشاشة أو ضغط زرّ البيت أو نقل التطبيق إلى نافذة.
   SessionGuard.instance.attach();
+  Get.find<AppResumeState>().attach();
 
-  runApp(MyApp(languages: languages, orderID: orderID));
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-INSETS-001 — **شريطا النظام يُلوَّنان، وإلّا بقيا أسودين.**
+  //
+  // الثيمُ الأصلُ على أندرويد `Theme.Black.NoTitleBar`، فشريطُ الحالة
+  // وشريطُ التنقّل أسودان. ولُوّنا في `styles.xml` — **وهذا وحدَه لا
+  // يكفي**: بعضُ الأجهزة تُعيد ضبطهما بعد أوّل إطار، ولا شيءَ في
+  // ٥١١ ملفَّ دارت كان ينادي `SystemChrome` مرّةً واحدة.
+  //
+  // **وسطوعُ الأيقونات يُقال صراحةً**: شريطُ حالةٍ أزرقُ داكنٌ يحتاج
+  // أيقوناتٍ فاتحة، وشريطُ تنقّلٍ أبيضُ يحتاج داكنة. وتركُه للنظام
+  // يجعل الأيقوناتِ تختفي على نصف الأجهزة — أبيضُ على أبيض.
+  // ══════════════════════════════════════════════════════════════════
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Color(0xFF053391),
+    statusBarIconBrightness: Brightness.light,   // أندرويد
+    statusBarBrightness: Brightness.dark,        // iOS
+    systemNavigationBarColor: Color(0xFFFFFFFF),
+    systemNavigationBarIconBrightness: Brightness.dark,
+    systemNavigationBarDividerColor: Color(0xFFE3E6EF),
+  ));
+
+  runApp(MyApp(languages: languages));
 
 }
 
 class MyApp extends StatelessWidget {
   final Map<String, Map<String, String>>? languages;
-  final int? orderID;
-  const MyApp({super.key, required this.languages, required this.orderID});
+  const MyApp({super.key, required this.languages});
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +136,11 @@ class MyApp extends StatelessWidget {
           child: GetMaterialApp(
             // AMIAL-CRASH-001: مسار الشاشات يُرفق بالعطل — «انهار عند الدفع»
             // و«انهار عند الدفع قادماً من المسح» عطلان مختلفان في التشخيص.
-            navigatorObservers: [FlutterSmartDialog.observer, AmialCrashRouteObserver()],
+            navigatorObservers: [
+              FlutterSmartDialog.observer,
+              AmialCrashRouteObserver(),
+              Get.find<AppResumeState>(),
+            ],
             builder: FlutterSmartDialog.init(),
             title: AppConstants.appName,
             debugShowCheckedModeBanner: false,

@@ -253,6 +253,25 @@ class OpsAlertGuardTest extends TestCase
             'فرقٌ عاد وبقي «محلولاً» — فلا يراه أحد');
     }
 
+
+    /** @test */
+    public function a_clean_control_can_resolve_an_open_alarm_without_deleting_its_history(): void
+    {
+        $this->withoutChannel();
+        $svc = app(OpsAlertService::class);
+
+        $svc->raise('recon.nightly_diverged', 'فرقٌ', 'تفصيل');
+        $svc->resolve('recon.nightly_diverged', 'مطابقة نظيفة لاحقة');
+
+        $row = DB::table('system_errors')
+            ->where('exception', 'recon.nightly_diverged')->first();
+
+        $this->assertSame('resolved', $row->status_flag);
+        $this->assertSame(1, (int) $row->occurrences,
+            'الإغلاق لا يحذف حادثةً ولا يزوّر عدّاد ظهورها.');
+    }
+
+
     /**
      * @test
      *

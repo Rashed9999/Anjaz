@@ -128,12 +128,18 @@ class SupportConsoleTest extends TestCase
 
     public function test_transaction_inspection_builds_timeline(): void
     {
+        $recipient = User::factory()->create([
+            'type' => CUSTOMER_TYPE, 'phone' => '967771555002',
+            'f_name' => 'ليان', 'l_name' => 'العولقي', 'zone_code' => 'NORTH',
+        ]);
         $tx = Transaction::create([
             'user_id' => $this->customer->id,
             'transaction_id' => 'TRXTIMELINE00001',
             'transaction_type' => 'send_money',
-            'debit' => '2000', 'credit' => '0', 'amount' => '2000',
-            'balance' => '23000',
+            'ref_trans_id' => 'REF-TL-001', 'from_user_id' => $this->customer->id,
+            'to_user_id' => $recipient->id, 'debit' => '2000', 'credit' => '0',
+            'charge' => '25', 'amount' => '2000', 'balance' => '23000',
+            'decision_code' => 'COMPLETED', 'zone_code' => 'SOUTH',
         ]);
         \App\Models\Receipt::create([
             'receipt_number' => 'RC-TL-0001',
@@ -154,7 +160,20 @@ class SupportConsoleTest extends TestCase
         $events = collect($r->json('meta.timeline'))->pluck('event');
         $this->assertTrue($events->contains('transaction_created'));
         $this->assertTrue($events->contains('receipt_issued'));
-        $r->assertJsonPath('meta.receipt.receipt_number', 'RC-TL-0001');
+        $r->assertJsonPath('meta.receipt.receipt_number', 'RC-TL-0001')
+            ->assertJsonPath('meta.receipt.direction', 'debit')
+            ->assertJsonPath('meta.transaction.charge', '25.0000')
+            ->assertJsonPath('meta.transaction.ref_trans_id', 'REF-TL-001')
+            ->assertJsonPath('meta.transaction.decision_code', 'COMPLETED');
+
+        $parties = collect($r->json('meta.parties'));
+        $this->assertTrue($parties->contains('user_id', $this->customer->id));
+        $this->assertTrue($parties->contains('user_id', $recipient->id));
+        $this->assertDatabaseHas('pii_access_logs', [
+            'actor_user_id' => $this->admin->id,
+            'subject_type' => 'transaction', 'subject_id' => $tx->id,
+            'field_name' => 'support_transaction_trace',
+        ]);
     }
 
     // ==================== إجراءات التحقّق ====================
@@ -395,6 +414,69 @@ class SupportConsoleTest extends TestCase
         $this->assertArrayHasKey('pending_jobs', $r->json('meta.queues'));
         $this->assertArrayHasKey('failed_jobs', $r->json('meta.queues'));
         $this->assertSame(1, $r->json('meta.support.tickets_by_status.open'));
+    }
+
+
+    public function test_playbooks_endpoint_exposes_both_49_core_and_top_100_banking_catalog(): void
+    {
+        $this->actAsAdmin();
+
+        $r = $this->getJson('/api/v1/amial/admin/support/playbooks')
+            ->assertOk()
+            ->assertJsonPath('meta.total_catalog', 49)
+            ->assertJsonPath('meta.top100_total', 100);
+
+        $this->assertSame(100, $r->json('meta.top100_summary.total_questions'));
+        $this->assertArrayHasKey('urgent', $r->json('meta.sla_matrix'));
+    }
+
+    public function test_customer_360_includes_hold_breakdown_limits_usage_and_diagnosis(): void
+    {
+        $this->actAsAdmin();
+
+        $r = $this->getJson("/api/v1/amial/admin/support/customers/{$this->customer->id}")
+            ->assertOk();
+
+        $this->assertArrayHasKey('available_balance', $r->json('meta.wallet'));
+        $this->assertArrayHasKey('hold_breakdown', $r->json('meta'));
+        $this->assertArrayHasKey('limits_usage', $r->json('meta'));
+        $this->assertArrayHasKey('account_diagnosis', $r->json('meta'));
+        $this->assertArrayHasKey('wrong_transfer_overview', $r->json('meta'));
+    }
+
+    public function test_support_can_add_customer_note_and_open_guided_escalation(): void
+    {
+        $this->actAsAdmin();
+
+        $this->postJson("/api/v1/amial/admin/support/customers/{$this->customer->id}/note", [
+            'body' => 'تواصل العميل للاستفسار عن الحوالة المعلّقة وتم التوضيح',
+            'pin' => true,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('customer_notes', [
+            'user_id' => $this->customer->id,
+            'is_pinned' => 1,
+        ]);
+
+        $esc = $this->postJson("/api/v1/amial/admin/support/customers/{$this->customer->id}/escalate", [
+            'target_team' => 'supervisor',
+            'requested_action' => 'unfreeze_account',
+            'reason' => 'العميل قدّم مستندات الهوية ويطلب رفع التجميد المؤقت',
+        ])->assertStatus(201);
+
+        $this->assertMatchesRegularExpression('/^TKT-\d{6}$/', $esc->json('meta.ticket.ticket_number'));
+    }
+
+    public function test_guided_escalation_cannot_target_a_non_customer(): void
+    {
+        $agent = User::factory()->create(['type' => AGENT_TYPE, 'phone' => '967771555098']);
+        $this->actAsAdmin();
+
+        $this->postJson("/api/v1/amial/admin/support/customers/{$agent->id}/escalate", [
+            'target_team' => 'security',
+            'requested_action' => 'block_device',
+            'reason' => 'اختبار منع التصعيد على حساب وكيل عبر مسار العملاء',
+        ])->assertNotFound();
     }
 
     /** يُسند دور مدير المنصّة — كما تفعل الهجرة لحسابات الإدارة القائمة. */

@@ -10,6 +10,8 @@ use App\Services\InsiderWatchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
 
@@ -135,6 +137,13 @@ class InsiderDefenseTest extends TestCase
 
     public function test_reset_pin_executes_only_after_approval(): void
     {
+        config(['amial_otp.resend.api_key' => 'test-provider-key', 'amial_otp.pin_recovery_channel' => 'email']);
+        Http::preventStrayRequests();
+        $mail = null;
+        Http::fake(['api.resend.com/emails' => function ($request) use (&$mail) {
+            $mail = $request->data();
+            return Http::response(['id' => 'support-recovery-test'], 200);
+        }]);
         $this->customer->forceFill(['transaction_pin' => bcrypt('9999'), 'pin_failed_attempts' => 5])->save();
 
         Passport::actingAs($this->maker, [], 'api');
@@ -142,12 +151,35 @@ class InsiderDefenseTest extends TestCase
             ['reason' => 'عميل نسي الرمز'])->json('meta.request_id');
 
         $this->assertNotNull($this->customer->fresh()->transaction_pin);
+        Http::assertNothingSent();
 
         Passport::actingAs($this->checker, [], 'api');
-        $this->postJson("/api/v1/amial/admin/support/approvals/{$reqId}/approve", [])->assertOk();
+        $this->postJson("/api/v1/amial/admin/support/approvals/{$reqId}/approve", [])
+            ->assertOk()->assertJsonMissingPath('meta.approval.payload.pin_recovery.otp');
 
+        // Approval sends proof to the customer's mailbox; support cannot clear
+        // the current PIN or choose its replacement on the customer's behalf.
         $fresh = $this->customer->fresh();
-        $this->assertNull($fresh->transaction_pin);
+        $this->assertTrue(Hash::check('9999', $fresh->transaction_pin));
+        $this->assertSame(5, (int) $fresh->pin_failed_attempts);
+        Http::assertSentCount(1);
+        $this->assertSame([$fresh->email], $mail['to']);
+        $this->assertSame(1, preg_match('/(?<!\d)\d{6}(?!\d)/u', $mail['text'], $match));
+        $this->assertSame('sent', DB::table('otp_challenges')->where('user_id', $fresh->id)->value('delivery_status'));
+
+        // The customer needs only the emailed code; support never relays a
+        // challenge identifier or the one-time verification token.
+        $proof = $this->postJson('/api/v1/auth/email-otp/verify', [
+            'email' => $fresh->email, 'purpose' => 'pin_recovery', 'otp' => $match[0],
+        ])->assertOk()->json('meta');
+        $this->postJson('/api/v1/auth/pin-recovery/email', [
+            'email' => $fresh->email,
+            'challenge_id' => $proof['challenge_id'],
+            'verification_token' => $proof['verification_token'],
+            'new_pin' => '739582', 'new_pin_confirmation' => '739582',
+        ])->assertOk()->assertJsonPath('code', 'PIN_RESET');
+        $fresh = $this->customer->fresh();
+        $this->assertTrue(Hash::check('739582', $fresh->transaction_pin));
         $this->assertSame(0, (int) $fresh->pin_failed_attempts);
     }
 

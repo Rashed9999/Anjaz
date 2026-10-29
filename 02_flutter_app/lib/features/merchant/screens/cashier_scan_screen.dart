@@ -58,11 +58,11 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
       return;
     }
     if (result == 'added') {
-      setState(() => _show('✓ تمت الإضافة', Colors.green));
+      setState(() => _show('✓ أُضيف ${c.lastScannedQuantity} للسلّة', Colors.green));
     } else if (result == 'not_found') {
       await _quickCreate(code);
     } else {
-      setState(() => _show('تعذّر البحث', AmialColors.red));
+      setState(() => _show(c.lastError.value.isEmpty ? 'تعذّر البحث' : c.lastError.value, AmialColors.red));
     }
     _busy = false;
   }
@@ -148,7 +148,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
     final result = await c.lookupAndAddByBarcode(code);
     if (!mounted) return;
     if (result == 'added') {
-      setState(() => _show('✓ أُضيف للسلّة', Colors.green));
+      setState(() => _show('✓ أُضيف ${c.lastScannedQuantity} للسلّة', Colors.green));
     } else if (result == 'not_found') {
       setState(() => _show('لا يوجد منتج بهذا الباركود', AmialColors.red));
     } else {

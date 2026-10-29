@@ -34,7 +34,7 @@ class ReportController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $user = $request->user();
+        $user = $this->actor($request);
         $reportType = $request->input('report_type');
 
         // صلاحيات: التقارير الإدارية للأدمن فقط
@@ -112,7 +112,7 @@ class ReportController extends Controller
     public function status(Request $request, string $ulid): JsonResponse
     {
         $export = ReportExport::where('export_ulid', $ulid)
-            ->where('requested_by_user_id', $request->user()->id)->first();
+            ->where('requested_by_user_id', $this->actor($request)->id)->first();
         if (!$export) return $this->error('NOT_FOUND', 'التقرير غير موجود', 404);
 
         return $this->ok([
@@ -128,7 +128,7 @@ class ReportController extends Controller
     public function download(Request $request, string $ulid): JsonResponse|StreamedResponse
     {
         $export = ReportExport::where('export_ulid', $ulid)
-            ->where('requested_by_user_id', $request->user()->id)->first();
+            ->where('requested_by_user_id', $this->actor($request)->id)->first();
         if (!$export) return $this->error('NOT_FOUND', 'التقرير غير موجود', 404);
 
         if (!$export->isReady()) {
@@ -146,7 +146,7 @@ class ReportController extends Controller
     /** GET /api/v1/amial/reports — قائمة تقارير المستخدم */
     public function index(Request $request): JsonResponse
     {
-        $reports = ReportExport::where('requested_by_user_id', $request->user()->id)
+        $reports = ReportExport::where('requested_by_user_id', $this->actor($request)->id)
             ->orderByDesc('created_at')->limit(50)
             ->get(['export_ulid', 'report_type', 'format', 'status', 'row_count', 'created_at', 'expires_at']);
 
@@ -154,6 +154,15 @@ class ReportController extends Controller
     }
 
     // ============================================================
+    /**
+     * التقارير عقد واحد بين تطبيق التاجر وبوابة الويب؛ لا نكرر محرك
+     * التصدير لمجرد اختلاف الحارس.
+     */
+    private function actor(Request $request): mixed
+    {
+        return $request->user('merchant_web') ?? $request->user();
+    }
+
     private function ok(array $meta, string $code = 'OK'): JsonResponse
     {
         return new JsonResponse(['success' => true, 'code' => $code,

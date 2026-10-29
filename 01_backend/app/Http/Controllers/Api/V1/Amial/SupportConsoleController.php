@@ -23,6 +23,7 @@ use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (Customer Operations Console).
@@ -51,16 +52,76 @@ class SupportConsoleController extends Controller
         $actor = $request->user();
         $capabilities = [
             'customers' => $actor->hasPlatformPermission('platform.customers.view'),
+            'playbooks' => $actor->hasPlatformPermission('platform.customers.view'),
             'transactions' => $actor->hasPlatformPermission('platform.transactions.view'),
             'tickets' => $actor->hasPlatformPermission('platform.tickets.manage'),
             'approvals' => $actor->hasPlatformPermission('platform.approvals.decide'),
             'insider' => $actor->hasPlatformPermission('platform.audit.view'),
             'ops' => $actor->hasPlatformPermission('platform.ops.view'),
+
+            // AMIAL-SUPPORT-DIAGNOSTICS-001 — الواجهة تعكس قرار الخادم:
+            // القراءة لا تُظهر أزرار فعلٍ غير مسموح بها.
+            'devices_view' => $actor->hasPlatformPermission('platform.customers.devices.view'),
+            'device_control' => $actor->hasPlatformPermission('platform.customers.sessions'),
+            'wrong_transfer_open' => $actor->hasPlatformPermission('platform.wrong_transfer.claim.open'),
+            'wrong_transfer_decide' => $actor->hasPlatformPermission('platform.disputes.decide'),
+            'recovery_view' => $actor->hasPlatformPermission('platform.recovery.view'),
+            'freeze' => $actor->hasPlatformPermission('platform.customers.freeze'),
+            'reset_pin' => $actor->hasPlatformPermission('platform.customers.reset_pin'),
+            'kyc_request' => $actor->hasPlatformPermission('platform.customers.kyc.request'),
+            'notes_create' => $actor->hasPlatformPermission('platform.customers.notes.create'),
+            'lifecycle_manage' => $actor->hasPlatformPermission('platform.customers.lifecycle.manage'),
+            'limits_update' => $actor->hasPlatformPermission('platform.customers.limits.update'),
+            'risk_escalate' => $actor->hasPlatformPermission('platform.risk.investigations.create'),
         ];
 
         abort_unless(in_array(true, $capabilities, true), 403);
 
         return view('admin-views.support.console', compact('capabilities'));
+    }
+
+    /**
+     * GET /admin/support-center/playbooks?q=&category=
+     *
+     * كتالوج التشغيل لا يحتاج صلاحية فعل مالي. موظف الدعم يقرأ الإجراء
+     * الصحيح حتى عندما تكون نتيجة الإجراء «صعّد ولا تنفذ».
+     */
+    public function playbooks(Request $request): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $catalog = app(\App\Services\SupportPlaybookCatalogService::class);
+        $q = trim((string) $request->query('q', ''));
+        $cat = trim((string) $request->query('category', ''));
+        $actionMode = trim((string) $request->query('action_mode', ''));
+
+        $rows = $catalog->search($q, $cat);
+        $top100Rows = $catalog->searchTop100($q, $cat, $actionMode);
+
+        $categories = collect($catalog->all())
+            ->groupBy('category')
+            ->map->count()
+            ->sortKeys()
+            ->all();
+
+        $top100Categories = collect($catalog->top100Catalog())
+            ->groupBy('category')
+            ->map->count()
+            ->sortKeys()
+            ->all();
+
+        return $this->ok([
+            'playbooks' => $rows,
+            'categories' => $categories,
+            'total_catalog' => count($catalog->all()),
+            'matched' => count($rows),
+            'top100_playbooks' => $top100Rows,
+            'top100_categories' => $top100Categories,
+            'top100_total' => count($catalog->top100Catalog()),
+            'top100_matched' => count($top100Rows),
+            'top100_summary' => $catalog->summaryStats(),
+            'sla_matrix' => $catalog->slaMatrix(),
+        ], 'SUPPORT_PLAYBOOKS_OK', 'كتالوج الدعم');
     }
 
     // ==================== 1) البحث الموحّد ====================
@@ -82,6 +143,9 @@ class SupportConsoleController extends Controller
         $canTraceTransactions = $request->user()->hasPlatformPermission('platform.transactions.view');
         $transactions = collect();
         $receipts = collect();
+        $pendingTransfers = collect();
+        $correlationEvents = collect();
+        $diagnosticErrors = collect();
 
         // — رقم عملية (ULID/ref) أو رقم إيصال أو كود تحقّق
         //
@@ -101,6 +165,51 @@ class SupportConsoleController extends Controller
                 ->orWhere('verification_code', $normalized)
                 ->orWhere('verification_code', strtoupper($q))
                 ->limit(5)->get();
+
+            // AMIAL-SUPPORT-PENDING-TRACE-001 — الرقم الذي يراه العميل
+            // أثناء نافذة التراجع هو transfer_ulid، وليس رقم Transaction
+            // النهائي الذي لا يُولد إلا عند التسليم. لذلك البحث في
+            // transactions وحده كان يقول «لا نتائج» بالضبط عندما تكون
+            // الحوالة عالقةً وتحتاج الدعم.
+            if (Schema::hasTable('pending_transfers')) {
+                $pendingTransfers = \App\Models\PendingTransfer::query()
+                    ->where('transfer_ulid', $normalized)
+                    ->orWhere('hold_transaction_id', $normalized)
+                    ->orWhere('release_transaction_id', $normalized)
+                    ->limit(5)
+                    ->get();
+            }
+        }
+
+        // AMIAL-SUPPORT-CORRELATION-001 — معرّف التشخيص الذي يحمله
+        // التطبيق عند تعذّر معرفة نتيجة طلب مالي. لا نكشف context/reason
+        // الخام لموظف الدعم؛ نعيد إسقاطاً آمناً فقط، ثم يفتح المعاملة إن
+        // كان للأثر رقم معاملة.
+        if ($canTraceTransactions
+            && preg_match('/^[A-Za-z0-9][A-Za-z0-9._:\\-]{7,63}$/', $q)) {
+            if (Schema::hasColumn('audit_decisions', 'correlation_id')) {
+                $correlationEvents = AuditDecision::query()
+                    ->where('correlation_id', $q)
+                    ->orderByDesc('id')
+                    ->limit(20)
+                    ->get(['decision_id', 'action', 'decision_code', 'severity',
+                           'transaction_id', 'created_at']);
+            }
+
+            // أخطاء 5xx لا تمر دائماً عبر AuditService، لكنها تُسجل في
+            // system_errors. ومنذ CorrelationContext صار request_id هو
+            // المرجع نفسه الذي يحمله العميل.
+            if (Schema::hasTable('system_errors')
+                && Schema::hasColumn('system_errors', 'request_id')) {
+                $diagnosticErrors = DB::table('system_errors')
+                    ->where('request_id', $q)
+                    ->orderByDesc('last_seen_at')
+                    ->limit(10)
+                    ->get([
+                        'id', 'status', 'path', 'occurrences',
+                        'status_flag', 'first_seen_at', 'last_seen_at',
+                    ]);
+            }
         }
 
         // — هاتف بكل الصيغ المكافئة
@@ -115,14 +224,28 @@ class SupportConsoleController extends Controller
         }
 
         // — اسم (جزئي)
-        if ($users->isEmpty() && $transactions->isEmpty() && $receipts->isEmpty()) {
+        if ($users->isEmpty()
+            && $transactions->isEmpty()
+            && $receipts->isEmpty()
+            && $pendingTransfers->isEmpty()
+            && $correlationEvents->isEmpty()
+            && $diagnosticErrors->isEmpty()) {
             $users = User::where('f_name', 'like', "%{$q}%")
                 ->orWhere('l_name', 'like', "%{$q}%")
                 ->limit(10)->get();
         }
 
         // AMIAL-INSIDER-001: كل بحث مسجَّل باسم الموظف + تقييم شذوذ
-        $this->watch->logSearch($request->user()->id, $q, $users->count() + $transactions->count() + $receipts->count());
+        $this->watch->logSearch(
+            $request->user()->id,
+            $q,
+            $users->count()
+                + $transactions->count()
+                + $receipts->count()
+                + $pendingTransfers->count()
+                + $correlationEvents->count()
+                + $diagnosticErrors->count(),
+        );
 
         return $this->ok([
             'query' => $q,
@@ -136,6 +259,35 @@ class SupportConsoleController extends Controller
                 'user_id' => $r->user_id,
                 'status' => $r->status,
                 'issued_at' => $r->issued_at,
+                // AMIAL-SUPPORT-TRACE-REACH-001 — **مرجعُ العمليّة يُرسَل**،
+                // وبه يفتح صفُّ الإيصال التتبّعَ الكامل. وبلا هذا الحقل
+                // يبقى الصفُّ سطراً ميّتاً كما كان.
+                'reference_transaction_id' => $r->reference_transaction_id,
+            ])->values(),
+            'pending_transfers' => $pendingTransfers
+                ->map(fn ($p) => $this->pendingTransferSummary(
+                    $p,
+                    $request->user()->hasPlatformPermission('platform.customers.pii.reveal'),
+                ))->values(),
+            'diagnostic_events' => $correlationEvents->map(fn ($a) => [
+                'decision_id' => $a->decision_id,
+                'action' => $a->action,
+                'decision_code' => $a->decision_code,
+                'severity' => $a->severity,
+                'transaction_id' => $a->transaction_id,
+                'created_at' => $a->created_at,
+            ])->values(),
+            // لا نعيد message/file/trace_head إلى الدعم. يكفي أن نثبت أن
+            // الطلب وصل للخادم ووقع عطل تقني، ثم يتولى التشغيل التفاصيل.
+            'diagnostic_errors' => $diagnosticErrors->map(fn ($e) => [
+                'id' => (int) $e->id,
+                'http_status' => $e->status,
+                'path' => $e->path,
+                'occurrences' => (int) $e->occurrences,
+                'state' => $e->status_flag,
+                'first_seen_at' => $e->first_seen_at,
+                'last_seen_at' => $e->last_seen_at,
+                'diagnosis' => 'الطلب وصل إلى الخادم وحدث خطأ تقني قبل اكتمال الاستجابة.',
             ])->values(),
         ]);
     }
@@ -147,7 +299,9 @@ class SupportConsoleController extends Controller
     {
         if ($resp = $this->requireAdmin($request)) return $resp;
 
-        $user = User::find($id);
+        // هذا الباب تابع لملف العميل 360°، فلا يتحول إلى مسار غير معلن
+        // لإسناد تذاكر دعم على وكيل أو تاجر عبر رقم معرّف فقط.
+        $user = User::where('type', CUSTOMER_TYPE)->find($id);
         if (!$user) {
             return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
         }
@@ -180,8 +334,12 @@ class SupportConsoleController extends Controller
             ->orderByDesc('created_at')
             ->value('created_at');
 
-        $recentTx = Transaction::where('user_id', $user->id)
-            ->orderByDesc('id')->limit(10)->get()
+        $recentTx = Transaction::where(function ($w) use ($user) {
+                $w->where('user_id', $user->id)
+                    ->orWhere('from_user_id', $user->id)
+                    ->orWhere('to_user_id', $user->id);
+            })
+            ->orderByDesc('id')->limit(15)->get()
             ->map(fn($t) => $this->txSummary($t))->values();
 
         $openTickets = SupportTicket::where('user_id', $user->id)
@@ -195,19 +353,29 @@ class SupportConsoleController extends Controller
         // AMIAL-INSIDER-001: فتح ملف 360° = اطّلاع مسجَّل باسم الموظف
         $this->watch->logView($request->user()->id, $user->id, 'profile_360');
 
+        $currentBal = (string) ($wallet?->current_balance ?? '0.0000');
+        $heldBal = (string) ($wallet?->held_balance ?? '0.0000');
+        $availableBal = \App\Services\MoneyService::sub($currentBal, $heldBal);
+
         return $this->ok([
             'profile' => $this->userSummary($user) + [
                 'email' => $user->email,
                 'zone_code' => $user->zone_code,
+                'lifecycle_state' => $user->lifecycle_state ?? 'active',
+                'lifecycle_reason' => $user->lifecycle_reason ?? null,
                 'created_at' => $user->created_at,
                 'last_active_at' => $user->last_active_at,
             ],
             'wallet' => [
                 'current_balance' => $wallet?->current_balance,
+                'available_balance' => $availableBal,
                 'pending_balance' => $wallet?->pending_balance,
                 'held_balance' => $wallet?->held_balance,
                 'exists' => (bool) $wallet,
             ],
+            'hold_breakdown' => $this->holdBreakdownFor($user),
+            'limits_usage' => $this->limitsUsageFor($user),
+            'account_diagnosis' => $this->accountDiagnosisFor($user),
             'kyc' => [
                 // AMIAL-KYC-FLAG-001: `=== 1` لا `(bool)`. الافتراضيّ ٣، والكود الذي
                 // يمنع التحويل يقرأ `!= 1` — فـ`(bool)` كانت تعرض «موثَّق» لعميلٍ
@@ -215,6 +383,7 @@ class SupportConsoleController extends Controller
                 'is_verified' => (int) $user->is_kyc_verified === 1,
                 'tier' => $user->kyc_tier,
                 'tier_updated_at' => $user->kyc_tier_updated_at,
+                'update_required' => (bool) ($user->kyc_update_required ?? false),
             ],
             'pin' => [
                 'is_set' => !empty($user->transaction_pin),
@@ -229,6 +398,10 @@ class SupportConsoleController extends Controller
                 'active_sessions' => $activeSessions,
                 'last_token_issued_at' => $lastLogin,
             ],
+            'wrong_transfer_overview' => $this->wrongTransferOverviewFor($user),
+            'safe_payments' => $this->safePaymentsFor($user),
+            'notes' => $this->notesFor($user),
+            'recent_notifications' => $this->recentNotificationsFor($user),
             'recent_transactions' => $recentTx,
             'open_tickets' => $openTickets,
             'recent_audit' => $recentAudit,
@@ -285,7 +458,9 @@ class SupportConsoleController extends Controller
             return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
         }
 
-        $q = Transaction::where('user_id', $id)->orderByDesc('id');
+        $q = Transaction::where(function ($w) use ($id) {
+            $w->where('user_id', $id)->orWhere('from_user_id', $id)->orWhere('to_user_id', $id);
+        })->orderByDesc('id');
         if ($request->filled('type')) {
             $q->where('transaction_type', $request->query('type'));
         }
@@ -320,6 +495,16 @@ class SupportConsoleController extends Controller
         if (!$tx) {
             return $this->error('TX_NOT_FOUND', 'العملية غير موجودة', 404);
         }
+
+        // فحص العملية يكشف أطرافاً وأرصدةً ومراجع إيصالات؛ يُسجَّل كاطلاع
+        // على بيانات شخصية مستقلة، لا كبحث عابر لا يترك أثراً.
+        app(\App\Services\PiiAccessAuditService::class)->logAccess(
+            actorUserId: $request->user()->id,
+            subjectType: 'transaction', subjectId: $tx->id,
+            fieldName: 'support_transaction_trace', accessType: 'view',
+            accessReason: 'فحص عملية من منصة الدعم: ' . ($tx->transaction_id ?? $tx->id),
+        );
+        $canRevealPii = $request->user()->hasPlatformPermission('platform.customers.pii.reveal');
 
         // الخط الزمني: إنشاء + إيصال + نزاعات + قرارات تدقيق
         $timeline = [];
@@ -389,23 +574,65 @@ class SupportConsoleController extends Controller
 
         return $this->ok([
             'transaction' => $this->txSummary($tx) + [
+                'transaction_no' => $tx->transaction_no,
                 'from_user_id' => $tx->from_user_id,
                 'to_user_id' => $tx->to_user_id,
                 'charge' => $tx->charge,
                 'balance_after' => $tx->balance,
                 'zone_code' => $tx->zone_code,
+                'request_zone' => $tx->request_zone,
+                'counterparty_zone' => $tx->counterparty_zone,
+                'fee_scheme_id' => $tx->fee_scheme_id,
+                'fee_scheme_version' => $tx->fee_scheme_version,
+                'pos_user_id' => $tx->pos_user_id,
                 'decision_code' => $tx->decision_code,
                 'decision_reason' => $tx->decision_reason,
                 'note' => $tx->note,
+                'updated_at' => $tx->updated_at,
             ],
+            'parties' => $this->transactionParties($tx, $canRevealPii),
+            'pos_actor' => $this->posActor($tx, $canRevealPii),
             'receipt' => $receipt ? [
                 'id' => $receipt->id,
                 'receipt_number' => $receipt->receipt_number,
+                'verification_code' => $receipt->verification_code,
+                'receipt_type' => $receipt->receipt_type,
                 'status' => $receipt->status,
+                'op_status' => $receipt->op_status,
+                'amount' => $receipt->amount,
+                'fee' => $receipt->fee,
+                'net_amount' => $receipt->net_amount,
+                'direction' => $receipt->direction,
+                'reference_type' => $receipt->reference_type,
+                'reference_id' => $receipt->reference_id,
+                'zone_code' => $receipt->zone_code,
+                'issued_at' => $receipt->issued_at,
+                'pdf_generated_at' => $receipt->pdf_generated_at,
+                'download_count' => $receipt->download_count,
+                'last_downloaded_at' => $receipt->last_downloaded_at,
             ] : null,
             'disputes' => $disputes->map(fn($d) => [
                 'id' => $d->id, 'status' => $d->status, 'created_at' => $d->created_at,
+                'updated_at' => $d->updated_at, 'reason' => $d->reason ?? null,
             ])->values(),
+            // AMIAL-WRONG-TRANSFER-001 — **دعاوى الرقم الخطأ في التتبّع نفسِه.**
+            // فشاشةٌ تعرض تتبّعاً كاملاً ولا تقول إنّ على هذه العمليّة
+            // دعوى مفتوحةً وحجزاً جارياً تُخفي أهمَّ ما يجري فيها الآن.
+            'wrong_transfer_claims' => \App\Models\WrongTransferClaim::with(['claimant', 'recipient'])
+                ->where('transaction_id', (string) ($tx->transaction_id ?? ''))
+                ->orderByDesc('id')->get()
+                ->map(fn ($c) => $this->claimPayload($c))->values(),
+            // **وأهليّةُ الفتح تُقال من الخادم لا تُخمَّن في الشاشة.**
+            // فزرٌّ ظاهرٌ على عمليّةِ دفعٍ لتاجر يَعِد بما يُرفَض عند الضغط.
+            'wrong_transfer_claimable' => in_array(
+                $tx->transaction_type,
+                \App\Services\WrongTransferRecoveryService::CLAIMABLE, true),
+            'tickets' => $tickets->map(fn (SupportTicket $t) => [
+                'number' => $t->ticket_number, 'status' => $t->status,
+                'category' => $t->category, 'priority' => $t->priority,
+                'created_at' => $t->created_at, 'updated_at' => $t->updated_at,
+            ])->values(),
+            'business_records' => $this->businessRecords($refs, $canRevealPii),
             'ledger_entries' => $ledgerEntries->map(fn($e) => [
                 'ulid' => $e->entry_ulid,
                 'source_type' => $e->source_type,
@@ -418,6 +645,9 @@ class SupportConsoleController extends Controller
                     'account' => $l->account?->account_code,
                     'direction' => $l->direction,
                     'amount' => (string) $l->amount,
+                    'balance_before' => (string) ($l->balance_before ?? ''),
+                    'balance_after' => (string) ($l->balance_after ?? ''),
+                    'description' => $l->description_ar,
                 ])->values(),
             ])->values(),
             'timeline' => $timeline,
@@ -733,6 +963,534 @@ class SupportConsoleController extends Controller
         ], 'OK', 'رُفع الحظر عن الجهاز');
     }
 
+
+    // ==================== 4.8) إجراءات الدعم المتقدمة والتصعيد الموجَّه ====================
+
+    /**
+     * POST /admin/support-center/customers/{id}/note  {body, pin?}
+     * متاح لموظف الدعم المباشر (`platform.customers.notes.create`).
+     */
+    public function addCustomerNote(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $user = User::where('type', CUSTOMER_TYPE)->find($id);
+        if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
+
+        $data = $request->validate([
+            'body' => 'required|string|min:5|max:2000',
+            'pin' => 'nullable|boolean',
+        ]);
+
+        try {
+            $out = $this->customerActions->run(
+                $user,
+                $request->user(),
+                'add_note',
+                'ملاحظة دعم فني: ' . mb_substr(trim($data['body']), 0, 200),
+                ['body' => trim($data['body']), 'pin' => (bool) ($data['pin'] ?? false)],
+            );
+        } catch (DomainException $e) {
+            return $this->error('NOTE_REJECTED', $e->getMessage(), 422);
+        }
+
+        return $this->ok([
+            'user_id' => $user->id,
+            'notes' => $this->notesFor($user),
+        ], 'OK', $out['message']);
+    }
+
+    /**
+     * POST /admin/support-center/customers/{id}/escalate
+     * {target_team, requested_action, reason, priority?, transaction_ref?}
+     *
+     * يمكّن موظف الدعم المباشر (`platform_support`) من تحريك طلب رسمي موجَّه
+     * للفريق المختص (الإشراف / الأمن / المخاطر / المالية / الامتثال / النزاعات)
+     * عندما يكون الإجراء خارج صلاحيته المباشرة، مع ربطه بتذكرة SLA وسجل تدقيق،
+     * وإن كان يملك صلاحية فتح تحقيق مخاطر واختار `risk` يفتح قضية AML مباشرةً.
+     */
+    public function escalateCustomerIssue(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $user = User::find($id);
+        if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
+
+        $data = $request->validate([
+            'target_team' => 'required|string|in:supervisor,security,risk,finance,compliance,disputes,ops',
+            'requested_action' => 'required|string|max:80',
+            'reason' => 'required|string|min:10|max:2000',
+            'priority' => 'nullable|string|in:' . implode(',', SupportTicket::PRIORITIES),
+            'transaction_ref' => 'nullable|string|max:40',
+        ]);
+
+        $teamLabels = [
+            'supervisor' => 'فريق الإشراف والموافقات (4-Eyes)',
+            'security' => 'فريق عمليات الأمن (حظر أجهزة / جلسات)',
+            'risk' => 'فريق المخاطر ومكافحة الاحتيال (AML)',
+            'finance' => 'فريق المالية ومطابقة الدفتر',
+            'compliance' => 'فريق الامتثال وتوثيق الهوية (KYC)',
+            'disputes' => 'فريق الفصل في النزاعات والاسترداد',
+            'ops' => 'فريق التشغيل والطوابير التقنية',
+        ];
+        $actionLabels = [
+            'unfreeze_account' => 'طلب فك تجميد الحساب',
+            'freeze_account' => 'طلب تجميد أمني للحساب',
+            'reset_pin' => 'طلب إعادة تعيين رمز PIN',
+            'block_device' => 'طلب حظر جهاز مشبوه / إنهاء جلسات',
+            'limit_exception' => 'طلب مراجعة / استثناء سقف التحويل',
+            'ledger_reconcile' => 'طلب مطابقة رصيد وقيد محاسبي',
+            'kyc_expedite' => 'طلب مراجعة مستندات التوثيق / تحديث البيانات',
+            'dispute_resolution' => 'طلب حسم نزاع مالي / دعوى تحويل خاطئ',
+            'aml_investigation' => 'إحالة اشتباه احتيال أو غسل أموال',
+            'other_action' => 'طلب إجراء تشغيلي',
+        ];
+
+        $teamAr = $teamLabels[$data['target_team']] ?? $data['target_team'];
+        $actAr = $actionLabels[$data['requested_action']] ?? $data['requested_action'];
+        $priority = $data['priority'] ?? (in_array($data['target_team'], ['security', 'risk'], true) ? 'urgent' : 'high');
+
+        $category = match ($data['target_team']) {
+            'security', 'risk' => 'fraud_suspect',
+            'finance' => 'balance_issue',
+            'disputes' => 'wrong_recipient',
+            'supervisor' => $data['requested_action'] === 'reset_pin' ? 'forgot_pin' : 'account_access',
+            default => 'other',
+        };
+
+        $subject = "[تصعيد → {$teamAr}] {$actAr} — العميل #{$user->id}";
+        $description = "الجهة المحال إليها: {$teamAr}\n"
+            . "الإجراء المطلوب: {$actAr}\n"
+            . ($data['transaction_ref'] ?? null ? "مرجع العملية: {$data['transaction_ref']}\n" : '')
+            . "السبب والتشخيص: " . trim($data['reason']);
+
+        $ticket = app(\App\Services\Support\SupportTicketService::class)->open(
+            $request->user(),
+            $user,
+            [
+                'subject' => mb_substr($subject, 0, 200),
+                'category' => $category,
+                'priority' => $priority,
+                'transaction_ref' => $data['transaction_ref'] ?? null,
+                'description' => $description,
+            ],
+        );
+
+        $amlCaseNumber = null;
+        if ($data['target_team'] === 'risk'
+            && (int) $user->type === CUSTOMER_TYPE
+            && $request->user()->hasPlatformPermission('platform.risk.investigations.create')) {
+            try {
+                $riskOut = $this->customerActions->run(
+                    $user,
+                    $request->user(),
+                    'escalate_risk',
+                    trim($data['reason']),
+                );
+                $amlCaseNumber = $riskOut['context']['case_number'] ?? null;
+            } catch (\Throwable) {
+                // التذكرة فُتحت بالفعل؛ لا نسقط التصعيد إن تعذّر فتح قضية رديفة.
+            }
+        }
+
+        $this->auditAction($request, $user, 'SUPPORT_GUIDED_ESCALATION', [
+            'ticket_id' => $ticket->id,
+            'ticket_number' => $ticket->ticket_number,
+            'target_team' => $data['target_team'],
+            'requested_action' => $data['requested_action'],
+            'aml_case_number' => $amlCaseNumber,
+        ]);
+
+        return $this->ok([
+            'ticket' => $ticket,
+            'target_team_ar' => $teamAr,
+            'requested_action_ar' => $actAr,
+            'aml_case_number' => $amlCaseNumber,
+        ], 'ESCALATED_OK', "تم فتح التصعيد الموجَّه {$ticket->ticket_number} إلى {$teamAr}" . ($amlCaseNumber ? " وربطه بالقضية {$amlCaseNumber}" : ''), 201);
+    }
+
+    /**
+     * POST /admin/support-center/customers/{id}/advanced-action
+     * {action: suspend|activate|escalate_risk|update_limits|close|mark_deceased, reason, payload?}
+     *
+     * يمرّ بالكامل عبر `CustomerActionService` الذي يفحص الصلاحية الدقيقة لكل فعل.
+     */
+    public function executeAdvancedAction(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+        if ($resp = $this->requireReason($request)) return $resp;
+
+        $user = User::where('type', CUSTOMER_TYPE)->find($id);
+        if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
+
+        $data = $request->validate([
+            'action' => 'required|string|in:suspend,activate,escalate_risk,update_limits,close,mark_deceased',
+            'reason' => 'required|string|min:10|max:1000',
+            'payload' => 'nullable|array',
+        ]);
+
+        try {
+            $out = $this->customerActions->run(
+                $user,
+                $request->user(),
+                $data['action'],
+                trim($data['reason']),
+                (array) ($data['payload'] ?? []),
+            );
+        } catch (DomainException $e) {
+            return $this->error('ACTION_REJECTED', $e->getMessage(), 422);
+        }
+
+        $approvalRequired = (bool) ($out['approval_required'] ?? false);
+
+        return $this->ok([
+            'user_id' => (int) $user->id,
+            'action' => $data['action'],
+            'approval_required' => $approvalRequired,
+            'request_number' => $out['approval_request_number'] ?? null,
+            'request_id' => $out['approval_request_id'] ?? null,
+            'operation' => $out['context'] ?? [],
+        ], $approvalRequired ? 'APPROVAL_PENDING' : 'OK', (string) $out['message'], $approvalRequired ? 202 : 200);
+    }
+
+    // ==================== Helpers للتشخيص الشامل في ملف 360° ====================
+
+    /**
+     * تفصيل المبالغ المحجوزة والمعلّقة للعميل (حوالات معلّقة + دعاوى رقم خاطئ + دفع آمن).
+     *
+     * @return array<string,mixed>
+     */
+    private function holdBreakdownFor(User $user): array
+    {
+        $items = [];
+
+        if (Schema::hasTable('pending_transfers')) {
+            \App\Models\PendingTransfer::query()
+                ->where('sender_user_id', $user->id)
+                ->where('status', 'holding')
+                ->orderByDesc('id')
+                ->limit(10)
+                ->get()
+                ->each(function ($p) use (&$items) {
+                    $items[] = [
+                        'kind' => 'pending_transfer',
+                        'kind_ar' => 'حوالة في نافذة التراجع/التسليم',
+                        'reference' => (string) $p->transfer_ulid,
+                        'amount' => (string) $p->total_debited,
+                        'status_ar' => $p->releasable_at && $p->releasable_at->isFuture()
+                            ? 'داخل نافذة التراجع'
+                            : 'بانتظار عامل التسليم',
+                        'expires_at' => $p->releasable_at?->toIso8601String(),
+                    ];
+                });
+        }
+
+        if (Schema::hasTable('wrong_transfer_claims')) {
+            \App\Models\WrongTransferClaim::query()
+                ->where('recipient_user_id', $user->id)
+                ->whereIn('status', \App\Models\WrongTransferClaim::LIVE)
+                ->where('held_amount', '>', 0)
+                ->orderByDesc('id')
+                ->limit(10)
+                ->get()
+                ->each(function ($c) use (&$items) {
+                    $items[] = [
+                        'kind' => 'wrong_transfer_hold',
+                        'kind_ar' => 'حجز احترازي لدعوى تحويل خاطئ',
+                        'reference' => (string) $c->claim_ulid,
+                        'transaction_id' => (string) $c->transaction_id,
+                        'amount' => (string) $c->held_amount,
+                        'status_ar' => 'محجوز مؤقتاً لحين قرار النزاعات',
+                        'expires_at' => $c->hold_expires_at?->toIso8601String(),
+                    ];
+                });
+        }
+
+        if (Schema::hasTable('safe_payments')) {
+            \App\Models\SafePayment::query()
+                ->where('buyer_user_id', $user->id)
+                ->whereIn('status', ['funded', 'accepted', 'disputed'])
+                ->orderByDesc('id')
+                ->limit(10)
+                ->get()
+                ->each(function ($sp) use (&$items) {
+                    $items[] = [
+                        'kind' => 'safe_payment_escrow',
+                        'kind_ar' => 'ضمان صفقة دفع آمن (مشتري)',
+                        'reference' => (string) ($sp->ulid ?? $sp->id),
+                        'amount' => (string) ($sp->total_debited ?? $sp->amount ?? '0'),
+                        'status_ar' => match ((string) $sp->status) {
+                            'funded' => 'بانتظار قبول البائع',
+                            'accepted' => 'بانتظار التسليم وكود التأكيد',
+                            'disputed' => 'قيد نزاع دفع آمن',
+                            default => (string) $sp->status,
+                        },
+                        'expires_at' => isset($sp->acceptance_deadline_at) && $sp->acceptance_deadline_at
+                            ? (string) $sp->acceptance_deadline_at
+                            : null,
+                    ];
+                });
+        }
+
+        return [
+            'count' => count($items),
+            'items' => $items,
+        ];
+    }
+
+    /**
+     * حساب حدود العميل والمستهلك والمتبقي اليومي والشهري.
+     *
+     * @return array<string,mixed>
+     */
+    private function limitsUsageFor(User $user): array
+    {
+        $limits = [
+            'max_balance' => '0',
+            'max_single_transaction' => '0',
+            'max_daily_total' => '0',
+            'max_monthly_total' => '0',
+            'source' => 'حد مستوى التوثيق',
+        ];
+
+        try {
+            if (class_exists(\App\Services\KycTierService::class)) {
+                $tierSvc = app(\App\Services\KycTierService::class);
+                $raw = $tierSvc->getLimitsForUser($user);
+                $override = is_array($user->limit_override)
+                    ? $user->limit_override
+                    : (json_decode((string) $user->limit_override, true) ?: []);
+                $limits = [
+                    'max_balance' => (string) ($raw['max_balance'] ?? '0'),
+                    'max_single_transaction' => (string) ($raw['max_single_transaction'] ?? '0'),
+                    'max_daily_total' => (string) ($raw['max_daily_total'] ?? '0'),
+                    'max_monthly_total' => (string) ($raw['max_monthly_total'] ?? '0'),
+                    'source' => $override !== [] ? 'استثناء خاص بالعميل' : 'حد فئة التوثيق (Tier ' . ((int) ($user->kyc_tier ?? 0)) . ')',
+                ];
+            }
+        } catch (\Throwable) {
+        }
+
+        $now = now();
+        $dailyUsed = \App\Services\MoneyService::normalize((string) Transaction::where('user_id', $user->id)
+            ->where('created_at', '>=', $now->copy()->startOfDay())
+            ->where('debit', '>', 0)
+            ->sum('debit'));
+
+        $monthlyUsed = \App\Services\MoneyService::normalize((string) Transaction::where('user_id', $user->id)
+            ->where('created_at', '>=', $now->copy()->startOfMonth())
+            ->where('debit', '>', 0)
+            ->sum('debit'));
+
+        $maxDaily = \App\Services\MoneyService::normalize((string) ($limits['max_daily_total'] ?? '0'));
+        $maxMonthly = \App\Services\MoneyService::normalize((string) ($limits['max_monthly_total'] ?? '0'));
+
+        return array_merge($limits, [
+            'daily_used' => \App\Services\MoneyService::display($dailyUsed),
+            'daily_remaining' => \App\Services\MoneyService::isPositive($maxDaily)
+                ? \App\Services\MoneyService::display(\App\Services\MoneyService::compare($maxDaily, $dailyUsed) > 0
+                    ? \App\Services\MoneyService::sub($maxDaily, $dailyUsed)
+                    : '0')
+                : 'غير محدد',
+            'monthly_used' => \App\Services\MoneyService::display($monthlyUsed),
+            'monthly_remaining' => \App\Services\MoneyService::isPositive($maxMonthly)
+                ? \App\Services\MoneyService::display(\App\Services\MoneyService::compare($maxMonthly, $monthlyUsed) > 0
+                    ? \App\Services\MoneyService::sub($maxMonthly, $monthlyUsed)
+                    : '0')
+                : 'غير محدد',
+        ]);
+    }
+
+    /**
+     * تشخيص موحّد لحالة الحساب والقيود الفعالة عليه ومن يملك رفعها.
+     *
+     * @return array<string,mixed>
+     */
+    private function accountDiagnosisFor(User $user): array
+    {
+        $blockers = [];
+
+        if ((bool) ($user->is_temp_blocked ?? false)) {
+            $blockers[] = [
+                'code' => 'TEMP_FROZEN',
+                'label_ar' => 'الحساب مجمَّد مؤقتاً',
+                'reason' => 'تجميد أمني/احترازي مسجَّل على الحساب.',
+                'resolution_ar' => 'يُرفع عبر طلب «فك التجميد» بموافقة مشرف ثانٍ (قاعدة 4-Eyes).',
+            ];
+        }
+
+        $lifecycle = (string) ($user->lifecycle_state ?? 'active');
+        if ($lifecycle !== '' && $lifecycle !== 'active') {
+            $blockers[] = [
+                'code' => 'LIFECYCLE_' . strtoupper($lifecycle),
+                'label_ar' => match ($lifecycle) {
+                    'suspended' => 'الحساب موقوف مؤقتاً (Suspended)',
+                    'closed' => 'الحساب مغلق نهائياً (Closed)',
+                    'deceased' => 'الحساب تحت مسار التركة (متوفّى)',
+                    default => 'حالة دورة الحياة: ' . $lifecycle,
+                },
+                'reason' => (string) ($user->lifecycle_reason ?: 'قرار دورة حياة الحساب'),
+                'resolution_ar' => match ($lifecycle) {
+                    'suspended' => 'يُفعَّل عبر صلاحية إدارة دورة حياة الحساب (platform.customers.lifecycle.manage).',
+                    'closed' => 'إغلاق نهائي — يحتاج قرار إدارة عليا وامتثال.',
+                    'deceased' => 'محمي تحت معاملة تركة الورثة ولا يُدار من الإجراءات العادية.',
+                    default => 'مراجعة الإشراف.',
+                },
+            ];
+        }
+
+        if ((bool) ($user->kyc_update_required ?? false)) {
+            $blockers[] = [
+                'code' => 'KYC_UPDATE_REQUIRED',
+                'label_ar' => 'العمليات الحساسة مقيّدة لحين تحديث الهوية',
+                'reason' => 'طُلب تحديث وثيقة الهوية أو انتهت صلاحيتها.',
+                'resolution_ar' => 'يرفع العميل الوثيقة المحدّثة من التطبيق ويعتمدها فريق الامتثال.',
+            ];
+        }
+
+        if ($user->pin_locked_until && \Illuminate\Support\Carbon::parse($user->pin_locked_until)->isFuture()) {
+            $blockers[] = [
+                'code' => 'PIN_LOCKED',
+                'label_ar' => 'رمز العمليات (PIN) مقفول مؤقتاً',
+                'reason' => 'تجاوز عدد المحاولات الفاشلة (' . (int) ($user->pin_failed_attempts ?? 0) . ').',
+                'resolution_ar' => 'ينتهي القفل المؤقت في ' . $user->pin_locked_until . ' أو يُطلب تصفير PIN بموافقة ثنائية.',
+            ];
+        }
+
+        return [
+            'can_transact' => count($blockers) === 0 && (bool) $user->is_active,
+            'summary_ar' => count($blockers) === 0
+                ? 'الحساب سليم وجاهز للعمليات المالية بلا قيود نشطة.'
+                : 'يوجد (' . count($blockers) . ') قيد نشط يؤثر على حركة الحساب.',
+            'blockers' => $blockers,
+        ];
+    }
+
+    /**
+     * ملخص دعاوى التحويل الخاطئ والذمم القائمة على العميل أو لصالحه.
+     *
+     * @return array<string,mixed>
+     */
+    private function wrongTransferOverviewFor(User $user): array
+    {
+        if (!Schema::hasTable('wrong_transfer_claims')) {
+            return ['as_claimant' => [], 'as_recipient' => [], 'total_receivable_debt' => '0.0000'];
+        }
+
+        $asClaimant = \App\Models\WrongTransferClaim::query()
+            ->where('claimant_user_id', $user->id)
+            ->orderByDesc('id')->limit(5)->get()
+            ->map(fn ($c) => $this->claimPayload($c))->values()->all();
+
+        $asRecipient = \App\Models\WrongTransferClaim::query()
+            ->where('recipient_user_id', $user->id)
+            ->orderByDesc('id')->limit(5)->get()
+            ->map(fn ($c) => $this->claimPayload($c))->values()->all();
+
+        $debt = '0.0000';
+        foreach ($asRecipient as $row) {
+            if (($row['status'] ?? '') === 'recovered'
+                && \App\Services\MoneyService::isPositive((string) ($row['outstanding'] ?? '0'))) {
+                $debt = \App\Services\MoneyService::add($debt, (string) $row['outstanding']);
+            }
+        }
+
+        return [
+            'as_claimant' => $asClaimant,
+            'as_recipient' => $asRecipient,
+            'total_receivable_debt' => $debt,
+        ];
+    }
+
+    /**
+     * آخر صفقات الدفع الآمن (Safe Payment Escrow) المرتبطة بالعميل.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function safePaymentsFor(User $user): array
+    {
+        if (!Schema::hasTable('safe_payments')) {
+            return [];
+        }
+
+        return \App\Models\SafePayment::query()
+            ->where(function ($q) use ($user) {
+                $q->where('buyer_user_id', $user->id)->orWhere('seller_user_id', $user->id);
+            })
+            ->orderByDesc('id')->limit(5)->get()
+            ->map(fn ($sp) => [
+                'id' => $sp->id,
+                'ulid' => $sp->ulid ?? (string) $sp->id,
+                'role' => (int) $sp->buyer_user_id === (int) $user->id ? 'مشتري' : 'بائع',
+                'amount' => (string) ($sp->amount ?? '0'),
+                'status' => (string) $sp->status,
+                'status_ar' => match ((string) $sp->status) {
+                    'funded' => 'مموَّلة — بانتظار قبول البائع',
+                    'accepted' => 'مقبولة — بانتظار التسليم',
+                    'completed', 'released' => 'مكتملة — تم صرف المبلغ للبائع',
+                    'disputed' => 'قيد نزاع دفع آمن',
+                    'refunded', 'expired', 'cancelled' => 'مستردة للمشتري / ملغاة',
+                    default => (string) $sp->status,
+                },
+                'created_at' => (string) $sp->created_at,
+            ])->values()->all();
+    }
+
+    /**
+     * ملاحظات موظفي الدعم على ملف العميل (المثبّتة أولاً).
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function notesFor(User $user): array
+    {
+        if (!Schema::hasTable('customer_notes')) {
+            return [];
+        }
+
+        return DB::table('customer_notes as n')
+            ->leftJoin('users as u', 'u.id', '=', 'n.author_id')
+            ->where('n.user_id', $user->id)
+            ->orderByDesc('n.is_pinned')
+            ->orderByDesc('n.created_at')
+            ->limit(15)
+            ->selectRaw('n.id, n.body, n.is_pinned, n.created_at, u.f_name, u.l_name')
+            ->get()
+            ->map(fn ($n) => [
+                'id' => (int) $n->id,
+                'body' => (string) $n->body,
+                'is_pinned' => (bool) $n->is_pinned,
+                'author' => trim((string) (($n->f_name ?? '') . ' ' . ($n->l_name ?? ''))) ?: 'موظف دعم',
+                'created_at' => (string) $n->created_at,
+            ])->all();
+    }
+
+    /**
+     * آخر إشعارات العميل لفحص شكاوى «لم يصلني إشعار أو OTP».
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function recentNotificationsFor(User $user): array
+    {
+        if (!Schema::hasTable('amial_notifications')) {
+            return [];
+        }
+
+        return DB::table('amial_notifications')
+            ->where('user_id', $user->id)
+            ->orderByDesc('id')
+            ->limit(8)
+            ->get(['id', 'type', 'title', 'body', 'created_at', 'read_at'])
+            ->map(fn ($n) => [
+                'id' => (int) $n->id,
+                'type' => (string) ($n->type ?? 'general'),
+                'title' => (string) ($n->title ?? '—'),
+                'body' => (string) ($n->body ?? ''),
+                'sent_at' => (string) $n->created_at,
+                'read_at' => $n->read_at ? (string) $n->read_at : null,
+                'is_read' => $n->read_at !== null,
+            ])->all();
+    }
+
     // ==================== 5) تذاكر النزاعات ====================
 
     /** GET /admin/support/tickets?status=&assigned_to=&q= */
@@ -969,19 +1727,292 @@ class SupportConsoleController extends Controller
         ];
     }
 
+    /** ملخصٌ تشخيصي للحوالة قبل ولادة Transaction النهائي. */
+    private function pendingTransferSummary(
+        \App\Models\PendingTransfer $p,
+        bool $canRevealPii,
+    ): array {
+        $people = User::whereIn('id', [$p->sender_user_id, $p->recipient_user_id])
+            ->get()->keyBy('id');
+        $sender = $people->get($p->sender_user_id);
+        $recipient = $people->get($p->recipient_user_id);
+
+        $diagnosis = match ((string) $p->status) {
+            'holding' => $p->releasable_at && $p->releasable_at->isFuture()
+                ? 'الحوالة محجوزة داخل نافذة التراجع ولم تُسلَّم للمستلم بعد.'
+                : 'انتهت نافذة التراجع وما زالت الحوالة معلّقة. افحص طابور التسليم قبل أن تطلب من العميل إعادة التحويل.',
+            'completed' => 'تم تسليم الحوالة للمستلم. افتح رقم العملية النهائية لرؤية القيد والإيصال.',
+            'cancelled' => 'أُلغي التحويل وأُعيد المبلغ المحجوز إلى المرسل.',
+            'failed' => 'فشل تسليم الحوالة وأعاد النظام المبلغ المحجوز إلى المرسل.'
+                . ($p->cancellation_reason ? ' السبب: ' . $p->cancellation_reason : ''),
+            default => 'حالة الحوالة تحتاج مراجعة تشغيلية: ' . (string) $p->status,
+        };
+
+        return [
+            'transfer_ulid' => $p->transfer_ulid,
+            'status' => $p->status,
+            'status_ar' => [
+                'holding' => 'معلّقة / محجوزة',
+                'completed' => 'تم التسليم',
+                'cancelled' => 'ملغاة',
+                'failed' => 'فشل التسليم وردّ المبلغ',
+            ][$p->status] ?? $p->status,
+            'diagnosis' => $diagnosis,
+            'amount' => (string) $p->amount,
+            'fee' => (string) $p->fee,
+            'total_debited' => (string) $p->total_debited,
+            'sender' => [
+                'user_id' => (int) $p->sender_user_id,
+                'name' => $sender
+                    ? ($canRevealPii ? trim((string) ($sender->f_name . ' ' . $sender->l_name)) : 'محمي بالصلاحيات')
+                    : 'حساب غير موجود',
+                'phone' => $sender
+                    ? ($canRevealPii ? (string) $sender->phone : $this->maskTransactionPhone($sender->phone))
+                    : '—',
+            ],
+            'recipient' => [
+                'user_id' => (int) $p->recipient_user_id,
+                'name' => $recipient
+                    ? ($canRevealPii ? trim((string) ($recipient->f_name . ' ' . $recipient->l_name)) : 'محمي بالصلاحيات')
+                    : 'حساب غير موجود',
+                'phone' => $recipient
+                    ? ($canRevealPii ? (string) $recipient->phone : $this->maskTransactionPhone($recipient->phone))
+                    : '—',
+            ],
+            'releasable_at' => $p->releasable_at,
+            'seconds_remaining' => $p->isHolding() && $p->releasable_at
+                ? max(0, now()->diffInSeconds($p->releasable_at, false))
+                : 0,
+            'release_transaction_id' => $p->release_transaction_id,
+            'completed_at' => $p->completed_at,
+            'cancelled_at' => $p->cancelled_at,
+            'cancellation_reason' => $p->cancellation_reason,
+            'created_at' => $p->created_at,
+        ];
+    }
+
     private function txSummary(Transaction $t): array
     {
+        $typeAr = match ((string) $t->transaction_type) {
+            'send_money' => 'تحويل صادر',
+            'received_money' => 'تحويل وارد',
+            'cash_in' => 'إيداع نقدي عبر وكيل',
+            'cash_out' => 'سحب نقدي عبر وكيل',
+            'payment', 'merchant_payment' => 'دفع لتاجر',
+            'bill_payment', 'BILL_PAY' => 'سداد فاتورة خدمات',
+            'safe_payment' => 'دفع آمن (ضمان)',
+            'added_dispute_money' => 'استرداد نزاع / تحويل خاطئ (+)',
+            'deducted_dispute_money' => 'خصم نزاع / ذمّة تحويل خاطئ (-)',
+            default => (string) $t->transaction_type,
+        };
+
         return [
             'id' => $t->id,
             'transaction_id' => $t->transaction_id,
             'ref_trans_id' => $t->ref_trans_id,
             'type' => $t->transaction_type,
+            'type_ar' => $typeAr,
             'debit' => $t->debit,
             'credit' => $t->credit,
             'amount' => $t->amount,
             'user_id' => $t->user_id,
             'decision_code' => $t->decision_code,
             'created_at' => $t->created_at,
+        ];
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    private function transactionParties(Transaction $tx, bool $canRevealPii): array
+    {
+        $ids = array_values(array_unique(array_filter([
+            $tx->user_id, $tx->from_user_id, $tx->to_user_id,
+        ])));
+        $users = User::whereIn('id', $ids)->get()->keyBy('id');
+        $labels = [
+            (int) $tx->user_id => 'صاحب سجل العملية',
+            (int) $tx->from_user_id => 'المرسِل / المصدر',
+            (int) $tx->to_user_id => 'المستلم / الوجهة',
+        ];
+
+        return collect($ids)->map(function (int $id) use ($users, $labels, $canRevealPii) {
+            $u = $users->get($id);
+            return [
+                'role' => $labels[$id] ?? 'طرف العملية',
+                'user_id' => $id,
+                'type' => $u ? $this->userSummary($u)['type_label'] : 'حساب محذوف/قديم',
+                'name' => $u && $canRevealPii ? trim((string) ($u->f_name . ' ' . $u->l_name)) : 'محمي بالصلاحيات',
+                'phone' => $u && $canRevealPii ? (string) $u->phone : $this->maskTransactionPhone($u?->phone),
+                'zone_code' => $u?->zone_code,
+            ];
+        })->values()->all();
+    }
+
+    private function maskTransactionPhone(?string $phone): string
+    {
+        $phone = trim((string) $phone);
+        return $phone === '' ? '—' : mb_substr($phone, 0, 3) . '••••' . mb_substr($phone, -2);
+    }
+
+    /** @return array<string,mixed>|null */
+    private function posActor(Transaction $tx, bool $canRevealPii): ?array
+    {
+        if (!$tx->pos_user_id || !Schema::hasTable('pos_users')) return null;
+        $pos = \App\Models\PosUser::with(['user:id,f_name,l_name,phone', 'merchant:id,f_name,l_name,phone'])
+            ->find($tx->pos_user_id);
+        if (!$pos) return ['id' => (int) $tx->pos_user_id, 'state' => 'السجل غير موجود'];
+
+        return [
+            'id' => $pos->id, 'pos_number' => $pos->pos_number, 'display_name' => $pos->display_name,
+            'active' => (bool) $pos->is_active,
+            'operator' => $canRevealPii ? trim((string) ($pos->user?->f_name . ' ' . $pos->user?->l_name)) : 'محمي بالصلاحيات',
+            'merchant_owner_id' => $pos->merchant_user_id,
+            'merchant_owner' => $canRevealPii ? trim((string) ($pos->merchant?->f_name . ' ' . $pos->merchant?->l_name)) : 'محمي بالصلاحيات',
+        ];
+    }
+
+    /** سجلات الأعمال المرتبطة: البيع/الوقود/الصيدلية/الجملة/طلب الدفع/تقسيم الفاتورة. */
+    private function businessRecords(array $refs, bool $canRevealPii): array
+    {
+        $out = [];
+        $read = static fn (string $table) => Schema::hasTable($table);
+
+        if ($read('payment_requests')) {
+            $out['payment_requests'] = \App\Models\PaymentRequest::whereIn('paid_transaction_id', $refs)->get()
+                // short_code رابط قابل للمشاركة وليس معلومة دعم؛ عرضه يحوّل
+                // صفحة التتبع إلى قناة استخراج روابط دفع.
+                ->map(fn ($r) => ['reference' => $r->request_ulid, 'status' => $r->status, 'amount' => $r->amount, 'requester_user_id' => $r->requester_user_id, 'recipient_user_id' => $r->recipient_user_id, 'paid_at' => $r->paid_at, 'expires_at' => $r->expires_at])->values();
+        }
+        if ($read('merchant_sales')) {
+            $out['merchant_sales'] = \App\Models\MerchantSale::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($s) => ['reference' => $s->sale_ulid, 'status' => $s->status, 'payment_method' => $s->payment_method, 'merchant_user_id' => $s->merchant_user_id, 'pos_user_id' => $s->pos_user_id, 'total_amount' => $s->total_amount, 'discount_amount' => $s->discount_amount, 'cash_amount' => $s->cash_amount, 'wallet_amount' => $s->wallet_amount, 'items' => collect($s->items ?? [])->take(50)->values()])->values();
+        }
+        if ($read('fuel_sales')) {
+            $out['fuel_sales'] = \App\Models\FuelSale::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($s) => ['reference' => $s->sale_ulid, 'status' => $s->status, 'station_id' => $s->station_id, 'pump_id' => $s->pump_id, 'nozzle_id' => $s->nozzle_id, 'liters' => $s->liters, 'price_per_liter' => $s->price_per_liter, 'total_amount' => $s->total_amount, 'payment_method' => $s->payment_method, 'vehicle_plate' => $canRevealPii ? $s->vehicle_plate : null])->values();
+        }
+        if ($read('pharmacy_sales')) {
+            $out['pharmacy_sales'] = \App\Models\PharmacySale::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($s) => ['reference' => $s->sale_ulid, 'status' => $s->status, 'pharmacy_id' => $s->pharmacy_id, 'total_amount' => $s->total_amount, 'discount_amount' => $s->discount_amount, 'payment_method' => $s->payment_method, 'clinical_details_restricted' => true])->values();
+        }
+        if ($read('wholesale_invoices')) {
+            $out['wholesale_invoices'] = \App\Models\WholesaleInvoice::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($i) => ['reference' => $i->invoice_number ?: $i->invoice_ulid, 'status' => $i->status, 'business_id' => $i->business_id, 'total_amount' => $i->total_amount, 'paid_amount' => $i->paid_amount, 'balance_due' => $i->balance_due, 'payment_type' => $i->payment_type, 'due_date' => $i->due_date])->values();
+        }
+        if ($read('wholesale_collections')) {
+            $out['wholesale_collections'] = \App\Models\WholesaleCollection::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($c) => ['reference' => $c->collection_ulid, 'invoice_id' => $c->invoice_id, 'amount' => $c->amount, 'payment_method' => $c->payment_method, 'collection_date' => $c->collection_date])->values();
+        }
+        if ($read('split_bill_participants')) {
+            $out['split_bill_participants'] = \App\Models\SplitBillParticipant::whereIn('paid_transaction_id', $refs)->get()
+                ->map(fn ($p) => ['split_bill_id' => $p->split_bill_id, 'customer_user_id' => $p->customer_user_id, 'share_amount' => $p->share_amount, 'status' => $p->status, 'paid_at' => $p->paid_at])->values();
+        }
+        return $out;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-WRONG-TRANSFER-001 — دعاوى «حوّلتُ إلى الرقم الخطأ»
+    //
+    // **ولمَ ثلاثُ نقاطٍ لا واحدة:** الفتحُ يوقف النزيفَ وهو **قابلٌ
+    // للرجوع** (‏يُفرَج عنه تلقائيّاً بعد المهلة)، فيُتاح لمن يردّ على
+    // الهاتف أوّلاً — دقيقةُ انتظارٍ لصلاحيّةٍ أعلى تعني مالاً أُنفق.
+    // أمّا الحسمُ والرفضُ فينقلان مالاً نهائيّاً، فيلزمهما
+    // `platform.disputes.decide`. **والصلاحيّةُ تتبع الأثرَ لا الشاشة.**
+    // ══════════════════════════════════════════════════════════════════
+
+    /** POST /admin/support/wrong-transfer/open */
+    public function openWrongTransferClaim(Request $request): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) {
+            return $resp;
+        }
+
+        $data = $request->validate([
+            'transaction_id' => 'required|string|max:64',
+            'intended_phone' => 'nullable|string|max:32',
+        ]);
+
+        try {
+            $claim = app(\App\Services\WrongTransferRecoveryService::class)->open(
+                $data['transaction_id'],
+                $data['intended_phone'] ?? null,
+                (int) $request->user()->id,
+            );
+        } catch (\Throwable $e) {
+            return $this->error('CLAIM_REFUSED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['claim' => $this->claimPayload($claim)],
+            'CLAIM_OPENED', 'فُتحت الدعوى');
+    }
+
+    /** POST /admin/support/wrong-transfer/{ulid}/resolve */
+    public function resolveWrongTransferClaim(Request $request, string $ulid): JsonResponse
+    {
+        return $this->decideWrongTransferClaim($request, $ulid, true);
+    }
+
+    /** POST /admin/support/wrong-transfer/{ulid}/reject */
+    public function rejectWrongTransferClaim(Request $request, string $ulid): JsonResponse
+    {
+        return $this->decideWrongTransferClaim($request, $ulid, false);
+    }
+
+    private function decideWrongTransferClaim(Request $request, string $ulid, bool $inFavour): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) {
+            return $resp;
+        }
+
+        // **السببُ مطلوبٌ في الحسم لا في الفتح.** فالفتحُ إجراءٌ عاجلٌ
+        // يرجع من تلقائه، والحسمُ ينقل مالاً ولا يرجع — ومن نقل مالَ
+        // إنسانٍ إلى آخرَ يكتب لماذا.
+        $data = $request->validate(['note' => 'required|string|min:5|max:500']);
+
+        $claim = \App\Models\WrongTransferClaim::where('claim_ulid', $ulid)->first();
+
+        if (! $claim) {
+            return $this->error('CLAIM_NOT_FOUND', 'الدعوى غير موجودة', 404);
+        }
+
+        $svc = app(\App\Services\WrongTransferRecoveryService::class);
+
+        try {
+            $claim = $inFavour
+                ? $svc->resolve($claim, (int) $request->user()->id, $data['note'])
+                : $svc->reject($claim, (int) $request->user()->id, $data['note']);
+        } catch (\Throwable $e) {
+            return $this->error('CLAIM_DECISION_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['claim' => $this->claimPayload($claim)],
+            'CLAIM_DECIDED', $inFavour ? 'حُسمت لصالح المطالِب' : 'رُفضت الدعوى وأُفرج عن الحجز');
+    }
+
+    /** صورةُ الدعوى كما تقرؤها الشاشة — **والذمّةُ تُحسب ولا تُقرأ من عمود**. */
+    private function claimPayload(\App\Models\WrongTransferClaim $c): array
+    {
+        return [
+            'ulid' => $c->claim_ulid,
+            'transaction_id' => $c->transaction_id,
+            'status' => $c->status,
+            'status_ar' => [
+                'open' => 'مفتوحة — بلا حجز',
+                'holding' => 'محجوزة',
+                'recovered' => 'استُرِدَّت',
+                'rejected' => 'مرفوضة',
+                'expired' => 'انقضت المهلة',
+            ][$c->status] ?? $c->status,
+            'amount' => (string) $c->amount,
+            'held_amount' => (string) $c->held_amount,
+            'recovered_amount' => (string) $c->recovered_amount,
+            'outstanding' => $c->outstanding(),
+            'risk_score' => (int) $c->risk_score,
+            'risk_signals' => $c->risk_signals ?? [],
+            'hold_expires_at' => $c->hold_expires_at,
+            'resolution_note' => $c->resolution_note,
+            'resolved_at' => $c->resolved_at,
+            'claimant' => $c->claimant?->only(['id', 'f_name', 'l_name']),
+            'recipient' => $c->recipient?->only(['id', 'f_name', 'l_name']),
         ];
     }
 

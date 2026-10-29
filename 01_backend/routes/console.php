@@ -68,6 +68,15 @@ Schedule::call(function () {
 // ============================================================
 Schedule::command('amial:reconcile-fees')->everyMinute()->withoutOverlapping();
 
+// فكّ حجوز المخزون خلال خمس دقائق؛ الأمر نفسه ينذر عند فشل الجولة.
+Schedule::command('amial:release-expired-reservations')
+    ->everyFiveMinutes()->withoutOverlapping()
+    ->description('AMIAL-STOCK: تحرير حجوز المنتجات المنتهية');
+
+// تقرير الاستعداد لا يبقى أمراً يدوياً؛ يُحفظ قياسٌ يومي بعد ساهر.
+Schedule::command('amial:readiness')->dailyAt('05:00')->withoutOverlapping()
+    ->description('AMIAL-OPS: قياس الجاهزية اليومية');
+
 // ══════════════════════════════════════════════════════════════════════
 // AMIAL-RECOVERY-APPLY-001 — **استعادةٌ معتمَدةٌ لا تُطبَّق نفسَها.**
 //
@@ -89,6 +98,22 @@ Schedule::command('amial:recovery:apply-approved')
 Schedule::call(function () {
     app(\App\Services\CustomerWithdrawService::class)->expireStale();
 })->everyMinute()->name('amial-expire-withdrawals')->withoutOverlapping();
+
+// ══════════════════════════════════════════════════════════════════════
+// AMIAL-WRONG-TRANSFER-001 — **الإفراجُ التلقائيُّ واقتطاعُ الذمم.**
+//
+// **بلا هذا السطر يصير الحجزُ مصادرة.** الخدمةُ تحجز مالَ من وصله
+// تحويلٌ خاطئ لتوقف النزيف، ولكلّ حجزٍ ساعةُ انتهاء — **وساعةٌ لا
+// يقرؤها أحدٌ ليست ساعة**. فمن لم يُحسَم ملفُّه يبقى مالُه محبوساً إلى
+// الأبد، وهي عقوبةٌ بيد الدعم على من لم تثبت عليه دعوى.
+//
+// **وكلَّ خمس دقائق لا كلَّ يوم**: المهلةُ تنقضي في لحظةٍ بعينها،
+// واقتطاعُ الذمّة يجب أن يلحق المالَ الداخلَ قبل أن يُنفَق ثانيةً.
+// ══════════════════════════════════════════════════════════════════════
+Schedule::command('amial:recovery-sweep')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->description('AMIAL-WRONG-TRANSFER: إفراجُ الحجوز المنتهية واقتطاعُ الذمم');
 
 // ============================================================
 // AMIAL-RECON-NIGHTLY-001 — المصالحة الليليّة
@@ -161,3 +186,20 @@ Schedule::command('amial:kyc:scan-expiry')
     ->dailyAt('03:00')
     ->withoutOverlapping()
     ->description('AMIAL-KYC: رادارُ انتهاء الهويّة — يُنذر ويَسِم ولا يُجمّد');
+
+// AMIAL-MUWATHAQ-BRIDGE-001 — إعادة إرسال صندوق فتح الحساب إلى بوابة
+// المراجعة. لا يفتح هذا أي حساب ولا ينشئ محفظة؛ القرار العائد وحده يفعل ذلك.
+Schedule::command('muwathaq:dispatch-pending')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->description('AMIAL-MUWATHAQ: Deliver pending account-opening cases');
+
+
+// AMIAL-MUWATHAQ-EVIDENCE-001 — الأدلة تصل مستقلة عن إنشاء القضية.
+// إذا سبق رفع السكن تسليم القضية بسبب انقطاع لحظي، تعاد المحاولة تلقائياً؛
+// لا يعتمد الحساب من ملخص ناقص ولا تضيع الوثيقة المشفرة.
+Schedule::call(fn () => app(\App\Services\Muwathaq\MuwathaqEvidenceBridgeService::class)->dispatchPending())
+    ->everyMinute()
+    ->name('muwathaq-deliver-pending-evidence')
+    ->withoutOverlapping()
+    ->description('AMIAL-MUWATHAQ: Deliver pending account-opening evidence');

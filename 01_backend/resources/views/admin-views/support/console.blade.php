@@ -3,11 +3,13 @@
 @section('title', translate('Operations Console'))
 
 @section('content')
-@php($firstSupportTab = collect($capabilities)->filter()->keys()->first())
+@php($mainSupportTabs = ['customers','playbooks','transactions','tickets','approvals','insider','ops'])
+@php($firstSupportTab = collect($mainSupportTabs)->first(fn($tab) => $capabilities[$tab] ?? false))
 <div class="content container-fluid" id="ops-console" data-testid="ops-console">
 
     <ul class="nav nav-tabs mb-3" role="tablist">
         @if($capabilities['customers'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'customers' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-search" data-testid="tab-search">🔍 خدمة العملاء</button></li>@endif
+        @if($capabilities['playbooks'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'playbooks' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-playbooks" data-testid="tab-playbooks">📚 دليل الدعم</button></li>@endif
         @if($capabilities['transactions'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'transactions' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-tx" data-testid="tab-tx">💳 فحص عملية</button></li>@endif
         @if($capabilities['tickets'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'tickets' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-tickets" data-testid="tab-tickets">🎫 التذاكر</button></li>@endif
         @if($capabilities['approvals'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'approvals' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-approvals" data-testid="tab-approvals">✅ الموافقات</button></li>@endif
@@ -22,13 +24,62 @@
             <div class="card p-3 mb-3">
                 <div class="input-group">
                     <input type="text" id="q" class="form-control" data-testid="search-input"
-                           placeholder="هاتف / رقم حساب / رقم عملية / رقم إيصال / اسم…">
+                           placeholder="هاتف / حساب / رقم عملية أو حوالة معلقة / إيصال / رقم تتبع / اسم…">
                     <button class="btn btn-primary" id="btn-search" data-testid="btn-search">بحث</button>
                 </div>
                 <div id="search-results" class="mt-3"></div>
             </div>
             <div id="customer-360"></div>
         </div>
+
+        {{-- ============ دليل الدعم التشغيلي ============ --}}
+        @if($capabilities['playbooks'])
+        <div class="tab-pane fade {{ $firstSupportTab === 'playbooks' ? 'show active' : '' }}" id="tab-playbooks">
+            <div class="card p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                    <div>
+                        <h5 class="mb-1">دليل الدعم التشغيلي وموسوعة الـ 100 سؤال مصرفي</h5>
+                        <div class="small text-muted">
+                            49 حالة تشغيلية أساسية + موسوعة الـ 100 سؤال مصرفي شاملة التشخيص وقدرة تحريك الحساب واتفاقية SLA.
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <select id="pb-scope" class="form-select form-select-sm" style="width:auto" data-testid="playbook-scope">
+                            <option value="top100">موسوعة الـ 100 سؤال مصرفي الشاملة</option>
+                            <option value="core49">الدليل القياسي (49 حالة)</option>
+                        </select>
+                        <span class="badge bg-dark" id="pb-count" data-testid="playbook-count">49 حالة</span>
+                    </div>
+                </div>
+                <div id="pb-summary-strip" class="row g-2 mb-3"></div>
+                <div class="row g-2">
+                    <div class="col-lg-6">
+                        <input type="text" id="pb-q" class="form-control"
+                               placeholder="مثال: الحوالة ما وصلت / خصم تلقائي / حدي اليومي / سرق جوالي / الدفع الآمن"
+                               data-testid="playbook-search-input">
+                    </div>
+                    <div class="col-lg-3">
+                        <select id="pb-category" class="form-select" data-testid="playbook-category">
+                            <option value="">كل الأقسام</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-2">
+                        <select id="pb-action-mode" class="form-select" data-testid="playbook-action-mode">
+                            <option value="">كل أنماط تحريك الحساب</option>
+                            <option value="direct_support">تنفيذ مباشر من الدعم</option>
+                            <option value="four_eyes">موافقة ثنائية (4-Eyes)</option>
+                            <option value="guided_escalation">تصعيد موجَّه بـ SLA</option>
+                            <option value="self_service">حل ذاتي بتوجيه الدعم</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-1 d-grid">
+                        <button class="btn btn-primary" id="btn-playbooks" data-testid="btn-playbooks">بحث</button>
+                    </div>
+                </div>
+            </div>
+            <div id="playbook-results" data-testid="playbook-results"></div>
+        </div>
+        @endif
 
         {{-- ============ 2) فحص عملية ============ --}}
         <div class="tab-pane fade {{ $firstSupportTab === 'transactions' ? 'show active' : '' }}" id="tab-tx">
@@ -56,6 +107,7 @@
                     <button class="btn btn-outline-primary" id="btn-tickets" data-testid="btn-tickets">تحديث</button>
                 </div>
                 <div id="tickets-list"></div>
+                <div id="ticket-detail-drawer" class="mt-3" data-testid="ticket-detail-drawer"></div>
             </div>
         </div>
 
@@ -101,8 +153,22 @@
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const BASE = '{{ url('admin/support-center') }}';
+    const RECOVERY_BASE = '{{ url('admin/amial/recovery') }}';
     const CSRF = '{{ csrf_token() }}';
     const CAN_ACK_INSIDER = @json($capabilities['approvals']);
+    const CAN_DEVICES_VIEW = @json($capabilities['devices_view']);
+    const CAN_DEVICE_CONTROL = @json($capabilities['device_control']);
+    const CAN_WRONG_TRANSFER_OPEN = @json($capabilities['wrong_transfer_open']);
+    const CAN_WRONG_TRANSFER_DECIDE = @json($capabilities['wrong_transfer_decide']);
+    const CAN_RECOVERY_VIEW = @json($capabilities['recovery_view']);
+    const CAN_FREEZE = @json($capabilities['freeze']);
+    const CAN_RESET_PIN = @json($capabilities['reset_pin']);
+    const CAN_KYC_REQUEST = @json($capabilities['kyc_request']);
+    const CAN_NOTES_CREATE = @json($capabilities['notes_create'] ?? false);
+    const CAN_LIFECYCLE_MANAGE = @json($capabilities['lifecycle_manage'] ?? false);
+    const CAN_LIMITS_UPDATE = @json($capabilities['limits_update'] ?? false);
+    const CAN_RISK_ESCALATE = @json($capabilities['risk_escalate'] ?? false);
+    const CAN_TICKETS_MANAGE = @json($capabilities['tickets'] ?? false);
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     async function get(path) {
@@ -117,6 +183,206 @@
         });
         return r.json();
     }
+
+    // ---------- دليل الدعم التشغيلي ----------
+    const pbSearch = document.getElementById('pb-q');
+    const pbCategory = document.getElementById('pb-category');
+    const pbScope = document.getElementById('pb-scope');
+    const pbActionMode = document.getElementById('pb-action-mode');
+    const pbSummaryStrip = document.getElementById('pb-summary-strip');
+    const pbButton = document.getElementById('btn-playbooks');
+    const pbResults = document.getElementById('playbook-results');
+    const pbCount = document.getElementById('pb-count');
+
+    const PB_CATEGORY_LABELS = {
+        transactions:'المعاملات', transfers:'التحويلات', fees:'الرسوم',
+        security:'الأمن', risk:'المخاطر', access:'الدخول/PIN', otp:'OTP',
+        recovery:'استعادة الحساب', account:'الحساب', kyc:'اعرف عميلك',
+        compliance:'الامتثال', limits:'الحدود', agents:'الوكلاء',
+        merchant:'التجار', services:'الخدمات', disputes:'النزاعات',
+        bills:'الفواتير', requests:'طلبات المال', wallet:'المحفظة',
+        receipts:'الإيصالات', system:'الأعطال والتشغيل',
+        complaints:'الشكاوى', privacy:'الخصوصية', tickets:'التذاكر',
+        sla:'المدد', operations:'التشغيل'
+    };
+    const PB_STATUS = {
+        ready:['success','قابل للحل/التشخيص الآن'],
+        partial:['warning text-dark','جزئي'],
+        escalate:['danger','تصعيد إلزامي'],
+        missing:['secondary','ينقصه بناء/سياسة']
+    };
+
+    async function loadPlaybooks() {
+        if (!pbResults) return;
+        const q = (pbSearch?.value || '').trim();
+        const category = pbCategory?.value || '';
+        const scope = pbScope?.value || 'top100';
+        const actionMode = pbActionMode?.value || '';
+        pbResults.innerHTML = '<div class="text-muted">جارٍ تحميل دليل الدعم…</div>';
+
+        const params = new URLSearchParams();
+        if (q) params.set('q', q);
+        if (category) params.set('category', category);
+        if (actionMode) params.set('action_mode', actionMode);
+
+        const j = await get('/playbooks?' + params.toString());
+        if (!j.success) {
+            pbResults.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`;
+            return;
+        }
+
+        const m = j.meta || {};
+        const useTop100 = scope === 'top100' && Array.isArray(m.top100_playbooks);
+        const rows = useTop100 ? (m.top100_playbooks || []) : (m.playbooks || []);
+        const totalCount = useTop100 ? (m.top100_total ?? 100) : (m.total_catalog ?? 49);
+        const matchedCount = useTop100 ? (m.top100_matched ?? rows.length) : (m.matched ?? rows.length);
+
+        if (pbCount) pbCount.textContent = `${matchedCount} من ${totalCount} حالة`;
+
+        if (pbSummaryStrip && m.top100_summary) {
+            const s = m.top100_summary;
+            pbSummaryStrip.innerHTML = `
+                <div class="col-md-3 col-6"><div class="border rounded p-2 bg-light"><div class="small text-muted">إجمالي الأسئلة المصرفية</div><div class="fw-bold">${esc(s.total_questions)} سؤالاً (100% قابلة للتشخيص)</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2 bg-light"><div class="small text-muted">تنفيذ/تشخيص مباشر بالدعم</div><div class="fw-bold text-success">${esc(s.direct_support_action)} حالة</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2 bg-light"><div class="small text-muted">موافقة ثنائية (4-Eyes)</div><div class="fw-bold text-primary">${esc(s.four_eyes_action)} حالات</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2 bg-light"><div class="small text-muted">تصعيد موجَّه بـ SLA / ذاتي</div><div class="fw-bold text-dark">${esc((s.guided_escalation || 0) + (s.self_service_guided || 0))} حالة</div></div></div>
+            `;
+        }
+
+        if (pbCategory && pbCategory.options.length === 1) {
+            const cats = m.top100_categories || m.categories || {};
+            Object.entries(cats).forEach(([code, count]) => {
+                const option = document.createElement('option');
+                option.value = code;
+                option.textContent = `${PB_CATEGORY_LABELS[code] || code} (${count})`;
+                pbCategory.appendChild(option);
+            });
+        }
+
+        if (!rows.length) {
+            pbResults.innerHTML = '<div class="alert alert-secondary">لا توجد حالة مطابقة. افتح تذكرة بعنوان واضح ولا تخمّن الحل.</div>';
+            return;
+        }
+
+        const txCategories = new Set(['transactions','transfers','fees','merchant','agents','services','bills','requests','wallet','receipts']);
+        const ticketCategories = new Set(['tickets','complaints','disputes','sla']);
+        const startTarget = p => p.category === 'recovery'
+            ? 'recovery'
+            : (txCategories.has(p.category) ? 'tx'
+            : (ticketCategories.has(p.category) ? 'tickets' : 'search'));
+
+        const actionBadge = mode => ({
+            direct_support: ['success', 'تنفيذ/تشخيص مباشر'],
+            four_eyes: ['primary', 'موافقة ثنائية (4-Eyes)'],
+            guided_escalation: ['warning text-dark', 'تصعيد موجَّه بـ SLA'],
+            self_service: ['info text-dark', 'حل ذاتي بتوجيه الدعم'],
+        })[mode] || ['secondary', esc(mode || 'تشخيص')];
+
+        pbResults.innerHTML = rows.map(p => {
+            const status = PB_STATUS[p.readiness] || ['secondary', esc(p.readiness)];
+            const actB = actionBadge(p.action_mode);
+            const steps = (p.steps || []).map((s, i) =>
+                `<li class="mb-1"><strong>${i + 1}.</strong> ${esc(s)}</li>`).join('');
+            return `
+              <div class="card mb-3" data-testid="playbook-case-${esc(p.id)}">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <div>
+                    <span class="badge bg-light text-dark border">#${esc(p.id)}</span>
+                    ${p.domain_ar ? `<span class="badge bg-secondary ms-1">${esc(p.domain_ar)}</span>` : ''}
+                    <strong class="ms-1">${esc(p.question)}</strong>
+                  </div>
+                  <div class="d-flex gap-1 flex-wrap">
+                    <span class="badge bg-${actB[0]}">${actB[1]}</span>
+                    ${p.sla_hours ? `<span class="badge bg-dark">SLA: ${esc(p.sla_hours)} ساعة</span>` : ''}
+                    <span class="badge bg-${status[0]}">${status[1]}</span>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="row g-3">
+                    <div class="col-lg-5">
+                      <div class="small text-muted mb-1">أين يبدأ الموظف؟</div>
+                      <div class="fw-semibold mb-2">${esc(p.diagnosis)}</div>
+                      ${p.account_movement ? `<div class="small text-muted mb-1">آلية تحريك الحساب والحل:</div><div class="small fw-semibold text-primary mb-2">${esc(p.account_movement)}</div>` : ''}
+                      <div class="small text-muted mb-1">الكلمات التي قد يقولها العميل</div>
+                      <div>${(p.keywords || []).map(k => `<span class="badge bg-light text-dark border me-1 mb-1">${esc(k)}</span>`).join('')}</div>
+                    </div>
+                    <div class="col-lg-7">
+                      <div class="small text-muted mb-1">خطوات التشخيص</div>
+                      <ol class="ps-3 mb-3">${steps}</ol>
+                      <div class="alert alert-${p.readiness === 'escalate' ? 'danger' : 'light'} border py-2 mb-2">
+                        <strong>حدود الصلاحية/التصعيد:</strong> ${esc(p.escalation)}
+                      </div>
+                      <div class="border rounded p-2 bg-light">
+                        <div class="small text-muted">رد مقترح للعميل</div>
+                        <div data-pb-reply="${esc(p.id)}">${esc(p.customer_reply)}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-wrap gap-2 mt-3">
+                    <button type="button" class="btn btn-sm btn-primary js-pb-start"
+                            data-pb-target="${startTarget(p)}" data-pb-question="${esc(p.question)}">
+                      ابدأ التشخيص
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary js-pb-copy"
+                            data-pb-id="${esc(p.id)}">نسخ الرد للعميل</button>
+                    ${p.required_permission ? `<span class="small text-muted align-self-center">الصلاحية: <code>${esc(p.required_permission)}</code></span>` : ''}
+                  </div>
+                </div>
+              </div>`;
+        }).join('');
+    }
+
+    if (pbButton) pbButton.onclick = loadPlaybooks;
+    if (pbSearch) pbSearch.addEventListener('keydown', e => { if (e.key === 'Enter') loadPlaybooks(); });
+    if (pbCategory) pbCategory.addEventListener('change', loadPlaybooks);
+    if (pbScope) pbScope.addEventListener('change', loadPlaybooks);
+    if (pbActionMode) pbActionMode.addEventListener('change', loadPlaybooks);
+    document.querySelector('[data-bs-target="#tab-playbooks"]')?.addEventListener('shown.bs.tab', loadPlaybooks);
+
+    document.addEventListener('click', async function (e) {
+        const copy = e.target.closest('.js-pb-copy');
+        if (copy) {
+            const node = document.querySelector(`[data-pb-reply="${copy.dataset.pbId}"]`);
+            if (node?.textContent && navigator.clipboard) {
+                await navigator.clipboard.writeText(node.textContent.trim());
+                copy.textContent = 'تم النسخ ✓';
+                setTimeout(() => copy.textContent = 'نسخ الرد للعميل', 1200);
+            }
+            return;
+        }
+
+        const start = e.target.closest('.js-pb-start');
+        if (!start) return;
+        const target = start.dataset.pbTarget;
+
+        if (target === 'recovery' && CAN_RECOVERY_VIEW) {
+            window.location.href = RECOVERY_BASE;
+            return;
+        }
+
+        if (target === 'tx') {
+            const tab = document.querySelector('[data-bs-target="#tab-tx"]');
+            if (tab && window.bootstrap?.Tab) {
+                window.bootstrap.Tab.getOrCreateInstance(tab).show();
+                setTimeout(() => document.getElementById('tx-ref')?.focus(), 120);
+                return;
+            }
+        }
+
+        if (target === 'tickets') {
+            const tab = document.querySelector('[data-bs-target="#tab-tickets"]');
+            if (tab && window.bootstrap?.Tab) {
+                window.bootstrap.Tab.getOrCreateInstance(tab).show();
+                return;
+            }
+        }
+
+        const searchTab = document.querySelector('[data-bs-target="#tab-search"]');
+        if (searchTab && window.bootstrap?.Tab) {
+            window.bootstrap.Tab.getOrCreateInstance(searchTab).show();
+            setTimeout(() => document.getElementById('q')?.focus(), 120);
+        }
+    });
 
     // ---------- بحث ----------
     document.getElementById('btn-search').onclick = doSearch;
@@ -140,15 +406,113 @@
                     </span><span class="text-muted">${esc(u.phone)}</span>
                 </button>`).join('') + '</div>';
         }
+        // ══════════════════════════════════════════════════════════
+        // AMIAL-SUPPORT-TRACE-REACH-001 — **سطرٌ ميّتٌ فوق تتبّعٍ كامل.**
+        //
+        // قال صاحبُ المشروع: «دخلتُ الدعمَ وأدخلتُ رقمَ العمليّة فأعطاني
+        // قيمتَها فقط، لا معلوماتٍ أخرى». **والتتبّعُ الكاملُ مبنيٌّ**:
+        // أطرافٌ ومنفّذُ POS وإيصالٌ وقيودٌ محاسبيّةٌ بأرصدةٍ قبلَ وبعد،
+        // ونزاعاتٌ وتذاكرُ وخطٌّ زمنيّ.
+        //
+        // **وكان في تبويبٍ آخرَ يطلب إعادةَ كتابة الرقم**، ونتيجةُ البحث
+        // `<li>` لا تُضغَط. فمن بحث ووجد ظنّ أنّ هذا كلُّ ما عندنا.
+        //
+        // فصار الصفُّ زرّاً يفتح التتبّعَ بضغطةٍ واحدة. (القاعدة الثانية
+        // عشرة: صفحةٌ لا يُوصل إليها ليست مبنيّة.)
+        // ══════════════════════════════════════════════════════════
         if (m.transactions.length) {
-            html += '<h6>العمليات</h6><ul class="list-group mb-3">' + m.transactions.map(t =>
-                `<li class="list-group-item">${esc(t.transaction_id)} — ${esc(t.type)} — مدين ${esc(t.debit)} / دائن ${esc(t.credit)}</li>`).join('') + '</ul>';
+            html += '<h6>العمليات</h6><div class="list-group mb-3">' + m.transactions.map(t =>
+                `<button type="button" class="list-group-item list-group-item-action"
+                         data-trace="${esc(t.transaction_id || t.id)}" data-testid="search-tx-row">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                      <span><span class="font-monospace">${esc(t.transaction_id)}</span>
+                        — ${esc(t.type)} — مدين ${esc(t.debit)} / دائن ${esc(t.credit)}</span>
+                      <span class="badge bg-primary">التتبّع الكامل ←</span>
+                    </div>
+                 </button>`).join('') + '</div>';
         }
         if (m.receipts.length) {
-            html += '<h6>الإيصالات</h6><ul class="list-group mb-3">' + m.receipts.map(r =>
-                `<li class="list-group-item">${esc(r.receipt_number)} — ${esc(r.receipt_type)} — ${esc(r.amount)}</li>`).join('') + '</ul>';
+            html += '<h6>الإيصالات</h6><div class="list-group mb-3">' + m.receipts.map(r =>
+                // **والإيصالُ يُتتبَّع بمرجع عمليّته لا برقمه** — فنقطةُ
+                // التتبّع تقرأ `transaction_id`، ورقمُ الإيصال لا يطابقها.
+                // فمن لا مرجعَ له يبقى سطراً ولا يَعِد بما لا يفتح.
+                (r.reference_transaction_id
+                    ? `<button type="button" class="list-group-item list-group-item-action"
+                               data-trace="${esc(r.reference_transaction_id)}" data-testid="search-receipt-row">
+                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                           <span>${esc(r.receipt_number)} — ${esc(r.receipt_type)} — ${esc(r.amount)}</span>
+                           <span class="badge bg-primary">التتبّع الكامل ←</span>
+                         </div>
+                       </button>`
+                    : `<div class="list-group-item">${esc(r.receipt_number)} — ${esc(r.receipt_type)} — ${esc(r.amount)}
+                         <span class="small text-muted">· لا مرجعَ عمليّةٍ مرتبطٌ به</span></div>`)
+            ).join('') + '</div>';
         }
-        box.innerHTML = html || '<div class="alert alert-secondary">لا نتائج</div>';
+
+        // رقم الحوالة الظاهر للعميل قبل إنشاء Transaction النهائي.
+        if ((m.pending_transfers || []).length) {
+            html += '<h6>الحوالات المعلّقة / مرحلة التسليم</h6>' + m.pending_transfers.map(p => `
+                <div class="card border-warning mb-3" data-testid="pending-transfer-result">
+                  <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                      <div>
+                        <div class="font-monospace fw-bold">${esc(p.transfer_ulid)}</div>
+                        <span class="badge bg-warning text-dark">${esc(p.status_ar)}</span>
+                      </div>
+                      <div class="fw-bold">${esc(p.amount)} <span class="small text-muted">+ رسم ${esc(p.fee)}</span></div>
+                    </div>
+                    <div class="alert alert-light border mt-3 mb-2">${esc(p.diagnosis)}</div>
+                    <div class="row g-2 small">
+                      <div class="col-md-6">المرسل: ${esc(p.sender.name)} · #${esc(p.sender.user_id)} · ${esc(p.sender.phone)}</div>
+                      <div class="col-md-6">المستلم: ${esc(p.recipient.name)} · #${esc(p.recipient.user_id)} · ${esc(p.recipient.phone)}</div>
+                      <div class="col-md-6">جاهزة للتسليم: ${esc(p.releasable_at)}</div>
+                      <div class="col-md-6">المتبقي في النافذة: ${esc(p.seconds_remaining)} ثانية</div>
+                    </div>
+                    ${p.release_transaction_id ? `
+                      <button type="button" class="btn btn-sm btn-primary mt-3"
+                              data-trace="${esc(p.release_transaction_id)}"
+                              data-testid="pending-transfer-final-trace">
+                        فتح العملية النهائية ←
+                      </button>` : ''}
+                  </div>
+                </div>`).join('');
+        }
+
+        if ((m.diagnostic_events || []).length) {
+            html += '<h6>أثر رقم التتبع</h6><div class="list-group mb-3">' +
+                m.diagnostic_events.map(e => `
+                  <div class="list-group-item" data-testid="diagnostic-event">
+                    <div class="d-flex justify-content-between flex-wrap gap-2">
+                      <div><strong>${esc(e.decision_code)}</strong> · ${esc(e.action)}</div>
+                      <div class="small text-muted">${esc(e.created_at)}</div>
+                    </div>
+                    <div class="small mt-1">الشدّة: ${esc(e.severity)}
+                      ${e.transaction_id ? `· <button type="button" class="btn btn-link btn-sm p-0"
+                          data-trace="${esc(e.transaction_id)}">فتح العملية المرتبطة</button>` : '· لا توجد عملية مالية نهائية مرتبطة بهذا الأثر'}
+                    </div>
+                  </div>`).join('') + '</div>';
+        }
+
+        if ((m.diagnostic_errors || []).length) {
+            html += '<h6>أعطال خادم مرتبطة بنفس الرقم</h6>' +
+                '<div class="alert alert-danger" data-testid="diagnostic-server-error">' +
+                m.diagnostic_errors.map(e => `
+                  <div class="border-bottom py-2">
+                    <div><strong>${esc(e.diagnosis)}</strong></div>
+                    <div class="small mt-1">
+                      HTTP: ${esc(e.http_status || '500')} ·
+                      المسار: <span class="font-monospace">${esc(e.path || '—')}</span> ·
+                      التكرار: ${esc(e.occurrences)} ·
+                      آخر ظهور: ${esc(e.last_seen_at)}
+                    </div>
+                    <div class="small text-muted mt-1">
+                      لا تطلب من العميل إعادة الدفع قبل التأكد من عدم وجود عملية مالية نهائية أو أثر Idempotency.
+                    </div>
+                  </div>`).join('') +
+                '</div>';
+        }
+
+        box.innerHTML = html || '<div class="alert alert-secondary">لا نتائج. إذا كان المدخل رقم تتبع لاتصال منقطع، فغياب الأثر لا يثبت وحده أن الطلب لم يصل.</div>';
     }
 
     // ---------- ملف العميل 360° ----------
@@ -158,49 +522,138 @@
         const j = await get('/customers/' + id);
         if (!j.success) { box.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`; return; }
         const m = j.meta, p = m.profile;
+        const diag = m.account_diagnosis || {can_transact: true, summary_ar: '', blockers: []};
+        const holds = (m.hold_breakdown && m.hold_breakdown.items) || [];
+        const lim = m.limits_usage || {};
+        const wtc = m.wrong_transfer_overview || {as_claimant: [], as_recipient: [], total_receivable_debt: '0.0000'};
+        const notes = m.notes || [];
+        const notifs = m.recent_notifications || [];
+        const safePays = m.safe_payments || [];
+
+        const diagHtml = (diag.blockers || []).length ? `
+            <div class="alert alert-danger mt-3 mb-2" data-testid="customer-account-diagnosis">
+                <div class="fw-bold mb-1">⚠ ${esc(diag.summary_ar)}</div>
+                <ul class="mb-0 ps-3 small">
+                    ${diag.blockers.map(b => `<li><strong>${esc(b.label_ar)}:</strong> ${esc(b.reason)} — <span class="text-dark">${esc(b.resolution_ar)}</span></li>`).join('')}
+                </ul>
+            </div>` : `<div class="alert alert-success py-2 mt-3 mb-2 small" data-testid="customer-account-diagnosis">✓ ${esc(diag.summary_ar || 'الحساب سليم وجاهز للعمليات المالية.')}</div>`;
+
+        const holdsHtml = holds.length ? `
+            <div class="card border-warning mt-3" data-testid="customer-hold-breakdown">
+                <div class="card-header py-2 bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
+                    <strong>تفصيل المبالغ المحجوزة والمعلّقة (${holds.length})</strong>
+                    <span class="badge bg-warning text-dark">إجمالي المحجوز: ${esc(m.wallet.held_balance ?? '0')}</span>
+                </div>
+                <div class="table-responsive"><table class="table table-sm mb-0">
+                    <thead><tr><th>نوع الحجز</th><th>المرجع</th><th>المبلغ</th><th>الحالة</th><th>موعد الإفراج التلقائي</th></tr></thead>
+                    <tbody>${holds.map(h => `
+                        <tr>
+                            <td>${esc(h.kind_ar)}</td>
+                            <td class="font-monospace small">${esc(h.reference)}</td>
+                            <td class="fw-bold">${esc(h.amount)}</td>
+                            <td>${esc(h.status_ar)}</td>
+                            <td class="small">${esc(h.expires_at || '—')}</td>
+                        </tr>`).join('')}</tbody>
+                </table></div>
+            </div>` : '';
+
+        const wtcDebtAlert = parseFloat(wtc.total_receivable_debt || '0') > 0 ? `
+            <div class="alert alert-warning py-2 mt-2 small" data-testid="customer-receivable-debt">
+                <strong>ذمّة استرداد تحويل خاطئ قائمة على هذا الحساب:</strong> ${esc(wtc.total_receivable_debt)} ريال — تُقتطع تلقائياً عند دخول أي رصيد جديد.
+            </div>` : '';
+
         box.innerHTML = `
         <div class="card p-3" data-testid="customer-360">
-            <div class="d-flex justify-content-between flex-wrap">
-                <h5>${esc(p.name)} <small class="text-muted">#${p.id} — ${esc(p.phone)}</small></h5>
-                <div>
+            <div class="d-flex justify-content-between flex-wrap gap-2">
+                <h5>${esc(p.name)} <small class="text-muted">#${p.id} — ${esc(p.phone)} (${esc(p.type_label || 'عميل')})</small></h5>
+                <div class="d-flex gap-1 align-items-center">
                     ${m.security.is_temp_blocked ? '<span class="badge bg-danger">مجمَّد مؤقتاً</span>' : '<span class="badge bg-success">نشط</span>'}
+                    ${p.lifecycle_state && p.lifecycle_state !== 'active' ? `<span class="badge bg-dark">${esc(p.lifecycle_state)}</span>` : ''}
                 </div>
             </div>
+
+            ${diagHtml}
+            ${wtcDebtAlert}
+
             <div class="row g-3 mt-1">
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">الرصيد</div><div class="fs-5 fw-bold">${esc(m.wallet.current_balance ?? '0')}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">معلَّق / محجوز</div><div>${esc(m.wallet.pending_balance ?? '0')} / ${esc(m.wallet.held_balance ?? '0')}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">KYC</div><div>${m.kyc.is_verified ? '✓ موثَّق' : '✗ غير موثَّق'} (فئة ${esc(m.kyc.tier ?? '—')})</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">الرصيد الكلي / المتاح</div><div class="fs-6 fw-bold">${esc(m.wallet.current_balance ?? '0')} <span class="text-success small">(متاح: ${esc(m.wallet.available_balance ?? m.wallet.current_balance ?? '0')})</span></div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">معلَّق / محجوز</div><div>${esc(m.wallet.pending_balance ?? '0')} / <span class="fw-bold text-danger">${esc(m.wallet.held_balance ?? '0')}</span></div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">KYC</div><div>${m.kyc.is_verified ? '✓ موثَّق' : '✗ غير موثَّق'} (فئة ${esc(m.kyc.tier ?? '—')}) ${m.kyc.update_required ? '<span class="badge bg-danger">تحديث مطلوب</span>' : ''}</div></div></div>
                 <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">PIN</div><div>${m.pin.is_set ? 'معيَّن' : 'غير معيَّن'}${m.pin.locked_until ? ' — مقفول' : ''} (${m.pin.failed_attempts} محاولات فاشلة)</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">الجلسات النشطة</div><div>${m.security.active_sessions}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">آخر نشاط</div><div>${esc(m.profile.last_active_at ?? '—')}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">تذاكر مفتوحة</div><div>${m.open_tickets}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">المنطقة</div><div>${esc(m.profile.zone_code ?? '—')}</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">المستهلك اليومي / المتبقي</div><div class="small fw-semibold" data-testid="customer-daily-limit">${esc(lim.daily_used ?? '0')} / متبقي: <span class="text-primary">${esc(lim.daily_remaining ?? '—')}</span> (سقف: ${esc(lim.max_daily_total ?? '—')})</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">المستهلك الشهري / المتبقي</div><div class="small fw-semibold" data-testid="customer-monthly-limit">${esc(lim.monthly_used ?? '0')} / متبقي: <span class="text-primary">${esc(lim.monthly_remaining ?? '—')}</span> (سقف: ${esc(lim.max_monthly_total ?? '—')})</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">الجلسات النشطة / آخر نشاط</div><div class="small">${m.security.active_sessions} جلسة · ${esc(m.profile.last_active_at ?? '—')}</div></div></div>
+                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">تذاكر مفتوحة / المنطقة</div><div>${m.open_tickets} تذكرة · نطاق ${esc(m.profile.zone_code ?? '—')}</div></div></div>
             </div>
 
+            ${holdsHtml}
+
             <div class="mt-3 d-flex gap-2 flex-wrap">
-                <button class="btn btn-sm btn-outline-danger js-act" data-act="freeze" data-id="${p.id}" data-unfreeze="${m.security.is_temp_blocked ? 1 : ''}" data-testid="btn-freeze">
-                    ${m.security.is_temp_blocked ? 'فك التجميد' : 'تجميد مؤقت'}</button>
-                <button class="btn btn-sm btn-outline-warning js-act" data-act="reset-pin" data-id="${p.id}" data-testid="btn-reset-pin">إعادة تعيين PIN</button>
-                <button class="btn btn-sm btn-outline-secondary js-act" data-act="revoke-sessions" data-id="${p.id}" data-testid="btn-revoke">إلغاء الجلسات المسجّلة</button>
-                <button class="btn btn-sm btn-outline-info js-act" data-act="require-kyc" data-id="${p.id}" data-testid="btn-kyc">طلب رفع الهوية</button>
+                ${CAN_FREEZE ? `<button class="btn btn-sm btn-outline-danger js-act" data-act="freeze" data-id="${p.id}" data-unfreeze="${m.security.is_temp_blocked ? 1 : ''}" data-testid="btn-freeze">
+                    ${m.security.is_temp_blocked ? 'فك التجميد' : 'تجميد مؤقت'}</button>` : ''}
+                ${CAN_RESET_PIN ? `<button class="btn btn-sm btn-outline-warning js-act" data-act="reset-pin" data-id="${p.id}" data-testid="btn-reset-pin">إعادة تعيين PIN</button>` : ''}
+                ${CAN_DEVICE_CONTROL ? `<button class="btn btn-sm btn-outline-secondary js-act" data-act="revoke-sessions" data-id="${p.id}" data-testid="btn-revoke">إلغاء الجلسات المسجّلة</button>` : ''}
+                ${CAN_KYC_REQUEST ? `<button class="btn btn-sm btn-outline-info js-act" data-act="require-kyc" data-id="${p.id}" data-testid="btn-kyc">طلب تحديث الهوية</button>` : ''}
+                ${CAN_LIFECYCLE_MANAGE ? `<button class="btn btn-sm btn-outline-dark js-adv-act" data-adv="${p.lifecycle_state === 'suspended' ? 'activate' : 'suspend'}" data-id="${p.id}" data-testid="btn-lifecycle">${p.lifecycle_state === 'suspended' ? 'تفعيل الحساب' : 'إيقاف مؤقت (Suspend)'}</button>` : ''}
+                ${CAN_RISK_ESCALATE ? `<button class="btn btn-sm btn-outline-danger js-adv-act" data-adv="escalate_risk" data-id="${p.id}" data-testid="btn-risk-case">فتح قضية مخاطر (AML)</button>` : ''}
+                ${CAN_RECOVERY_VIEW ? `<a class="btn btn-sm btn-outline-dark" href="${RECOVERY_BASE}?status=all&user_id=${p.id}" data-testid="btn-recovery">متابعة استعادة الحساب</a>` : ''}
+                ${CAN_NOTES_CREATE ? `<button class="btn btn-sm btn-outline-secondary js-act" data-act="add-note" data-id="${p.id}" data-name="${esc(p.name)}" data-testid="btn-add-note">+ إضافة ملاحظة</button>` : ''}
+                ${CAN_TICKETS_MANAGE ? `<button class="btn btn-sm btn-warning text-dark js-act" data-act="guided-escalate" data-id="${p.id}" data-name="${esc(p.name)}" data-testid="btn-guided-escalate">⬆ تصعيد موجَّه للفريق المختص</button>` : ''}
                 <button class="btn btn-sm btn-primary js-act" data-act="open-ticket" data-id="${p.id}" data-name="${esc(p.name)}" data-testid="btn-open-ticket">+ فتح تذكرة</button>
             </div>
 
-            {{-- AMIAL-DEVICE-PANEL-001: الأجهزة كانت ثلاثة مسارات تردّ JSON
-                 ولا شاشة تفتحها — فالحظر مبنيٌّ ولا يُستعمل. --}}
+            ${CAN_DEVICES_VIEW ? `
             <div class="d-flex justify-content-between align-items-center mt-4">
                 <h6 class="mb-0">الأجهزة</h6>
                 <button class="btn btn-sm btn-outline-secondary js-devices" data-id="${p.id}" data-testid="btn-devices">عرض الأجهزة</button>
             </div>
-            <div id="devices-box" class="mt-2"></div>
+            <div id="devices-box" class="mt-2"></div>` : ''}
 
-            <h6 class="mt-4">آخر العمليات</h6>
+            <div class="row g-3 mt-3">
+                <div class="col-lg-6">
+                    <h6>ملاحظات الدعم على العميل (${notes.length})</h6>
+                    <div class="border rounded p-2" style="max-height:180px;overflow-y:auto" data-testid="customer-notes-box">
+                        ${notes.map(n => `
+                            <div class="border-bottom py-1 small">
+                                ${n.is_pinned ? '<span class="badge bg-warning text-dark">مثبّتة</span> ' : ''}
+                                <strong>${esc(n.author)}:</strong> ${esc(n.body)}
+                                <div class="text-muted" style="font-size:11px">${esc(n.created_at)}</div>
+                            </div>`).join('') || '<div class="text-muted small">لا توجد ملاحظات مسجَّلة على هذا العميل.</div>'}
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <h6>آخر الإشعارات وسجل التسليم (${notifs.length})</h6>
+                    <div class="border rounded p-2" style="max-height:180px;overflow-y:auto" data-testid="customer-notifications-box">
+                        ${notifs.map(n => `
+                            <div class="border-bottom py-1 small d-flex justify-content-between">
+                                <span><strong>${esc(n.title)}</strong> — ${esc(n.body)}</span>
+                                <span class="text-nowrap ms-2">${n.is_read ? '<span class="badge bg-success">مقروء</span>' : '<span class="badge bg-secondary">أُرسل</span>'} <small class="text-muted">${esc(n.sent_at)}</small></span>
+                            </div>`).join('') || '<div class="text-muted small">لا توجد إشعارات حديثة.</div>'}
+                    </div>
+                </div>
+            </div>
+
+            ${safePays.length ? `
+            <h6 class="mt-3">صفقات الدفع الآمن (${safePays.length})</h6>
             <div class="table-responsive"><table class="table table-sm">
-                <thead><tr><th>المرجع</th><th>النوع</th><th>مدين</th><th>دائن</th><th>القرار</th><th>التاريخ</th></tr></thead>
+                <thead><tr><th>المرجع</th><th>الدور</th><th>المبلغ</th><th>الحالة</th><th>التاريخ</th></tr></thead>
+                <tbody>${safePays.map(sp => `<tr><td class="font-monospace small">${esc(sp.ulid)}</td><td>${esc(sp.role)}</td><td>${esc(sp.amount)}</td><td>${esc(sp.status_ar)}</td><td class="small">${esc(sp.created_at)}</td></tr>`).join('')}</tbody>
+            </table></div>` : ''}
+
+            <h6 class="mt-4">آخر العمليات (الصادرة والواردة)</h6>
+            <div class="table-responsive"><table class="table table-sm align-middle">
+                <thead><tr><th>المرجع</th><th>النوع</th><th>مدين</th><th>دائن</th><th>القرار</th><th>التاريخ</th><th></th></tr></thead>
                 <tbody>${(m.recent_transactions || []).map(t => `
-                    <tr><td class="font-monospace">${esc(t.transaction_id)}</td><td>${esc(t.type)}</td>
-                    <td>${esc(t.debit)}</td><td>${esc(t.credit)}</td><td>${esc(t.decision_code ?? '—')}</td><td class="small">${esc(t.created_at)}</td></tr>`).join('')
-                    || '<tr><td colspan="6" class="text-muted">لا عمليات</td></tr>'}</tbody>
+                    <tr>
+                        <td class="font-monospace">${esc(t.transaction_id)}</td>
+                        <td>${esc(t.type_ar || t.type)}</td>
+                        <td>${esc(t.debit)}</td>
+                        <td>${esc(t.credit)}</td>
+                        <td>${esc(t.decision_code ?? '—')}</td>
+                        <td class="small">${esc(t.created_at)}</td>
+                        <td><button type="button" class="btn btn-sm btn-outline-primary py-0" data-trace="${esc(t.transaction_id || t.id)}">التتبّع ←</button></td>
+                    </tr>`).join('')
+                    || '<tr><td colspan="7" class="text-muted">لا عمليات</td></tr>'}</tbody>
             </table></div>
         </div>`;
     };
@@ -235,6 +688,63 @@
         const ref = await dialog.request('رقم العملية المرتبطة (اختياري):', {title: 'فتح تذكرة دعم', okLabel: 'فتح التذكرة'}) || null;
         const j = await post('/tickets', {user_id: userId, subject: subject, transaction_ref: ref, category: 'other'});
         await dialog.show(j.success ? ('فُتحت التذكرة ' + j.meta.ticket.ticket_number) : (j.message || 'فشل'), j.success ? 'تم فتح التذكرة' : 'تعذّر فتح التذكرة');
+        if (j.success) loadCustomer(userId);
+    };
+
+    window.addCustomerNoteModal = async function (userId, name) {
+        const dialog = window.amialDialog;
+        const body = dialog
+            ? await dialog.request('اكتب ملاحظة الدعم على ملف العميل ' + name + ' (5 أحرف على الأقل):', {title: 'إضافة ملاحظة على ملف العميل', okLabel: 'حفظ الملاحظة'})
+            : prompt('اكتب ملاحظة الدعم على ملف العميل ' + name + ':');
+        if (!body || body.trim().length < 5) return;
+        const j = await post(`/customers/${userId}/note`, {body: body.trim(), pin: true});
+        if (dialog) await dialog.show(j.message || (j.success ? 'تم الحفظ' : 'فشل'), j.success ? 'تمت الإضافة' : 'تعذّر الحفظ');
+        if (j.success) loadCustomer(userId);
+    };
+
+    window.guidedEscalateModal = async function (userId, name) {
+        const dialog = window.amialDialog;
+        const team = prompt(
+            'اختر الفريق المختص للتصعيد للعميل ' + name + ':\n'
+            + 'supervisor = الإشراف والموافقات (فك تجميد / تصفير PIN)\n'
+            + 'security = عمليات الأمن (حظر جهاز مسروق / إنهاء جلسات)\n'
+            + 'risk = المخاطر ومكافحة الاحتيال (AML)\n'
+            + 'disputes = الفصل في النزاعات والاسترداد\n'
+            + 'finance = المالية ومطابقة الدفتر\n'
+            + 'compliance = الامتثال وتوثيق الهوية (KYC)',
+            'supervisor'
+        );
+        if (!team) return;
+        const action = prompt(
+            'اختر الإجراء المطلوب:\n'
+            + 'unfreeze_account | reset_pin | block_device | dispute_resolution | ledger_reconcile | kyc_expedite | aml_investigation',
+            team === 'security' ? 'block_device' : (team === 'finance' ? 'ledger_reconcile' : 'unfreeze_account')
+        );
+        if (!action) return;
+        const reason = dialog
+            ? await dialog.request('اشرح التشخيص والسبب (10 أحرف على الأقل — يُسجَّل في التذكرة والتدقيق):', {title: 'تصعيد موجَّه للفريق المختص', okLabel: 'إرسال التصعيد'})
+            : prompt('اشرح التشخيص والسبب (10 أحرف على الأقل):');
+        if (!reason || reason.trim().length < 10) return;
+        const j = await post(`/customers/${userId}/escalate`, {
+            target_team: team.trim(),
+            requested_action: action.trim(),
+            reason: reason.trim(),
+        });
+        if (dialog) await dialog.show(j.message || (j.success ? 'تم التصعيد' : 'فشل'), j.success ? 'تم إرسال التصعيد' : 'تعذّر التصعيد');
+        else alert(j.message || 'تم');
+        if (j.success) loadCustomer(userId);
+    };
+
+    window.doAdvancedAction = async function (userId, action) {
+        const dialog = window.amialDialog;
+        const reason = dialog
+            ? await dialog.request('سبب تنفيذ الإجراء «' + action + '» (10 أحرف على الأقل):', {title: 'تأكيد إجراء متقدم', okLabel: 'تنفيذ', danger: true})
+            : prompt('سبب تنفيذ الإجراء (10 أحرف على الأقل):');
+        if (!reason || reason.trim().length < 10) return;
+        const j = await post(`/customers/${userId}/advanced-action`, {action, reason: reason.trim()});
+        if (dialog) await dialog.show(j.message || (j.success ? 'تم' : 'فشل'), j.success ? 'تم الإجراء' : 'تعذّر الإجراء');
+        else alert(j.message || 'تم');
+        if (j.success) loadCustomer(userId);
     };
 
     // تفويض أحداث (CSP يمنع onclick المضمّنة): صفوف البحث + أزرار الإجراءات
@@ -242,10 +752,18 @@
         const row = e.target.closest('.js-user-row');
         if (row) { loadCustomer(parseInt(row.dataset.userId, 10)); return; }
 
+        const adv = e.target.closest('.js-adv-act');
+        if (adv) {
+            doAdvancedAction(parseInt(adv.dataset.id, 10), adv.dataset.adv);
+            return;
+        }
+
         const act = e.target.closest('.js-act');
         if (act) {
             const id = parseInt(act.dataset.id, 10);
             if (act.dataset.act === 'open-ticket') openTicket(id, act.dataset.name || '');
+            else if (act.dataset.act === 'add-note') addCustomerNoteModal(id, act.dataset.name || '');
+            else if (act.dataset.act === 'guided-escalate') guidedEscalateModal(id, act.dataset.name || '');
             else doAction(id, act.dataset.act, !!act.dataset.unfreeze);
         }
     });
@@ -277,9 +795,11 @@
                     ${d.block_reason ? `<div class="small text-muted mt-1">${esc(d.block_reason)}</div>` : ''}
                 </td>
                 <td class="text-nowrap">
-                    ${d.is_blocked
-                        ? `<button class="btn btn-sm btn-outline-success js-dev" data-do="unblock" data-row="${d.id}" data-user="${userId}">رفع الحظر</button>`
-                        : `<button class="btn btn-sm btn-outline-danger js-dev" data-do="block" data-row="${d.id}" data-user="${userId}">حظر الجهاز</button>`}
+                    ${CAN_DEVICE_CONTROL
+                        ? (d.is_blocked
+                            ? `<button class="btn btn-sm btn-outline-success js-dev" data-do="unblock" data-row="${d.id}" data-user="${userId}">رفع الحظر</button>`
+                            : `<button class="btn btn-sm btn-outline-danger js-dev" data-do="block" data-row="${d.id}" data-user="${userId}">حظر الجهاز</button>`)
+                        : '<span class="small text-muted">عرض فقط</span>'}
                 </td>
             </tr>`).join('');
 
@@ -289,7 +809,9 @@
                 <thead><tr><th>الجهاز</th><th>النظام</th><th>IP</th><th>آخر ظهور</th><th>الحالة</th><th></th></tr></thead>
                 <tbody>${rows || '<tr><td colspan="6" class="text-muted text-center py-3">لا أجهزة مسجَّلة</td></tr>'}</tbody>
             </table></div>
-            <div class="small text-muted">من حظر الجهاز لا يرفع الحظر عنه — يراجعه موظّف آخر.</div>`;
+            <div class="small text-muted">${CAN_DEVICE_CONTROL
+                ? 'من حظر الجهاز لا يرفع الحظر عنه — يراجعه موظّف آخر.'
+                : 'أنت في وضع التشخيص فقط؛ حظر الجهاز أو إنهاء الجلسات يحتاج فريق الأمن.'}</div>`;
     };
 
     document.addEventListener('click', async function (e) {
@@ -315,6 +837,32 @@
         loadDevices(parseInt(b.dataset.user, 10));
     });
 
+    // ══════════════════════════════════════════════════════════════
+    // AMIAL-SUPPORT-TRACE-REACH-001 — **الضغطةُ تنقل وتشغّل معاً.**
+    //
+    // ونقلٌ بلا تشغيلٍ يترك الدعمَ أمام حقلٍ مملوءٍ وزرٍّ لم يُضغَط —
+    // **فيظنّ أنّ لا نتيجة**. فتُملأ الخانةُ ويُضغط الزرُّ في النداء نفسِه.
+    //
+    // و`data-testid` على الصفوف يجعل مسبارَ الأزرار يمسكها إن ماتت.
+    // ══════════════════════════════════════════════════════════════
+    document.addEventListener('click', function (e) {
+        const row = e.target.closest('[data-trace]');
+        if (!row) return;
+
+        const tab = document.querySelector('[data-bs-target="#tab-tx"]');
+        if (!tab) {
+            // **صلاحيّةُ تتبّع العمليّات غيرُ ممنوحةٍ لهذا الموظّف** —
+            // فالتبويبُ غيرُ مُصيَّرٍ أصلاً. ويُقال ولا يُبتلع صمتاً.
+            alert('تتبّعُ العمليّات يحتاج صلاحيّة «عرض المعاملات» — راجع مديرَك.');
+            return;
+        }
+
+        tab.click();
+        const box = document.getElementById('tx-ref');
+        box.value = row.dataset.trace;
+        document.getElementById('btn-tx').click();
+    });
+
     // ---------- فحص عملية ----------
     document.getElementById('btn-tx').onclick = async function () {
         const ref = document.getElementById('tx-ref').value.trim();
@@ -323,26 +871,136 @@
         box.innerHTML = '<div class="text-muted">جارٍ الفحص…</div>';
         const j = await get('/transactions/' + encodeURIComponent(ref));
         if (!j.success) { box.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`; return; }
-        const t = j.meta.transaction;
+        const t = j.meta.transaction, receipt = j.meta.receipt, parties = j.meta.parties || [];
+        const card = (label, value, cls = 'col-md-3 col-6') => `<div class="${cls}"><div class="border rounded p-2 h-100"><div class="small text-muted">${esc(label)}</div><div class="text-break">${value}</div></div></div>`;
+        const val = v => esc(v === null || v === undefined || v === '' ? '—' : v);
+        const recordLabels = {payment_requests:'طلبات الدفع', merchant_sales:'مبيعات التجزئة/البيع السريع', fuel_sales:'مبيعات الوقود', pharmacy_sales:'مبيعات الصيدلية', wholesale_invoices:'فواتير الجملة', wholesale_collections:'تحصيلات الجملة', split_bill_participants:'حصص الفاتورة المقسّمة'};
+        const business = Object.entries(j.meta.business_records || {}).filter(([, rows]) => rows && rows.length).map(([kind, rows]) => `
+            <div class="card mb-2"><div class="card-header py-2"><strong>${esc(recordLabels[kind] || kind)}</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><tbody>${rows.map(row => {
+                const details = Object.entries(row).filter(([key, value]) => !['items','clinical_details_restricted'].includes(key) && value !== null && value !== '').map(([key, value]) => `<div><span class="text-muted">${esc(key)}:</span> ${val(value)}</div>`).join('');
+                const items = Array.isArray(row.items) && row.items.length ? `<details class="mt-2"><summary>الأصناف (${row.items.length})</summary><pre class="small mb-0">${esc(JSON.stringify(row.items, null, 2))}</pre></details>` : '';
+                const restricted = row.clinical_details_restricted ? '<div class="small text-muted mt-2">تفاصيل الوصفة والأصناف الطبية محمية ولا تُعرض في تتبع المعاملة العام.</div>' : '';
+                return `<tr><td>${details}${items}${restricted}</td></tr>`;
+            }).join('')}</tbody></table></div></div>`).join('');
         box.innerHTML = `
-            <div class="row g-2 mb-3">
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">المرجع</div><div class="font-monospace">${esc(t.transaction_id)}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">النوع</div><div>${esc(t.type)}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">مدين / دائن</div><div>${esc(t.debit)} / ${esc(t.credit)}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">القرار</div><div>${esc(t.decision_code ?? 'OK')} ${t.decision_reason ? '— ' + esc(t.decision_reason) : ''}</div></div></div>
+            <div class="alert alert-light border small">هذا تتبّع كامل للعملية من سجلّ العملية والإيصال والدفتر المحاسبي والسجلات المرتبطة. الحقول الشخصية تظهر فقط لمن يملك صلاحية كشف PII.</div>
+            <h6>هوية العملية وحالتها</h6><div class="row g-2 mb-3">
+                ${card('رقم العملية الرسمي', `<span class="font-monospace">${val(t.transaction_no)}</span>`)}
+                ${card('مرجع العملية', `<span class="font-monospace">${val(t.transaction_id)}</span>`)}
+                ${card('المرجع المرتبط', `<span class="font-monospace">${val(t.ref_trans_id)}</span>`)}
+                ${card('الرقم الداخلي', val(t.id))}
+                ${card('النوع', val(t.type))}${card('الحالة / القرار', val(t.decision_code || 'لم يُسجل قرار'))}
+                ${card('سبب القرار', val(t.decision_reason))}${card('أنشئت', val(t.created_at))}
+                ${card('آخر تحديث', val(t.updated_at))}${card('منطقة التنفيذ', val(t.zone_code))}
+                ${card('منطقة الطلب', val(t.request_zone))}${card('منطقة الطرف الآخر', val(t.counterparty_zone))}
             </div>
+            <h6>الأثر المالي</h6><div class="row g-2 mb-3">
+                ${card('المبلغ', val(t.amount))}${card('مدين', val(t.debit))}${card('دائن', val(t.credit))}${card('الرسوم', val(t.charge))}
+                ${card('الرصيد بعد العملية', val(t.balance_after))}${card('ملاحظة العملية', val(t.note), 'col-md-6 col-12')}
+            </div>
+            <h6>الأطراف</h6><div class="row g-2 mb-3">${parties.map(p => card(p.role, `<strong>${val(p.name)}</strong><div class="small">#${val(p.user_id)} · ${val(p.type)} · ${val(p.phone)} · ${val(p.zone_code)}</div>`)).join('') || '<div class="text-muted">لا توجد أطراف مرتبطة في السجل القديم.</div>'}</div>
+            ${j.meta.pos_actor ? `<h6>منفّذ POS</h6><div class="row g-2 mb-3">${card('جهاز/موظف POS', `<strong>${val(j.meta.pos_actor.display_name)}</strong><div class="small">${val(j.meta.pos_actor.pos_number)} · ${val(j.meta.pos_actor.operator)}</div>`)}${card('مالك المنشأة', `<strong>${val(j.meta.pos_actor.merchant_owner)}</strong><div class="small">#${val(j.meta.pos_actor.merchant_owner_id)}</div>`)}</div>` : ''}
+            <h6>الإيصال</h6>${receipt ? `<div class="row g-2 mb-3">${card('رقم الإيصال', `<span class="font-monospace">${val(receipt.receipt_number)}</span>`)}${card('رمز التحقق', `<span class="font-monospace">${val(receipt.verification_code)}</span>`)}${card('حالة العملية', val(receipt.op_status))}${card('حالة PDF', val(receipt.status))}${card('إجمالي الإيصال', val(receipt.amount))}${card('صافي / رسم', `${val(receipt.net_amount)} / ${val(receipt.fee)}`)}${card('الاتجاه', val(receipt.direction))}${card('أصدر في', val(receipt.issued_at))}${card('تنزيلات PDF', val(receipt.download_count))}${card('آخر تنزيل', val(receipt.last_downloaded_at))}</div>` : '<div class="alert alert-warning py-2 mb-3">لا يوجد إيصال مرتبط بهذه العملية.</div>'}
+            ${business ? `<h6>سجلات النشاط المرتبطة</h6>${business}` : ''}
             <h6>الدليل المحاسبي</h6>
-            <div class="table-responsive mb-3"><table class="table table-sm"><thead><tr><th>القيد</th><th>المصدر</th><th>الحالة</th><th>الحركة</th></tr></thead><tbody>${(j.meta.ledger_entries || []).map(e => `<tr><td class="font-monospace">${esc(e.ulid)}</td><td>${esc(e.source_type)} / ${esc(e.source_id)}</td><td>${esc(e.status)}${e.is_reversal ? ' — عكسي' : ''}</td><td>${e.lines.map(l => `${esc(l.direction)} ${esc(l.amount)} (${esc(l.account)})`).join('<br>')}</td></tr>`).join('') || '<tr><td colspan="4" class="text-muted">لا يوجد قيد مرتبط — يلزم تحقيق مالي.</td></tr>'}</tbody></table></div>
+            <div class="table-responsive mb-3"><table class="table table-sm"><thead><tr><th>القيد</th><th>المصدر</th><th>الحالة</th><th>الأسطر والأرصدة</th></tr></thead><tbody>${(j.meta.ledger_entries || []).map(e => `<tr><td class="font-monospace">${esc(e.ulid)}</td><td>${esc(e.source_type)} / ${esc(e.source_id)}</td><td>${esc(e.status)}${e.is_reversal ? ' — عكسي' : ''}</td><td>${e.lines.map(l => `${esc(l.direction)} ${esc(l.amount)} (${esc(l.account)})<br><small class="text-muted">قبل: ${esc(l.balance_before)} · بعد: ${esc(l.balance_after)}${l.description ? ' · ' + esc(l.description) : ''}</small>`).join('<hr class="my-1">')}</td></tr>`).join('') || '<tr><td colspan="4" class="text-muted">لا يوجد قيد مرتبط — يلزم تحقيق مالي.</td></tr>'}</tbody></table></div>
+            ${(j.meta.disputes || []).length || (j.meta.tickets || []).length ? `<h6>النزاعات والتذاكر</h6><div class="row g-2 mb-3">${(j.meta.disputes || []).map(d => card('نزاع #'+d.id, `${val(d.status)}<div class="small">${val(d.reason)} · ${val(d.created_at)}</div>`)).join('')}${(j.meta.tickets || []).map(x => card('تذكرة '+x.number, `${val(x.status)} · ${val(x.category)} · ${val(x.priority)}<div class="small">${val(x.created_at)}</div>`)).join('')}</div>` : ''}
+            ${wrongTransferPanel(j.meta, t)}
             <h6>الخط الزمني</h6>
-            <ul class="list-group">${j.meta.timeline.map(e => `
-                <li class="list-group-item d-flex justify-content-between">
-                    <span><strong>${esc(e.event)}</strong> — ${esc(e.detail)}</span>
-                    <span class="text-muted small">${esc(e.at)}</span>
-                </li>`).join('')}</ul>`;
+            <ul class="list-group">${j.meta.timeline.map(e => `<li class="list-group-item d-flex justify-content-between gap-3"><span><strong>${esc(e.event)}</strong> — ${esc(e.detail)}</span><span class="text-muted small text-nowrap">${esc(e.at)}</span></li>`).join('')}</ul>`;
     };
+
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-WRONG-TRANSFER-001 — **حوّل إلى الرقم الخطأ: من الشاشة نفسِها.**
+    //
+    // فمن يفحص العمليّة هو من يردّ على العميل الآن، ودقيقةُ انتقالٍ إلى
+    // شاشةٍ أخرى تعني ريالاتٍ أُنفقت. ولا يظهر زرُّ الفتح على عمليّةٍ لا
+    // تُقبل الدعوى عليها — والخادمُ هو الذي يقولها (`wrong_transfer_
+    // claimable`)، لا تخمينٌ في المتصفّح.
+    // ══════════════════════════════════════════════════════════════════
+    function wrongTransferPanel(meta, t) {
+        const claims = meta.wrong_transfer_claims || [];
+        const live = c => c.status === 'open' || c.status === 'holding';
+
+        const rows = claims.map(c => `
+            <tr>
+                <td class="font-monospace small">${esc(c.ulid)}</td>
+                <td>${esc(c.status_ar)}</td>
+                <td class="money">${esc(c.amount)}</td>
+                <td class="money">${esc(c.held_amount)}</td>
+                <td class="money">${esc(c.outstanding)}</td>
+                <td>${esc(c.risk_score)}/100</td>
+                <td class="small">${esc(c.hold_expires_at)}</td>
+                <td class="text-nowrap">${live(c) && CAN_WRONG_TRANSFER_DECIDE ? `
+                    <button class="btn btn-sm btn-success" data-wtc-resolve="${esc(c.ulid)}" data-testid="wtc-resolve">استرداد</button>
+                    <button class="btn btn-sm btn-outline-danger" data-wtc-reject="${esc(c.ulid)}" data-testid="wtc-reject">رفض</button>
+                ` : (live(c)
+                    ? '<span class="badge bg-secondary">بانتظار فريق النزاعات</span>'
+                    : `<span class="text-muted small">${esc(c.resolution_note)}</span>`)}</td>
+            </tr>
+            <tr><td colspan="8" class="small text-muted">إشاراتُ التقدير: ${Object.entries(c.risk_signals || {}).map(([k, v]) => `${esc(k)} = ${esc(v)}`).join(' · ') || '—'}</td></tr>`).join('');
+
+        const opener = CAN_WRONG_TRANSFER_OPEN && meta.wrong_transfer_claimable && !claims.some(live) ? `
+            <div class="border rounded p-2 mb-3">
+                <div class="small text-muted mb-2">يفتح الدعم بلاغاً احترازياً فقط: يُحجز المتاح مؤقتاً ويُسجّل الباقي ذمّة. قرار الاسترداد أو الرفض النهائي يبقى لفريق النزاعات.</div>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text">الرقم الذي قصده</span>
+                    <input class="form-control" id="wtc-phone" placeholder="اختياري — وهو أقوى إشارةٍ في التقدير">
+                    <button class="btn btn-warning" id="wtc-open" data-wtc-tx="${esc(t.transaction_id)}" data-testid="wtc-open">فتح بلاغ تحويل خاطئ</button>
+                </div>
+            </div>` : '';
+
+        if (!claims.length && !opener) return '';
+
+        return `<h6>بلاغات التحويل إلى مستلم خاطئ</h6>${opener}${claims.length ? `
+            <div class="table-responsive mb-3"><table class="table table-sm align-middle">
+            <thead><tr><th>الدعوى</th><th>الحالة</th><th>المبلغ</th><th>المحجوز</th><th>الذمّة</th><th>التقدير</th><th>تنتهي المهلة</th><th>الإجراء</th></tr></thead>
+            <tbody>${rows}</tbody></table></div>` : ''}`;
+    }
+
+    // **معالجٌ واحدٌ بالتفويض** — الأزرارُ تُرسَم بعد كلّ فحص، وربطُ
+    // `onclick` وقتَ التحميل يتركها ميّتةً. (القاعدة التاسعة.)
+    document.addEventListener('click', async function (ev) {
+        const open = ev.target.closest('#wtc-open');
+        const resolve = ev.target.closest('[data-wtc-resolve]');
+        const reject = ev.target.closest('[data-wtc-reject]');
+        if (!open && !resolve && !reject) return;
+
+        ev.preventDefault();
+        let j;
+
+        // **مفتاحُ تفرّدٍ يُرسَل في الجسد.** الوسيطُ يقرؤه من الترويسة أو
+        // من `idempotency_key`، **وإن غاب ولّد واحداً — أي أنّ الحمايةَ
+        // تصير صفراً**. فضغطتان متتاليتان على «استرداد» تُنتجان حركتين.
+        if (open) {
+            j = await post('/wrong-transfer/open', {
+                transaction_id: open.dataset.wtcTx,
+                intended_phone: (document.getElementById('wtc-phone') || {}).value || null,
+                idempotency_key: 'wtc-open-' + open.dataset.wtcTx,
+            });
+        } else {
+            const ulid = (resolve || reject).dataset[resolve ? 'wtcResolve' : 'wtcReject'];
+            const note = prompt(resolve
+                ? 'سببُ الاسترداد (يُسجَّل في التدقيق):'
+                : 'سببُ الرفض (يُسجَّل في التدقيق):');
+            if (!note || note.trim().length < 5) { alert('السببُ مطلوبٌ ولا يقلّ عن خمسة أحرف.'); return; }
+            // **والمفتاحُ مشتقٌّ من الدعوى لا عشوائيّ** — فعشوائيٌّ جديدٌ
+            // مع كلّ ضغطةٍ لا يمنع التكرار، وهو ما يُراد منعُه بالضبط.
+            j = await post('/wrong-transfer/' + encodeURIComponent(ulid) + (resolve ? '/resolve' : '/reject'),
+                {note: note.trim(), idempotency_key: (resolve ? 'wtc-res-' : 'wtc-rej-') + ulid});
+        }
+
+        alert(j.message || (j.success ? 'تمّ' : 'تعذّر التنفيذ'));
+        // **يُعاد الفحصُ بعد كلّ إجراء** — فشاشةٌ تبقى على حالها بعد نقل
+        // مالٍ تجعل الموظّف يضغط مرّتين.
+        if (j.success) document.getElementById('btn-tx').click();
+    });
 
     // ---------- التذاكر ----------
     document.getElementById('btn-tickets').onclick = loadTickets;
+    const TK_STATUS_AR = {open:'مفتوحة', investigating:'قيد التحقيق', waiting_customer:'بانتظار العميل', resolved:'محلولة', closed:'مغلقة'};
+    const TK_PRIORITY_AR = {urgent:'عاجلة (SLA: ساعتان)', high:'مرتفعة (SLA: 8 ساعات)', normal:'عادية (SLA: 24 ساعة)', low:'منخفضة (SLA: 48 ساعة)'};
+
     async function loadTickets() {
         const st = document.getElementById('tk-status').value;
         const box = document.getElementById('tickets-list');
@@ -350,18 +1008,127 @@
         const j = await get('/tickets' + (st ? '?status=' + st : ''));
         if (!j.success) { box.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`; return; }
         const rows = j.meta.tickets.map(t => `
-            <tr>
-                <td class="font-monospace">${esc(t.ticket_number)}</td>
+            <tr data-testid="ticket-row-${esc(t.id)}">
+                <td class="font-monospace fw-bold">${esc(t.ticket_number)}</td>
                 <td>${esc(t.user ? (t.user.f_name + ' ' + (t.user.l_name || '')) : t.user_id)}</td>
-                <td>${esc(t.subject)}</td>
-                <td><span class="badge bg-${({'open':'primary','investigating':'warning','waiting_customer':'secondary','resolved':'success','closed':'dark'})[t.status] || 'light'}">${esc(t.status)}</span></td>
-                <td>${esc(t.priority)}</td>
+                <td>${esc(t.subject)} ${t.transaction_ref ? `<span class="badge bg-light text-dark border font-monospace">${esc(t.transaction_ref)}</span>` : ''}</td>
+                <td><span class="badge bg-${({'open':'primary','investigating':'warning text-dark','waiting_customer':'secondary','resolved':'success','closed':'dark'})[t.status] || 'light'}">${esc(TK_STATUS_AR[t.status] || t.status)}</span></td>
+                <td class="small">${esc(TK_PRIORITY_AR[t.priority] || t.priority)}</td>
                 <td class="small">${esc(t.updated_at)}</td>
+                <td class="text-nowrap">
+                    <button type="button" class="btn btn-sm btn-outline-primary js-ticket-open" data-ticket-id="${esc(t.id)}" data-testid="btn-open-ticket-detail">إدارة / الخط الزمني</button>
+                </td>
             </tr>`).join('');
-        box.innerHTML = `<div class="table-responsive"><table class="table table-sm table-hover">
-            <thead><tr><th>الرقم</th><th>العميل</th><th>الموضوع</th><th>الحالة</th><th>الأولوية</th><th>آخر تحديث</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="6" class="text-muted">لا تذاكر</td></tr>'}</tbody></table></div>`;
+        box.innerHTML = `<div class="table-responsive"><table class="table table-sm table-hover align-middle">
+            <thead><tr><th>الرقم</th><th>العميل</th><th>الموضوع</th><th>الحالة</th><th>الأولوية وSLA</th><th>آخر تحديث</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="7" class="text-muted">لا تذاكر</td></tr>'}</tbody></table></div>`;
     }
+
+    window.openTicketDetail = async function (ticketId) {
+        const drawer = document.getElementById('ticket-detail-drawer');
+        if (!drawer) return;
+        drawer.innerHTML = '<div class="text-muted">جارٍ تحميل تفاصيل التذكرة…</div>';
+        const j = await get('/tickets/' + ticketId);
+        if (!j.success) { drawer.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`; return; }
+        const t = j.meta.ticket;
+        const events = (t.events || []).map(ev => `
+            <li class="list-group-item d-flex justify-content-between align-items-start small">
+                <div>
+                    <strong>${esc(ev.event_type)}</strong>
+                    ${ev.old_value || ev.new_value ? `<span class="text-muted">(${esc(ev.old_value || '—')} ← ${esc(ev.new_value || '—')})</span>` : ''}
+                    ${ev.note ? `<div class="mt-1">${esc(ev.note)}</div>` : ''}
+                </div>
+                <span class="text-muted text-nowrap ms-2">${esc(ev.created_at)}</span>
+            </li>`).join('');
+
+        drawer.innerHTML = `
+            <div class="card border-primary p-3">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                    <div>
+                        <h6 class="mb-1"><span class="font-monospace">${esc(t.ticket_number)}</span> — ${esc(t.subject)}</h6>
+                        <div class="small text-muted">
+                            العميل: ${esc(t.user ? (t.user.f_name + ' ' + (t.user.l_name || '') + ' (' + (t.user.phone || '') + ')') : t.user_id)}
+                            · الحالة: <strong>${esc(TK_STATUS_AR[t.status] || t.status)}</strong>
+                            · الأولوية: <strong>${esc(TK_PRIORITY_AR[t.priority] || t.priority)}</strong>
+                            ${t.transaction_ref ? ` · العملية: <button type="button" class="btn btn-link btn-sm p-0 font-monospace" data-trace="${esc(t.transaction_ref)}">${esc(t.transaction_ref)}</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+                ${t.description ? `<div class="border rounded p-2 bg-light small mb-3" style="white-space:pre-line">${esc(t.description)}</div>` : ''}
+                ${CAN_TICKETS_MANAGE ? `
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">تحديث الحالة</label>
+                        <select id="tk-detail-status" class="form-select form-select-sm">
+                            <option value="open" ${t.status === 'open' ? 'selected' : ''}>مفتوحة</option>
+                            <option value="investigating" ${t.status === 'investigating' ? 'selected' : ''}>قيد التحقيق</option>
+                            <option value="waiting_customer" ${t.status === 'waiting_customer' ? 'selected' : ''}>بانتظار العميل</option>
+                            <option value="resolved" ${t.status === 'resolved' ? 'selected' : ''}>محلولة</option>
+                            <option value="closed" ${t.status === 'closed' ? 'selected' : ''}>مغلقة</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">الأولوية</label>
+                        <select id="tk-detail-priority" class="form-select form-select-sm">
+                            <option value="low" ${t.priority === 'low' ? 'selected' : ''}>منخفضة</option>
+                            <option value="normal" ${t.priority === 'normal' ? 'selected' : ''}>عادية</option>
+                            <option value="high" ${t.priority === 'high' ? 'selected' : ''}>مرتفعة</option>
+                            <option value="urgent" ${t.priority === 'urgent' ? 'selected' : ''}>عاجلة</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1">ملاحظة الحل / التحديث</label>
+                        <input type="text" id="tk-detail-resolution" class="form-control form-control-sm" value="${esc(t.resolution_note || '')}" placeholder="خلاصة الإجراء أو الحل المقدم للعميل">
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button type="button" class="btn btn-sm btn-success js-ticket-save" data-ticket-id="${esc(t.id)}" data-testid="btn-save-ticket">حفظ التحديث</button>
+                    </div>
+                </div>
+                <div class="input-group input-group-sm mb-3">
+                    <input type="text" id="tk-detail-note" class="form-control" placeholder="إضافة ملاحظة متابعة في الخط الزمني للتذكرة…">
+                    <button type="button" class="btn btn-outline-primary js-ticket-add-note" data-ticket-id="${esc(t.id)}" data-testid="btn-add-ticket-note">+ إضافة ملاحظة</button>
+                </div>` : ''}
+                <h6 class="small fw-bold mb-2">الخط الزمني للتذكرة (${(t.events || []).length})</h6>
+                <ul class="list-group">${events || '<li class="list-group-item text-muted small">لا توجد أحداث</li>'}</ul>
+            </div>`;
+    };
+
+    document.addEventListener('click', async function (e) {
+        const openBtn = e.target.closest('.js-ticket-open');
+        if (openBtn) {
+            openTicketDetail(parseInt(openBtn.dataset.ticketId, 10));
+            return;
+        }
+        const saveBtn = e.target.closest('.js-ticket-save');
+        if (saveBtn) {
+            const id = parseInt(saveBtn.dataset.ticketId, 10);
+            const status = document.getElementById('tk-detail-status')?.value;
+            const priority = document.getElementById('tk-detail-priority')?.value;
+            const resolution_note = document.getElementById('tk-detail-resolution')?.value || null;
+            const j = await post(`/tickets/${id}/update`, {status, priority, resolution_note});
+            if (j.success) {
+                await loadTickets();
+                await openTicketDetail(id);
+            } else {
+                alert(j.message || 'تعذّر تحديث التذكرة');
+            }
+            return;
+        }
+        const noteBtn = e.target.closest('.js-ticket-add-note');
+        if (noteBtn) {
+            const id = parseInt(noteBtn.dataset.ticketId, 10);
+            const noteInput = document.getElementById('tk-detail-note');
+            const note = (noteInput?.value || '').trim();
+            if (!note) return;
+            const j = await post(`/tickets/${id}/note`, {note});
+            if (j.success) {
+                if (noteInput) noteInput.value = '';
+                await openTicketDetail(id);
+            } else {
+                alert(j.message || 'تعذّر إضافة الملاحظة');
+            }
+        }
+    });
 
     // ---------- الموافقات (Maker-Checker) ----------
     document.getElementById('btn-approvals').onclick = loadApprovals;
@@ -481,7 +1248,7 @@
     // روابط لوحة التحكم تقود إلى الطابور نفسه لا إلى أول تبويب عشوائياً.
     // لا نقبل إلا تبويبات الشاشة الفعلية، ثم نحمل بيانات الطابور عند فتحه.
     const requestedTab = new URLSearchParams(window.location.search).get('tab');
-    const tabLoaders = {tickets: loadTickets, approvals: loadApprovals, insider: loadInsider, ops: loadOps};
+    const tabLoaders = {playbooks: loadPlaybooks, tickets: loadTickets, approvals: loadApprovals, insider: loadInsider, ops: loadOps};
     if (requestedTab && tabLoaders[requestedTab]) {
         const trigger = document.querySelector(`[data-bs-target="#tab-${requestedTab}"]`);
         if (trigger && window.bootstrap?.Tab) {

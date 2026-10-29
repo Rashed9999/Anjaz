@@ -5,11 +5,21 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Concerns\DeniesByPlan;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
+use App\Models\PaymentRequest;
 use App\Models\MerchantSale;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\CashierService;
 use App\Services\CashierSaleInvoicePdfService;
+use App\Services\BranchResolverService;
+use App\Services\Merchant\MerchantPermissionService;
+use App\Services\Merchant\MerchantPosGateway;
+use App\Services\MerchantPaymentReferenceService;
+use App\Services\MoneyService;
+use App\Services\PaymentRequestService;
+use App\Support\Merchant\MerchantPermissions as P;
+use App\Support\Access\AccessConstants as A;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -26,17 +36,56 @@ use Illuminate\Support\Facades\Validator;
  */
 class CashierController extends AmialApiController // AMIAL-FIX-007
 {
+    // AMIAL-OFFLINE-POS-003 — **استيرادُ الصنف ليس استعمالَ التِّرَيت.**
+    //
+    // كان `use App\Http\Controllers\Concerns\DeniesByPlan;` في رأس
+    // الملفّ (استيرادُ نطاق) **ولا سطرَ له داخل الصنف**. فـ`$this->
+    // denyUnless(...)` يرمي `Method ... does not exist` — **انهيارٌ فادحٌ
+    // في مسار البيع نفسِه**، يراه الكاشيرُ شريطاً أحمرَ عند تأكيد الدفع.
+    //
+    // ولا يمسكه مُحلِّلٌ ولا اختبار: الاستيرادُ مستعمَلٌ نحويّاً (يظهر في
+    // التعليقات والتوثيق)، و`php -l` لا يفحص وجودَ دالّةٍ في وقت التشغيل.
+    use \App\Http\Controllers\Concerns\DeniesByPlan;
+
     public function __construct(
         private readonly CashierService $cashier,
+        private readonly MerchantPermissionService $perm,
+        private readonly BranchResolverService $branches,
     ) {}
 
     public function products(Request $request): JsonResponse
     {
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, $posUserId, , $branch] = $ctx;
 
-        return $this->ok(['products' => $this->cashier->listProducts($merchant, $request->query('search'))]);
+        $gateway = app(MerchantPosGateway::class);
+        if ($gateway->enabledFor($merchant)) {
+            if (! $gateway->approved($merchant) || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {
+                return $this->error('MERCHANT_POS_NOT_APPROVED', 'نقطة البيع المستقلة تحتاج اعتماد المنشأة ونشاط التجزئة.', 403);
+            }
+            try {
+                $all = $gateway->catalog($merchant, $branch, $posUserId === null ? 'owner' : 'cashier',
+                    (string) ($posUserId ?? $merchant->id));
+                $search = mb_substr(trim((string) $request->query('search', '')), 0, 100);
+                if ($search !== '') {
+                    $all = array_values(array_filter($all, static fn (array $p): bool =>
+                        str_contains(mb_strtolower((string) $p['name']), mb_strtolower($search))
+                        || str_contains(mb_strtolower((string) $p['sku']), mb_strtolower($search))));
+                }
+                return $this->ok(['products' => $all, 'catalog_source' => 'amial-merchant']);
+            } catch (\RuntimeException $e) {
+                return $this->error('MERCHANT_POS_CATALOG_UNAVAILABLE', 'تعذر جلب المنتجات من أميال التاجر: '.$e->getMessage(), 503);
+            }
+        }
+
+        return $this->ok(['products' => $this->cashier->listProducts(
+            $merchant,
+            $request->query('search'),
+            // AMIAL-VARIANT-EDITOR-001 — شاشةُ الإدارة تطلبها صراحةً،
+            // وشبكةُ البيع لا تطلبها فتبقى مستثناة.
+            $request->boolean('include_variant_parents'),
+        )]);
     }
 
     /**
@@ -50,14 +99,36 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, $posUserId, , $branch] = $ctx;
 
-        $product = $this->cashier->findByBarcode($merchant, (string) $request->query('barcode', $request->input('barcode')));
-        if (!$product) {
+        $gateway = app(MerchantPosGateway::class);
+        if ($gateway->enabledFor($merchant)) {
+            if (! $gateway->approved($merchant) || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {
+                return $this->error('MERCHANT_POS_NOT_APPROVED', 'نقطة البيع المستقلة غير معتمدة.', 403);
+            }
+            try {
+                $hit = $gateway->lookup($merchant, $branch, trim((string) $request->input('barcode')),
+                    $posUserId === null ? 'owner' : 'cashier', (string) ($posUserId ?? $merchant->id));
+                if ($hit === null) return $this->error('MERCHANT_BARCODE_NOT_FOUND',
+                    'هذا الباركود غير مسجل في أميال التاجر؛ أضفه من لوحة التاجر أولًا.', 422);
+                return $this->ok($hit);
+            } catch (\RuntimeException $e) {
+                return $this->error('MERCHANT_POS_SCAN_UNAVAILABLE', 'تعذر فحص الباركود في أميال التاجر: '.$e->getMessage(), 503);
+            }
+        }
+
+        try {
+            $hit = app(\App\Services\MerchantProductBarcodeService::class)->find(
+                $merchant, (string) $request->query('barcode', $request->input('barcode')));
+        } catch (\DomainException $e) {
+            return $this->error('AMBIGUOUS_BARCODE', $e->getMessage(), 409);
+        }
+        if (!$hit) {
             return $this->error('NOT_FOUND', 'لا يوجد منتج بهذا الباركود', 404);
         }
 
-        return $this->ok(['product' => $product]);
+        return $this->ok(['product' => $hit['product'], 'pack_size' => $hit['pack_size'],
+            'barcode' => $hit['barcode']]);
     }
 
     public function addProduct(Request $request): JsonResponse
@@ -72,14 +143,29 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'expiry_date' => 'sometimes|nullable|date',
             'category' => 'sometimes|nullable|string|max:80',
             'barcode' => 'sometimes|nullable|string|max:64',
+            'sku' => 'sometimes|nullable|string|max:64',
+            'category_id' => 'sometimes|nullable|integer|min:1',
+            'brand_id' => 'sometimes|nullable|integer|min:1',
+            'unit_id' => 'sometimes|nullable|integer|min:1',
+            'reorder_level' => 'sometimes|nullable|numeric|min:0',
+            'track_stock' => 'sometimes|boolean',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
-        $product = $this->cashier->addProduct($merchant, $v->validated());
+        if (app(MerchantPosGateway::class)->enabledFor($merchant)) {
+            return $this->error('MERCHANT_PRODUCT_WRITE_MOVED',
+                'أضف المنتج وباركوده من لوحة أميال التاجر المستقلة؛ لن ننسخه في قاعدة الكاشير القديمة.', 409);
+        }
+
+        try {
+            $product = $this->cashier->addProduct($merchant, $v->validated());
+        } catch (\DomainException $e) {
+            return $this->error('BARCODE_CONFLICT', $e->getMessage(), 422);
+        }
 
         // AMIAL-CATALOG-001 — **ما أدخله التاجر يُفيد من بعده.**
         //
@@ -128,6 +214,10 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
+        if (app(MerchantPosGateway::class)->enabledFor($merchant)) {
+            return $this->error('MERCHANT_PRODUCT_WRITE_MOVED',
+                'إضافة منتج من الكتالوج العام تتم من لوحة أميال التاجر بعد ربطه، وليس من قاعدة الكاشير القديمة.', 409);
+        }
 
         $catalog = app(\App\Services\Catalog\ProductCatalogService::class);
 
@@ -164,6 +254,12 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'category' => 'sometimes|nullable|string|max:80',
             'barcode' => 'sometimes|nullable|string|max:64',
             'is_active' => 'sometimes|boolean',
+            'sku' => 'sometimes|nullable|string|max:64',
+            'category_id' => 'sometimes|nullable|integer|min:1',
+            'brand_id' => 'sometimes|nullable|integer|min:1',
+            'unit_id' => 'sometimes|nullable|integer|min:1',
+            'reorder_level' => 'sometimes|nullable|numeric|min:0',
+            'track_stock' => 'sometimes|boolean',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -171,16 +267,240 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
+        if (app(MerchantPosGateway::class)->enabledFor($merchant)) {
+            return $this->error('MERCHANT_PRODUCT_WRITE_MOVED',
+                'عدّل المنتج في أميال التاجر المستقلة؛ تعديل الصنف القديم سيؤدي إلى اختلاف بيانات الكاشير.', 409);
+        }
+
         try {
             $product = $this->cashier->updateProduct($merchant, $id, $v->validated());
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('NOT_FOUND', 'المنتج غير موجود', 404);
+        } catch (\DomainException $e) {
+            return $this->error('BARCODE_CONFLICT', $e->getMessage(), 422);
         }
         return $this->ok(['product' => $product], 'PRODUCT_UPDATED', 'تم التحديث');
     }
 
+    /**
+     * AMM-WALLET-JOURNEY-001. Reserve independently priced products BEFORE QR.
+     * The QR is created in the actual merchant wallet, never the POS employee.
+     */
+    public function prepareWalletOrder(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'request_key' => 'required|uuid',
+            'expected_total' => 'required|string|regex:/^[0-9]+(\\.[0-9]{1,4})?$/D',
+            'items' => 'required|array|min:1|max:60',
+            'items.*.merchant_product_id' => 'required|uuid',
+            'items.*.qty' => 'required|integer|min:1|max:10000',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posUserId, , $branch] = $ctx;
+        $gateway = app(MerchantPosGateway::class);
+        if (! $gateway->enabledFor($merchant) || ! $gateway->approved($merchant)
+            || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {
+            return $this->error('MERCHANT_WALLET_NOT_ENABLED', 'منشأة التجزئة غير مفعّلة لمسار محفظة أميال التاجر.', 403);
+        }
+        $actorType = $posUserId === null ? 'owner' : 'cashier';
+        $actorId = (string) ($posUserId ?? $merchant->id);
+        $lines = array_map(static fn (array $line): array => [
+            'product_id' => $line['merchant_product_id'],
+            'quantity' => (int) $line['qty'],
+        ], $v->validated()['items']);
+
+        try {
+            $order = $gateway->reserveWalletOrder($merchant, $branch, $lines,
+                (string) $request->input('request_key'), $actorType, $actorId);
+
+            if (MoneyService::compare((string) $order['total'], (string) $request->input('expected_total')) !== 0) {
+                return $this->error('MERCHANT_POS_PRICE_CHANGED',
+                    'تغيّرت أسعار المنتجات؛ حدّث السلة قبل عرض رمز الدفع.', 409);
+            }
+            if (! in_array($order['status'] ?? null, ['reserved', 'ready_to_fulfill', 'fulfilled'], true)) {
+                return $this->error('MERCHANT_WALLET_ORDER_UNAVAILABLE', 'طلب التاجر غير قابل للتحصيل.', 409);
+            }
+
+            $note = 'AMM_ORDER:'.$order['id'];
+            $qr = PaymentRequest::query()->where('requester_user_id', $merchant->id)
+                ->where('note', $note)->whereIn('status', ['pending', 'paid'])
+                ->orderByDesc('id')->first();
+
+            if (! $qr || ($qr->status === 'pending' && ! $qr->expires_at?->isFuture())) {
+                // QR's lifespan must NOT exceed the stock reservation.
+                $qr = app(PaymentRequestService::class)->create(
+                    requester: $merchant,
+                    amount: (string) $order['total'],
+                    note: $note,
+                    shareMethod: 'qr',
+                );
+                $qr->expires_at = now()->addMinutes(4)->min(
+                    \Illuminate\Support\Carbon::parse($order['expires_at']));
+                $qr->save();
+            }
+            if (MoneyService::compare((string) $qr->amount, (string) $order['total']) !== 0) {
+                return $this->error('MERCHANT_WALLET_QR_AMOUNT_MISMATCH',
+                    'طلب الدفع لا يطابق قيمة المنتجات.', 409);
+            }
+            return $this->ok([
+                'order' => $order, 'request' => $qr,
+                'short_code' => $qr->short_code,
+            ], 'MERCHANT_WALLET_ORDER_PREPARED', 'تم حجز المنتجات وتجهيز رمز محفظة المنشأة');
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->error('MERCHANT_WALLET_PREPARE_FAILED',
+                'تعذر تجهيز البيع دون خصم أي مبلغ: '.$e->getMessage(), 503);
+        }
+    }
+
+    /**
+     * Only a PAID Amial Pay PaymentRequest belonging to this merchant AND
+     * exact reserved order is accepted. Client-provided totals are ignored.
+     * Remote payment event, fulfillment and receipt are retryable/idempotent.
+     */
+    public function completeWalletOrder(Request $request, string $order): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'paid_transaction_id' => 'required|string|regex:/^[A-Za-z0-9_-]{12,128}$/D',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posUserId, , $branch] = $ctx;
+        $gateway = app(MerchantPosGateway::class);
+        if (! $gateway->enabledFor($merchant) || ! $gateway->approved($merchant)
+            || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {
+            return $this->error('MERCHANT_WALLET_NOT_ENABLED', 'لا يمكن اعتماد دفع لمنشأة غير مفعّلة.', 403);
+        }
+        $actorType = $posUserId === null ? 'owner' : 'cashier';
+        $actorId = (string) ($posUserId ?? $merchant->id);
+        $reference = (string) $request->input('paid_transaction_id');
+
+        try {
+            $sourceOrder = $gateway->walletOrder($merchant, $branch, $order, $actorType, $actorId);
+            $payment = PaymentRequest::query()->where('paid_transaction_id', $reference)
+                ->where('requester_user_id', $merchant->id)->where('status', 'paid')
+                ->where('note', 'AMM_ORDER:'.$order)->first();
+            if (! $payment) {
+                return $this->error('PAYMENT_NOT_MATCHED_TO_ORDER',
+                    'مرجع المحفظة لم يُدفع لهذا الطلب أو يخص منشأة أخرى.', 409);
+            }
+            app(MerchantPaymentReferenceService::class)->assertPaidForMerchant(
+                $merchant, $reference, (string) $sourceOrder['total']);
+            if (MoneyService::compare((string) $payment->amount, (string) $sourceOrder['total']) !== 0) {
+                return $this->error('PAYMENT_AMOUNT_MISMATCH', 'مرجع الدفع لا يطابق إجمالي الخادم.', 409);
+            }
+
+            $gateway->authorizeWalletOrder($merchant, $branch, $order,
+                $reference, (string) $sourceOrder['total']);
+            $gateway->fulfillWalletOrder($merchant, $branch, $order, $actorType, $actorId);
+            $receipt = $gateway->walletReceipt($merchant, $branch, $order, $actorType, $actorId);
+            if (($receipt['paid_transaction_id'] ?? null) !== $reference) {
+                throw new \RuntimeException('MERCHANT_WALLET_RECEIPT_REFERENCE_MISMATCH');
+            }
+
+            return $this->ok(['sale' => $receipt], 'MERCHANT_WALLET_SALE_COMPLETED',
+                'التحصيل مؤكد والمخزون خُصم وإيصال البيع جاهز للطباعة');
+        } catch (\RuntimeException $e) {
+            // Financial debit may ALREADY have happened. Never retry payment
+            // here; operators must reconcile this exact order/reference.
+            return $this->error('PAYMENT_CAPTURED_COMMERCIAL_SYNC_PENDING',
+                'تحقق من الطلب ومرجع الدفع قبل أي تحصيل آخر. مرجع: '.$reference.
+                '، طلب: '.$order.'. سبب المزامنة: '.$e->getMessage(), 503);
+        }
+    }
+
+    /** Cancel only an unpaid QR belonging to this merchant and independent order. */
+    public function cancelWalletPaymentRequest(Request $request, int $requestId): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $gateway = app(MerchantPosGateway::class);
+        if (! $gateway->enabledFor($merchant) || ! $gateway->approved($merchant)) {
+            return $this->error('MERCHANT_WALLET_NOT_ENABLED', 'لا يمكنك إلغاء تحصيل هذه المنشأة.', 403);
+        }
+        $qr = PaymentRequest::query()->whereKey($requestId)
+            ->where('requester_user_id', $merchant->id)
+            ->where('note', 'like', 'AMM_ORDER:%')->first();
+        if (! $qr) return $this->error('PAYMENT_REQUEST_NOT_FOUND', 'رمز الدفع غير موجود.', 404);
+        try {
+            app(PaymentRequestService::class)->cancel($merchant, $qr);
+            return $this->ok([], 'MERCHANT_WALLET_QR_CANCELLED', 'أُلغي رمز التحصيل غير المدفوع.');
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->error('PAYMENT_REQUEST_CANCEL_DENIED', $e->getMessage(), 409);
+        }
+    }
+
     public function recordSale(Request $request): JsonResponse
     {
+        $items = $request->input('items', []);
+        // Never let a UUID product be billed by the legacy name/price-only path,
+        // even when the Merchant integration switch is OFF.
+        $hasMerchantIds = is_array($items) && collect($items)->contains(
+            static fn ($line): bool => is_array($line) && array_key_exists('merchant_product_id', $line)
+        );
+        if ($hasMerchantIds && ! config('amial.merchant_pos_bridge.enabled', false)) {
+            return $this->error('MERCHANT_POS_BRIDGE_DISABLED', 'تعذر تأكيد ربط الكاشير بمنتجات أميال التاجر.', 503);
+        }
+        // An opted-in retail merchant must NEVER sell a new Merchant UUID through
+        // the legacy integer product IDs. Amial Pay continues to own wallet/QR.
+        if (config('amial.merchant_pos_bridge.enabled', false)) {
+            $scope = $this->resolveMerchantPos($request);
+            if ($scope instanceof JsonResponse) return $scope;
+            [$merchant, $posUserId, , $branch] = $scope;
+            $gateway = app(MerchantPosGateway::class);
+            if ($hasMerchantIds && ! $gateway->enabledFor($merchant)) {
+                return $this->error('MERCHANT_POS_NOT_ENABLED_FOR_OWNER',
+                    'معرّف الصنف المستقل غير مسموح لهذا التاجر.', 403);
+            }
+            if ($gateway->enabledFor($merchant)) {
+                if (! $gateway->approved($merchant)
+                    || MerchantProfile::where('user_id', $merchant->id)->value('business_type') !== 'retail') {
+                    return $this->error('MERCHANT_POS_NOT_APPROVED', 'الكاشير المستقل غير معتمد لهذا النشاط.', 403);
+                }
+                // Opted-in retail owners must not create empty-cart or old-ID
+                // sales in 6Cash while their catalog/stock lives in Merchant.
+                if (! $hasMerchantIds) {
+                    return $this->error('MERCHANT_POS_CART_NOT_MIGRATED',
+                        'الكاشير المستقل يقبل أصناف أميال التاجر فقط؛ لا بيع بمبلغ حر أو منتج قديم.', 409);
+                }
+                $v = Validator::make($request->all(), [
+                    'payment_method' => 'required|in:cash',
+                    'currency' => 'sometimes|in:YER',
+                    'client_uuid' => 'required|uuid',
+                    'items' => 'required|array|min:1|max:60',
+                    'items.*.merchant_product_id' => 'required|uuid',
+                    'items.*.qty' => 'required|integer|min:1|max:10000',
+                ]);
+                if ($v->fails()) return $this->validationError($v);
+                if ($request->filled('paid_transaction_id') || $request->filled('held_ticket_ulid')
+                    || (float) $request->input('discount_amount', 0) > 0
+                    || (float) $request->input('redeem_points', 0) > 0
+                    || $request->filled('cash_amount') || $request->filled('wallet_amount')
+                    || $request->filled('promotion_id') || $request->filled('corporate_account_id')) {
+                    return $this->error('MERCHANT_POS_PAYMENT_UNSUPPORTED',
+                        'الربط الحالي يدعم البيع النقدي للمنتجات المستقلة دون خصومات أو دفعات محفظة.', 422);
+                }
+                $items = $v->validated()['items'];
+                $lines = array_map(static fn (array $row): array => [
+                    'product_id' => $row['merchant_product_id'],
+                    'quantity' => (int) $row['qty'],
+                ], $items);
+                try {
+                    $sale = $gateway->cashSale($merchant, $branch, $lines,
+                        (string) $request->input('client_uuid'),
+                        $posUserId === null ? 'owner' : 'cashier', (string) ($posUserId ?? $merchant->id));
+                    return $this->ok(['sale' => $sale], 'SALE_RECORDED', 'تم البيع النقدي في أميال التاجر');
+                } catch (\RuntimeException $e) {
+                    return $this->error('MERCHANT_POS_SALE_FAILED',
+                        'لم يُؤكَّد البيع النقدي في أميال التاجر: '.$e->getMessage(),
+                        $e->getMessage() === 'MERCHANT_POS_CONFLICT' ? 409 : 503);
+                }
+            }
+        }
         $v = Validator::make($request->all(), [
             'total' => 'required|numeric|min:0.01',
             'payment_method' => 'required|in:cash,credit,amial_pay,corporate,mixed',
@@ -204,6 +524,14 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'discount_amount' => 'sometimes|nullable|numeric|min:0',
             'promotion_id' => 'sometimes|nullable|integer',
             'client_uuid' => 'sometimes|nullable|string|max:64',
+            // AMIAL-MULTI-CURRENCY-003 — عملةُ البيعة. غيابُها = الأساس،
+            // فكلُّ تطبيقٍ قائمٍ يبيع بالريال كما كان.
+            'currency' => 'sometimes|nullable|string|size:3',
+            // AMIAL-LOYALTY-AT-PAYMENT-001 — نقاطٌ يصرفها العميلُ على
+            // هذه الفاتورة. غيابُها = لا استبدال.
+            'redeem_points' => 'sometimes|nullable|numeric|min:0',
+            // AMIAL-CASH-TENDERED-001 — ما استلمه الكاشيرُ نقداً من الزبون.
+            'amount_received' => 'sometimes|nullable|numeric|min:0',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -216,14 +544,56 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         //
         // فالحارسُ على الفعل لا على العنوان: مسارُ البيع واحدٌ للحالتين،
         // ووضعُ `capability:` عليه يُقفل الكاشيرَ على كلّ تاجرٍ مجّانيّ.
-        if ($request->filled('client_uuid')
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-OFFLINE-POS-003 — **والإشارةُ كانت خاطئةً واقعاً.**
+        //
+        // قال التعليقُ أعلاه: «`client_uuid` لا يُرسَل إلّا من طابور
+        // المزامنة». **وقِيس في التطبيق فإذا هو يُرسَل في كلّ بيع** —
+        // سطرٌ غيرُ مشروط في `cashier_controller.dart` يولّده مفتاحاً
+        // لمنع التكرار (‏AMIAL-OFFLINE-POS-001)، متّصلاً كان أو غيرَ متّصل.
+        //
+        // فالحارسُ كان يقع على **كلّ** بيع. ولو أُضيف التِّرَيتُ وحدَه
+        // لتحوّل الانهيارُ إلى ٤٠٢ على البيع النقديِّ الأساسيِّ لكلّ تاجرٍ
+        // مجّانيّ — **وذاك أسوأُ من الانهيار**: قفلٌ مدفوعٌ على ما هو مجّانيّ
+        // بالتصميم، ولا يقول لأحدٍ لماذا.
+        //
+        // **والفارقُ الحقيقيُّ موجودٌ في الحمولة**: طابورُ المزامنة يضيف
+        // `_offline_queued_at` عند الحفظ المحلّيّ ويرسله مع البيع، والبيعُ
+        // المتّصلُ لا يرسله قطّ. فصار الحارسُ على أثرِ الطابور لا على مفتاح
+        // منع التكرار. (القاعدة الثامنة: الحدُّ على ما لا يُنتحَل.)
+        // ══════════════════════════════════════════════════════════════
+        if (($request->filled('_offline_queued_at') || $request->filled('_offline_state'))
             && ($deny = $this->denyUnless($request, 'offline_pos')) !== null) {
             return $deny;
         }
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, $posUserId] = $ctx;
+        [$merchant, $posUserId, , $branch] = $ctx;
+
+        // AMIAL-QUICK-SALE-CONTRACT-001 — البيع السريع «مبلغ لا سلة».
+        // حتى لو استُخدم API قديماً أو عُدّل التطبيق لا يمكن تحويل
+        // البسطة إلى كاشير منتجات أو دفتر آجل من الباب الخلفي.
+        $businessType = (string) MerchantProfile::where('user_id', $merchant->id)
+            ->value('business_type');
+        if ($businessType === A::BIZ_QUICK_SALE) {
+            if ((array) $request->input('items', []) !== []) {
+                return $this->error(
+                    'QUICK_SALE_ITEMS_NOT_ALLOWED',
+                    'البيع السريع يعمل بمبلغ مباشر بلا أصناف. استخدم قطاع التجزئة لإدارة المنتجات.',
+                    422,
+                );
+            }
+
+            if (! in_array((string) $request->input('payment_method'), ['cash', 'amial_pay'], true)) {
+                return $this->error(
+                    'QUICK_SALE_PAYMENT_METHOD_NOT_ALLOWED',
+                    'البيع السريع يقبل النقد أو أميال باي فقط.',
+                    422,
+                );
+            }
+        }
+
 
         // AMIAL-CORPORATE-ACCOUNTS-001: البيع على حساب شركة يتطلّب الباقة المؤسسية
         if ($request->input('payment_method') === 'corporate'
@@ -248,14 +618,185 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                 cashAmount: $request->input('cash_amount'),
                 walletAmount: $request->input('wallet_amount'),
                 clientUuid: $request->input('client_uuid'),
+                currency: $request->input('currency'),
+                // AMIAL-LOYALTY-AT-PAYMENT-001 — نقاطُ العميل تُصرَف مع
+                // البيعة، فتسقط معها إن سقطت.
+                redeemPoints: $request->input('redeem_points') !== null
+                    ? (float) $request->input('redeem_points') : null,
+                amountReceived: $request->input('amount_received') !== null
+                    ? (string) $request->input('amount_received') : null,
+                branchId: $branch?->id,
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('SALE_INVALID', $e->getMessage(), 422);
         } catch (\RuntimeException $e) {
+            // **ورسالةُ «لا سعرَ صرفٍ مضبوط» تصل الكاشيرَ بنصّها** — فرفضٌ
+            // بلا سبب يجعله يعيد المحاولة والعميلُ واقف.
             return $this->error('SALE_FAILED', $e->getMessage(), 422);
         }
 
-        return $this->ok(['sale' => $sale], 'SALE_RECORDED', 'تم تسجيل البيع');
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-HELD-SALE-001 — **التذكرةُ تُختَم بالبيعة التي وُلدت منها.**
+        //
+        // فيُعرف مصيرُها: دُفعت أم ما زالت معلَّقة. **ولا يُرمى استثناءٌ
+        // إن تعذّر الربط** — البيعةُ وقعت والمالُ تحرّك، وربطُ الأثر لا
+        // يُسقط بيعةً ناجحة. (وهو حدُّ `AuditService::record` نفسُه:
+        // عقوبةُ خطأٍ صغيرٍ لا تكون بفقد ما نجح.)
+        // ══════════════════════════════════════════════════════════════
+        if ($request->filled('held_ticket_ulid')) {
+            try {
+                app(\App\Services\HeldSaleService::class)->linkSale(
+                    $merchant,
+                    (string) $request->input('held_ticket_ulid'),
+                    (string) ($sale['sale_ulid'] ?? $sale->sale_ulid ?? ''),
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'held ticket link failed: ' . $e->getMessage());
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-NEGATIVE-STOCK-001 — **ما نزل تحت الصفر يُقال الآن.**
+        //
+        // البيعُ لا يُوقَف (البضاعةُ خرجت من الرفّ فعلاً)، **لكنّ الكاشير
+        // يُخبَر وهو واقفٌ أمام الرفّ** — وهي أنفعُ لحظةٍ لقوله. وتركُه
+        // لجدولٍ يقرؤه المالكُ بعد يومين يجعل الإشارةَ تصل من لا يستطيع
+        // النظرَ في الرفّ الآن.
+        //
+        // **ولا يُرسَل مفتاحٌ فارغٌ حين لا سالب** — قائمةٌ فارغةٌ في كلّ
+        // ردٍّ تُعوّد الشاشةَ على تجاهلها.
+        // ══════════════════════════════════════════════════════════════
+        $negative = $this->cashier->takeNegativeLines();
+
+        return $this->ok(array_filter([
+            'sale' => $sale,
+            'negative_stock' => $negative !== [] ? $negative : null,
+        ], fn ($v) => $v !== null), 'SALE_RECORDED', 'تم تسجيل البيع');
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-HELD-SALE-001 — التذاكر المفتوحة (تعليق الفاتورة)
+    // ══════════════════════════════════════════════════════════════════
+
+    /** GET /merchant/cashier/held — التذاكر المفتوحة للمنشأة. */
+    public function heldIndex(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $tickets = app(\App\Services\HeldSaleService::class)->open($merchant);
+
+        return $this->ok([
+            'tickets' => $tickets,
+            'count' => count($tickets),
+            'max_open' => \App\Models\HeldSale::MAX_OPEN,
+        ]);
+    }
+
+    /** POST /merchant/cashier/held — تعليق السلة الحالية. */
+    public function heldStore(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'items' => 'required|array|min:1',
+            'items.*.name' => 'sometimes|nullable|string|max:200',
+            'items.*.qty' => 'sometimes|numeric|min:0',
+            'items.*.quantity' => 'sometimes|numeric|min:0',
+            'items.*.price' => 'sometimes|numeric|min:0',
+            'items.*.product_id' => 'sometimes|nullable|integer',
+            'label' => 'sometimes|nullable|string|max:120',
+            'customer_name' => 'sometimes|nullable|string|max:190',
+            'customer_phone' => 'sometimes|nullable|string|max:32',
+            'notes' => 'sometimes|nullable|string|max:500',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posUserId] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)->hold(
+                $merchant, $posUserId, $request->input('items'), [
+                    'label' => $request->input('label'),
+                    'customer_name' => $request->input('customer_name'),
+                    'customer_phone' => $request->input('customer_phone'),
+                    'notes' => $request->input('notes'),
+                ]);
+        } catch (\DomainException $e) {
+            return $this->error('HOLD_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $this->ticketArr($ticket)], 'HELD',
+            'عُلّقت الفاتورة — تُستأنف من «التذاكر المفتوحة»', 201);
+    }
+
+    /** POST /merchant/cashier/held/{ulid}/resume */
+    public function heldResume(Request $request, string $ulid): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)->resume($merchant, $ulid);
+        } catch (\DomainException $e) {
+            return $this->error('RESUME_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $ticket], 'RESUMED', 'استُؤنفت التذكرة');
+    }
+
+    /** POST /merchant/cashier/held/{ulid}/reopen — تراجُعٌ عن الاستئناف. */
+    public function heldReopen(Request $request, string $ulid): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)->reopen($merchant, $ulid);
+        } catch (\DomainException $e) {
+            return $this->error('REOPEN_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $ticket], 'REOPENED', 'أُعيدت التذكرة معلَّقة');
+    }
+
+    /** POST /merchant/cashier/held/{ulid}/void */
+    public function heldVoid(Request $request, string $ulid): JsonResponse
+    {
+        $v = Validator::make($request->all(), ['reason' => 'required|string|min:3|max:300']);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)
+                ->void($merchant, $ulid, (string) $request->input('reason'));
+        } catch (\DomainException $e) {
+            return $this->error('VOID_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $ticket], 'VOIDED', 'أُلغيت التذكرة');
+    }
+
+    private function ticketArr(\App\Models\HeldSale $t): array
+    {
+        return [
+            'ticket_ulid' => $t->ticket_ulid,
+            'label' => $t->label,
+            'customer_name' => $t->customer_name,
+            'items' => $t->items ?? [],
+            'items_count' => count($t->items ?? []),
+            'total' => (string) $t->total,
+            'status' => $t->status,
+            'opened_by_name' => $t->opened_by_name,
+            'opened_at' => $t->created_at?->toIso8601String(),
+        ];
     }
 
     /**
@@ -263,24 +804,70 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
      *
      * المسار لا يقرأ شيئاً من Flutter: التاجر وPOS لا يملكان إلا فاتورتهما.
      */
+    /** Server-authoritative printable PDF: paid, fulfilled, correct tenant. */
+    public function downloadWalletOrderInvoice(Request $request, string $order)
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posId, , $branch] = $ctx;
+        $gateway = app(MerchantPosGateway::class);
+        if (! $gateway->enabledFor($merchant) || ! $gateway->approved($merchant)) {
+            return $this->error('MERCHANT_WALLET_NOT_ENABLED', 'حساب التاجر غير مفعّل.', 403);
+        }
+        try {
+            $type = $posId === null ? 'owner' : 'cashier';
+            $receipt = $gateway->walletReceipt($merchant, $branch, $order,
+                $type, (string) ($posId ?? $merchant->id));
+            $storeName = (string) (\App\Models\Merchant::where('user_id', $merchant->id)
+                ->value('store_name') ?: 'منشأة أميال');
+            $html = view('pdf.merchant-wallet-pos-receipt', compact('receipt', 'storeName'))->render();
+            $pdf = \App\Support\ArabicPdf::render($html, ['format' => 'A4', 'margin' => 12]);
+            return response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Length' => (string) strlen($pdf),
+                'Content-Disposition' => 'attachment; filename="amial-wallet-'.$order.'.pdf"',
+                'Cache-Control' => 'private, no-store',
+                'Content-Encoding' => 'identity',
+            ]);
+        } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('Merchant wallet PDF unavailable', [
+                'owner_id' => $merchant->id, 'order' => $order,
+                'error_type' => get_class($exception),
+            ]);
+            return $this->error('MERCHANT_RECEIPT_NOT_READY',
+                'لا يوجد إيصال مدفوع ومكتمل لهذا البيع أو تعذّر توليد الملف.', 503);
+        }
+    }
+
     public function downloadInvoice(Request $request, string $ulid)
     {
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         $sale = MerchantSale::where('sale_ulid', $ulid)
             ->where('merchant_user_id', $merchant->id)
+            ->when($branch !== null, fn ($q) => $q->where('branch_id', $branch->id))
             ->first();
         if (!$sale) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
 
         try {
-            $pdf = app(CashierSaleInvoicePdfService::class)->generate($sale);
+            // AMIAL-PDF-CACHE-002 — **بيعٌ تمّ لا يتغيّر، فالتصيير مرّةً
+            // يكفي أبداً.** وكلُّ تصييرٍ داخل الطلب يعرّض الاتّصالَ
+            // للقطع على شبكة جوّال (`Connection closed while receiving
+            // data`) — **وهو عطلٌ وقع فعلاً**، وهذا مسارُ الجوّال نفسُه.
+            $pdfSvc = app(CashierSaleInvoicePdfService::class);
+
+            $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                $pdfSvc->cacheKey($sale),
+                fn () => $pdfSvc->generate($sale),
+            );
+
             return response($pdf, 200, [
                 'Content-Type' => 'application/pdf',
                 'Content-Length' => (string) strlen($pdf),
                 'Content-Disposition' => 'attachment; filename="'
-                    . app(CashierSaleInvoicePdfService::class)->suggestedFilename($sale) . '"',
+                    . $pdfSvc->suggestedFilename($sale) . '"',
                 'Cache-Control' => 'private, max-age=900',
                 'Content-Encoding' => 'identity',
             ]);
@@ -296,12 +883,18 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
     public function settleCredit(Request $request, int $id): JsonResponse
     {
+        try {
+            $this->perm->assert($request->user(), P::CASH_MOVE);
+        } catch (DomainException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        }
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         try {
-            $sale = $this->cashier->settleCredit($merchant, $id, $request->input('paid_transaction_id'));
+            $sale = $this->cashier->settleCredit(
+                $merchant, $id, $request->input('paid_transaction_id'), $branch?->id);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
         } catch (\RuntimeException $e) {
@@ -322,12 +915,13 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         return $this->ok($this->cashier->listSales(
             $merchant,
             $request->query('date'),
-            (int) $request->query('limit', 100)
+            (int) $request->query('limit', 100),
+            $branch?->id,
         ));
     }
 
@@ -342,10 +936,11 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
     {
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         $sale = \App\Models\MerchantSale::where('sale_ulid', $ulid)
             ->where('merchant_user_id', $merchant->id)
+            ->when($branch !== null, fn ($q) => $q->where('branch_id', $branch->id))
             ->with('lines')
             ->first();
         if (! $sale) return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
@@ -356,8 +951,15 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
         return $this->ok([
             'sale' => $sale->only([
-                'id', 'sale_ulid', 'total_amount', 'discount_amount', 'payment_method',
-                'status', 'customer_name', 'customer_phone', 'created_at',
+                'id', 'sale_ulid', 'invoice_number', 'total_amount', 'discount_amount', 'payment_method',
+                'status', 'customer_name', 'customer_phone',
+                // مرجع التحصيل والتسوية جزءٌ من تفاصيل البيع، لا من سجل
+                // المحفظة وحده. بدونه لا يستطيع المالك مطابقة شكوى عميل
+                // مع عملية أميال التي دفعت الفاتورة.
+                'paid_transaction_id', 'settled_at',
+                'cash_amount', 'wallet_amount', 'amount_received',
+                'branch_id', 'pos_user_id', 'shift_id', 'pos_device_id',
+                'created_at',
             ]),
             'lines' => $sale->lines->map(fn ($l) => [
                 'id' => $l->id,
@@ -391,11 +993,46 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
     public function report(Request $request): JsonResponse
     {
+        // AMIAL-POS-DAILY-REPORT-001 — تقرير الموظف يختلف عن تقرير المالك:
+        // يُقيَّد بحساب POS نفسه ويقرأ جدول القطاع الحقيقي. ولا نمرره عبر
+        // resolveMerchantPos() أولاً لأن ذلك يرفض الصيدلية عمداً لمسار
+        // «الكاشير العام»، بينما تقرير الصيدلية هنا لا يبيع شيئاً.
+        $authUser = $request->user();
+        $pos = PosUser::where('user_id', $authUser->id)
+            ->where('is_active', true)->first();
+
+        if ($pos) {
+            $merchant = User::find($pos->merchant_user_id);
+            if (! $merchant) {
+                return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
+            }
+
+            try {
+                $branch = $this->branches->resolveOperational($request, $merchant, $pos);
+                $this->branches->assertDeviceMatches(
+                    \App\Http\Middleware\EnsurePosDevice::deviceOf($request),
+                    $merchant,
+                    $branch,
+                );
+            } catch (\LogicException $e) {
+                return $this->error('BRANCH_SCOPE_INVALID', $e->getMessage(), 403);
+            }
+
+            return $this->ok($this->cashier->dailyReportForPos(
+                $merchant,
+                (int) $pos->id,
+                (int) $authUser->id,
+                $request->query('date'),
+                $branch?->id,
+            ));
+        }
+
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
-        return $this->ok($this->cashier->dailyReport($merchant, $request->query('date')));
+        return $this->ok($this->cashier->dailyReport(
+            $merchant, $request->query('date'), $branch?->id));
     }
 
     /** AMIAL-PROFIT-001 — GET /profit-report?days=7|30|90 */
@@ -403,15 +1040,47 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
     {
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, , , $branch] = $ctx;
 
         $days = (int) $request->query('days', 7);
-        return $this->ok($this->cashier->profitReport($merchant, $days));
+        return $this->ok($this->cashier->profitReport($merchant, $days, $branch?->id));
+    }
+
+    /**
+     * AMIAL-SALES-BREAKDOWN-001 — **ماذا بِعتُ، وبكم، وبأيّ ربح.**
+     *
+     * وكان في المنتج `top_products`: خمسةُ أسماءٍ بكمّيّاتها ليومٍ واحد.
+     * وهذا يُضيف الإيرادَ والتكلفةَ والهامشَ **والتصنيف**، على مدىً
+     * يختاره التاجر، **ومطروحاً منه المرتجَع**.
+     *
+     * @see \App\Services\SalesBreakdownService
+     */
+    public function salesBreakdown(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, , , $branch] = $ctx;
+
+        $v = \Illuminate\Support\Facades\Validator::make($request->query(), [
+            'from' => 'sometimes|nullable|date',
+            'to' => 'sometimes|nullable|date',
+        ]);
+
+        if ($v->fails()) {
+            return $this->validationError($v);
+        }
+
+        return $this->ok(app(\App\Services\SalesBreakdownService::class)->report(
+            $merchant,
+            $request->query('from'),
+            $request->query('to'),
+            $branch?->id,
+        ));
     }
 
     // ---- helpers ----
 
-    /** يرجّع [merchant(User), posUserId(?int)] أو JsonResponse عند الخطأ. */
+    /** يرجّع [merchant(User), posUserId(?int), posUser(?PosUser), branch(?Branch)]. */
     private function resolveMerchantPos(Request $request): array|JsonResponse
     {
         $authUser = $request->user();
@@ -420,12 +1089,48 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if ($pos) {
             $merchant = User::find($pos->merchant_user_id);
             if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
-            return [$merchant, $pos->id];
+            if ($this->isPharmacyMerchant($merchant)) {
+                return $this->error(
+                    'PHARMACY_CASHIER_ONLY',
+                    'هذه المنشأة صيدلية. استخدم كاشير الصيدلية لتبقى الوصفات والتشغيلات والصلاحية في الفاتورة.',
+                    403,
+                );
+            }
+            try {
+                $branch = $this->branches->resolveOperational($request, $merchant, $pos);
+                $this->branches->assertDeviceMatches(
+                    \App\Http\Middleware\EnsurePosDevice::deviceOf($request), $merchant, $branch);
+            } catch (\LogicException $e) {
+                return $this->error('BRANCH_SCOPE_INVALID', $e->getMessage(), 403);
+            }
+            return [$merchant, $pos->id, $pos, $branch];
         }
 
-        if (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
+        $profile = MerchantProfile::where('user_id', $authUser->id)->first();
+        if (!$profile) {
             return $this->error('NOT_A_MERCHANT', 'الكاشير متاح للتجار وموظفي نقاط البيع فقط', 403);
         }
-        return [$authUser, null];
+        if ($profile->business_type === 'pharmacy') {
+            return $this->error(
+                'PHARMACY_CASHIER_ONLY',
+                'هذه المنشأة صيدلية. استخدم كاشير الصيدلية لتبقى الوصفات والتشغيلات والصلاحية في الفاتورة.',
+                403,
+            );
+        }
+        try {
+            $branch = $this->branches->resolveOperational($request, $authUser);
+            $this->branches->assertDeviceMatches(
+                \App\Http\Middleware\EnsurePosDevice::deviceOf($request), $authUser, $branch);
+        } catch (\LogicException $e) {
+            return $this->error('BRANCH_SCOPE_INVALID', $e->getMessage(), 403);
+        }
+        return [$authUser, null, null, $branch];
+    }
+
+    /** الكاشير العام يخص البيع السريع والتجزئة؛ الصيدلية لها مصدر بيع مستقل. */
+    private function isPharmacyMerchant(User $merchant): bool
+    {
+        return MerchantProfile::where('user_id', $merchant->id)
+            ->value('business_type') === 'pharmacy';
     }
 }

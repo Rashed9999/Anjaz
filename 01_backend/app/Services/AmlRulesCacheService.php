@@ -27,7 +27,7 @@ class AmlRulesCacheService
     /**
      * Get all active rules (cached).
      */
-    public function getActiveRules()
+    private function getActiveRules()
     {
         return $this->cache->remember('aml.rules.active', CacheService::TTL_HOT, function () {
             return \App\Models\Aml\AmlRule::active()

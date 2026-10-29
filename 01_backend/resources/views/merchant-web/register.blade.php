@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>فتح حساب منشأة | موثّق</title>
+<style nonce="{{ request()->attributes->get('csp_nonce') }}">body{margin:0;background:#f4f8f6;color:#15332c;font-family:Tahoma,"Segoe UI",sans-serif}.card{max-width:680px;margin:12vh auto;padding:32px;background:#fff;border:1px solid #dce8e2;border-radius:18px;box-shadow:0 12px 34px #163a2d0a;text-align:center}h1{margin:0 0 14px}.lead{color:#5d6e68;line-height:1.8}.btn{display:inline-block;margin-top:20px;padding:13px 22px;background:#126b50;color:#fff;text-decoration:none;border-radius:10px;font-weight:bold}.back{display:block;margin-top:18px;color:#126b50}</style></head>
+<body><main class="card"><h1>فتح حساب منشأة يتم عبر موثّق</h1><p class="lead">موثّق يستلم بيانات المنشأة وأدلتها ويعتمدها. بعد الاعتماد فقط يهيّئ أميال باي لوحة القطاع والمحفظة ويرسل طريقة الدخول الآمنة.</p>
+@php($muwathaq = rtrim((string) config('muwathaq.base_url'), '/'))
+@if($muwathaq !== '')<a class="btn" href="{{ $muwathaq }}/open-account?type=merchant">فتح طلب تاجر في موثّق</a>@else<p class="lead">بوابة موثّق غير مضبوطة حالياً. لا يمكن إنشاء حساب من أميال باي.</p>@endif
+<a class="back" href="{{ route('merchant.web.login') }}">لدي حساب بالفعل ←</a></main></body></html>

@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
-use App\Models\EMoney;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Traits\UploadSizeHelperTrait;
@@ -23,7 +22,6 @@ class AgentController extends Controller
 
     public function __construct(
         private User        $user,
-        private EMoney      $eMoney,
         private Transaction $transaction
     )
     {
@@ -76,69 +74,16 @@ class AgentController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
-    {
-        $check = $this->validateUploadedFile($request, ['image']);
-        if ($check !== true) {
-            return $check;
+    public function store(Request $request): RedirectResponse{
+        $muwathaq = rtrim((string) config('muwathaq.base_url'), '/');
+
+        if ($muwathaq === '') {
+            return redirect()->route('admin.agent.list')
+                ->with('error', 'بوابة موثّق غير مضبوطة؛ لا يمكن إنشاء وكيل من أميال باي.');
         }
 
-        $request->validate([
-            'f_name' => 'required',
-            'l_name' => 'required',
-            'image' => 'required|image|max:'. $this->maxImageSizeKB .'|mimes:' . implode(',', array_column(IMAGE_EXTENSIONS, 'key')),
-            'email' => '',
-            'phone' => [
-                'required',
-                Rule::unique('users')->where(function ($query) {
-                    return $query->whereNull('deleted_at');
-                }),
-                'min:5',
-                'max:20',
-            ],
-            'country_code' => 'required',
-            'gender' => 'required',
-            'occupation' => 'required',
-            'password' => 'required|min:4|max:4',
-        ], [
-            'password.min' => translate('Password must contain 4 characters'),
-            'password.max' => translate('Password must contain 4 characters'),
-        ]);
-
-        $phone = $request->country_code . $request->phone;
-        $agent = $this->user->where(['phone' => $phone])->first();
-        if (isset($agent)) {
-            Toastr::warning(translate('This phone number is already taken'));
-            return back();
-        }
-
-        DB::transaction(function () use ($request, $phone) {
-            $user = $this->user;
-            $user->f_name = $request->f_name;
-            $user->l_name = $request->l_name;
-            $user->image = Helpers::upload('agent/', APPLICATION_IMAGE_FORMAT, $request->file('image'));
-            $user->email = $request->email;
-            $user->dial_country_code = $request->country_code;
-            $user->phone = $phone;
-            $user->gender = $request->gender;
-            $user->occupation = $request->occupation;
-            $user->password = bcrypt($request->password);
-            $user->type = AGENT_TYPE;
-            $user->referral_id = $request->referral_id ?? null;
-            $user->identification_image = json_encode([]);
-            $user->save();
-
-            $user->find($user->id);
-            $user->unique_id = $user->id . mt_rand(1111, 99999);
-            $user->save();
-
-            $emoney = $this->eMoney;
-            $emoney->user_id = $user->id;
-            $emoney->save();
-        });
-
-        Toastr::success(translate('Agent Added Successfully!'));
-        return redirect(route('admin.agent.list'));
+        return redirect()->away($muwathaq.'/accounts/new-agent')
+            ->with('warning', 'إنشاء الوكيل انتقل إلى موثّق؛ أميال باي لا ينشئ الوكلاء مباشرة.');
     }
 
     public function edit(int $id): View
@@ -255,26 +200,17 @@ class AgentController extends Controller
         return view('admin-views.agent.kyc_list', compact('agents', 'search'));
     }
 
-    public function updateKycStatus(int $id, int $status): RedirectResponse
-    {
-        $user = $this->user->find($id);
-        if (!isset($user)) {
-            Toastr::error(translate('agent not found'));
-            return back();
-        }
-        $user->is_kyc_verified = in_array($status, [1, 2]) ? $status : $user->is_kyc_verified;
-        $user->save();
-
-        $data = [
-            'title' => $status == 1 ? translate('verification_request_is_accepted') : translate('verification_request_is_denied'),
-            'description' => '',
-            'image' => '',
-            'type' => 'kyc_verification',
-        ];
-
-        Helpers::send_push_notif_to_device($user->fcm_token, $data);
-
-        Toastr::success(translate('Successfully updated.'));
-        return back();
-    }
+    /*
+     * AMIAL-KYC-EVIDENCE-001 — **حُذفت `updateKycStatus`: بابٌ ثانٍ إلى
+     * قرارٍ ماليّ.**
+     *
+     * كانت تكتب `is_kyc_verified` مباشرةً — **بلا مراجعةِ وثيقةٍ واحدة،
+     * وبلا محافظةِ سكن، وبلا المبدأ الرباعيّ، وبلا سطرِ تدقيق**. وقِيس
+     * أنّها بلا مسارٍ مسجَّلٍ ولا قالبٍ يناديها، فهي شيفرةٌ يتيمة —
+     * **لكنّ اليتيمَ يُتبنّى**: من قرأها ظنّها المسارَ ووصلها بمسار.
+     *
+     * والقرارُ الواحد: `KycDocumentService::decideAccountVerification`،
+     * ومدخلُه من اللوحة `POST hub/users/{id}/kyc`.
+     * ويحرسه `KycEvidenceGuardTest`.
+     */
 }

@@ -6,6 +6,7 @@ use App\Models\MerchantProduct;
 use App\Models\Retail\MerchantLocation;
 use App\Models\Retail\ProductStock;
 use App\Models\Retail\StockMovement;
+use App\Models\Branch;
 use App\Models\User;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -35,11 +36,43 @@ class StockService
      */
     public function defaultLocation(int $merchantUserId): MerchantLocation
     {
+        $branch = Branch::where('merchant_user_id', $merchantUserId)
+            ->where('is_active', true)
+            ->where('is_default', true)
+            ->first();
+
+        if ($branch) {
+            return $this->syncBranchLocation($branch);
+        }
+
         $loc = MerchantLocation::where('merchant_user_id', $merchantUserId)
-            ->where('is_default', true)->first();
+            ->where('kind', 'store')
+            ->where('is_active', true)
+            ->where('is_default', true)
+            ->first();
 
         if ($loc) {
             return $loc;
+        }
+
+        $legacy = MerchantLocation::withTrashed()
+            ->where('merchant_user_id', $merchantUserId)
+            ->where('kind', 'store')
+            ->where('code', 'MAIN')
+            ->first();
+
+        if ($legacy) {
+            if ($legacy->trashed()) {
+                $legacy->restore();
+            }
+            $legacy->update([
+                'branch_id' => null,
+                'name' => $legacy->name ?: 'الفرع الرئيسي',
+                'is_active' => true,
+                'is_default' => true,
+            ]);
+
+            return $legacy->fresh();
         }
 
         return MerchantLocation::create([
@@ -50,6 +83,121 @@ class StockService
             'is_active' => true,
             'is_default' => true,
         ]);
+    }
+
+    /**
+     * الموقع التشغيلي للبيع يخرج من branch_id نفسه.
+     *
+     * لا يجوز لبيع فرع ثان أن يخصم من MAIN لمجرد أن MAIN هو الافتراضي.
+     * وإذا كان التاجر قديماً وله موقع MAIN بلا branch_id نتبنّاه للفرع
+     * الافتراضي بدلاً من إنشاء مخزون موازٍ.
+     */
+    public function locationForBranch(int $merchantUserId, ?int $branchId): MerchantLocation
+    {
+        if ($branchId === null) {
+            return $this->defaultLocation($merchantUserId);
+        }
+
+        $branch = Branch::whereKey($branchId)
+            ->where('merchant_user_id', $merchantUserId)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $branch) {
+            throw new DomainException('الفرع التشغيلي غير صالح لهذه المنشأة');
+        }
+
+        return $this->syncBranchLocation($branch);
+    }
+
+    /**
+     * مزامنة هوية الفرع مع موقع المخزون من غير تحريك أي كمية.
+     * تغيير الاسم أو جعل فرع افتراضياً لا ينقل البضاعة بين المواقع.
+     */
+    public function syncBranchLocation(Branch $branch): MerchantLocation
+    {
+        $merchantUserId = (int) $branch->merchant_user_id;
+
+        return DB::transaction(function () use ($branch, $merchantUserId) {
+            $base = MerchantLocation::withTrashed()
+                ->where('merchant_user_id', $merchantUserId)
+                ->where('kind', 'store');
+
+            $location = (clone $base)
+                ->where('branch_id', $branch->id)
+                ->first();
+
+            // جسر الترقية: MAIN القديم كان بلا branch_id.
+            if (! $location && $branch->is_default) {
+                $location = (clone $base)
+                    ->whereNull('branch_id')
+                    ->where('is_default', true)
+                    ->first();
+            }
+
+            $preferredCode = $branch->is_default ? 'MAIN' : 'BR-' . $branch->id;
+
+            if (! $location) {
+                $sameCode = MerchantLocation::withTrashed()
+                    ->where('merchant_user_id', $merchantUserId)
+                    ->where('code', $preferredCode)
+                    ->first();
+
+                if ($sameCode
+                    && $sameCode->kind === 'store'
+                    && ($sameCode->branch_id === null || (int) $sameCode->branch_id === (int) $branch->id)) {
+                    $location = $sameCode;
+                } elseif ($sameCode) {
+                    $preferredCode = 'STORE-' . $branch->id;
+                }
+            }
+
+            if ($branch->is_default) {
+                $others = MerchantLocation::where('merchant_user_id', $merchantUserId)
+                    ->where('kind', 'store');
+                if ($location) {
+                    $others->where('id', '!=', $location->id);
+                }
+                $others->update(['is_default' => false]);
+            }
+
+            $attrs = [
+                'branch_id' => $branch->id,
+                'name' => $branch->name ?: 'فرع ' . $branch->id,
+                'city' => $branch->city,
+                'address' => $branch->address,
+                'is_active' => (bool) $branch->is_active,
+                'is_default' => (bool) $branch->is_default,
+            ];
+
+            if ($location) {
+                if ($location->trashed()) {
+                    $location->restore();
+                }
+                $location->update($attrs);
+
+                return $location->fresh();
+            }
+
+            return MerchantLocation::create($attrs + [
+                'merchant_user_id' => $merchantUserId,
+                'kind' => 'store',
+                'code' => $preferredCode,
+                'created_by' => $merchantUserId,
+            ]);
+        });
+    }
+
+    /** يبقى تاريخ المخزون محفوظاً عند إيقاف/حذف الفرع، لكنه لا يعود موقع بيع حي. */
+    public function deactivateBranchLocation(Branch $branch): void
+    {
+        MerchantLocation::where('merchant_user_id', $branch->merchant_user_id)
+            ->where('branch_id', $branch->id)
+            ->where('kind', 'store')
+            ->update([
+                'is_active' => false,
+                'is_default' => false,
+            ]);
     }
 
     public function addLocation(User $merchant, array $data): MerchantLocation
@@ -71,18 +219,53 @@ class StockService
             throw new DomainException('نوع الموقع غير صحيح (متجر أو مستودع)');
         }
 
+        $branchId = $data['branch_id'] ?? null;
+        $merchantBranches = Branch::where('merchant_user_id', $merchant->id)
+            ->where('is_active', true);
+
+        // المتجر هو نقطة البيع في فرع؛ أما المستودع فليس فرع مبيعات ولا
+        // نفرض عليه ارتباطاً وهمياً. ومع ذلك لا نقبل معرّف فرعٍ لتاجر آخر.
+        if ($branchId !== null && $branchId !== '') {
+            $branch = (clone $merchantBranches)->where('id', (int) $branchId)->first();
+            if (! $branch) throw new DomainException('الفرع غير صالح لهذه المنشأة');
+            $branchId = $branch->id;
+        } elseif ($kind === 'store') {
+            $branchId = (clone $merchantBranches)->where('is_default', true)->value('id');
+        }
+
         return MerchantLocation::create([
             'merchant_user_id' => $merchant->id,
             'kind' => $kind,
             'name' => trim((string) ($data['name'] ?? $code)),
             'code' => $code,
-            'branch_id' => $data['branch_id'] ?? null,
+            'branch_id' => $branchId,
             'city' => $data['city'] ?? null,
             'address' => $data['address'] ?? null,
             'is_active' => true,
             'is_default' => false,
             'created_by' => $merchant->id,
         ]);
+    }
+
+    /**
+     * يضمن وجود لقطة موقع للصنف حتى لو كان رصيده صفراً.
+     * إنشاء صفر ليس حركة مالية/مخزنية؛ لذلك لا نختلق stock_movement.
+     */
+    public function ensureLocationStock(
+        MerchantProduct $product,
+        MerchantLocation $location,
+    ): ProductStock {
+        if ((int) $product->merchant_user_id !== (int) $location->merchant_user_id) {
+            throw new DomainException('موقع المخزون لا يتبع منشأة الصنف');
+        }
+
+        return DB::transaction(function () use ($product, $location) {
+            $stock = ProductStock::where('product_id', $product->id)
+                ->where('location_id', $location->id)
+                ->lockForUpdate()->first();
+
+            return $stock ?: $this->openStockRow($product, $location);
+        });
     }
 
     /**
@@ -206,6 +389,9 @@ class StockService
             'location_id' => $location->id,
             'on_hand' => $adopt ? $legacy : '0',
             'reserved' => '0',
+            // حد المنتج هو الافتراضي لأي موقع جديد. يمكن للموقع لاحقاً
+            // امتلاك حد مستقل من شاشة المخزون دون تغيير بقية المواقع.
+            'reorder_level' => (string) ($product->reorder_level ?? '0'),
         ]);
 
         if ($adopt) {
@@ -316,13 +502,36 @@ class StockService
      * **ومن لم يُضبَط له حدٌّ لا يُعدّ منخفضاً** — حدُّ الصفر يعني «لم
      * يُضبط»، وعدُّه منخفضاً يُغرق الشاشة بتنبيهاتٍ لا معنى لها.
      */
-    public function lowStock(int $merchantUserId, ?int $locationId = null): array
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-NEGATIVE-STOCK-001 — **السالبُ يصل صاحبَ المتجر.**
+     *
+     * **ما قِيس:** البيعُ يمرّ بالسالب عمداً وهو صواب (`allowNegative:
+     * true` في `decrementStockForSale`) — «البضاعةُ خرجت من الرفّ فعلاً،
+     * ورفضُها بعد خروجها لا يُفيد أحداً». **والسالبُ يُترَك ظاهراً**
+     * إشارةً على أنّ الجردَ منحرف، ولوحةُ المنصّة تعرضه أوّلَ ما تعرض.
+     *
+     * **لكنّ التاجرَ نفسَه لا يراه إطلاقاً.**
+     *
+     * `lowStock()` يشترط `reorder_level > 0`، **وهو صفرٌ بالافتراض**. فصنفٌ
+     * رصيدُه ‎-٤٠ ولم يُضبَط له حدُّ طلبٍ **لا يظهر في أيّ شاشةٍ للتاجر**.
+     * فالإشارةُ محفوظةٌ ومقصودةٌ ومعروضةٌ لمن لا يملك إصلاحَها، **ومحجوبةٌ
+     * عمّن يملكه** — وهو «مبنيٌّ ولا يُوصَل إليه» مقلوباً.
+     *
+     * **ولا يُشترَط هنا حدُّ طلبٍ ولا قدرةٌ مدفوعة**: السالبُ ليس تنبيهَ
+     * نفادٍ يُشترى، هو **خللٌ في البيانات** — وبيعُ رؤيةِ خللٍ للتاجر
+     * بيعُ أرقامٍ خاطئةٍ لمن دفع أقلّ. (وهو حدُّ `core()` نفسُه.)
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function negativeStock(int $merchantUserId, ?int $locationId = null): array
     {
         $q = ProductStock::query()
             ->whereHas('product', fn ($w) => $w->where('merchant_user_id', $merchantUserId))
-            ->where('reorder_level', '>', 0)
-            ->whereColumn('on_hand', '<=', 'reorder_level')
-            ->with(['product:id,name,barcode', 'location:id,name']);
+            ->where('on_hand', '<', 0)
+            ->with(['product:id,name,barcode', 'location:id,name'])
+            ->orderBy('on_hand');
 
         if ($locationId) {
             $q->where('location_id', $locationId);
@@ -332,13 +541,113 @@ class StockService
             ->map(fn (ProductStock $s) => [
                 'product_id' => (int) $s->product_id,
                 'product' => $s->product->name ?? '—',
+                'barcode' => $s->product->barcode ?? null,
                 'location' => $s->location->name ?? '—',
+                'location_id' => (int) $s->location_id,
                 'on_hand' => (string) $s->on_hand,
+                // **الناقصُ موجبٌ ليُقرأ**: «ينقص ٤٠» أوضحُ من «‎-٤٠» على
+                // شاشةٍ صغيرةٍ بالعربيّة.
+                'shortfall' => ltrim((string) $s->on_hand, '-'),
+                'last_counted_at' => $s->last_counted_at?->toIso8601String(),
+            ])->all();
+    }
+
+    public function lowStock(int $merchantUserId, ?int $locationId = null): array
+    {
+        $q = $this->activeSellableStockQuery($merchantUserId)
+            ->where('product_stocks.reorder_level', '>', 0)
+            // المتاح لا الموجود: الموجود المحجوز ليس قابلاً للبيع.
+            ->whereRaw('(product_stocks.on_hand - product_stocks.reserved) <= product_stocks.reorder_level')
+            ->with(['product:id,name,barcode', 'location:id,name']);
+
+        if ($locationId) {
+            $q->where('product_stocks.location_id', $locationId);
+        }
+
+        return $q->limit(200)->get()
+            ->map(fn (ProductStock $s) => [
+                'product_id' => (int) $s->product_id,
+                'product' => $s->product->name ?? '—',
+                'barcode' => $s->product->barcode ?? null,
+                'location' => $s->location->name ?? '—',
+                'location_id' => (int) $s->location_id,
+                'on_hand' => (string) $s->on_hand,
+                'reserved' => (string) $s->reserved,
+                'available' => $s->available(),
                 'reorder_level' => (string) $s->reorder_level,
-                // كم يُطلب ليبلغ الحدَّ الأقصى — اقتراحٌ لا أمرُ شراء.
                 'suggested_order' => bccomp((string) $s->max_level, '0', 3) > 0
-                    ? bcsub((string) $s->max_level, (string) $s->on_hand, 3)
+                    ? bcsub((string) $s->max_level, $s->available(), 3)
                     : null,
             ])->all();
+    }
+
+    /**
+     * النافد في موقع بعينه، لا مجموع المنشأة.
+     * الموجود المحجوز بالكامل يعد صفراً قابلاً للبيع.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function outOfStock(int $merchantUserId, ?int $locationId = null): array
+    {
+        $q = $this->activeSellableStockQuery($merchantUserId)
+            ->whereRaw('(product_stocks.on_hand - product_stocks.reserved) <= 0')
+            ->with(['product:id,name,barcode', 'location:id,name']);
+
+        if ($locationId) {
+            $q->where('product_stocks.location_id', $locationId);
+        }
+
+        return $q->orderByRaw('(product_stocks.on_hand - product_stocks.reserved) asc')
+            ->limit(200)->get()
+            ->map(fn (ProductStock $s) => [
+                'product_id' => (int) $s->product_id,
+                'product' => $s->product->name ?? '—',
+                'barcode' => $s->product->barcode ?? null,
+                'location' => $s->location->name ?? '—',
+                'location_id' => (int) $s->location_id,
+                'on_hand' => (string) $s->on_hand,
+                'reserved' => (string) $s->reserved,
+                'available' => $s->available(),
+            ])->all();
+    }
+
+    /**
+     * عدادات بلا حدّ عرض؛ القوائم تُقصّ للواجهة، أمّا KPI فلا يجوز أن
+     * يتحول 200+ تنبيه إلى «200» لأن القائمة حُدّت للأداء.
+     *
+     * @return array{low_locations:int,out_locations:int,negative_locations:int}
+     */
+    public function healthCounts(int $merchantUserId): array
+    {
+        $base = $this->activeSellableStockQuery($merchantUserId);
+
+        return [
+            'low_locations' => (clone $base)
+                ->where('product_stocks.reorder_level', '>', 0)
+                ->whereRaw('(product_stocks.on_hand - product_stocks.reserved) <= product_stocks.reorder_level')
+                ->count(),
+            'out_locations' => (clone $base)
+                ->whereRaw('(product_stocks.on_hand - product_stocks.reserved) <= 0')
+                ->count(),
+            // السالب خلل بيانات حتى لو أوقف الصنف أو الموقع؛ لا نخفيه
+            // من العداد بينما قائمة المصالحة ما زالت تعرضه.
+            'negative_locations' => ProductStock::query()
+                ->whereHas('product', fn ($w) => $w->where('merchant_user_id', $merchantUserId))
+                ->where('product_stocks.on_hand', '<', 0)
+                ->count(),
+        ];
+    }
+
+    /** أساس مؤشرات المخزون التشغيلية: منتجات ومواقع فعالة ومخزون متعقب. */
+    private function activeSellableStockQuery(int $merchantUserId)
+    {
+        return ProductStock::query()
+            ->whereHas('product', fn ($w) => $w
+                ->where('merchant_user_id', $merchantUserId)
+                ->where('is_active', true)
+                ->where('track_stock', true))
+            ->whereHas('location', fn ($w) => $w
+                ->where('merchant_user_id', $merchantUserId)
+                ->where('is_active', true));
     }
 }

@@ -108,6 +108,8 @@ class UnifiedLoginController extends Controller
             'needsCaptcha' => $this->needsCaptcha($request),
             'adminHost'    => PortalHost::admin(),
             'agentHost'    => PortalHost::agent(),
+            'merchantHost' => PortalHost::merchant(),
+            'merchantLoginUrl' => PortalHost::merchantLoginUrl(),
             'current'      => $current,
         ]);
     }

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_shift_cash_screen.dart';
 
@@ -97,9 +98,10 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
 
     // توجد نوبة مفتوحة
     final openedAt = shift['opened_at'] != null
-        ? DateTime.tryParse(shift['opened_at'])
+        ? DateConverterHelper.tryFromApi(shift['opened_at'].toString())
         : null;
-    final duration = openedAt != null ? DateTime.now().difference(openedAt) : null;
+    final duration = openedAt != null
+        ? DateConverterHelper.nowInMecca().difference(openedAt) : null;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -398,8 +400,10 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
   // ==================== سجل النوبات ====================
   Widget _shiftHistoryCard(Map<String, dynamic> s) {
     final variance = double.tryParse('${s['variance'] ?? 0}') ?? 0;
-    final openedAt = s['opened_at'] != null ? DateTime.tryParse(s['opened_at']) : null;
-    final closedAt = s['closed_at'] != null ? DateTime.tryParse(s['closed_at']) : null;
+    final openedAt = s['opened_at'] != null
+        ? DateConverterHelper.tryFromApi(s['opened_at'].toString()) : null;
+    final closedAt = s['closed_at'] != null
+        ? DateConverterHelper.tryFromApi(s['closed_at'].toString()) : null;
     final status = s['status']?.toString() ?? '';
 
     Color varColor;

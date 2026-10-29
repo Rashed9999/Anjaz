@@ -25,15 +25,20 @@ class PendingTransferServiceTest extends TestCase
         parent::setUp();
         config()->set('amial.encryption.pii_key', base64_encode(random_bytes(32)));
         config()->set('amial.encryption.blind_index_key', base64_encode(random_bytes(32)));
+        config()->set('amial.operational_governorates', ['YE-AD']);
         $this->service = app(PendingTransferService::class);
     }
 
     private function makeUser(string $balance, string $pin = '1234', array $extra = []): User
     {
         $user = User::factory()->create(array_merge([
+            'type' => 2,
             'zone_code' => 'SOUTH',
             'kyc_tier' => 3,
+            'is_phone_verified' => 1,
             'is_kyc_verified' => 1,
+            'verified_residence_governorate' => 'YE-AD',
+            'residence_verified_at' => now(),
             'sanction_status' => 'clear',
             'sanction_checked' => true,
             'transaction_pin' => Hash::make($pin),

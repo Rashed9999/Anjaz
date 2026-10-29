@@ -26,6 +26,9 @@ class ApprovalRequest extends Model
         // وهذا الإجراءُ وحدَه يخلق مالاً من العدم؛ سواه يُحرّك موجوداً أو
         // يفتح باباً. فموضعُه هنا ليس توسيعَ قائمةٍ بل إغلاقُ أخطر باب.
         'treasury_issuance',
+        // AMIAL-PLATFORM-PROFIT-PAYOUT-001 — صرف الإيراد يتطلب عينين
+        // منفصلتين عن محرّك الدفع وإثباته.
+        'platform_profit_payout',
     ];
 
     protected $fillable = [

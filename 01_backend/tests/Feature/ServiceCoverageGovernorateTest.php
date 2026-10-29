@@ -43,8 +43,45 @@ class ServiceCoverageGovernorateTest extends TestCase
             ->assertOk()->json('data');
 
         $this->assertNull($data['governorate']);
-        // العلَم هو ما يسمح للتطبيق بعرض زرّ بدل نصّ ميّت.
         $this->assertTrue($data['needs_governorate']);
+        $this->assertSame('missing_residence', $data['source']);
+    }
+
+    public function test_current_location_override_is_temporary_and_does_not_mutate_kyc_residence(): void
+    {
+        $user = $this->customer('YE-AD');
+
+        $data = $this->actingAs($user, 'api')
+            ->getJson('/api/v1/amial/service-coverage?governorate=YE-TA')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame('تعز', $data['governorate']);
+        $this->assertSame('current_location', $data['source']);
+
+        // الاستعلام الحالي ليس تغيير عنوان؛ KYC يبقى كما هو.
+        $this->assertSame('YE-AD', $user->fresh()->residence_governorate);
+    }
+
+    public function test_flutter_home_has_no_location_banner_and_withdraw_owns_the_location_choice(): void
+    {
+        $home = base_path('../02_flutter_app/lib/features/home/screens/amial_customer_home_screen.dart');
+        $withdraw = base_path('../02_flutter_app/lib/features/withdraw/screens/withdraw_request_screen.dart');
+        $card = base_path('../02_flutter_app/lib/features/coverage/widgets/service_coverage_card.dart');
+
+        if (!is_file($home) || !is_file($withdraw) || !is_file($card)) {
+            $this->markTestSkipped('مصادر Flutter غير موجودة في هذه البيئة');
+        }
+
+        $homeSrc = file_get_contents($home);
+        $withdrawSrc = file_get_contents($withdraw);
+        $cardSrc = file_get_contents($card);
+
+        $this->assertStringNotContainsString('_coverageBanner', $homeSrc);
+        $this->assertStringNotContainsString('Geolocator.requestPermission()', $homeSrc);
+        $this->assertStringContainsString('ServiceCoverageCard', $withdrawSrc);
+        $this->assertStringContainsString('coverage_use_current', $cardSrc);
+        $this->assertStringContainsString('coverage_current_only_notice', $cardSrc);
     }
 
     public function test_setting_it_the_first_time_works_and_clears_the_notice(): void

@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\CentralLogics\Helpers;
 use App\Services\FirebaseTokenService;
+use App\Services\NotificationDeliveryLogService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -46,22 +47,29 @@ class SendTransactionNotificationJob implements ShouldQueue
         $this->onQueue('notifications');
     }
 
-    public function handle(FirebaseTokenService $tokenService): void
+    public function handle(FirebaseTokenService $tokenService, NotificationDeliveryLogService $delivery): void
     {
+        $attempt = max(1, $this->attempts());
         $user = \App\Models\User::find($this->userId);
-        if (!$user || empty($user->fcm_token)) {
-            // لا fcm token — لا شيء نفعل
+        if (!$user) {
+            $delivery->skipped($this->userId, 'USER_NOT_FOUND', $this->notificationType ?? $this->transactionType, $this->transactionId, $attempt);
+            return;
+        }
+        if (empty($user->fcm_token)) {
+            $delivery->skipped($this->userId, 'FCM_TOKEN_MISSING', $this->notificationType ?? $this->transactionType, $this->transactionId, $attempt);
             return;
         }
 
         $messageBody = Helpers::order_status_update_message($this->transactionType);
         if (!$messageBody) {
+            $delivery->skipped($this->userId, 'NOTIFICATION_MESSAGE_DISABLED', $this->notificationType ?? $this->transactionType, $this->transactionId, $attempt);
             return;
         }
 
         $serviceKey = Helpers::get_business_settings('push_notification_service_file_content');
         if (empty($serviceKey)) {
             Log::warning('SendTransactionNotificationJob: missing FCM service key');
+            $delivery->skipped($this->userId, 'FCM_SERVICE_KEY_MISSING', $this->notificationType ?? $this->transactionType, $this->transactionId, $attempt);
             return;
         }
         $serviceKey = (array)$serviceKey;
@@ -69,6 +77,15 @@ class SendTransactionNotificationJob implements ShouldQueue
         $accessToken = $tokenService->getAccessToken($serviceKey);
         if (!$accessToken) {
             Log::warning('SendTransactionNotificationJob: no access token, will retry');
+            $delivery->failed(
+                $this->userId,
+                'FCM_ACCESS_TOKEN_UNAVAILABLE',
+                'تعذر إنشاء access token لـ FCM.',
+                $this->notificationType ?? $this->transactionType,
+                $this->transactionId,
+                null,
+                $attempt,
+            );
             $this->release(30); // ضع الـ job مرة أخرى بعد 30s
             return;
         }
@@ -84,15 +101,22 @@ class SendTransactionNotificationJob implements ShouldQueue
             'message' => [
                 'token' => $user->fcm_token,
                 'data' => [
-                    'title' => '',
+                    'title' => 'أميال باي',
                     'body' => $description,
                     'image' => '',
                     'type' => $this->notificationType ?? $this->transactionType,
                     'transaction_id' => $this->transactionId ?? '',
                 ],
                 'notification' => [
-                    'title' => '',
+                    'title' => 'أميال باي',
                     'body' => $description,
+                ],
+                'android' => [
+                    'priority' => 'HIGH',
+                    'notification' => [
+                        'channel_id' => 'amial_pay_default',
+                        'sound' => 'notification',
+                    ],
                 ],
                 'apns' => [
                     'payload' => ['aps' => ['sound' => 'notification.wav']],
@@ -108,6 +132,15 @@ class SendTransactionNotificationJob implements ShouldQueue
         // 401 = token expired/invalid → invalidate cache و retry
         if ($response->status() === 401) {
             $tokenService->invalidate($projectId);
+            $delivery->failed(
+                $this->userId,
+                'FCM_HTTP_401',
+                'رفض FCM رمز الوصول؛ تم إبطال الكاش وستعاد المحاولة.',
+                $this->notificationType ?? $this->transactionType,
+                $this->transactionId,
+                401,
+                $attempt,
+            );
             throw new \RuntimeException('FCM returned 401, token invalidated, retrying');
         }
 
@@ -118,9 +151,27 @@ class SendTransactionNotificationJob implements ShouldQueue
                 'user_id' => $this->userId,
                 'transaction_type' => $this->transactionType,
             ]);
+            $delivery->failed(
+                $this->userId,
+                'FCM_HTTP_' . $response->status(),
+                'رفض FCM طلب الإرسال.',
+                $this->notificationType ?? $this->transactionType,
+                $this->transactionId,
+                $response->status(),
+                $attempt,
+            );
             // نعتبره فشل → Laravel سيُعيد المحاولة وفق $tries و $backoff
             throw new \RuntimeException('FCM send failed with status ' . $response->status());
         }
+
+        $delivery->accepted(
+            $this->userId,
+            $this->notificationType ?? $this->transactionType,
+            $this->transactionId,
+            $response->json('name'),
+            $response->status(),
+            $attempt,
+        );
     }
 
     /**
@@ -133,5 +184,16 @@ class SendTransactionNotificationJob implements ShouldQueue
             'transaction_id' => $this->transactionId,
             'error' => $exception->getMessage(),
         ]);
+
+        app(NotificationDeliveryLogService::class)->failed(
+            $this->userId,
+            'FCM_PERMANENT_FAILURE',
+            $exception->getMessage(),
+            $this->notificationType ?? $this->transactionType,
+            $this->transactionId,
+            null,
+            $this->tries,
+            true,
+        );
     }
 }

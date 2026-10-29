@@ -8,6 +8,7 @@ use App\Services\ZoneAssignmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
+use Tests\Support\ProvisionsAccountsFromMuwathaq;
 use Tests\TestCase;
 
 /**
@@ -42,13 +43,21 @@ use Tests\TestCase;
 class ZoneOnRegistrationTest extends TestCase
 {
     use RefreshDatabase;
+    use ProvisionsAccountsFromMuwathaq;
 
     private function customer(string $zone = 'UNKNOWN'): User
     {
-        $u = User::factory()->create(['type' => 2, 'is_kyc_verified' => 1]);
-        $u->forceFill(['zone_code' => $zone])->save();
+        // تغطية النقد تُشتق من محافظة إقامة موثقة، لا من zone_code منفرد
+        // يمكن أن يكون أثراً قديماً متناقضاً.
+        $factory = User::factory()->state(['type' => CUSTOMER_TYPE]);
 
-        return $u->refresh();
+        $factory = match ($zone) {
+            'NORTH' => $factory->outsideZone('NORTH'),
+            'UNKNOWN' => $factory->tierZero(),
+            default => $factory,
+        };
+
+        return $factory->create()->refresh();
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -56,21 +65,15 @@ class ZoneOnRegistrationTest extends TestCase
     // ══════════════════════════════════════════════════════════════════
 
     /** @test */
-    public function registration_records_the_zone_decision_and_its_signals(): void
-    {
-        $u = User::factory()->create(['type' => 2]);
+    public function registration_records_the_zone_decision_and_its_signals(): void{
+        $user = $this->provisionCustomerFromMuwathaq('967783545525');
 
-        app(ZoneAssignmentService::class)->assignOnRegistration($u);
+        $row = DB::table('zone_assignment_logs')->where('user_id', $user->id)->first();
 
-        $row = DB::table('zone_assignment_logs')->where('user_id', $u->id)->first();
-
-        $this->assertNotNull($row,
-            'حسابٌ أُنشئ بلا سطرٍ في سجلّ إسناد المناطق — '
-            . 'فالمدقّقُ يبدأ من فراغٍ ولا يعرف على أيّ شيءٍ يبني');
-
-        $this->assertSame('registration', $row->method);
-        $this->assertSame('UNKNOWN', $row->assigned_zone,
-            'التسجيلُ منح منطقةً — و«ممنوعٌ حتّى يثبت» انقلب إلى عكسه');
+        $this->assertNotNull($row);
+        $this->assertSame('kyc_verification', $row->method);
+        $this->assertSame('SOUTH', $row->assigned_zone);
+        $this->assertSame('YE-AD', $user->fresh()->verified_residence_governorate);
     }
 
     /**
@@ -79,68 +82,34 @@ class ZoneOnRegistrationTest extends TestCase
     private function registrationPayload(string $phone = '783545525'): array
     {
         return [
-            'f_name' => 'راشد', 'l_name' => 'المعربي', 'gender' => 'male',
+            'f_name' => 'راشد', 'father_name' => 'محمد', 'grandfather_name' => 'عوض',
+            'family_name' => 'المعربي', 'l_name' => 'المعربي', 'gender' => 'male',
             'dial_country_code' => '+967', 'phone' => $phone,
+            'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
             'password' => '4321',
         ];
     }
 
     /** @test */
-    public function the_registration_endpoint_actually_calls_it(): void
-    {
-        // ══════════════════════════════════════════════════════════════
-        // **ولا يُقاس هذا بمسحِ نصّ الملفّ.**
-        //
-        // كُتب هذا الحارسُ أوّلَ مرّةٍ `assertStringContainsString`، ثمّ
-        // حُذف النداءُ عمداً للتجريب بالعكس — **فمرّ الحارسُ أخضرَ**:
-        // الكلمةُ باقيةٌ في **التعليق العربيّ الذي يشرحها**. أي أنّ
-        // التعليقَ الذي يصف الإصلاحَ كان يُخفي غيابَه.
-        //
-        // فالقياسُ على الأثر: يُنشأ حسابٌ من النقطة نفسِها، ويُسأل
-        // السجلُّ. وهذا لا يخدعه تعليقٌ ولا إعادةُ تسمية.
-        // ══════════════════════════════════════════════════════════════
-        $this->withoutExceptionHandling();
-        $this->disablePhoneVerification();
+    public function the_registration_endpoint_actually_calls_it(): void{
+        $phone = '783545525';
 
-        $this->postJson('/api/v1/customer/auth/register', $this->registrationPayload())
-            ->assertSuccessful();
+        $this->postJson('/api/v1/customer/auth/register', $this->registrationPayload($phone))
+            ->assertStatus(410)
+            ->assertJsonPath('code', 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
 
-        $user = User::where('phone', 'like', '%783545525')->firstOrFail();
-
-        $this->assertNotNull(
-            DB::table('zone_assignment_logs')->where('user_id', $user->id)->first(),
-            'سُجّل حسابٌ من نقطة النهاية بلا سطرٍ في سجلّ إسناد المناطق — '
-            . 'فالدالّةُ مبنيّةٌ ولا يناديها أحد');
+        $this->assertDatabaseMissing('users', ['phone' => '967'.$phone]);
     }
 
     /** @test */
-    public function a_failing_assignment_never_blocks_creating_the_account(): void
-    {
-        // ══════════════════════════════════════════════════════════════
-        // **والإسنادُ أثرٌ لا شرط** — فإن انفجر لا يسقط إنشاءُ الحساب.
-        //
-        // وكُتب هذا الحارسُ أوّلَ مرّةٍ بحذف جدول السجلّ، **فمرّ والـ`try`
-        // محذوفة**: `logAssignment` تلتقط أخطاءَها بنفسِها، فالفشلُ لم
-        // يبلغ المتحكّمَ أصلاً. أي أنّ الحارسَ كان يحرس `catch` الخدمة
-        // ويظنّ نفسَه يحرس `try` المتحكّم.
-        //
-        // فيُحقَن انفجارٌ لا مهربَ منه.
-        // ══════════════════════════════════════════════════════════════
-        $this->disablePhoneVerification();
+    public function a_failing_assignment_never_blocks_creating_the_account(): void{
+        $phone = '783545526';
 
-        $this->app->bind(ZoneAssignmentService::class, fn () => new class extends ZoneAssignmentService
-        {
-            public function assignOnRegistration(User $user, ?\Illuminate\Http\Request $request = null): string
-            {
-                throw new RuntimeException('انفجارٌ مقصودٌ في الإسناد');
-            }
-        });
+        $this->postJson('/api/v1/customer/auth/register', $this->registrationPayload($phone))
+            ->assertStatus(410)
+            ->assertJsonPath('code', 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
 
-        $this->postJson('/api/v1/customer/auth/register', $this->registrationPayload('783545526'))
-            ->assertSuccessful();
-
-        $this->assertNotNull(User::where('phone', 'like', '%783545526')->first(),
-            'سقط إنشاءُ الحساب بفشل إسنادٍ — والإسنادُ أثرٌ لا شرط');
+        $this->assertDatabaseMissing('users', ['phone' => '967'.$phone]);
     }
 
     private function disablePhoneVerification(): void
@@ -156,25 +125,20 @@ class ZoneOnRegistrationTest extends TestCase
     // ══════════════════════════════════════════════════════════════════
 
     /** @test */
-    public function an_unverified_recipient_is_told_verification_is_pending(): void
+    public function a_tier_one_recipient_can_receive_before_full_kyc_approval(): void
     {
         $sender = $this->customer('SOUTH');
-        $recipient = $this->customer('UNKNOWN');
+        $recipient = $this->customer('NORTH');
+
+        // وصل إلى أساس Tier 1 (هاتف وإقامة) ثم طلب Tier أعلى؛ انتظار
+        // اعتماد الهوية لا يلغي خدمات Tier 1 الأساسية مثل الاستقبال.
         $recipient->forceFill(['is_kyc_verified' => 0])->save();
 
-        try {
-            app(RecipientVerificationService::class)
-                ->verifyRecipient((string) $recipient->phone, $sender->id);
+        $result = app(RecipientVerificationService::class)
+            ->verifyRecipient((string) $recipient->phone, $sender->id);
 
-            $this->fail('قُبل مستلمٌ غيرُ موثَّق');
-        } catch (RuntimeException $e) {
-            $this->assertStringContainsString('لم يُوثَّق بعد', $e->getMessage(),
-                'الرسالةُ لا تقول إنّ التوثيقَ ناقص — فيظنّ القارئُ '
-                . 'الحسابَ محظوراً، ويذهب إلى الدعم بلا معلومة');
-
-            // **وتقول ماذا يفعل** — رفضٌ بلا مخرجٍ يُنتج تذكرةَ دعم.
-            $this->assertStringContainsString('التوثيق', $e->getMessage());
-        }
+        $this->assertSame($recipient->id, (int) $result['recipient_id']);
+        $this->assertNotEmpty($result['verification_token']);
     }
 
     /** @test */

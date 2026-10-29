@@ -15,6 +15,7 @@ class CustomerCreditMovement extends Model
     protected $fillable = [
         'movement_ulid', 'account_id', 'type', 'amount', 'balance_after',
         'due_date', 'reference_type', 'reference_id', 'reference_number',
+        'sale_movement_ulid',
         'note', 'created_by_user_id', 'zone_code',
     ];
 
