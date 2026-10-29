@@ -37,6 +37,7 @@
         </form>
         <div class="account-links">
             <a href="{{ route('merchant.web.register') }}">إنشاء حساب منشأة جديد</a>
+            <a href="{{ route('merchant.web.activate') }}">لدي موافقة موثّق — تفعيل كلمة المرور وPIN</a>
             <a href="{{ route('merchant.web.opening') }}">استكمال طلب منشأة قائم</a>
             <a href="{{ route('merchant.web.recover') }}">نسيت كلمة المرور؟</a>
         </div>

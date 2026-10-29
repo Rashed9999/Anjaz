@@ -178,7 +178,7 @@ jobs:
 
       - name: استكمال تسجيل التاجر وإرسال الأدلة إلى موثّق
         working-directory: 01_backend
-        run: php artisan test --compact tests/Feature/MerchantWebRegistrationJourneyTest.php tests/Feature/MuwathaqOpeningProgressTest.php tests/Feature/MerchantCenterMuwathaqEvidenceTest.php
+        run: php artisan test --compact tests/Feature/MerchantWebRegistrationJourneyTest.php tests/Feature/MuwathaqOpeningProgressTest.php tests/Feature/MerchantCenterMuwathaqEvidenceTest.php tests/Feature/MuwathaqMerchantActivationTest.php
 
       - name: E2E موثّق — فتح الحساب ودليل موظفة الجلسة وسجل التدقيق
         working-directory: 01_backend
