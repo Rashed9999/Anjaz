@@ -499,6 +499,8 @@ return [
     // Disabled unless TLS, signed S2S, Muwathaq approval, branch and stock parity are verified.
     'merchant_workspace' => [
         'enabled' => filter_var(env('AMIAL_MERCHANT_WORKSPACE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        // Reversible cleanup only AFTER tenant/data/login cutover: default false.
+        'fence_legacy_commercial_writes' => filter_var(env('AMIAL_MERCHANT_LEGACY_COMMERCIAL_WRITES_FENCED', false), FILTER_VALIDATE_BOOLEAN),
         'base_url' => env('AMIAL_MERCHANT_WORKSPACE_URL', ''),
         'integration_secret' => env('AMIAL_MERCHANT_WORKSPACE_SECRET', ''),
         'issuer' => env('AMIAL_MERCHANT_WORKSPACE_ISSUER', 'amial-pay'),
