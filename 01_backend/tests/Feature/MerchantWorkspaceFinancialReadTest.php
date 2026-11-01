@@ -2,78 +2,74 @@
 
 namespace Tests\Feature;
 
-use App\Models\Merchant;
-use App\Models\MerchantProfile;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
+/**
+ * The legacy merchant-workspace financial bridge was retired when Amial
+ * Business v9 became the sole merchant engine. Financial data now crosses
+ * the signed /api/v1/business gateway, never the old owner/tenant bridge.
+ *
+ * These tests deliberately verify both sides of that security boundary:
+ * retired endpoints must not reappear, and every replacement financial
+ * endpoint must reject unauthenticated server-to-server requests.
+ */
 final class MerchantWorkspaceFinancialReadTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function signedRead(int $ownerId, string $tenantId, string $nonce, string $section = 'wallet', string $scope = 'merchant.financial.read'): \Illuminate\Testing\TestResponse
+    public function test_retired_merchant_workspace_financial_route_is_not_registered(): void
     {
-        $path = '/api/v1/amial/merchant-workspace/financial';
-        $body = json_encode(['section' => $section], JSON_THROW_ON_ERROR);
-        $timestamp = (string) time();
-        $context = [
-            'iss' => 'amial-merchant', 'aud' => 'amial-pay', 'iat' => (int) $timestamp,
-            'exp' => (int) $timestamp + 60, 'actor_type' => 'owner',
-            'actor_id' => (string) $ownerId, 'tenant_id' => $tenantId,
-            'scopes' => [$scope],
-        ];
-        $encoded = rtrim(strtr(base64_encode(json_encode($context, JSON_THROW_ON_ERROR)), '+/', '-_'), '=');
-        $canonical = $timestamp."\n".$nonce."\nPOST\n".$path."\n".$encoded."\n".hash('sha256', $body);
+        $uri = 'api/v1/amial/merchant-workspace/financial';
 
-        return $this->call('POST', $path, [], [], [], [
-            'CONTENT_TYPE' => 'application/json',
-            'HTTP_X_AMIAL_TIMESTAMP' => $timestamp,
-            'HTTP_X_AMIAL_NONCE' => $nonce,
-            'HTTP_X_AMIAL_CONTEXT' => $encoded,
-            'HTTP_X_AMIAL_SIGNATURE' => hash_hmac('sha256', $canonical, config('amial.merchant_workspace.integration_secret')),
-        ], $body);
+        $this->assertFalse(
+            collect(Route::getRoutes())->contains(
+                static fn ($route) => $route->uri() === $uri
+                    && in_array('POST', $route->methods(), true)
+            ),
+            'The retired workspace money bridge must not be exposed after the Business v9 cutover.'
+        );
+
+        // Even an old client with its previous payload must not enter the
+        // payment system by calling the retired endpoint.
+        $this->postJson('/'.$uri, ['section' => 'wallet'])->assertNotFound();
+        $this->postJson('/'.$uri, ['section' => 'sector'])->assertNotFound();
     }
 
-    public function test_sector_reads_have_a_separate_scope_and_verified_owner(): void
+    public function test_replacement_business_financial_routes_require_server_signature(): void
     {
-        config()->set('amial.merchant_workspace.integration_secret', str_repeat('s', 64));
-        $owner = User::factory()->create();
-        MerchantProfile::create(['user_id' => $owner->id, 'verification_status' => 'verified', 'business_type' => 'retail']);
-        $merchant = new Merchant();
-        $merchant->user_id = $owner->id;
-        $merchant->merchant_number = 'SECTOR-01';
-        $merchant->save();
-        $tenant = 'legacy_merchant_'.$merchant->id;
-        $this->signedRead($owner->id, $tenant, str_repeat('a', 32), 'sector', 'merchant.financial.read')
-            ->assertForbidden()->assertJsonPath('code', 'MERCHANT_SCOPE_INVALID');
-        $this->signedRead($owner->id, $tenant, str_repeat('b', 32), 'wallet', 'merchant.sector.read')
-            ->assertForbidden()->assertJsonPath('code', 'MERCHANT_SCOPE_INVALID');
-        $this->signedRead($owner->id, 'legacy_merchant_other', str_repeat('c', 32), 'sector', 'merchant.sector.read')
-            ->assertForbidden()->assertJsonPath('code', 'MERCHANT_OWNER_SCOPE_INVALID');
-        $this->signedRead($owner->id, $tenant, str_repeat('d', 32), 'sector', 'merchant.sector.read')
-            ->assertStatus(422)->assertJsonPath('code', 'MERCHANT_SECTOR_UNSUPPORTED');
-    }
+        config()->set('amial_business.inbound_secret', str_repeat('s', 64));
 
-    public function test_financial_read_requires_a_valid_signature_and_verified_owner_tenant(): void
-    {
-        config()->set('amial.merchant_workspace.integration_secret', str_repeat('s', 64));
-        $this->postJson('/api/v1/amial/merchant-workspace/financial', ['section' => 'wallet'])
-            ->assertUnauthorized();
+        foreach ([
+            'amial.business.link',
+            'amial.business.wallet',
+            'amial.business.fees.quote',
+            'amial.business.entitlements',
+            'amial.business.payment-intents.create',
+            'amial.business.credit.handover',
+            'amial.business.customer-debts.upsert',
+            'amial.business.refunds.request',
+        ] as $name) {
+            $route = Route::getRoutes()->getByName($name);
+            $this->assertNotNull($route, 'Replacement business route missing: '.$name);
+            $this->assertContains(
+                'amial.business.signature',
+                $route->gatherMiddleware(),
+                'Business money or entitlement endpoint without the shared HMAC guard: '.$name
+            );
+        }
 
-        $owner = User::factory()->create();
-        MerchantProfile::create(['user_id' => $owner->id, 'verification_status' => 'verified']);
-        $merchant = new Merchant();
-        $merchant->user_id = $owner->id;
-        $merchant->merchant_number = 'BRIDGE-01';
-        $merchant->save();
-        $tenant = 'legacy_merchant_'.$merchant->id;
+        $this->getJson('/api/v1/business/wallet')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'BUSINESS_SIGNATURE_EXPIRED');
 
-        $this->signedRead($owner->id, 'legacy_merchant_other', str_repeat('n', 32))
-            ->assertForbidden()->assertJsonPath('code', 'MERCHANT_OWNER_SCOPE_INVALID');
-        $this->signedRead($owner->id, $tenant, str_repeat('o', 32))
-            ->assertOk()->assertJsonPath('data.source', 'amial_pay_ledger');
-        $this->signedRead($owner->id, $tenant, str_repeat('o', 32))
-            ->assertStatus(409)->assertJsonPath('code', 'REPLAYED_INTEGRATION_REQUEST');
+        $this->postJson('/api/v1/business/payment-intents', ['reference' => 'old-workspace'])
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'BUSINESS_SIGNATURE_EXPIRED');
+
+        $this->postJson('/api/v1/business/credit/handover', ['reference' => 'old-workspace'])
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'BUSINESS_SIGNATURE_EXPIRED');
     }
 }
