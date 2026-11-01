@@ -107,7 +107,7 @@ class _MerchantCashOutScreenState extends State<MerchantCashOutScreen> {
                         contentPadding: EdgeInsets.zero,
                         title: Text(AmialMoney.yer(r['amount'])),
                         subtitle: Text('merchant_cash_out_fee'.trParams({'fee': AmialMoney.yer(r['fee'])})),
-                        trailing: Text(('merchant_cash_out_status_' + '${r[\'status\']}').tr,
+                        trailing: Text(('merchant_cash_out_status_' + (r['status']?.toString() ?? '')).tr,
                             style: TextStyle(color: r['status'] == 'completed' ? AmialColors.success : AmialColors.textMuted)),
                       )),
                 ],
