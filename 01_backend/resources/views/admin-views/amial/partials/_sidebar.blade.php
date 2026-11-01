@@ -116,12 +116,13 @@
         [
             'title' => 'الخدمات والعملاء',
             'icon' => '🧾',
-            'match' => ['admin/support-center*', 'admin/amial/surface*', 'admin/amial/charity*', 'admin/amial/hub/subscriptions*', 'admin/amial/hub/disputes*', 'admin/amial/hub/staff*', 'admin/amial/invoices*', 'admin/amial/catalog*'],
+            'match' => ['admin/support-center*', 'admin/amial/surface*', 'admin/amial/charity*', 'admin/amial/hub/subscriptions*', 'admin/amial/hub/plans*', 'admin/amial/hub/disputes*', 'admin/amial/hub/staff*', 'admin/amial/invoices*', 'admin/amial/catalog*'],
             'links' => [
                 ['🎧 مركز الدعم (بحث شامل + الأجهزة)', route('admin.support-center.index'), null],
                 ['🧾 فواتير التجّار ومدفوعاتها', route('admin.amial.invoices.page'), 'platform.money.view'],
                 ['📦 كتالوج المنتجات (الباركود)', route('admin.amial.catalog.page'), 'platform.settings.update'],
                 ['💎 لوحة الاشتراكات', route('admin.amial.hub.subscriptions'), 'platform.settings.manage'],
+                ['🧩 كتالوج الباقات والميزات', route('admin.amial.hub.plans'), 'platform.settings.manage'],
                 ['⚖️ لوحة النزاعات (دفع آمن)', route('admin.amial.hub.disputes'), 'platform.transactions.view'],
                 ['📝 بلاغات العملاء والنزاعات', route('admin.disputes.index'), 'platform.transactions.view'],
                 ['🎗️ لوحة التبرعات (الجمعيات)', route('admin.amial.charity.page'), null],

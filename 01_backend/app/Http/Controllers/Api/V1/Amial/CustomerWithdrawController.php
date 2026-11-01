@@ -39,6 +39,10 @@ class CustomerWithdrawController extends Controller
             $req = $this->service->request($request->user(), (string)$request->input('amount'));
         } catch (\App\Exceptions\InsufficientBalanceException $e) {
             return new JsonResponse($e->toApiArray(), 402);
+        } catch (\App\Exceptions\AmlBlockedException $e) {
+            return new JsonResponse($e->toApiArray(), 403);
+        } catch (\App\Exceptions\AmlHeldException $e) {
+            return new JsonResponse($e->toApiArray(), 202);
         } catch (\InvalidArgumentException | \RuntimeException $e) {
             return $this->error('WITHDRAW_REQUEST_FAILED', $e->getMessage(), 422);
         }
@@ -109,9 +113,14 @@ class CustomerWithdrawController extends Controller
         }
 
         $customer = User::find($req->customer_user_id);
+        $isMerchant = $req->requester_type === 'merchant';
         return $this->ok([
             'amount' => (string)$req->amount,            // المبلغ المطلوب فقط (لا الرصيد)
+            // AMIAL-MERCHANT-CASHOUT-001 — الوكيل يعرف أنه يصرف لتاجر، وأن التحقق إلزامي.
+            'requester_type' => $req->requester_type,
+            'identity_required' => $isMerchant,
             'customer' => [
+                'store_name' => $isMerchant ? \App\Models\Merchant::where('user_id', $customer->id)->value('store_name') : null,
                 'name' => trim(($customer->f_name ?? '') . ' ' . ($customer->l_name ?? '')),
                 'phone' => $customer->phone,
                 'account_number' => $customer->account_number,

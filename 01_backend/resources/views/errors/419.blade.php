@@ -64,9 +64,8 @@
 
              والصحيحُ **طلبُ صفحةٍ جديدةً بـGET** — فتُنشئ جلسةً ورمزاً
              جديدَين. ووجهتُها الدخولُ لأنّ ٤١٩ غالباً على إرسال نموذج. --}}
-        <a class="btn" href="{{ request()->is('merchant', 'merchant/*')
-            ? route('merchant.web.login')
-            : (url()->previous() !== url()->current() ? route('admin.auth.login') : url('/')) }}"
+        <a class="btn" href="{{ url()->previous() !== url()->current()
+            ? route('admin.auth.login') : '/' }}"
            style="text-decoration:none;display:inline-block">ابدأ من جديد</a>
     </div>
 </div>

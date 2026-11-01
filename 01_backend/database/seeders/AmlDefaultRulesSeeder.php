@@ -201,6 +201,8 @@ class AmlDefaultRulesSeeder extends Seeder
         // الصفّ القائم، فمن أطفأ الظلّ عن قاعدةٍ بعد مراجعة بياناته يجد قراره
         // مُلغى عند أوّل إعادة بذر. فالظلّ يُكتب عند الإنشاء فقط.
         $enforced = 0;
+        // AMIAL-BUSINESS-AML-001 — قواعد سحب التاجر واسترداد أميال أعمال.
+        \App\Aml\BusinessAmlRules::install();
         foreach ($rules as $r) {
             $shadow = $r['shadow_mode'] ?? true;
             unset($r['shadow_mode']);

@@ -15,6 +15,7 @@ use App\Services\PharmacySaleInvoicePdfService;
 use App\Services\WholesaleInvoicePdfService;
 use App\Services\CustomerCreditSettleService;
 use App\Services\CreditSourceSettlementService;
+use App\Services\BusinessGateway\BusinessCustomerDebtService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -53,7 +54,13 @@ class CustomerCreditViewController extends Controller
             );
         }
 
+        // AMIAL-BUSINESS-CREDIT-001 — تاجرٌ سلّم آجله لأميال أعمال: دفتره هنا
+        // مجمَّد وقديم، فلا يُعرض ولا يُجمع (وإلا ظهر الدين مرتين). يظهر بدلاً
+        // منه من مرآة أميال أعمال في business_accounts.
+        $handedOver = \App\Models\BusinessGateway\BusinessLink::whereNotNull('credit_handed_over_at')
+            ->pluck('merchant_user_id');
         $accounts = CustomerCreditAccount::where('customer_user_id', $userId)
+            ->whereNotIn('merchant_user_id', $handedOver)
             ->orderByDesc('current_balance')
             ->get();
 
@@ -76,10 +83,19 @@ class CustomerCreditViewController extends Controller
             ];
         })->values();
 
+        $debts = app(BusinessCustomerDebtService::class);
+        $business = $debts->forCustomer($request->user())
+            ->map(fn ($d) => $debts->present($d))
+            ->values();
+        foreach ($business as $b) {
+            $totalOwed = bcadd($totalOwed, $b['current_balance'], 4);
+        }
+
         return $this->ok([
             'total_owed' => $totalOwed,
             'accounts_count' => $items->count(),
             'accounts' => $items,
+            'business_accounts' => $business,
         ], 'OK', 'حساباتي الآجلة');
     }
 
@@ -285,6 +301,56 @@ class CustomerCreditViewController extends Controller
             'receipt_number' => $result['receipt_number'] ?? null,
             'receipt_type' => 'debt_payment',
             'allocations' => $result['allocations'] ?? [],
+        ], 'SETTLED', 'تم سداد الدين بنجاح');
+    }
+
+    /**
+     * AMIAL-BUSINESS-CREDIT-001 — سداد دين لدى تاجر في أميال أعمال من المحفظة.
+     *
+     * المال يتحرّك عبر طلب دفعٍ موجّه للعميل نفسه ويُدفع بالمسار القائم (حراس
+     * KYC والحدود وAML والقيد المزدوج)، وأميال أعمال تُقيّد السداد في دفترها
+     * عند وصول الحدث الموقّع. لا رصيد دين يُعدَّل هنا.
+     */
+    public function settleBusiness(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+
+        $v = Validator::make($request->all(), [
+            'amount' => ['required', 'string', 'regex:/^\d{1,15}(\.\d{1,2})?$/'],
+            'pin' => 'required|string|min:4|max:8',
+        ]);
+        if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
+
+        if (!Helpers::pin_check($user->id, $request->input('pin'))) {
+            return $this->error('WRONG_PIN', 'رمز الدخول غير صحيح', 403);
+        }
+
+        $debt = \App\Models\BusinessGateway\BusinessCustomerDebt::where('id', $id)
+            ->where('customer_user_id', $user->id)->first();
+        if (!$debt) {
+            return $this->error('NOT_FOUND', 'الدين غير موجود أو لا يخصّك', 404);
+        }
+
+        $debts = app(BusinessCustomerDebtService::class);
+        try {
+            $result = $debts->settleFromApp($user, $debt, (string) $request->input('amount'));
+        } catch (\App\Services\BusinessGateway\BusinessGatewayException $e) {
+            return $this->error($e->errorCode, $e->getMessage(), $e->httpStatus >= 500 ? 422 : $e->httpStatus);
+        } catch (\App\Exceptions\InsufficientBalanceException $e) {
+            return $this->error('INSUFFICIENT_BALANCE', 'رصيد محفظتك لا يكفي', 422);
+        } catch (\App\Exceptions\AmlBlockedException|\App\Exceptions\AmlHeldException $e) {
+            return new JsonResponse($e->toApiArray(), $e instanceof \App\Exceptions\AmlHeldException ? 202 : 403);
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->error('SETTLE_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok([
+            'paid' => $result['intent']['amount'],
+            'new_balance' => $debts->outstanding($debt->fresh()),
+            'transaction_id' => $result['intent']['paid_transaction_id'],
+            'intent_id' => $result['intent']['intent_id'],
+            'payment' => $result['payment'],
+            'receipt_type' => 'debt_payment',
         ], 'SETTLED', 'تم سداد الدين بنجاح');
     }
 

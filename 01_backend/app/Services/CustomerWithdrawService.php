@@ -34,24 +34,90 @@ class CustomerWithdrawService
         if (!MoneyService::isPositive($amount)) {
             throw new InvalidArgumentException('مبلغ السحب يجب أن يكون موجباً');
         }
+        // AMIAL-MERCHANT-CASHOUT-001 — حساب التاجر يسحب من بابه هو (PIN وحدود
+        // وتحقّق إلزامي عند الوكيل)، لا من باب العميل الذي لا يطبّق شيئاً منها عليه.
+        if ((int) $customer->type === MERCHANT_TYPE) {
+            throw new RuntimeException('حساب التاجر يسحب من «سحب نقدي عبر وكيل» في لوحة التاجر.');
+        }
         // السحب النقدي خدمة Tier 1+ للعميل الفردي. لا يمتد هذا الفحص إلى
         // الوكيل الذي ينفذ الصرف لاحقاً؛ له حدود وسياسات وكالة مستقلة.
         $this->assertIndividualCustomerTransactionAllowed($customer->id, $amount, 'cash_out');
         $this->assertFinancialEligibility($customer->id, 'cash_out');
+        // AMIAL-BUSINESS-AML-001 — الطلب هو لحظة القرار (التنفيذ عند الوكيل صرفٌ لحجزٍ
+        // قائم)، فيُفحص هنا قبل الحجز. كان يمرّ بلا فحص.
+        $this->screenAml($customer->id, null, 'cash_out', $amount);
 
         $breakdown = app(FeeService::class)->calculate('CASH_OUT', $amount, ['applies_to' => 'customer']);
+
+        return $this->createRequest($customer, $amount, $breakdown, 'customer', (int) config('amial.withdraw.expiry_minutes', 45));
+    }
+
+    /**
+     * AMIAL-MERCHANT-CASHOUT-001 — مالك المنشأة يحوّل رصيد محفظته نقداً عند أي وكيل.
+     *
+     * الآلية نفسها (حجز · رقم عملية · صرف الوكيل · عمولته · القيود)، بسياسة التاجر:
+     *   - المالك الموثّق وحده (المتحكّم يتحقّق من PIN).
+     *   - حدٌّ للطلب وحدٌّ يومي؛ ما فوقهما عبر طلب المستحقات الإداري.
+     *   - رسم سحب التاجر إن عرّفته الإدارة، وإلا رسم سحب العميل نفسه.
+     *   - التنفيذ يشترط تحقّق الوكيل من هاتف المالك أو رقم حسابه.
+     */
+    public function requestAsMerchant(User $merchant, string $amount): WithdrawalRequest
+    {
+        $amount = MoneyService::normalize($amount);
+        if (!MoneyService::isPositive($amount)) {
+            throw new InvalidArgumentException('مبلغ السحب يجب أن يكون موجباً');
+        }
+        $profile = \App\Models\MerchantProfile::where('user_id', $merchant->id)->first();
+        if ((int) $merchant->type !== MERCHANT_TYPE || !$profile) {
+            throw new RuntimeException('سحب التاجر متاح لمالك المنشأة فقط');
+        }
+        if ($profile->verification_status !== 'verified' || !(bool) $merchant->is_active) {
+            throw new RuntimeException('أكمل توثيق المنشأة لتفعيل السحب النقدي');
+        }
+        $this->assertFinancialEligibility($merchant->id, 'cash_out');
+
+        $max = MoneyService::normalize((string) config('amial.merchant_cash_out.max_per_request', '500000'));
+        if (MoneyService::compare($amount, $max) > 0) {
+            throw new RuntimeException('المبلغ أكبر من حدّ السحب عبر الوكيل ('.$max.' ر.ي). للمبالغ الأكبر اطلب سحب المستحقات من الإدارة.');
+        }
+        $today = (string) WithdrawalRequest::where('customer_user_id', $merchant->id)->where('requester_type', 'merchant')
+            ->whereIn('status', ['pending', 'completed'])->where('created_at', '>=', today())->sum('amount');
+        $daily = MoneyService::normalize((string) config('amial.merchant_cash_out.daily_limit', '2000000'));
+        if (MoneyService::compare(MoneyService::add(MoneyService::normalize($today ?: '0'), $amount), $daily) > 0) {
+            throw new RuntimeException('يتجاوز حدّ السحب اليومي عبر الوكلاء ('.$daily.' ر.ي).');
+        }
+
+        $breakdown = $this->merchantCashOutFee($merchant, $amount);
+
+        $this->screenAml($merchant->id, null, 'merchant_cash_out', $amount);
+
+        return $this->createRequest($merchant, $amount, $breakdown, 'merchant', (int) config('amial.merchant_cash_out.expiry_minutes', 60));
+    }
+
+    /** رسم سحب التاجر: رسم التاجر إن عرّفته الإدارة، وإلا رسم العميل. مصدرٌ واحد للطلب والعرض. */
+    public function merchantCashOutFee(User $merchant, string $amount): array
+    {
+        $fees = app(FeeService::class);
+        $zone = $merchant->zone_code ?? 'SOUTH';
+
+        return $fees->activeScheme('CASH_OUT', $zone, 'merchant')
+            ? $fees->calculate('CASH_OUT', $amount, ['applies_to' => 'merchant', 'zone_code' => $zone])
+            : $fees->calculate('CASH_OUT', $amount, ['applies_to' => 'customer']);
+    }
+
+    private function createRequest(User $customer, string $amount, array $breakdown, string $requesterType, int $expiryMinutes): WithdrawalRequest
+    {
         $fee = $breakdown['fee'];
-        $totalDebit = MoneyService::add($amount, $fee); // العميل يدفع المبلغ + الرسم
+        $totalDebit = MoneyService::add($amount, $fee); // صاحب الطلب يدفع المبلغ + الرسم
 
-        $expiryMinutes = (int) config('amial.withdraw.expiry_minutes', 45);
-
-        return DB::transaction(function () use ($customer, $amount, $fee, $breakdown, $totalDebit, $expiryMinutes) {
+        return DB::transaction(function () use ($customer, $amount, $fee, $breakdown, $totalDebit, $expiryMinutes, $requesterType) {
             // حجز المبلغ فوراً (يمنع الإنفاق المزدوج قبل وصول الوكيل)
             $this->guard()->hold($customer->id, $totalDebit, 'withdraw_request_hold');
 
             $req = WithdrawalRequest::create([
                 'op_code' => $this->generateOpCode(),
                 'customer_user_id' => $customer->id,
+                'requester_type' => $requesterType,
                 'amount' => $amount,
                 'fee' => $fee,
                 'agent_commission' => $breakdown['agent_commission'],
@@ -173,6 +239,10 @@ class CustomerWithdrawService
             // يمنع تنفيذ عملية صحيحة. سابقاً كان إجبارياً ويقارن الهاتف حرفياً
             // (777… ≠ 967777…) فيرمي خطأً ولا تُسجَّل المعاملة إطلاقاً.
             $identifier = trim($identifier);
+            // سحب التاجر: مبالغه أكبر، فلا يكفي رقم العملية؛ يتحقّق الوكيل من صاحبه.
+            if ($req->requester_type === 'merchant' && $identifier === '') {
+                throw new RuntimeException('أدخل هاتف التاجر أو رقم حسابه للتحقق قبل الصرف');
+            }
             if ($identifier !== '' && !$this->identifierMatches($req->customer_user_id, $identifier)) {
                 throw new RuntimeException('معرّف العميل لا يطابق صاحب العملية');
             }
@@ -234,6 +304,19 @@ class CustomerWithdrawService
 
             // تسجيل حركة سيولة الوكيل
             app(AgentNetworkService::class)->recordFloatMovement($agent->id, 'cash_out', (string)$req->amount);
+
+            // AMIAL-MERCHANT-CASHOUT-001 — أميال أعمال تقيّد السحب في دفترها (من المحفظة
+            // إلى الصندوق والرسم مصروفاً)، فيبقى دفترها مطابقاً لرصيد المحفظة هنا.
+            if ($req->requester_type === 'merchant'
+                && ($link = \App\Models\BusinessGateway\BusinessLink::where('merchant_user_id', $req->customer_user_id)->first())) {
+                app(\App\Services\BusinessGateway\BusinessOutbox::class)->record($link, 'merchant_cash_out.completed', [
+                    'withdrawal_id' => (string) $req->id, 'transaction_id' => $txId,
+                    'amount' => MoneyService::normalize((string) $req->amount), 'fee' => MoneyService::normalize((string) $req->fee),
+                    'net_amount' => MoneyService::normalize((string) $req->amount), 'total_debit' => MoneyService::normalize((string) $req->total_debit),
+                    'currency' => (string) config('amial_business.wallet_currency', 'YER'),
+                    'completed_at' => now()->toIso8601String(),
+                ]);
+            }
 
             // **الصرفُ يُرحَّل**: من الحجز إلى الوكيل وإلى إيراد المنصّة.
             // ولا خصمَ من العميل هنا — خُصم عند الطلب.

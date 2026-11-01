@@ -27,6 +27,19 @@ class CustomerCreditMovement extends Model
 
     public const TYPES = ['sale', 'payment', 'return', 'adjustment'];
 
+    /**
+     * AMIAL-BUSINESS-CREDIT-001 — بعد تسليم الآجل لأميال أعمال لا يتحرّك هنا
+     * أي رصيد دين. الحارس على النموذج لا على الخدمة، فيمرّ به كل مسار.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $movement) {
+            app(\App\Services\BusinessGateway\CreditHandoverService::class)->assertOpen(
+                CustomerCreditAccount::whereKey($movement->account_id)->value('merchant_user_id')
+            );
+        });
+    }
+
     public function account(): BelongsTo
     {
         return $this->belongsTo(CustomerCreditAccount::class, 'account_id');

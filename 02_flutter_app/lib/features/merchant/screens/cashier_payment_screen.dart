@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:uuid/uuid.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
@@ -91,11 +90,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   @override
   void initState() {
     super.initState();
-    if (c.containsIndependentProducts) {
-      _method = 'cash';
-    } else {
-      _loadCurrencies();
-    }
+    _loadCurrencies();
   }
 
   Future<void> _loadCurrencies() async {
@@ -741,61 +736,6 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   /// أميال باي: يعرض QR بمبلغ ثابت يمسحه العميل ويدفع من محفظته، ثم يُسجَّل
   /// البيع مربوطاً بمرجع الدفع وتُفتح الفاتورة تلقائياً (استقبال حقيقي).
   Future<void> _amialPay() async {
-    if (c.containsIndependentProducts) {
-      if (_discount != 0 || _redeemPoints != 0 || _promotionId != null ||
-          !_isBaseCurrency) {
-        _snack('بيع أميال التاجر بالمحفظة لا يدعم الخصم أو عملة غير الريال بعد.');
-        return;
-      }
-      final key = const Uuid().v4(); // stable across QR retries
-      setState(() => _busy = true);
-      final prepared = await c.prepareWalletOrder(
-          requestKey: key, expectedTotal: _net);
-      if (!mounted) return;
-      setState(() => _busy = false);
-      if (prepared == null) {
-        _snack(c.lastError.value);
-        return;
-      }
-      final order = Map<String, dynamic>.from((prepared['order'] ?? {}) as Map);
-      final orderId = (order['id'] ?? '').toString();
-      final serverTotal = double.tryParse('${order['total'] ?? ''}');
-      if (orderId.isEmpty || serverTotal == null || serverTotal <= 0) {
-        _snack('لم يؤكد خادم التاجر مبلغ الطلب — لا تعرض QR.');
-        return;
-      }
-      var firstQrRead = true;
-      Get.to(() => AmialQrCollectScreen(
-        amount: serverTotal,
-        title: 'تحصيل محفظة أميال — أميال التاجر',
-        note: 'سداد طلب تاجر $orderId',
-        createPaymentRequest: (amount, note) async {
-          if (firstQrRead) {
-            firstQrRead = false;
-            return prepared;
-          }
-          return c.prepareWalletOrder(requestKey: key, expectedTotal: _net);
-        },
-        cancelPaymentRequest: c.cancelWalletPaymentRequest,
-        onPaid: (transactionId) async {
-          final sale = await c.completeWalletOrder(orderId, transactionId);
-          if (sale == null) {
-            Get.snackbar('تم التحصيل من المحفظة', c.lastError.value,
-                duration: const Duration(seconds: 12));
-            return false;
-          }
-          c.clearCart();
-          Get.off(() => CashierReceiptScreen(
-            sale: sale,
-            total: serverTotal,
-            method: 'amial_pay',
-            invoiceTitle: 'إيصال بيع أميال التاجر — مدفوع بالمحفظة',
-          ));
-          return true;
-        },
-      ));
-      return;
-    }
     Get.to(() => AmialQrCollectScreen(
           amount: _net,
           note: widget.freeAmount ? 'بيع سريع' : 'دفع مشتريات',
@@ -987,10 +927,10 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           const SizedBox(height: 12),
 
           // ====== عملة القبض (تظهر لمن فعّل أكثر من عملة) ======
-          if (!c.containsIndependentProducts && _acceptedCurrencies.length > 1) _currencyPicker(),
+          if (_acceptedCurrencies.length > 1) _currencyPicker(),
 
           // ====== خصم / كوبون (باقة ستارتر فأعلى) ======
-          if (!widget.freeAmount && !c.containsIndependentProducts) AccessGate(feature: 'promotions', child: Align(
+          if (!widget.freeAmount) AccessGate(feature: 'promotions', child: Align(
             alignment: Alignment.centerRight,
             child: _discount > 0
                 ? TextButton.icon(
@@ -1010,7 +950,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           const SizedBox(height: 10),
 
           // ====== نقاط الولاء (باقة الأعمال فأعلى) ======
-          if (!widget.freeAmount && !c.containsIndependentProducts) AccessGate(feature: 'loyalty', child: _loyaltyCard()),
+          if (!widget.freeAmount) AccessGate(feature: 'loyalty', child: _loyaltyCard()),
 
           // ====== المبلغ المستلم والباقي (نقداً فقط) ======
           //
@@ -1055,12 +995,6 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           // فاختيارُها مع الدولار يُسجّل بيعةً بعملةٍ لم يدفع بها الزبون.
           // وزرٌّ معروضٌ يُفترَض أنّه يعمل — فإخفاؤه أصدقُ من رفضٍ بعد
           // الضغط والزبونُ واقف. (والسببُ مكتوبٌ في بطاقة العملة أعلاه.)
-          if (c.containsIndependentProducts)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Text('أصناف أميال التاجر: الدفع النقدي فقط في هذا الإصدار التجريبي. لن يُخصم مبلغ من المحفظة.',
-                  style: TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold)),
-            ),
           MerchantPaymentMethodPicker(
             layout: MerchantPaymentPickerLayout.cards,
             selectedValue: _method,
@@ -1069,8 +1003,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
               MerchantPaymentOption.cash,
               if (_methodAllowedInCurrency('amial_pay'))
                 MerchantPaymentOption.amialPay,
-              if (!widget.freeAmount && !c.containsIndependentProducts) MerchantPaymentOption.credit,
-              if (!widget.freeAmount && !c.containsIndependentProducts && _methodAllowedInCurrency('mixed'))
+              if (!widget.freeAmount) MerchantPaymentOption.credit,
+              if (!widget.freeAmount && _methodAllowedInCurrency('mixed'))
                 MerchantPaymentOption.mixed,
             ],
           ),
@@ -1081,7 +1015,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           // مشتركٍ فلا يفترق عن نصّ الصيدليّة بعد أوّل تعديل.
           if (!widget.freeAmount && _method == 'credit') const CreditSaleNotice(),
 
-          if (!widget.freeAmount && !c.containsIndependentProducts && _methodAllowedInCurrency('corporate'))
+          if (!widget.freeAmount && _methodAllowedInCurrency('corporate'))
             AccessGate(feature: 'corporate_accounts', child: _methodCard(
               value: 'corporate',
               icon: Icons.business_center_outlined,

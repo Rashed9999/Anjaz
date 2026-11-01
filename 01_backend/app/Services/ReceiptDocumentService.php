@@ -166,6 +166,10 @@ class ReceiptDocumentService
             'customer_name' => 'اسم العميل',
             'customer_phone' => 'هاتف العميل',
             'balance_after' => 'المتبقي على العميل بعد التحصيل',
+            // AMIAL-BUSINESS-RECEIPT-001
+            'business_store' => 'المتجر',
+            'business_reference' => 'رقم فاتورة أميال أعمال',
+            'business_contact_ref' => 'رقم الحساب لدى المتجر',
         ] as $key => $label) {
             $value = $this->safeText($meta[$key] ?? null, 120);
             if ($value !== null) {
@@ -179,7 +183,9 @@ class ReceiptDocumentService
                 ? ($receipt->direction === 'debit' ? 'سند سداد دين عبر أميال باي'
                     : (($meta['payment_method'] ?? '') === 'cash'
                         ? 'سند تحصيل دين نقدي' : 'سند تحصيل دين عبر أميال باي'))
-                : $this->walletTitle($receipt->receipt_type),
+                : (($meta['business_purpose'] ?? '') === 'sale' ? 'سند دفع فاتورة عبر أميال باي'
+                    : (($meta['business_purpose'] ?? '') === 'debt_collection' ? 'سند سداد دين آجل عبر أميال باي'
+                        : $this->walletTitle($receipt->receipt_type))),
             'subtitle' => $receipt->receipt_type === 'debt_payment'
                 ? (($meta['payment_method'] ?? '') === 'cash'
                     ? 'تحصيل نقدي في صندوق المنشأة — دون تحريك المحفظة'

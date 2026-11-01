@@ -5,10 +5,8 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
-/// قناة الدعم الحقيقية + مركز الحلول الفورية للعميل.
-/// تقرأ من إعداد الدعم المخصص، لا من بيانات شركة قديمة أو فارغة في config،
-/// وتعرض سبباً واضحاً إن تعذر فتح تطبيق الاتصال، بالإضافة إلى دليل حلول
-/// ذاتي تفاعلي لأهم استفسارات الأموال والحسابات.
+/// قناة الدعم الحقيقية. تقرأ من إعداد الدعم المخصص، لا من بيانات شركة
+/// قديمة أو فارغة في config، وتعرض سبباً واضحاً إن تعذر فتح تطبيق الاتصال.
 class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key});
 
@@ -22,65 +20,6 @@ class _SupportScreenState extends State<SupportScreen> {
   String _email = '';
   bool _loading = true;
   bool _failed = false;
-  String _searchQuery = '';
-  String _selectedCategory = 'all';
-
-  static const List<Map<String, String>> _categories = [
-    {'code': 'all', 'label': 'support_category_all'},
-    {'code': 'transfers', 'label': 'support_category_transfers'},
-    {'code': 'holds', 'label': 'support_category_holds'},
-    {'code': 'security', 'label': 'support_category_security'},
-    {'code': 'kyc', 'label': 'support_category_kyc'},
-    {'code': 'services', 'label': 'support_category_services'},
-  ];
-
-  static const List<Map<String, String>> _quickAnswers = [
-    {
-      'category': 'transfers',
-      'q': 'support_quick_wrong_transfer_q',
-      'a': 'support_quick_wrong_transfer_a',
-    },
-    {
-      'category': 'transfers',
-      'q': 'support_quick_pending_transfer_q',
-      'a': 'support_quick_pending_transfer_a',
-    },
-    {
-      'category': 'holds',
-      'q': 'support_quick_available_balance_q',
-      'a': 'support_quick_available_balance_a',
-    },
-    {
-      'category': 'holds',
-      'q': 'support_quick_receivable_q',
-      'a': 'support_quick_receivable_a',
-    },
-    {
-      'category': 'security',
-      'q': 'support_quick_lost_phone_q',
-      'a': 'support_quick_lost_phone_a',
-    },
-    {
-      'category': 'security',
-      'q': 'support_quick_pin_q',
-      'a': 'support_quick_pin_a',
-    },
-    {
-      'category': 'kyc',
-      'q': 'support_quick_limits_q',
-      'a': 'support_quick_limits_a',
-    },
-    {
-      'category': 'services',
-      'q': 'support_quick_safe_payment_q',
-      'a': 'support_quick_safe_payment_a',
-    },
-    {
-      'category': 'services',
-      'q': 'support_quick_payment_network_q',
-      'a': 'support_quick_payment_network_a',
-    },
-  ];
 
   @override
   void initState() {
@@ -138,21 +77,8 @@ class _SupportScreenState extends State<SupportScreen> {
     );
   }
 
-  List<Map<String, String>> get _filteredAnswers {
-    final q = _searchQuery.trim().toLowerCase();
-    return _quickAnswers.where((item) {
-      final matchesCat = _selectedCategory == 'all' ||
-          item['category'] == _selectedCategory;
-      if (!matchesCat) return false;
-      if (q.isEmpty) return true;
-      final hay = '${item['q']!.tr} ${item['a']!.tr}'.toLowerCase();
-      return hay.contains(q);
-    }).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final answers = _filteredAnswers;
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('الدعم والمساعدة')),
@@ -184,12 +110,12 @@ class _SupportScreenState extends State<SupportScreen> {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
-            Text(
-              'support_contact_intro'.tr,
+            const Text(
+              'اختر وسيلة التواصل المناسبة. لا تُعرض أي وسيلة غير قابلة للاستخدام.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AmialColors.textSecondary),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             if (_loading)
               const Center(child: CircularProgressIndicator())
             else ...[
@@ -243,83 +169,6 @@ class _SupportScreenState extends State<SupportScreen> {
                 ),
               ],
             ],
-            const SizedBox(height: 28),
-            Text(
-              'support_solutions_title'.tr,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              onChanged: (v) => setState(() => _searchQuery = v),
-              decoration: InputDecoration(
-                hintText: 'support_solutions_search_hint'.tr,
-                prefixIcon: const Icon(Icons.search_rounded),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: AmialColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: AmialColors.border),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _categories.map((cat) {
-                  final selected = _selectedCategory == cat['code'];
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: ChoiceChip(
-                      label: Text(cat['label']!.tr),
-                      selected: selected,
-                      onSelected: (_) =>
-                          setState(() => _selectedCategory = cat['code']!),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...answers.map(
-              (item) => Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AmialColors.border),
-                ),
-                child: ExpansionTile(
-                  title: Text(
-                    item['q']!.tr,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AmialColors.textPrimary,
-                    ),
-                  ),
-                  childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                  children: [
-                    Text(
-                      item['a']!.tr,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        height: 1.5,
-                        color: AmialColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ],
         ),
       ),

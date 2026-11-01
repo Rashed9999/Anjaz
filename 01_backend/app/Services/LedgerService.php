@@ -491,7 +491,6 @@ class LedgerService
                 'status' => 'corrected',
                 'action_taken' => $approvalNote,
                 'resolution_journal_entry_id' => $entry->id,
-                'resolved_at' => now(),
             ])->save();
 
             app(AuditService::class)->record([

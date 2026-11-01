@@ -7,7 +7,6 @@
   const actualSectorName = @json($businessType);
   const navigation = @json($portalNavigation);
   const titles=Object.fromEntries(navigation.map(item=>[item.tab,item.label]));
-  const navigationSymbols={dashboard_customize:'⌁',insights:'⌂',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌘',groups:'♙',people:'♟',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',undo:'↶',print:'▰',extension:'✚',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨',business_center:'▣'};
   let stopScanner=null;
   let active=navigation[0]?.tab||'overview';const content=document.getElementById('content'),notice=document.getElementById('message');
   function node(tag,text,className){const e=document.createElement(tag);if(text!==undefined&&text!==null)e.textContent=String(text);if(className)e.className=className;return e}
@@ -35,6 +34,7 @@
   }
   function buildNavigation(){
     const nav=document.getElementById('portal-nav');nav.replaceChildren();
+    const symbols={dashboard_customize:'⌁',insights:'⌂',account_balance_wallet:'◉',inventory_2:'▤',payments:'◫',account_tree:'⌘',groups:'♙',people:'♟',point_of_sale:'▣',analytics:'▥',receipt_long:'▧',undo:'↶',print:'▰',extension:'✚',auto_awesome:'✧',storefront:'⌂',local_shipping:'▦',shopping_cart:'▨',business_center:'▣'};
     const groups=[
       ['نظرة عامة',['overview']],
       ['التشغيل والمبيعات',['sector','sales','returns','products','customers','debts','suppliers','expenses','assets']],
@@ -46,7 +46,7 @@
     const appendItem=item=>{
       if(!item||seen.has(item.tab))return;seen.add(item.tab);
       const button=node('button',null,'nav');button.type='button';button.dataset.tab=item.tab;button.dataset.state=item.state;
-      const icon=node('span',navigationSymbols[item.icon]||'•','nav-icon'),label=node('span',item.label);
+      const icon=node('span',symbols[item.icon]||'•','nav-icon'),label=node('span',item.label);
       button.append(icon,label);button.title=item.state==='available'?item.label:navigationNote(item.state);
       button.addEventListener('click',()=>{setMenu(false);load(item.tab)});nav.append(button);
     };
@@ -59,68 +59,6 @@
     const rest=navigation.filter(item=>!seen.has(item.tab));
     if(rest.length){nav.append(node('div','المزيد','nav-section-title'));rest.forEach(appendItem)}
   }
-  function openMerchantCommandCenter(){
-    let layer=document.getElementById('merchant-command-layer');
-    if(layer){
-      layer.hidden=false;
-      document.body.classList.add('merchant-command-open');
-      document.getElementById('merchant-command-trigger')?.setAttribute('aria-expanded','true');
-      layer.querySelector('input')?.focus();
-      return;
-    }
-    const trigger=document.getElementById('merchant-command-trigger');
-    layer=node('div',null,'merchant-command-layer');
-    layer.id='merchant-command-layer';
-    const dialog=node('section',null,'merchant-command');
-    dialog.id='merchant-command-center';
-    dialog.setAttribute('role','dialog');
-    dialog.setAttribute('aria-modal','true');
-    dialog.setAttribute('aria-labelledby','merchant-command-title');
-    const head=node('div',null,'merchant-command-head');
-    const title=node('h2','ابحث أو انتقل إلى مساحة عمل','');title.id='merchant-command-title';
-    const close=node('button','×','merchant-command-close');close.type='button';close.setAttribute('aria-label','إغلاق البحث والتنقل السريع');
-    head.append(title,close);
-    const input=node('input');input.type='search';input.placeholder='اكتب اسم المساحة، مثل: مبيعات أو محفظة أو موردون';input.autocomplete='off';input.setAttribute('aria-label','البحث في مساحات عمل المنشأة');
-    const help=node('p','تظهر فقط المساحات المتاحة لمنشأتك وباقتك. اضغط Esc للإغلاق.','merchant-command-help');
-    const results=node('div',null,'merchant-command-results');
-    const groups={
-      overview:'نظرة عامة',sector:'التشغيل والمبيعات',sales:'التشغيل والمبيعات',returns:'التشغيل والمبيعات',products:'التشغيل والمبيعات',customers:'التشغيل والمبيعات',debts:'التشغيل والمبيعات',suppliers:'التشغيل والمبيعات',expenses:'التشغيل والمبيعات',assets:'التشغيل والمبيعات',
-      branches:'الفريق ونقاط البيع',posSetup:'الفريق ونقاط البيع',staff:'الفريق ونقاط البيع',devices:'الفريق ونقاط البيع',
-      wallet:'المالية والتقارير',reports:'المالية والتقارير',documents:'المالية والتقارير',settings:'إعدادات المنشأة',integrations:'إعدادات المنشأة',plans:'إعدادات المنشأة'
-    };
-    const available=()=>navigation.filter(item=>item.state==='available');
-    const render=(query='')=>{
-      const q=query.trim().toLocaleLowerCase('ar');
-      const rows=available().filter(item=>!q||item.label.toLocaleLowerCase('ar').includes(q)||(groups[item.tab]||'').toLocaleLowerCase('ar').includes(q));
-      results.replaceChildren();
-      if(!rows.length){results.append(node('p','لا توجد مساحة متاحة تطابق بحثك.','merchant-command-empty'));return}
-      rows.forEach(item=>{
-        const button=node('button',null,'merchant-command-item');button.type='button';
-        const copy=node('span');copy.append(node('strong',item.label),node('small',groups[item.tab]||'مساحة عمل'));
-        button.append(copy,node('span','فتح ←','merchant-command-open'));
-        button.addEventListener('click',()=>{closeMerchantCommandCenter();load(item.tab)});results.append(button);
-      });
-    };
-    close.addEventListener('click',()=>closeMerchantCommandCenter());
-    layer.addEventListener('click',event=>{if(event.target===layer)closeMerchantCommandCenter()});
-    input.addEventListener('input',()=>render(input.value));
-    input.addEventListener('keydown',event=>{if(event.key==='Enter'){const first=results.querySelector('button');if(first){event.preventDefault();first.click()}}});
-    dialog.append(head,input,help,results);layer.append(dialog);document.body.append(layer);render();
-    document.body.classList.add('merchant-command-open');
-    trigger?.setAttribute('aria-expanded','true');
-    requestAnimationFrame(()=>input.focus());
-    layer._merchantCommandTrigger=trigger;
-  }
-  function closeMerchantCommandCenter(){
-    const layer=document.getElementById('merchant-command-layer');
-    if(!layer||layer.hidden)return false;
-    layer.hidden=true;
-    document.body.classList.remove('merchant-command-open');
-    document.getElementById('merchant-command-trigger')?.setAttribute('aria-expanded','false');
-    layer._merchantCommandTrigger?.focus();
-    return true;
-  }
-  document.getElementById('merchant-command-trigger')?.addEventListener('click',openMerchantCommandCenter);
   function workspaceActions(panel,tabs){
     const available=new Map(navigation.map(item=>[item.tab,item.state==='available']));
     const names=new Map(navigation.map(item=>[item.tab,item.label]));
@@ -235,17 +173,10 @@
   function attentionCard(report={},counts={}){
     const card=node('section',null,'chart-card'),head=node('div',null,'chart-head');head.append(node('div'));head.firstChild.append(node('h3','يحتاج انتباهك'),node('small','تنبيهات تشغيلية مبنية على الحالة الحالية'));card.append(head);
     const list=node('div',null,'attention-list'),receivable=Number(report.receivables?.amount||0),open=Number(counts.open_shifts||0),devices=Number(counts.devices||0),live=Number(counts.active_device_sessions||0);
-    const available=new Set(navigation.filter(item=>item.state==='available').map(item=>item.tab));
-    const add=(icon,title,detail,tone='',tab=null)=>{
-      const actionable=tab!==null&&available.has(tab),r=node(actionable?'button':'div','attention-item'+(tone?' '+tone:'')+(actionable?' attention-action':''));
-      if(actionable){r.type='button';r.setAttribute('aria-label','فتح '+(titles[tab]||title));r.addEventListener('click',()=>load(tab))}
-      r.append(node('span',icon,'att-icon'));const x=node('div');x.append(node('strong',title),node('small',detail));r.append(x);
-      if(actionable)r.append(node('span','فتح','attention-open'));
-      list.append(r)
-    };
-    if(actualSector!=='quick_sale'&&receivable>0)add('◫','ذمم عملاء قائمة',money(receivable)+' ما زالت مستحقة على العملاء.','warn','debts');
-    if(open>0)add('◷','ورديات مفتوحة',open+' وردية لم تُقفل بعد؛ راقب جرد الصندوق وتسليم النقد.','warn','sector');
-    if(devices>0&&live<devices)add('▣','أجهزة غير متصلة',(devices-live)+' جهاز مرخص لا يملك جلسة نشطة الآن.','','devices');
+    const add=(icon,title,detail,tone='')=>{const r=node('div',null,'attention-item'+(tone?' '+tone:''));r.append(node('span',icon,'att-icon'));const x=node('div');x.append(node('strong',title),node('small',detail));r.append(x);list.append(r)};
+    if(actualSector!=='quick_sale'&&receivable>0)add('◫','ذمم عملاء قائمة',money(receivable)+' ما زالت مستحقة على العملاء.','warn');
+    if(open>0)add('◷','ورديات مفتوحة',open+' وردية لم تُقفل بعد؛ راقب جرد الصندوق وتسليم النقد.','warn');
+    if(devices>0&&live<devices)add('▣','أجهزة غير متصلة',(devices-live)+' جهاز مرخص لا يملك جلسة نشطة الآن.');
     if((actualSector==='quick_sale'||receivable===0)&&open===0&&(devices===0||live===devices))add('✓','التشغيل مستقر',actualSector==='quick_sale'?'لا توجد ورديات أو أجهزة تحتاج إجراءً فوريًا.':'لا توجد ذمم أو ورديات مفتوحة تحتاج إجراءً فوريًا.');
     card.append(list);return card
   }
@@ -333,70 +264,6 @@
     hero.append(actions);return hero
   }
 
-  // دليلُ مساحات العمل لا ينشئ صلاحيةً أو مساراً: هو مجرد نافذة منظمة
-  // فوق القائمة التي جهزها الخادم من الاستحقاقات الفعلية للمنشأة.
-  function workspaceDirectoryCard(){
-    const groups=[
-      ['البيع والتشغيل',['sector','sales','returns','customers','debts']],
-      ['الأصناف والتوريد',['products','suppliers','expenses','assets']],
-      ['الفريق ونقاط البيع',['branches','posSetup','staff','devices']],
-      ['المالية والرقابة',['wallet','reports','documents']],
-      ['إدارة المنشأة',['settings','integrations','plans']],
-    ];
-    const byTab=new Map(navigation.filter(item=>item.state==='available').map(item=>[item.tab,item]));
-    const card=node('section',null,'workspace-directory');
-    const head=node('div',null,'workspace-directory-head'),copy=node('div');
-    copy.append(node('h3','مساحات العمل',''),node('p','انتقل مباشرة إلى الأدوات المتاحة لمنشأتك. تظهر المساحات المسموح بها فقط.',''));
-    head.append(copy,node('span','حسب الباقة والصلاحية','workspace-directory-note'));card.append(head);
-    const grid=node('div',null,'workspace-directory-grid');
-    groups.forEach(([group,tabs])=>{
-      const items=tabs.map(tab=>byTab.get(tab)).filter(Boolean);
-      if(!items.length)return;
-      const column=node('section',null,'workspace-group');
-      column.append(node('h4',group));
-      const links=node('div',null,'workspace-links');
-      items.forEach(item=>{
-        const button=node('button',null,'workspace-link');button.type='button';button.dataset.tab=item.tab;
-        button.setAttribute('aria-label','فتح '+item.label);
-        button.append(node('span',navigationSymbols[item.icon]||'•','workspace-link-icon'),node('span',item.label));
-        button.addEventListener('click',()=>load(item.tab));links.append(button);
-      });
-      column.append(links);grid.append(column);
-    });
-    if(!grid.childElementCount)return null;
-    card.append(grid);return card;
-  }
-
-  function operationalReadinessCard(setup={},counts={}){
-    const available=new Map(navigation.map(item=>[item.tab,item.state==='available']));
-    const steps=[];
-    if(available.get('branches'))steps.push(['فرع أو موقع تشغيل',Boolean(setup.has_branch),'branches','أضف الفرع الذي ستعمل منه نقاط البيع والفريق.']);
-    if(available.get('staff')){
-      steps.push(['دور تشغيلي',Boolean(setup.has_role),'staff','حدّد دوراً وصلاحياته قبل توزيع العمل على الموظفين.']);
-      steps.push(['موظف نقطة بيع',Boolean(setup.has_employee),'staff','أنشئ موظفاً مستقلاً بدلاً من مشاركة حساب المالك.']);
-    }
-    if(available.get('devices'))steps.push(['جهاز نقطة بيع',Boolean(setup.has_device),'devices','فعّل جهازاً واربطه بالتشغيل قبل بدء الوردية.']);
-    if(!steps.length)return null;
-
-    const completed=steps.filter(([,done])=>done).length;
-    const card=node('section',null,'readiness-card');
-    const head=node('div',null,'readiness-head'),copy=node('div');
-    copy.append(node('h3','تجهيز التشغيل',''),node('p','هذه قائمة تجهيز تشغيلية فقط؛ لا تمثل اعتماداً مالياً أو رصيداً.',''));
-    head.append(copy,node('span',completed+' من '+steps.length+' مكتمل','readiness-count'));card.append(head);
-    const list=node('div',null,'readiness-list');
-    steps.forEach(([label,done,tab,detail])=>{
-      const row=node('div',null,'readiness-row '+(done?'done':'pending'));
-      const state=node('span',done?'✓':'○','readiness-state');
-      const body=node('div',null,'readiness-copy');body.append(node('strong',label),node('small',done?'جاهز للتشغيل.':detail));
-      row.append(state,body);
-      if(!done){const go=node('button','إكمال','action secondary readiness-action');go.type='button';go.addEventListener('click',()=>load(tab));row.append(go)}
-      list.append(row);
-    });
-    card.append(list);
-    if(Number(counts.open_shifts||0)>0)card.append(node('p','لديك '+counts.open_shifts+' وردية مفتوحة حالياً؛ تابع الجرد والتسليم من مساحة التشغيل المرتبطة بها.','readiness-open-shifts'));
-    return card;
-  }
-
   async function overview(days=14){
     if(!actualSector){
       const data=await api('sectorTypes'),p=box('ابدأ بتحديد نشاط المنشأة');
@@ -416,12 +283,7 @@
     const todayCount=Number(sales.count||0),todayGross=Number(sales.gross||0),todayAvg=todayCount>0?todayGross/todayCount:0;
     const saleReturn=(movement.rows||[]).find(x=>x.code==='sale_return'),returnToday=saleReturn?.available?Number(saleReturn.total||0):null;
 
-    content.append(quickHero(d));
-    const directory=workspaceDirectoryCard();
-    if(directory)content.append(directory);
-    const readiness=operationalReadinessCard(o.setup||{},counts);
-    if(readiness)content.append(readiness);
-    content.append(dashboardPeriodBar(days));
+    content.append(quickHero(d),dashboardPeriodBar(days));
     const overviewKpis=[
       ['مبيعات اليوم',money(sales.gross),'↗',d.today_change_percent===null?'المقارنة تحتاج مبيعات أمس':((Number(d.today_change_percent)>=0?'+':'')+Number(d.today_change_percent).toFixed(1)+'% عن أمس')],
       ['عدد عمليات البيع',String(todayCount),'▧','متوسط الفاتورة '+money(todayAvg),'blue'],
@@ -739,17 +601,7 @@
     );
     content.append(summary);
 
-    const hub=node('section',null,'customer-hub');
-    const hubHead=node('header',null,'customer-hub-head'),copy=node('div');
-    copy.append(node('span','مركز العملاء والتحصيل','customer-kicker'),node('h2','العملاء',''),node('p','ملف العميل، مبيعاته، حدّه الائتماني وسجلّه المالي في مكان واحد. لا يتحول وجود العميل إلى دين، ولا يتحول الدين إلى رصيد محفظة.',''));
-    const hubActions=node('div',null,'customer-hub-actions');
-    const addCustomer=node('button','إضافة عميل','customer-hub-action');addCustomer.type='button';addCustomer.onclick=()=>customerEditor();hubActions.append(addCustomer);
-    if(navigation.some(item=>item.tab==='debts'&&item.state==='available')){
-      const credits=node('button','الديون والتحصيل','customer-hub-action secondary');credits.type='button';credits.onclick=()=>load('debts');hubActions.append(credits);
-    }
-    hubHead.append(copy,hubActions);hub.append(hubHead);
-    const p=node('section',null,'workspace-surface customer-directory');p.append(node('h3','دليل العملاء'));
-    hub.append(p);content.append(hub);
+    const p=box('قاعدة بيانات العملاء');
     hint(p,actualSector==='pharmacy'
       ?'هذا ملف عملاء الصيدلية نفسه المستخدم أثناء البيع والوصفات؛ لا ننشئ نسخة عملاء موازية في الويب.'
       :actualSector==='wholesale'
@@ -761,7 +613,8 @@
     const tools=node('form',null,'product-tools'),searchLabel=node('label','بحث بالاسم أو الهاتف','field'),input=node('input');
     input.type='search';input.value=search;input.placeholder='اسم العميل أو رقم الهاتف';searchLabel.append(input);
     const go=node('button','بحث','action secondary');go.type='submit';
-    tools.append(searchLabel,go);p.append(tools);
+    const add=node('button','+ إضافة عميل','action');add.type='button';add.onclick=()=>customerEditor();
+    tools.append(searchLabel,go,add);p.append(tools);
     tools.addEventListener('submit',ev=>{ev.preventDefault();customers(input.value.trim()).catch(e=>message(e.message))});
 
     if(actualSector==='pharmacy'){
@@ -1494,23 +1347,7 @@
       ['مصدر السجل',data.source||'—','◎','مصدر قطاع المنشأة الحقيقي','gold'],
     ]);
 
-    const hub=node('section',null,'sales-hub');
-    const hubHead=node('header',null,'sales-hub-head'),copy=node('div');
-    copy.append(node('span','مركز البيع والفواتير','sales-kicker'),node('h2',(titles.sales||'المبيعات'),'') ,node('p','راجع كل عملية من مصدر قطاعها الحقيقي، وافتح فاتورتها أو مرتجعها. طرق الدفع لا تُجمع في رصيد واحد لأنها تحمل التزامات تشغيلية ومالية مختلفة.',''));
-    const hubActions=node('div',null,'sales-hub-actions'),available=new Set(navigation.filter(item=>item.state==='available').map(item=>item.tab));
-    [['customers','العملاء'],['debts','الديون والتحصيل'],['returns','المرتجعات']].forEach(([tab,label])=>{
-      if(!available.has(tab))return;
-      const button=node('button',label,'sales-hub-action');button.type='button';button.addEventListener('click',()=>load(tab));hubActions.append(button);
-    });
-    hubHead.append(copy,hubActions);hub.append(hubHead);
-    const moneyPaths=node('div',null,'sales-money-paths');
-    [
-      ['نقد الوردية','يبقى في درج الوردية حتى الجرد والتسليم.','cash'],
-      ['مدفوعات أميال','تصل إلى محفظة المنشأة ويثبتها الدفتر.','wallet'],
-      ['بيع آجل','يسجل في ذمة العميل حتى التحصيل.','credit'],
-    ].forEach(([title,detail,tone])=>{const item=node('div',null,'sales-money-path '+tone);item.append(node('strong',title),node('small',detail));moneyPaths.append(item)});
-    hub.append(moneyPaths);
-    const p=node('section',null,'workspace-surface sales-directory');p.append(node('h3','سجل '+actualSectorName));hub.append(p);content.append(hub);
+    const p=box('سجل '+actualSectorName);
     hint(p,'الفلاتر تعمل على الخادم قبل الترقيم. نتائج الوقود والصيدلية والجملة لا تُقرأ من merchant_sales، وتفاصيل العملية تظل من محرك قطاعها الأصلي.');
 
     const ff=node('form',null,'filter-bar');
@@ -2731,65 +2568,26 @@
     ]);
     const supplierRows=s.suppliers||[],orders=o.orders||[],returnRows=returns.returns||[];
     const openShifts=(ops.open_shifts||[]).filter(x=>x.shift_type==='cashier');
-    dashboardKpis([
-      ['علينا للموردين',money(s.totals?.total_debt||0),'◫','التزامات مستقلة عن نقد الوردية','gold'],
-      ['لنا عند الموردين',money(s.totals?.total_credit||0),'◉','رصيد دائن قابل للاستخدام أو التحصيل','blue'],
-      ['أوامر شراء نشطة',String(s.totals?.active_po_count??0),'▧','لا تزيد المخزون قبل الاستلام'],
-      ['مرتجعات معلقة',String(returnRows.filter(x=>x.status==='pending').length),'↶','بانتظار قرار الاعتماد',returnRows.some(x=>x.status==='pending')?'red':'']
-    ]);
+    grid([['علينا للموردين',money(s.totals?.total_debt||0)],['لنا عند الموردين',money(s.totals?.total_credit||0)],['صافي المستحق',money(s.totals?.net_payable||0)],['عدد الموردين',s.totals?.suppliers_count??supplierRows.length],['أوامر شراء نشطة',s.totals?.active_po_count??0],['مرتجعات معلقة',returnRows.filter(x=>x.status==='pending').length]]);
 
-    const hub=node('section',null,'procurement-hub');
-    const intro=node('header',null,'procurement-hub-head'),copy=node('div');
-    copy.append(node('span','مركز الشراء والتوريد','procurement-kicker'),node('h2','الموردون والمشتريات',''),node('p','تابع المورد، أنشئ أمر الشراء، وثّق الاستلام، وعالج المرتجع من مساحة واحدة. الأرصدة والمخزون لا تتحرك إلا وفق دورة الاعتماد الفعلية.',''));
-    const count=node('div',null,'procurement-counts');
-    count.append(node('strong',String(s.totals?.suppliers_count??supplierRows.length)),node('span','مورد مسجل'));
-    intro.append(copy,count);hub.append(intro);
+    const p=box('الموردون');
+    hint(p,'نُظهر ما علينا للمورد وما لنا عنده منفصلين. فائض المرتجع لا يضيع في ملاحظة؛ يصبح رصيداً لنا ويُستهلك تلقائياً في المشتريات التالية أو يُحصّل نقداً.');
+    table(p,[['المورد',x=>x.name],['الهاتف',x=>x.phone||'—'],['علينا',x=>money(x.current_debt)],['لنا',x=>money(x.current_credit||0)],['الصافي',x=>money(Number(x.current_debt||0)-Number(x.current_credit||0))],['الإجراءات',x=>buttons([action('كشف الحساب',()=>showSupplier(x.id)),Number(x.current_debt||0)>0?action('سداد نقدي',()=>paySupplier(x,openShifts),false):null,Number(x.current_debt||0)>0?action('سداد أميال',()=>paySupplierWallet(x),false):null,Number(x.current_credit||0)>0?action('تحصيل من المورد',()=>collectSupplierCredit(x,openShifts),false):null])]],supplierRows);
 
-    const tabList=node('div',null,'procurement-tabs');tabList.setAttribute('role','tablist');tabList.setAttribute('aria-label','أقسام مركز المشتريات');
-    const panel=node('div',null,'procurement-panel');panel.setAttribute('role','tabpanel');panel.tabIndex=0;
-    const tabDefinitions=[
-      ['overview','نظرة عامة','ملخص التوريد'],
-      ['suppliers','الموردون',String(supplierRows.length)],
-      ['orders','أوامر الشراء',String(orders.length)],
-      ['returns','مرتجعات الشراء',String(returnRows.length)],
-    ];
-    const tabButtons=new Map();
+    const create=box('إضافة مورد');
+    form(create,[['name','اسم المورد'],['contact_person','مسؤول التواصل'],['phone','الهاتف','tel'],['email','البريد','email'],['address','العنوان'],['category','التصنيف'],['opening_balance','رصيد افتتاحي مستحق','number']],'حفظ المورد',d=>api('supplierCreate',d));
+
+    const ordersPanel=box('أوامر الشراء');
+    hint(ordersPanel,'المخزون لا يزيد عند إنشاء الأمر أو اعتماده؛ يزيد فقط عند تسجيل الاستلام الفعلي.');
+    table(ordersPanel,[['الأمر',x=>x.po_number],['المورد',x=>x.supplier?.name||'—'],['الإجمالي',x=>money(x.total_amount)],['الحالة',x=>poStatus(x.status)],['التاريخ',x=>x.created_at||'—'],['الإجراء',x=>purchaseOrderActions(x,openShifts)]],orders);
+
+    const createOrder=box('أمر شراء جديد');
     const products=productData.products||productData.items||productData.result?.products||[];
-    const render=(tab)=>{
-      panel.replaceChildren();
-      tabButtons.forEach((button,key)=>{const selected=key===tab;button.classList.toggle('active',selected);button.setAttribute('aria-selected',selected?'true':'false');button.tabIndex=selected?0:-1});
-      if(tab==='overview'){
-        const guide=node('section',null,'procurement-guide');
-        guide.append(node('h3','دورة الشراء الصحيحة'),node('p','أمر شراء ← اعتماد ← استلام فعلي ← سداد أو رصيد مورد ← مرتجع عند الحاجة. لا يتحول أمر مكتوب إلى مخزون أو مال من تلقاء نفسه.',''));
-        const steps=node('div',null,'procurement-flow');
-        [['١','أنشئ الأمر','تحديد المورد والأصناف والكميات.'],['٢','اعتمد ثم استلم','المخزون يرتفع عند الاستلام فقط.'],['٣','سوِّد الالتزام','نقداً أو بأميال باي وفق القيد الفعلي.'],['٤','عالج المرتجع','خصم من الدين أو استرداد موثق.']].forEach(([n,title,detail])=>{const item=node('div',null,'procurement-flow-step');item.append(node('span',n,'procurement-flow-number'),node('strong',title),node('small',detail));steps.append(item)});
-        guide.append(steps);panel.append(guide);
-        const recent=node('section',null,'workspace-surface');recent.append(node('h3','أحدث أوامر الشراء'));
-        table(recent,[['الأمر',x=>x.po_number],['المورد',x=>x.supplier?.name||'—'],['الإجمالي',x=>money(x.total_amount)],['الحالة',x=>poStatus(x.status)],['الإجراء',x=>purchaseOrderActions(x,openShifts)]],orders.slice(0,6));panel.append(recent);
-        return;
-      }
-      if(tab==='suppliers'){
-        const list=node('section',null,'workspace-surface');list.append(node('h3','دليل الموردين'));
-        hint(list,'ما علينا للمورد وما لنا عنده يظهران منفصلين؛ فائض المرتجع لا يضيع في ملاحظة بل يبقى رصيداً قابلاً للتتبع.');
-        table(list,[['المورد',x=>x.name],['الهاتف',x=>x.phone||'—'],['علينا',x=>money(x.current_debt)],['لنا',x=>money(x.current_credit||0)],['الصافي',x=>money(Number(x.current_debt||0)-Number(x.current_credit||0))],['الإجراءات',x=>buttons([action('كشف الحساب',()=>showSupplier(x.id)),Number(x.current_debt||0)>0?action('سداد نقدي',()=>paySupplier(x,openShifts),false):null,Number(x.current_debt||0)>0?action('سداد أميال',()=>paySupplierWallet(x),false):null,Number(x.current_credit||0)>0?action('تحصيل من المورد',()=>collectSupplierCredit(x,openShifts),false):null])]],supplierRows);
-        const create=node('section',null,'workspace-surface procurement-create');create.append(node('h3','إضافة مورد'));
-        form(create,[['name','اسم المورد'],['contact_person','مسؤول التواصل'],['phone','الهاتف','tel'],['email','البريد','email'],['address','العنوان'],['category','التصنيف'],['opening_balance','رصيد افتتاحي مستحق','number']],'حفظ المورد',d=>api('supplierCreate',d));panel.append(list,create);return;
-      }
-      if(tab==='orders'){
-        const list=node('section',null,'workspace-surface');list.append(node('h3','أوامر الشراء'));
-        hint(list,'المخزون لا يزيد عند إنشاء الأمر أو اعتماده؛ يزيد فقط عند تسجيل الاستلام الفعلي.');
-        table(list,[['الأمر',x=>x.po_number],['المورد',x=>x.supplier?.name||'—'],['الإجمالي',x=>money(x.total_amount)],['الحالة',x=>poStatus(x.status)],['التاريخ',x=>x.created_at||'—'],['الإجراء',x=>purchaseOrderActions(x,openShifts)]],orders);
-        const create=node('section',null,'workspace-surface procurement-create');create.append(node('h3','أمر شراء جديد'));purchaseOrderCreator(create,supplierRows,Array.isArray(products)?products:[]);panel.append(list,create);return;
-      }
-      const list=node('section',null,'workspace-surface');list.append(node('h3','مرتجعات الشراء'));
-      hint(list,'المرتجع لا يحرّك المخزون أو الأصل أو الدين إلا بعد الاعتماد. عند الاسترداد النقدي تحدد درج POS الذي دخل إليه المبلغ؛ النقد الخارجي لا يغير وردية.');
-      table(list,[['المرجع',x=>x.return_ulid],['المورد',x=>x.supplier?.name||'—'],['القيمة',x=>money(x.total_amount)],['التسوية',x=>x.settlement_type==='cash_refund'?'استرداد نقدي':'خصم من دين المورد'],['الحالة',x=>x.status==='pending'?'بانتظار الاعتماد':x.status==='approved'?'معتمد':'مرفوض'],['الإجراء',returnActions]],returnRows);panel.append(list);
-    };
-    tabDefinitions.forEach(([key,label,meta])=>{
-      const button=node('button',null,'procurement-tab');button.type='button';button.setAttribute('role','tab');button.dataset.tab=key;
-      button.append(node('span',label),node('small',meta));button.addEventListener('click',()=>render(key));tabButtons.set(key,button);tabList.append(button);
-    });
-    hub.append(tabList,panel);content.append(hub);render('overview');
+    purchaseOrderCreator(createOrder,supplierRows,Array.isArray(products)?products:[]);
+
+    const returnsPanel=box('مرتجعات الشراء');
+    hint(returnsPanel,'المرتجع لا يحرّك المخزون أو الأصل أو الدين إلا بعد الاعتماد. إذا أعاد المورد نقداً يمكنك تحديد درج POS الذي دخل إليه المبلغ؛ والنقد الخارجي لا يغيّر أي وردية.');
+    table(returnsPanel,[['المرجع',x=>x.return_ulid],['المورد',x=>x.supplier?.name||'—'],['القيمة',x=>money(x.total_amount)],['التسوية',x=>x.settlement_type==='cash_refund'?'استرداد نقدي':'خصم من دين المورد'],['الحالة',x=>x.status==='pending'?'بانتظار الاعتماد':x.status==='approved'?'معتمد':'مرفوض'],['الإجراء',returnActions]],returnRows);
   }
 
   const expenseLabels={rent:'إيجار',salary:'رواتب',utilities:'كهرباء ومياه',supplies:'مستلزمات',transport:'نقل',other:'أخرى'};
@@ -3329,13 +3127,7 @@
   }
   menuToggle.addEventListener('click',()=>setMenu(!sidebar.classList.contains('open')));
   menuBackdrop.addEventListener('click',()=>{setMenu(false);menuToggle.focus()});
-  document.addEventListener('keydown',e=>{
-    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){
-      e.preventDefault();openMerchantCommandCenter();return;
-    }
-    if(e.key==='Escape'&&closeMerchantCommandCenter())return;
-    if(e.key==='Escape'&&sidebar.classList.contains('open')){setMenu(false);menuToggle.focus()}
-  });
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&sidebar.classList.contains('open')){setMenu(false);menuToggle.focus()}});
   compactLayout.addEventListener('change',()=>setMenu(false));
   buildNavigation();
   load(active);

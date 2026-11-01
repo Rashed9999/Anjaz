@@ -601,6 +601,12 @@ class PaymentRequestService
                 'paid_at' => now(),
             ]);
 
+            // AMIAL-BUSINESS-GATEWAY-001 — إن كان الطلب نيّةَ دفعٍ من «أميال
+            // أعمال» تُسجَّل نتيجتُها وحدثُها هنا، داخل المعاملة نفسها: يُرَدّ
+            // الإبلاغ إن رُدّ الدفع، ويُرَدّ الدفع إن كانت النيّة أُلغيت.
+            app(\App\Services\BusinessGateway\BusinessPaymentIntentService::class)
+                ->recordPaymentRequestPaid($locked, $txId, $feeBearer === 'receiver' ? $fee : '0');
+
             $this->ledgerTransferWithFee(
                 fromUserId: $payer->id,
                 toUserId: $requesterId,
@@ -645,7 +651,7 @@ class PaymentRequestService
             ];
         }, 3);
 
-        $this->safeIssueReceipts([
+        $this->safeIssueReceipts(array_merge([
             'from_user_id' => $payer->id,
             'to_user_id' => $requesterId,
             'reference_transaction_id' => $result['transaction_id'],
@@ -654,7 +660,7 @@ class PaymentRequestService
             'fee' => $fee,
             'fee_bearer' => $result['fee_bearer'],
             'zone_code' => $payer->zone_code ?? 'SOUTH',
-        ]);
+        ], app(\App\Services\BusinessGateway\BusinessPaymentIntentService::class)->receiptContext($result['request']) ?? []));
         $this->maybeAnalyzeMerchantRisk($requesterId, $payer->id, $amount);
         $this->dispatchPaidNotifications($result['request'], $payer);
         $this->dispatchPaidPushNotifications($result['request'], $payer, $result['transaction_id']);

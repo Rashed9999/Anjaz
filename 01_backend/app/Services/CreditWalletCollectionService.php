@@ -30,6 +30,9 @@ class CreditWalletCollectionService
     {
         $amount=MoneyService::normalize($amount);
         if (!MoneyService::isPositive($amount)) throw new InvalidArgumentException('المبلغ يجب أن يكون موجباً');
+        // AMIAL-BUSINESS-CREDIT-001 — لا طلب QR لدينٍ صار دفتره في أميال أعمال:
+        // دفعُه لن يجد ما يُخصم منه هنا.
+        app(\App\Services\BusinessGateway\CreditHandoverService::class)->assertOpen((int)$merchant->id);
         return DB::transaction(function() use ($merchant,$actor,$posId,$account,$amount,$key,$saleUlid) {
             $a=CustomerCreditAccount::whereKey($account->id)
                 ->where('merchant_user_id',$merchant->id)->lockForUpdate()->firstOrFail();

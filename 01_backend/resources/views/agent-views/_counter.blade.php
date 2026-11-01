@@ -516,6 +516,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── السحب برمز العميل ────────────────────────────────────────
     let wdCode = null;
+    let wdIdentityRequired = false;
 
     $('wd-find').addEventListener('click', async () => {
         const code = $('wd-code').value.trim().toUpperCase();
@@ -536,6 +537,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const q = j.request;
         box.innerHTML = `
             <div class="border rounded p-3">
+                ${q.identity_required ? `<div class="badge bg-warning text-dark mb-2">سحب تاجر${q.store_name ? ' — ' + esc(q.store_name) : ''} · أدخل هاتفه أو رقم حسابه قبل الصرف</div>` : ''}
                 <div class="fw-bold fs-5">${esc(q.customer.name)}</div>
                 <div class="text-muted" dir="ltr">${esc(q.customer.phone ?? '')}</div>
                 <div class="small text-muted mt-2">ينتهي: ${esc(q.expires_at ?? '—')}</div>
@@ -548,6 +550,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         wdCode = q.op_code;
+        wdIdentityRequired = !!q.identity_required;
         $('wd-summary').innerHTML =
             `<div class="fs-4 fw-bold">ادفع نقداً: ${fmt(q.amount)} ر.ي</div>` +
             `<div class="small text-muted">رسم العملية ${fmt(q.fee)} — مخصومٌ من رصيده، لا من النقد.</div>`;
@@ -558,6 +561,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     $('wd-pay').addEventListener('click', async () => {
         if (busy || !wdCode) return;
+        if (wdIdentityRequired && !$('wd-ident').value.trim()) {
+            $('wd-result').innerHTML = '<div class="alert alert-warning mb-0 small">سحب التاجر يتطلب إدخال هاتفه أو رقم حسابه للتحقق.</div>';
+            $('wd-ident').focus();
+            return;
+        }
         busy = true;
         $('wd-pay').disabled = true;
         try {

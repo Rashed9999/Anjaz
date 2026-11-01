@@ -23,6 +23,8 @@ class _MyCreditsScreenState extends State<MyCreditsScreen> {
   bool _loading = true;
   String _totalOwed = '0';
   List<Map<String, dynamic>> _accounts = [];
+  /// AMIAL-BUSINESS-CREDIT-001 — ديون لدى تجار «أميال أعمال» (مرآة دفترهم).
+  List<Map<String, dynamic>> _businessAccounts = [];
   String? _error;
 
   @override
@@ -40,6 +42,9 @@ class _MyCreditsScreenState extends State<MyCreditsScreen> {
         setState(() {
           _totalOwed = '${meta['total_owed'] ?? '0'}';
           _accounts = ((meta['accounts'] ?? []) as List)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+          _businessAccounts = ((meta['business_accounts'] ?? []) as List)
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
         });
@@ -96,7 +101,7 @@ class _MyCreditsScreenState extends State<MyCreditsScreen> {
                       child: Text(_error!, textAlign: TextAlign.center,
                           style: const TextStyle(color: AmialColors.red)),
                     ),
-                  if (_accounts.isEmpty && _error == null)
+                  if (_accounts.isEmpty && _businessAccounts.isEmpty && _error == null)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 60),
                       child: Column(children: [
@@ -107,11 +112,116 @@ class _MyCreditsScreenState extends State<MyCreditsScreen> {
                       ]),
                     ),
                   ..._accounts.map(_accountCard),
+                  ..._businessAccounts.map(_businessCard),
                 ],
               ),
       ),
     );
   }
+
+  /// دينٌ لدى تاجر يعمل على «أميال أعمال». الرصيد من دفتر التاجر هناك ناقص ما
+  /// دفعتَه للتوّ ولم يصل تحديثه بعد، فلا يُدفع الدين مرتين.
+  Widget _businessCard(Map<String, dynamic> a) {
+    final balance = double.tryParse('${a['current_balance'] ?? 0}') ?? 0;
+    final overdue = double.tryParse('${a['overdue_amount'] ?? 0}') ?? 0;
+    final pending = double.tryParse('${a['pending_payments'] ?? 0}') ?? 0;
+    final settled = balance <= 0;
+    final due = '${a['next_due_date'] ?? ''}';
+    final note = overdue > 0
+        ? 'credit_business_overdue'.trParams({'amount': _fmt(overdue)})
+        : due.isNotEmpty
+            ? 'credit_business_due'.trParams({'date': due})
+            : (settled ? 'مسدّد' : 'مستحقّ عليك');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        leading: CircleAvatar(
+          backgroundColor: (settled ? AmialColors.success : AmialColors.primary).withValues(alpha: 0.1),
+          child: Icon(Icons.business_center_outlined,
+              color: settled ? AmialColors.success : AmialColors.primary),
+        ),
+        title: Text('${a['merchant_name'] ?? 'تاجر'}',
+            style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(note, style: TextStyle(fontSize: 12,
+              color: settled ? AmialColors.success : (overdue > 0 ? AmialColors.red : AmialColors.textSecondary))),
+          if (pending > 0)
+            Text('credit_business_pending'.trParams({'amount': _fmt(pending)}),
+                style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+        ]),
+        trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text('${_fmt(a['current_balance'])} ر.ي',
+              style: TextStyle(fontWeight: FontWeight.bold,
+                  color: settled ? AmialColors.success : AmialColors.red)),
+          if (!settled)
+            Text('credit_business_pay'.tr,
+                style: const TextStyle(fontSize: 12, color: AmialColors.primary, fontWeight: FontWeight.w600)),
+        ]),
+        onTap: settled ? null : () => _settleBusiness(a),
+      ),
+    );
+  }
+
+  Future<void> _settleBusiness(Map<String, dynamic> a) async {
+    final balance = double.tryParse('${a['current_balance'] ?? 0}') ?? 0;
+    if (balance <= 0) return;
+    final amtCtrl = TextEditingController(text: balance.toStringAsFixed(balance == balance.roundToDouble() ? 0 : 2));
+
+    final amount = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('credit_business_pay_title'.trParams({'merchant': '${a['merchant_name'] ?? ''}'})),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('المستحقّ: ${_fmt(balance)} ر.ي',
+              style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.red)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: amtCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+                labelText: 'مبلغ السداد', suffixText: 'ر.ي', border: OutlineInputBorder()),
+          ),
+          const SizedBox(height: 6),
+          Text('credit_business_pay_note'.tr,
+              style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, amtCtrl.text.trim()), child: Text('credit_settle_continue'.tr)),
+        ],
+      ),
+    );
+    if (amount == null || amount.isEmpty || !mounted) return;
+    final val = double.tryParse(amount) ?? 0;
+    // الخادم يقبل منزلتين عشريتين على الأكثر؛ والتحقق الحقيقي من المتبقّي هناك.
+    if (val <= 0 || val > balance || !RegExp(r'^\d{1,15}(\.\d{1,2})?$').hasMatch(amount)) {
+      _snack('credit_settle_invalid_amount'.tr);
+      return;
+    }
+
+    final pin = await askAmialPinInput(title: 'credit_settle_pin_title'.tr);
+    if (pin == null || pin.isEmpty || !mounted) return;
+
+    final r = await _api.postData(
+      '/api/v1/amial/customer/credits/business/${a['debt_id']}/settle',
+      {'amount': amount, 'pin': pin},
+    );
+    if (!mounted) return;
+    if (r.statusCode == 200) {
+      final meta = (r.body is Map && r.body['meta'] is Map) ? r.body['meta'] as Map : const {};
+      await _load();
+      if (!mounted) return;
+      _snack('credit_settle_remaining'.trParams({'balance': _fmt(meta['new_balance'])}), ok: true);
+    } else {
+      final msg = (r.body is Map ? r.body['message']?.toString() : null) ?? 'credit_settle_failed'.tr;
+      _snack(msg);
+    }
+  }
+
+  void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Widget _accountCard(Map<String, dynamic> a) {
     final balance = double.tryParse('${a['current_balance'] ?? 0}') ?? 0;

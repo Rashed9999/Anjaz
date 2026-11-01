@@ -46,7 +46,7 @@ class ZonePolicyTest extends TestCase
     {
         // AMIAL-ZONE-BOUNDARY-001: الحجب انتقل من الشخص إلى نقطة عبور النقد.
         // التحويل يبقى عاملاً؛ السحب لدى وكيل هو ما يُحجَب.
-        $user = User::factory()->outsideZone('NORTH')->create();
+        $user = User::factory()->create(['zone_code' => 'NORTH']);
         $result = $this->svc->authorize($user, 'cash_out', Request::create('/'));
 
         $this->assertFalse($result['allowed']);
@@ -66,11 +66,11 @@ class ZonePolicyTest extends TestCase
     /** @test */
     public function user_with_no_zone_cannot_transact(): void
     {
-        $user = User::factory()->tierZero()->create();
+        $user = User::factory()->create(['zone_code' => 'UNKNOWN']);
         $result = $this->svc->authorize($user, 'send_money', Request::create('/'));
 
         $this->assertFalse($result['allowed']);
-        $this->assertSame('ACCOUNT_LOCATION_UNVERIFIED', $result['decision_code']);
+        $this->assertSame('ACCOUNT_ZONE_UNKNOWN', $result['decision_code']);
     }
 
     /** @test */
@@ -136,16 +136,15 @@ class ZonePolicyTest extends TestCase
     }
 
     /** @test */
-    public function session_policy_keeps_ledger_access_when_cash_is_outside_coverage(): void
+    public function session_policy_shows_banner_for_non_south_user(): void
     {
-        $user = User::factory()->outsideZone('MIDDLE')->create();
+        $user = User::factory()->create(['zone_code' => 'MIDDLE']);
         $payload = $this->svc->buildSessionPolicy($user, Request::create('/'));
 
-        $this->assertTrue($payload['can_transact']);
-        $this->assertFalse($payload['read_only_mode']);
+        $this->assertFalse($payload['can_transact']);
+        $this->assertTrue($payload['read_only_mode']);
         $this->assertNotNull($payload['banner_message']);
-        $this->assertNotEmpty($payload['available_actions']['ledger']);
-        $this->assertSame([], $payload['available_actions']['cash_boundary']);
+        $this->assertSame([], $payload['available_actions']['financial']);
     }
 
     /** @test */

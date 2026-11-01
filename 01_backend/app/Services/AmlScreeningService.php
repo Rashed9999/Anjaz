@@ -68,6 +68,8 @@ class AmlScreeningService
         // AMIAL-AML-002 (v2.5): قواعد سلوكية جديدة
         $this->registerStrategy(new CircularTransferRule());
         $this->registerStrategy(new AgentVelocityRule());
+        // AMIAL-BUSINESS-AML-001 — استردادات أميال أعمال
+        $this->registerStrategy(new \App\Aml\Rules\RefundRatioRule());
     }
 
     private function registerStrategy(AmlRuleInterface $rule): void

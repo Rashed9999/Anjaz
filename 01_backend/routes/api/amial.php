@@ -212,10 +212,6 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             Route::post('/customers/{id}/reset-pin', [$c, 'resetPin'])->where('id', '[0-9]+')->middleware('platform:platform.customers.reset_pin')->name('customers.reset-pin');
             Route::post('/customers/{id}/revoke-sessions', [$c, 'revokeSessions'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.revoke-sessions');
             Route::post('/customers/{id}/require-kyc', [$c, 'requireKyc'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.require-kyc');
-            Route::post('/customers/{id}/note', [$c, 'addCustomerNote'])->where('id', '[0-9]+')->middleware('platform:platform.customers.notes.create')->name('customers.note');
-            Route::post('/customers/{id}/escalate', [$c, 'escalateCustomerIssue'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('customers.escalate');
-            // الصلاحية الدقيقة تُفحَص داخل CustomerActionService بحسب action.
-            Route::post('/customers/{id}/advanced-action', [$c, 'executeAdvancedAction'])->where('id', '[0-9]+')->name('customers.advanced-action');
             // AMIAL-KYC-DOCS-001 — مراجعة مستندات الهوية.
             // الصلاحية نفسها المستعملة لطلب تحديث الهوية: من يطلب المستند
             // هو من يبتّ فيه، ولا معنى لفصلهما.
@@ -598,6 +594,24 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
                 ->name('roles.create');
         });
 
+    // AMIAL-MERCHANT-CASHOUT-001 — سحب التاجر نقداً عبر الوكيل (آلية سحب العميل نفسها).
+    Route::prefix('merchant/cash-out')->name('amial.merchant.cash-out.')->middleware('amial.idempotency')->group(function () {
+        $mc = \App\Http\Controllers\Api\V1\Amial\MerchantCashOutController::class;
+        Route::get('/', [$mc, 'index'])->name('index');
+        Route::post('/', [$mc, 'store'])->middleware(['amial.zone:cash_out', 'amial.rate-limit:merchant_cash_out,10,1'])->name('store');
+        Route::post('/{id}/cancel', [$mc, 'cancel'])->where('id', '[0-9]+')->name('cancel');
+    });
+
+    // AMIAL-BUSINESS-REFUND-001 — اعتماد استردادات أميال أعمال برمز التاجر.
+    Route::prefix('merchant/business-refunds')->name('amial.merchant.business-refunds.')->middleware('amial.idempotency')->group(function () {
+        $br = \App\Http\Controllers\Api\V1\Amial\MerchantBusinessRefundController::class;
+        Route::get('/', [$br, 'index'])->name('index');
+        Route::put('/mandate', [$br, 'mandate'])->middleware('amial.rate-limit:business_refund_mandate,10,1')->name('mandate');
+        Route::post('/{refund}/approve', [$br, 'approve'])->where('refund', '[0-9A-HJKMNP-TV-Z]{26}')
+            ->middleware('amial.rate-limit:business_refund_approve,30,1')->name('approve');
+        Route::post('/{refund}/reject', [$br, 'reject'])->where('refund', '[0-9A-HJKMNP-TV-Z]{26}')->name('reject');
+    });
+
     Route::prefix('merchant')->name('amial.merchant.')->middleware('amial.idempotency')->group(function () {
         // AMIAL-POS-DEVICES-004 — إدارة المقاعد. الحارس يقرأ الباقة؛
         // المتحكّم يفرض ملكية التاجر ويفصل صلاحية القراءة عن الكتابة.
@@ -677,15 +691,6 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             Route::post('/held/{ulid}/void', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'heldVoid'])
                 ->where('ulid', '[0-9A-Z]{26}')->name('held.void');
 
-            // Full independent retail wallet journey: reserve → merchant-wallet QR → verify paid → fulfill → printable receipt.
-            Route::post('/wallet-orders', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'prepareWalletOrder'])
-                ->middleware(['amial.rate-limit:cashier_sale,120,1', 'amial.shift'])->name('wallet-orders.prepare');
-            Route::post('/wallet-orders/{order}/complete', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'completeWalletOrder'])
-                ->whereUuid('order')->name('wallet-orders.complete');
-            Route::get('/wallet-orders/{order}/invoice', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'downloadWalletOrderInvoice'])
-                ->whereUuid('order')->name('wallet-orders.invoice');
-            Route::post('/wallet-orders/payment-requests/{requestId}/cancel', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'cancelWalletPaymentRequest'])
-                ->whereNumber('requestId')->name('wallet-orders.qr-cancel');
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'recordSale'])
                 ->middleware(['amial.rate-limit:cashier_sale,120,1', 'amial.shift'])->name('sales');
             Route::post('/sales/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'settleCredit'])->name('sales.settle');
@@ -1329,6 +1334,10 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
         Route::post('/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'settle'])
             ->where('id', '[0-9]+')
             ->middleware(['amial.terms', 'amial.rate-limit:credit_settle,30,1'])->name('settle');
+        // AMIAL-BUSINESS-CREDIT-001 — دين لدى تاجر في أميال أعمال (من المرآة).
+        Route::post('/business/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'settleBusiness'])
+            ->where('id', '[0-9]+')
+            ->middleware(['amial.terms', 'amial.rate-limit:credit_settle,30,1'])->name('business.settle');
     });
 
     // -------- AMIAL-CUSTOMER-WITHDRAW-001 — السحب المبدوء من العميل --------

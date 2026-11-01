@@ -3,9 +3,14 @@
 namespace App\Services\BusinessGateway;
 
 /**
- * Canonical signed request contract for Amial Business <-> Amial Pay.
- * Inbound: HMAC-SHA256(timestamp + nonce + method + path + query + body hash).
- * Outbound webhook: HMAC-SHA256(timestamp + "." + body).
+ * صيغة التوقيع الوحيدة للقناة، في الاتجاهين. تُعرَّف في مكانٍ واحد لئلّا
+ * يوقّع طرفٌ بصيغة ويتحقق الآخر بأخرى.
+ *
+ * وارد (أميال أعمال → أميال باي):
+ *   HMAC-SHA256( secret, "{timestamp}\n{nonce}\n{METHOD}\n{path}\n{query}\n{sha256(body)}" )
+ *
+ * صادر (أميال باي → أميال أعمال، الأحداث):
+ *   HMAC-SHA256( secret, "{timestamp}.{body}" )
  */
 final class BusinessGatewaySignature
 {

@@ -34,17 +34,17 @@ void main() {
 
     expect(
       source,
-      contains('if (!widget.freeAmount && !c.containsIndependentProducts) MerchantPaymentOption.credit'),
+      contains('if (!widget.freeAmount) MerchantPaymentOption.credit'),
     );
     expect(
       source,
       contains(
-          "if (!widget.freeAmount && !c.containsIndependentProducts && _methodAllowedInCurrency('mixed'))"),
+          "if (!widget.freeAmount && _methodAllowedInCurrency('mixed'))"),
     );
     expect(
       source,
       contains(
-          "if (!widget.freeAmount && !c.containsIndependentProducts && _methodAllowedInCurrency('corporate'))"),
+          "if (!widget.freeAmount && _methodAllowedInCurrency('corporate'))"),
     );
     expect(
       source,

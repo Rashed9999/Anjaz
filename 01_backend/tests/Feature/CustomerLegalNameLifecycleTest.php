@@ -273,26 +273,29 @@ class CustomerLegalNameLifecycleTest extends TestCase
         $this->assertStringNotContainsString('الحضرمي', (string) $audit->context);
     }
 
-    public function test_registration_sources_require_explicit_four_name_parts(): void{
-        $progressive = (string) file_get_contents(
+    public function test_registration_sources_require_explicit_four_name_parts(): void
+    {
+        $quick = (string) file_get_contents(
             app_path('Http/Controllers/Api/V1/Auth/ProgressiveRegistrationController.php')
         );
         $legacy = (string) file_get_contents(
             app_path('Http/Controllers/Api/V1/RegisterController.php')
         );
-        $merchant = (string) file_get_contents(
-            app_path('Http/Controllers/Api/V1/Auth/MerchantAccountOpeningController.php')
+        $flutter = (string) file_get_contents(
+            dirname(base_path()) . '/02_flutter_app/lib/features/auth/screens/quick_registration_screen.dart'
         );
 
-        // الاسم القانوني وحقوله لا تُفسَّر في أميال باي عند الإنشاء؛ موثّق
-        // هو صاحب الطلب، ثم يصل إلى أميال باي حدث اعتماد موقّع ومحدود.
-        foreach ([$progressive, $legacy, $merchant] as $controller) {
-            $this->assertStringContainsString('ACCOUNT_CREATION_OWNED_BY_MUWATHAQ', $controller);
+        foreach (['given_name', 'father_name', 'grandfather_name', 'family_name'] as $field) {
+            $this->assertStringContainsString("'{$field}'", $quick);
+        }
+        foreach (['f_name', 'father_name', 'grandfather_name', 'family_name'] as $field) {
+            $this->assertStringContainsString("'{$field}'", $legacy);
         }
 
-        $provisioning = (string) file_get_contents(
-            app_path('Services/Muwathaq/MuwathaqProvisioningService.php')
-        );
-        $this->assertStringContainsString("['f_name','l_name','phone','email']", $provisioning);
+        $this->assertStringContainsString('_givenName', $flutter);
+        $this->assertStringContainsString('_fatherName', $flutter);
+        $this->assertStringContainsString('_grandfatherName', $flutter);
+        $this->assertStringContainsString('_familyName', $flutter);
+        $this->assertStringContainsString('اكتب اسمك الحقيقي', $flutter);
     }
 }

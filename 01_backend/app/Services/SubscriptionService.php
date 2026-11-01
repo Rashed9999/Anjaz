@@ -44,11 +44,23 @@ class SubscriptionService
     public function changePlan(
         User $merchant, string $newPlan, ?User $actor = null, array $options = []
     ): SubscriptionChange {
-        if (!in_array($newPlan, A::ALL_PLANS, true)) {
-            throw new \InvalidArgumentException("Invalid plan: {$newPlan}");
+        // AMIAL-PLAN-CATALOG-001 — رمزٌ من الكتالوج (والرتب الثلاث فيه). الرتبة تُكتب في subscription_plan
+        // كما كانت فلا يتغيّر قارئٌ واحد، والرمز في subscription_plan_code. ومدّةٌ مختارة تحدّد الانتهاء والسعر.
+        $catalogPlan = app(\App\Services\Access\PlanCatalogService::class)->resolveAssignable($newPlan, !empty($options['keep_current']));
+        $planCode = $catalogPlan->code;
+        $newPlan = $catalogPlan->base_tier;
+        if (!empty($options['months']) && $newPlan !== A::PLAN_FREE) {
+            $months = (int) $options['months'];
+            $price = $catalogPlan->priceFor($months);
+            if ($price === null) {
+                throw new \InvalidArgumentException("Duration not offered: {$months}");
+            }
+            $options['expires_at'] ??= now()->addMonthsNoOverflow($months);
+            $options['price_paid_sar'] ??= $price;
+            $options['metadata'] = array_merge($options['metadata'] ?? [], ['months' => $months, 'plan_code' => $planCode]);
         }
 
-        return DB::transaction(function () use ($merchant, $newPlan, $actor, $options) {
+        return DB::transaction(function () use ($merchant, $newPlan, $planCode, $actor, $options) {
             $profile = MerchantProfile::where('user_id', $merchant->id)->lockForUpdate()->first();
             if (!$profile) {
                 throw new \RuntimeException("Merchant profile not found for user {$merchant->id}");
@@ -70,6 +82,7 @@ class SubscriptionService
 
             // تطبيق التغيير على Profile
             $profile->subscription_plan = $newPlan;
+            $profile->subscription_plan_code = $planCode;
             $profile->subscription_expires_at = $newExpiresAt;
             if (!empty($options['notes'])) {
                 $profile->subscription_notes = $options['notes'];
@@ -133,7 +146,8 @@ class SubscriptionService
             ? $profile->subscription_expires_at
             : now();
 
-        return $this->changePlan($merchant, $currentPlan, $actor, array_merge($options, [
+        return $this->changePlan($merchant, $profile->subscription_plan_code ?: $currentPlan, $actor, array_merge($options, [
+            'keep_current' => true,
             'expires_at' => $baseTime->copy()->addDays($days),
             'action' => SubscriptionChange::ACTION_EXTEND,
             'metadata' => array_merge($options['metadata'] ?? [], ['extended_days' => $days]),
@@ -152,7 +166,8 @@ class SubscriptionService
             throw new \LogicException('Cannot renew a FREE plan');
         }
 
-        return $this->changePlan($merchant, $currentPlan, $actor, array_merge($options, [
+        return $this->changePlan($merchant, $profile->subscription_plan_code ?: $currentPlan, $actor, array_merge($options, [
+            'keep_current' => true,
             'expires_at' => now()->addDays(30),
             'action' => SubscriptionChange::ACTION_RENEW,
         ]));

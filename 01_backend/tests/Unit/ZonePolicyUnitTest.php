@@ -100,7 +100,7 @@ class ZonePolicyUnitTest extends TestCase
     {
         $d = $this->policy->authorize($this->userInZone(null), 'send_money');
         $this->assertFalse($d['allowed']);
-        $this->assertSame('ACCOUNT_LOCATION_UNVERIFIED', $d['decision_code']);
+        $this->assertSame('ACCOUNT_ZONE_UNKNOWN', $d['decision_code']);
     }
 
     public function test_read_action_allowed_in_any_zone(): void
@@ -185,13 +185,12 @@ class ZonePolicyUnitTest extends TestCase
         $this->assertNull($p['banner_message']);
     }
 
-    public function test_session_policy_north_user_keeps_ledger_access_without_cash_coverage(): void
+    public function test_session_policy_north_user_is_read_only(): void
     {
         $p = $this->policy->buildSessionPolicy($this->userInZone('NORTH'), $this->requestWithZoneHeader(null));
-        $this->assertTrue($p['can_transact']);
-        $this->assertFalse($p['read_only_mode']);
-        $this->assertNotEmpty($p['available_actions']['ledger']);
-        $this->assertSame([], $p['available_actions']['cash_boundary']);
+        $this->assertFalse($p['can_transact']);
+        $this->assertTrue($p['read_only_mode']);
+        $this->assertSame([], $p['available_actions']['financial']);
         $this->assertNotNull($p['banner_message']);
     }
 

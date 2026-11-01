@@ -78,6 +78,9 @@
                         <option value="{{ $p['code'] }}">{{ $p['label'] }} ({{ $p['code'] }})</option>
                     @endforeach
                 </select>
+                <label class="form-label mt-2" for="months-select">المدّة</label>
+                <select class="form-select" id="months-select"></select>
+                <div class="small text-muted mt-1"><a href="{{ route('admin.amial.hub.plans') }}">🧩 تعديل الباقات وأسعارها ومددها</a></div>
                 <button class="btn btn-primary w-100 mt-2" id="plan-submit">تغيير الباقة</button>
             </div>
             <hr>
@@ -102,6 +105,16 @@
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     let page = 1, lastPage = 1, search = '', plan = '', currentMerchant = null;
+    const catalog = @json($plans);
+    const cur = @json($currencyLabel);
+    function fillMonths() {
+        const p = catalog.find(x => x.code === document.getElementById('plan-select').value);
+        const sel = document.getElementById('months-select');
+        sel.innerHTML = (p?.durations ?? []).map(d => `<option value="${d.months}">${d.months} ${d.months === 1 ? 'شهر' : 'أشهر'} — ${d.price} ${cur}</option>`).join('')
+            || '<option value="">— (دائمة)</option>';
+    }
+    document.getElementById('plan-select').addEventListener('change', fillMonths);
+    fillMonths();
 
     async function post(url, body) {
         const r = await fetch(url, {
@@ -157,9 +170,9 @@
         const errEl = document.getElementById('plan-error'); errEl.textContent = '';
         try {
             const j = await post(`${base}/subscriptions/${currentMerchant}/plan`,
-                {plan: document.getElementById('plan-select').value});
+                {plan: document.getElementById('plan-select').value, months: Number(document.getElementById('months-select').value) || null});
             bootstrap.Modal.getInstance(document.getElementById('modal-plan')).hide();
-            alert(`${j.message} — صالحة حتى ${j.new_expires_at ?? '—'}`); load();
+            alert(`${j.message} — صالحة حتى ${j.new_expires_at ?? '—'}${j.price ? ` · المبلغ ${j.price} ${cur}` : ''}`); load();
         } catch (err) { errEl.textContent = err.message; }
     });
 

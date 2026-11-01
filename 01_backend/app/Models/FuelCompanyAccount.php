@@ -9,6 +9,19 @@ class FuelCompanyAccount extends Model
 {
     protected $table = 'fuel_company_accounts';
 
+    /**
+     * AMIAL-BUSINESS-CREDIT-001 — رصيد شركة الأسطول دينٌ آجل؛ بعد تسليم الآجل لأميال
+     * أعمال لا يتحرّك هنا.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $account) {
+            if (\App\Services\BusinessGateway\CreditBalanceChange::changed($account, ['current_balance'])) {
+                app(\App\Services\BusinessGateway\CreditHandoverService::class)->assertOpen($account->merchant_user_id);
+            }
+        });
+    }
+
     protected $fillable = [
         'merchant_user_id', 'company_name', 'contact_person', 'contact_phone',
         'tax_number', 'credit_limit', 'current_balance', 'monthly_limit',

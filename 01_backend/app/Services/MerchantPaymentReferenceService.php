@@ -67,6 +67,10 @@ class MerchantPaymentReferenceService
             || WholesaleCollection::where('paid_transaction_id', $transactionId)->exists()
             || SplitBillParticipant::where('paid_transaction_id', $transactionId)->exists()
             || \App\Models\CreditCollection::where('paid_transaction_id', $transactionId)
-                ->where('status', 'completed')->exists();
+                ->where('status', 'completed')->exists()
+            // AMIAL-BUSINESS-GATEWAY-001 — دفعٌ استُهلك في فاتورةٍ بأميال أعمال
+            // لا يُربط ببيعٍ ثانٍ في كاشير أميال باي.
+            || \App\Models\BusinessGateway\BusinessPaymentIntent::where('paid_transaction_id', $transactionId)
+                ->exists();
     }
 }

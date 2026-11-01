@@ -61,6 +61,11 @@ class CustomerCreditSettleService
         }
 
         $merchantId = (int) $account->merchant_user_id;
+
+        // AMIAL-BUSINESS-CREDIT-001 — قبل تحريك أي مال: دينٌ سُلّم لأميال أعمال
+        // يُسدَّد من مرآته هناك، لا من هذا الدفتر المجمَّد.
+        app(\App\Services\BusinessGateway\CreditHandoverService::class)->assertOpen($merchantId);
+
         $merchant = User::find($merchantId);
         if (!$merchant || !(bool) $merchant->is_active) {
             throw new RuntimeException('حساب التاجر غير متاح حالياً');

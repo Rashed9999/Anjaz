@@ -39,6 +39,7 @@ class SystemHealthService
             'queue' => $this->checkQueue(),
             'disk' => $this->checkDisk(),
             'php' => $this->checkPhp(),
+            'business_gateway' => $this->checkBusinessGateway(),
         ];
 
         $allHealthy = collect($checks)->every(fn($c) => $c['status'] === 'healthy');
@@ -143,6 +144,62 @@ class SystemHealthService
                 'message' => 'فشل Storage',
                 'error' => $e->getMessage(),
             ];
+        }
+    }
+
+    /**
+     * AMIAL-BUSINESS-OBSERVE-001 — قناة أميال أعمال.
+     *
+     * حدثٌ ماليٌّ لم يُسلَّم يعني أنّ دفتر التاجر هناك لا يعرف بمالٍ تحرّك هنا:
+     *   - حدثٌ ميّت (استُنفدت محاولاته)            ⇒ ساقطة (تُنذر).
+     *   - روابطُ فعّالة والقناةُ غيرُ مضبوطة         ⇒ ساقطة: الأحداث تتراكم بلا مستلم.
+     *   - حدثٌ معلّقٌ منذ أكثر من 15 دقيقة            ⇒ متدهورة: أميال أعمال لا تجيب.
+     *   - استردادٌ ينتظر موافقة التاجر أكثر من 48 ساعة ⇒ متدهورة: سينتهي قريباً.
+     * ولا روابط ⇒ سليمة «غير مستعملة» — لا صفرٌ يُقرأ نجاحاً (القاعدة السابعة).
+     */
+    private function checkBusinessGateway(): array
+    {
+        try {
+            $links = DB::table('business_links')->where('status', 'active')->count();
+            if ($links === 0) {
+                return ['status' => 'healthy', 'message' => 'لا تاجرَ مربوطاً — القناة غير مستعملة', 'links' => 0];
+            }
+
+            $dead = DB::table('business_outbox_events')->where('status', 'dead')->count();
+            $stale = DB::table('business_outbox_events')->where('status', 'pending')
+                ->where('created_at', '<', now()->subMinutes(15))->count();
+            $refunds = DB::table('business_refunds')->where('status', 'pending_approval')
+                ->where('created_at', '<', now()->subHours(48))->count();
+            $configured = trim((string) config('amial_business.webhook_url')) !== ''
+                && trim((string) config('amial_business.webhook_secret')) !== '';
+
+            $problems = [];
+            $status = 'healthy';
+            if (!$configured) {
+                $status = 'unhealthy';
+                $problems[] = 'عنوان أميال أعمال أو سرّها غير مضبوط والأحداث تتراكم';
+            }
+            if ($dead > 0) {
+                $status = 'unhealthy';
+                $problems[] = "{$dead} حدثاً ميّتاً لم يصل دفتر التاجر";
+            }
+            if ($stale > 0) {
+                $status = $status === 'healthy' ? 'warning' : $status;
+                $problems[] = "{$stale} حدثاً معلّقاً منذ أكثر من ربع ساعة";
+            }
+            if ($refunds > 0) {
+                $status = $status === 'healthy' ? 'warning' : $status;
+                $problems[] = "{$refunds} استرداداً ينتظر موافقة التاجر منذ أكثر من 48 ساعة";
+            }
+
+            return [
+                'status' => $status,
+                'message' => $problems === [] ? "القناة تعمل ({$links} تاجراً مربوطاً)" : implode(' · ', $problems),
+                'links' => $links, 'dead' => $dead, 'stale' => $stale, 'aging_refunds' => $refunds,
+            ];
+        } catch (\Throwable $e) {
+            // تعذّر الفحص ليس «سليم».
+            return ['status' => 'warning', 'message' => 'تعذّر فحص قناة أميال أعمال', 'error' => $e->getMessage()];
         }
     }
 

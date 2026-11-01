@@ -203,3 +203,9 @@ Schedule::call(fn () => app(\App\Services\Muwathaq\MuwathaqEvidenceBridgeService
     ->name('muwathaq-deliver-pending-evidence')
     ->withoutOverlapping()
     ->description('AMIAL-MUWATHAQ: Deliver pending account-opening evidence');
+
+// AMIAL-BUSINESS-GATEWAY-001 — دورة قناة «أميال أعمال»: إنهاء نوايا الدفع
+// المنتهية، وتسليم الأحداث المعلّقة، وتنظيف معرّفات الطلبات القديمة.
+Schedule::command('amial:business tick')->everyMinute()->withoutOverlapping(5)->onOneServer();
+// AMIAL-BUSINESS-CREDIT-001 — تذكير الديون مرة يومياً قبل الظهر بتوقيت عدن.
+Schedule::command('amial:business reminders')->dailyAt('10:17')->timezone('Asia/Aden')->withoutOverlapping(30)->onOneServer();

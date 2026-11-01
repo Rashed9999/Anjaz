@@ -332,6 +332,8 @@ return [
         // الأنواع الخاضعة للفحص. البقية تمرّ بلا فحص.
         'screened_types' => [
             'send_money', 'cash_out', 'safe_payment_fund', 'donation', 'pay_merchant',
+            // AMIAL-BUSINESS-AML-001 — سحب التاجر عبر الوكيل واسترداد أميال أعمال، بقواعدهما.
+            'merchant_cash_out', 'business_refund',
         ],
 
         // A protected transaction type with zero active rules is a coverage
@@ -495,24 +497,6 @@ return [
         'merchant' => env('AMIAL_MERCHANT_HOST', ''),
     ],
 
-    // Opt-in merchant-by-merchant: never expose the integration secret to Flutter.
-    // Disabled unless TLS, signed S2S, Muwathaq approval, branch and stock parity are verified.
-    'merchant_workspace' => [
-        'enabled' => filter_var(env('AMIAL_MERCHANT_WORKSPACE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
-        'base_url' => env('AMIAL_MERCHANT_WORKSPACE_URL', ''),
-        'integration_secret' => env('AMIAL_MERCHANT_WORKSPACE_SECRET', ''),
-        'issuer' => env('AMIAL_MERCHANT_WORKSPACE_ISSUER', 'amial-pay'),
-        'audience' => env('AMIAL_MERCHANT_WORKSPACE_AUDIENCE', 'amial-merchant'),
-        'read_issuer' => env('AMIAL_MERCHANT_READ_ISSUER', 'amial-merchant'),
-        'read_audience' => env('AMIAL_MERCHANT_READ_AUDIENCE', 'amial-pay'),
-    ],
-    'merchant_pos_bridge' => [
-        'enabled' => filter_var(env('AMIAL_MERCHANT_POS_BRIDGE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
-        'base_url' => env('AMIAL_MERCHANT_POS_URL', ''),
-        'secret' => env('AMIAL_MERCHANT_POS_SECRET', ''),
-        'owner_ids' => array_filter(array_map('trim', explode(',', (string) env('AMIAL_MERCHANT_POS_OWNER_IDS', '')))),
-    ],
-
     /*
     |--------------------------------------------------------------------
     | AMIAL-OTP-SPLIT-001 — رمزُ العرض لأرقامه وحدها
@@ -624,4 +608,12 @@ return [
         'alert_emails' => array_filter(array_map('trim', explode(',', (string) env('AMIAL_ALERT_EMAIL', '')))),
     ],
 
+
+    // AMIAL-MERCHANT-CASHOUT-001 — سحب التاجر نقداً عبر الوكيل. ما فوق الحدّ عبر
+    // طلب المستحقات الإداري (MerchantPayoutService).
+    'merchant_cash_out' => [
+        'max_per_request' => env('AMIAL_MERCHANT_CASH_OUT_MAX', '500000'),
+        'daily_limit' => env('AMIAL_MERCHANT_CASH_OUT_DAILY', '2000000'),
+        'expiry_minutes' => (int) env('AMIAL_MERCHANT_CASH_OUT_EXPIRY', 60),
+    ],
 ];

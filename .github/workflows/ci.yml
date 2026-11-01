@@ -29,11 +29,6 @@ on:
         options:
           - full_ci
           - apk_only
-      deploy_coolify:
-        description: 'نشر خادم أميال باي يدويًا فقط بعد اكتمال اختبارات الإنتاج والموافقة'
-        required: true
-        default: false
-        type: boolean
       build_type:
         description: 'installable يضمن APK قابلاً للتثبيت؛ release_strict يتطلب مفتاح التوقيع الثابت'
         required: true
@@ -161,11 +156,6 @@ jobs:
           echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
           echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
 
-      # Isolated, database-free transport/security regression checks for staged Merchant SSO.
-      - name: Merchant Workspace bridge HTTPS and signed contract
-        working-directory: 01_backend
-        run: php artisan test --compact tests/Feature/MerchantOperationSurfaceTest.php
-
       - name: تحقق شاشتي الرسوم وسجل التدقيق ضد 500
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/FeeCentreScreensGuardTest.php tests/Feature/AuditScreenArabicAndFiltersTest.php
@@ -211,7 +201,7 @@ jobs:
 
       - name: تحقق عوائق الخادم السابقة
         working-directory: 01_backend
-        run: php artisan test --compact tests/Feature/DonationsServiceTest.php tests/Feature/CharityServiceTest.php tests/Feature/CharityPayoutAndFundTraceGuardTest.php tests/Feature/KycSanctionTest.php tests/Feature/CustomerCenterTest.php tests/Feature/MerchantOperationsCenterTest.php tests/Feature/MerchantStaffTest.php tests/Feature/StaffDisableRevokesNowGuardTest.php tests/Feature/CustomerCreditSettleTest.php tests/Feature/CustomerCreditViewTest.php tests/Feature/LedgerCoverageGuardTest.php tests/Feature/NoTillWithoutAShiftGuardTest.php tests/Feature/BillPayServiceTest.php tests/Feature/BillPayCustomerUiGuardTest.php tests/Feature/CustomerSystemsCenterGuardTest.php tests/Feature/CustomerLegalNameLifecycleTest.php tests/Feature/CustomerProfileChangeApiTest.php tests/Feature/CustomerKycUpgradeJourneyGuardTest.php tests/Feature/ServiceCoverageGovernorateTest.php tests/Feature/PlatformProfitPayoutTest.php
+        run: php artisan test --compact tests/Feature/DonationsServiceTest.php tests/Feature/CharityServiceTest.php tests/Feature/CharityPayoutAndFundTraceGuardTest.php tests/Feature/KycSanctionTest.php tests/Feature/CustomerCenterTest.php tests/Feature/MerchantOperationsCenterTest.php tests/Feature/MerchantStaffTest.php tests/Feature/StaffDisableRevokesNowGuardTest.php tests/Feature/CustomerCreditSettleTest.php tests/Feature/CustomerCreditViewTest.php tests/Feature/LedgerCoverageGuardTest.php tests/Feature/NoTillWithoutAShiftGuardTest.php tests/Feature/BillPayServiceTest.php tests/Feature/BillPayCustomerUiGuardTest.php tests/Feature/CustomerSystemsCenterGuardTest.php tests/Feature/CustomerLegalNameLifecycleTest.php tests/Feature/CustomerProfileChangeApiTest.php tests/Feature/CustomerKycUpgradeJourneyGuardTest.php tests/Feature/ServiceCoverageGovernorateTest.php
 
       - name: تشغيل كل اختبارات الخادم
         working-directory: 01_backend
@@ -223,22 +213,14 @@ jobs:
           import xml.etree.ElementTree as ET
           report = Path('phpunit_report.xml')
           if report.exists():
-              try:
-                  for case in ET.parse(report).iter('testcase'):
-                      for problem in case:
-                          if problem.tag in ('failure', 'error'):
-                              print(f"FAILED: {case.get('class')}::{case.get('name')}")
-                              print('\n'.join((problem.text or problem.get('message', '')).splitlines()[:12])[:1800])
-              except ET.ParseError:
-                  print('JUnit report was empty or malformed; collecting PHPUnit debug output below.')
+              for case in ET.parse(report).iter('testcase'):
+                  for problem in case:
+                      if problem.tag in ('failure', 'error'):
+                          print(f"FAILED: {case.get('class')}::{case.get('name')}")
+                          print('\n'.join((problem.text or problem.get('message', '')).splitlines()[:12])[:1800])
           else:
               print('JUnit report unavailable; see process output below.')
           PY
-            # A risky test is omitted from this JUnit report. Listing the
-            # suite is deterministic and inexpensive, so the failing progress
-            # marker can be mapped back to the precise test without rerunning
-            # the whole suite under verbose event logging.
-            ./vendor/bin/phpunit --list-tests
             echo '::error::فشلت اختبارات PHPUnit — آخر 160 سطراً:'
             tail -n 160 phpunit_report.txt
             exit 1
@@ -635,9 +617,7 @@ jobs:
     needs: [structural, backend, docker]
     # **ولا نشرَ من زرّ بناء APK** — انظر `AMIAL-CI-APK-002` أعلاه.
     if: >-
-      github.event_name == 'workflow_dispatch'
-      && inputs.run_mode == 'full_ci'
-      && inputs.deploy_coolify == true
+      (github.event_name != 'workflow_dispatch' || inputs.run_mode == 'full_ci')
       && github.ref == 'refs/heads/claude/project-code-review-yjagv'
     steps:
       - name: نداء خطّاف النشر

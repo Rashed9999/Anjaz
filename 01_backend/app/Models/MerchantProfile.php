@@ -23,7 +23,7 @@ class MerchantProfile extends Model
         'can_transfer_out', 'requires_settlement_only',
         'verified_by_admin_id', 'verified_at', 'zone_code',
         // CRITICAL-001 — الاشتراكات + الميزات
-        'subscription_plan', 'subscription_expires_at', 'subscription_notes', 'extra_features',
+        'subscription_plan', 'subscription_plan_code', 'subscription_expires_at', 'subscription_notes', 'extra_features',
         // AMIAL-RECEIPT-SETTINGS-001 — إعدادات الفاتورة/الطباعة
         'receipt_settings',
     ];
@@ -42,6 +42,34 @@ class MerchantProfile extends Model
         'extra_features' => 'array',
         'receipt_settings' => 'array',
     ];
+
+    /**
+     * AMIAL-BUSINESS-PLANS-001 — تغيّرُ الباقة أو تاريخِها أو الإضافات يُبلَّغ لأميال أعمال،
+     * من أيّ مسارٍ جاء (تغيير · تمديد · تجديد · انتهاء · تعديلٌ إداريّ). والحدث في المعاملة نفسها.
+     */
+    protected static function booted(): void
+    {
+        // AMIAL-PLAN-CATALOG-001 — من يكتب الرتبة مباشرةً (تسجيل · فتح حساب · updateMerchantPlan) لا يعرف
+        // رمز الكتالوج: رمزٌ لا تطابق رتبتُه الرتبةَ الجديدة يُمحى، فلا تبقى باقةٌ قديمةٌ تفتح ميزاتها.
+        static::saving(function (self $profile) {
+            if ($profile->isDirty('subscription_plan') && !$profile->isDirty('subscription_plan_code') && $profile->subscription_plan_code) {
+                $tier = \App\Models\SubscriptionPlan::where('code', $profile->subscription_plan_code)->value('base_tier');
+                if ($tier !== \App\Support\Access\AccessConstants::canonicalPlan($profile->subscription_plan)) {
+                    $profile->subscription_plan_code = null;
+                }
+            }
+        });
+        static::saved(function (self $profile) {
+            if ($profile->wasChanged(['subscription_plan', 'subscription_plan_code', 'subscription_expires_at', 'extra_features'])) {
+                try {
+                    app(\App\Services\BusinessGateway\BusinessEntitlementService::class)->announce((int) $profile->user_id);
+                } catch (\Throwable $e) {
+                    // إعادة القراءة الدوريّة في أميال أعمال تلتقط ما فات؛ لا يُرَدّ تغييرُ اشتراكٍ لأجل إبلاغ.
+                    \Illuminate\Support\Facades\Log::warning('entitlements.changed not recorded', ['user_id' => $profile->user_id, 'error' => $e->getMessage()]);
+                }
+            }
+        });
+    }
 
     public function user(): BelongsTo { return $this->belongsTo(User::class, 'user_id'); }
 

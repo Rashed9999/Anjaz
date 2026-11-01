@@ -484,15 +484,6 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
         Route::get('/entries', [$lc, 'entries'])->name('entries');
         // AMIAL-RECON-NIGHTLY-001: تاريخُ المصالحات — القاعدة ١٢.
         Route::get('/reconciliation-runs', [$lc, 'reconciliationRuns'])->name('reconciliation-runs');
-        // هذه الأفعال المالية منفصلة عن القراءة: اقتراح موثق ثم اعتماد مستقل فقط.
-        Route::post('/reconciliation-cases/{caseUlid}/propose-correction', [$lc, 'proposeReconciliationCorrection'])
-            ->middleware('platform:platform.approvals.decide')
-            ->where('caseUlid', '[0-9A-HJKMNP-TV-Z]{26}')
-            ->name('reconciliation-cases.propose-correction');
-        Route::post('/reconciliation-cases/{caseUlid}/approve-correction', [$lc, 'approveReconciliationCorrection'])
-            ->middleware('platform:platform.approvals.decide')
-            ->where('caseUlid', '[0-9A-HJKMNP-TV-Z]{26}')
-            ->name('reconciliation-cases.approve-correction');
     });
 
 // ============ AMIAL-OTP-CENTER-001 — مركز التحقّق ============
@@ -926,17 +917,6 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->middleware('platform:platform.money.view')->name('finance.stats');
     Route::get('/finance/feed.json', [$hc, 'financeFeed'])
         ->middleware('platform:platform.money.view')->name('finance.feed');
-    $ppc = App\Http\Controllers\Admin\PlatformProfitPayoutController::class;
-    Route::get('/finance/profit-payouts.json', [$ppc, 'index'])
-        ->middleware('platform:platform.money.view')->name('finance.profit-payouts.index');
-    Route::post('/finance/profit-payouts', [$ppc, 'store'])
-        ->middleware('platform:platform.treasury.payout')->name('finance.profit-payouts.store');
-    Route::post('/finance/profit-payouts/{ulid}/mark-paid', [$ppc, 'markPaid'])
-        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.treasury.payout')
-        ->name('finance.profit-payouts.mark-paid');
-    Route::post('/finance/profit-payouts/{ulid}/confirm-cash', [$ppc, 'confirmCash'])
-        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.treasury.payout')
-        ->name('finance.profit-payouts.confirm-cash');
 
     // لوحة الاشتراكات (الباقات) — حقيقية عبر SubscriptionService
     Route::get('/subscriptions', [$hc, 'subscriptions'])->middleware('platform:platform.settings.manage')->name('subscriptions');
@@ -945,6 +925,14 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->where('merchantId', '[0-9]+')->middleware('platform:platform.settings.manage')->name('subscriptions.plan');
     Route::post('/subscriptions/{merchantId}/extend', [$hc, 'subsExtend'])
         ->where('merchantId', '[0-9]+')->middleware('platform:platform.settings.manage')->name('subscriptions.extend');
+
+    // AMIAL-PLAN-CATALOG-001 — كتالوج الباقات: اسم · سعر · ميزات · حدود · مدد بخصم.
+    $pc = App\Http\Controllers\Admin\PlanCatalogController::class;
+    Route::get('/plans', [$pc, 'page'])->middleware('platform:platform.settings.manage')->name('plans');
+    Route::get('/plans/list.json', [$pc, 'list'])->middleware('platform:platform.settings.manage')->name('plans.list');
+    Route::post('/plans', [$pc, 'store'])->middleware('platform:platform.settings.manage')->name('plans.store');
+    Route::post('/plans/{plan}', [$pc, 'update'])->where('plan', '[0-9]+')->middleware('platform:platform.settings.manage')->name('plans.update');
+    Route::post('/plans/{plan}/toggle', [$pc, 'toggle'])->where('plan', '[0-9]+')->middleware('platform:platform.settings.manage')->name('plans.toggle');
 
     // لوحة النزاعات — واجهة فوق مسارات safe-payments الموجودة (JSON)
     Route::get('/disputes', [$hc, 'disputes'])->middleware('platform:platform.transactions.view')->name('disputes');

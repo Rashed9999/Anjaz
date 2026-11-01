@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_business_refunds_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_cash_out_screen.dart';
 import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_accept_payment_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
@@ -429,11 +431,25 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                     // «قريباً» فيظنّ أنّه لا يستطيع إخراجَ مال بيعه وهو
                     // يستطيع. فيُسمّى بما هو، ويُفتح على ما يعمل.
                     // ══════════════════════════════════════════════════
+                    // AMIAL-MERCHANT-CASHOUT-001 — السحب اليومي عبر أي وكيل؛ والمبالغ
+                    // الكبيرة فوق حدّه تبقى عبر طلب المستحقات من الإدارة.
+                    _LinkTile(
+                      icon: Icons.storefront,
+                      label: 'merchant_cash_out_title'.tr,
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const MerchantCashOutScreen()),
+                    ),
                     _LinkTile(
                       icon: Icons.account_balance,
-                      label: 'سحب رصيدي',
+                      label: 'merchant_large_payout'.tr,
                       ownerOnly: true,
                       onTap: () => Get.to(() => const MerchantPayoutScreen()),
+                    ),
+                    _LinkTile(
+                      icon: Icons.assignment_return,
+                      label: 'business_refunds_title'.tr,
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const MerchantBusinessRefundsScreen()),
                     ),
                     _LinkTile(
                       icon: Icons.people,

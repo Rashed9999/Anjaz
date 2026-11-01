@@ -78,26 +78,12 @@ class ApprovalService
                 ApprovalRequest::where('id', $requestId)->where('status', 'pending')
                     ->update(['status' => 'expired', 'decided_at' => now()]);
             });
-            app(PlatformProfitPayoutService::class)->markFailedOrExpired(
-                $requestId, \App\Models\PlatformProfitPayout::STATUS_EXPIRED, null, 'انتهت مهلة الاعتماد',
-            );
             throw new \DomainException('EXPIRED');
         }
 
         try {
             return $this->approveTx($checker, $requestId, $note);
         } catch (\DomainException $e) {
-            // قد تنتهي المهلة بين الفحص السريع أعلاه والقفل داخل المعاملة.
-            // لا نترك طلب صرف الأرباح محجوزاً إن كانت النتيجة النهائية EXPIRED.
-            if ($e->getMessage() === 'EXPIRED') {
-                DB::transaction(function () use ($requestId) {
-                    ApprovalRequest::where('id', $requestId)->where('status', 'pending')
-                        ->update(['status' => 'expired', 'decided_at' => now()]);
-                });
-                app(PlatformProfitPayoutService::class)->markFailedOrExpired(
-                    $requestId, \App\Models\PlatformProfitPayout::STATUS_EXPIRED, null, 'انتهت مهلة الاعتماد',
-                );
-            }
             throw $e;
         } catch (\Throwable $e) {
             DB::transaction(function () use ($requestId, $checker, $e) {
@@ -108,10 +94,6 @@ class ApprovalService
                     'decided_at' => now(),
                 ]);
             });
-            app(PlatformProfitPayoutService::class)->markFailedOrExpired(
-                $requestId, \App\Models\PlatformProfitPayout::STATUS_FAILED, $checker,
-                'فشل تنفيذ الاعتماد: '.$e->getMessage(),
-            );
             throw $e;
         }
     }
@@ -182,10 +164,6 @@ class ApprovalService
                 'checker_note' => $note,
                 'decided_at' => now(),
             ]);
-
-            if ($req->action_type === 'platform_profit_payout') {
-                app(PlatformProfitPayoutService::class)->rejectFromApproval($req, $checker, $note);
-            }
 
             $this->audit->record([
                 'actor_type' => 'admin',
@@ -269,9 +247,6 @@ class ApprovalService
                     idempotencyKey: null,
                     fundingSource: (string) ($req->payload['funding_source'] ?? 'treasury_supply'),
                 ),
-
-            'platform_profit_payout' => app(PlatformProfitPayoutService::class)
-                ->approveFromApproval($req, $checker),
 
             'mark_customer_deceased' => tap($user, function (User $u) use ($req, $checker) {
                 $u->forceFill([

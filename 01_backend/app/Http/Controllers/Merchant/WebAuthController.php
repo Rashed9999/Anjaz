@@ -5,8 +5,6 @@ namespace App\Http\Controllers\Merchant;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
-use App\Services\Merchant\MerchantPosGateway;
-use App\Services\Merchant\MerchantWorkspaceBridge;
 use App\Models\User;
 use App\Support\Access\AccessConstants as A;
 use App\Support\Phone;
@@ -147,12 +145,6 @@ class WebAuthController extends Controller
             ? MerchantProfile::where('user_id', $owner->id)->first()
             : null;
 
-        // Resolve through the owner, even when the login identifier was a phone
-        // number or an email rather than the merchant number.
-        $merchant = $owner
-            ? Merchant::where('user_id', $owner->id)->first()
-            : null;
-
         if (!$owner || !Hash::check((string) $input['password'], (string) $owner->password)
             || (int) $owner->is_active !== 1
             || (int) ($owner->is_temp_blocked ?? 0) === 1
@@ -181,27 +173,7 @@ class WebAuthController extends Controller
         Auth::guard('merchant_web')->login($owner, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        $posGateway = app(MerchantPosGateway::class);
-        if ($posGateway->enabledFor($owner)) {
-            try {
-                if (! $merchant) throw new \RuntimeException('MERCHANT_PROFILE_MISSING');
-                return redirect()->away($posGateway->ownerRedirect($owner, $merchant, $profile));
-            } catch (\RuntimeException $e) {
-                \Illuminate\Support\Facades\Log::warning('Independent Merchant pilot SSO failed', [
-                    'owner_id' => $owner->id, 'error' => $e->getMessage(),
-                ]);
-                return redirect()->route('merchant.web.login')->withErrors([
-                    'identifier' => 'تعذر الدخول الآمن إلى أميال التاجر المستقل؛ أبلغ الدعم ولا تستخدم اللوحة القديمة لتسجيل منتجات مكررة.',
-                ]);
-            }
-        }
-
-        $workspaceRedirect = $merchant
-            ? app(MerchantWorkspaceBridge::class)->redirectFor($owner, $merchant, $profile)
-            : null;
-        return $workspaceRedirect !== null
-            ? redirect()->away($workspaceRedirect)
-            : redirect()->route('merchant.web.dashboard');
+        return redirect()->route('merchant.web.dashboard');
     }
 
     public function logout(Request $request): RedirectResponse

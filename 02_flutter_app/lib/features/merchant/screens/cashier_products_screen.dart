@@ -294,14 +294,12 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
             ),
         ],
       ),
-      floatingActionButton: Obx(() => c.usingIndependentCatalog.value
-          ? const SizedBox.shrink()
-          : FloatingActionButton.extended(
-              backgroundColor: AmialColors.primary,
-              onPressed: _addDialog,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('إضافة', style: TextStyle(color: Colors.white)),
-            )),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AmialColors.primary,
+        onPressed: _addDialog,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('إضافة', style: TextStyle(color: Colors.white)),
+      ),
       body: Obx(() {
         if (c.isLoadingProducts.value && c.products.isEmpty) {
           return const Center(child: CircularProgressIndicator());
@@ -337,7 +335,7 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
               // ولا حارسَ باقةٍ عليه: التعديلُ من صميم إدارة المنتجات،
               // ومسارُه غيرُ محروسٍ بقدرة — فلا يُعرَض زرٌّ يقود إلى ٤٠٢.
               // ══════════════════════════════════════════════════════════
-              onTap: p['source'] == 'amial-merchant' ? null : () async {
+              onTap: () async {
                 final changed = await Get.to<bool>(
                     () => ProductEditorScreen(product: p));
                 if (changed == true) c.loadProducts(includeVariantParents: true);
@@ -376,7 +374,7 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
                   // يقود إلى رفضٍ ٤٠٢ — زرٌّ يعمل ويصل إلى طريقٍ مسدود.
                   // (كشفه محورُ المواصفة في مراجعةٍ آليّة.)
                   // **وزرٌّ مرئيٌّ مع الضغطة** — فمدخلٌ لا يُرى لا يُستعمل.
-                  if (p['source'] != 'amial-merchant') IconButton(
+                  IconButton(
                     icon: const Icon(Icons.edit_outlined,
                         color: AmialColors.textMuted, size: 20),
                     tooltip: 'تعديل المنتج',
@@ -386,7 +384,7 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
                       if (changed == true) c.loadProducts(includeVariantParents: true);
                     },
                   ),
-                  if (p['source'] != 'amial-merchant' && Get.isRegistered<EntitlementsController>() &&
+                  if (Get.isRegistered<EntitlementsController>() &&
                       Get.find<EntitlementsController>().isAvailable('retail.variants'))
                   IconButton(
                     icon: const Icon(Icons.auto_awesome_motion,
@@ -406,7 +404,7 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
                   //
                   // **ولا يظهر إلّا على مِظلّة** — فصنفٌ بلا متغيّراتٍ
                   // يفتح شاشةً فارغةً تُقرأ عطلاً.
-                  if (p['source'] != 'amial-merchant' && p['is_variant_parent'] == true)
+                  if (p['is_variant_parent'] == true)
                     IconButton(
                       icon: const Icon(Icons.tune,
                           color: AmialColors.primary, size: 20),

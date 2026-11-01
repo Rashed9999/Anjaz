@@ -12,7 +12,7 @@ class WithdrawalRequest extends Model
     protected $table = 'withdrawal_requests';
 
     protected $fillable = [
-        'op_code', 'customer_user_id', 'agent_user_id',
+        'op_code', 'customer_user_id', 'requester_type', 'agent_user_id',
         'amount', 'fee', 'agent_commission', 'platform_profit', 'total_debit',
         'fee_scheme_id', 'fee_scheme_version',
         'status', 'transaction_id', 'expires_at', 'completed_at', 'zone_code',

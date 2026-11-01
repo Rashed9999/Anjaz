@@ -11,9 +11,7 @@ class CartLine {
   int qty;
   // AMIAL-CASHIER-BARCODE-001 — معرّف المنتج (إن وُجد) ليُخصم المخزون عند البيع.
   final int? productId;
-  // Separate UUID identity: never coerce an Amial Merchant UUID into a 6Cash int.
-  final String? merchantProductId;
-  CartLine({required this.name, required this.price, this.qty = 1, this.productId, this.merchantProductId});
+  CartLine({required this.name, required this.price, this.qty = 1, this.productId});
 
   double get lineTotal => price * qty;
   Map<String, dynamic> toJson() => {
@@ -21,7 +19,6 @@ class CartLine {
         'qty': qty,
         'price': price.toString(),
         if (productId != null) 'product_id': productId,
-        if (merchantProductId != null) 'merchant_product_id': merchantProductId,
       };
 }
 
@@ -33,12 +30,10 @@ class CashierController extends GetxController implements GetxService {
   // المنتجات
   final RxList<Map<String, dynamic>> products = <Map<String, dynamic>>[].obs;
   final RxBool isLoadingProducts = false.obs;
-  final RxBool usingIndependentCatalog = false.obs;
 
   // السلة (محلية)
   final RxList<CartLine> cart = <CartLine>[].obs;
   double get cartTotal => cart.fold(0.0, (s, l) => s + l.lineTotal);
-  bool get containsIndependentProducts => cart.any((line) => line.merchantProductId != null);
 
   // الحالة
   final RxBool isSubmitting = false.obs;
@@ -62,15 +57,8 @@ class CashierController extends GetxController implements GetxService {
       if (_ok(r)) {
         final list = (r.body['meta']?['products'] ?? []) as List;
         products.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
-        usingIndependentCatalog.value = r.body['meta']?['catalog_source'] == 'amial-merchant';
-      } else {
-        products.clear(); // never show stale legacy data on independent-catalog failure
-        lastError.value = _msg(r) ?? 'تعذّر جلب الأصناف من الخادم';
       }
-    } catch (_) {
-      products.clear();
-      lastError.value = 'تعذّر الاتصال بخدمة الأصناف';
-    } finally {
+    } catch (_) {} finally {
       isLoadingProducts.value = false;
     }
   }
@@ -169,27 +157,15 @@ class CashierController extends GetxController implements GetxService {
   }
 
   // ---- السلة ----
-  void addToCart(String name, double price,
-      {int? productId, String? merchantProductId, int quantity = 1}) {
+  void addToCart(String name, double price, {int? productId, int quantity = 1}) {
     if (quantity <= 0) return;
-    final newEngine = merchantProductId != null;
-    if (cart.isNotEmpty && (cart.first.merchantProductId != null) != newEngine) {
-      lastError.value = 'لا يمكن خلط منتجات أميال التاجر مع كاشير أميال باي القديم في سلة واحدة.';
-      return;
-    }
-    final existing = cart.firstWhereOrNull((l) {
-      if (merchantProductId != null) return l.merchantProductId == merchantProductId;
-      if (l.merchantProductId != null) return false;
-      return l.productId != null
-          ? l.productId == productId
-          : (l.name == name && l.price == price);
-    });
+    final existing = cart.firstWhereOrNull(
+        (l) => l.productId != null ? l.productId == productId : (l.name == name && l.price == price));
     if (existing != null) {
       existing.qty += quantity;
       cart.refresh();
     } else {
-      cart.add(CartLine(name: name, price: price, qty: quantity,
-          productId: productId, merchantProductId: merchantProductId));
+      cart.add(CartLine(name: name, price: price, qty: quantity, productId: productId));
     }
   }
 
@@ -201,12 +177,7 @@ class CashierController extends GetxController implements GetxService {
     addToCart(
       (product['name'] ?? '').toString(),
       price,
-      productId: product['source'] == 'amial-merchant'
-          ? null
-          : (product['id'] is int ? product['id'] as int : int.tryParse('${product['id']}')),
-      merchantProductId: product['source'] == 'amial-merchant'
-          ? (product['merchant_product_id'] ?? product['id']).toString()
-          : null,
+      productId: product['id'] is int ? product['id'] as int : int.tryParse('${product['id']}'),
       quantity: quantity,
     );
   }
@@ -270,14 +241,7 @@ class CashierController extends GetxController implements GetxService {
           return 'error';
         }
         lastScannedQuantity = pack.toInt();
-        final before = cart.fold<int>(0, (total, line) => total + line.qty);
         addProductToCart(p, quantity: lastScannedQuantity);
-        final after = cart.fold<int>(0, (total, line) => total + line.qty);
-        // Mixed-engine rejection must never show a false "✓ added" in camera.
-        if (after - before != lastScannedQuantity) {
-          lastError.value = 'تعذّر إضافة الصنف إلى السلة؛ لا تخلط كاشير أميال التاجر مع أصناف أميال باي.';
-          return 'error';
-        }
         return 'added';
       }
       if (r.statusCode == 404) return 'not_found';
@@ -318,61 +282,6 @@ class CashierController extends GetxController implements GetxService {
   void clearCart() {
     cart.clear();
     activeTicket.value = '';
-  }
-
-  /// Full-wallet independent journey; server prices stock and issues QR.
-  Future<Map<String, dynamic>?> prepareWalletOrder({
-    required String requestKey,
-    required double expectedTotal,
-  }) async {
-    lastError.value = '';
-    if (cart.isEmpty || !cart.every((line) => line.merchantProductId != null)) {
-      lastError.value = 'هذه العملية مخصصة لسلة أميال التاجر فقط.';
-      return null;
-    }
-    try {
-      final r = await repo.prepareWalletOrder({
-        'request_key': requestKey,
-        'expected_total': expectedTotal.toStringAsFixed(4),
-        'items': cart.map((line) => {
-          'merchant_product_id': line.merchantProductId,
-          'qty': line.qty,
-        }).toList(),
-      });
-      if (_ok(r)) return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
-      lastError.value = _msg(r) ?? 'تعذّر حجز المنتجات لدى أميال التاجر';
-    } catch (_) {
-      lastError.value = 'لا اتصال بخدمة التاجر. لم يُعرض QR ولم يُحصل أي مبلغ.';
-    }
-    return null;
-  }
-
-  /// Only confirms an already-paid QR, never charges the wallet again.
-  Future<Map<String, dynamic>?> completeWalletOrder(
-      String orderId, String paidTransactionId) async {
-    lastError.value = '';
-    try {
-      final r = await repo.completeWalletOrder(orderId, paidTransactionId);
-      if (_ok(r)) {
-        final meta = Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
-        return Map<String, dynamic>.from((meta['sale'] ?? {}) as Map);
-      }
-      lastError.value = _msg(r) ?? 'دُفع المبلغ لكن تعذّر ربطه بفواتير التاجر. لا تطلب الدفع مرة أخرى.';
-    } catch (_) {
-      lastError.value = 'قد اكتمل تحصيل المحفظة. تعذّر تأكيد الفاتورة؛ احتفظ بالمرجع $paidTransactionId والطلب $orderId.';
-    }
-    return null;
-  }
-
-  Future<bool> cancelWalletPaymentRequest(int id) async {
-    try {
-      final r = await repo.cancelWalletPaymentRequest(id);
-      if (_ok(r)) return true;
-      lastError.value = _msg(r) ?? 'لا يمكن إلغاء QR مدفوع';
-    } catch (_) {
-      lastError.value = 'تعذر إلغاء طلب التحصيل؛ تحقق من حالته قبل المغادرة.';
-    }
-    return false;
   }
 
   // ---- تسجيل البيع ----
@@ -428,16 +337,12 @@ class CashierController extends GetxController implements GetxService {
         // AMIAL-OFFLINE-POS-001 — مفتاح idempotency: يمنع ازدواج البيع عند المزامنة
         'client_uuid': const Uuid().v4(),
       };
-      if (containsIndependentProducts && method != 'cash') {
-        lastError.value = 'منتجات أميال التاجر الجديدة تدعم البيع النقدي فقط حاليًا؛ لا يمكن تحصيل محفظة أو آجل بهذا المسار.';
-        return null;
-      }
       final r = await repo.recordSale(data);
 
       // AMIAL-OFFLINE-POS-001 — دون اتصال: احفظ البيع محلياً وأكمل العمل.
       // البيع النقدي/الآجل يمكن حفظه دون اتصال؛ «أميال باي» يحتاج تحصيلاً فورياً
       // فلا يُخزَّن (سبق أن حُصّل مرجع الدفع أونلاين قبل الوصول هنا).
-      if (r.statusCode == 1 && method != 'amial_pay' && !containsIndependentProducts) {
+      if (r.statusCode == 1 && method != 'amial_pay') {
         try {
           await Get.find<OfflineSaleQueue>().enqueue(data);
           clearCart();
@@ -582,10 +487,6 @@ class CashierController extends GetxController implements GetxService {
       return false;
     }
 
-    if (containsIndependentProducts) {
-      lastError.value = 'تعليق تذاكر أميال التاجر غير مربوط بعد؛ لن تُنقل منتجات السلة إلى النظام القديم.';
-      return false;
-    }
     isHolding.value = true;
     try {
       final r = await repo.holdCart({

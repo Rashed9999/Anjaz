@@ -19,6 +19,19 @@ class Supplier extends Model
         'is_active' => 'boolean',
     ];
 
+    /**
+     * AMIAL-BUSINESS-CREDIT-001 — بعد تسليم الآجل لأميال أعمال لا يتحرّك هنا
+     * أي رصيد دين. الحارس على النموذج لا على الخدمة، فيمرّ به كل مسار.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $supplier) {
+            if (\App\Services\BusinessGateway\CreditBalanceChange::changed($supplier, ['current_debt', 'current_credit'])) {
+                app(\App\Services\BusinessGateway\CreditHandoverService::class)->assertOpen($supplier->merchant_user_id);
+            }
+        });
+    }
+
     public function ledger(): HasMany
     {
         return $this->hasMany(SupplierLedgerEntry::class)->orderByDesc('id');

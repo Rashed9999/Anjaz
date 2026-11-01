@@ -33,6 +33,7 @@ use App\Http\Middleware\{AdminMiddleware,
     EnforceZonePolicy,
     InactiveAuthCheck,
     EnforceUsageLimit,
+    MerchantMiddleware,
     PerUserRateLimit,
     RedirectIfAuthenticated,
     RequirePermission,
@@ -64,12 +65,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
                 ->middleware('api')
                 ->group(base_path('routes/api/amial.php'));
 
-            // Existing, signed read contract used by the independent owner workspace.
-            \Illuminate\Support\Facades\Route::prefix('api/v1/amial/merchant-workspace')
-                ->middleware(['api', 'throttle:120,1', 'amial.merchant-workspace.signature'])
-                ->post('/financial', \App\Http\Controllers\Api\V1\Amial\MerchantWorkspaceFinancialController::class)
-                ->name('amial.merchant-workspace.financial');
-
             // AMIAL-ADMIN-001 (v0.8): Admin Blade views
             \Illuminate\Support\Facades\Route::middleware(['web', 'admin', 'amial.force-pin-change'])
                 ->prefix('admin/amial')
@@ -100,6 +95,11 @@ $app = Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Support\Facades\Route::middleware('api')
                 ->prefix('api/v1')
                 ->group(base_path('routes/api/unified-auth.php'));
+
+            // AMIAL-BUSINESS-GATEWAY-001: قناة «أميال أعمال» — خادمٌ لخادم بتوقيع HMAC.
+            \Illuminate\Support\Facades\Route::middleware('api')
+                ->prefix('api/v1/business')
+                ->group(base_path('routes/api/business-gateway.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
@@ -195,6 +195,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'inactiveAuthCheck' => InactiveAuthCheck::class,
             'deviceVerify' => DeviceVerifyMiddleware::class,
             'checkDeviceId' => CheckDeviceId::class,
+            'merchant' => MerchantMiddleware::class,
             'merchant.web' => \App\Http\Middleware\MerchantWebMiddleware::class,
 
             // Amial Pay v0.6
@@ -226,10 +227,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'amial.force-pin-change' => \App\Http\Middleware\ForcePlatformPinChange::class,
             // AMIAL-API-ACCESS-001 — مصادقة الشركاء بمفتاح API
             'amial.api-key' => \App\Http\Middleware\AuthenticateApiKey::class,
-            'amial.merchant-workspace.signature' => \App\Http\Middleware\VerifyMerchantWorkspaceRequest::class,
             'amial.agent' => \App\Http\Middleware\EnsureAgent::class,  // AMIAL-FIX-004
             // قناة قرار فتح الحساب بين «موثّق» وأميال باي فقط.
             'muwathaq.signature' => \App\Http\Middleware\VerifyMuwathaqSignature::class,
+            'amial.business.signature' => \App\Http\Middleware\VerifyBusinessGatewaySignature::class,
 
             // Amial Pay — الحارس المخفي (Application-level IDS)
             'amial.sentinel' => SecuritySentinel::class,

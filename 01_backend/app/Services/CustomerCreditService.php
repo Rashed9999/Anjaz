@@ -319,7 +319,6 @@ class CustomerCreditService
         int $merchantId,
         ?string $search = null,
         ?string $filter = null, // 'debtors' | 'over_limit' | 'paid_up' | null=الكل
-        ?int $page = null,
     ) {
         $q = CustomerCreditAccount::where('merchant_user_id', $merchantId)
             ->where('is_active', true);
@@ -337,7 +336,7 @@ class CustomerCreditService
               ->whereColumn('current_balance', '>', 'credit_limit');
         }
 
-        return $q->orderByDesc('current_balance')->paginate(20, ['*'], 'page', $page);
+        return $q->orderByDesc('current_balance')->paginate(20);
     }
 
     // ============ القلب: نشر قيد بأمان ============
