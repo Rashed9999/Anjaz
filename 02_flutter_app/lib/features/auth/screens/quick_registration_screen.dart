@@ -144,16 +144,16 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       );
       final body = response.body;
       if (response.statusCode == 403) {
-        _snack('انتهت جلسة الاستكمال. استعد طلبك بالبريد وكلمة المرور.'.tr);
+        _snack('انتهت جلسة الاستكمال. استعد طلبك بالبريد وكلمة المرور.');
         return;
       }
       if (body is Map && body['success'] == true && body['data'] is Map) {
         _adoptOpeningStatus(Map<String, dynamic>.from(body['data'] as Map), id, token);
       } else {
-        _snack(_responseMessage(response, 'تعذر تحديث حالة الطلب.'.tr));
+        _snack(_responseMessage(response, 'تعذر تحديث حالة الطلب.'));
       }
     } catch (_) {
-      _snack('تعذر الاتصال بموثّق لتحديث الحالة.'.tr);
+      _snack('تعذر الاتصال بموثّق لتحديث الحالة.');
     }
   }
 
@@ -188,7 +188,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
     password.dispose();
     if (credentials == null || !mounted) return;
     if (credentials['email']?.isEmpty != false || credentials['password']?.isEmpty != false) {
-      _snack('أدخل البريد وكلمة المرور.'.tr);return;
+      _snack('أدخل البريد وكلمة المرور.');return;
     }
     setState(() => _busy = true);
     try {
@@ -198,13 +198,13 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       final body=response.body;
       if (response.statusCode != 200 || body is! Map
           || body['success'] != true || body['data'] is! Map) {
-        _snack(_responseMessage(response, 'تعذر استعادة الطلب.'.tr));return;
+        _snack(_responseMessage(response, 'تعذر استعادة الطلب.'));return;
       }
       final data=Map<String, dynamic>.from(body['data'] as Map);
       final id=data['application_ulid']?.toString();
       final token=data['account_opening_access_token']?.toString();
       if (id == null || id.length != 26) {
-        _snack('الطلب غير صالح للاستكمال.'.tr);return;
+        _snack('الطلب غير صالح للاستكمال.');return;
       }
       if (token == null || token.length < 32) {
         _snack('الطلب حُسم بالفعل. حالته: '+(data['status']?.toString() ?? 'غير معروفة'));
@@ -214,9 +214,9 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       _openingAccessToken=token;
       await _persistOpeningProgress();
       await _refreshOpeningStatus();
-      _snack('تمت استعادة طلبك الحالي بأمان.'.tr, error: false);
+      _snack('تمت استعادة طلبك الحالي بأمان.', error: false);
     } catch (_) {
-      _snack('تعذر استعادة طلب التوثيق. تحقق من الاتصال.'.tr);
+      _snack('تعذر استعادة طلب التوثيق. تحقق من الاتصال.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -365,17 +365,17 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       }
     }
     if (_gender == null) {
-      _snack('اختر الجنس ليحدد النظام مسار فتح الحساب الصحيح.'.tr);
+      _snack('اختر الجنس ليحدد النظام مسار فتح الحساب الصحيح.');
       return false;
     }
     final digits = _phone.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.length < 7) {
-      _snack('أدخل رقم هاتف صحيح.'.tr);
+      _snack('أدخل رقم هاتف صحيح.');
       return false;
     }
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
         .hasMatch(_normalizedEmail)) {
-      _snack('أدخل بريداً إلكترونياً صحيحاً.'.tr);
+      _snack('أدخل بريداً إلكترونياً صحيحاً.');
       return false;
     }
     if (_password.text.length < 8) {
@@ -403,11 +403,11 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       return false;
     }
     if (_pin.text != _pinConfirm.text) {
-      _snack('تأكيد رمز PIN غير مطابق.'.tr);
+      _snack('تأكيد رمز PIN غير مطابق.');
       return false;
     }
     if (!_termsAccepted) {
-      _snack('وافق على الشروط وسياسة الخصوصية للمتابعة.'.tr);
+      _snack('وافق على الشروط وسياسة الخصوصية للمتابعة.');
       return false;
     }
     return true;
@@ -433,7 +433,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   Future<bool> _loadMuwathaqPolicy({bool showFailure = true}) async {
     final gender = _gender;
     if (gender == null) {
-      if (showFailure) _snack('اختر الجنس أولاً ليعرض موثّق متطلبات فتح الحساب.'.tr);
+      if (showFailure) _snack('اختر الجنس أولاً ليعرض موثّق متطلبات فتح الحساب.');
       return false;
     }
 
@@ -447,7 +447,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           ? Map<String, dynamic>.from(body['data'] as Map)
           : null;
       if (response.statusCode != 200 || body is! Map || body['success'] != true || data == null) {
-        if (showFailure) _snack(_responseMessage(response, 'تعذر تحميل سياسة موثّق.'.tr));
+        if (showFailure) _snack(_responseMessage(response, 'تعذر تحميل سياسة موثّق.'));
         return false;
       }
 
@@ -463,7 +463,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       }
       return true;
     } catch (_) {
-      if (showFailure) _snack('تعذر الاتصال بموثّق. حاول لاحقاً.'.tr);
+      if (showFailure) _snack('تعذر الاتصال بموثّق. حاول لاحقاً.');
       return false;
     } finally {
       if (mounted) setState(() => _muwathaqPolicyLoading = false);
@@ -494,7 +494,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           meta['delivery_status'] == 'sent';
 
       if (!sent) {
-        _snack(_responseMessage(response, 'تعذر إرسال رمز البريد.'.tr));
+        _snack(_responseMessage(response, 'تعذر إرسال رمز البريد.'));
         return;
       }
       _emailChallengeId = challenge;
@@ -504,9 +504,9 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
         int.tryParse('${meta['resend_after_seconds'] ?? 60}') ?? 60,
       );
       setState(() => _step = 1);
-      _snack('أرسلنا رمز التحقق إلى بريدك الإلكتروني.'.tr, error: false);
+      _snack('أرسلنا رمز التحقق إلى بريدك الإلكتروني.', error: false);
     } catch (_) {
-      _snack('تعذر الاتصال بخدمة التحقق من البريد.'.tr);
+      _snack('تعذر الاتصال بخدمة التحقق من البريد.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -515,11 +515,11 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
   Future<void> _verifyEmailAndCreate() async {
     if (_busy) return;
     if (!RegExp(r'^\d{6}$').hasMatch(_emailOtp.text.trim())) {
-      _snack('أدخل رمز البريد المكوّن من 6 أرقام.'.tr);
+      _snack('أدخل رمز البريد المكوّن من 6 أرقام.');
       return;
     }
     if (_emailChallengeId == null) {
-      _snack('جلسة البريد غير موجودة. أعد إرسال الرمز.'.tr);
+      _snack('جلسة البريد غير موجودة. أعد إرسال الرمز.');
       return;
     }
 
@@ -546,7 +546,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           verifyBody['success'] != true ||
           token == null ||
           token.length < 32) {
-        _snack(_responseMessage(verify, 'رمز البريد غير صحيح أو انتهت صلاحيته.'.tr));
+        _snack(_responseMessage(verify, 'رمز البريد غير صحيح أو انتهت صلاحيته.'));
         return;
       }
       _emailVerificationToken = token;
@@ -578,7 +578,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
           registerBody is! Map ||
           registerBody['success'] != true ||
           registerBody['data'] is! Map) {
-        _snack(_responseMessage(register, 'تعذر إنشاء الحساب.'.tr));
+        _snack(_responseMessage(register, 'تعذر إنشاء الحساب.'));
         return;
       }
 
@@ -602,7 +602,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       if (!mounted) return;
       setState(() => _step = 2);
     } catch (_) {
-      _snack('حدث خطأ في الاتصال أثناء إنشاء الحساب.'.tr);
+      _snack('حدث خطأ في الاتصال أثناء إنشاء الحساب.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -657,7 +657,7 @@ class _QuickRegistrationScreenState extends State<QuickRegistrationScreen> {
       );
       if (response.statusCode != 200 || response.body is! Map ||
           response.body['success'] != true) {
-        _snack(_responseMessage(response, 'رمز الهاتف غير صحيح أو انتهت جلسة الفتح.'.tr));
+        _snack(_responseMessage(response, 'رمز الهاتف غير صحيح أو انتهت جلسة الفتح.'));
         return;
       }
       if (!mounted) return;

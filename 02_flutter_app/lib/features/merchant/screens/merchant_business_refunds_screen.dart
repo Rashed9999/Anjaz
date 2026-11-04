@@ -218,7 +218,7 @@ class _MerchantBusinessRefundsScreenState extends State<MerchantBusinessRefundsS
       contentPadding: EdgeInsets.zero,
       title: Text(AmialMoney.yer(r['amount'])),
       subtitle: Text('${r['business_reference'] ?? ''} · ${r['customer_masked_name'] ?? ''}'),
-      trailing: Text(('business_refund_status_' + status).tr, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+      trailing: Text('business_refund_status_$status'.tr, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
     );
   }
 }
