@@ -12,7 +12,7 @@ class PharmacyProduct extends Model
 
     protected $fillable = [
         'pharmacy_id', 'category_id',
-        'sku', 'barcode', 'trade_name', 'generic_name', 'manufacturer', 'unit',
+        'sku', 'barcode', 'trade_name', 'generic_name', 'active_ingredient', 'strength', 'dosage_form', 'manufacturer', 'unit',
         'sale_price', 'cost_price',
         'requires_prescription', 'is_active',
         'low_stock_threshold', 'description', 'dosage_instructions',

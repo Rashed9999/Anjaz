@@ -6,10 +6,14 @@ use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentCashMovement;
 use App\Models\Agent\AgentStaff;
 use App\Models\EMoney;
+use App\Models\MuwathaqAccountOpeningApplication;
+use App\Models\MuwathaqOpeningEvidence;
+use App\Services\Muwathaq\MuwathaqAccountOpeningService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Tests\Support\OpensAccountsFromHub;
 use Tests\TestCase;
 
 /**
@@ -42,6 +46,7 @@ class AgentLifecycleChainTest extends TestCase
         return $this->actingAs($staff, 'agent_staff');
     }
 
+    use OpensAccountsFromHub;
     use RefreshDatabase;
 
     private User $admin;
@@ -62,6 +67,44 @@ class AgentLifecycleChainTest extends TestCase
         );
     }
 
+    /**
+     * يحاكي قرار موثّق ثم اعتماد الإدارة؛ لا تُفتح محفظة الوكيل عند مجرد
+     * إنشائه من لوحة الإدارة.
+     */
+    private function approveAgentOpening(User $agent): void
+    {
+        $application = MuwathaqAccountOpeningApplication::query()
+            ->where('user_id', $agent->id)
+            ->firstOrFail();
+
+        foreach ([
+            MuwathaqOpeningEvidence::ADMIN_PROVISIONING => null,
+            MuwathaqOpeningEvidence::OWNER_IDENTITY => 'tests/muwathaq/agent-owner.enc',
+            MuwathaqOpeningEvidence::OPERATING_ADDRESS => 'tests/muwathaq/agent-address.enc',
+        ] as $kind => $file) {
+            MuwathaqOpeningEvidence::query()->create([
+                'application_id' => $application->id,
+                'kind' => $kind,
+                'state' => MuwathaqOpeningEvidence::STATE_SUBMITTED,
+                'file_encrypted_path' => $file,
+                'submitted_at' => now(),
+            ]);
+        }
+
+        $opening = app(MuwathaqAccountOpeningService::class);
+        $opening->receiveDecision(
+            $application->application_ulid,
+            MuwathaqAccountOpeningApplication::STATUS_APPROVED,
+            'MUW-AGENT-TEST-'.$agent->id,
+            context: [
+                'admin_provisioned' => true,
+                'verified_owner_identity' => true,
+                'verified_residence_governorate' => 'YE-AD',
+            ],
+        );
+
+    }
+
     /** @test */
     public function amial_creates_an_agent_who_opens_a_branch_hires_a_teller_and_serves_a_customer(): void
     {
@@ -70,12 +113,15 @@ class AgentLifecycleChainTest extends TestCase
             ->postJson(route('admin.amial.hub.users.store', ['slug' => 'agents']), [
                 'f_name' => 'العمقي', 'l_name' => 'للصرافة',
                 'phone' => '967771600001', 'password' => 'agent-pass-1',
-            ])->assertCreated();
+                'email' => 'agent-chain-company@example.test',
+            ] + $this->kycDossier('967771600001'))->assertCreated();
 
         $agent = User::where('phone', '967771600001')->first();
 
         $this->assertNotNull($agent, 'الوكيل لم يُنشأ');
         $this->assertSame(AGENT_TYPE, (int) $agent->type);
+        $this->approveAgentOpening($agent);
+        $agent->refresh();
         // بلا محفظةٍ لا يستطيع تمويل فرعٍ لاحقاً — والخطأ سيظهر بعد أسبوع.
         $this->assertNotNull(EMoney::where('user_id', $agent->id)->first(),
             'الوكيل أُنشئ بلا محفظة');
@@ -103,6 +149,7 @@ class AgentLifecycleChainTest extends TestCase
         $this->postJson(route('agent.branch.create'), [
             'name' => 'فرع المكلا', 'code' => 'MKL', 'city' => 'حضرموت',
             'phone' => '967771600002', 'password' => 'branch-pass-1',
+            'email' => 'agent-chain-branch@example.test',
         ])->assertOk();
 
         $branch = AgentBranch::where('code', 'MKL')->first();
@@ -233,9 +280,12 @@ class AgentLifecycleChainTest extends TestCase
             ->postJson(route('admin.amial.hub.users.store', ['slug' => 'agents']), [
                 'f_name' => 'البسيري', 'l_name' => 'للصرافة',
                 'phone' => '967771600009', 'password' => 'agent-pass-9',
-            ])->assertCreated();
+                'email' => 'agent-chain-new-company@example.test',
+            ] + $this->kycDossier('967771600009'))->assertCreated();
 
         $agent = User::where('phone', '967771600009')->first();
+        $this->approveAgentOpening($agent);
+        $agent->refresh();
 
         $this->assertSame(0, AgentStaff::where('agent_user_id', $agent->id)->count(),
             'الافتراض: لا موظّفين بعد');

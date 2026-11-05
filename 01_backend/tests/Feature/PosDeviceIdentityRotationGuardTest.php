@@ -52,7 +52,16 @@ class PosDeviceIdentityRotationGuardTest extends TestCase
 
     private const UUID = 'installation-id-abcd-9931';
 
-    private function merchant(string $plan = A::PLAN_FREE): User
+    /**
+     * AMIAL-POS-SEAT-002 — **باقةُ الاختبار تُختار بالحدّ لا بالاسم.**
+     *
+     * كانت `PLAN_FREE` تُستعمل بوصفها «الباقةَ ذاتَ المقعد الواحد»، ثمّ
+     * صارت المجّانيّةُ بلا مقاعد بقرار تسعيرٍ صريح — فسقط اختبارٌ سليم
+     * لأنّه كتب قرارَ التسعير في نصّه.
+     */
+    private const SEAT_PLAN = A::PLAN_BUSINESS;
+
+    private function merchant(string $plan = self::SEAT_PLAN): User
     {
         $u = User::factory()->create([
             'type' => 3, 'role' => A::ROLE_MERCHANT, 'zone_code' => 'SOUTH',
@@ -90,7 +99,7 @@ class PosDeviceIdentityRotationGuardTest extends TestCase
      */
     public function rotating_the_key_keeps_the_device_and_takes_no_second_seat(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);   // مقعدٌ واحدٌ فقط — فالمجالُ لا يحتمل خطأً
+        $m = $this->merchant(self::SEAT_PLAN);
 
         $this->useKeys(self::KEY_OLD, 1);
 
@@ -125,9 +134,24 @@ class PosDeviceIdentityRotationGuardTest extends TestCase
      */
     public function without_the_previous_key_the_identity_is_genuinely_lost(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);
+        $m = $this->merchant(self::SEAT_PLAN);
+
+        // **تُملأ المقاعدُ إلّا واحداً** — فالجهازُ الأصليُّ يأخذ الأخير،
+        // ولا يبقى مقعدٌ للشبح. وبلا هذا يمرّ التدويرُ الأعمى بلا رفضٍ
+        // لأنّ الباقةَ واسعة، فيضيع نصفُ ما يقيسه الاختبار.
+        //
+        // (والحدُّ يُقرأ من الجدول: رقمٌ مكتوبٌ هنا يسقط أوّلَ تغييرِ
+        // تسعير — وهو ما وقع حين صارت المجّانيّةُ بلا مقاعد.)
+        $limit = (int) (A::PLAN_LIMITS[self::SEAT_PLAN]['pos_devices'] ?? 0);
+
+        $this->assertGreaterThan(0, $limit, 'باقةُ الاختبار بلا مقاعد');
 
         $this->useKeys(self::KEY_OLD, 1);
+
+        for ($i = 1; $i < $limit; $i++) {
+            $this->reg()->register($m, "seat-filler-{$i}");
+        }
+
         $this->reg()->register($m, self::UUID);
 
         // تدويرٌ أعمى: لا `previous_keys`.
@@ -140,7 +164,7 @@ class PosDeviceIdentityRotationGuardTest extends TestCase
             . '**فالمفتاحُ لا يشارك في التجزئة أصلاً، والحارسُ السابقُ لا يحرس**');
 
         $this->assertSame(PosDeviceRegistrar::RESULT_LIMIT, $blind['result'],
-            'المقعدُ الوحيدُ مشغولٌ بالشبح، فالمتوقَّعُ رفضٌ بالحدّ');
+            'المقاعدُ كلُّها مشغولةٌ وفيها الشبح، فالمتوقَّعُ رفضٌ بالحدّ');
     }
 
     /**
@@ -152,7 +176,7 @@ class PosDeviceIdentityRotationGuardTest extends TestCase
      */
     public function the_row_is_migrated_so_the_old_key_can_be_dropped(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);
+        $m = $this->merchant(self::SEAT_PLAN);
 
         $this->useKeys(self::KEY_OLD, 1);
         $device = $this->reg()->register($m, self::UUID)['device'];

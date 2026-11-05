@@ -355,7 +355,32 @@ class _AmialAccountStatementScreenState
         border: const Border(
             top: BorderSide(color: Color(0xFFECEFF4), width: 1)),
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      // ══════════════════════════════════════════════════════════════
+      // AMIAL-STATEMENT-UI-001 — **الكشفُ لا يُرسَم، والملفُّ يُنزَّل.**
+      //
+      // `CrossAxisAlignment.stretch` في `Row` يعني: امْدُد الأبناءَ
+      // **رأسيّاً** إلى ارتفاع الأب. وأبو هذا الصفّ سلسلةٌ تنتهي إلى
+      // `SingleChildScrollView` — **وارتفاعُها غيرُ محدود**. فيصل إلى
+      // كلّ خليّةٍ `h = Infinity` فينهار التخطيط:
+      //
+      //   BoxConstraints forces an infinite height
+      //
+      // والنتيجةُ أنّ جدولَ الحركات **لا يُرسَم إطلاقاً** متى كان فيه
+      // صفٌّ واحد. وهي شكوى صاحب المشروع الثالثة حرفيّاً: «لا يظهر
+      // الكشف في التطبيق، فقط عند التحميل» — لأنّ ملفَّ الـPDF يُبنى
+      // على الخادم ولا يمرّ بهذا التخطيط أصلاً.
+      //
+      // **ولا يراه شيءٌ ممّا كان قائماً**: `flutter analyze` راضٍ
+      // (‏تخطيطٌ صحيحٌ نحويّاً)، والخادمُ أخضرُ بسبعة اختبارات، ولا
+      // اختبارَ دارت يبني هذه الشاشة. وهو نفسُ صنف العطل الذي وُلدت
+      // منه الطبقةُ العاشرة في البوّابة.
+      //
+      // **و`IntrinsicHeight` تُبقي النيّة**: الخلايا تتساوى ارتفاعاً
+      // فتمتدّ الفواصلُ بينها — لكن على ارتفاعٍ **محسوبٍ من المحتوى**
+      // لا لا نهائيّ.
+      // ══════════════════════════════════════════════════════════════
+      child: IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         cell(
           txt(date == null ? '—' : _d(date), size: 10.5),
           _wDate,
@@ -387,7 +412,8 @@ class _AmialAccountStatementScreenState
               w: FontWeight.bold, color: AmialColors.primary),
           _wBalance,
         ),
-      ]),
+        ]),
+      ),
     );
   }
 

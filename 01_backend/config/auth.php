@@ -41,6 +41,12 @@ return [
             'provider' => 'users',
         ],
 
+        // جلسة التاجر منفصلة عن جلسة موظّف أميال؛ لا ترث auth:user.
+        'merchant_web' => [
+            'driver' => 'session',
+            'provider' => 'users',
+        ],
+
         'api' => [
             'driver' => 'passport',
             'provider' => 'users',

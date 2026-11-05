@@ -7,6 +7,7 @@ use App\Models\AgentSettlement;
 use App\Services\AgentNetworkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -65,15 +66,63 @@ class AgentNetworkController extends AmialApiController // AMIAL-FIX-007
         ], 'TOPUP_REQUESTED', 'تم إرسال طلب شراء الرصيد. ينتظر الموافقة.');
     }
 
+    /** POST /api/v1/amial/agent/payout-request — استرداد سيولة الوكيل نقداً. */
+    public function requestPayout(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:1',
+            'note' => 'sometimes|nullable|string|max:255',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        try {
+            $settlement = $this->network->requestPayout(
+                $request->user(), (string) $request->input('amount'), 'cash', $request->input('note'),
+            );
+        } catch (\RuntimeException $e) {
+            return $this->error('PAYOUT_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok([
+            'settlement_ulid' => $settlement->settlement_ulid,
+            'amount' => (string) $settlement->amount,
+            'status' => $settlement->status,
+        ], 'PAYOUT_REQUESTED', 'أُرسل طلب صرف السيولة وحُجز المبلغ حتى قرار الإدارة.');
+    }
+
     /** GET /api/v1/amial/agent/settlements */
     public function settlements(Request $request): JsonResponse
     {
         $settlements = AgentSettlement::where('agent_user_id', $request->user()->id)
             ->orderByDesc('created_at')
             ->limit(30)
-            ->get(['settlement_ulid', 'settlement_type', 'amount', 'status', 'created_at', 'completed_at']);
+            ->get(['settlement_ulid', 'settlement_type', 'amount', 'status', 'payment_method',
+                'payment_reference', 'note', 'created_at', 'completed_at']);
+
+        // حالة النقد الورقي جزء من تفاصيل الصرف، لا ملاحظة مخفية في الإدارة.
+        $handovers = DB::table('cash_handovers')
+            ->whereIn('settlement_ulid', $settlements->pluck('settlement_ulid'))
+            ->get(['handover_ulid', 'settlement_ulid', 'status', 'location', 'reference', 'delivered_at', 'received_at'])
+            ->keyBy('settlement_ulid');
+        $settlements->transform(function (AgentSettlement $s) use ($handovers) {
+            $row = $handovers->get($s->settlement_ulid);
+            $s->setAttribute('handover', $row ? (array) $row : null);
+            return $s;
+        });
 
         return $this->ok(['settlements' => $settlements]);
+    }
+
+    /** يؤكد الوكيل استلام النقد المخصص له، لا مجرد اكتمال القيد الإلكتروني. */
+    public function confirmHandover(Request $request, string $ulid): JsonResponse
+    {
+        try {
+            $handover = app(\App\Services\CashHandoverService::class)
+                ->confirm($ulid, $request->user(), $request->input('note'));
+            return $this->ok(['handover' => $handover], 'HANDOVER_CONFIRMED', 'تم تأكيد استلام النقد.');
+        } catch (\DomainException $e) {
+            return $this->error('HANDOVER_CONFIRM_FAILED', $e->getMessage(), 422);
+        }
     }
 
     /** GET /api/v1/amial/agent/distributor-network (للموزّعين فقط) */

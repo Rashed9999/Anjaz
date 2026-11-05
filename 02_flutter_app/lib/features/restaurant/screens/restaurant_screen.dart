@@ -7,7 +7,16 @@ import 'package:amial_pay/helper/amial_money.dart';
 
 /// AMIAL-RESTAURANT-001 — لوحة المطعم: الطاولات + شاشة المطبخ.
 class RestaurantScreen extends StatefulWidget {
-  const RestaurantScreen({super.key});
+  /// AMIAL-RESTAURANT-GATE-002 — **التبويبُ يُفتَح على ما ضُغط.**
+  ///
+  /// تُفتَح هذه الشاشةُ من ثلاث قدرات: «طاولات المطعم» و«طلبات المطعم»
+  /// و«شاشة المطبخ». ولو فُتحت كلُّها على التبويب الأوّل لَكان زرُّ
+  /// «شاشة المطبخ» يفتح الطاولات — **يعمل ويفعل الشيءَ الخطأ**، ولا
+  /// خطأَ في أيّ سجلّ. (القاعدة التاسعة: يُقاس أين ذهبت لا هل أخطأت.)
+  const RestaurantScreen({super.key, this.initialTab = 0});
+
+  /// ٠ = الطاولات والطلبات · ١ = المطبخ
+  final int initialTab;
 
   @override
   State<RestaurantScreen> createState() => _RestaurantScreenState();
@@ -25,7 +34,7 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
+    _tab = TabController(length: 2, vsync: this, initialIndex: widget.initialTab.clamp(0, 1));
     _load();
   }
 

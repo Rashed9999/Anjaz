@@ -25,6 +25,21 @@ class WholesaleCustomer extends Model
         'is_active' => 'boolean',
     ];
 
+    /**
+     * AMIAL-BUSINESS-CREDIT-001 — بعد تسليم الآجل لأميال أعمال لا يتحرّك هنا
+     * أي رصيد دين. الحارس على النموذج لا على الخدمة، فيمرّ به كل مسار.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $customer) {
+            if (\App\Services\BusinessGateway\CreditBalanceChange::changed($customer, ['current_balance'])) {
+                app(\App\Services\BusinessGateway\CreditHandoverService::class)->assertOpen(
+                    WholesaleBusiness::whereKey($customer->business_id)->value('merchant_user_id')
+                );
+            }
+        });
+    }
+
     public function business(): BelongsTo { return $this->belongsTo(WholesaleBusiness::class, 'business_id'); }
     public function defaultTier(): BelongsTo { return $this->belongsTo(WholesalePriceTier::class, 'default_tier_id'); }
     public function invoices(): HasMany { return $this->hasMany(WholesaleInvoice::class, 'customer_id'); }

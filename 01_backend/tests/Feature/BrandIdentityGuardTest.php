@@ -171,9 +171,14 @@ class BrandIdentityGuardTest extends TestCase
         //     نفسَه لسقط أبداً. (حارسٌ يقتل نفسَه لا يحرس.)
         //   `*_NOTES.md` — ملاحظاتُ جولاتٍ سابقة، تقتبس عناوينَ وثائقَ
         //     كُتبت بالاسم القديم. وتغييرُ اقتباسٍ يُحرّفه.
+        //   `CODEX_TO_CLAUDE_*` — وثائقُ تسليمٍ بين أداتين، وفيها
+        //     الكلمةُ **منهيّاً عنها**: «must read AMIAL PAY, never
+        //     AMYAL PAY». فمسحُها يجعل الحارسَ يسقط على نصٍّ يقول ما
+        //     يقوله الحارسُ نفسُه — وهي علّةُ استثناء هذا الملفّ أعلاه.
         $skip = ['/vendor/', '/node_modules/', '/.git/', '/build/', '/storage/',
                  '/docs/', '/dist/', '/.dart_tool/', '/ios/Pods/',
-                 'CHANGELOG', 'CHANGES_', '_NOTES.md', 'BrandIdentityGuardTest.php'];
+                 'CHANGELOG', 'CHANGES_', '_NOTES.md', 'CODEX_TO_CLAUDE_',
+                 'BrandIdentityGuardTest.php'];
 
         $hits = [];
 

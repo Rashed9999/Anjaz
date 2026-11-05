@@ -43,6 +43,7 @@ class AgentWhatsappTest extends TestCase
         parent::setUp();
 
         $this->company = new User();
+        $this->company->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $this->company->forceFill([
             'f_name' => 'البسيري', 'l_name' => 'للصرافة', 'phone' => '967772100001',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
@@ -53,6 +54,7 @@ class AgentWhatsappTest extends TestCase
         $this->hq = app(AgentStaffService::class)->ensureHeadOfficeAccount($this->company, 'hq123456');
 
         $bu = new User();
+        $bu->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $bu->forceFill([
             'f_name' => 'فرع المكلا', 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '967772100099', 'password' => Hash::make('secret123'),
@@ -158,6 +160,7 @@ class AgentWhatsappTest extends TestCase
     public function a_staff_member_of_another_company_cannot_be_linked(): void
     {
         $rival = new User();
+        $rival->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $rival->forceFill([
             'f_name' => 'منافس', 'l_name' => 'للصرافة', 'phone' => '967772199999',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),

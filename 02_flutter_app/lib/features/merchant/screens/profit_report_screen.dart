@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/merchant/screens/sales_breakdown_screen.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
@@ -34,8 +35,12 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
 تقرير ربحية — أميال باي (آخر $_days أيام)
 إجمالي المبيعات: ${AmialMoney.yer(t['revenue'])}
 إجمالي التكلفة: ${AmialMoney.yer(t['cost'])}
-صافي الربح: ${AmialMoney.yer(t['profit'])}
-هامش الربح: ${t['margin_percent']}%
+الربح الإجمالي: ${AmialMoney.yer(t['gross_profit'] ?? t['profit'])}
+المصروفات النقدية: ${AmialMoney.yer(t['cash_operating_expenses'])}
+إهلاك الأصول: ${AmialMoney.yer(t['depreciation_expense'])}
+إجمالي مصروفات التشغيل: ${AmialMoney.yer(t['operating_expenses'])}
+صافي الربح: ${AmialMoney.yer(t['net_profit'] ?? t['profit'])}
+هامش صافي الربح: ${t['net_margin_percent'] ?? t['margin_percent']}%
 عدد العمليات: ${t['sales_count']}
 ''');
   }
@@ -47,6 +52,17 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
       appBar: AppBar(
         title: const Text('تقارير الربحية'),
         actions: [
+          // AMIAL-SALES-BREAKDOWN-001 — **البابُ إلى التفصيل.**
+          //
+          // هذه الشاشةُ تقول الإجماليَّ وأعلى عشرةِ منتجاتٍ ربحاً، وتلك
+          // تقول كلَّ صنفٍ وكلَّ تصنيف. وكلتاهما خلف `profit_reports`،
+          // فلا بابَ يُعرض ثمّ يُرفض. (وشاشةٌ لا يُوصل إليها ليست مبنيّة
+          // — القاعدة الثانية عشرة.)
+          IconButton(
+            icon: const Icon(Icons.list_alt_rounded),
+            tooltip: 'المبيعات بالصنف',
+            onPressed: () => Get.to(() => const SalesBreakdownScreen()),
+          ),
           IconButton(icon: const Icon(Icons.share), onPressed: _share),
         ],
       ),
@@ -57,6 +73,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
               child: CircularProgressIndicator(color: AmialColors.primary));
         }
         final totals = report?['totals'] ?? {};
+        final hasNetProfit = totals['net_profit'] != null;
         final daily = (report?['daily'] as List?) ?? [];
         final products = (report?['products'] as List?) ?? [];
         final maxRevenue = daily.fold<double>(
@@ -118,26 +135,57 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                               fontWeight: FontWeight.w600)),
                     ),
                     const Spacer(),
-                    const Text('إجمالي الأرباح',
-                        style: TextStyle(
+                    Text(hasNetProfit ? 'صافي الربح بعد المصروفات' : 'الربح الإجمالي قبل المصروفات',
+                        style: const TextStyle(
                             fontSize: 13, color: AmialColors.textSecondary)),
                   ]),
                   const SizedBox(height: 10),
-                  Text(AmialMoney.yer(totals['profit']),
+                  Text(AmialMoney.yer(hasNetProfit ? totals['net_profit'] : totals['profit']),
                       style: const TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
                           color: AmialColors.primary)),
                   const Divider(height: 28),
+                  if (hasNetProfit) ...[
+                    Row(children: [
+                      Expanded(
+                        child: Column(children: [
+                          Text(AmialMoney.yer(totals['gross_profit'] ?? totals['profit']),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                          const Text('الربح الإجمالي',
+                              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+                        ]),
+                      ),
+                      Container(height: 34, width: 1, color: AmialColors.border),
+                      Expanded(
+                        child: Column(children: [
+                          Text(AmialMoney.yer(totals['cash_operating_expenses']),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AmialColors.red)),
+                          const Text('مصروفات نقدية',
+                              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+                        ]),
+                      ),
+                      Container(height: 34, width: 1, color: AmialColors.border),
+                      Expanded(
+                        child: Column(children: [
+                          Text(AmialMoney.yer(totals['depreciation_expense']),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AmialColors.red)),
+                          const Text('إهلاك الأصول',
+                              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+                        ]),
+                      ),
+                    ]),
+                    const Divider(height: 28),
+                  ],
                   Row(children: [
                     Expanded(
                       child: Column(children: [
-                        Text('${totals['margin_percent'] ?? 0}%',
+                        Text('${hasNetProfit ? (totals['net_margin_percent'] ?? 0) : (totals['margin_percent'] ?? 0)}%',
                             style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: AmialColors.yellowDark)),
-                        const Text('هامش الربح',
+                        Text(hasNetProfit ? 'هامش صافي الربح' : 'هامش الربح',
                             style: TextStyle(
                                 fontSize: 11,
                                 color: AmialColors.textMuted)),
@@ -318,7 +366,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
 
               const SizedBox(height: 8),
               const Text(
-                'التكلفة محسوبة من «سعر التكلفة» الحالي لكل منتج — حدّثه من إدارة المخزون لدقة أعلى.',
+                'تكلفة البضاعة تُحفظ لحظة البيع حتى لا يتغير ربح الماضي عند تغير سعر الشراء لاحقاً. المصروفات التشغيلية تُعرض منفصلة وتُخصم من صافي الربح.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
               ),

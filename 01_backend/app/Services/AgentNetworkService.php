@@ -129,6 +129,45 @@ class AgentNetworkService
         }
     }
 
+    /**
+     * فحص صرف النقد من درج الوكيل (cash-out) قبل تنفيذ سحب العميل.
+     *
+     * لا نستعمل حدّ الإيداع هنا: العمليتان متعاكستان في النقد والفلوت،
+     * وخلطهما يجعل رقمَ `daily_cash_out_limit` معروضاً في الإدارة بلا أثر.
+     */
+    public function assertCashOutAllowed(int $agentUserId, string $amount): void
+    {
+        // يُستدعى من داخل معاملة تنفيذ السحب؛ القفل يمنع تجاوز الحد بسباق.
+        $profile = AgentProfile::where('user_id', $agentUserId)->lockForUpdate()->first();
+        if (!$profile) {
+            $defaultSingle = (string) config('amial.agent.default_single_transaction_limit', '100000');
+            if (bccomp($amount, $defaultSingle, 4) > 0) {
+                throw new RuntimeException(
+                    "مبلغ السحب يتجاوز الحد الافتراضي للعملية (" . Helpers::money($defaultSingle) . " ر.ي). يلزم تفعيل ملف الوكيل."
+                );
+            }
+            return;
+        }
+
+        if (!$profile->isActive()) {
+            throw new RuntimeException('حساب الوكيل غير نشط');
+        }
+
+        if (bccomp($amount, (string) $profile->single_transaction_limit, 4) > 0) {
+            throw new RuntimeException(
+                "مبلغ السحب يتجاوز حد العملية الواحدة (" . Helpers::money($profile->single_transaction_limit) . " ر.ي)"
+            );
+        }
+
+        $todayLog = $this->getTodayFloatLog($agentUserId);
+        $newDailyTotal = bcadd((string) $todayLog->cash_out_total, $amount, 4);
+        if (bccomp($newDailyTotal, (string) $profile->daily_cash_out_limit, 4) > 0) {
+            throw new RuntimeException(
+                "هذه العملية ستتجاوز حدك اليومي للسحب النقدي (" . Helpers::money($profile->daily_cash_out_limit) . " ر.ي)"
+            );
+        }
+    }
+
     // ============================================================
     // 2. تتبع السيولة
     // ============================================================
@@ -165,6 +204,46 @@ class AgentNetworkService
         $log->closing_float = (string)($wallet?->current_balance ?? '0');
 
         $log->save();
+    }
+
+    /**
+     * تعديل حدود التشغيل لوكيل من مركز الحدود.
+     * لا يحرّك رصيداً ولا ينشئ تسوية؛ هو قرار صلاحيات موثّق فقط.
+     */
+    public function updateOperationalLimits(User $agent, User $actor, array $limits, string $reason): AgentProfile
+    {
+        $profile = AgentProfile::where('user_id', $agent->id)->lockForUpdate()->first();
+        if (!$profile) {
+            throw new RuntimeException('ملف الوكيل غير موجود');
+        }
+
+        foreach (['daily_cash_in_limit', 'daily_cash_out_limit', 'single_transaction_limit'] as $key) {
+            if (isset($limits[$key]) && bccomp((string) $limits[$key], '0', 4) < 0) {
+                throw new RuntimeException('لا يمكن أن يكون الحد سالباً');
+            }
+        }
+
+        $before = $profile->only(['daily_cash_in_limit', 'daily_cash_out_limit', 'single_transaction_limit']);
+        $profile->fill($limits);
+        if (bccomp((string) $profile->single_transaction_limit, (string) $profile->daily_cash_in_limit, 4) > 0
+            || bccomp((string) $profile->single_transaction_limit, (string) $profile->daily_cash_out_limit, 4) > 0) {
+            throw new RuntimeException('حد العملية الواحدة لا يجوز أن يتجاوز الحد اليومي');
+        }
+        $profile->save();
+
+        $auditId = $this->audit->record([
+            'actor_type' => 'admin', 'actor_user_id' => $actor->id,
+            'subject_type' => 'agent_profile', 'subject_id' => (string) $profile->id,
+            'action' => 'AGENT_OPERATIONAL_LIMITS_UPDATED', 'decision_code' => 'OK',
+            'reason' => $reason, 'severity' => 'warning',
+            'context' => ['agent_user_id' => $agent->id, 'before' => $before,
+                'after' => $profile->only(['daily_cash_in_limit', 'daily_cash_out_limit', 'single_transaction_limit'])],
+        ]);
+        if ($auditId === null) {
+            throw new RuntimeException('تعذر حفظ سجل التدقيق؛ لم يتم اعتماد تعديل الحدود');
+        }
+
+        return $profile;
     }
 
     private function getTodayFloatLog(int $agentUserId): AgentFloatLog

@@ -5,10 +5,22 @@
 Provision a deterministic matrix for manual and automated testing of merchant verticals and subscription entitlements:
 
 - 6 business types
-- 5 subscription plans
-- 30 merchant accounts
+- 3 subscription plans (Free · Business · Enterprise)
+- 18 merchant accounts
 
 Source of truth: `Database\Seeders\MerchantDemoMatrixSeeder::accounts()`.
+Guarded against this document by `tests/Feature/DemoMatrixDocumentTruthGuardTest.php`
+— no number is printed here without an account behind it, and no account is
+seeded without a line here.
+
+> **Plan merge (AMIAL-PLAN-MATRIX-003).** This file used to publish five
+> plans and thirty accounts. The catalogue is three — `Starter` collapsed
+> into `Business` and `Merchant Pro` into `Enterprise` — so **twelve of the
+> thirty numbers never existed**: every `…001` and every `…003`. Typing one
+> of them at the login screen returns "no account", which reads as a broken
+> sign-in rather than a retired number. The surviving digits were left
+> untouched (`0` · `2` · `4`) because these numbers are memorised: anyone
+> who knew a number still lands on the plan they meant.
 
 ## Credentials
 
@@ -19,22 +31,22 @@ Source of truth: `Database\Seeders\MerchantDemoMatrixSeeder::accounts()`.
 
 Plan digit:
 
-- `0` = Free
-- `1` = Starter
-- `2` = Business
-- `3` = Merchant Pro
-- `4` = Enterprise
+- `0` = Free (0 ر.س)
+- `2` = Business (35 ر.س / month)
+- `4` = Enterprise (99 ر.س / month)
+
+Digits `1` and `3` are retired and are **not** seeded.
 
 Accounts (local phone form):
 
-| Vertical | Free | Starter | Business | Merchant Pro | Enterprise |
-|---|---:|---:|---:|---:|---:|
-| Quick sale | 777211000 | 777211001 | 777211002 | 777211003 | 777211004 |
-| Retail | 777212000 | 777212001 | 777212002 | 777212003 | 777212004 |
-| Fuel | 777213000 | 777213001 | 777213002 | 777213003 | 777213004 |
-| Pharmacy | 777214000 | 777214001 | 777214002 | 777214003 | 777214004 |
-| Wholesale | 777215000 | 777215001 | 777215002 | 777215003 | 777215004 |
-| Restaurant | 777216000 | 777216001 | 777216002 | 777216003 | 777216004 |
+| Vertical | Free | Business | Enterprise |
+|---|---:|---:|---:|
+| Quick sale | 777211000 | 777211002 | 777211004 |
+| Retail | 777212000 | 777212002 | 777212004 |
+| Fuel | 777213000 | 777213002 | 777213004 |
+| Pharmacy | 777214000 | 777214002 | 777214004 |
+| Wholesale | 777215000 | 777215002 | 777215004 |
+| Restaurant | 777216000 | 777216002 | 777216004 |
 
 DB phone is always the `967`-prefixed version, e.g. wholesale/business is `967777215002`.
 
@@ -45,7 +57,7 @@ DB phone is always the `967`-prefixed version, e.g. wholesale/business is `96777
    - the existing entitlement/plan matrix tests
    - merchant dispatcher tests
 2. Confirm all migrations are current.
-3. Confirm none of the 30 reserved phone numbers belong to a real/non-demo account. The Seeder also refuses collisions using marker `AMIAL_DEMO_MERCHANT_MATRIX_V1`.
+3. Confirm none of the 18 reserved phone numbers belong to a real/non-demo account. The Seeder also refuses collisions using marker `AMIAL_DEMO_MERCHANT_MATRIX_V1`.
 4. Do not add this Seeder to `DatabaseSeeder` and do not run it from a migration.
 
 ## Provisioning
@@ -72,24 +84,22 @@ For every account, verify `GET /api/v1/amial/me/access` and `GET /api/v1/amial/m
 - KYC/verification accepted
 - correct capability states for that plan
 
-Then smoke-test one account from every vertical plus all five Wholesale accounts:
+Then smoke-test one account from every vertical plus all three Wholesale accounts:
 
 - login succeeds with phone + password;
 - transaction PIN `1234` is accepted where a non-financial gated test needs it;
 - `HomeDispatcherScreen` opens the correct vertical, never another merchant vertical;
 - locked capabilities show the correct upgrade state from the server manifest;
 - available capabilities open real routes/API;
-- Free/Starter/Business/Pro/Enterprise differences match the plan entitlement tests;
+- Free/Business/Enterprise differences match the plan entitlement tests;
 - no known-password demo account can transfer wallet funds outward.
 
 ## Wholesale focus
 
-Use these five accounts for the current UI round:
+Use these three accounts for the current UI round:
 
 - `777215000` — Free
-- `777215001` — Starter
 - `777215002` — Business
-- `777215003` — Merchant Pro
 - `777215004` — Enterprise
 
 They must show the same Wholesale design language while the feature depth changes strictly according to server entitlements.

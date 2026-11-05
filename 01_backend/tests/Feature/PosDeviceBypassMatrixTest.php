@@ -37,7 +37,28 @@ class PosDeviceBypassMatrixTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function merchant(string $plan = A::PLAN_FREE): User
+    /**
+     * AMIAL-POS-SEAT-002 — **باقةُ المقاعد تُختار بالحدّ لا بالاسم.**
+     *
+     * كانت هذه الاختباراتُ تستعمل `PLAN_FREE` بوصفها «الباقةَ ذاتَ
+     * المقعد الواحد». ثمّ قرّر صاحبُ المشروع أن تكون المجّانيّةُ **بلا
+     * مقاعد** — فسقطت عشرةُ اختباراتٍ سليمةٍ دفعةً واحدة، لا لأنّ شيئاً
+     * انكسر بل لأنّها كتبت **قرارَ تسعيرٍ في نصّها**.
+     *
+     * فصارت تسأل الجدولَ عن **أصغر باقةٍ لها مقاعد**، وتعبّر عن كلّ
+     * توقّعٍ بحدّها لا برقمٍ مكتوب. فتغييرُ التسعير غداً لا يُسقط حارساً
+     * واحداً.
+     */
+    private const SEAT_PLAN = A::PLAN_BUSINESS;
+
+    /** حدُّ المقاعد المُعلَن لباقة الاختبار — يُقرأ ولا يُكتب. */
+    private function seatLimit(): int
+    {
+        return (int) (A::PLAN_LIMITS[self::SEAT_PLAN]['pos_devices'] ?? 0);
+    }
+
+
+    private function merchant(string $plan = self::SEAT_PLAN): User
     {
         $u = User::factory()->create([
             'type' => 3, 'role' => A::ROLE_MERCHANT, 'zone_code' => 'SOUTH',
@@ -49,6 +70,17 @@ class PosDeviceBypassMatrixTest extends TestCase
         ]);
 
         return $u->refresh();
+    }
+
+    /**
+     * يملأ مقاعدَ التاجر حتّى الحدّ **إلّا واحداً** — فيبقى مقعدٌ واحدٌ
+     * حرّ. وبه تُختبَر حالةُ «الحدُّ مستنفَد» بلا كتابة رقمٍ في النصّ.
+     */
+    private function fillSeatsLeavingOne(\App\Models\User $m): void
+    {
+        for ($i = 1; $i < $this->seatLimit(); $i++) {
+            $this->reg()->register($m, "seat-filler-{$i}");
+        }
     }
 
     private function reg(): PosDeviceRegistrar
@@ -96,7 +128,9 @@ class PosDeviceBypassMatrixTest extends TestCase
      */
     public function pairing_is_refused_when_the_seat_limit_is_full(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);   // مقعدٌ واحد
+        $m = $this->merchant(self::SEAT_PLAN);
+
+        $this->fillSeatsLeavingOne($m);          // بقي مقعدٌ واحدٌ حرّ
 
         $this->actingAs($m, 'api')->postJson($this->url(), ['device_uuid' => 'first-device-001'])
             ->assertStatus(200);
@@ -105,14 +139,14 @@ class PosDeviceBypassMatrixTest extends TestCase
             ->assertStatus(402)
             ->assertJsonPath('code', 'PLAN_LIMIT_REACHED');
 
-        $this->assertSame(1, PosDevice::activeSeats($m->id),
+        $this->assertSame($this->seatLimit(), PosDevice::activeSeats($m->id),
             '**الاقترانُ تجاوز الحدَّ** — فهو بابٌ ثانٍ بلا حارس');
     }
 
     /** @test */
     public function pairing_and_registering_share_one_seat_for_one_device(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);
+        $m = $this->merchant(self::SEAT_PLAN);
 
         $this->actingAs($m, 'api')->postJson($this->url(), ['device_uuid' => 'device-both-doors']);
         $this->actingAs($m, 'api')->postJson($this->url('/pair'), ['device_uuid' => 'device-both-doors'])
@@ -196,6 +230,44 @@ class PosDeviceBypassMatrixTest extends TestCase
         ])->assertStatus(200)->assertJsonPath('data.device.branch_id', $own->id);
     }
 
+    /** @test */
+    public function moving_a_device_to_another_branch_ends_its_live_sessions(): void
+    {
+        $m = $this->merchant(A::PLAN_BUSINESS);
+        $from = Branch::create([
+            'merchant_user_id' => $m->id, 'name' => 'الفرع أ',
+            'code' => 'DEVICE-A', 'is_active' => true,
+        ]);
+        $to = Branch::create([
+            'merchant_user_id' => $m->id, 'name' => 'الفرع ب',
+            'code' => 'DEVICE-B', 'is_active' => true,
+        ]);
+
+        $device = $this->reg()->register(
+            $m, 'device-branch-move', ['branch_id' => $from->id],
+        )['device'];
+
+        PosDeviceSession::create([
+            'access_token_id' => 'device-move-session',
+            'pos_device_id' => $device->id,
+            'merchant_user_id' => $m->id,
+            'actor_user_id' => $m->id,
+            'started_at' => now(),
+            'last_seen_at' => now(),
+        ]);
+
+        $this->actingAs($m, 'api')
+            ->patchJson($this->url('/'.$device->id), ['branch_id' => $to->id])
+            ->assertOk()
+            ->assertJsonPath('data.device.branch_id', $to->id)
+            ->assertJsonPath('data.ended_sessions', 1);
+
+        $this->assertNotNull(
+            PosDeviceSession::where('access_token_id', 'device-move-session')->value('ended_at'),
+            'نُقل الجهاز إلى فرع آخر وبقيت جلسة الفرع القديم حيّة',
+        );
+    }
+
     // ══════════════════════════════════════════════════════════════════
     //  ⑧ الملغى والحدُّ ممتلئ
     // ══════════════════════════════════════════════════════════════════
@@ -203,7 +275,9 @@ class PosDeviceBypassMatrixTest extends TestCase
     /** @test */
     public function a_revoked_device_cannot_return_while_the_limit_is_full(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);
+        $m = $this->merchant(self::SEAT_PLAN);
+
+        $this->fillSeatsLeavingOne($m);          // بقي مقعدٌ واحدٌ حرّ
 
         $old = $this->reg()->register($m, 'device-old-seat')['device'];
         $this->reg()->revoke($old, $m->id);
@@ -214,7 +288,7 @@ class PosDeviceBypassMatrixTest extends TestCase
         $this->actingAs($m, 'api')->postJson($this->url(), ['device_uuid' => 'device-old-seat'])
             ->assertStatus(402);
 
-        $this->assertSame(1, PosDevice::activeSeats($m->id),
+        $this->assertSame($this->seatLimit(), PosDevice::activeSeats($m->id),
             '**الإلغاءُ بابُ تجاوز**: يُلغى جهازٌ ثمّ يعود فيتجاوز الحدّ');
     }
 

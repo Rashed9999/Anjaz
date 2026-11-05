@@ -55,11 +55,40 @@ class SuppliersController extends GetxController implements GetxService {
   Future<bool> poApprove(int id) =>
       _submit(() => repo.poApprove(id), 'فشل الاعتماد');
 
-  Future<bool> poReceive(int id, List<Map<String, dynamic>> items) =>
-      _submit(() => repo.poReceive(id, items), 'فشل الاستلام');
+  /// AMIAL-DAILY-MOVEMENT-001 — `paidNow`: ما دُفع نقداً لحظةَ الاستلام.
+  Future<bool> poReceive(int id, List<Map<String, dynamic>> items,
+          {String? paidNow}) =>
+      _submit(() => repo.poReceive(id, items, paidNow: paidNow),
+          'فشل الاستلام');
 
   Future<bool> poCancel(int id) =>
       _submit(() => repo.poCancel(id), 'فشل الإلغاء');
+
+  // ── مرتجعات الشراء (AMIAL-DAILY-MOVEMENT-001) ──────────────────────
+
+  Future<bool> prCreate(Map<String, dynamic> data) =>
+      _submit(() => repo.prCreate(data), 'فشل تسجيل المرتجع');
+
+  Future<bool> prApprove(int id) =>
+      _submit(() => repo.prApprove(id), 'فشل اعتماد المرتجع');
+
+  Future<bool> prReject(int id, String reason) =>
+      _submit(() => repo.prReject(id, reason), 'فشل رفض المرتجع');
+
+  Future<List<Map<String, dynamic>>> prList({String status = 'all'}) async {
+    try {
+      final r = await repo.prList(status: status);
+      if (_ok(r)) {
+        return ((r.body['meta']?['returns'] ?? []) as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      }
+      lastError.value = _msg(r) ?? 'تعذّر تحميل المرتجعات';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    }
+    return [];
+  }
 
   Future<Map<String, dynamic>?> poShow(int id) async {
     try {

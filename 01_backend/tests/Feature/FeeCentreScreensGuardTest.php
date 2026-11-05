@@ -646,8 +646,11 @@ class FeeCentreScreensGuardTest extends TestCase
             'bearer' => 'sender',
         ])->assertSessionHasErrors();
 
-        $this->assertSame(0, FeeScheme::count(),
-            'حُفظت نسخةٌ بحصّةِ وكيلٍ على عمليّةٍ لا وكيلَ فيها');
+        $this->assertSame(0, FeeScheme::where('code', 'SEND_MONEY')
+            ->where('zone_code', 'SOUTH')
+            ->where('applies_to', 'customer')
+            ->count(),
+            'حُفظت النسخةُ المرفوضة بحصّة وكيل؛ وجود تسعيرات أساسية أخرى لا يخص هذا الحارس');
     }
 
     /**
@@ -667,7 +670,10 @@ class FeeCentreScreensGuardTest extends TestCase
             'bearer' => 'merchant',
         ])->assertSessionHasErrors();
 
-        $this->assertSame(0, FeeScheme::count());
+        $this->assertSame(0, FeeScheme::where('code', 'MERCHANT_QR')
+            ->where('zone_code', 'SOUTH')
+            ->where('applies_to', 'agent')
+            ->count());
     }
 
     /**
@@ -685,7 +691,10 @@ class FeeCentreScreensGuardTest extends TestCase
             'bearer' => 'sender',
         ])->assertSessionHasErrors();
 
-        $this->assertSame(0, FeeScheme::count());
+        $this->assertSame(0, FeeScheme::where('code', 'SEND_MONEY')
+            ->where('zone_code', 'SOUTH')
+            ->where('applies_to', 'customer')
+            ->count());
     }
 
     /**

@@ -31,6 +31,7 @@ class ReceiptDownloadIntegrityTest extends TestCase
     private function makeReceipt(): array
     {
         $u = new User();
+        $u->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $u->forceFill([
             'f_name' => 'راشد', 'l_name' => 'معرابي', 'phone' => '967999000333',
             'type' => CUSTOMER_TYPE, 'password' => bcrypt('x123456'),
@@ -113,6 +114,7 @@ class ReceiptDownloadIntegrityTest extends TestCase
         [$u, $r] = $this->makeReceipt();
 
         $other = new User();
+        $other->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $other->forceFill([
             'f_name' => 'آخر', 'l_name' => 'مستخدم', 'phone' => '967999000444',
             'type' => CUSTOMER_TYPE, 'password' => bcrypt('x123456'),

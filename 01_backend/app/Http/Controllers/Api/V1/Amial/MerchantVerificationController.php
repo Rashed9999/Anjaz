@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantVerificationRequest;
 use App\Services\MerchantVerificationService;
+use App\Services\Verification\VerificationCaseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -27,6 +28,7 @@ class MerchantVerificationController extends Controller
 {
     public function __construct(
         private readonly MerchantVerificationService $svc,
+        private readonly VerificationCaseService $workflow,
     ) {}
 
     /** حالة التوثيق الحالية للتاجر. */
@@ -40,8 +42,9 @@ class MerchantVerificationController extends Controller
             'profile_status' => $profile->verification_status,
             'tier' => $profile->tier,
             'current_request' => $current,
-            'required_docs' => MerchantVerificationService::REQUIRED_DOCS,
+            'required_docs' => $this->svc->requiredDocsFor($user),
             'optional_docs' => MerchantVerificationService::OPTIONAL_DOCS,
+            'unified_case' => $this->workflowSnapshot($user),
         ]);
     }
 
@@ -187,5 +190,16 @@ class MerchantVerificationController extends Controller
             'success' => false, 'code' => 'VALIDATION_FAILED',
             'message' => 'بيانات غير صحيحة', 'errors' => $v->errors(), 'meta' => (object)[],
         ], 422);
+    }
+
+    private function workflowSnapshot($user): ?array
+    {
+        try {
+            return $this->workflow->snapshot($user);
+        } catch (\DomainException) {
+            // أثناء نشر الهجرة في بيئة متدرجة تبقى شاشة التاجر عاملة؛ لا
+            // نُصدر توثيقاً بديلاً ولا نخفي طلبه القائم.
+            return null;
+        }
     }
 }

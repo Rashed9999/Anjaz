@@ -34,6 +34,7 @@ class AgentSettingsTest extends TestCase
         parent::setUp();
 
         $this->company = new User();
+        $this->company->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $this->company->forceFill([
             'f_name' => 'البسيري', 'l_name' => 'للصرافة', 'phone' => '967776100001',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
@@ -44,6 +45,7 @@ class AgentSettingsTest extends TestCase
         $this->hq = app(AgentStaffService::class)->ensureHeadOfficeAccount($this->company, 'hq123456');
 
         $bu = new User();
+        $bu->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $bu->forceFill([
             'f_name' => 'فرع المكلا', 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '967776100099', 'password' => Hash::make('secret123'),
@@ -143,6 +145,7 @@ class AgentSettingsTest extends TestCase
     public function thresholds_of_another_companys_branch_are_out_of_reach(): void
     {
         $rival = new User();
+        $rival->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $rival->forceFill([
             'f_name' => 'منافس', 'l_name' => 'للصرافة', 'phone' => '967776100777',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
@@ -150,6 +153,7 @@ class AgentSettingsTest extends TestCase
         ])->save();
 
         $ru = new User();
+        $ru->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $ru->forceFill([
             'f_name' => 'فرع المنافس', 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '967776100778', 'password' => Hash::make('secret123'),
@@ -210,6 +214,7 @@ class AgentSettingsTest extends TestCase
     public function another_companys_announcement_cannot_be_toggled(): void
     {
         $rival = new User();
+        $rival->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $rival->forceFill([
             'f_name' => 'منافس', 'l_name' => 'للصرافة', 'phone' => '967776100666',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),

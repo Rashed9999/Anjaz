@@ -853,6 +853,7 @@ class AgentPortalController extends Controller
             'name' => 'required|string|max:120',
             'code' => 'required|string|max:24',
             'phone' => 'required|string',
+            'email' => 'required|email|max:255',
             'password' => 'required|string|min:8',
             'city' => 'sometimes|nullable|string|max:80',
             'address' => 'sometimes|nullable|string|max:500',

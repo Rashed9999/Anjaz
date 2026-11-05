@@ -343,6 +343,10 @@ class AgentCounterController extends Controller
                 'fee' => (string) $req->fee,
                 'total_debit' => (string) $req->total_debit,
                 'expires_at' => $req->expires_at?->toDateTimeString(),
+                // AMIAL-MERCHANT-CASHOUT-001 — سحب تاجر: التحقق من صاحبه إلزامي قبل الصرف.
+                'requester_type' => $req->requester_type,
+                'identity_required' => $req->requester_type === 'merchant',
+                'store_name' => $req->requester_type === 'merchant' ? \App\Models\Merchant::where('user_id', $req->customer_user_id)->value('store_name') : null,
                 'customer' => [
                     'name' => $customer
                         ? (trim(($customer->f_name ?? '') . ' ' . ($customer->l_name ?? '')) ?: '—')

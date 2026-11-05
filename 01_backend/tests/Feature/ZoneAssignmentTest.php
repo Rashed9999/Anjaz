@@ -67,7 +67,11 @@ class ZoneAssignmentTest extends TestCase
     public function sanaa_user_cannot_cash_out_but_can_transfer()
     {
         // مستخدم في صنعاء (NORTH) — السيناريو الذي سأل عنه المستخدم
-        $sanaaUser = User::factory()->create();
+        $sanaaUser = User::factory()->create([
+            'residence_governorate' => 'YE-SN',
+            'verified_residence_governorate' => 'YE-SN',
+            'residence_verified_at' => now(),
+        ]);
         $this->zoneService->assignFromKyc($sanaaUser, 'صنعاء');
         $sanaaUser->refresh();
 
@@ -88,7 +92,11 @@ class ZoneAssignmentTest extends TestCase
     /** @test */
     public function sanaa_user_can_view_balance()
     {
-        $sanaaUser = User::factory()->create();
+        $sanaaUser = User::factory()->create([
+            'residence_governorate' => 'YE-SN',
+            'verified_residence_governorate' => 'YE-SN',
+            'residence_verified_at' => now(),
+        ]);
         $this->zoneService->assignFromKyc($sanaaUser, 'صنعاء');
         $sanaaUser->refresh();
 

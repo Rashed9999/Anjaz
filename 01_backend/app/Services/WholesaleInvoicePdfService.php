@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\WholesaleInvoice;
+use App\Models\Merchant;
+use App\Services\Merchant\MerchantLogoService;
 use App\Support\ArabicPdf;
 
 /**
@@ -23,10 +25,14 @@ class WholesaleInvoicePdfService
     {
         // تحميل العلاقات اللازمة
         $invoice->loadMissing(['business', 'customer', 'salesRep', 'items', 'collections']);
+        $merchant = Merchant::where('user_id', $invoice->business?->merchant_user_id)->first();
+        $qr = app(DocumentQrService::class);
+        $verificationCode = (string) $invoice->invoice_ulid;
 
         $html = view('pdf.wholesale-invoice', [
             'invoice' => $invoice,
             'business' => $invoice->business,
+            'merchantLogoData' => app(MerchantLogoService::class)->dataUri($merchant),
             'customer' => $invoice->customer,
             'salesRep' => $invoice->salesRep,
             'items' => $invoice->items,
@@ -36,9 +42,28 @@ class WholesaleInvoicePdfService
             'days_overdue' => $invoice->isOverdue() ? $invoice->daysOverdue() : 0,
             'status_label' => $this->statusLabel($invoice->status),
             'status_color' => $this->statusColor($invoice->status),
+            'verificationUrl' => $qr->url($verificationCode),
+            'qrDataUri' => $qr->dataUri($verificationCode),
         ])->render();
 
         return ArabicPdf::render($html, ['format' => 'A4', 'margin' => 0]);
+    }
+
+    /**
+     * كل رقم يغيّر محتوى الفاتورة يدخل البصمة، لا updated_at وحده.
+     * تحصيل/مرتجع داخل الثانية نفسها لا يجوز أن يخدم PDF قديم.
+     */
+    public function cacheKey(WholesaleInvoice $invoice): string
+    {
+        $fingerprint = implode('|', [
+            (string) $invoice->status,
+            (string) $invoice->total_amount,
+            (string) $invoice->paid_amount,
+            (string) $invoice->balance_due,
+            (string) ($invoice->updated_at?->format('YmdHis.u') ?? '0'),
+        ]);
+
+        return "wholesale_invoice_{$invoice->id}_" . sha1($fingerprint);
     }
 
     public function suggestedFilename(WholesaleInvoice $invoice): string

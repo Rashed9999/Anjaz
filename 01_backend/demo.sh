@@ -33,7 +33,11 @@ check_docker() {
 # ── تجهيز ملف .env.demo ─────────────────────────────────
 prepare_env() {
     if [ ! -f ".env.demo" ]; then
-        err "لا يوجد .env.demo — هل أنت في مجلّد 01_backend؟"
+        if [ ! -f ".env.demo.example" ]; then
+            err "لا يوجد .env.demo.example — هل أنت في مجلّد 01_backend؟"
+        fi
+        cp .env.demo.example .env.demo
+        warn "أُنشئ .env.demo محلياً من القالب؛ أضف مفاتيح ngrok/Meta عند الحاجة ولا ترفعه إلى Git."
     fi
     # نسخ .env.demo إلى .env داخل الـ build
     cp .env.demo .env
@@ -96,11 +100,8 @@ start)
     echo -e "${GREEN}║  API URL (هاتف):   http://${LOCAL_IP}:8000            ║${NC}"
     echo -e "${GREEN}╠══════════════════════════════════════════════════════╣${NC}"
     echo -e "${GREEN}║  حسابات الديمو:                                      ║${NC}"
-    echo -e "${GREEN}║    أدمن:    admin@amial.pay / Admin@2026              ║${NC}"
-    echo -e "${GREEN}║    عميل 1:  777100001 / PIN: 1234                    ║${NC}"
-    echo -e "${GREEN}║    عميل 2:  777100002 / PIN: 1234                    ║${NC}"
-    echo -e "${GREEN}║    تاجر:    777200001 / PIN: 1234                    ║${NC}"
-    echo -e "${GREEN}║    وكيل:    777300001 / PIN: 1234                    ║${NC}"
+    echo -e "${GREEN}║    بيانات الدخول محلية ولا تُطبع في السكربت.          ║${NC}"
+    echo -e "${GREEN}║    راجع سجل التهيئة المحلي أو عيّن بياناتك في .env.demo║${NC}"
     echo -e "${GREEN}╠══════════════════════════════════════════════════════╣${NC}"
     echo -e "${GREEN}║  الخطوة التالية للهاتف:                              ║${NC}"
     echo -e "${GREEN}║    عدِّل BASE_URL في Flutter لـ:                     ║${NC}"
@@ -147,7 +148,7 @@ start-wa)
         echo "⚡ الخطوات التالية لتفعيل واتساب:"
         echo "   1. افتح Meta Developer Portal → تطبيقك → WhatsApp → Webhook"
         echo "   2. أدخل Callback URL: ${NGROK_URL}/wa/webhook"
-        echo "   3. Verify Token: amyal_webhook_2026"
+        echo "   3. Verify Token: القيمة التي عيّنتها في META_WA_VERIFY_TOKEN محلياً"
         echo "   4. اشترك في حدث: messages"
     else
         warn "تعذّر الحصول على رابط ngrok — تحقّق من NGROK_AUTHTOKEN"

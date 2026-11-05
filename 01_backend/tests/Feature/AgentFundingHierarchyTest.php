@@ -69,6 +69,7 @@ class AgentFundingHierarchyTest extends TestCase
         EMoney::updateOrCreate(['user_id' => $this->admin->id], ['current_balance' => '5000000']);
 
         $this->company = new User();
+        $this->company->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $this->company->forceFill([
             'f_name' => 'البسيري', 'l_name' => 'للصرافة', 'phone' => '967771500001',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
@@ -77,6 +78,7 @@ class AgentFundingHierarchyTest extends TestCase
         EMoney::create(['user_id' => $this->company->id, 'current_balance' => '0']);
 
         $this->branch = app(AgentBranchService::class)->create($this->company, [
+            'email' => 'branch-' . bin2hex(random_bytes(8)) . '@example.test',
             'name' => 'فرع المكلا', 'code' => 'MKL', 'phone' => '967771500099',
             'city' => 'المكلا', 'password' => 'branch123',
         ]);
@@ -263,6 +265,7 @@ class AgentFundingHierarchyTest extends TestCase
     public function an_agent_cannot_fund_a_branch_that_is_not_its_own(): void
     {
         $other = new User();
+        $other->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $other->forceFill([
             'f_name' => 'وكيل', 'l_name' => 'آخر', 'phone' => '967771500777',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'), 'is_active' => 1,

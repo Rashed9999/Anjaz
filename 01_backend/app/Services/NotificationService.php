@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\Jobs\SendAmialNotificationPushJob;
 use App\Models\AmialNotification;
 use App\Models\User;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 
 /**
@@ -23,8 +26,11 @@ class NotificationService
         'withdrawal_completed', 'withdrawal_failed', 'withdrawal_pending', 'withdraw_pending', 'withdraw_cancelled',
         'credit_sale', 'credit_payment', 'credit_over_limit',
         'merchant_payment_received',
+        'bill_payment_success', 'bill_payment_pending', 'bill_payment_failed',
         'merchant_verified', 'merchant_verification_rejected', 'merchant_verification_submitted', 'merchant_resubmission_required',
-        'kyc_update_required',
+        'kyc_update_required', 'kyc_verification',
+        'security_alert',
+        'subscription_expiring', 'subscription_daily_digest',
         'refund_received', 'refund_pending',
         'system', 'promo', 'terms_update',
     ];
@@ -37,6 +43,7 @@ class NotificationService
         ?string $icon = null,
         ?string $actionUrl = null,
         ?array $data = null,
+        bool $push = true,
     ): AmialNotification {
         if (trim($title) === '' || trim($body) === '') {
             throw new InvalidArgumentException('عنوان الإشعار ونصّه مطلوبان');
@@ -55,10 +62,66 @@ class NotificationService
             'data' => $data,
         ]);
 
-        // AMIAL-WHATSAPP-OTP-001: نسخة واتساب اختيارية من الإشعار (لا تكسر الإرسال أبداً)
-        $this->echoToWhatsapp($user, $type, $title, $body);
+        // كل قناة خارجية تنتظر commit: لا Push ولا واتساب لعملية تراجعت.
+        // push=false مخصص فقط لمسار يملك Push مالي متخصصاً مسبقاً لمنع الازدواج.
+        $this->queueExternalAfterCommit($notification, $user, $push);
 
         return $notification;
+    }
+
+    private function queueExternalAfterCommit(
+        AmialNotification $notification,
+        User $user,
+        bool $push,
+    ): void {
+        $afterCommit = function () use ($notification, $user, $push): void {
+            if ($push) {
+                try {
+                    SendAmialNotificationPushJob::dispatch(
+                        userId: (int) $user->id,
+                        notificationId: (int) $notification->id,
+                        type: (string) $notification->type,
+                        title: (string) $notification->title,
+                        body: (string) $notification->body,
+                        actionUrl: $notification->action_url ? (string) $notification->action_url : null,
+                    );
+                } catch (\Throwable $e) {
+                    app(NotificationDeliveryLogService::class)->failed(
+                        (int) $user->id,
+                        'PUSH_QUEUE_DISPATCH_FAILED',
+                        $e->getMessage(),
+                        (string) $notification->type,
+                        null,
+                        null,
+                        1,
+                        true,
+                        (int) $notification->id,
+                    );
+
+                    Log::warning('Amial notification push queue dispatch failed', [
+                        'user_id' => $user->id,
+                        'notification_id' => $notification->id,
+                        'type' => $notification->type,
+                        'error' => mb_substr($e->getMessage(), 0, 200),
+                    ]);
+                }
+            }
+
+            // AMIAL-WHATSAPP-OTP-001: القناة الثانوية أيضاً بعد commit.
+            $this->echoToWhatsapp(
+                $user,
+                (string) $notification->type,
+                (string) $notification->title,
+                (string) $notification->body,
+            );
+        };
+
+        try {
+            DB::afterCommit($afterCommit);
+        } catch (\Throwable $e) {
+            // خارج transaction أو في driver قديم: لا نخسر القنوات بسبب hook.
+            $afterCommit();
+        }
     }
 
     /**

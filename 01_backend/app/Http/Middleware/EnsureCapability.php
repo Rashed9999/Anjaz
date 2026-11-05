@@ -104,6 +104,13 @@ class EnsureCapability
                 $r,
             ),
 
+            EntitlementService::COMING_SOON => $this->deny(
+                'CAPABILITY_COMING_SOON',
+                'هذه الخدمة لم تُفعَّل بعد ولا تفتحها ترقية الباقة حالياً',
+                503,
+                $r,
+            ),
+
             default => $this->deny(
                 'PERMISSION_REQUIRED',
                 sprintf(

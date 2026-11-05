@@ -77,7 +77,8 @@
     <div class="row g-3 mb-4">
         @php
             $names = ['database' => 'قاعدة البيانات', 'cache' => 'الكاش', 'queue' => 'الطابور',
-                      'storage' => 'التخزين', 'disk' => 'القرص', 'php' => 'PHP'];
+                      'storage' => 'التخزين', 'disk' => 'القرص', 'php' => 'PHP',
+                      'business_gateway' => 'قناة أميال أعمال'];
         @endphp
         @foreach ($now as $c)
             @php

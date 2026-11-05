@@ -557,3 +557,27 @@ a.portal:hover { background: #eef2fb; transform: translateX(-2px); }
     border: 1px solid var(--border);
 }
 .nav-admin:hover { color: var(--navy) !important; border-color: #c9d5f0; }
+
+/* Keep all navigation links reachable on phones and medium desktop widths. */
+@media (max-width: 1240px) {
+    .site-head .nav-toggle { display: block; }
+    .site-head .nav {
+        display: none;
+        position: absolute;
+        inset-inline: 12px;
+        top: 70px;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        box-shadow: var(--shadow-lg);
+        flex-direction: column;
+        align-items: stretch;
+        padding: 10px;
+        gap: 2px;
+        max-height: calc(100svh - 82px);
+        overflow-y: auto;
+    }
+    .site-head .nav.open { display: flex; }
+    .site-head .nav a { padding: 11px 12px; }
+    .site-head .nav .btn { margin-top: 6px; }
+}

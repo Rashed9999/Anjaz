@@ -37,6 +37,7 @@ class ReceiptNoticeService
         'pay_merchant'            => 'إشعار دفع',
         'pos_payment'             => 'إشعار دفع',
         'qr_payment'              => 'إشعار دفع',
+        'debt_payment'            => 'إشعار سداد دين',
         'bill_payment'            => 'إشعار سداد فاتورة',
         'refund'                  => 'إشعار استرجاع',
         'safe_payment_funded'     => 'إشعار حجز (دفع آمن)',
@@ -63,6 +64,7 @@ class ReceiptNoticeService
         'pay_merchant'            => 'دفع مشتريات',
         'pos_payment'             => 'دفع عبر نقطة بيع',
         'qr_payment'              => 'دفع بمسح رمز',
+        'debt_payment'            => 'سداد دين آجل',
         'bill_payment'            => 'سداد فاتورة',
         'refund'                  => 'استرجاع مبلغ',
         'safe_payment_funded'     => 'حجز مبلغ (دفع آمن)',
@@ -155,6 +157,17 @@ class ReceiptNoticeService
                 $this->money($receipt->amount),
                 $party ?: 'تاجر معتمد',
             ),
+            'debt_payment' => $receipt->direction === 'debit'
+                ? sprintf(
+                    'سداد دين آجل بمبلغ %s لدى %s',
+                    $this->money($receipt->amount),
+                    $party ?: 'التاجر',
+                )
+                : sprintf(
+                    'تحصيل دين آجل بمبلغ %s من %s',
+                    $this->money($receipt->amount),
+                    $party ?: 'العميل',
+                ),
             'bill_payment' => sprintf(
                 'سداد فاتورة %s بمبلغ %s',
                 $meta['provider'] ?? $meta['service'] ?? '',
@@ -183,7 +196,6 @@ class ReceiptNoticeService
         };
 
         $body = trim(preg_replace('/\s+/u', ' ', $body));
-
 
         return $body . ' — عبر تطبيق أميال باي';
     }

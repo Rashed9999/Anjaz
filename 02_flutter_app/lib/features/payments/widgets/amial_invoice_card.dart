@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 /// AMIAL-RECEIPT-SETTINGS-001 — بطاقة الفاتورة الموحّدة (حرارية 58/80مم).
 ///
@@ -18,6 +20,10 @@ class AmialInvoiceCard extends StatelessWidget {
     this.customer,
     this.totalYer,
     this.currencies = const [],
+    this.verificationUrl,
+    this.paidAmount,
+    this.changeAmount,
+    this.balanceDueAmount,
   });
 
   /// إعدادات الفاتورة كما تعود من الخادم (merchant/receipt-settings).
@@ -36,6 +42,10 @@ class AmialInvoiceCard extends StatelessWidget {
   /// AMIAL-MULTI-CURRENCY-001: الإجمالي بالريال + العملات لعرض المكافئ.
   final double? totalYer;
   final List<Map<String, dynamic>> currencies;
+  final String? verificationUrl;
+  final String? paidAmount;
+  final String? changeAmount;
+  final String? balanceDueAmount;
 
   double get _width => (settings['paper_width'] == 58) ? 230 : 300;
   bool _flag(String k, [bool def = true]) => settings[k] == null ? def : settings[k] == true;
@@ -110,6 +120,9 @@ class AmialInvoiceCard extends StatelessWidget {
           const Text('الإجمالي',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black)),
         ]),
+        if (paidAmount != null) _line('receipt_tendered_amount'.tr, paidAmount!),
+        if (changeAmount != null) _line('receipt_change'.tr, changeAmount!),
+        if (balanceDueAmount != null) _line('receipt_balance_due'.tr, balanceDueAmount!),
         if (_equivalents().isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -128,6 +141,22 @@ class AmialInvoiceCard extends StatelessWidget {
               style: const TextStyle(fontSize: 10, color: Colors.black45)),
         ],
         _dashed(),
+        if (verificationUrl != null && verificationUrl!.isNotEmpty) ...[
+          Text('document_verify_invoice'.tr, textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.black87)),
+          const SizedBox(height: 5),
+          Center(child: QrImageView(
+            data: verificationUrl!,
+            size: 92,
+            padding: EdgeInsets.zero,
+            backgroundColor: Colors.white,
+          )),
+          const SizedBox(height: 3),
+          Text(verificationUrl!, textAlign: TextAlign.center,
+              textDirection: TextDirection.ltr,
+              style: const TextStyle(fontSize: 7.5, color: Colors.black45)),
+          _dashed(),
+        ],
         Text(footer, textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black)),
         const SizedBox(height: 4),

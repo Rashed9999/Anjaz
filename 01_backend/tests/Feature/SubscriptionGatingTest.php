@@ -61,6 +61,42 @@ class SubscriptionGatingTest extends TestCase
         $this->assertNotContains(A::F_BRANCHES, $f);
     }
 
+    /**
+     * @test
+     *
+     * AMIAL-VERTICAL-SCOPE-001 — **والترقيةُ لا تُحوِّل المحطّةَ بقالة.**
+     *
+     * كان هذا الملفُّ يشترط أنّ ترقيةَ **محطّة وقود** تفتح لها
+     * `products` و`inventory` — أي كتالوجَ رفوفٍ وجردَ مخزون. وذاك ما
+     * سأل عنه صاحبُ المشروع: «لماذا تاجرُ وقودٍ لديه أصنافٌ ومخزون؟».
+     *
+     * فالمشتري يدفع ٣٥ ر.س ويأخذ سبعَ قدراتٍ **لا شاشةَ تفتحها له**:
+     * `CashierPosScreen` تردّ حسابَ الوقود إلى `FuelSaleScreen`.
+     *
+     * **والباقةُ تفتح العمقَ في نطاق النشاط** — لا تُخرجه منه.
+     */
+    public function upgrading_a_fuel_station_never_opens_the_dry_goods_catalogue(): void
+    {
+        $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+
+        foreach ([A::PLAN_BUSINESS, A::PLAN_ENTERPRISE] as $plan) {
+            app(SubscriptionService::class)->changePlan($this->merchant, $plan, $admin);
+
+            $f = $this->featuresFromApi();
+
+            foreach ([
+                A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
+                A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
+                A::F_SUPPLIERS, A::F_PURCHASES,
+            ] as $code) {
+                $this->assertNotContains($code, $f,
+                    "**فُتحت «{$code}» لمحطّة وقودٍ بترقيتها إلى «{$plan}»** — "
+                    . 'وهي كتالوجُ رفوفٍ لا يبيع منه شيءٌ في المحطّة. '
+                    . 'والتدقيق: «محطة وقود — لا يجوز أن يرى… كاشير منتجات عام».');
+            }
+        }
+    }
+
     /** @test الأدمن يرقّي الخطة → الميزات تُفتح فوراً في /me/access. */
     public function admin_upgrade_unlocks_features_immediately(): void
     {
@@ -71,12 +107,20 @@ class SubscriptionGatingTest extends TestCase
 
         $f = $this->featuresFromApi();
 
-        // الآن الميزات المدفوعة مفتوحة
+        // ══════════════════════════════════════════════════════════════
+        // الآن الميزاتُ المدفوعةُ مفتوحة — **وفي نطاق نشاطها**.
+        //
+        // AMIAL-VERTICAL-SCOPE-001: كان هنا `F_PRODUCTS` و`F_INVENTORY`،
+        // والحسابُ **محطّةُ وقود**. فكان الملفُّ يشترط أن تفتح الترقيةُ
+        // كتالوجَ رفوفٍ لمن يبيع لتراً من مضخّة — وهو ما سأل عنه صاحبُ
+        // المشروع. فاستُبدلا بعمق **قطاعه** وبالمشترَك الحقيقيّ، وأُفرد
+        // للمنع اختبارٌ صريحٌ أدناه لئلّا يُقرأ الحذفُ تخفيفاً.
+        // ══════════════════════════════════════════════════════════════
         $this->assertContains(A::F_FUEL_CARDS, $f);
         $this->assertContains(A::F_FUEL_VARIANCE, $f);
-        $this->assertContains(A::F_PRODUCTS, $f);
-        $this->assertContains(A::F_INVENTORY, $f);
+        $this->assertContains(A::F_FUEL_COMPANIES, $f);
         $this->assertContains(A::F_EMPLOYEES, $f);
+        $this->assertContains(A::F_PROFIT_REPORTS, $f);
         // وأساسيات الوقود ما زالت متاحة
         $this->assertContains(A::F_FUEL_POS, $f);
     }

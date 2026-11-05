@@ -2,17 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/access/screens/home_dispatcher_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_dashboard_screen.dart';
 import 'package:amial_pay/features/home/screens/nav_bar_screen.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.7)
 ///
 /// RoleRouter — يوجّه المستخدم للشاشة المناسبة حسب دوره بعد تسجيل الدخول.
 ///
-/// AMIAL-SECTOR-ROUTING: التاجر يمرّ عبر HomeDispatcher الذي يقرأ نوع نشاطه
-/// من الخادم (me/access) ويفتح لوحة قطاعه: محطة الوقود / الصيدلية / الجملة /
-/// البيع السريع (بائع السمك والبسطات) — ومن لا قطاعَ خاصاً له تفتح له لوحة
-/// التاجر العامة. (كان يذهب الجميع للوحة العامة متجاوزاً الموزّع.)
+/// AMIAL-MERCHANT-WEB-ONLY-001: التاجر يمرّ عبر HomeDispatcher لكي يميّز
+/// مالك المنشأة من موظف نقطة البيع. المالك يُحال إلى بوابة الويب، وموظف POS
+/// وحده يبقى في التطبيق؛ فلا يتسرب رصيد المالك أو إعدادات منشأته إلى جهاز بيع.
 ///
 /// AMIAL-WEB-ONLY-PORTALS-001: `agent` و`admin` لم تعد لهما لوحاتٌ في
 /// التطبيق — بوّابتاهما على المتصفّح (`/agent/login` و`/admin/auth/login`).
@@ -25,7 +23,7 @@ class RoleRouter {
       case 'merchant':
       case 'pos':
         Get.offAll(() => const HomeDispatcherScreen(
-              userHomeFallback: MerchantDashboardScreen(),
+              userHomeFallback: WebPortalNoticeScreen(role: 'merchant'),
             ));
         break;
       case 'agent':
@@ -43,7 +41,7 @@ class RoleRouter {
   static Widget homeForRole(String role) {
     return switch (role) {
       'merchant' || 'pos' => const HomeDispatcherScreen(
-          userHomeFallback: MerchantDashboardScreen(),
+          userHomeFallback: WebPortalNoticeScreen(role: 'merchant'),
         ),
       'agent' || 'admin' => WebPortalNoticeScreen(role: role),
       _ => const NavBarScreen(),

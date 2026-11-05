@@ -8,6 +8,7 @@ use App\Models\BillProvider;
 use App\Models\BillService;
 use App\Models\BillServiceProduct;
 use App\Services\BillPayService;
+use App\Services\MoneyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -25,7 +26,7 @@ class BillPayController extends Controller
     public function listProviders(Request $request): JsonResponse
     {
         $providers = BillProvider::where('is_active', true)
-            ->where('zone_code', 'SOUTH')
+            ->where('zone_code', $request->user()?->zone_code ?: 'SOUTH')
             ->with(['services' => fn($q) => $q->where('is_active', true)])
             ->get();
 
@@ -64,15 +65,15 @@ class BillPayController extends Controller
         $product = $request->input('product_id') ? BillServiceProduct::find($request->input('product_id')) : null;
         $provider = $service->provider;
 
-        if ($product && $product->amount_type === 'fixed' && (string)$product->fixed_amount !== (string)$request->input('amount')) {
+        if ($product && $product->amount_type === 'fixed' && MoneyService::compare((string) $product->fixed_amount, (string) $request->input('amount')) !== 0) {
             return $this->error('AMOUNT_MISMATCH', 'المبلغ لا يطابق سعر الخدمة الثابت', 422);
         }
         if ($product && $product->amount_type === 'variable') {
-            $amt = (float)$request->input('amount');
-            if ($product->min_amount && $amt < (float)$product->min_amount) {
+            $amt = (string) $request->input('amount');
+            if ($product->min_amount && MoneyService::compare($amt, (string) $product->min_amount) < 0) {
                 return $this->error('AMOUNT_TOO_LOW', 'المبلغ أقلّ من الحدّ الأدنى', 422);
             }
-            if ($product->max_amount && $amt > (float)$product->max_amount) {
+            if ($product->max_amount && MoneyService::compare($amt, (string) $product->max_amount) > 0) {
                 return $this->error('AMOUNT_TOO_HIGH', 'المبلغ أعلى من الحدّ الأقصى', 422);
             }
         }
@@ -86,6 +87,7 @@ class BillPayController extends Controller
                 subscriberAccount: $request->input('subscriber_account'),
                 amount: (string)$request->input('amount'),
                 subscriberExtra: $request->input('subscriber_extra', []),
+                idempotencyKey: $request->attributes->get('amial.idempotency_key'),
             );
         } catch (\App\Exceptions\InsufficientBalanceException $e) {
             return new JsonResponse($e->toApiArray(), 402);
@@ -100,7 +102,7 @@ class BillPayController extends Controller
             default => 'BILL_PAY_UNKNOWN',
         };
 
-        return $this->ok(['order' => $order], $code, $order->provider_message ?? 'Order processed');
+        return $this->ok(['order' => $this->customerOrder($order)], $code, $order->provider_message ?? 'Order processed');
     }
 
     public function showOrder(Request $request, string $ulid): JsonResponse
@@ -111,7 +113,7 @@ class BillPayController extends Controller
 
         if (!$order) return $this->error('NOT_FOUND', 'الطلب غير موجود', 404);
 
-        return $this->ok(['order' => $order]);
+        return $this->ok(['order' => $this->customerOrder($order)]);
     }
 
     public function listOrders(Request $request): JsonResponse
@@ -126,8 +128,36 @@ class BillPayController extends Controller
                 'per_page' => $orders->perPage(),
                 'current_page' => $orders->currentPage(),
             ],
-            'items' => $orders->items(),
+            'items' => collect($orders->items())
+                ->map(fn (BillPaymentOrder $order) => $this->customerOrder($order))
+                ->values()
+                ->all(),
         ]);
+    }
+
+    /**
+     * عقد العميل متعمّد وصغير. لا نسرّب idempotency_key أو correlation_id
+     * أو subscriber_extra أو إعدادات الرسوم الداخلية لمجرد أن Eloquent
+     * يستطيع تحويل النموذج كاملاً إلى JSON.
+     *
+     * @return array<string,mixed>
+     */
+    private function customerOrder(BillPaymentOrder $order): array
+    {
+        return [
+            'id' => (int) $order->id,
+            'order_ulid' => (string) $order->order_ulid,
+            'user_id' => (int) $order->user_id,
+            'subscriber_account' => (string) $order->subscriber_account,
+            'amount' => (string) $order->amount,
+            'fee' => (string) $order->fee,
+            'total_debited' => (string) $order->total_debited,
+            'status' => (string) $order->status,
+            'provider_reference' => $order->provider_reference,
+            'provider_message' => $order->provider_message,
+            'completed_at' => $order->completed_at?->toIso8601String(),
+            'created_at' => $order->created_at?->toIso8601String(),
+        ];
     }
 
     // Helpers

@@ -203,6 +203,21 @@ final class FeeOperationRegistry
             ),
 
             new FeeOperation(
+                code: 'SUPPLIER_PAYMENT',
+                labelAr: 'سداد مورد من محفظة المنشأة',
+                labelEn: 'Supplier wallet payment',
+                category: 'merchant',
+                actors: ['merchant'],
+                bearers: ['merchant'],
+                agentCommission: false,
+                zoneScoped: true,
+                consumers: [
+                    'app/Http/Controllers/Api/V1/Amial/SupplierController.php',
+                ],
+                owner: 'App\\Http\\Controllers\\Api\\V1\\Amial\\SupplierController::walletPayment',
+            ),
+
+            new FeeOperation(
                 code: 'SAFE_PAYMENT',
                 labelAr: 'الدفع الآمن (وسيط)',
                 labelEn: 'Escrow payment',
@@ -251,12 +266,17 @@ final class FeeOperationRegistry
                 bearers: ['sender'],
                 agentCommission: false,
                 zoneScoped: true,
-                consumers: [],
+                // AMIAL-FEE-BILLPAY-001 — **القرارُ اتُّخذ: فوق رسم المزوّد.**
+                //
+                // كان مكتوباً هنا «قرارٌ ينتظر». وقاله صاحبُ المشروع
+                // صراحةً: **رسمُ المنصّة**. فرسمُ المزوّد تكلفةٌ تمرّ إليه،
+                // ورسمُ المنصّة أجرُ الخدمة — وجعلُ الثاني بدلَ الأوّل
+                // يجعل المنصّةَ تدفع تكلفةَ المزوّد من جيبها.
+                //
+                // **وحتّى تُضبَط نسخةٌ يبقى صفراً** ويُرفَع عطلُ «تسعيرٌ
+                // مفقود» — فالسلوكُ اليومَ لا يتغيّر بحرف.
+                consumers: ['app/Services/BillPayService.php'],
                 owner: 'App\\Services\\BillPayService',
-                notWiredReason: 'رسمُ الفواتير يُحسب اليوم من عمودَي '
-                    . '`bill_service_products.fee_amount/fee_percent` في `BillPayService`. '
-                    . 'فمن يضبط مخطّطاً هنا لا يتغيّر شيء. **وقرارٌ ينتظر**: أهو رسمُ '
-                    . 'المنصّة فوق رسم المزوّد أم بدله؟ لا يُخترع جوابُه في شيفرة.',
             ),
 
             new FeeOperation(

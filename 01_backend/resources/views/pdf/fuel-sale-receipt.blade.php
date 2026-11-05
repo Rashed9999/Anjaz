@@ -8,6 +8,7 @@
         body { font-family: DejaVu Sans, sans-serif; font-size: 12px; color: #1A1A1A; }
         .header { text-align: center; padding-bottom: 12px; border-bottom: 2px solid #053391; }
         .station-name { color: #053391; font-size: 20px; font-weight: bold; }
+        .merchant-logo { max-width: 92px; max-height: 58px; object-fit: contain; margin-bottom: 6px; }
         .station-info { color: #5F6B7C; font-size: 11px; margin-top: 4px; }
 
         .title-band {
@@ -69,6 +70,7 @@
 <body>
 
 <div class="header">
+    @if(!empty($merchantLogoData))<img class="merchant-logo" src="{{ $merchantLogoData }}" alt="شعار المحطة">@endif
     <div class="station-name">{{ $station->station_name }}</div>
     @if($station->city || $station->address)
     <div class="station-info">
@@ -83,12 +85,12 @@
 
 <div class="title-band">إيصال بيع وقود</div>
 
-<div class="ulid">#{{ substr($sale->sale_ulid, -12) }}</div>
+<div class="ulid">{{ $sale->invoice_number ?: $sale->sale_ulid }}</div>
 
 <table class="info-table">
     <tr>
         <td class="label">التاريخ</td>
-        <td class="value">{{ $sale->created_at->format('Y-m-d H:i') }}</td>
+        <td class="value">{{ $sale->created_at->copy()->setTimezone('Asia/Riyadh')->format('Y-m-d H:i') }}</td>
     </tr>
     <tr>
         <td class="label">المضخّة</td>
@@ -158,8 +160,13 @@
 
 <div class="footer">
     <div>شكراً لزيارتكم</div>
-    <div class="verification-code">{{ strtoupper(substr($sale->sale_ulid, -8)) }}</div>
-    <div style="font-size:9px; margin-top:4px">رمز التحقّق</div>
+    {{-- AMIAL-DOC-VERIFY-001 — **الرمزُ يصير رابطاً يُقرأ.**
+         كان يُطبَع الرمزُ وحدَه تحت لافتة «رمز التحقّق» — **ولا مُتحقِّقَ
+         يقبله ولا موضعَ يُكتب فيه**. فمن جرّبه قرأ سندَه الصحيحَ مزوَّراً. --}}
+    @if(!empty($qrDataUri))<img class="verification-qr" src="{{ $qrDataUri }}" alt="QR تحقق">@endif
+    <div style="font-size:9px; margin-top:4px">تحقق من أصالة السند</div>
+    <div class="verification-code">{{ $sale->sale_ulid }}</div>
+    <div style="font-size:8px; margin-top:2px" dir="ltr">{{ $verificationUrl }}</div>
     <div class="amial-brand">Amial Pay © {{ now()->year }}</div>
 </div>
 

@@ -59,15 +59,45 @@ void main() {
       }
     });
 
-    test('أيقونة السبلاش مربّعة — النظام يقصّها في دائرة', () {
-      // لوحة غير مربّعة تُقصّ بغير ما نتوقّع، فيبدو الشعار منزاحاً.
+    // ══════════════════════════════════════════════════════════════════
+    // **الأصلُ صورةٌ قبل أن يكون مربّعاً.**
+    //
+    // قِيس فوُجد ثلاثةٌ من الخمسة **ليست PNG إطلاقاً**: لا توقيعَ في
+    // أوّلها، وبايتاتٌ عشوائيّةٌ محلَّها — كتبها `1f44499` («fix: unify
+    // merchant financial views across verticals»)، وهو التزامٌ عن
+    // شاشاتٍ ماليّةٍ لا عن أصولٍ رسوميّة. وكتب الغثاءَ نفسَه في
+    // `routes/api/amial.php` معه.
+    //
+    // **وكان الحارسُ يقرأ البايتات ١٦..٢٣ من غيرِ صورةٍ فيُخرج
+    // «ليست مربّعة»** — والرقمُ ٣٦٦٠٢٨٦٤٧٢×٢٨٠٨٧٦٥٢٨٨. فيُرسل من
+    // يصدّقه ليقصّ صورةً سليمةً لا وجودَ لها. **وحارسٌ يصيب في المنع
+    // ويخطئ في السبب يُنتج إصلاحاً في المكان الخطأ.** (القاعدة الثالثة.)
+    // ══════════════════════════════════════════════════════════════════
+    test('أيقونة السبلاش صورةٌ أصلاً، ثمّ مربّعة', () {
+      const pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
       for (final d in densities) {
-        final bytes = File('$resDir/drawable-$d/splash_icon.png').readAsBytesSync();
-        // ترويسة PNG: العرض والارتفاع في البايتات 16..23
+        final bytes =
+            File('$resDir/drawable-$d/splash_icon.png').readAsBytesSync();
+
+        expect(bytes.length, greaterThan(pngSignature.length),
+            reason: 'drawable-$d/splash_icon.png فارغٌ أو مبتور.');
+
+        expect(bytes.sublist(0, 8), pngSignature,
+            reason: '**drawable-$d/splash_icon.png ليس PNG** — لا توقيعَ '
+                'في أوّله. والامتدادُ وحدَه لا يجعل الملفَّ صورةً: '
+                'يُبنى التطبيقُ وتُعرض شاشةُ إقلاعٍ بلا شعار، ولا يقول '
+                'ذلك مُصرِّفٌ ولا محلِّل.');
+
+        // ترويسة PNG: العرض والارتفاع في البايتات 16..23 — **ولا تُقرأ
+        // إلّا بعد ثبوت التوقيع**، وإلّا فُسِّر غثاءٌ على أنّه مقاس.
         final width = bytes.buffer.asByteData().getUint32(16);
         final height = bytes.buffer.asByteData().getUint32(20);
 
-        expect(width, height, reason: 'drawable-$d/splash_icon.png ليست مربّعة');
+        // لوحة غير مربّعة تُقصّ بغير ما نتوقّع، فيبدو الشعار منزاحاً.
+        expect(width, height,
+            reason: 'drawable-$d/splash_icon.png ليست مربّعة '
+                '($width×$height)');
       }
     });
   });

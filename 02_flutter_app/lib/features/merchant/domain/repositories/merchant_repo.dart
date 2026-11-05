@@ -7,12 +7,47 @@ class MerchantRepo extends GetxService {
   final ApiClient apiClient;
   MerchantRepo({required this.apiClient});
 
-  // التاجر يستخدم customer routes (لأن Cash6 يعتبره user مع type=3)
+  /// مسارات 6cash القديمة — **وليست كلُّها مفتوحةً للتاجر**، انظر أدناه.
   static const String _customerBase = '/api/v1/customer';
 
-  // ====== Profile ======
-  Future<Response> getProfile() => apiClient.getData('$_customerBase/get-customer');
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-MERCHANT-SESSION-001 — **«التاجر يستخدم customer routes» كان
+  // مكتوباً هنا، وقِيس فإذا هو غيرُ صحيح.**
+  //
+  //   GET /api/v1/customer/get-customer      (تاجر) → 403 Access forbidden.
+  //   GET /api/v1/customer/transaction-history (تاجر) → 403 Access forbidden.
+  //
+  // ووسيطُ `customerAuth` يشترط `type == CUSTOMER_TYPE`، والتاجرُ ٣.
+  // **فالنداءان يُردّان لكلّ تاجرٍ منذ كُتبا** — ولا خطأَ في أيّ سجلّ:
+  // `MerchantController` يبتلع الاستثناء، فتُعرَض «لا حركةَ في المحفظة
+  // بعد» على متجرٍ فيه حركات. **وهو غيابٌ يُقرأ صفراً** (القاعدة السابعة).
+  //
+  // فصار المصدرُ مسارَ التاجر: `merchant/ledger` — قيودُ محفظته من
+  // الدفتر نفسِه، وهو مصدرُ الحقيقة الماليّة.
+  // ══════════════════════════════════════════════════════════════════
   Future<Response> dailyStats() => apiClient.getData('/api/v1/amial/merchant/daily-stats');
+
+  /// حركاتُ محفظة المتجر — من دفتر التاجر لا من سجلّ العميل.
+  Future<Response> walletLedger({int page = 1}) =>
+      apiClient.getData('/api/v1/amial/merchant/ledger', query: {'page': '$page'});
+  Future<Response> financialReport({String? from, String? to}) =>
+      apiClient.getData('/api/v1/amial/merchant/financial-report', query: {
+        if (from != null) 'from': from,
+        if (to != null) 'to': to,
+      });
+
+  /// سجل مبيعات نقطة البيع مصدره `merchant_sales`، لا دفتر المحفظة.
+  /// لذلك تظهر المبيعات النقدية والآجلة أيضاً، مع طريقة الدفع ورقم الفاتورة.
+  Future<Response> cashierSales({required String date}) => apiClient.getData(
+        '/api/v1/amial/merchant/cashier/sales',
+        query: {'date': date},
+      );
+
+  /// التفصيل يُقرأ من الخادم قبل فتح الفاتورة؛ لا تعيد الشاشة بناءه محلياً.
+  Future<Response> cashierSale(String saleUlid) => apiClient.getData(
+        '/api/v1/amial/merchant/cashier/sales/$saleUlid',
+      );
+
   Future<Response> updateProfile(Map<String, dynamic> data) =>
       apiClient.putData('$_customerBase/update-profile', data);
   Future<Response> logout() => apiClient.postData('$_customerBase/logout', {});
@@ -46,9 +81,6 @@ class MerchantRepo extends GetxService {
     );
   }
 
-  // ====== Transaction history (filtered to incoming) ======
-  Future<Response> transactionHistory({int page = 1}) =>
-      apiClient.getData('$_customerBase/transaction-history?page=$page');
 
   // ====== Refund (يستخدم AMIAL safe-payment إذا متاح أو send-money عكسي) ======
   Future<Response> processRefund({
@@ -71,20 +103,20 @@ class MerchantRepo extends GetxService {
   Future<Response> ledger({int page = 1}) =>
       apiClient.getData('/api/v1/amial/merchant/ledger?page=$page');
 
-  // ====== Withdraw (التاجر يسحب إلى بنكه) ======
-  Future<Response> withdraw({
-    required String amount,
-    required int withdrawalMethodId,
-    Map<String, dynamic>? methodFields,
-  }) {
-    return apiClient.postData(
-      '$_customerBase/withdraw',
-      {
+  // ====== Merchant payout ======
+  // ليس /customer/withdraw: ذلك باب العميل التاريخي ويختلف عن مستحقات
+  // مالك المنشأة ومراحل اعتمادها وتسليمها.
+  Future<Response> payoutRequests() =>
+      apiClient.getData('/api/v1/amial/merchant/payouts');
+
+  Future<Response> requestPayout({required String amount, String? note}) =>
+      apiClient.postData('/api/v1/amial/merchant/payouts', {
         'amount': amount,
-        'withdrawal_method_id': withdrawalMethodId,
-        ...?methodFields,
-      },
-      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('merchant_withdraw'),
-    );
-  }
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }, idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('merchant_payout'));
+
+  Future<Response> confirmPayoutHandover(String payoutUlid, {String? note}) =>
+      apiClient.postData('/api/v1/amial/merchant/payouts/$payoutUlid/confirm-handover', {
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }, idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('merchant_payout_handover'));
 }

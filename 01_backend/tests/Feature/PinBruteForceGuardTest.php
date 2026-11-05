@@ -143,17 +143,17 @@ class PinBruteForceGuardTest extends TestCase
         // **وحاجزٌ يشلّ عملاً سليماً يُطفَأ عند أوّل شكوى** — فيُقاس
         // الموضعُ لا الوجود: نداءٌ واحدٌ فقط، وداخل فرع «لا رمزَ بعد».
         // ══════════════════════════════════════════════════════════════
-        $this->assertSame(1, substr_count($fn, 'Helpers::pin_check'),
-            "{$relPath}: `pin_check` في أكثر من موضعٍ — فأحدُهما يتخطّى القفل");
-
+        // البديل الفعلي الآن: التعيين الأول يتحقق من كلمة المرور مباشرة
+        // تحت شرط عدم وجود transaction_pin، وسائر المحاولات عبر خدمة القفل.
+        $this->assertSame(0, substr_count($fn, 'Helpers::pin_check('),
+            "{$relPath}: مسار التحقق القديم لا يجب أن يتجاوز القفل");
+        $this->assertSame(1, substr_count($fn, 'Hash::check('),
+            "{$relPath}: التعيين الأول وحده يجوز له إثبات كلمة المرور");
         $firstTime = strpos($fn, 'empty($user->transaction_pin)');
-        $legacy = strpos($fn, 'Helpers::pin_check');
-
-        $this->assertNotFalse($firstTime,
-            "{$relPath}: `pin_check` بلا شرطِ «لا رمزَ بعد» — فكلُّ حسابٍ يتخطّى القفل");
-
+        $legacy = strpos($fn, 'Hash::check(');
+        $this->assertNotFalse($firstTime);
         $this->assertGreaterThan($firstTime, $legacy,
-            "{$relPath}: `pin_check` خارجَ فرع التعيين الأوّل — أي على كلّ حساب");
+            "{$relPath}: إثبات كلمة المرور خارج فرع التعيين الأول");
     }
 
     /**

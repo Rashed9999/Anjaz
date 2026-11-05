@@ -19,7 +19,8 @@ use Illuminate\Database\Seeder;
  *   - الاسترجاع وتقسيم الفاتورة والصندوق العائلي: بلا رسم في v1.
  *
  * كل الأرقام placeholders للسوق الجنوبي (SOUTH) — تضبطها الإدارة من لوحة التحكم.
- * يستخدم updateOrCreate حتى لا يكرّر عند إعادة التشغيل.
+ * يضيف النسخ الافتراضية عند غيابها فقط. النسخ النشطة اللاحقة وقرارات الإدارة
+ * لا يجوز أن تعيد البذرة إلغاءها أو إحياء نسخة تاريخية عند كل إقلاع.
  */
 class FeeSchemeSeeder extends Seeder
 {
@@ -30,12 +31,28 @@ class FeeSchemeSeeder extends Seeder
             ['SEND_MONEY',        'تحويل بين الأفراد', 'percent_plus_fixed', '0.5000', '0',    null,  '500', '0',      '0', 'customer', 'sender'],
             ['CASH_OUT',          'سحب نقدي',          'percent_plus_fixed', '0.7500', '0',    '50',  null,  '40.0000','0', 'customer', 'sender'],
             ['CASH_IN',           'إيداع نقدي',        'fixed',              '0',      '0',    null,  null,  '0',      '0', 'customer', 'sender'],
-            // AMIAL-FEE-BEARER-001: التاجر يستلم المبلغ كاملاً — الرسم يتحمّله
-            // الدافع (bearer=sender) لا التاجر. (كان bearer=merchant فيُخصم من
-            // التاجر، وهو ما لا يقبله السوق اليمني.) الإدارة تضبط النسبة/المتحمّل
-            // من لوحة الرسوم.
-            ['MERCHANT_QR',       'دفع تاجر QR',       'percent',            '1.0000', '0',    null,  null,  '0',      '0', 'merchant', 'sender'],
-            ['MERCHANT_POS',      'دفع تاجر POS',      'percent',            '1.0000', '0',    null,  null,  '0',      '0', 'merchant', 'sender'],
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-FEE-MERCHANT-FREE-001 — **قبولُ الدفع مجّانيٌّ عمداً.**
+            //
+            // **قرارُ صاحب المشروع، ٢٩ أغسطس ٢٠٢٦، بنصّه:**
+            // «لا ناخذ رسوم على التاجر.. فقط الاشتراكات».
+            //
+            // فدخلُ المنصّة من التاجر **اشتراكُ الباقة وحدَه**، ولا
+            // استقطاعَ على البيعة. وكان هذا السطرُ يبذر ١٪.
+            //
+            // **وصفرٌ صريحٌ لا حذفُ النسخة.** فالحذفُ يجعلها
+            // `missing_config`، و`FeeService` ترفع عندها عطلاً «تسعيرٌ
+            // مفقود» في مركز الأعطال **مع كلّ بيعة** — إنذارٌ كاذبٌ
+            // يُعوّد القارئَ تجاهلَ اللافتة يومَ تصدق. والصفرُ الصريحُ
+            // يُقرأ `explicit_zero`: قرارٌ له سببٌ وسجلّ.
+            // (‏وهذا نصُّ القاعدة السابعة: «غير معروف» ليس صفراً.)
+            //
+            // **ورسومُ العميل باقيةٌ ولم تُمسّ** — التحويلُ والسحبُ
+            // والإيداعُ عبر الوكيل اقتصادُ شبكةِ الوكلاء، وهو غيرُ ما
+            // قيل فيه القرار.
+            // ══════════════════════════════════════════════════════════
+            ['MERCHANT_QR',       'دفع تاجر QR',       'percent',            '0',      '0',    null,  null,  '0',      '0', 'merchant', 'sender'],
+            ['MERCHANT_POS',      'دفع تاجر POS',      'percent',            '0',      '0',    null,  null,  '0',      '0', 'merchant', 'sender'],
             ['SAFE_PAYMENT',      'الدفع الآمن',       'percent',            '1.5000', '0',    '100', null,  '0',      '0', 'customer', 'sender'],
             ['BILL_PAY',          'تسديد فاتورة',      'fixed',              '0',      '10',   null,  null,  '0',      '0', 'customer', 'sender'],
             ['SPLIT_BILL',        'تقسيم فاتورة',      'percent',            '0',      '0',    null,  null,  '0',      '0', 'customer', 'sender'],
@@ -46,8 +63,15 @@ class FeeSchemeSeeder extends Seeder
         foreach ($defaults as $row) {
             [$code, $label, $type, $percent, $fixed, $min, $max, $agentP, $agentF, $appliesTo, $bearer] = $row;
 
-            FeeScheme::updateOrCreate(
-                ['code' => $code, 'zone_code' => 'SOUTH', 'applies_to' => $appliesTo, 'version' => 1],
+            // أي نسخة عامة سابقة تعني أن التسعير دخل دورة الإدارة؛ لا نعيد
+            // نسخة 1 ولا نطمس النسخة النشطة حتى لو غابت النسخة الأولى.
+            if (FeeScheme::where('code', $code)->where('zone_code', 'SOUTH')
+                ->where('applies_to', $appliesTo)->whereNull('plan')->exists()) {
+                continue;
+            }
+
+            FeeScheme::firstOrCreate(
+                ['code' => $code, 'zone_code' => 'SOUTH', 'applies_to' => $appliesTo, 'plan' => null, 'version' => 1],
                 [
                     'label' => $label,
                     'fee_type' => $type,

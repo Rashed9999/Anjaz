@@ -37,9 +37,19 @@ class AccountRecoveryController extends Controller
             $query->where('status', $status);
         }
 
+        // AMIAL-SUPPORT-RECOVERY-001 — زر «متابعة استعادة الحساب» من ملف
+        // العميل يجب أن يفتح طلبات هذا العميل لا قائمة الاستعادة كلها.
+        $userId = (int) $request->query('user_id', 0);
+        if ($userId > 0) {
+            $query->where('user_id', $userId);
+        }
+
         $requests = $query->paginate(20)->withQueryString();
 
-        return view('admin-views.amial.recovery.index', ['requests' => $requests]);
+        return view('admin-views.amial.recovery.index', [
+            'requests' => $requests,
+            'filteredUserId' => $userId > 0 ? $userId : null,
+        ]);
     }
 
     public function webShow(string $ulid)

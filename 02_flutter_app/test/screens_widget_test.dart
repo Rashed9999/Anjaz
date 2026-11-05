@@ -76,8 +76,8 @@ void main() {
     testWidgets('لوحة التاجر', (t) async {
       registerAccess();
       final repo = _MockMerchantRepo();
-      when(() => repo.getProfile())
-          .thenAnswer((_) async => const Response(statusCode: 503, statusText: 'x'));
+      // AMIAL-MERCHANT-SESSION-001 — `getProfile` نُزعت: كانت تنادي
+      // `/api/v1/customer/get-customer` وهي تردّ ٤٠٣ لكلّ تاجر.
       when(() => repo.dailyStats())
           .thenAnswer((_) async => const Response(statusCode: 503, statusText: 'x'));
       Get.put<MerchantController>(MerchantController(repo: repo));

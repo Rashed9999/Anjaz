@@ -77,16 +77,36 @@ class X {
       if (ok) Navigator.pop(sheetContext);
     });
   }
+
+  Future<void> pick() async {
+    await showModalBottomSheet(
+      context: context,
+      builder: (sheet) => ListTile(
+        onTap: () { select(); Navigator.pop(sheet); },
+      ),
+    );
+  }
+
+  Future<void> real() async {
+    final ok = await service.save();
+    Navigator.pop(sheetContext);
+  }
 }
 ''');
 
     final found = _offendersIn(tmp);
     tmp.deleteSync();
 
-    expect(found.length, 1,
-        reason: 'الماسحُ إمّا فوّت العطلَ وإمّا أنذر على الزرّ المتزامن: $found');
+    // ثلاثةُ أشكالٍ سليمة (سهمٌ · محروسٌ بـmounted · ردُّ نداءٍ متزامنٌ
+    // من سطرٍ واحد) وشكلان خطران — ويُشترط الموضعُ لا العدد وحدَه.
+    expect(found.length, 2,
+        reason: 'الماسحُ إمّا فوّت عطلاً وإمّا أنذر على إغلاقٍ متزامن: $found');
     expect(found.first, contains(':7'),
         reason: 'أُنذر على السطر الخطأ — والزرُّ المتزامن في الثالث');
+    expect(found.last, contains(':22'),
+        reason: 'لم يُمسك الإغلاقُ بعد await في دالّةٍ منتظِرة');
+    expect(found.join(), isNot(contains(':15')),
+        reason: 'أُنذر على ردِّ نداءٍ متزامنٍ من سطرٍ واحد — وهو ما أُصلح');
   });
 }
 
@@ -149,8 +169,25 @@ List<String> _offendersIn(File f) {
     if (m != null) {
       final v = m.group(1)!;
 
-      // **وإغلاقُ سهمٍ لا انتظارَ قبله في التعبير نفسِه.**
-      final isArrow = line.contains('=>');
+      // ══════════════════════════════════════════════════════════
+      // **وإغلاقٌ داخل ردِّ نداءٍ متزامنٍ على السطر نفسِه ليس خطراً.**
+      //
+      // كان يُشترط `{` في **آخر السطر** لتسجيل نطاق، فردُّ نداءٍ من
+      // سطرٍ واحد — `onTap: () { …; Navigator.pop(sheet); }` — لا
+      // يُسجَّل، فيُنسَب إغلاقُه إلى الدالّة المحيطة المنتظِرة ويُنذَر
+      // عليه. **وأنذر على شاشتين سليمتين من عمل كودكس بعد دمجه.**
+      //
+      // فالعبرةُ بما قبل الإغلاق في سطره: إن فُتح ردُّ نداءٍ قبله ولا
+      // `await` بينهما، فالإغلاقُ متزامنٌ مهما انتظرت الدالّةُ حوله.
+      // (وهذه ثالثةُ كذبةٍ لهذا الماسح، وكلُّها من الصنف نفسِه: نطاقٌ
+      // لا يراه فيُنسَب الفعلُ إلى نطاقٍ أوسع.)
+      // ══════════════════════════════════════════════════════════
+      final before = line.substring(0, m.start);
+      final opensSyncHere = (RegExp(r'\)\s*\{').hasMatch(before) ||
+              before.contains('=>')) &&
+          !before.contains('await ');
+
+      final isArrow = line.contains('=>') || opensSyncHere;
 
       final inner = stack.isEmpty ? null : stack.last;
       final risky = inner != null &&

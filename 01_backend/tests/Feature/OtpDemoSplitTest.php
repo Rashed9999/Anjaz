@@ -31,6 +31,19 @@ class OtpDemoSplitTest extends TestCase
     private const DEMO_PHONE = '967777100001';
     private const REAL_PHONE = '967739555444';
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // هذا الصنف يختبر مسار العرض صراحةً؛ لا يعتمد على أي قيمة افتراضية
+        // قابلة للاستخدام في الشيفرة العامة.
+        config([
+            'amial.otp.demo_code' => '123456',
+            'amial.otp.demo_numbers' => [self::DEMO_PHONE],
+            'amial.otp.pilot_customer_phone_enabled' => false,
+        ]);
+    }
+
     private function policy(): OtpPolicy
     {
         return app(OtpPolicy::class);

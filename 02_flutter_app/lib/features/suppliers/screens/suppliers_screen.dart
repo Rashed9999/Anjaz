@@ -26,7 +26,8 @@ class _SuppliersScreenState extends State<SuppliersScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    // AMIAL-DAILY-MOVEMENT-001 — تبويبٌ ثالث: مرتجعاتُ الشراء.
+    _tabs = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => c.loadAll());
   }
 
@@ -113,6 +114,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
           tabs: const [
             Tab(text: 'الموردون'),
             Tab(text: 'أوامر الشراء'),
+            Tab(text: 'المرتجعات'),
           ],
         ),
       ),
@@ -121,6 +123,15 @@ class _SuppliersScreenState extends State<SuppliersScreen>
         backgroundColor: AmialColors.primary,
         foregroundColor: Colors.white,
         onPressed: () async {
+          // **ولا يُنشأ مرتجعٌ من فراغ**: هو ردُّ بضاعةٍ استُلمت، وبابُه
+          // شاشةُ الاستلام نفسُها. وزرُّ «إضافة» هنا يفتح أمراً بلا سياق.
+          if (_tabs.index == 2) {
+            Get.snackbar('من أين يُسجَّل المرتجع؟',
+                'افتح أمر الشراء الذي استُلمت منه البضاعة، ثم «ردّ بضاعة إلى المورد».',
+                backgroundColor: AmialColors.warningSurface,
+                colorText: AmialColors.warning);
+            return;
+          }
           if (_tabs.index == 0) {
             final saved =
                 await Get.to<bool>(() => const SupplierEditorScreen());
@@ -132,7 +143,11 @@ class _SuppliersScreenState extends State<SuppliersScreen>
           }
         },
         icon: const Icon(Icons.add),
-        label: Text(_tabs.index == 0 ? 'إضافة مورد' : 'أمر شراء'),
+        label: Text(switch (_tabs.index) {
+          0 => 'إضافة مورد',
+          2 => 'كيف أسجّل مرتجعاً؟',
+          _ => 'أمر شراء',
+        }),
       ),
       body: Obx(() {
         if (c.isLoading.value && c.suppliers.isEmpty && c.orders.isEmpty) {
@@ -166,7 +181,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
           Expanded(
             child: TabBarView(
               controller: _tabs,
-              children: [_suppliersTab(), _ordersTab()],
+              children: [_suppliersTab(), _ordersTab(), _returnsTab()],
             ),
           ),
         ]);
@@ -434,5 +449,186 @@ class _SuppliersScreenState extends State<SuppliersScreen>
         },
       ),
     );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  AMIAL-DAILY-MOVEMENT-001 — مرتجعاتُ الشراء
+  // ══════════════════════════════════════════════════════════════════
+
+  /// **الطلبُ يُنشأ ثمّ يُعتمَد — وهنا موضعُ الاعتماد.**
+  ///
+  /// وبلا هذه القائمة يبقى المرتجعُ `pending` أبداً: البضاعةُ لا تخرج
+  /// والدينُ لا ينقص، **ولا رسالةَ تقول لماذا**. (القاعدة الثانية عشرة:
+  /// مسارٌ بلا شاشةٍ ليس مبنيّاً.)
+  Widget _returnsTab() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: c.prList(),
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Center(
+              child: CircularProgressIndicator(color: AmialColors.primary));
+        }
+
+        final rows = snap.data ?? const <Map<String, dynamic>>[];
+        if (rows.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                  'لا مرتجعات شراء.\n\nتُسجَّل من أمر الشراء الذي استُلمت منه '
+                  'البضاعة: افتحه ثم «ردّ بضاعة إلى المورد».',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AmialColors.textMuted)),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
+          itemCount: rows.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (_, i) => _returnCard(rows[i]),
+        );
+      },
+    );
+  }
+
+  Widget _returnCard(Map<String, dynamic> r) {
+    final status = '${r['status']}';
+    final pending = status == 'pending';
+
+    final (label, fg, bg) = switch (status) {
+      'pending' => ('بانتظار الاعتماد', AmialColors.yellowDark,
+          AmialColors.warningSurface),
+      'approved' => ('معتمد', AmialColors.success, AmialColors.successSurface),
+      'rejected' => ('مرفوض', AmialColors.red, AmialColors.dangerSurface),
+      _ => (status, AmialColors.textMuted, const Color(0xFFEFEFEF)),
+    };
+
+    final cash = r['settlement_type'] == 'cash_refund';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AmialColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: Text('${r['supplier']?['name'] ?? 'مورد'}',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 14)),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+                color: bg, borderRadius: BorderRadius.circular(20)),
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w800, color: fg)),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Text(AmialMoney.yer(r['total_amount']),
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  color: AmialColors.red)),
+          const SizedBox(width: 10),
+          // **ووجهُ المال يُقرأ على البطاقة** — فمن يعتمد يعرف ما سيقع.
+          Text(cash ? 'استرداد نقدي' : 'خصم من الدين',
+              style: const TextStyle(
+                  fontSize: 11, color: AmialColors.textSecondary)),
+        ]),
+        if ('${r['reason'] ?? ''}'.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text('${r['reason']}',
+              style: const TextStyle(
+                  fontSize: 11, color: AmialColors.textMuted)),
+        ],
+        Text('${(r['items'] as List?)?.length ?? 0} صنف',
+            style: const TextStyle(
+                fontSize: 11, color: AmialColors.textMuted)),
+        if (pending) ...[
+          const Divider(height: 20),
+          Row(children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: () async {
+                  final ok = await c.prApprove(r['id'] as int);
+                  if (!mounted) return;
+                  if (ok) {
+                    setState(() {});
+                    Get.snackbar('اعتُمد المرتجع',
+                        'خرجت البضاعة من المخزون وتحرّك حساب المورد',
+                        backgroundColor: AmialColors.successSurface,
+                        colorText: AmialColors.success);
+                  } else {
+                    Get.snackbar('تعذّر الاعتماد', c.lastError.value,
+                        backgroundColor: AmialColors.dangerSurface,
+                        colorText: AmialColors.red);
+                  }
+                },
+                icon: const Icon(Icons.task_alt, size: 16),
+                label: const Text('اعتماد'),
+                style: FilledButton.styleFrom(
+                    backgroundColor: AmialColors.success,
+                    minimumSize: const Size(0, 42)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _rejectDialog(r['id'] as int),
+                icon: const Icon(Icons.close, size: 16),
+                label: const Text('رفض'),
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: AmialColors.red,
+                    side: const BorderSide(color: AmialColors.red),
+                    minimumSize: const Size(0, 42)),
+              ),
+            ),
+          ]),
+        ],
+      ]),
+    );
+  }
+
+  Future<void> _rejectDialog(int id) async {
+    final ctl = TextEditingController();
+
+    final confirmed = await Get.dialog<bool>(AlertDialog(
+      title: const Text('رفض المرتجع'),
+      content: TextField(
+        controller: ctl,
+        maxLines: 2,
+        decoration: const InputDecoration(
+          labelText: 'السبب (5 أحرف على الأقل)',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Get.back(result: false),
+            child: const Text('إلغاء')),
+        FilledButton(onPressed: () => Get.back(result: true),
+            child: const Text('رفض')),
+      ],
+    ));
+
+    if (confirmed != true) return;
+
+    if (ctl.text.trim().length < 5) {
+      Get.snackbar('السبب مطلوب', 'اكتب سبباً واضحاً — يُحفظ مع المرتجع',
+          backgroundColor: AmialColors.dangerSurface,
+          colorText: AmialColors.red);
+      return;
+    }
+
+    final ok = await c.prReject(id, ctl.text.trim());
+    if (!mounted) return;
+    if (ok) setState(() {});
   }
 }

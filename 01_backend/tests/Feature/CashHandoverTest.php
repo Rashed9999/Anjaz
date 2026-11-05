@@ -126,6 +126,20 @@ class CashHandoverTest extends TestCase
         $this->assertNotNull($done['received_at']);
     }
 
+    /** @test المستلِمُ المعيّن وحده يغلق تسليماً موجهاً إليه. */
+    public function another_account_cannot_confirm_a_handover_addressed_to_someone_else(): void
+    {
+        $ops = $this->admin();
+        $intended = $this->agent();
+        $other = $this->agent();
+        $h = $this->svc()->open('platform_to_agent', '80000', null, $intended, $ops);
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('مخصّص لمستلم آخر');
+
+        $this->svc()->confirm($h['handover_ulid'], $other);
+    }
+
     /**
      * @test
      *

@@ -9,6 +9,7 @@ use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\BranchService;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -26,7 +27,10 @@ use Illuminate\Support\Facades\Validator;
  */
 class BranchController extends AmialApiController // AMIAL-FIX-007
 {
-    public function __construct(private readonly BranchService $svc) {}
+    public function __construct(
+        private readonly BranchService $svc,
+        private readonly AuditService $audit,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -90,6 +94,15 @@ class BranchController extends AmialApiController // AMIAL-FIX-007
             return $this->error('INVALID', $e->getMessage(), 422);
         }
 
+        $this->audit->record([
+            'actor_type' => 'merchant', 'actor_user_id' => $merchant->id,
+            'subject_type' => 'merchant', 'subject_id' => (string) $merchant->id,
+            'action' => 'MERCHANT_BRANCH_CREATED', 'decision_code' => 'COMPLETED',
+            'reason' => 'أُنشئ فرع للمنشأة',
+            'context' => ['merchant_user_id' => $merchant->id, 'branch_id' => $branch->id,
+                'branch_name' => $branch->name],
+        ]);
+
         return $this->ok(['branch' => $branch], 'CREATED', 'تمّ إنشاء الفرع');
     }
 
@@ -126,6 +139,14 @@ class BranchController extends AmialApiController // AMIAL-FIX-007
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID', $e->getMessage(), 422);
         }
+        $this->audit->record([
+            'actor_type' => 'merchant', 'actor_user_id' => $merchant->id,
+            'subject_type' => 'merchant', 'subject_id' => (string) $merchant->id,
+            'action' => 'MERCHANT_BRANCH_UPDATED', 'decision_code' => 'COMPLETED',
+            'reason' => 'عُدّلت بيانات الفرع',
+            'context' => ['merchant_user_id' => $merchant->id, 'branch_id' => $branch->id,
+                'branch_name' => $branch->name],
+        ]);
         return $this->ok(['branch' => $branch], 'UPDATED', 'تمّ التحديث');
     }
 
@@ -160,6 +181,14 @@ class BranchController extends AmialApiController // AMIAL-FIX-007
         } catch (\LogicException $e) {
             return $this->error('INVALID_STATE', $e->getMessage(), 422);
         }
+        $this->audit->record([
+            'actor_type' => 'merchant', 'actor_user_id' => $merchant->id,
+            'subject_type' => 'merchant', 'subject_id' => (string) $merchant->id,
+            'action' => 'MERCHANT_BRANCH_DEFAULTED', 'decision_code' => 'COMPLETED',
+            'reason' => 'تغيّر الفرع الافتراضي للمنشأة',
+            'context' => ['merchant_user_id' => $merchant->id, 'branch_id' => $branch->id,
+                'branch_name' => $branch->name],
+        ]);
         return $this->ok(['branch' => $branch], 'DEFAULT_SET', 'تمّ تعيينه افتراضياً');
     }
 

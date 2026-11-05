@@ -60,10 +60,7 @@ class _ChooseLanguageScreenState extends State<ChooseLanguageScreen> {
                       children: [
                         const Align(
                           alignment: Alignment.center,
-                          child: CustomLogoWidget(
-                            height: 120,
-                            width: 120,
-                          ),
+                          child: CustomLogoWidget(height: 104),
                         ),
                         const SizedBox(height: Dimensions.paddingSizeOverLarge,),
                         Padding(

@@ -7,39 +7,26 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * AMIAL-PROD-READINESS-003 — **رسالةُ الإنذار التشغيليّ.**
+ * AMIAL-PROD-READINESS-003/005 — رسالة الإنذار التشغيلي.
  *
- * ══════════════════════════════════════════════════════════════════════
- * **ولمَ صنفٌ لا `Mail::raw()`:**
- *
- * `MailFake::raw()` **دالّةٌ فارغةٌ لا تُسجّل شيئاً** — فقناةٌ مبنيّةٌ بها
- * لا يمكن إثباتُ إرسالها في أيّ اختبار. وقناةُ إنذارٍ لا تُختبَر هي
- * بعينها ما تحاربه هذه الجولة: **يُظنّ أنّها تعمل حتّى الليلة التي
- * تُحتاج فيها.**
- *
- * فصارت `Mailable` — يمسكها `Mail::assertSent()`، ويُقاس وصولُها كما
- * يُقاس كلُّ شيءٍ آخر هنا.
- *
- * **ولا تُرحَّل في طابور** (`Queueable` غيرُ مُنفَّذ عمداً): الطابورُ على
- * قاعدة البيانات، وإنذارُ «القاعدةُ ساقطة» لا يُرسَل عبر القاعدة الساقطة.
- * فيُرسَل في الطلب نفسِه ولو أبطأ.
- *
- * ولا يحمل رقمَ عميلٍ ولا مبلغَ محفظةٍ بعينها — يقول «هناك فرق، افتح
- * اللوحة»، والتفصيلُ خلف الجلسة والصلاحيّة.
+ * تُرسل مباشرةً ولا تُرحّل إلى طابور، لأن إنذار سقوط قاعدة البيانات
+ * لا يجوز أن يعتمد على الطابور نفسه. كما تستخدم القالب التفصيلي ذاته
+ * الذي يستخدمه Resend، حتى لا تصبح قناة SMTP الاحتياطية أقل معلومات.
  */
 class OpsAlertMail extends Mailable
 {
     use Queueable, SerializesModels;
 
+    /** @param array<string,string> $payload */
     public function __construct(
-        public readonly string $alertTitle,
-        public readonly string $body,
+        public readonly array $payload,
     ) {}
 
     public function build(): self
     {
         return $this
-            ->subject('أميال باي — ' . $this->alertTitle)
-            ->text('emails.ops-alert', ['body' => $this->body]);
+            ->subject($this->payload['subject'])
+            ->view('emails.ops-alert-html', $this->payload)
+            ->text('emails.ops-alert', $this->payload);
     }
 }

@@ -277,7 +277,7 @@ class TwoFactorAuthService
      * بناء otpauth:// URI (للـ QR code).
      * الـ Flutter يحوّله إلى QR image.
      */
-    public function buildOtpAuthUri(string $secret, string $accountLabel): string
+    private function buildOtpAuthUri(string $secret, string $accountLabel): string
     {
         $issuer = rawurlencode(self::ISSUER);
         $label = rawurlencode(self::ISSUER . ':' . $accountLabel);

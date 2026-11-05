@@ -14,6 +14,7 @@ class MerchantUserRole extends Model
     protected $fillable = [
         'merchant_user_id', 'user_id', 'merchant_role_id',
         'scope_station_id', 'scope_branch_id', 'is_active',
+        'suspended_by_staff_toggle',
     ];
 
     protected $casts = [
@@ -23,6 +24,7 @@ class MerchantUserRole extends Model
         'scope_station_id' => 'integer',
         'scope_branch_id' => 'integer',
         'is_active' => 'boolean',
+        'suspended_by_staff_toggle' => 'boolean',
     ];
 
     public function role(): BelongsTo

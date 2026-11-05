@@ -27,10 +27,16 @@ class ServiceCoverageController extends Controller
         $user = $request->user();
 
         $code = YemenGovernorates::codeFromName((string) ($user->residence_governorate ?? ''));
+        $source = 'residence_profile';
 
-        // يسمح بالاستعلام عن محافظة أخرى (قبل السفر مثلاً)
+        // استعلام مؤقت لموقعٍ حالي مختلف عن عنوان السكن الموثّق.
+        // لا يكتب شيئاً في KYC ولا يطلب مراجعة تغيير العنوان.
         if ($request->filled('governorate')) {
-            $code = YemenGovernorates::codeFromName((string) $request->input('governorate')) ?? $code;
+            $requested = YemenGovernorates::codeFromName((string) $request->input('governorate'));
+            if ($requested !== null) {
+                $code = $requested;
+                $source = 'current_location';
+            }
         }
 
         if ($code === null) {
@@ -53,9 +59,10 @@ class ServiceCoverageController extends Controller
                     // بنفسه. هذه اللافتة لا تظهر إلا لمن رفض الإذن أو تعذّر
                     // تحديد موقعه — فالصيغة تخاطبه هو لا تُحمّله عملاً كان
                     // على التطبيق أن يقوم به.
-                    'notice' => 'تعذّر تحديد محافظتك من موقعك. اخترها يدوياً '
-                        . 'لعرض الوكلاء والتجّار القريبين منك.',
+                    'notice' => 'لم تُسجّل محافظة السكن بعد. أكمل بيانات التوثيق، '
+                        . 'أو استخدم موقعك الحالي مؤقتاً داخل الخدمة التي تحتاجه.',
                     'needs_governorate' => true,
+                    'source' => 'missing_residence',
                 ],
             ]);
         }
@@ -79,6 +86,7 @@ class ServiceCoverageController extends Controller
                 'notice' => $this->notice($name, $agents, $merchants),
                 'notice_short' => $this->noticeShort($name, $agents, $merchants),
                 'needs_governorate' => false,
+                'source' => $source,
             ],
         ]);
     }

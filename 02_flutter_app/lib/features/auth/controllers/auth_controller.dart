@@ -8,6 +8,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:phone_numbers_parser/phone_numbers_parser.dart';
 import 'package:amial_pay/helper/amial_crash_reporter.dart';
+import 'package:amial_pay/helper/app_resume_state.dart';
 import 'package:amial_pay/features/transaction_money/controllers/bootom_slider_controller.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/features/camera_verification/controllers/camera_screen_controller.dart';
@@ -21,6 +22,7 @@ import 'package:amial_pay/features/auth/domain/models/user_short_data_model.dart
 import 'package:amial_pay/features/auth/domain/quick_receive_preferences.dart';
 import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
 import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/helper/notification_helper.dart';
 import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 
@@ -286,7 +288,6 @@ class AuthController extends GetxController implements GetxService {
 
         Get.find<AuthController>().bioAthPinSetup(signUpBody.password).then((value) {
 
-          UserShortDataModel? userData = Get.find<AuthController>().getUserData();
           Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
         });
 
@@ -335,6 +336,12 @@ class AuthController extends GetxController implements GetxService {
       if(Get.currentRoute != RouteHelper.navbar) {
         Get.offAllNamed(RouteHelper.getNavBarRoute(), arguments: true);
       }
+
+      // إن كان الدخول بدأ من ضغط إشعار والتطبيق مغلق، افتحه بعد أن صار
+      // الحساب مصادقاً والـ navbar جاهزاً. consume-once يمنع التكرار.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(NotificationHelper.consumePendingInitialNotification());
+      });
     }
     else{
       ApiChecker.checkApi(response);
@@ -408,6 +415,7 @@ class AuthController extends GetxController implements GetxService {
     if (response.statusCode == 200) {
       // AMIAL-CRASH-005: أعطال من يستعمل الجهاز بعده لا تُنسب إلى حسابه.
       await AmialCrashReporter.forgetIdentity();
+      try { Get.find<AppResumeState>().clear(); } catch (_) {}
 
       Get.offAllNamed(RouteHelper.getSplashRoute());
       _isLoading = false;

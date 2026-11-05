@@ -129,23 +129,37 @@ class SubscriptionServiceTest extends TestCase
     /** @test */
     public function summary_calculates_mrr_correctly(): void
     {
-        // 3 تجار: 1 STARTER (15), 1 BUSINESS (35), 1 PRO (65)
-        $u1 = User::factory()->create(['type' => 3]);
-        $u2 = User::factory()->create(['type' => 3]);
-        $u3 = User::factory()->create(['type' => 3]);
-        MerchantProfile::create(['user_id' => $u1->id, 'verification_status' => 'verified',
-            'business_type' => A::BIZ_WHOLESALE,
-            'subscription_plan' => A::PLAN_STARTER, 'subscription_expires_at' => now()->addDays(20)]);
-        MerchantProfile::create(['user_id' => $u2->id, 'verification_status' => 'verified',
-            'business_type' => A::BIZ_WHOLESALE,
-            'subscription_plan' => A::PLAN_BUSINESS, 'subscription_expires_at' => now()->addDays(20)]);
-        MerchantProfile::create(['user_id' => $u3->id, 'verification_status' => 'verified',
-            'business_type' => A::BIZ_WHOLESALE,
-            'subscription_plan' => A::PLAN_MERCHANT_PRO, 'subscription_expires_at' => now()->addDays(20)]);
+        // ══════════════════════════════════════════════════════════════
+        // **تاجرٌ لكلّ باقةٍ حيّة، والمجموعُ يُحسب من قائمة الأسعار.**
+        //
+        // كان هنا ثلاثةُ تجّارٍ بأسعارٍ مكتوبة (`15 + 35 + 65`) وباقتان
+        // منها أُلغيتا بتوحيد الكتالوج. فصار الحارسُ يقيس إيراداً لا
+        // يبيعه أحد، **ويسقط على قرارِ تسعيرٍ سليم**.
+        //
+        // والرقمُ يُحسب من مصدره (القاعدة السادسة): من `PLAN_PRICES_SAR`
+        // نفسِها التي يقرأها `summary()`. فإن أُضيفت باقةٌ أو تغيّر سعرٌ
+        // بقي الحارسُ صادقاً — وإن **حُذفت قائمةُ الأسعار أو صفَّرت**
+        // سقط، وهو المقصود.
+        // ══════════════════════════════════════════════════════════════
+        $paid = array_values(array_filter(
+            A::ALL_PLANS,
+            fn (string $p): bool => (A::PLAN_PRICES_SAR[$p] ?? 0) > 0,
+        ));
+
+        $this->assertNotEmpty($paid, 'لا باقةَ مدفوعةً في الفهرس — فلا إيرادَ يُقاس أصلاً');
+
+        foreach ($paid as $plan) {
+            $u = User::factory()->create(['type' => 3]);
+            MerchantProfile::create(['user_id' => $u->id, 'verification_status' => 'verified',
+                'business_type' => A::BIZ_WHOLESALE,
+                'subscription_plan' => $plan, 'subscription_expires_at' => now()->addDays(20)]);
+        }
+
+        $expected = array_sum(array_map(fn (string $p): int => A::PLAN_PRICES_SAR[$p], $paid));
 
         $summary = $this->svc->summary();
-        $this->assertEquals(15 + 35 + 65, $summary['mrr_sar']);
-        $this->assertEquals((15 + 35 + 65) * 12, $summary['arr_sar']);
+        $this->assertEquals($expected, $summary['mrr_sar']);
+        $this->assertEquals($expected * 12, $summary['arr_sar']);
     }
 
     /** @test */

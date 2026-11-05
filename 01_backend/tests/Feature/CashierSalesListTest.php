@@ -6,6 +6,7 @@ use App\Models\EMoney;
 use App\Models\MerchantProfile;
 use App\Models\User;
 use App\Services\CashierService;
+use App\Services\CashierShiftService;
 use App\Services\MerchantSaleRefundService;
 use App\Services\MoneyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -92,6 +93,8 @@ class CashierSalesListTest extends TestCase
     /** @test */
     public function reflects_partial_and_full_refunds(): void
     {
+        app(CashierShiftService::class)->open($this->merchant, null, '0');
+
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '5000',

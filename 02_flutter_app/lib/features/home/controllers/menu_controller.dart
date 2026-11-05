@@ -2,11 +2,20 @@ import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amial_pay/features/home/screens/amial_customer_home_screen.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amial_pay/features/setting/screens/profile_screen.dart';
+import 'package:amial_pay/helper/app_resume_state.dart';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 class MenuItemController extends GetxController implements GetxService{
+  void _rememberTab(String tab) {
+    try {
+      Get.find<AppResumeState>().rememberNavbar(tab);
+    } catch (_) {
+      // لا يجب أن يفشل تبديل التبويب إذا كان التطبيق في اختبار بلا DI.
+    }
+  }
+
   int _currentTabIndex = 0;
   int get currentTabIndex => _currentTabIndex;
 
@@ -26,6 +35,7 @@ class MenuItemController extends GetxController implements GetxService{
 
   void resetNavBarTabIndex({bool isUpdate = false}){
     _currentTabIndex = 0;
+    _rememberTab('home');
 
     if(isUpdate) {
       update();
@@ -34,6 +44,7 @@ class MenuItemController extends GetxController implements GetxService{
 
   void selectHomePage({bool isUpdate = true}) {
     _currentTabIndex = 0;
+    _rememberTab('home');
     if(isUpdate) {
       update();
     }
@@ -41,6 +52,7 @@ class MenuItemController extends GetxController implements GetxService{
 
   void selectHistoryPage({bool isUpdate = true}) {
     _currentTabIndex = 1;
+    _rememberTab('history');
     if(isUpdate){
       update();
     }
@@ -48,6 +60,7 @@ class MenuItemController extends GetxController implements GetxService{
 
   void selectNotificationPage({bool isUpdate = true}) {
     _currentTabIndex = 2;
+    _rememberTab('notification');
     if(isUpdate){
       update();
     }
@@ -55,6 +68,7 @@ class MenuItemController extends GetxController implements GetxService{
 
   void selectProfilePage({bool isUpdate = true}) {
     _currentTabIndex = 3;
+    _rememberTab('profile');
     if(isUpdate){
       update();
     }

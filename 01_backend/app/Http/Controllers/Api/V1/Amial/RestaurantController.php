@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
+use App\Models\MerchantSale;
 use App\Models\PosUser;
 use App\Models\RestaurantOrder;
 use App\Models\RestaurantTable;
@@ -16,6 +17,7 @@ use App\Support\Merchant\MerchantPermissions as P;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -151,6 +153,58 @@ class RestaurantController extends Controller
         return $this->ok(['orders' => $list, 'count' => $list->count()]);
     }
 
+    /**
+     * سجل المبيعات المكتملة للمطعم.
+     *
+     * شاشة المالك كانت تستعمل orders() التي تعيد الطلبات النشطة فقط؛
+     * وبذلك تختفي البيعة لحظة إغلاقها. هنا نقرأ الطلب المغلق ثم نربطه
+     * ببيعة الكاشير التي تحمل طريقة الدفع والمرجع المالي.
+     */
+    public function salesHistory(Request $request): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::RESTAURANT_ORDER_VIEW_ALL)) {
+            return $deny;
+        }
+
+        $ctx = $this->resolve($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $orders = RestaurantOrder::where('merchant_user_id', $merchant->id)
+            ->where('status', 'closed')
+            ->whereNotNull('sale_ulid')
+            ->orderByDesc('closed_at')
+            ->limit(100)
+            ->get();
+
+        $sales = MerchantSale::where('merchant_user_id', $merchant->id)
+            ->whereIn('sale_ulid', $orders->pluck('sale_ulid')->filter())
+            ->get()
+            ->keyBy('sale_ulid');
+
+        $tables = RestaurantTable::where('merchant_user_id', $merchant->id)
+            ->whereIn('id', $orders->pluck('table_id')->filter()->unique())
+            ->get(['id', 'label'])
+            ->keyBy('id');
+
+        $rows = $orders->map(function (RestaurantOrder $order) use ($sales, $tables): array {
+            $sale = $sales->get($order->sale_ulid);
+
+            return [
+                ...$this->orderArr($order),
+                'order_number' => $order->order_no,
+                'table_label' => $tables->get($order->table_id)?->label,
+                'total_amount' => (string) ($sale?->total_amount ?? $order->total),
+                'payment_method' => $sale?->payment_method,
+                'paid_transaction_id' => $sale?->paid_transaction_id,
+                'created_at' => ($sale?->created_at ?? $order->closed_at)?->toIso8601String(),
+                'closed_at' => $order->closed_at?->toIso8601String(),
+            ];
+        })->values();
+
+        return $this->ok(['orders' => $rows, 'count' => $rows->count()]);
+    }
+
     public function openOrder(Request $request): JsonResponse
     {
 
@@ -159,7 +213,7 @@ class RestaurantController extends Controller
         }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, $posId] = $ctx;
+        [$merchant] = $ctx;
 
         $v = Validator::make($request->all(), [
             'table_id' => 'sometimes|nullable|integer',
@@ -173,7 +227,7 @@ class RestaurantController extends Controller
 
         try {
             $o = $this->svc->openOrder($merchant, $request->input('table_id'),
-                $request->input('items', []), $request->input('notes'), $posId ?? $merchant->id);
+                $request->input('items', []), $request->input('notes'), $request->user()->id);
         } catch (\InvalidArgumentException $e) {
             return $this->err('ORDER_INVALID', $e->getMessage(), 422);
         }
@@ -191,7 +245,22 @@ class RestaurantController extends Controller
         [$merchant] = $ctx;
         $o = RestaurantOrder::where('id', $id)->where('merchant_user_id', $merchant->id)->first();
         if (!$o) return $this->err('NOT_FOUND', 'الطلب غير موجود', 404);
-        return $this->ok(['order' => $this->orderArr($o)]);
+
+        $row = $this->orderArr($o);
+        if ($o->sale_ulid) {
+            $sale = MerchantSale::where('merchant_user_id', $merchant->id)
+                ->where('sale_ulid', $o->sale_ulid)
+                ->first();
+            if ($sale) {
+                $row['total_amount'] = (string) $sale->total_amount;
+                $row['payment_method'] = $sale->payment_method;
+                $row['paid_transaction_id'] = $sale->paid_transaction_id;
+                $row['created_at'] = $sale->created_at?->toIso8601String();
+                $row['invoice_number'] = $sale->invoice_number ?: $row['invoice_number'];
+            }
+        }
+
+        return $this->ok(['order' => $row]);
     }
 
     public function updateOrder(Request $request, int $id): JsonResponse
@@ -268,7 +337,8 @@ class RestaurantController extends Controller
 
         try {
             $res = $this->svc->closeOrder($merchant, $o, $request->input('payment_method'),
-                $request->input('customer'), $request->input('paid_transaction_id'), $posId);
+                $request->input('customer'), $request->input('paid_transaction_id'), $posId,
+                $request->user()->id);
         } catch (\InvalidArgumentException | \RuntimeException $e) {
             return $this->err('CLOSE_FAILED', $e->getMessage(), 422);
         }
@@ -305,6 +375,12 @@ class RestaurantController extends Controller
             $merchant = User::find($pos->merchant_user_id);
             if (!$merchant) return $this->err('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
             $posId = $pos->id;
+        } elseif ($merchantId = DB::table('merchant_user_roles')
+            ->where('user_id', $authUser->id)
+            ->where('is_active', true)
+            ->value('merchant_user_id')) {
+            $merchant = User::find($merchantId);
+            if (!$merchant) return $this->err('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
         } elseif (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
             return $this->err('NOT_A_MERCHANT', 'متاح للمطاعم وموظفيها فقط', 403);
         }
@@ -328,6 +404,7 @@ class RestaurantController extends Controller
         return [
             'id' => $o->id,
             'order_no' => $o->order_no,
+            'invoice_number' => $o->invoice_number,
             'table_id' => $o->table_id,
             'status' => $o->status,
             'items' => $o->items ?? [],

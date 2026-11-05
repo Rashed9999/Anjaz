@@ -3,6 +3,8 @@
 namespace App\Models\Merchant;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Branch;
 
 /**
  * AMIAL-POS-DEVICES-001 — **مقعدُ ترخيصٍ يملكه التاجر، لا حسابُ موظّف.**
@@ -28,6 +30,11 @@ class PosDevice extends Model
         'is_active' => 'boolean',
         'metadata' => 'array',
     ];
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
 
     /**
      * **البصمةُ تُجزَّأ بسرٍّ مستقلٍّ عن `APP_KEY`.**

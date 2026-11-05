@@ -24,6 +24,44 @@ class PortalHostRedirect
 {
     public function handle(Request $request, Closure $next): Response
     {
+        $merchantHost = PortalHost::merchant();
+        $currentHost = mb_strtolower($request->getHost());
+        $path = trim($request->path(), '/');
+
+        // merchant.amialpay.com opens the merchant portal, not the public website.
+        // Keep /merchant URLs for compatibility with existing bookmarks.
+        if ($merchantHost !== null && $currentHost === $merchantHost) {
+            if ($path === '' || $path === 'login') {
+                $portalPath = $path === 'login' ? '/merchant/login' : '/merchant';
+                if (! $request->isMethod('GET') && ! $request->isMethod('HEAD')) {
+                    return response()->json([
+                        'success' => false,
+                        'code' => 'WRONG_PORTAL_PATH',
+                        'message' => 'استخدم نموذج دخول التاجر على مساره المخصص.',
+                        'meta' => [
+                            'expected_host' => $merchantHost,
+                            'expected_path' => $portalPath,
+                        ],
+                    ], 421);
+                }
+                $query = $request->getQueryString();
+
+                return redirect()->away(
+                    $request->getScheme() . '://' . $merchantHost . $portalPath
+                        . ($query !== null ? '?' . $query : ''),
+                    302
+                );
+            }
+
+            // Until admin/agent hosts are configured, never serve their
+            // login pages under the merchant-only subdomain.
+            if (($path === 'admin' || str_starts_with($path, 'admin/')
+                || $path === 'agent' || str_starts_with($path, 'agent/'))
+                && PortalHost::expectedFor($path) === null) {
+                abort(404);
+            }
+        }
+
         $expected = PortalHost::expectedFor($request->path());
 
         if ($expected === null || mb_strtolower($request->getHost()) === $expected) {

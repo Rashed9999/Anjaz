@@ -653,7 +653,7 @@ class WhatsappBotService
         $serviceName = $this->session->getData($phone, 'service_name', '');
         $account     = $this->session->getData($phone, 'account', '');
 
-        $fee   = $this->billPaySvc->previewFee(null, $amount);
+        $fee   = $this->billPaySvc->previewFee(null, $amount, $user);
         $total = bcadd($amount, $fee, 4);
 
         $wallet  = EMoney::where('user_id', $user->id)->first();
@@ -667,6 +667,7 @@ class WhatsappBotService
 
         $this->session->advance($phone, WhatsappSessionManager::STEP_BILLPAY_PIN_SENT, [
             'amount' => $amount, 'fee' => $fee, 'total' => $total,
+            'idempotency_key' => (string) Str::ulid(),
         ]);
 
         $pinUrl = $this->createSecurePinUrl($phone, $user->id, 'billpay');
@@ -693,6 +694,7 @@ class WhatsappBotService
         $providerId  = $data['data']['provider_id']  ?? null;
         $account     = $data['data']['account']      ?? '';
         $amount      = $data['data']['amount']        ?? '0';
+        $idempotencyKey = $data['data']['idempotency_key'] ?? null;
 
         $service  = \App\Models\BillService::find($serviceId);
         $provider = \App\Models\BillProvider::find($providerId);
@@ -710,6 +712,7 @@ class WhatsappBotService
             $order = $this->billPaySvc->createAndExecute(
                 user: $user, provider: $provider, service: $service,
                 product: null, subscriberAccount: $account, amount: $amount,
+                idempotencyKey: $idempotencyKey,
             );
 
             $this->session->clear($phone);

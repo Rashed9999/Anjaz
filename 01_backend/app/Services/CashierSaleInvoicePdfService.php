@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSale;
+use App\Services\Merchant\MerchantLogoService;
 use App\Support\ArabicPdf;
 
 /**
@@ -20,6 +21,8 @@ class CashierSaleInvoicePdfService
         $sale->loadMissing('lines');
         $merchant = Merchant::where('user_id', $sale->merchant_user_id)->first();
         $profile = MerchantProfile::where('user_id', $sale->merchant_user_id)->first();
+        $qr = app(DocumentQrService::class);
+        $verificationCode = (string) $sale->sale_ulid;
 
         $items = $sale->lines->isNotEmpty()
             ? $sale->lines->map(fn ($line) => [
@@ -40,7 +43,11 @@ class CashierSaleInvoicePdfService
             ])->values()->all();
 
         $vertical = (string) ($profile?->business_type ?? 'retail');
-        $title = $vertical === 'quick_sale' ? 'فاتورة بيع سريع' : 'فاتورة بيع بالتجزئة';
+        $title = match ($vertical) {
+            'quick_sale' => 'فاتورة بيع سريع',
+            'restaurant' => 'فاتورة مطعم',
+            default => 'فاتورة بيع بالتجزئة',
+        };
         $discount = (string) ($sale->discount_amount ?? '0');
         $total = (string) $sale->total_amount;
         $subtotal = MoneyService::add($total, $discount);
@@ -48,6 +55,7 @@ class CashierSaleInvoicePdfService
         $html = view('pdf.cashier-sale-invoice', [
             'sale' => $sale,
             'merchant' => $merchant,
+            'merchantLogoData' => app(MerchantLogoService::class)->dataUri($merchant),
             'title' => $title,
             'vertical' => $vertical,
             'items' => $items,
@@ -56,14 +64,37 @@ class CashierSaleInvoicePdfService
             'total' => $total,
             'paymentLabel' => $this->paymentLabel((string) $sale->payment_method),
             'statusLabel' => $this->statusLabel((string) $sale->status),
+            'verificationUrl' => $qr->url($verificationCode),
+            'qrDataUri' => $qr->dataUri($verificationCode),
         ])->render();
 
         return ArabicPdf::render($html, ['format' => 'A4', 'margin' => 12]);
     }
 
+    /**
+     * مفتاح النسخة يتبدّل عندما تتبدّل حالة البيع.
+     *
+     * بيع الآجل يمكن أن ينتقل من credit_unpaid إلى credit_paid بعد أن يكون
+     * العميل قد نزّل PDF مرةً؛ المفتاح الثابت كان سيخدم النسخة القديمة
+     * ويعرض «غير مسددة» بعد وصول المال. الحالة + updated_at تمنع ذلك.
+     */
+    public function cacheKey(MerchantSale $sale): string
+    {
+        $version = $sale->updated_at?->format('YmdHis') ?? '0';
+
+        return "cashier_invoice_{$sale->sale_ulid}_{$sale->status}_{$version}";
+    }
+
     public function suggestedFilename(MerchantSale $sale): string
     {
-        return 'cashier_invoice_' . strtoupper(substr((string) $sale->sale_ulid, -10)) . '.pdf';
+        $number = $sale->invoice_number ?: $sale->sale_ulid;
+
+        return 'cashier_invoice_' . $this->safeFilenamePart((string) $number) . '.pdf';
+    }
+
+    private function safeFilenamePart(string $value): string
+    {
+        return trim((string) preg_replace('/[^A-Za-z0-9_-]/', '-', $value), '-');
     }
 
     private function paymentLabel(string $method): string

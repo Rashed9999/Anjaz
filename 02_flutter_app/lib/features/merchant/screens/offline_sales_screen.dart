@@ -86,15 +86,30 @@ class _OfflineSalesScreenState extends State<OfflineSalesScreen> {
                         itemBuilder: (_, i) {
                           final s = _items[i];
                           final method = {'cash': 'نقد', 'credit': 'آجل', 'mixed': 'مختلط'}[s['payment_method']] ?? '${s['payment_method']}';
+                          final failed = s['_offline_state'] == 'failed';
+                          final detail = failed
+                              ? 'لم تُرسل: ${s['_offline_last_error'] ?? 'رفض الخادم العملية'}'
+                              : '${((s['items'] ?? []) as List).length} صنف • بانتظار المزامنة';
                           return Container(
                             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
                             child: ListTile(
-                              leading: const CircleAvatar(
-                                backgroundColor: Color(0x1AF59E0B),
-                                child: Icon(Icons.pending, color: AmialColors.yellowDark)),
+                              leading: CircleAvatar(
+                                backgroundColor: (failed ? AmialColors.red : AmialColors.yellow).withValues(alpha: 0.12),
+                                child: Icon(failed ? Icons.error_outline : Icons.pending,
+                                    color: failed ? AmialColors.red : AmialColors.yellowDark)),
                               title: Text('${s['total']} ر.ي — $method', style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('${((s['items'] ?? []) as List).length} صنف • بانتظار المزامنة',
+                              subtitle: Text(detail,
                                   style: const TextStyle(fontSize: 11)),
+                              trailing: failed
+                                  ? IconButton(
+                                      tooltip: 'حذف العملية المرفوضة',
+                                      icon: const Icon(Icons.delete_outline, color: AmialColors.red),
+                                      onPressed: () async {
+                                        await _q.discard('${s['client_uuid']}');
+                                        await _load();
+                                      },
+                                    )
+                                  : null,
                             ),
                           );
                         },
@@ -109,7 +124,7 @@ class _OfflineSalesScreenState extends State<OfflineSalesScreen> {
                       icon: _syncing
                           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.sync),
-                      label: Text(_syncing ? 'جارٍ المزامنة…' : 'مزامنة الآن'),
+                      label: Text(_syncing ? 'جارٍ المزامنة…' : 'مزامنة المعلّق فقط'),
                       style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(52)),
                     ),
                   ),

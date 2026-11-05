@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\MerchantProfile;
 use App\Models\MerchantVerificationRequest;
 use App\Models\User;
+use App\Services\Verification\VerificationCaseService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -39,6 +40,7 @@ class MerchantVerificationService
 
     public function __construct(
         private readonly NotificationService $notif,
+        private readonly VerificationCaseService $workflow,
     ) {}
 
     /** تأكّد أن المستخدم لديه MerchantProfile (يخلقه إن لم يوجد). */
@@ -80,7 +82,13 @@ class MerchantVerificationService
                 ->whereIn('status', ['pending_review', 'resubmission_required'])
                 ->first();
 
-            // ارفع الملفات وحفظ مساراتها
+            // AMIAL-UNIFIED-VERIFICATION-002 — المتطلبات تتبع سياسة
+            // القطاع. البيع السريع لا يُحجب بسجل تجاري، لكن لا يفقد هوية
+            // المالك أو صورة وموقع نقطة البيع. الفحص قبل التخزين حتى لا
+            // تخلّف محاولة ناقصة ملفات خاصة يتيمة.
+            $this->assertRequiredDocuments($merchant, $request, $this->plannedPaths($files));
+
+            // ارفع الملفات وحفظ مساراتها بعد اجتياز سياسة القطاع.
             $paths = $this->uploadFiles($merchant->id, $files);
 
             if ($request) {
@@ -116,7 +124,21 @@ class MerchantVerificationService
             throw new RuntimeException('الطلب ليس بانتظار مراجعة');
         }
 
-        return DB::transaction(function () use ($request, $adminId, $tier) {
+        $merchant = User::find($request->merchant_user_id);
+        if (!$merchant) {
+            throw new RuntimeException('حساب التاجر غير موجود');
+        }
+        $reviewer = $this->reviewerFor($merchant, $adminId);
+
+        // الاعتماد آخر خط دفاع، لا واجهة فقط. قد تُنشأ طلبات قديمة أو
+        // مستوردة خارج submit()؛ لا يجوز أن تتجاوز متطلبات قطاعها.
+        try {
+            $this->assertRequiredDocuments($merchant, $request, []);
+        } catch (InvalidArgumentException $e) {
+            throw new RuntimeException($e->getMessage(), 0, $e);
+        }
+
+        return DB::transaction(function () use ($request, $adminId, $tier, $merchant, $reviewer) {
             $request->update([
                 'status' => 'verified',
                 'reviewed_by_admin_id' => $adminId,
@@ -132,17 +154,24 @@ class MerchantVerificationService
                 $profile->update($updates);
             }
 
-            // إشعار التاجر
-            $merchant = User::find($request->merchant_user_id);
-            if ($merchant) {
-                $this->notif->dispatch(
-                    $merchant,
-                    'merchant_verified',
-                    '✓ تمّ توثيق متجرك',
-                    'تهانينا! تمّ توثيق متجر "' . $request->business_name . '" بنجاح.',
-                    data: ['request_ulid' => $request->request_ulid],
-                );
-            }
+            // AMIAL-VERIFICATION-SCOPE-001 — قرار المنشأة لا يستدعي ولا
+            // يلمس قرار هوية الشخص. حتى وجود ملف KYC مكتمل لا يبرر قراراً
+            // تلقائياً؛ اعتماد الهوية له زر ومراجع وسجل مستقلون.
+            $this->workflow->recordMerchantReview(
+                merchant: $merchant,
+                reviewer: $reviewer,
+                approved: true,
+                requestUlid: (string) $request->request_ulid,
+            );
+
+            $this->notif->dispatch(
+                $merchant,
+                'merchant_verified',
+                '✓ تمّ توثيق متجرك',
+                'تهانينا! تمّ توثيق متجر "' . $request->business_name . '" بنجاح. '
+                    . 'توثيق هوية صاحب الحساب قرار منفصل ولا يتغير بهذا الاعتماد.',
+                data: ['request_ulid' => $request->request_ulid],
+            );
 
             return $request->fresh();
         });
@@ -154,17 +183,29 @@ class MerchantVerificationService
         if ($request->status !== 'pending_review') {
             throw new RuntimeException('الطلب ليس بانتظار مراجعة');
         }
-        $request->update([
-            'status' => 'rejected',
-            'admin_note' => $reason,
-            'reviewed_by_admin_id' => $adminId,
-            'reviewed_at' => now(),
-        ]);
-        MerchantProfile::where('user_id', $request->merchant_user_id)
-            ->update(['verification_status' => 'rejected']);
-
         $merchant = User::find($request->merchant_user_id);
-        if ($merchant) {
+        if (!$merchant) {
+            throw new RuntimeException('حساب التاجر غير موجود');
+        }
+        $reviewer = $this->reviewerFor($merchant, $adminId);
+
+        return DB::transaction(function () use ($request, $adminId, $reason, $merchant, $reviewer) {
+            $request->update([
+                'status' => 'rejected',
+                'admin_note' => $reason,
+                'reviewed_by_admin_id' => $adminId,
+                'reviewed_at' => now(),
+            ]);
+            MerchantProfile::where('user_id', $request->merchant_user_id)
+                ->update(['verification_status' => 'rejected']);
+
+            $this->workflow->recordMerchantReview(
+                merchant: $merchant,
+                reviewer: $reviewer,
+                approved: false,
+                requestUlid: (string) $request->request_ulid,
+                reason: $reason,
+            );
             $this->notif->dispatch(
                 $merchant,
                 'merchant_verification_rejected',
@@ -172,8 +213,8 @@ class MerchantVerificationService
                 "السبب: {$reason}",
                 data: ['request_ulid' => $request->request_ulid],
             );
-        }
-        return $request->fresh();
+            return $request->fresh();
+        });
     }
 
     /** Admin: طلب إعادة رفع وثائق. */
@@ -185,17 +226,28 @@ class MerchantVerificationService
         if ($request->status !== 'pending_review') {
             throw new RuntimeException('الطلب ليس بانتظار مراجعة');
         }
-        $request->update([
-            'status' => 'resubmission_required',
-            'admin_note' => $reason,
-            'reviewed_by_admin_id' => $adminId,
-            'reviewed_at' => now(),
-        ]);
-        MerchantProfile::where('user_id', $request->merchant_user_id)
-            ->update(['verification_status' => 'resubmission_required']);
-
         $merchant = User::find($request->merchant_user_id);
-        if ($merchant) {
+        if (!$merchant) {
+            throw new RuntimeException('حساب التاجر غير موجود');
+        }
+        $reviewer = $this->reviewerFor($merchant, $adminId);
+
+        return DB::transaction(function () use ($request, $adminId, $reason, $merchant, $reviewer) {
+            $request->update([
+                'status' => 'resubmission_required',
+                'admin_note' => $reason,
+                'reviewed_by_admin_id' => $adminId,
+                'reviewed_at' => now(),
+            ]);
+            MerchantProfile::where('user_id', $request->merchant_user_id)
+                ->update(['verification_status' => 'resubmission_required']);
+
+            $this->workflow->recordMerchantResubmission(
+                merchant: $merchant,
+                reviewer: $reviewer,
+                requestUlid: (string) $request->request_ulid,
+                reason: $reason,
+            );
             $this->notif->dispatch(
                 $merchant,
                 'merchant_resubmission_required',
@@ -203,8 +255,8 @@ class MerchantVerificationService
                 "السبب: {$reason}",
                 data: ['request_ulid' => $request->request_ulid],
             );
-        }
-        return $request->fresh();
+            return $request->fresh();
+        });
     }
 
     /** الحالة الحالية للتاجر (إن وجدت). */
@@ -213,6 +265,26 @@ class MerchantVerificationService
         return MerchantVerificationRequest::where('merchant_user_id', $merchant->id)
             ->orderByDesc('id')
             ->first();
+    }
+
+    /** @return array<int,string> */
+    public function requiredDocsFor(User $merchant): array
+    {
+        return $this->workflow->merchantRequiredDocuments($merchant);
+    }
+
+    private function reviewerFor(User $merchant, int $reviewerId): User
+    {
+        if ((int) $merchant->id === $reviewerId) {
+            throw new RuntimeException('FOUR_EYES_VIOLATION');
+        }
+
+        $reviewer = User::find($reviewerId);
+        if (!$reviewer || (int) $reviewer->type !== ADMIN_TYPE) {
+            throw new RuntimeException('MERCHANT_VERIFICATION_REVIEWER_REQUIRED');
+        }
+
+        return $reviewer;
     }
 
     // ============ Private ============
@@ -225,6 +297,57 @@ class MerchantVerificationService
             'bank_account_holder', 'contact_phone',
         ];
         return array_intersect_key($data, array_flip($allowed));
+    }
+
+    private function assertRequiredDocuments(
+        User $merchant,
+        ?MerchantVerificationRequest $existing,
+        array $newPaths,
+    ): void {
+        $columns = [
+            'id_card_front' => 'id_card_front_path',
+            'id_card_back' => 'id_card_back_path',
+            'commercial_register' => 'commercial_register_path',
+            'store_photo' => 'store_photo_path',
+        ];
+        $missing = [];
+        foreach ($this->requiredDocsFor($merchant) as $document) {
+            $column = $columns[$document] ?? null;
+            if (!$column) continue;
+            if (empty($newPaths[$column]) && empty($existing?->{$column})) {
+                $missing[] = $document;
+            }
+        }
+        if ($missing !== []) {
+            $labels = [
+                'id_card_front' => 'وجه الهوية',
+                'id_card_back' => 'ظهر الهوية',
+                'commercial_register' => 'السجل التجاري',
+                'store_photo' => 'صورة نقطة البيع',
+            ];
+            throw new InvalidArgumentException('يلزم استكمال: '.implode('، ', array_map(
+                fn (string $key) => $labels[$key] ?? $key,
+                $missing,
+            )));
+        }
+    }
+
+    /** @return array<string,string> */
+    private function plannedPaths(array $files): array
+    {
+        $map = [
+            'id_card_front' => 'id_card_front_path',
+            'id_card_back' => 'id_card_back_path',
+            'commercial_register' => 'commercial_register_path',
+            'store_photo' => 'store_photo_path',
+        ];
+        $paths = [];
+        foreach ($map as $document => $column) {
+            if (($files[$document] ?? null) instanceof UploadedFile) {
+                $paths[$column] = '__new_upload__';
+            }
+        }
+        return $paths;
     }
 
     /**

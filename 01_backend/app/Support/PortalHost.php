@@ -49,10 +49,29 @@ class PortalHost
         return self::clean(config('amial.hosts.agent'));
     }
 
+    /** مضيف بوابة صاحب المنشأة، أو null قبل إعداد DNS وTLS. */
+    public static function merchant(): ?string
+    {
+        return self::clean(config('amial.hosts.merchant'));
+    }
+
+    /**
+     * Direct HTTPS merchant sign-in for navigation only.
+     * Keep the legacy route before merchant DNS/TLS is configured.
+     */
+    public static function merchantLoginUrl(): string
+    {
+        $host = self::merchant();
+
+        return $host !== null
+            ? 'https://' . $host . '/merchant/login'
+            : route('merchant.web.login');
+    }
+
     /** أفُعِّل الفصل أصلاً؟ */
     public static function enabled(): bool
     {
-        return self::admin() !== null || self::agent() !== null;
+        return self::admin() !== null || self::agent() !== null || self::merchant() !== null;
     }
 
     /**
@@ -71,6 +90,10 @@ class PortalHost
 
         if ($path === 'agent' || str_starts_with($path, 'agent/')) {
             return self::agent();
+        }
+
+        if ($path === 'merchant' || str_starts_with($path, 'merchant/')) {
+            return self::merchant();
         }
 
         return null;

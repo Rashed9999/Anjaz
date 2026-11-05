@@ -128,7 +128,15 @@ class PaidEndpointBypassMatrixTest extends TestCase
     {
         $method = strtolower($route['method']);
 
-        return $this->actingAs($actor, 'api')->json($method, $route['uri'], []);
+        // بعد نقل مالك المنشأة إلى الويب، بعض الأبواب المدفوعة صارت تحت
+        // /merchant/data وتحرسها جلسة merchant_web، بينما أبواب التطبيق
+        // تبقى على Passport. الاختبار يريد قياس capability نفسها لا أن
+        // يتوقف قبلها عند 401 بسبب استعمال حارس مصادقة خاطئ.
+        $guard = str_starts_with($route['uri'], '/merchant/')
+            ? 'merchant_web'
+            : 'api';
+
+        return $this->actingAs($actor, $guard)->json($method, $route['uri'], []);
     }
 
     /**

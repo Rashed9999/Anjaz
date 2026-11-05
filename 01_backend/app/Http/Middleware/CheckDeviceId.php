@@ -27,7 +27,11 @@ class CheckDeviceId
 
         $deviceId = $request->header('device-id');
         if ($deviceId == '') {
-            abort(response()->json(response_formatter(DEFAULT_400), 400));
+            return $this->deny(
+                'DEVICE_ID_REQUIRED',
+                'تعذّر التعرّف على هذا الجهاز. أعد فتح التطبيق ثم سجّل الدخول من جديد.',
+                400,
+            );
         }
 
         $userId = $request->user()->id;
@@ -48,7 +52,11 @@ class CheckDeviceId
                 'reason' => $device->block_reason,
             ]);
 
-            abort(response()->json(response_formatter(DEFAULT_403), 403));
+            return $this->deny(
+                'DEVICE_BLOCKED',
+                'هذا الجهاز محظور لأسباب أمنية. استخدم جهازاً موثوقاً أو تواصل مع الدعم.',
+                403,
+            );
         }
 
         if ($device && $device->is_active) {
@@ -57,7 +65,22 @@ class CheckDeviceId
             return $next($request);
         }
 
-        abort(response()->json(response_formatter(DEFAULT_403), 403));
+        return $this->deny(
+            'DEVICE_NOT_ACTIVE',
+            'انتهت صلاحية جلسة هذا الجهاز. سجّل الدخول من جديد لتوثيق الجهاز الحالي.',
+            403,
+        );
+    }
+
+    private function deny(string $code, string $message, int $status): \Illuminate\Http\JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'code' => $code,
+            'message' => $message,
+            'errors' => (object) [],
+            'meta' => (object) [],
+        ], $status);
     }
 
     /**

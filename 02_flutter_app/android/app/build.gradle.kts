@@ -60,16 +60,17 @@ android {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String?
             keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
+            storeFile = keystoreProperties["storeFile"]?.let { rootProject.file(it as String) }
             storePassword = keystoreProperties["storePassword"] as String?
         }
     }
 
     buildTypes {
         getByName("release") {
-            // AMIAL-BRANDING-001: release موقّع بـ debug keystore حتى يُولّد keystore حقيقي
-            // (وفق قرار المستخدم: توقيع release ليس أولوية الآن)
-            signingConfig = signingConfigs.getByName("debug")
+            // AMIAL-APK-SIGNING-002 — release يجب أن يحمل هوية توقيع ثابتة.
+            // GitHub runners مؤقتة؛ debug.keystore يتغيّر من بناءٍ لآخر،
+            // فيرفض Android التحديث لأن الناشر يبدو مختلفاً.
+            signingConfig = signingConfigs.getByName("release")
 
             // تعطيل minify/shrink للتسليم السريع — أعِد تفعيلها للـ production الحقيقي
             isMinifyEnabled = false

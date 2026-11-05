@@ -107,6 +107,7 @@ class UnifiedAuthService
         }
 
         $this->assertUserActive($user);
+        $this->assertAccountOpeningApproved($user);
 
         return $this->issueToken($user, 'customer', $request, [], $phone);
     }
@@ -116,10 +117,10 @@ class UnifiedAuthService
     // ============================================================
 
     /**
-     * Merchant login: merchant_number + phone + password [+ pos_number].
+     * Merchant login: merchant_number + phone + password [+ employee_code].
      *
-     * إذا pos_number موجود → الـ login يكون لـ POS user تحت هذا التاجر.
-     * بدون pos_number → الـ login لحساب التاجر الرئيسي.
+     * إذا employee_code موجود → دخول حساب موظف تحت هذا التاجر.
+     * بدونه → الدخول لحساب التاجر الرئيسي.
      */
     public function loginMerchant(
         string $merchantNumber,
@@ -146,7 +147,10 @@ class UnifiedAuthService
             throw new \RuntimeException('بيانات الدخول غير صحيحة');
         }
 
-        // إذا pos_number موجود → POS user login
+        // موظف نقطة البيع لا يصبح طريقاً خلفياً إلى منشأة لم تعتمد بعد.
+        $this->assertAccountOpeningApproved($merchant);
+
+        // رمز الموظف يحدد حساب الموظف، لا جهاز نقطة البيع.
         if ($posNumber) {
             $posUser = PosUser::active()
                 ->where('merchant_user_id', $merchant->id)
@@ -155,7 +159,7 @@ class UnifiedAuthService
 
             if (!$posUser) {
                 $this->recordFailure('merchant', $merchantNumber, $request, 'POS_NOT_FOUND', $merchant->id);
-                throw new \RuntimeException('نقطة البيع غير موجودة لهذا التاجر');
+                throw new \RuntimeException('رمز الموظف غير موجود أو الحساب غير مفعّل لهذا التاجر');
             }
 
             $user = $posUser->user;
@@ -170,7 +174,7 @@ class UnifiedAuthService
             return $this->issueToken($user, 'pos', $request, [
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUser->id,
-                'pos_number' => $posNumber,
+                'employee_code' => $posNumber,
                 'permissions' => $posUser->permissions ?? [],
             ], $merchantNumber);
         }
@@ -182,6 +186,7 @@ class UnifiedAuthService
         }
 
         $this->assertUserActive($merchant);
+        $this->assertAccountOpeningApproved($merchant);
 
         return $this->issueToken($merchant, 'merchant', $request, [], $merchantNumber);
     }
@@ -209,6 +214,7 @@ class UnifiedAuthService
         }
 
         $this->assertUserActive($agent);
+        $this->assertAccountOpeningApproved($agent);
 
         // توليد OTP + token مؤقت
         // AMIAL-OTP-SPLIT-001: وكيلُ العرض وحده يأخذ الرمزَ الثابت.
@@ -271,6 +277,8 @@ class UnifiedAuthService
         if (!$agent) {
             throw new \RuntimeException('الحساب غير موجود');
         }
+
+        $this->assertAccountOpeningApproved($agent);
 
         Cache::forget($this->otpCacheKey($otpToken));
         return $this->issueToken($agent, 'agent', $request, [], $agent->agent_number ?? null);
@@ -373,6 +381,23 @@ class UnifiedAuthService
         if (isset($user->security_hold_until) && $user->security_hold_until && $user->security_hold_until->isFuture()) {
             throw new \RuntimeException('الحساب موقوف مؤقتاً لأسباب أمنية');
         }
+    }
+
+    /** الحسابات القديمة بلا طلب تبقى عاملة؛ الطلب الجديد لا يصدر له token قبل اعتماده. */
+    private function assertAccountOpeningApproved(User $user): void
+    {
+        $application = \App\Models\MuwathaqAccountOpeningApplication::query()
+            ->where('user_id', $user->id)
+            ->first();
+        if ($application === null || $application->status === 'approved') {
+            return;
+        }
+
+        throw new \RuntimeException(
+            $application->status === 'rejected'
+                ? 'لم يُعتمد طلب فتح الحساب. راجع التعليمات في موثّق.'
+                : 'طلب فتح الحساب ما زال لدى موثّق للمراجعة.'
+        );
     }
 
     /**
@@ -498,7 +523,8 @@ class UnifiedAuthService
         if ($raw === '') {
             if ($enforced) {
                 throw new \RuntimeException(
-                    'لا جهازَ مسجَّلٌ لهذه الجلسة. سجّل الجهازَ من حساب التاجر ثمّ أعد الدخول.');
+                    'حساب الموظف صحيح، لكن جهاز نقطة البيع غير مفعّل. '
+                    . 'يسجّل مالك التاجر هذا الجهاز من «أجهزة نقاط البيع» ثم يعيد الموظف الدخول.');
             }
 
             app(OpsAlertService::class)->note(
@@ -527,11 +553,32 @@ class UnifiedAuthService
 
         if ($device === null) {
             throw new \RuntimeException(
-                'هذا الجهاز غير مسجَّلٍ لدى هذا التاجر. سجّله من حساب التاجر أوّلاً.');
+                'هذا جهاز نقطة البيع غير مفعّل لهذا التاجر. '
+                . 'يسجّله مالك التاجر من «أجهزة نقاط البيع»؛ لا يُنشئ الموظف حساباً جديداً.');
         }
 
         if ($device->revoked_at !== null || ! $device->is_active) {
             throw new \RuntimeException('أُلغي هذا الجهاز. راجع صاحبَ الحساب.');
+        }
+
+        // إن كانت المنشأة متعددة الفروع فلا يكفي أن يكون الجهاز والموظف
+        // للتاجر نفسه؛ يجب أن يكونا في الفرع نفسه. وإلا يستطيع كاشير فرع
+        // أن يبدأ يومه من صندوق فرع آخر، ثم يكتشف المنع لاحقاً عند فتح
+        // الوردية. نرفض مبكراً عند المصادقة برسالة تشغيلية واضحة.
+        $pos = \App\Models\PosUser::where('user_id', $user->id)
+            ->where('merchant_user_id', $merchantUserId)
+            ->first();
+
+        if ($pos !== null) {
+            $staffBranch = $pos->branch_id === null ? null : (int) $pos->branch_id;
+            $deviceBranch = $device->branch_id === null ? null : (int) $device->branch_id;
+
+            if ($staffBranch !== $deviceBranch) {
+                throw new \RuntimeException(
+                    'هذا الموظف مخصّص لفرع مختلف عن جهاز نقطة البيع. '
+                    . 'استخدم جهاز فرع الموظف أو غيّر تعيينه من لوحة التاجر.'
+                );
+            }
         }
 
         if ($tokenId === null) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — **تفصيلُ بيعةٍ سطراً سطراً**.
@@ -153,7 +154,7 @@ class _CashierSaleDetailScreenState extends State<CashierSaleDetailScreen> {
   }
 
   Widget _header(Map<String, dynamic> sale) {
-    final created = DateTime.tryParse((sale['created_at'] ?? '').toString())?.toLocal();
+    final created = DateConverterHelper.tryFromApi((sale['created_at'] ?? '').toString());
     final when = created == null
         ? '—'
         : '${created.year}/${created.month.toString().padLeft(2, '0')}/'

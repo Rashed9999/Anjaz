@@ -1,0 +1,173 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\KycDocument;
+use App\Models\User;
+use App\Services\Kyc\KycPrivacyService;
+use App\Services\Kyc\LegalNameService;
+use App\Services\Kyc\ResidenceVerificationService;
+use App\Services\KycDocumentService;
+use App\Services\KycOcrService;
+use DomainException;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+/** AMIAL-RESIDENCE-ADMIN-001 — مراجعة الإقامة منفصلة عن محافظة الأصل. */
+class KycResidenceAdminController extends Controller
+{
+    public function index()
+    {
+        return view('admin-views.amial.kyc.residence');
+    }
+
+    public function queue(
+        Request $request,
+        ResidenceVerificationService $residence,
+        KycPrivacyService $privacy,
+        KycOcrService $ocr,
+        LegalNameService $legalNames,
+    ): JsonResponse {
+        $actor = $request->user();
+        $canRestricted = (bool) $actor?->hasPlatformPermission('platform.customers.kyc.restricted.view');
+        $hidden = 0;
+
+        $rows = collect($residence->pendingQueue(200))
+            ->filter(function (array $row) use ($privacy, $canRestricted, &$hidden) {
+                if ($privacy->isRestricted((int) $row['user_id']) && !$canRestricted) {
+                    $hidden++;
+                    return false;
+                }
+                return true;
+            });
+
+        $docs = KycDocument::whereIn(
+            'id',
+            $rows->pluck('kyc_document_id')->filter()->unique()->values()->all()
+        )->get()->keyBy('id');
+
+        $rows = $rows->map(function (array $row) use ($docs, $ocr, $legalNames) {
+            $suggested = '';
+            $doc = $row['kyc_document_id'] ? $docs->get($row['kyc_document_id']) : null;
+            if ($doc) {
+                try {
+                    $review = $ocr->forReviewer($doc);
+                    $suggested = trim((string) data_get($review, 'fields.full_name.value', ''));
+                } catch (\Throwable) {
+                    $suggested = '';
+                }
+            }
+
+            $preview = $suggested !== ''
+                ? $legalNames->compare((string) $row['declared_legal_name'], $suggested)
+                : null;
+
+            return $row + [
+                'ocr_name_suggestion' => $suggested,
+                'ocr_name_match_status' => $preview['status'] ?? null,
+                'ocr_name_match_score' => $preview['score'] ?? null,
+            ];
+        })->values()->all();
+
+        return response()->json([
+            'success' => true,
+            'data' => $rows,
+            'meta' => ['restricted_hidden' => $hidden],
+        ]);
+    }
+
+    public function decide(
+        Request $request,
+        int $verificationId,
+        ResidenceVerificationService $residence,
+        KycPrivacyService $privacy,
+        KycDocumentService $documents,
+        LegalNameService $legalNames,
+    ): JsonResponse {
+        $data = $request->validate([
+            'status' => ['required', 'in:verified,needs_more_evidence,rejected'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+            'document_name' => ['nullable', 'string', 'min:2', 'max:300'],
+            'name_review_note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $row = DB::table('residence_verifications')->where('id', $verificationId)->first();
+        if (!$row) {
+            return response()->json(['message' => 'طلب إثبات السكن غير موجود.'], 404);
+        }
+
+        $actor = $request->user();
+        $subject = User::findOrFail((int) $row->user_id);
+
+        try {
+            // إن كانت الحالة ضمن مسار الخصوصية فحتى قرار السكن يمر من مفتاحها.
+            $privacy->assertReviewerAccess($subject, $actor, true);
+
+            if ($data['status'] === ResidenceVerificationService::STATUS_VERIFIED
+                && (string) $row->evidence_strength === 'supporting') {
+                throw new DomainException('RESIDENCE_STRONGER_EVIDENCE_REQUIRED');
+            }
+
+            $doc = $row->kyc_document_id ? KycDocument::find((int) $row->kyc_document_id) : null;
+            if (!$doc) {
+                throw new DomainException('RESIDENCE_EVIDENCE_DOCUMENT_INVALID');
+            }
+
+            if ($data['status'] === ResidenceVerificationService::STATUS_VERIFIED) {
+                $documentName = trim((string) ($data['document_name'] ?? ''));
+                if ($documentName === '') {
+                    throw new DomainException('RESIDENCE_DOCUMENT_NAME_REQUIRED');
+                }
+                $legalNames->confirmResidenceDocumentName(
+                    $verificationId,
+                    $actor,
+                    $documentName,
+                    $data['name_review_note'] ?? null,
+                );
+
+                if ($doc->status === KycDocument::STATUS_PENDING) {
+                    $documents->approve($doc, $actor);
+                } elseif ($doc->status !== KycDocument::STATUS_APPROVED) {
+                    throw new DomainException('RESIDENCE_DOCUMENT_MUST_BE_APPROVED');
+                }
+            } elseif ($doc->status === KycDocument::STATUS_PENDING) {
+                $documents->reject(
+                    $doc,
+                    $actor,
+                    trim((string) ($data['reason'] ?? '')) ?: 'دليل السكن يحتاج استكمالاً قبل الاعتماد.'
+                );
+            }
+
+            $state = $residence->decide(
+                $verificationId,
+                $actor,
+                (string) $data['status'],
+                $data['reason'] ?? null,
+            );
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'code' => $e->getMessage(),
+                'message' => match ($e->getMessage()) {
+                    'RESIDENCE_STRONGER_EVIDENCE_REQUIRED' => 'هذا دليل مساعد فقط؛ اطلب دليلاً أقوى أو تحققاً حضوريّاً.',
+                    'RESIDENCE_DOCUMENT_MUST_BE_APPROVED' => 'لا يمكن اعتماد السكن قبل اعتماد المستند نفسه.',
+                    'RESIDENCE_DOCUMENT_NAME_REQUIRED' => 'اكتب الاسم كما يظهر فعلياً في إثبات السكن قبل الاعتماد.',
+                    'RESIDENCE_NAME_MISMATCH' => 'الاسم في إثبات السكن يختلف جوهرياً عن الاسم القانوني المصرّح به. اطلب تصحيح الاسم أو دليلاً مناسباً.',
+                    'LEGAL_NAME_PARTIAL_MATCH_REQUIRES_NOTE' => 'التطابق جزئي؛ اكتب ملاحظة مراجعة واضحة (10 أحرف على الأقل) قبل الاعتماد.',
+                    'FOUR_EYES_VIOLATION' => 'لا يجوز للمراجع اعتماد ملفه الشخصي.',
+                    default => $e->getMessage(),
+                },
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $data['status'] === ResidenceVerificationService::STATUS_VERIFIED
+                ? 'تم تثبيت محل الإقامة وإعادة احتساب نطاق التشغيل.'
+                : 'تم تسجيل قرار المراجعة.',
+            'data' => $state,
+        ]);
+    }
+}

@@ -6,7 +6,7 @@ import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 
-/// AMIAL-WEB-ONLY-PORTALS-001 — لوحتا الإدارة والوكيل خرجتا من التطبيق.
+/// AMIAL-WEB-ONLY-PORTALS-001 — لوحات المالك والإدارة والوكيل خارج التطبيق.
 ///
 /// **ولماذا شاشةٌ بدل الحذف الصامت؟**
 ///
@@ -20,29 +20,40 @@ import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 /// فتبقى نقطةُ هبوطٍ واحدة تقول ثلاثة: أين تعمل لوحتك، وكيف تفتحها،
 /// وكيف تخرج من هنا.
 class WebPortalNoticeScreen extends StatelessWidget {
-  /// `admin` أو `agent` — يحدّد العنوان والنصّ.
+  /// `merchant` أو `admin` أو `agent` — يحدّد العنوان والنصّ.
   final String role;
 
   const WebPortalNoticeScreen({super.key, required this.role});
 
   bool get _isAdmin => role == 'admin';
+  bool get _isMerchant => role == 'merchant';
 
-  String get _title => _isAdmin ? 'لوحة الإدارة' : 'بوّابة شركات الصرافة';
+  String get _title => _isMerchant
+      ? 'بوابة المنشأة'
+      : _isAdmin
+          ? 'لوحة الإدارة'
+          : 'بوّابة شركات الصرافة';
 
   /// عنوان البوّابة على المتصفّح. **عامٌّ عمداً** — الخلط بين المسارين
   /// يُرسل كلاً منهما إلى بوّابةٍ ترفضه بلا رسالةٍ مفهومة، فيُفحص نصّاً
   /// في `web_only_portals_guard_test.dart` لا بالنظر إليه.
-  String get portalUrl => _isAdmin
-      ? '${AppConstants.productionDomain}/admin/auth/login'
-      : '${AppConstants.productionDomain}/agent/login';
+  String get portalUrl => _isMerchant
+      ? AppConstants.merchantPortalUrl
+      : _isAdmin
+          ? '${AppConstants.productionDomain}/admin/auth/login'
+          : '${AppConstants.productionDomain}/agent/login';
 
-  String get _who => _isAdmin
-      ? 'حسابك حساب إدارة المنصّة.'
-      : 'حسابك حساب شركة صرافة أو موظّف فيها.';
+  String get _who => _isMerchant
+      ? 'حسابك حساب مالك منشأة.'
+      : _isAdmin
+          ? 'حسابك حساب إدارة المنصّة.'
+          : 'حسابك حساب شركة صرافة أو موظّف فيها.';
 
-  String get _whatFor => _isAdmin
-      ? 'الإدارة والتقارير والإعدادات كلّها على المتصفّح.'
-      : 'الشبّاك والورديّات والخزنة والتسويات كلّها على المتصفّح.';
+  String get _whatFor => _isMerchant
+      ? 'المنتجات والمخزون والمحفظة والآجل والموظفون والتقارير كلها على المتصفّح. تطبيق أميال باي مخصص للعميل ونقطة البيع.'
+      : _isAdmin
+          ? 'الإدارة والتقارير والإعدادات كلّها على المتصفّح.'
+          : 'الشبّاك والورديّات والخزنة والتسويات كلّها على المتصفّح.';
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +71,11 @@ class WebPortalNoticeScreen extends StatelessWidget {
             children: [
               const SizedBox(height: 24),
               Icon(
-                _isAdmin ? Icons.admin_panel_settings : Icons.storefront,
+                _isMerchant
+                    ? Icons.storefront_rounded
+                    : _isAdmin
+                        ? Icons.admin_panel_settings
+                        : Icons.storefront,
                 size: 78,
                 color: AmialColors.primary,
               ),
@@ -133,7 +148,7 @@ class WebPortalNoticeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(
-                'تطبيق أميال باي للعملاء والتجّار.',
+                'تطبيق أميال باي للعملاء ونقاط البيع.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
               ),

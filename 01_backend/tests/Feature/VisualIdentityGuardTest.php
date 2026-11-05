@@ -184,7 +184,8 @@ class VisualIdentityGuardTest extends TestCase
      */
     public function the_brand_blue_is_no_longer_written_raw_in_css(): void
     {
-        $excluded = ['receipts/', 'pdf/', 'reports/', 'admin-views/transaction/statement.blade.php'];
+        // Email clients, like dompdf, cannot rely on the application's CSS variables.
+        $excluded = ['receipts/', 'pdf/', 'reports/', 'admin-views/transaction/statement.blade.php', 'emails/amial-otp.blade.php', 'emails/ops-alert-html.blade.php'];
         $offenders = [];
 
         $it = new \RecursiveIteratorIterator(

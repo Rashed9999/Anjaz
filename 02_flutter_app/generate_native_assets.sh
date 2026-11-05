@@ -19,19 +19,17 @@ echo "=== Amial Pay — Native Assets Generator ==="
 echo "[1/4] flutter pub get..."
 flutter pub get
 
-# 2) توليد native splash
-echo "[2/4] Generating native splash..."
+# 2) توحيد الأصل قبل أي توليد: لا نسخة بالهجاء القديم (بالياء) ولا إطار أبيض.
+echo "[2/5] Generating canonical brand assets..."
+python3 scripts/generate_brand_assets.py
+python3 scripts/generate_launch_logo.py
+
+# 3) توليد native splash
+echo "[3/5] Generating native splash..."
 dart run flutter_native_splash:create
 
-# 3) توليد launcher icons (اختياري — أصلاً نسخنا الأيقونات يدوياً)
-# نشغّله فقط لو أردت إعادة توليدها بالكامل من المصدر
-# echo "[3/4] Generating launcher icons (optional)..."
-# dart run flutter_launcher_icons
-
-echo "[3/4] Skipping launcher_icons (using pre-generated icons from assets/branding/android,ios)"
-
 # 4) clean & rebuild
-echo "[4/4] flutter clean..."
+echo "[4/5] flutter clean..."
 flutter clean
 flutter pub get
 

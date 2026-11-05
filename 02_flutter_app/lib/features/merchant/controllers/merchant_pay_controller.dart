@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import 'package:amial_pay/features/merchant/domain/repositories/merchant_pay_repo.dart';
 import 'package:amial_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/data/api/diagnostic_trace_id.dart';
 
 /// AMIAL-MERCHANT-PAY-001 — متحكّم دفع العميل للتاجر.
 class MerchantPayController extends GetxController implements GetxService {
@@ -10,6 +11,7 @@ class MerchantPayController extends GetxController implements GetxService {
   final RxBool isQuoting = false.obs;
   final RxBool isSubmitting = false.obs;
   final RxString lastError = ''.obs;
+  final RxString lastDiagnosticId = ''.obs;
 
   // نتيجة المعاينة
   final RxString quoteFee = ''.obs;
@@ -19,10 +21,13 @@ class MerchantPayController extends GetxController implements GetxService {
   final Rx<Map<String, dynamic>?> lastResult = Rx<Map<String, dynamic>?>(null);
 
   String _idempotencyKey = '';
+  String _correlationId = '';
 
   /// يُستدعى قبل كل عملية دفع جديدة — مفتاح idempotency جديد + تصفير الحالة.
   void prepareNewPayment() {
     _idempotencyKey = IdempotencyKeyGenerator.forFinancialAction('merchant_pay');
+    _correlationId = DiagnosticTraceId.generate();
+    lastDiagnosticId.value = _correlationId;
     lastError.value = '';
     lastResult.value = null;
     quoteFee.value = '';
@@ -69,16 +74,42 @@ class MerchantPayController extends GetxController implements GetxService {
         note: note,
         pin: pin,
         idempotencyKey: _idempotencyKey,
+        correlationId: _correlationId,
       );
 
+      final responseTrace =
+          r.headers?['x-correlation-id'] ??
+          r.headers?['X-Correlation-Id'] ??
+          _correlationId;
+      lastDiagnosticId.value = responseTrace;
+
       if (_isOk(r)) {
-        lastResult.value = Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+        final meta = Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+        meta['diagnostic_reference'] = responseTrace;
+        lastResult.value = meta;
         return true;
       }
-      lastError.value = _msg(r) ?? 'فشل الدفع';
+
+      final message = _msg(r) ?? 'فشل الدفع';
+      if (r.statusCode == 1 || r.statusCode == 0) {
+        lastError.value =
+            'تعذر تأكيد نتيجة الدفع بسبب انقطاع الاتصال. '
+            'لا تبدأ عملية دفع جديدة قبل التحقق أو إعادة المحاولة من نفس الشاشة. '
+            'رقم التتبع: $responseTrace';
+      } else {
+        lastError.value = '$message\nرقم التتبع: $responseTrace';
+      }
       return false;
     } catch (e) {
-      lastError.value = 'خطأ في الشبكة';
+      // قد يكون الخادم نفّذ العملية ثم تعثرت معالجة الرد داخل التطبيق؛
+      // لذلك لا نصفها بأنها «مشكلة إنترنت» ولا نطلب دفعاً جديداً.
+      final trace = _correlationId.isEmpty
+          ? DiagnosticTraceId.generate()
+          : _correlationId;
+      lastDiagnosticId.value = trace;
+      lastError.value =
+          'تعذر تأكيد نتيجة الدفع داخل التطبيق. '
+          'لا تنشئ دفعة جديدة قبل التحقق. رقم التتبع: $trace';
       return false;
     } finally {
       isSubmitting.value = false;

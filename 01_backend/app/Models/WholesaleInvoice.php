@@ -15,7 +15,7 @@ class WholesaleInvoice extends Model
         'invoice_date', 'due_date',
         'subtotal', 'discount_amount', 'tax_rate', 'tax_amount',
         'total_amount', 'paid_amount', 'balance_due',
-        'status', 'payment_type',
+        'status', 'payment_type', 'paid_transaction_id',
         'sales_rep_commission_rate', 'sales_rep_commission_amount',
         'notes', 'zone_code',
     ];
@@ -31,7 +31,11 @@ class WholesaleInvoice extends Model
     ];
 
     public const STATUSES = ['draft', 'issued', 'partial_paid', 'paid', 'overdue', 'voided'];
-    public const PAYMENT_TYPES = ['cash', 'credit'];
+    /**
+     * `amial_pay` لا يعني أن الموظف كتب "تم الدفع"؛ بل لا يصبح مدفوعاً
+     * إلا بعد التحقق من طلب دفع مكتمل ومتجه إلى محفظة مالك التاجر.
+     */
+    public const PAYMENT_TYPES = ['cash', 'amial_pay', 'credit'];
 
     public function business(): BelongsTo { return $this->belongsTo(WholesaleBusiness::class, 'business_id'); }
     public function customer(): BelongsTo { return $this->belongsTo(WholesaleCustomer::class, 'customer_id'); }

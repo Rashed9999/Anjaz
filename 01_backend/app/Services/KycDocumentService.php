@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\KycDocument;
 use App\Models\User;
+use App\Services\Verification\VerificationCaseService;
 use DomainException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,9 @@ class KycDocumentService
 {
     /** ما يلزم لكل مستوى. المستوى 1 لا يطلب مستنداً (هاتف فقط). */
     private const REQUIRED_BY_TIER = [
-        2 => [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE],
+        // المستوى الثاني يثبت وثيقة الهوية نفسها؛ إثبات صاحبها (سيلفي أو
+        // بديل بيومتري/حضوري) يُطلب فقط في المستوى الثالث.
+        2 => [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK],
         3 => [
             KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK,
             KycDocument::TYPE_SELFIE, KycDocument::TYPE_ADDRESS_PROOF,
@@ -41,6 +44,23 @@ class KycDocumentService
 
     private const ALLOWED_MIME = [
         'image/jpeg', 'image/png', 'image/heic', 'image/heif', 'application/pdf',
+    ];
+
+    /** أسماء يفهمها المراجع بدلاً من رموز الحقول التنظيمية الخام. */
+    private const PROFILE_FIELD_LABELS = [
+        'residence_governorate' => 'محافظة السكن',
+        'residence_district' => 'المديرية',
+        'residence_area' => 'الحيّ',
+        'occupation' => 'المهنة',
+        'income_source' => 'مصدر الدخل',
+        'account_purpose' => 'الغرض من الحساب',
+        'gender' => 'الجنس',
+        'date_of_birth' => 'تاريخ الميلاد',
+        'father_name' => 'اسم الأب',
+        'grandfather_name' => 'اسم الجدّ',
+        'name_en' => 'الاسم بالإنجليزية',
+        'is_pep' => 'الإفصاح السياسي (PEP)',
+        'pep_position' => 'المنصب السياسي',
     ];
 
     public function __construct(
@@ -73,7 +93,7 @@ class KycDocumentService
 
         $path = $this->storage->encryptAndStore($file, 'kyc');
 
-        return DB::transaction(function () use ($user, $docType, $path, $mime, $file, $sha, $operator) {
+        $doc = DB::transaction(function () use ($user, $docType, $path, $mime, $file, $sha, $operator) {
             // الأحدث هو النافذ — انظر شرح الصنف.
             KycDocument::where('user_id', $user->id)
                 ->where('doc_type', $docType)
@@ -108,6 +128,10 @@ class KycDocumentService
 
             return $doc;
         });
+
+        $this->syncVerificationCase($user);
+
+        return $doc;
     }
 
     /**
@@ -118,9 +142,9 @@ class KycDocumentService
      * لا تُغيّر شيئاً يستحقّ ذريّةً: إن فشلت، بقي المستند مرفوعاً وحالتُه
      * تقول إنّه لم يُقرأ.
      */
-    public function uploadAndRead(User $user, string $docType, UploadedFile $file): KycDocument
+    public function uploadAndRead(User $user, string $docType, UploadedFile $file, ?User $operator = null): KycDocument
     {
-        $doc = $this->upload($user, $docType, $file);
+        $doc = $this->upload($user, $docType, $file, $operator);
 
         return app(KycOcrService::class)->process($doc);
     }
@@ -149,6 +173,10 @@ class KycDocumentService
             'severity' => 'critical',
             'context' => ['doc_type' => $doc->doc_type, 'customer_id' => $doc->user_id],
         ]);
+
+        if ($doc->user) {
+            $this->syncVerificationCase($doc->user);
+        }
 
         return $doc->fresh();
     }
@@ -179,6 +207,10 @@ class KycDocumentService
             'severity' => 'warning',
             'context' => ['doc_type' => $doc->doc_type, 'customer_id' => $doc->user_id],
         ]);
+
+        if ($doc->user) {
+            $this->syncVerificationCase($doc->user);
+        }
 
         return $doc->fresh();
     }
@@ -220,11 +252,65 @@ class KycDocumentService
             }
 
             if ($approve) {
+                // AMIAL-KYC-SEQUENCE-001 — القرار النهائي نفسه يفرض التسلسل.
+                // لا نعتمد على Flutter أو Controller؛ أي مدخل قديم أو استدعاء
+                // خدمة مباشر يمر من هنا قبل توسيع الحدود المالية.
+                // أولاً سمِّ الوثائق الناقصة؛ بعد اكتمالها يطبق الحارس
+                // ترتيب المراحل وإثبات ملكية صاحب الوثيقة قبل أي اعتماد.
                 $completeness = $this->completenessFor($account, $requiredTier);
                 if (!$completeness['complete']) {
+                    throw new DomainException($this->sayMissing(
+                        'KYC_DOCUMENTS_INCOMPLETE',
+                        'لا يُعتمد الحسابُ قبل رفع هذه المستندات',
+                        $completeness['missing'],
+                        \App\Models\KycDocument::TYPE_LABELS,
+                        'ارفعها من نافذة «✏️ تعديل» ← قسمُ المستندات، ثمّ أعِد الاعتماد.'
+                    ));
+                }
+
+                app(KycTierService::class)
+                    ->assertSequentialVerificationDecision($account, $requiredTier);
+
+                // مطابقة الاسم المستخرج من الوثيقة حماية معززة للفئة الثالثة؛
+                // لا تحوّل Tier 2 إلى مسار OCR خفي. عقد Tier 2 هو وجها
+                // الوثيقة المعتمدان بعد Tier 1، بلا سيلفي أو OCR إلزامي.
+                if ($requiredTier >= 3) {
+                    app(\App\Services\Kyc\LegalNameService::class)
+                        ->assertIdentityNameReady($account);
+                }
+
+                // ══════════════════════════════════════════════════════
+                // AMIAL-KYC-REUSE-001 — **ورقةٌ واحدةٌ لا تفتح حسابين.**
+                //
+                // والمنعُ ها هنا لا في الشاشة وحدَها: **تحذيرٌ يُمكن
+                // تخطّيه يُتخطّى**، ومسارُ القرار له بابان (اللوحةُ
+                // وطابورُ الهويّة) — فحارسٌ في أحدهما ليس حارساً.
+                // (القاعدة الرابعة: ميزةٌ لها مدخلان تُختبَر من مدخليها.)
+                // ══════════════════════════════════════════════════════
+                $reuse = app(\App\Services\Kyc\DocumentReuseService::class)
+                    ->findingsFor($account);
+
+                if ($reuse['blockers'] !== []) {
                     throw new DomainException(
-                        'KYC_DOCUMENTS_INCOMPLETE: ' . implode(', ', $completeness['missing'])
-                    );
+                        'لا يُعتمد الحسابُ: '.implode(' · ', $reuse['blockers']));
+                }
+
+                // ══════════════════════════════════════════════════════
+                // AMIAL-KYC-DUP-001 — **وهويّةٌ منتهيةٌ تمنع كغيرها.**
+                //
+                // ونظيرُه في `KycEvidenceService::blockers()` يعرضه قبل
+                // الضغط — **والاثنان شرطٌ واحد**: منعٌ بلا عرضٍ يجعل
+                // المراجعَ يضغط فيُردّ ولا يعرف لماذا، وعرضٌ بلا منعٍ
+                // لافتةٌ تُتخطّى. (القاعدة الرابعة، والتاسعة.)
+                // ══════════════════════════════════════════════════════
+                $expiry = app(\App\Services\Kyc\IdentityExpiryService::class)
+                    ->stateOf($account);
+
+                if (($expiry['state'] ?? null) === \App\Services\Kyc\IdentityExpiryService::STATE_EXPIRED) {
+                    throw new DomainException(
+                        'لا يُعتمد الحسابُ: هويّةُ صاحبه منتهيةٌ'
+                        .($expiry['expires_at'] ? ' منذ '.$expiry['expires_at'] : '')
+                        .' — اطلب إعادةَ الرفع.');
                 }
 
                 // ══════════════════════════════════════════════════════
@@ -240,15 +326,26 @@ class KycDocumentService
                 // المراجعَ يبحث وتُنتج تذكرةَ دعمٍ لا إجراءً.
                 // ══════════════════════════════════════════════════════
                 if ($requiredTier >= 3 && ($completeness['missing_fields'] ?? []) !== []) {
-                    throw new DomainException(
-                        'KYC_PROFILE_INCOMPLETE: '
-                        . implode(', ', $completeness['missing_fields'])
-                    );
+                    throw new DomainException($this->sayMissing(
+                        'KYC_PROFILE_INCOMPLETE',
+                        'لا تُرفَع الفئةُ الثالثةُ قبل استكمال هذه الحقول',
+                        $completeness['missing_fields'],
+                        self::PROFILE_FIELD_LABELS,
+                        'استكملها من نافذة «✏️ تعديل» ثمّ أعِد المحاولة.'
+                    ));
                 }
 
                 $account->is_kyc_verified = 1;
                 $account->kyc_tier = max((int) ($account->kyc_tier ?? 0), $requiredTier);
                 $account->kyc_tier_updated_at = now();
+
+                if ($requiredTier >= 3) {
+                    app(\App\Services\Kyc\LegalNameService::class)
+                        ->verifyIdentityName($account, $reviewer);
+                    // الخدمة حفظت الاسم القانوني الموثق؛ أعِد قفل الصف قبل
+                    // بقية تحديثات قرار الحساب داخل المعاملة نفسها.
+                    $account->refresh();
+                }
                 // لا يُمسح طلب التحديث بمجرد رفع ملفات أو اعتماد ملفٍ مفرد؛
                 // يُمسح هنا فقط، بعد قرار الحساب النهائي ومستندات مكتملة.
                 foreach ([
@@ -432,6 +529,9 @@ class KycDocumentService
                 'customer_phone' => (string) ($d->user?->phone ?? '—'),
                 'doc_type' => $d->doc_type,
                 'doc_label' => KycDocument::TYPE_LABELS[$d->doc_type] ?? $d->doc_type,
+                // لا نكشف مسار الملف المشفر؛ النوع وحده يكفي لاختيار عارض
+                // الصورة أو المستند في لوحة المراجع.
+                'original_mime' => $d->original_mime,
                 'uploaded_at' => $d->created_at?->toIso8601String(),
                 'waiting_hours' => (int) $d->created_at?->diffInHours(now()),
             ])->all();
@@ -455,9 +555,17 @@ class KycDocumentService
             })
             ->orderBy('id')
             ->limit($limit)
-            ->get(['id', 'f_name', 'l_name', 'phone', 'kyc_tier', 'residence_governorate', 'zone_code'])
+            ->get([
+                'id', 'f_name', 'l_name', 'phone', 'kyc_tier',
+                'residence_governorate', 'zone_code',
+                'declared_legal_name', 'verified_legal_name', 'legal_name_status',
+            ])
             ->filter(fn (User $user) => $this->completenessFor($user, 2)['complete'])
-            ->map(fn (User $user) => [
+            ->map(function (User $user) { 
+                $name = app(\App\Services\Kyc\LegalNameService::class)
+                    ->identityComparison($user);
+
+                return [
                 'user_id' => (int) $user->id,
                 'customer_name' => trim((string) ($user->f_name . ' ' . $user->l_name)) ?: '—',
                 'customer_phone' => (string) ($user->phone ?? '—'),
@@ -465,12 +573,88 @@ class KycDocumentService
                 'residence_governorate' => $user->residence_governorate,
                 'residence_governorate_name' => \App\Support\YemenGovernorates::name($user->residence_governorate),
                 'zone_code' => $user->zone_code ?? ZoneAssignmentService::ZONE_UNKNOWN,
-            ])->values()->all();
+                'declared_legal_name' => (string) ($user->declared_legal_name
+                    ?: trim((string) ($user->f_name . ' ' . $user->l_name))),
+                'identity_document_name' => $name['document'],
+                'legal_name_match_status' => $name['status'],
+                'legal_name_match_score' => $name['score'],
+                'legal_name_ready' => !in_array($name['status'], ['unavailable', 'mismatch'], true),
+            ];
+            })->values()->all();
     }
 
     /** الملفّ مفكوكَ التشفير — للعرض على المراجع وحده. */
     public function decrypt(KycDocument $doc): string
     {
         return $this->storage->decryptToBinary($doc->encrypted_path);
+    }
+
+    /**
+     * القضية الموحدة إسقاط تشغيلي لحالة الأدلة، لا جزء من قرار المستند.
+     * لذلك لا ينبغي أن يحوّل غياب جدولٍ أثناء نشرٍ تدريجي قرارَ الرفع أو
+     * المراجعة إلى فشلٍ للمستخدم.
+     */
+    private function syncVerificationCase(User $user): void
+    {
+        try {
+            if (Schema::hasTable('kyc_verification_cases')) {
+                app(VerificationCaseService::class)->snapshot($user->fresh());
+            }
+        } catch (\Throwable $e) {
+            Log::warning('verification case sync failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * AMIAL-KYC-SAY-001 — **رفضٌ يقول ما ينقص بالعربيّة وأين يُستدرَك.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمنُ الذي دُفع:** أرسل صاحبُ المشروع صورةَ نافذةٍ في لوحة
+     * الإدارة تقول حرفيّاً:
+     *
+     *     رسالة من أميال باي
+     *     KYC_DOCUMENTS_INCOMPLETE: national_id_front, national_id_back, selfie
+     *
+     * **والرفضُ صحيحٌ تماماً** — الحسابُ ينقصه ثلاثةُ مستندات. لكنّه
+     * يتكلّم بلغة الآلة في وجه إنسانٍ يعمل بالعربيّة، ولا يقول ماذا
+     * يفعل. فسأل: «هذا الزرّ لا يعمل، وإذا عمل هل يعمل بشكل صحيح؟»
+     * — والجوابُ أنّه عمل وأصاب **وأخفق في أن يُفهِم**.
+     *
+     * **والمعجمُ كان موجوداً ولا يُستعمَل**: `KycDocument::TYPE_LABELS`
+     * فيه أسماءٌ عربيّةٌ للخمسة كلِّها منذ كُتب الصنف. مبنيٌّ ولا يُوصَل
+     * إليه — وهو نمطُ العطل الأكثرُ تكراراً في هذا المشروع.
+     *
+     * **ورمزٌ بلا ترجمةٍ يُعرَض خاماً ويُوسَم، ولا يُخترَع له معنى.**
+     * فترجمةٌ مخترَعةٌ في شاشة امتثالٍ تُمرّر القارئَ واثقاً من معنىً لم
+     * يقصده أحد، والرمزُ الخامُ يُوقفه ليسأل. (القاعدة السابعة.)
+     *
+     * @param  array<int,string>     $codes
+     * @param  array<string,string>  $dictionary
+     */
+    private function sayMissing(
+        string $marker,
+        string $headline,
+        array $codes,
+        array $dictionary,
+        string $whatToDo,
+    ): string {
+        $named = array_map(
+            static fn (string $c): string => $dictionary[$c] ?? ($c . ' (بلا ترجمة)'),
+            array_values($codes));
+
+        // ══════════════════════════════════════════════════════════════
+        // **والرمزُ يبقى في الذيل — عقدٌ لا زينة.**
+        //
+        // قِيس: سبعةُ مواضعَ تعتمد `KYC_DOCUMENTS_INCOMPLETE` علامةً
+        // (اختباراتٌ ومساعدُ تجهيزٍ ووثائقُ حرّاس)، ونزعُه كسر اثني عشرَ
+        // اختباراً في أوّل تشغيل. **ورسالةٌ تُقرأ بالعربيّة ولا يُعرَف
+        // رمزُها يجعل بلاغَ الدعم بلا مفتاح.**
+        //
+        // فالإنسانُ يقرأ الجملةَ أوّلاً، والآلةُ تجد علامتَها آخِراً.
+        // ══════════════════════════════════════════════════════════════
+        return $headline . ': ' . implode('، ', $named) . '. ' . $whatToDo . ' [' . $marker . ']';
     }
 }

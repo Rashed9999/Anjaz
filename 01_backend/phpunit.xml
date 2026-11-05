@@ -30,6 +30,8 @@
         <!-- <server name="DB_CONNECTION" value="sqlite"/> -->
         <!-- <server name="DB_DATABASE" value=":memory:"/> -->
         <server name="MAIL_MAILER" value="array"/>
+        <!-- Explicit, unverified test mailboxes; never used outside PHPUnit. -->
+        <server name="AMIAL_BOOTSTRAP_EMAILS" value="{&quot;967777100001&quot;:&quot;bootstrap-967777100001@example.test&quot;,&quot;967777100002&quot;:&quot;bootstrap-967777100002@example.test&quot;,&quot;967777200001&quot;:&quot;bootstrap-967777200001@example.test&quot;,&quot;967777200002&quot;:&quot;bootstrap-967777200002@example.test&quot;,&quot;967777200003&quot;:&quot;bootstrap-967777200003@example.test&quot;,&quot;967777200004&quot;:&quot;bootstrap-967777200004@example.test&quot;,&quot;967777200005&quot;:&quot;bootstrap-967777200005@example.test&quot;,&quot;967777200006&quot;:&quot;bootstrap-967777200006@example.test&quot;,&quot;967777900001&quot;:&quot;bootstrap-967777900001@example.test&quot;}"/>
         <server name="QUEUE_CONNECTION" value="sync"/>
         <server name="SESSION_DRIVER" value="array"/>
         <server name="TELESCOPE_ENABLED" value="false"/>
@@ -41,5 +43,8 @@
              من البيئة، وحارسُ `PosDeviceIdentityRotationGuardTest` يمنع
              أن يعود الاشتقاقُ من `APP_KEY`. -->
         <server name="AMIAL_DEVICE_HASH_KEY" value="testing-device-hash-key-not-a-production-secret"/>
+        <!-- مفاتيح اختبار فقط؛ الإنتاج يرفض الإقلاع إن غابت مفاتيح مدير الأسرار. -->
+        <server name="AMIAL_PII_ENCRYPTION_KEY" value="FHAK8qeP6rpaUicSnPp2R/MabL/3DjYCViRNS2FIvAI="/>
+        <server name="AMIAL_PII_BLIND_INDEX_KEY" value="COvXB5jm61FpFLUdXmRnyVtpyRCQSDTgRE3graUdbis="/>
     </php>
 </phpunit>

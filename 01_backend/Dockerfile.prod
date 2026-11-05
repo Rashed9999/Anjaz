@@ -43,10 +43,15 @@ RUN composer dump-autoload --optimize --no-dev --no-scripts --ignore-platform-re
 FROM php:8.4-fpm-alpine AS production
 
 RUN apk add --no-cache \
+    bash \
     nginx \
     supervisor \
     mysql-client \
     curl \
+    # AMIAL-BACKUP-OFFSITE-001 — أداةُ شحن النسخة خارج الخادم.
+    # انظر `Dockerfile`: بلاها يسقط الشحنُ أوّلَ ما تُضبَط الوجهة،
+    # وتبقى كلُّ النسخ على القرص الذي قد يذهب بالأصل معه.
+    rclone \
     libpng-dev \
     libjpeg-turbo-dev \
     libzip-dev \

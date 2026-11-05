@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
-use App\Models\EMoney;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Traits\UploadSizeHelperTrait;
@@ -23,7 +22,6 @@ class AgentController extends Controller
 
     public function __construct(
         private User        $user,
-        private EMoney      $eMoney,
         private Transaction $transaction
     )
     {
@@ -78,6 +76,10 @@ class AgentController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $muwathaq = rtrim((string) config('muwathaq.base_url'), '/');
+        if ($muwathaq !== '') return redirect()->away($muwathaq.'/accounts/new-agent')
+            ->with('warning', 'إنشاء الوكيل انتقل إلى موثّق؛ أميال باي لا ينشئ الوكلاء مباشرة.');
+        return redirect()->route('admin.agent.list')->with('error', 'بوابة موثّق غير مضبوطة؛ لا يمكن إنشاء وكيل من أميال باي.');
         $check = $this->validateUploadedFile($request, ['image']);
         if ($check !== true) {
             return $check;
@@ -87,7 +89,7 @@ class AgentController extends Controller
             'f_name' => 'required',
             'l_name' => 'required',
             'image' => 'required|image|max:'. $this->maxImageSizeKB .'|mimes:' . implode(',', array_column(IMAGE_EXTENSIONS, 'key')),
-            'email' => '',
+            'email' => 'required|email|max:255',
             'phone' => [
                 'required',
                 Rule::unique('users')->where(function ($query) {
@@ -132,12 +134,20 @@ class AgentController extends Controller
             $user->unique_id = $user->id . mt_rand(1111, 99999);
             $user->save();
 
-            $emoney = $this->eMoney;
-            $emoney->user_id = $user->id;
-            $emoney->save();
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'agent_number')
+                && trim((string) $user->agent_number) === '') {
+                $user->agent_number = 'AG-'.str_pad((string) $user->id, 6, '0', STR_PAD_LEFT);
+                $user->save();
+            }
+
+            \App\Models\AgentProfile::firstOrCreate(['user_id' => $user->id], [
+                'status' => 'pending_approval',
+                'zone_code' => \App\Services\ZoneAssignmentService::ZONE_UNKNOWN,
+            ]);
+            app(\App\Services\Muwathaq\MuwathaqAccountOpeningService::class)->submitFor($user);
         });
 
-        Toastr::success(translate('Agent Added Successfully!'));
+        Toastr::success('تم إنشاء الوكيل وإرسال طلبه التشغيلي إلى موثّق.');
         return redirect(route('admin.agent.list'));
     }
 
@@ -255,26 +265,17 @@ class AgentController extends Controller
         return view('admin-views.agent.kyc_list', compact('agents', 'search'));
     }
 
-    public function updateKycStatus(int $id, int $status): RedirectResponse
-    {
-        $user = $this->user->find($id);
-        if (!isset($user)) {
-            Toastr::error(translate('agent not found'));
-            return back();
-        }
-        $user->is_kyc_verified = in_array($status, [1, 2]) ? $status : $user->is_kyc_verified;
-        $user->save();
-
-        $data = [
-            'title' => $status == 1 ? translate('verification_request_is_accepted') : translate('verification_request_is_denied'),
-            'description' => '',
-            'image' => '',
-            'type' => 'kyc_verification',
-        ];
-
-        Helpers::send_push_notif_to_device($user->fcm_token, $data);
-
-        Toastr::success(translate('Successfully updated.'));
-        return back();
-    }
+    /*
+     * AMIAL-KYC-EVIDENCE-001 — **حُذفت `updateKycStatus`: بابٌ ثانٍ إلى
+     * قرارٍ ماليّ.**
+     *
+     * كانت تكتب `is_kyc_verified` مباشرةً — **بلا مراجعةِ وثيقةٍ واحدة،
+     * وبلا محافظةِ سكن، وبلا المبدأ الرباعيّ، وبلا سطرِ تدقيق**. وقِيس
+     * أنّها بلا مسارٍ مسجَّلٍ ولا قالبٍ يناديها، فهي شيفرةٌ يتيمة —
+     * **لكنّ اليتيمَ يُتبنّى**: من قرأها ظنّها المسارَ ووصلها بمسار.
+     *
+     * والقرارُ الواحد: `KycDocumentService::decideAccountVerification`،
+     * ومدخلُه من اللوحة `POST hub/users/{id}/kyc`.
+     * ويحرسه `KycEvidenceGuardTest`.
+     */
 }

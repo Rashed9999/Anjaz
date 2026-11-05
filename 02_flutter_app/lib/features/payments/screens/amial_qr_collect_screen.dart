@@ -21,11 +21,21 @@ class AmialQrCollectScreen extends StatefulWidget {
     required this.onPaid,
     this.note,
     this.title = 'استلام الدفع — QR',
+    this.createPaymentRequest,
+    this.cancelPaymentRequest,
   });
 
   final double amount;
   final String? note;
   final String title;
+
+  /// يتجاوز إنشاء الطلب العام عند الحاجة إلى مالك محفظة محدّد. تستعمله
+  /// الجملة حتى لا تُحوّل جلسة POS التحصيل إلى محفظة الموظف.
+  final Future<Map<String, dynamic>?> Function(double amount, String? note)?
+      createPaymentRequest;
+
+  /// إلغاء الطلب المخصّص عندما يُنشأ باسم محفظة غير صاحب جلسة POS.
+  final Future<bool> Function(int requestId)? cancelPaymentRequest;
 
   /// يُستدعى بعد دفع العميل. أعِد true عند نجاح تسجيل العملية (وتتكفّل بالتنقل).
   final Future<bool> Function(String paidTransactionId) onPaid;
@@ -63,11 +73,18 @@ class _AmialQrCollectScreenState extends State<AmialQrCollectScreen> {
 
   Future<void> _create() async {
     setState(() => _stage = _Stage.creating);
-    final ok = await _pr.create(
-      amount: widget.amount.toStringAsFixed(0),
-      note: widget.note,
-      shareMethod: 'qr',
-    );
+    Map<String, dynamic>? customMeta;
+    var ok = true;
+    if (widget.createPaymentRequest != null) {
+      customMeta = await widget.createPaymentRequest!(widget.amount, widget.note);
+      ok = customMeta != null;
+    } else {
+      ok = await _pr.create(
+        amount: widget.amount.toStringAsFixed(0),
+        note: widget.note,
+        shareMethod: 'qr',
+      );
+    }
     if (!mounted) return;
     if (!ok) {
       setState(() {
@@ -76,7 +93,7 @@ class _AmialQrCollectScreenState extends State<AmialQrCollectScreen> {
       });
       return;
     }
-    final meta = _pr.currentRequest.value ?? <String, dynamic>{};
+    final meta = customMeta ?? _pr.currentRequest.value ?? <String, dynamic>{};
     final req = (meta['request'] is Map) ? meta['request'] as Map : const {};
     _code = (meta['short_code'] ?? req['short_code'])?.toString();
     _requestId = int.tryParse('${req['id'] ?? ''}');
@@ -132,7 +149,21 @@ class _AmialQrCollectScreenState extends State<AmialQrCollectScreen> {
 
   Future<void> _cancel() async {
     _poll?.cancel();
-    if (_requestId != null) await _pr.cancel(_requestId!);
+    var cancelled = true;
+    if (_requestId != null) {
+      cancelled = widget.cancelPaymentRequest != null
+          ? await widget.cancelPaymentRequest!(_requestId!)
+          : await _pr.cancel(_requestId!);
+    }
+    if (!cancelled) {
+      if (mounted) {
+        setState(() {
+          _stage = _Stage.error;
+          _error = 'تعذّر إلغاء طلب الدفع؛ راجع الطلبات قبل إنشاء طلب جديد';
+        });
+      }
+      return;
+    }
     if (mounted) Get.back();
   }
 

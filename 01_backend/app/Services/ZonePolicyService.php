@@ -3,19 +3,21 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Support\YemenGovernorates;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 
 /**
  * AMIAL-ZONE-001
  *
- * ZonePolicyService — تطبيق سياسة "SOUTH only" المذكورة في قسم 4 من الوثيقة.
+ * ZonePolicyService — الحارس المركزي لتغطية الخدمات المالية وسياسة المحافظات.
  *
  * المبادئ (من الوثيقة):
- *   - أي حساب بدون zone واضح: لا عمليات مالية.
- *   - أي عملية خارج SOUTH: ترفض من API.
- *   - خارج SOUTH: login + عرض الرصيد + سجل مسموحة.
- *     لكن: تحويل، فواتير، QR، cash-in/out، دفع آمن → مرفوضة.
+ *   - أي حساب بلا موقع إقامة أو نشاط موثق: لا عمليات مالية.
+ *   - التحويلات الداخلية متاحة بعد التحقق، لأنها لا تعبر نقداً.
+ *   - الخدمات النقدية تحددها سياسة المحافظات الفعالة المراجَعة.
  *   - IP/VPN: إشارات risk فقط، **ليست** الحُكم النهائي.
  *     الحُكم النهائي مبني على user.zone_code (يُعيَّن عند الـ KYC).
  *
@@ -42,6 +44,77 @@ class ZonePolicyService
             'OTHER' => 'أخرى',
             default => 'غير محددة',
         };
+    }
+
+    /**
+     * المصدر الحاكم للتغطية النقدية هو آخر سياسة محافظات فعّالة.
+     * zone_code يبقى للتوافق والتدقيق، ولا يقرر التغطية للحسابات الجديدة.
+     *
+     * @return list<string>
+     */
+    public function operationalGovernorates(): array
+    {
+        try {
+            if (Schema::hasTable('operational_governorate_policies')) {
+                $policy = DB::table('operational_governorate_policies')
+                    ->where('is_active', true)->orderByDesc('version')
+                    ->first(['governorate_codes']);
+                if ($policy !== null) {
+                    $codes = json_decode((string) $policy->governorate_codes, true);
+                    if (is_array($codes)) {
+                        return array_values(array_unique(array_filter(
+                            $codes,
+                            static fn ($code) => is_string($code) && YemenGovernorates::isValidCode($code),
+                        )));
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return array_values(array_unique(array_filter(
+            (array) config('amial.operational_governorates', []),
+            static fn ($code) => is_string($code) && YemenGovernorates::isValidCode($code),
+        )));
+    }
+
+    /** @return array{identity_ready:bool,cash_available:bool,governorate:?string,source:string} */
+    public function coverage(User $user): array
+    {
+        $governorate = YemenGovernorates::codeFromName(
+            (string) ($user->verified_residence_governorate ?? '')
+        );
+        if ($governorate !== null && !empty($user->residence_verified_at)) {
+            return [
+                'identity_ready' => true,
+                'cash_available' => in_array($governorate, $this->operationalGovernorates(), true),
+                'governorate' => $governorate,
+                'source' => 'verified_residence',
+            ];
+        }
+
+        // توافق آمن للحسابات القديمة المعتمدة قبل موثّق. التسجيل الحديث يبدأ
+        // UNKNOWN فلا يستطيع الاستفادة من هذا المسار.
+        $legacyGovernorate = YemenGovernorates::codeFromName(
+            (string) ($user->residence_governorate ?? '')
+        );
+        if ($legacyGovernorate !== null && (int) ($user->is_kyc_verified ?? 0) === 1) {
+            return [
+                'identity_ready' => true,
+                'cash_available' => in_array($legacyGovernorate, $this->operationalGovernorates(), true),
+                'governorate' => $legacyGovernorate,
+                'source' => 'legacy_verified_residence',
+            ];
+        }
+
+        $zone = (string) ($user->zone_code ?? 'UNKNOWN');
+        return [
+            'identity_ready' => $zone !== '' && $zone !== 'UNKNOWN',
+            'cash_available' => $zone === self::ALLOWED_OPERATIONAL_ZONE,
+            'governorate' => null,
+            'source' => 'legacy_zone',
+        ];
     }
 
     /**
@@ -158,15 +231,30 @@ class ZonePolicyService
         $accountZone = $user->zone_code ?? 'UNKNOWN';
         $requestZone = $this->detectRequestZone($request);
 
-        // 1) أي حساب بدون zone محدد: ممنوع من المالية
-        if ($accountZone === 'UNKNOWN' || empty($accountZone)) {
+        // القراءة متاحة دائماً؛ لا ينبغي أن يحجب طلب موثّق غير المكتمل
+        // الوصول إلى الحساب أو السجل.
+        if (in_array($action, self::READ_ACTIONS, true)) {
+            return [
+                'allowed' => true,
+                'decision_code' => 'ALLOWED_READ',
+                'reason' => 'Read-only action',
+                'account_zone' => $accountZone,
+                'request_zone' => $requestZone,
+            ];
+        }
+
+        $coverage = $this->coverage($user);
+
+        // غياب محل إقامة/نشاط موثق يمنع المال، لا فتح طلب موثّق أو مراجعته.
+        if (!$coverage['identity_ready']) {
             return $this->deny(
                 $user,
                 $action,
-                'ACCOUNT_ZONE_UNKNOWN',
-                'Account has no operational zone assigned',
+                'ACCOUNT_LOCATION_UNVERIFIED',
+                'Verified residence or operating location is required before financial operations',
                 $accountZone,
                 $requestZone,
+                $coverage,
             );
         }
 
@@ -194,23 +282,24 @@ class ZonePolicyService
             ];
         }
 
-        // 4) عمليات يعبر فيها النقد: account_zone يجب أن يساوي SOUTH
+        // عمليات النقد تقرأ نسخة المحافظات الفعالة، لا SOUTH ثابتة.
         if (in_array($action, self::CASH_BOUNDARY_ACTIONS, true)) {
-            if ($accountZone !== self::ALLOWED_OPERATIONAL_ZONE) {
+            if (!$coverage['cash_available']) {
                 return $this->deny(
                     $user,
                     $action,
                     'TX_ZONE_BLOCKED',
-                    "Financial operations only allowed in zone " . self::ALLOWED_OPERATIONAL_ZONE,
+                    'Cash-boundary services are not enabled for the verified operating governorate',
                     $accountZone,
                     $requestZone,
+                    $coverage,
                 );
             }
 
             return [
                 'allowed' => true,
-                'decision_code' => 'ALLOWED_ZONE_OK',
-                'reason' => 'Account in allowed operational zone',
+                'decision_code' => 'ALLOWED_CASH_COVERAGE',
+                'reason' => 'Cash service enabled by operational governorate policy',
                 'account_zone' => $accountZone,
                 'request_zone' => $requestZone,
             ];
@@ -225,6 +314,17 @@ class ZonePolicyService
             $accountZone,
             $requestZone,
         );
+    }
+
+    /**
+     * تستخدمه الخدمات الداخلية حتى لا يعيد كل منها كتابة شرط SOUTH خاص به.
+     */
+    public function assertAllowed(User $user, string $action): void
+    {
+        $decision = $this->authorize($user, $action);
+        if (!$decision['allowed']) {
+            throw new RuntimeException($decision['reason'].' ['.$decision['decision_code'].']');
+        }
     }
 
     /**
@@ -255,29 +355,37 @@ class ZonePolicyService
     {
         $accountZone = $user?->zone_code ?? 'UNKNOWN';
         $requestZone = $this->detectRequestZone($request);
-        $allowedOperationalZone = self::ALLOWED_OPERATIONAL_ZONE;
-
-        // هل العمليات المالية مفعّلة لهذا المستخدم؟
-        $canTransact = $user !== null && $accountZone === $allowedOperationalZone;
+        $coverage = $user ? $this->coverage($user) : [
+            'identity_ready' => false,
+            'cash_available' => false,
+            'governorate' => null,
+            'source' => 'anonymous',
+        ];
+        $ledgerActions = $coverage['identity_ready'] ? self::LEDGER_ACTIONS : [];
+        $cashActions = $coverage['cash_available'] ? self::CASH_BOUNDARY_ACTIONS : [];
 
         return [
             'account_zone' => $accountZone,
             'request_zone' => $requestZone,
-            'allowed_operational_zone' => $allowedOperationalZone,
-            'can_transact' => $canTransact,
-            'read_only_mode' => !$canTransact && $user !== null,
-            // قائمة actions المتاحة (للتطبيق ليعرض/يخفي الأزرار)
+            'allowed_operational_zone' => self::ALLOWED_OPERATIONAL_ZONE,
+            'operational_governorates' => $this->operationalGovernorates(),
+            'verified_residence_governorate' => $coverage['governorate'],
+            'coverage_source' => $coverage['source'],
+            'cash_services_available' => $coverage['cash_available'],
+            'can_transact' => $coverage['identity_ready'],
+            'read_only_mode' => !$coverage['identity_ready'] && $user !== null,
             'available_actions' => [
                 'read' => self::READ_ACTIONS,
-                'financial' => $canTransact ? self::FINANCIAL_ACTIONS : [],
+                'financial' => array_values(array_unique(array_merge($ledgerActions, $cashActions))),
+                'ledger' => $ledgerActions,
+                'cash_boundary' => $cashActions,
             ],
-            // رسالة معروضة في الـ banner لو read-only
-            'banner_message' => $canTransact
-                ? null
-                : ($user
-                    ? "العمليات المالية متاحة في الجنوب فقط حالياً."
+            'banner_message' => !$user || !$coverage['identity_ready']
+                ? ($user ? 'أكمل توثيق محل الإقامة أو النشاط لتفعيل الخدمات المالية.' : null)
+                : (!$coverage['cash_available']
+                    ? 'التحويلات الداخلية متاحة؛ الخدمات النقدية غير مفعّلة في محافظة الإقامة أو النشاط الموثقة حالياً.'
                     : null),
-            'policy_version' => '1.0',
+            'policy_version' => '2.0',
             'evaluated_at' => now()->toIso8601String(),
         ];
     }
@@ -292,6 +400,7 @@ class ZonePolicyService
         string $reason,
         string $accountZone,
         ?string $requestZone,
+        ?array $coverage = null,
     ): array {
         $this->audit->record([
             'actor_type' => 'user',
@@ -307,6 +416,8 @@ class ZonePolicyService
                 'requested_action' => $action,
                 'account_zone' => $accountZone,
                 'request_zone' => $requestZone,
+                'verified_governorate' => $coverage['governorate'] ?? null,
+                'coverage_source' => $coverage['source'] ?? null,
             ],
         ]);
 

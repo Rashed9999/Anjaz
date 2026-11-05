@@ -91,6 +91,13 @@ class SplitBillTest extends TestCase
         $merchant = User::factory()->create(['type' => 1, 'phone' => '+967700009300']);
         $c1 = User::factory()->create(['type' => 2, 'phone' => '+967700009301']);
         $c2 = User::factory()->create(['type' => 2, 'phone' => '+967700009302']);
+        // AMIAL-MERCHANT-VERIFY-RECEIVE-001: القبضُ الماليّ يتطلّب تاجراً
+        // موثّقاً في الخادم — فالمستلمُ في التقسيم تاجرٌ حقيقيّ لا حسابٌ عارٍ.
+        \App\Models\MerchantProfile::create([
+            'user_id' => $merchant->id, 'tier' => 'small',
+            'verification_status' => 'verified',
+            'single_receive_limit' => '500000', 'daily_receive_limit' => '5000000',
+        ]);
         $this->wallet($merchant->id);
         $this->wallet($c1->id, '1000.0000');
         $this->wallet($c2->id, '1000.0000');

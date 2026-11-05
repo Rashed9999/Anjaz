@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_receipt_screen.dart';
+import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-RESTAURANT-001 — محرّر طلب المطعم.
@@ -8,11 +10,23 @@ import 'package:amial_pay/theme/amial_colors.dart';
 /// يفتح طلباً جديداً على طاولة (أو سفري) أو يعرض طلباً قائماً: إضافة أصناف،
 /// إرساله للمطبخ، تعليمه جاهزاً/مُقدَّماً، ثم إغلاقه (يُسجَّل بيعاً ويحرّر الطاولة).
 class RestaurantOrderScreen extends StatefulWidget {
-  const RestaurantOrderScreen({super.key, this.tableId, this.tableLabel, this.existingOrder});
+  const RestaurantOrderScreen({
+    super.key,
+    this.tableId,
+    this.tableLabel,
+    this.existingOrder,
+    this.checkoutOnly = false,
+    this.nextSalePage,
+  });
 
   final int? tableId;
   final String? tableLabel;
   final Map<String, dynamic>? existingOrder;
+
+  /// شاشة كاشير المطعم: يقرأ الطلب ويحصّله فقط. لا يضيف أصنافاً ولا
+  /// يغيّر حالة المطبخ لأن دور cashier لا يملك تلك الصلاحيات في الخادم.
+  final bool checkoutOnly;
+  final Widget Function()? nextSalePage;
 
   @override
   State<RestaurantOrderScreen> createState() => _RestaurantOrderScreenState();
@@ -132,8 +146,47 @@ class _RestaurantOrderScreenState extends State<RestaurantOrderScreen> {
     final r = await _api.postData('/api/v1/amial/restaurant/orders/$_orderId/close', {'payment_method': method});
     if (!mounted) return;
     setState(() => _busy = false);
-    if (r.statusCode == 200) { _snack('أُغلق الطلب وسُجّلت الفاتورة', ok: true); Get.back(result: true); }
-    else { _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر الإغلاق'); }
+    if (r.statusCode == 200 && r.body is Map) {
+      final meta = r.body['meta'] is Map
+          ? Map<String, dynamic>.from(r.body['meta'] as Map)
+          : <String, dynamic>{};
+      final rawSale = meta['sale'];
+      final order = meta['order'] is Map
+          ? Map<String, dynamic>.from(meta['order'] as Map)
+          : <String, dynamic>{};
+
+      // لا نكتفي برسالة «سُجّلت الفاتورة»: البيع المسجّل يفتح فوراً في
+      // شاشة الفاتورة الموحدة، فتتوفر الطباعة الحرارية وPDF وواتساب للمطعم
+      // كما هي متاحة لبقية القطاعات. أسطر العرض هنا هي لقطة الطلب الذي
+      // أغلقناه؛ أما PDF فيُقرأ من سجل البيع الحقيقي في الخادم.
+      if (rawSale is Map) {
+        final sale = Map<String, dynamic>.from(rawSale);
+        if (sale['items'] is! List) {
+          sale['items'] = _items
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList(growable: false);
+        }
+        final total = double.tryParse(
+              '${sale['total_amount'] ?? order['total'] ?? _total}',
+            ) ??
+            _total;
+
+        Get.off(() => CashierReceiptScreen(
+          sale: sale,
+          total: total,
+          method: method,
+          invoiceTitle: 'فاتورة مطعم',
+          nextSalePage: widget.nextSalePage,
+          nextSaleRoute: widget.nextSalePage == null ? RouteHelper.restaurant : null,
+        ));
+        return;
+      }
+
+      _snack('أُغلق الطلب وسُجّلت الفاتورة', ok: true);
+      Get.back(result: true);
+    } else {
+      _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر الإغلاق');
+    }
   }
 
   String _statusLabel(String s) => {
@@ -145,13 +198,23 @@ class _RestaurantOrderScreenState extends State<RestaurantOrderScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: Text(widget.tableLabel != null ? 'طلب — ${widget.tableLabel}' : 'طلب سفري'),
+        title: Text(widget.checkoutOnly
+            ? (widget.tableLabel != null
+                ? 'تحصيل — ${widget.tableLabel}'
+                : 'تحصيل طلب')
+            : (widget.tableLabel != null
+                ? 'طلب — ${widget.tableLabel}'
+                : 'طلب سفري')),
         backgroundColor: AmialColors.primary, foregroundColor: Colors.white,
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _busy ? null : _addItem,
-        backgroundColor: AmialColors.primary, icon: const Icon(Icons.add), label: const Text('صنف'),
-      ),
+      floatingActionButton: widget.checkoutOnly
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _busy ? null : _addItem,
+              backgroundColor: AmialColors.primary,
+              icon: const Icon(Icons.add),
+              label: const Text('صنف'),
+            ),
       body: Column(children: [
         Container(
           width: double.infinity,
@@ -185,8 +248,16 @@ class _RestaurantOrderScreenState extends State<RestaurantOrderScreen> {
                         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                           Text('${(q * p).toStringAsFixed(0)} ر.ي',
                               style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
-                          IconButton(icon: const Icon(Icons.close, size: 18, color: AmialColors.red),
-                              onPressed: _status == 'closed' ? null : () { setState(() => _items.removeAt(i)); if (_orderId != null) _persist(); }),
+                          if (!widget.checkoutOnly)
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18, color: AmialColors.red),
+                              onPressed: _status == 'closed'
+                                  ? null
+                                  : () {
+                                      setState(() => _items.removeAt(i));
+                                      if (_orderId != null) _persist();
+                                    },
+                            ),
                         ]),
                       ),
                     );
@@ -197,20 +268,35 @@ class _RestaurantOrderScreenState extends State<RestaurantOrderScreen> {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(children: [
-                Expanded(child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _setStatus(_status == 'open' ? 'preparing' : 'ready'),
-                  icon: const Icon(Icons.soup_kitchen),
-                  label: Text(_status == 'open' ? 'إرسال للمطبخ' : 'تعليم جاهز'),
-                )),
-                const SizedBox(width: 8),
-                Expanded(child: FilledButton.icon(
-                  onPressed: _busy ? null : _close,
-                  icon: const Icon(Icons.point_of_sale),
-                  label: const Text('إغلاق ودفع'),
-                  style: FilledButton.styleFrom(backgroundColor: AmialColors.success),
-                )),
-              ]),
+              child: widget.checkoutOnly
+                  ? FilledButton.icon(
+                      onPressed: _busy ? null : _close,
+                      icon: const Icon(Icons.point_of_sale),
+                      label: const Text('تحصيل وإغلاق الطلب'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AmialColors.success,
+                        minimumSize: const Size.fromHeight(52),
+                      ),
+                    )
+                  : Row(children: [
+                      Expanded(child: OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _setStatus(
+                                _status == 'open' ? 'preparing' : 'ready'),
+                        icon: const Icon(Icons.soup_kitchen),
+                        label: Text(
+                            _status == 'open' ? 'إرسال للمطبخ' : 'تعليم جاهز'),
+                      )),
+                      const SizedBox(width: 8),
+                      Expanded(child: FilledButton.icon(
+                        onPressed: _busy ? null : _close,
+                        icon: const Icon(Icons.point_of_sale),
+                        label: const Text('إغلاق ودفع'),
+                        style: FilledButton.styleFrom(
+                            backgroundColor: AmialColors.success),
+                      )),
+                    ]),
             ),
           ),
       ]),

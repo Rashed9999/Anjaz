@@ -8,7 +8,15 @@ use Illuminate\Database\Eloquent\Model;
 class PurchaseOrderItem extends Model
 {
     protected $fillable = [
-        'purchase_order_id', 'product_id', 'name',
-        'quantity', 'received_quantity', 'unit_cost',
+        'purchase_order_id', 'product_id', 'item_type', 'asset_category',
+        'useful_life_months', 'salvage_value', 'name',
+        'quantity', 'received_quantity', 'returned_quantity', 'unit_cost',
     ];
+
+    /** ما بقي قابلاً للردّ من هذا البند — **مُستلَمٌ ناقصُ ما رُدّ**. */
+    public function returnableQuantity(): string
+    {
+        return bcsub((string) $this->received_quantity,
+            (string) ($this->returned_quantity ?? '0'), 3);
+    }
 }

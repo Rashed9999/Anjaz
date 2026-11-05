@@ -20,6 +20,10 @@ class AgentMiddleware
             return $next($request);
         }
         //else
-        abort(response()->json(['message' => 'Access forbidden.'], 403));
+        abort(response()->json([
+            'success' => false,
+            'code' => 'AGENT_ACCESS_REQUIRED',
+            'message' => 'هذه الخدمة متاحة لحساب الوكيل فقط.',
+        ], 403));
     }
 }

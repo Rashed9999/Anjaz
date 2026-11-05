@@ -68,6 +68,8 @@
             @if((float) $document['discount'] > 0)<tr><td>الخصم</td><td class="left">- {{ number_format((float) $document['discount'], 2) }}</td></tr>@endif
             @if((float) $document['tax'] > 0)<tr><td>الضريبة</td><td class="left">{{ number_format((float) $document['tax'], 2) }}</td></tr>@endif
             <tr><td class="b">الإجمالي</td><td class="left b">{{ number_format((float) $document['total'], 2) }} {{ $document['currency'] }}</td></tr>
+            {{-- AMIAL-CASH-TENDERED-001 — المستلَمُ والباقي على الشريط الحراريّ. --}}
+            @foreach($document['tendered_lines'] ?? [] as $line)<tr><td>{{ $line['label'] }}</td><td class="left">{{ number_format((float) $line['value'], 2) }} {{ $document['currency'] }}</td></tr>@endforeach
             @if((float) $document['balance_due'] > 0)<tr><td>المتبقي</td><td class="left b">{{ number_format((float) $document['balance_due'], 2) }} {{ $document['currency'] }}</td></tr>@endif
         </table>
     @else
@@ -85,8 +87,16 @@
     <div class="hr"></div>
     <table><tr><td>مرجع العملية</td><td class="left muted">{{ $document['transaction_number'] }}</td></tr></table>
     <div class="c muted">التحقق: {{ $document['verification_code'] }}</div>
+    {{-- **ورمزٌ بلا موضعٍ يُكتب فيه لا يُتحقَّق منه.** --}}
+    <div class="c muted" dir="ltr">{{ rtrim(config('app.url', 'https://amialpay.com'), '/') }}/verify</div>
     @if(!empty($qrDataUri))<div class="c"><img class="qr" src="{{ $qrDataUri }}" width="{{ $widthMm >= 80 ? 92 : 74 }}" alt="QR"></div>@endif
     <div class="hr"></div>
+    {{-- AMIAL-SHIFT-GATE-001 — اسمُ فاتح الوردية أسفل الفاتورة.
+         ولا يُطبَع سطرٌ فارغٌ لبيعةٍ لا وردية لها: فراغٌ باسم «الوردية»
+         يُقرأ «لم يقبضها أحد». (القاعدة السابعة.) --}}
+    @if(!empty($document['shift_line']))
+        <div class="c muted">{{ $document['shift_line']['label'] }}: {{ $document['shift_line']['value'] }}</div>
+    @endif
     <div class="c muted">
         @if($document['kind'] === 'merchant_invoice')
             {{ $document['seller']['footer_note'] }}

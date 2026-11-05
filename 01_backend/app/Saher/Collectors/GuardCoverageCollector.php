@@ -118,6 +118,18 @@ class GuardCoverageCollector
         $seen = 0;
 
         foreach (app('router')->getRoutes() as $route) {
+            // AMIAL-BUSINESS-OBSERVE-001 — قناة أميال أعمال: لا مستخدمَ ولا صلاحيّة،
+            // فالحارسُ الوحيد هو التوقيع. ومسارٌ هناك بلا توقيع — ولو قراءة — يفتح
+            // تصديرَ بيانات التاجر أو مرآةَ ديونه لكلّ من يعرف العنوان.
+            if (str_starts_with($route->uri(), 'api/v1/business/')) {
+                $seen++;
+                if (! in_array(self::BUSINESS_SIGNATURE, $route->gatherMiddleware(), true)) {
+                    $findings[] = $this->unsignedBusinessRoute($route);
+                }
+
+                continue;
+            }
+
             if (! $this->isAdminWrite($route)) {
                 continue;
             }
@@ -207,6 +219,37 @@ class GuardCoverageCollector
         }
 
         return false;
+    }
+
+    private const BUSINESS_SIGNATURE = 'amial.business.signature';
+
+    private function unsignedBusinessRoute(Route $route): Finding
+    {
+        $method = implode('|', array_diff($route->methods(), ['HEAD']));
+
+        return (new Finding(
+            ruleId: 'SAHER.GUARD.BUSINESS_GATEWAY_UNSIGNED',
+            sourceCode: self::SOURCE,
+            category: 'security',
+            title: 'مسارٌ في قناة أميال أعمال بلا توقيع',
+            severity: 'CRITICAL',
+            confidence: 'PROVEN',
+            assetKey: ($route->getName() ?: $method . ' ' . $route->uri()),
+            assetType: 'route',
+            expected: 'كلُّ مسارٍ تحت `api/v1/business/` خلف وسيطة `' . self::BUSINESS_SIGNATURE . '`',
+            actual: 'لا وسيطةَ توقيعٍ على هذا المسار',
+            impact: 'يُنادى بلا سرّ القناة — والرابطُ (أي التاجر) يُقرأ من الترويسة',
+            suggestedAction: 'يُنقل المسار إلى مجموعة `routes/api/business-gateway.php`',
+            symbol: is_string($route->getActionName()) ? $route->getActionName() : null,
+        ))->withEvidence(
+            new Evidence(
+                'ROUTE_MIDDLEWARE',
+                'الوسائطُ المحمولةُ على المسار فعلاً',
+                $method . ' ' . $route->uri() . "\n"
+                    . implode("\n", array_map(fn ($m) => '  · ' . (is_string($m) ? $m : gettype($m)), $route->gatherMiddleware())),
+                'GuardCoverageCollector::collect',
+            ),
+        );
     }
 
     private function unguarded(Route $route, string $name): Finding

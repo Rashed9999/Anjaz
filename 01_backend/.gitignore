@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.demo.example
 storage/oauth-private.key
 storage/oauth-public.key
 storage/logs/

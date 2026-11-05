@@ -41,6 +41,7 @@ class AgentStaffProfileTest extends TestCase
         parent::setUp();
 
         $this->company = new User();
+        $this->company->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $this->company->forceFill([
             'f_name' => 'البسيري', 'l_name' => 'للصرافة', 'phone' => '967771600001',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),
@@ -60,6 +61,7 @@ class AgentStaffProfileTest extends TestCase
     private function makeBranch(string $code, string $name): AgentBranch
     {
         $bu = new User();
+        $bu->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $bu->forceFill([
             'f_name' => $name, 'l_name' => 'فرع', 'type' => AGENT_TYPE,
             'phone' => '9677716' . random_int(10000, 99999),
@@ -328,6 +330,7 @@ class AgentStaffProfileTest extends TestCase
     public function a_profile_from_another_company_is_not_reachable(): void
     {
         $rival = new User();
+        $rival->email = 'fixture-' . bin2hex(random_bytes(8)) . '@example.test';
         $rival->forceFill([
             'f_name' => 'منافس', 'l_name' => 'للصرافة', 'phone' => '967771699999',
             'type' => AGENT_TYPE, 'password' => Hash::make('secret123'),

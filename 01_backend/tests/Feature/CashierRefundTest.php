@@ -7,9 +7,11 @@ use App\Models\EMoney;
 use App\Models\MerchantProfile;
 use App\Models\MerchantRefund;
 use App\Models\MerchantSale;
+use App\Models\Retail\SaleReturn;
 use App\Models\AmialNotification;
 use App\Models\User;
 use App\Services\CashierService;
+use App\Services\CashierShiftService;
 use App\Services\MerchantSaleRefundService;
 use App\Services\MoneyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -54,6 +56,8 @@ class CashierRefundTest extends TestCase
     /** @test */
     public function cash_refund_creates_record_without_wallet_movement(): void
     {
+        app(CashierShiftService::class)->open($this->merchant, null, '0');
+
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '5000',
@@ -93,6 +97,8 @@ class CashierRefundTest extends TestCase
             'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
         ]);
 
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TX12345', '3000');
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '3000',
@@ -220,6 +226,8 @@ class CashierRefundTest extends TestCase
     /** @test */
     public function multiple_partial_refunds_cannot_exceed_total(): void
     {
+        app(CashierShiftService::class)->open($this->merchant, null, '0');
+
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '1000',
@@ -255,6 +263,81 @@ class CashierRefundTest extends TestCase
         $this->assertSame('pending_approval', $refund->status);
     }
 
+    /** @test المال والبضاعة يبقيان معلّقين معاً ثم يُعتمدان معاً. */
+    public function pending_line_refund_approves_money_and_goods_atomically(): void
+    {
+        $customer = User::factory()->create([
+            'type' => 2,
+            'phone' => '+967700555',
+            'zone_code' => 'SOUTH',
+        ]);
+        EMoney::create([
+            'user_id' => $customer->id,
+            'current_balance' => '0.0000',
+            'held_balance' => '0.0000',
+            'pending_balance' => '0.0000',
+            'charge_earned' => '0.0000',
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $this->paidQrRequest($this->merchant, 'TX-PENDING-LINE', '6000');
+        $sale = $this->cashier->recordSale(
+            merchant: $this->merchant,
+            total: '6000',
+            paymentMethod: 'amial_pay',
+            items: [['name' => 'صنف مرتجع', 'qty' => 1, 'price' => '6000']],
+            customer: ['name' => 'عميل المرتجع', 'phone' => '+967700555'],
+            paidTransactionId: 'TX-PENDING-LINE',
+        );
+        $line = $sale->lines()->firstOrFail();
+
+        $merchantBefore = (string) EMoney::where('user_id', $this->merchant->id)
+            ->value('current_balance');
+        $customerBefore = (string) EMoney::where('user_id', $customer->id)
+            ->value('current_balance');
+
+        $refund = $this->svc->refund(
+            merchant: $this->merchant,
+            originalSaleUlid: $sale->sale_ulid,
+            refundAmount: '6000',
+            refundMethod: 'wallet',
+            items: [[
+                'sale_item_id' => $line->id,
+                'quantity' => 1,
+                'condition' => 'good',
+                'restock' => true,
+            ]],
+            reason: 'اختبار اعتماد مرتجع سطري',
+        );
+
+        $this->assertSame('pending_approval', $refund->status);
+
+        $goods = SaleReturn::where('refund_ulid', $refund->refund_ulid)->firstOrFail();
+        $this->assertSame('pending', $goods->status);
+        $this->assertSame('0.000', (string) $line->fresh()->returned_quantity);
+        $this->assertSame($merchantBefore,
+            (string) EMoney::where('user_id', $this->merchant->id)->value('current_balance'));
+        $this->assertSame($customerBefore,
+            (string) EMoney::where('user_id', $customer->id)->value('current_balance'));
+
+        $admin = User::factory()->create(['type' => 1]);
+        $approved = $this->svc->approve($refund, $admin->id);
+
+        $this->assertSame('completed', $approved->status);
+        $this->assertSame('approved', $goods->fresh()->status);
+        $this->assertSame('1.000', (string) $line->fresh()->returned_quantity);
+        $this->assertSame(
+            MoneyService::sub($merchantBefore, '6000'),
+            MoneyService::normalize((string) EMoney::where('user_id', $this->merchant->id)
+                ->value('current_balance'))
+        );
+        $this->assertSame(
+            MoneyService::add($customerBefore, '6000'),
+            MoneyService::normalize((string) EMoney::where('user_id', $customer->id)
+                ->value('current_balance'))
+        );
+    }
+
     /** @test */
     public function admin_can_approve_pending_refund(): void
     {
@@ -265,6 +348,8 @@ class CashierRefundTest extends TestCase
             'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
         ]);
 
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TX99', '10000');
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '10000',
@@ -302,6 +387,8 @@ class CashierRefundTest extends TestCase
             'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
         ]);
 
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TX44', '2000');
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '2000',

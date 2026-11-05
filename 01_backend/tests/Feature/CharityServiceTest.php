@@ -156,7 +156,7 @@ class CharityServiceTest extends TestCase
         $this->service->approveCampaign($campaign, $this->checker);
 
         // 3 donations
-        $donor = User::factory()->create(['zone_code' => 'SOUTH']);
+        $donor = User::factory()->create(['zone_code' => 'SOUTH', 'is_kyc_verified' => 1]);
         EMoney::create(['user_id' => $donor->id, 'current_balance' => '1000.0000']);
 
         $this->donations->donate($donor, $campaign, '100.0000');
@@ -209,7 +209,7 @@ class CharityServiceTest extends TestCase
         ], $this->admin);
         $this->service->approveCampaign($campaign, $this->checker);
 
-        $donor = User::factory()->create(['zone_code' => 'SOUTH']);
+        $donor = User::factory()->create(['zone_code' => 'SOUTH', 'is_kyc_verified' => 1]);
         EMoney::create(['user_id' => $donor->id, 'current_balance' => '1000.0000']);
         $this->donations->donate($donor, $campaign, '100.0000');
 
@@ -236,7 +236,7 @@ class CharityServiceTest extends TestCase
         ], $this->admin);
         $this->service->approveCampaign($campaign, $this->checker);
 
-        $donor = User::factory()->create(['zone_code' => 'SOUTH']);
+        $donor = User::factory()->create(['zone_code' => 'SOUTH', 'is_kyc_verified' => 1]);
         EMoney::create(['user_id' => $donor->id, 'current_balance' => '1000.0000']);
         $this->donations->donate($donor, $campaign, '500.0000');
 
