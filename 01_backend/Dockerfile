@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM php:8.4-fpm-alpine
 
 # ── System deps ─────────────────────────────────────────
@@ -169,7 +170,8 @@ COPY composer.json composer.lock ./
 # `--no-scripts` و`--no-autoloader` شرطُ عملٍ لا تحسين: السكربتاتُ تُقلع
 # Laravel، ولا شيفرةَ بعد — `artisan` نفسُه لم يُنسخ. وخريطةُ التحميل
 # تُبنى بعد نسخ الشيفرة.
-RUN composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
+RUN --mount=type=cache,target=/root/.cache/composer \
+    COMPOSER_CACHE_DIR=/root/.cache/composer composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
 
 COPY . .
 

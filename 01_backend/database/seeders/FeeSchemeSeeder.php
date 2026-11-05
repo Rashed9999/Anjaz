@@ -19,7 +19,8 @@ use Illuminate\Database\Seeder;
  *   - الاسترجاع وتقسيم الفاتورة والصندوق العائلي: بلا رسم في v1.
  *
  * كل الأرقام placeholders للسوق الجنوبي (SOUTH) — تضبطها الإدارة من لوحة التحكم.
- * يستخدم updateOrCreate حتى لا يكرّر عند إعادة التشغيل.
+ * يضيف النسخ الافتراضية عند غيابها فقط. النسخ النشطة اللاحقة وقرارات الإدارة
+ * لا يجوز أن تعيد البذرة إلغاءها أو إحياء نسخة تاريخية عند كل إقلاع.
  */
 class FeeSchemeSeeder extends Seeder
 {
@@ -62,8 +63,15 @@ class FeeSchemeSeeder extends Seeder
         foreach ($defaults as $row) {
             [$code, $label, $type, $percent, $fixed, $min, $max, $agentP, $agentF, $appliesTo, $bearer] = $row;
 
-            FeeScheme::updateOrCreate(
-                ['code' => $code, 'zone_code' => 'SOUTH', 'applies_to' => $appliesTo, 'version' => 1],
+            // أي نسخة عامة سابقة تعني أن التسعير دخل دورة الإدارة؛ لا نعيد
+            // نسخة 1 ولا نطمس النسخة النشطة حتى لو غابت النسخة الأولى.
+            if (FeeScheme::where('code', $code)->where('zone_code', 'SOUTH')
+                ->where('applies_to', $appliesTo)->whereNull('plan')->exists()) {
+                continue;
+            }
+
+            FeeScheme::firstOrCreate(
+                ['code' => $code, 'zone_code' => 'SOUTH', 'applies_to' => $appliesTo, 'plan' => null, 'version' => 1],
                 [
                     'label' => $label,
                     'fee_type' => $type,
