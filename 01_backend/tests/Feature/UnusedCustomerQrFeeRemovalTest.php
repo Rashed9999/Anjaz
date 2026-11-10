@@ -16,6 +16,14 @@ class UnusedCustomerQrFeeRemovalTest extends TestCase
     {
         $this->seed(FeeSchemeSeeder::class);
 
+        // الهجرةُ تستهدف الصفَّ ١١ بعينه (يتيمُ الإنتاج). ورقمُ الصفّ في القاعدة
+        // الاختباريّة يتبع عدّادَ الزيادة — وMySQL لا يُرجعه مع تراجع المعاملات —
+        // فيقع ١١ أحياناً على صفٍّ مبذور. يُنقَل ذاك إلى رقمٍ حرّ ليبقى ١١ للحالة.
+        if (DB::table('fee_schemes')->where('id', 11)->exists()) {
+            DB::table('fee_schemes')->where('id', 11)
+                ->update(['id' => (int) DB::table('fee_schemes')->max('id') + 1]);
+        }
+
         DB::table('fee_schemes')->insert([
             'id' => 11, 'code' => 'MERCHANT_QR', 'zone_code' => 'SOUTH',
             'applies_to' => 'customer', 'plan' => null, 'version' => 1,
