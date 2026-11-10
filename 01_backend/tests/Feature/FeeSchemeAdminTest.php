@@ -56,13 +56,14 @@ class FeeSchemeAdminTest extends TestCase
     /** @test */
     public function store_rejects_invalid_percent()
     {
+        $before = \Illuminate\Support\Facades\DB::table('fee_schemes')->count();
         $resp = $this->withoutMiddleware()->post('/admin/amial/fees', [
             'code' => 'SEND_MONEY', 'zone_code' => 'SOUTH', 'applies_to' => 'customer',
             'fee_type' => 'percent', 'percent_rate' => '150', 'fixed_amount' => '0',
             'agent_commission_percent' => '0', 'agent_commission_fixed' => '0', 'bearer' => 'sender',
         ]);
         $resp->assertSessionHasErrors();
-        $this->assertDatabaseCount('fee_schemes', 0);
+        $this->assertDatabaseCount('fee_schemes', $before);
     }
 
     /** @test */

@@ -300,7 +300,7 @@ class MerchantWebPortalTest extends TestCase
 
         $this->get('/merchant')
             ->assertOk()
-            ->assertSee('async function customers()', false)
+            ->assertSee('async function customers(', false)
             ->assertSee('قاعدة بيانات العملاء')
             ->assertSee('staffPerformance')
             ->assertSee('إنشاء دور مخصص');

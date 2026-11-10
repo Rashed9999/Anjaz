@@ -86,6 +86,8 @@ class MerchantVerificationService
             // القطاع. البيع السريع لا يُحجب بسجل تجاري، لكن لا يفقد هوية
             // المالك أو صورة وموقع نقطة البيع. الفحص قبل التخزين حتى لا
             // تخلّف محاولة ناقصة ملفات خاصة يتيمة.
+            // ملفٌّ مرفوضُ النوع أو الحجم يُقال سببُه أوّلاً — لا «يلزم استكمال».
+            $this->assertFilesAcceptable($files);
             $this->assertRequiredDocuments($merchant, $request, $this->plannedPaths($files));
 
             // ارفع الملفات وحفظ مساراتها بعد اجتياز سياسة القطاع.
@@ -354,6 +356,21 @@ class MerchantVerificationService
      * يرفع الملفات لـ storage/app/private/merchant_verifications/{merchantId}/{ulid}_{type}.
      * يرجّع map من نوع الوثيقة لـ path.
      */
+    /** نوعُ الملف وحجمُه — قبل فحص الاكتمال وقبل التخزين. */
+    private function assertFilesAcceptable(array $files): void
+    {
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+        foreach ($files as $key => $file) {
+            if (!$file instanceof UploadedFile) continue;
+            if (!in_array($file->getMimeType(), $allowedMimes, true)) {
+                throw new InvalidArgumentException("نوع الملف غير مدعوم: {$key}");
+            }
+            if ($file->getSize() > 5 * 1024 * 1024) {
+                throw new InvalidArgumentException("حجم الملف يتجاوز 5MB: {$key}");
+            }
+        }
+    }
+
     private function uploadFiles(int $merchantId, array $files): array
     {
         $paths = [];

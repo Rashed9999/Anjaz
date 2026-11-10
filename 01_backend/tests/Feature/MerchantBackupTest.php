@@ -54,7 +54,7 @@ class MerchantBackupTest extends TestCase
             ->assertOk()
             ->assertHeader('content-disposition')
             ->assertJsonPath('meta.counts.sales', 1)
-            ->assertJsonPath('meta.schema_version', 1);
+            ->assertJsonPath('meta.schema_version', 2); // الإصدار ٢: أقسامُ القطاع (vertical) والعدّاداتُ لكلّ قسم
 
         $this->assertStringContainsString('attachment', $res->headers->get('content-disposition'));
     }

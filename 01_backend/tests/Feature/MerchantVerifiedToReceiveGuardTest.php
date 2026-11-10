@@ -170,7 +170,7 @@ class MerchantVerifiedToReceiveGuardTest extends TestCase
     /** @test */
     public function business_and_identity_decisions_are_independent_and_together_unlock_receiving(): void
     {
-        $admin = User::factory()->create(['type' => 1]);
+        $admin = User::factory()->create(['type' => ADMIN_TYPE]); // المراجعُ موظّفٌ إداريّ (النوع ٠)
         $merchant = $this->merchant('pending_review');
 
         // اجعل الطلبَ قيدَ المراجعة (كما يصنعه submit).
@@ -179,6 +179,11 @@ class MerchantVerifiedToReceiveGuardTest extends TestCase
             'merchant_user_id' => $merchant->id,
             'business_name' => 'متجر الاختبار',
             'status' => 'pending_review',
+            // مستنداتُ القطاع — الاعتمادُ يرفض طلباً بلا مستنداته (آخرُ خطّ دفاع).
+            'id_card_front_path' => 'merchant-verification/test/front.jpg',
+            'id_card_back_path' => 'merchant-verification/test/back.jpg',
+            'commercial_register_path' => 'merchant-verification/test/cr.pdf',
+            'store_photo_path' => 'merchant-verification/test/store.jpg',
         ]);
 
         $this->assertSame(0, (int) $merchant->fresh()->is_kyc_verified,
@@ -222,7 +227,7 @@ class MerchantVerifiedToReceiveGuardTest extends TestCase
      */
     public function business_verification_alone_never_verifies_the_person(): void
     {
-        $admin = User::factory()->create(['type' => 1]);
+        $admin = User::factory()->create(['type' => ADMIN_TYPE]); // المراجعُ موظّفٌ إداريّ (النوع ٠)
         $merchant = $this->merchant('pending_review');   // بلا وثيقةِ هويّةٍ واحدة
 
         $req = \App\Models\MerchantVerificationRequest::create([
@@ -230,6 +235,10 @@ class MerchantVerifiedToReceiveGuardTest extends TestCase
             'merchant_user_id' => $merchant->id,
             'business_name' => 'متجر بلا هويّة',
             'status' => 'pending_review',
+            'id_card_front_path' => 'merchant-verification/test/front.jpg',
+            'id_card_back_path' => 'merchant-verification/test/back.jpg',
+            'commercial_register_path' => 'merchant-verification/test/cr.pdf',
+            'store_photo_path' => 'merchant-verification/test/store.jpg',
         ]);
 
         app(MerchantVerificationService::class)->approve($req, $admin->id);

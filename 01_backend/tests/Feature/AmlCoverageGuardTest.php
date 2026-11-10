@@ -237,7 +237,26 @@ class AmlCoverageGuardTest extends TestCase
 
         $missing = [];
 
+        // ── سقفٌ خاصٌّ بنوعه، لا ثغرة ──
+        //
+        // AMIAL-BUSINESS-AML-001: سحبُ التاجر واستردادُ أميال أعمال لهما
+        // قواعدُهما في `BusinessAmlRules` (مراجعةٌ فوق 300,000 و200,000).
+        // وتطبيقُ سقف الأفراد (50,000 حجباً) عليهما يحجز سحبَ التاجر اليوميّ
+        // كلَّه — وهو ما يمنعه `BusinessAmlTest` صراحةً. فالشرطُ هنا أن يكون
+        // لكلٍّ منهما سقفٌ فعّالٌ بعينه، لا أن يدخلا سقفَ الأفراد.
+        $ownCap = ['merchant_cash_out', 'business_refund'];
+
         foreach ((array) config('amial.aml.screened_types', []) as $type) {
+            if (in_array($type, $ownCap, true)) {
+                $capped = AmlRule::where('is_active', true)
+                    ->where('rule_type', 'max_single_transaction')
+                    ->get()
+                    ->contains(fn (AmlRule $r) => $r->appliesToType($type));
+                if (! $capped) {
+                    $missing[] = $type;
+                }
+                continue;
+            }
             if (! $hard->appliesToType($type)) {
                 $missing[] = $type;
             }

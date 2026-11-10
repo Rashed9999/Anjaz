@@ -634,7 +634,7 @@ class KycDocumentService
      * @param  array<int,string>     $codes
      * @param  array<string,string>  $dictionary
      */
-    private function sayMissing(
+    protected function sayMissing(
         string $marker,
         string $headline,
         array $codes,

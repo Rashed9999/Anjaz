@@ -1,0 +1,1024 @@
+<title>محاكي تاجر الجملة</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
+<style>
+  :root{
+    --brand:#053391; --brand-lt:#1D4FB8; --brand-dk:#021F5C;
+    --ok:#0F7A46; --ok-bg:#E3F3E5;
+    --warn:#8A5A00; --warn-bg:#FFF6E0;
+    --bad:#B3261E; --bad-bg:#FDE7E7;
+    --cash:#7A5C00;
+    --ground:#E7EBF3; --panel:#F4F6FA;
+    --surface:#FFFFFF; --surface-2:#F7F9FC;
+    --ink:#0F1729; --ink-2:#48536B; --ink-3:#7B869C;
+    --line:#D8DEEA; --line-2:#E9EDF5;
+    --shadow:0 1px 2px rgba(5,51,145,.06),0 8px 24px rgba(5,51,145,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --brand:#6E92E8; --brand-lt:#8FADF0; --brand-dk:#0A1B3D;
+      --ok:#5FCE93; --ok-bg:#123123;
+      --warn:#E5B65C; --warn-bg:#33260A;
+      --bad:#F2867E; --bad-bg:#3A1512;
+      --cash:#D9B25C;
+      --ground:#0B1120; --panel:#0F1727;
+      --surface:#151E31; --surface-2:#1B2539;
+      --ink:#E9EDF6; --ink-2:#A6B2C8; --ink-3:#7A87A0;
+      --line:#2A354C; --line-2:#212B3E;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --brand:#6E92E8; --brand-lt:#8FADF0; --brand-dk:#0A1B3D;
+    --ok:#5FCE93; --ok-bg:#123123;
+    --warn:#E5B65C; --warn-bg:#33260A;
+    --bad:#F2867E; --bad-bg:#3A1512;
+    --cash:#D9B25C;
+    --ground:#0B1120; --panel:#0F1727;
+    --surface:#151E31; --surface-2:#1B2539;
+    --ink:#E9EDF6; --ink-2:#A6B2C8; --ink-3:#7A87A0;
+    --line:#2A354C; --line-2:#212B3E;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  /* `display:grid` على .iconbtn يغلب `[hidden]` الافتراضيَّ، فيبقى زرُّ
+     الرجوع ظاهراً في الجذر ويُضغط فلا يرجع — التقطه المسبار. */
+  [hidden]{display:none !important}
+  body{
+    margin:0; direction:rtl; background:var(--ground); color:var(--ink);
+    /* **ولا يُعتمد على وصول الخطّ.** `Tajawal` من fonts.googleapis.com،
+       وهو مسموحٌ في الأرتفاكت — لكنّه لم يصل في حاوية الفحص. والمشروعُ
+       دفع ثمنَ هذا مرّةً: خطٌّ افتراضيٌّ بصفر حرفٍ عربيّ، فكلُّ نصٍّ
+       يسقط على خطّ الجهاز ولا خطأَ في أيّ سجلّ. فالبدائلُ هنا تكتب
+       العربيّةَ كلُّها. */
+    font-family:'Tajawal','Noto Kufi Arabic','Noto Sans Arabic','Segoe UI',
+                'Geeza Pro','Droid Arabic Naskh',system-ui,sans-serif;
+    font-size:15px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{margin:0; text-wrap:balance; font-weight:800; letter-spacing:-.01em}
+  button{font:inherit; color:inherit; cursor:pointer}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ══ التخطيط: منضدةُ عمل — إطارُ الهاتف ولوحةُ «ما يقوله الخادم» ══ */
+  .wrap{max-width:1180px; margin:0 auto; padding:24px 20px 56px}
+  .masthead{margin-bottom:20px}
+  .eyebrow{
+    font-size:11px; font-weight:700; letter-spacing:.14em;
+    color:var(--brand); text-transform:uppercase; margin-bottom:6px;
+  }
+  .masthead h1{font-size:27px; margin-bottom:6px}
+  .masthead p{margin:0; color:var(--ink-2); max-width:62ch; font-size:14px}
+
+  .bench{display:grid; grid-template-columns:minmax(0,352px) minmax(0,1fr); gap:24px; align-items:start}
+  @media (max-width:880px){ .bench{grid-template-columns:1fr} }
+
+  /* ══ شريطُ التحكّم ══ */
+  .rail{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding:14px; box-shadow:var(--shadow); margin-bottom:16px;
+  }
+  .rail h3{font-size:12px; letter-spacing:.1em; color:var(--ink-3); margin-bottom:9px; font-weight:700}
+  .seg{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px}
+  .seg:last-child{margin-bottom:0}
+  .seg button{
+    flex:1 1 auto; min-width:78px; padding:7px 10px; border-radius:9px;
+    border:1px solid var(--line); background:var(--surface-2); color:var(--ink-2);
+    font-size:13px; font-weight:500; transition:.14s;
+  }
+  .seg button:hover{border-color:var(--brand-lt); color:var(--brand)}
+  .seg button[aria-pressed="true"]{
+    background:var(--brand); border-color:var(--brand); color:#fff; font-weight:700;
+  }
+  :root[data-theme="dark"] .seg button[aria-pressed="true"],
+  :root:not([data-theme="light"]) .seg button[aria-pressed="true"]{color:var(--brand-dk)}
+  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]) .seg button[aria-pressed="true"]{color:#fff} }
+
+  /* ══ لوحةُ الخادم ══ */
+  .verdict{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding:16px; box-shadow:var(--shadow);
+  }
+  .verdict h3{font-size:15px; margin-bottom:4px}
+  .verdict .sub{font-size:12.5px; color:var(--ink-3); margin:0 0 12px}
+  .grant{border-top:1px solid var(--line-2); padding:9px 0; display:flex; gap:9px; align-items:flex-start}
+  .grant:last-child{padding-bottom:0}
+  .dot{width:8px; height:8px; border-radius:50%; margin-top:7px; flex:none}
+  .dot.on{background:var(--ok)} .dot.off{background:var(--ink-3); opacity:.5}
+  .grant b{font-size:13.5px; font-weight:700; display:block}
+  .grant span{font-size:12px; color:var(--ink-2); display:block; line-height:1.5}
+  .src{
+    display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px;
+    border-radius:5px; margin-inline-start:5px; vertical-align:1px;
+  }
+  .src.box{background:var(--ok-bg); color:var(--ok)}
+  .src.plan{background:#E6ECFA; color:var(--brand)}
+  :root[data-theme="dark"] .src.plan,:root:not([data-theme="light"]) .src.plan{background:#182543}
+  @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .src.plan{background:#E6ECFA}}
+  .src.none{background:var(--warn-bg); color:var(--warn)}
+
+  /* ══ إطارُ الهاتف ══ */
+  .phone{
+    width:352px; max-width:100%; height:722px; margin-inline:auto;
+    background:var(--surface); border:9px solid #10182B; border-radius:34px;
+    overflow:hidden; position:relative; display:flex; flex-direction:column;
+    box-shadow:0 18px 46px rgba(5,20,60,.28);
+  }
+  .status{
+    background:var(--brand); color:#fff; font-size:11px; padding:5px 16px;
+    display:flex; justify-content:space-between; flex:none; font-weight:500;
+  }
+  .appbar{
+    background:var(--brand); color:#fff; padding:9px 13px 13px;
+    display:flex; align-items:center; gap:9px; flex:none;
+  }
+  .appbar h2{font-size:16.5px; flex:1; font-weight:700}
+  .iconbtn{
+    background:rgba(255,255,255,.14); border:0; color:#fff; width:31px; height:31px;
+    border-radius:9px; font-size:15px; display:grid; place-items:center; flex:none;
+  }
+  .iconbtn:hover{background:rgba(255,255,255,.26)}
+  .screen{flex:1; overflow-y:auto; overflow-x:hidden; background:var(--panel); padding:13px}
+
+  /* ══ عناصرُ الشاشة ══ */
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:13px; margin-bottom:11px}
+  .card:last-child{margin-bottom:0}
+  .balance{
+    background:linear-gradient(135deg,var(--brand),var(--brand-lt));
+    color:#fff; border:0; border-radius:15px; padding:15px; margin-bottom:11px;
+  }
+  .balance .lbl{font-size:12px; opacity:.85}
+  .balance .amt{font-size:27px; font-weight:800; margin:3px 0 11px}
+  .balance .acts{display:flex; gap:8px}
+  .balance .acts button{
+    flex:1; background:rgba(255,255,255,.17); border:1px solid rgba(255,255,255,.3);
+    color:#fff; padding:8px; border-radius:9px; font-size:13px; font-weight:700;
+  }
+  .balance .acts button:hover{background:rgba(255,255,255,.3)}
+
+  .tiles{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+  .tile{
+    background:var(--surface); border:1px solid var(--line); border-radius:13px;
+    padding:13px 11px; text-align:center; position:relative; transition:.14s;
+  }
+  .tile:hover{border-color:var(--brand-lt); transform:translateY(-1px)}
+  .tile .ic{font-size:21px; display:block; margin-bottom:5px}
+  .tile .nm{font-size:12.5px; font-weight:700; line-height:1.35; display:block}
+  .tile.lock{opacity:.62}
+  .tile.lock:hover{transform:none; border-color:var(--warn)}
+  .tile .lk{position:absolute; top:6px; inset-inline-start:8px; font-size:11px}
+
+  .row{
+    display:flex; align-items:center; gap:10px; padding:10px 0;
+    border-bottom:1px solid var(--line-2); text-align:start; width:100%;
+    background:none; border-inline:0; border-top:0;
+  }
+  .row:last-child{border-bottom:0}
+  .row .g{flex:1; min-width:0}
+  .row .t{font-size:13.5px; font-weight:700; display:block}
+  .row .s{font-size:11.5px; color:var(--ink-3); display:block}
+  .row .v{font-size:13.5px; font-weight:700; white-space:nowrap}
+  .chip{font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap}
+  .chip.ok{background:var(--ok-bg); color:var(--ok)}
+  .chip.wr{background:var(--warn-bg); color:var(--warn)}
+  .chip.bd{background:var(--bad-bg); color:var(--bad)}
+
+  .btn{
+    display:block; width:100%; padding:12px; border-radius:11px; border:0;
+    background:var(--brand); color:#fff; font-size:15px; font-weight:700; margin-top:10px;
+  }
+  .btn:hover{background:var(--brand-lt)}
+  .btn.ghost{background:var(--surface); color:var(--brand); border:1.5px solid var(--brand)}
+  .btn:disabled{background:var(--line); color:var(--ink-3); cursor:not-allowed}
+
+  .sec{font-size:11.5px; font-weight:700; color:var(--ink-3); letter-spacing:.08em; margin:14px 0 7px}
+  .sec:first-child{margin-top:0}
+  .note{
+    background:var(--warn-bg); color:var(--warn); border-radius:10px;
+    padding:10px 11px; font-size:12.5px; line-height:1.55; margin-bottom:11px;
+  }
+  .note b{font-weight:800}
+
+  /* ══ الدرج ══ */
+  .scrim{position:absolute; inset:0; background:rgba(6,14,32,.5); opacity:0; visibility:hidden; transition:.2s; z-index:8}
+  .scrim.open{opacity:1; visibility:visible}
+  /* **الدرجُ يفتح من جهة البداية — أي اليمين في RTL**، كما يفعل `Scaffold`
+     في التطبيق. وكان يفتح من `inset-inline-end` أي اليسار، والزرُّ ☰ في
+     الطرف المقابل لموضعه في التطبيق. التقطه المسبار حين تعذّر بلوغُ
+     الحجاب: الدرجُ كان يعترض الجهةَ التي يضغطها المستعمل. */
+  .drawer{
+    position:absolute; top:0; bottom:0; inset-inline-start:-101%; width:277px;
+    background:var(--surface); z-index:9; transition:inset-inline-start .22s;
+    visibility:hidden; display:flex; flex-direction:column;
+  }
+  .drawer.open{inset-inline-start:0; visibility:visible}
+  .dhead{background:var(--brand); color:#fff; padding:16px 14px}
+  .dhead .nm{font-size:15.5px; font-weight:800}
+  .dhead .sb{font-size:11.5px; opacity:.85}
+  .dbody{flex:1; overflow-y:auto; padding:7px 0}
+  .ditem{
+    display:flex; gap:10px; align-items:flex-start; width:100%; padding:10px 14px;
+    background:none; border:0; text-align:start;
+  }
+  .ditem:hover{background:var(--surface-2)}
+  .ditem .ic{font-size:16px; margin-top:1px}
+  .ditem .t{font-size:13.5px; font-weight:700; display:block}
+  .ditem .s{font-size:11px; color:var(--ink-3); display:block; line-height:1.45}
+  .dsep{height:1px; background:var(--line-2); margin:6px 14px}
+
+  .toast{
+    position:absolute; bottom:18px; inset-inline:16px; background:var(--ink);
+    color:var(--surface); padding:11px 14px; border-radius:11px; font-size:13px;
+    font-weight:500; text-align:center; z-index:20; opacity:0; transition:.2s;
+    pointer-events:none;
+  }
+  .toast.show{opacity:.96}
+
+  /* رمزُ الدفع — نقشٌ مرسومٌ لا صورةٌ خارجيّة، فلا يعتمد على شبكة. */
+  .qr{
+    width:154px; height:154px; margin-inline:auto; border-radius:9px;
+    background-color:var(--surface);
+    background-image:
+      repeating-linear-gradient(90deg,var(--ink) 0 7px,transparent 7px 14px),
+      repeating-linear-gradient(0deg,var(--ink) 0 7px,transparent 7px 14px);
+    background-size:14px 14px;
+    border:7px solid var(--surface); outline:2px solid var(--line);
+    opacity:.88;
+  }
+
+  .caption{font-size:12.5px; color:var(--ink-3); text-align:center; margin-top:11px}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="eyebrow">أميال باي · محاكي القطاعات</div>
+    <h1>محاكي تاجر الجملة وموظّف فواتيره</h1>
+    <p>هذه شاشاتُ الجملة كما يقرّرها الخادمُ اليوم — لا تصميمٌ مقترح. بدِّل الدورَ
+      والباقةَ فوق، وستقرأ في اللوحة المقابلة <b>مَن منح كلَّ قدرة</b>: مربّعُ
+      القطاع، أم الباقة، أم لا أحد.</p>
+  </header>
+
+  <div class="bench">
+    <div>
+      <div class="rail">
+        <h3>مَن يمسك الجهاز</h3>
+        <div class="seg" id="segRole">
+          <button data-role="owner" aria-pressed="true">مالك الجملة</button>
+          <button data-role="pos" aria-pressed="false">موظّف الفواتير</button>
+        </div>
+        <h3>الباقة</h3>
+        <div class="seg" id="segPlan">
+          <button data-plan="free" aria-pressed="true">مجّاني</button>
+          <button data-plan="business" aria-pressed="false">الأعمال</button>
+          <button data-plan="enterprise" aria-pressed="false">مؤسسة</button>
+        </div>
+        <h3 id="permHead">صلاحيّاتُ الموظّف</h3>
+        <div class="seg" id="segPerms"></div>
+      </div>
+      <div class="verdict">
+        <h3>ما يقوله الخادم</h3>
+        <p class="sub" id="vSub"></p>
+        <div id="vList"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="phone">
+        <div class="status"><span id="stTime">٩:٤١</span><span>▮▮▮ ⌁ ⬤</span></div>
+        <div class="appbar">
+          <button class="iconbtn" id="back" hidden aria-label="رجوع">→</button>
+          <button class="iconbtn" id="menu" aria-label="القائمة">☰</button>
+          <h2 id="title">الرئيسية</h2>
+        </div>
+        <div class="screen" id="view"></div>
+        <div class="scrim" id="scrim"></div>
+        <nav class="drawer" id="drawer" aria-label="قائمة التاجر">
+          <div class="dhead">
+            <div class="nm">مؤسسة الرشيد للتجارة</div>
+            <div class="sb" id="dsub">تجارة جملة · الباقة المجّانيّة</div>
+          </div>
+          <div class="dbody" id="dbody"></div>
+        </nav>
+        <div class="toast" id="toast"></div>
+      </div>
+      <p class="caption">اضغط أيَّ عنصر — كلُّ زرٍّ هنا يقود إلى ما يقود إليه في التطبيق.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ════════════════════════════════════════════════════════════════
+     العقدُ مقروءٌ من الخادم لا مخترَع:
+
+       VerticalRegistry::BIZ_WHOLESALE->own()  = cashier · debts ·
+         quick_sale · wholesale_invoices · wholesale_collections
+       ->paidDepth() = [PLAN_BUSINESS => wholesale_multi_pricing]
+       AccessPresets::planFeatures — الأصنافُ والمخزونُ مشروطةٌ بـ
+         CapabilityRegistry::GOODS، والجملةُ منها.
+     ════════════════════════════════════════════════════════════════ */
+
+  var OWN = ['cashier', 'debts', 'quick_sale', 'wholesale_invoices', 'wholesale_collections'];
+
+  var PLAN_RANK = { free: 0, business: 1, enterprise: 2 };
+  var PLAN_AR = { free: 'المجّانيّة', business: 'الأعمال', enterprise: 'المؤسسة' };
+  var PLAN_PRICE = { free: '٠', business: '٣٥', enterprise: '٩٩' };
+
+  // القدرةُ ← أدنى باقةٍ تمنحها من `planFeatures` (بعد تصفية القطاع).
+  var PLAN_GRANT = {
+    products: 'business', barcode: 'business', inventory: 'business',
+    suppliers: 'business', purchases: 'business', customers: 'business',
+    daily_reports: 'business', low_stock_alerts: 'business',
+    employees: 'business', employee_permissions: 'business',
+    refunds: 'business', shift_close: 'business', multi_pos: 'business',
+    wholesale_multi_pricing: 'business',
+    branches: 'enterprise', rbac: 'enterprise', offline_pos: 'enterprise',
+    inventory_audit: 'enterprise', corporate_accounts: 'enterprise',
+    corporate_credit_limits: 'enterprise', 'retail.locations': 'enterprise',
+    'retail.transfers': 'enterprise', advanced_reports: 'enterprise'
+  };
+
+  var NAMES = {
+    wholesale_invoices: 'فواتير الجملة', wholesale_collections: 'تحصيلات الجملة',
+    debts: 'الديون وكشف الحساب', cashier: 'الكاشير', quick_sale: 'بيع سريع',
+    wholesale_multi_pricing: 'تسعير متعدّد المستويات', products: 'الأصناف',
+    inventory: 'المخزون', customers: 'العملاء', suppliers: 'الموردون',
+    purchases: 'طلبات الشراء', daily_reports: 'تقارير يوميّة',
+    advanced_reports: 'تقارير متقدّمة', employees: 'الموظّفون',
+    employee_permissions: 'صلاحيّات الموظّفين', rbac: 'الأدوار',
+    multi_pos: 'أجهزة نقاط البيع', shift_close: 'إغلاق الورديّة',
+    branches: 'الفروع', refunds: 'المرتجعات', offline_pos: 'بيع دون اتّصال',
+    corporate_accounts: 'حسابات الشركات', corporate_credit_limits: 'سقوف ائتمان الشركات',
+    barcode: 'الباركود', low_stock_alerts: 'تنبيه نفاد المخزون',
+    inventory_audit: 'جرد المخزون'
+  };
+
+  /* ══ الحالة ══ */
+  var role = 'owner', plan = 'free';
+  var PERMS = [
+    ['sell', 'إصدار فاتورة'], ['credit', 'بيع آجل'],
+    ['refunds', 'مرتجع'], ['products', 'الأصناف'], ['reports', 'تقارير']
+  ];
+  var posPerms = { sell: 1 };
+
+  function has(code) {
+    if (OWN.indexOf(code) > -1) return true;
+    var need = PLAN_GRANT[code];
+    return !!need && PLAN_RANK[plan] >= PLAN_RANK[need];
+  }
+  function granter(code) {
+    if (OWN.indexOf(code) > -1) return { kind: 'box', label: 'مربّع الجملة' };
+    var need = PLAN_GRANT[code];
+    if (!need) return { kind: 'none', label: 'لا مانح' };
+    return { kind: 'plan', label: 'باقة ' + PLAN_AR[need] };
+  }
+  // الموظّفُ لا يرى ما لم يُمنَح له، ولو فتحته الباقة.
+  function posCan(p) { return role !== 'pos' || !!posPerms[p]; }
+
+  /* ══ بيانات العرض ══ */
+  var money = function (n) { return n.toLocaleString('en-US') + ' ر.ي'; };
+  var BALANCE = 3418700;
+
+  var CUSTOMERS = [
+    ['بقالة النور — صنعاء', 145000, 'due', 'يستحقّ بعد ٦ أيّام'],
+    ['سوبرماركت اليمن', 0, 'clear', 'لا مديونيّة'],
+    ['مطاعم الخير', 620000, 'late', 'متأخّر ١٤ يوماً'],
+    ['بقالة الصفا — إب', 88000, 'due', 'يستحقّ بعد ١٩ يوماً']
+  ];
+
+  var ITEMS = [
+    ['سكر ٥٠ كجم', 'كيس', 21500, 19800, 18900, 340],
+    ['أرز بسمتي ٤٠ كجم', 'كيس', 34000, 31500, 30200, 118],
+    ['زيت ذرة — كرتون ١٢', 'كرتون', 27800, 25900, 24800, 62],
+    ['دقيق فاخر ٥٠ كجم', 'كيس', 18400, 17100, 16400, 9],
+    ['معكرونة — كرتون ٢٠', 'كرتون', 9600, 8900, 8500, 210]
+  ];
+  // [الاسم, الوحدة, تجزئة, جملة, شركات, الرصيد]
+
+  var INVOICES = [
+    ['ف-٤٨٢١', 'بقالة النور', 145000, 'آجلة'],
+    ['ف-٤٨٢٠', 'سوبرماركت اليمن', 412500, 'مدفوعة'],
+    ['ف-٤٨١٩', 'مطاعم الخير', 620000, 'متأخّرة'],
+    ['ف-٤٨١٨', 'بقالة الصفا', 88000, 'آجلة'],
+    ['ف-٤٨١٧', 'بقالة النور', 96000, 'مدفوعة']
+  ];
+
+  /* ══ التنقّل ══ */
+  var view = document.getElementById('view'),
+      titleEl = document.getElementById('title'),
+      backBtn = document.getElementById('back'),
+      drawer = document.getElementById('drawer'),
+      scrim = document.getElementById('scrim'),
+      toastEl = document.getElementById('toast');
+  var stack = [], toastTimer;
+  var cart = [], invCustomer = CUSTOMERS[0], invTier = 1, invPay = 'credit';
+  var paidTxn = null, shortCode = null, qrCtx = 'invoice', collectMethod = 'cash';
+
+  function invoiceTotal() {
+    var tier = has('wholesale_multi_pricing') ? invTier : 0;
+    return cart.reduce(function (s, c) { return s + c.q * ITEMS[c.i][2 + tier]; }, 0);
+  }
+  // الفاتورةُ لا تُصدَر بأميال باي قبل أن تعود حركةٌ مدفوعة.
+  function canIssue() {
+    if (!cart.length) return false;
+    return invPay !== 'amial_pay' || !!paidTxn;
+  }
+  function newShortCode() {
+    return String(Math.floor(100000 + Math.random() * 899999));
+  }
+
+  function toast(msg) {
+    toastEl.textContent = msg; toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2100);
+  }
+  function closeDrawer() { drawer.classList.remove('open'); scrim.classList.remove('open'); }
+  function go(name, keep) {
+    closeDrawer();
+    if (!keep && stack[stack.length - 1] !== name) stack.push(name);
+    render();
+  }
+  function back() { if (stack.length > 1) { stack.pop(); render(); } }
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  /* ══ لبنات ══ */
+  function tiles(list) {
+    return '<div class="tiles">' + list.map(function (t) {
+      var open = t[3] !== false;
+      return '<button class="tile' + (open ? '' : ' lock') + '" data-go="' + t[2] + '"' +
+        (open ? '' : ' data-lock="' + esc(t[4] || '') + '"') + '>' +
+        (open ? '' : '<span class="lk">🔒</span>') +
+        '<span class="ic">' + t[0] + '</span><span class="nm">' + t[1] + '</span></button>';
+    }).join('') + '</div>';
+  }
+  function rows(list) {
+    return list.map(function (r) {
+      return '<button class="row" data-go="' + (r.go || '') + '">' +
+        '<span class="g"><span class="t">' + r.t + '</span>' +
+        (r.s ? '<span class="s">' + r.s + '</span>' : '') + '</span>' +
+        (r.chip ? '<span class="chip ' + r.chip[1] + '">' + r.chip[0] + '</span>' : '') +
+        (r.v ? '<span class="v num">' + r.v + '</span>' : '') + '</button>';
+    }).join('');
+  }
+
+  /* ══ الشاشات ══ */
+  var S = {};
+
+  S.home = function () {
+    titleEl.textContent = 'مؤسسة الرشيد للتجارة';
+    var t = [
+      ['🧾', 'فاتورة جديدة', 'newInvoice'],
+      ['📋', 'الفواتير', 'invoices'],
+      ['💰', 'التحصيلات', 'collections'],
+      ['👥', 'العملاء والديون', 'customers'],
+      ['🏷️', 'التسعير', 'pricing', has('wholesale_multi_pricing'), 'باقة الأعمال'],
+      ['📦', 'الأصناف والمخزون', 'stock', has('products'), 'باقة الأعمال'],
+      ['📊', 'التقارير', 'reports', has('daily_reports'), 'باقة الأعمال'],
+      ['👤', 'الفريق والأجهزة', 'team', has('employees'), 'باقة الأعمال']
+    ];
+    return '<div class="balance"><div class="lbl">رصيد المحفظة</div>' +
+      '<div class="amt num">' + money(BALANCE) + '</div>' +
+      '<div class="acts"><button data-go="wallet">المحفظة</button>' +
+      '<button data-act="withdraw">سحب</button></div></div>' +
+      '<div class="card"><div class="sec">اليوم</div>' +
+      rows([
+        { t: 'مبيعات اليوم', v: money(1058500) },
+        { t: 'تحصيل نقديّ', v: money(412500) },
+        { t: 'أُضيف على الذمم', v: money(646000) },
+        { t: 'فواتير متأخّرة', v: '١', chip: ['تنبيه', 'bd'] }
+      ]) + '</div>' + tiles(t);
+  };
+
+  S.wallet = function () {
+    titleEl.textContent = 'محفظة التاجر';
+    if (role === 'pos') {
+      return '<div class="note"><b>الرصيد للمالك وحده.</b> الخادمُ يحذف ' +
+        '<code>current_balance</code> من ردّ الإحصاءات حين يكون الطالبُ موظّفَ ' +
+        'نقطة بيع، ويُرسل <code>balance_scope: owner_only</code>. فلا رقمَ ' +
+        'يُخفى في الواجهة — <b>لا يُرسَل أصلاً</b>.</div>';
+    }
+    return '<div class="balance"><div class="lbl">الرصيد المتاح</div>' +
+      '<div class="amt num">' + money(BALANCE) + '</div>' +
+      '<div class="acts"><button data-act="withdraw">سحب</button>' +
+      '<button data-act="transfer">تحويل</button></div></div>' +
+      '<div class="card"><div class="sec">آخر الحركات</div>' +
+      rows([
+        { t: 'تحصيل — سوبرماركت اليمن', s: 'اليوم ١١:٤٠', v: '+ ' + money(412500) },
+        { t: 'تحصيل — بقالة النور', s: 'أمس ١٦:٢٢', v: '+ ' + money(96000) },
+        { t: 'سحب إلى وكيل البسيري', s: 'أمس ٠٩:١٠', v: '− ' + money(500000) },
+        { t: 'اشتراك — باقة ' + PLAN_AR[plan], s: 'قبل ٣ أيّام', v: '− ' + PLAN_PRICE[plan] + ' ر.س' }
+      ]) + '</div>';
+  };
+
+  S.invoices = function () {
+    titleEl.textContent = 'فواتير الجملة';
+    var chipOf = { 'مدفوعة': ['مدفوعة', 'ok'], 'آجلة': ['آجلة', 'wr'], 'متأخّرة': ['متأخّرة', 'bd'] };
+    return '<button class="btn" data-go="newInvoice">＋ فاتورة جديدة</button>' +
+      '<div class="card" style="margin-top:11px"><div class="sec">آخر الفواتير</div>' +
+      rows(INVOICES.map(function (i) {
+        return { t: i[0] + ' · ' + i[1], s: money(i[2]), chip: chipOf[i[3]] };
+      })) + '</div>';
+  };
+
+  S.newInvoice = function () {
+    titleEl.textContent = 'فاتورة جديدة';
+    var tierNames = ['سعر التجزئة', 'سعر الجملة', 'سعر الشركات'];
+    var canPrice = has('wholesale_multi_pricing');
+    var tier = canPrice ? invTier : 0;
+
+    var lines = cart.map(function (c, ix) {
+      var it = ITEMS[c.i], unit = it[2 + tier];
+      return '<button class="row" data-line="' + ix + '"><span class="g">' +
+        '<span class="t">' + it[0] + '</span><span class="s num">' + c.q + ' × ' +
+        money(unit) + '</span></span><span class="v num">' + money(c.q * unit) + '</span></button>';
+    }).join('');
+
+    var total = cart.reduce(function (s, c) { return s + c.q * ITEMS[c.i][2 + tier]; }, 0);
+
+    var tierBlock = canPrice
+      ? '<div class="seg" style="margin:0">' + tierNames.map(function (n, ix) {
+          return '<button data-tier="' + ix + '" aria-pressed="' + (ix === tier) + '">' + n + '</button>';
+        }).join('') + '</div>'
+      : '<div class="note" style="margin:0"><b>قائمةٌ واحدة: سعر التجزئة.</b> ' +
+        'شرائحُ الكمّيّة وسعرُ الشركات في <b>باقة الأعمال</b> — والفاتورةُ ' +
+        'تُصدَر الآن بسعرٍ واحدٍ لكلّ عميل.</div>';
+
+    return '<div class="card"><div class="sec">العميل</div>' +
+      '<button class="row" data-act="pickCustomer"><span class="g">' +
+      '<span class="t">' + invCustomer[0] + '</span><span class="s">' + invCustomer[3] +
+      '</span></span><span class="v">تغيير</span></button></div>' +
+      '<div class="card"><div class="sec">قائمة السعر</div>' + tierBlock + '</div>' +
+      '<div class="card"><div class="sec">الأصناف</div>' +
+      (lines || '<p class="s" style="color:var(--ink-3);font-size:12.5px;margin:4px 0">لم يُضَف صنفٌ بعد.</p>') +
+      '<button class="btn ghost" data-go="pickItem">＋ إضافة صنف</button></div>' +
+      // ══════════════════════════════════════════════════════════════
+      // **الدفعُ عبر أميال باي — وكان ساقطاً.** والعقدُ في الخادم:
+      //   payment_type in: cash · amial_pay · credit
+      //   paid_transaction_id required_if: payment_type,amial_pay
+      // أي أنّ الفاتورةَ **لا تُصدَر** بأميال باي قبل أن يُدفع الـQR —
+      // فالزرُّ يبقى معطَّلاً حتّى يعود معرّفُ الحركة.
+      // ══════════════════════════════════════════════════════════════
+      '<div class="card"><div class="sec">طريقة السداد</div><div class="seg" style="margin:0">' +
+      '<button data-pay="cash" aria-pressed="' + (invPay === 'cash') + '">نقداً</button>' +
+      '<button data-pay="amial_pay" aria-pressed="' + (invPay === 'amial_pay') + '">أميال باي</button>' +
+      '<button data-pay="credit" aria-pressed="' + (invPay === 'credit') + '">آجل</button>' +
+      '</div>' +
+      (invPay === 'amial_pay'
+        ? (paidTxn
+            ? '<div class="note" style="background:var(--ok-bg);color:var(--ok);margin:11px 0 0">' +
+              '<b>دُفعت عبر أميال باي.</b> رقم الحركة <span class="num">' + paidTxn + '</span></div>'
+            : '<div class="note" style="margin:11px 0 0"><b>يُدفع الـQR أوّلاً.</b> ' +
+              'الخادمُ يشترط <code>paid_transaction_id</code> مع أميال باي — ' +
+              'فلا فاتورةَ مدفوعةً بلا حركةٍ حقيقيّة.</div>' +
+              '<button class="btn" data-go="qr">عرض رمز الدفع</button>')
+        : '') +
+      '</div>' +
+      '<div class="card"><div class="row" style="border:0;padding:2px 0">' +
+      '<span class="g"><span class="t" style="font-size:15px">الإجمالي</span></span>' +
+      '<span class="v num" style="font-size:19px;color:var(--brand)">' + money(total) + '</span></div>' +
+      '<button class="btn" data-act="issue"' + (canIssue(total) ? '' : ' disabled') + '>' +
+      (invPay === 'amial_pay' && !paidTxn ? 'بانتظار دفع العميل' : 'إصدار الفاتورة') + '</button></div>';
+  };
+
+  S.pickItem = function () {
+    titleEl.textContent = 'اختيار صنف';
+    var tier = has('wholesale_multi_pricing') ? invTier : 0;
+    return '<div class="card">' + ITEMS.map(function (it, ix) {
+      var low = it[5] < 20;
+      return '<button class="row" data-add="' + ix + '"><span class="g">' +
+        '<span class="t">' + it[0] + '</span><span class="s num">' + money(it[2 + tier]) +
+        ' / ' + it[1] + ' · رصيد ' + it[5] + '</span></span>' +
+        (low ? '<span class="chip bd">قارب النفاد</span>' : '') + '</button>';
+    }).join('') + '</div>';
+  };
+
+  /* ══════════════════════════════════════════════════════════════════
+     شاشةُ تحصيل أميال باي — `AmialQrCollectScreen` في التطبيق.
+
+     والتعليقُ في الشيفرة الحقيقيّة يقول بنصّه: «أميال» ليس رقمَ مرجعٍ
+     يكتبه الموظّف: نفتح QR باسم محفظة المالك، ثمّ نسجّل التحصيل **فقط
+     بعد حركةٍ مدفوعة». فلا حقلَ نصٍّ هنا — ولا يُقبل ادّعاءُ دفع.
+     ══════════════════════════════════════════════════════════════════ */
+  S.qr = function () {
+    titleEl.textContent = qrCtx === 'invoice' ? 'دفع الفاتورة — أميال باي'
+                                              : 'تحصيل دين — أميال باي';
+    if (!shortCode) shortCode = newShortCode();
+    var amt = qrCtx === 'invoice' ? invoiceTotal() : 620000;
+
+    return '<div class="card" style="text-align:center;padding:18px 14px">' +
+      '<div class="sec" style="text-align:center">المطلوب من العميل</div>' +
+      '<div class="num" style="font-size:26px;font-weight:800;color:var(--brand);margin-bottom:13px">' +
+      money(amt) + '</div>' +
+      '<div class="qr" aria-label="رمز الدفع"></div>' +
+      '<div style="margin-top:12px;font-size:12px;color:var(--ink-3)">أو بالرمز القصير</div>' +
+      '<div class="num" style="font-size:27px;font-weight:800;letter-spacing:.14em">' +
+      shortCode + '</div></div>' +
+      '<div class="card"><div class="row" style="border:0;padding:2px 0">' +
+      '<span class="dot off" style="margin-top:6px"></span>' +
+      '<span class="g"><span class="t">بانتظار دفع العميل</span>' +
+      '<span class="s">يُمسح الرمزُ من تطبيق أميال باي عند العميل.</span></span></div></div>' +
+      '<div class="note">لا يُكتب رقمُ مرجعٍ هنا. <b>التحصيلُ يُسجَّل بعد ' +
+      'حركةٍ مدفوعةٍ فعلاً</b> — فادّعاءُ الدفع لا يُقبَل من الشاشة.</div>' +
+      '<button class="btn" data-act="qrPaid">محاكاة: دفع العميل</button>' +
+      '<button class="btn ghost" data-act="qrCancel">إلغاء الطلب</button>';
+  };
+
+  S.invoiceDone = function () {
+    titleEl.textContent = 'تمّ الإصدار';
+    return '<div class="card" style="text-align:center;padding:26px 14px">' +
+      '<div style="font-size:44px">✅</div>' +
+      '<h3 style="margin:9px 0 4px">صدرت الفاتورة ف-٤٨٢٢</h3>' +
+      '<p style="color:var(--ink-2);font-size:13px;margin:0">' + invCustomer[0] + ' · ' +
+      (invPay === 'cash' ? 'نقداً' : 'آجل') + '</p></div>' +
+      '<div class="card">' + rows([
+        { t: 'طباعة', s: 'طابعة حراريّة ٨٠مم' },
+        { t: 'إرسال QR للعميل' },
+        { t: 'نسخة PDF' }
+      ]) + '</div>' +
+      '<button class="btn" data-act="newAgain">فاتورة أخرى</button>';
+  };
+
+  S.collections = function () {
+    titleEl.textContent = 'التحصيلات';
+    return '<div class="card"><div class="sec">مستحقّ اليوم</div>' +
+      rows([
+        { t: 'مطاعم الخير', s: 'متأخّر ١٤ يوماً', v: money(620000), chip: ['متأخّر', 'bd'] },
+        { t: 'بقالة النور', s: 'يستحقّ بعد ٦ أيّام', v: money(145000), chip: ['آجل', 'wr'] },
+        { t: 'بقالة الصفا — إب', s: 'يستحقّ بعد ١٩ يوماً', v: money(88000), chip: ['آجل', 'wr'] }
+      ]) + '</div>' +
+      // العقد: payment_method in: cash · bank_transfer · amial_pay · check
+      '<div class="card"><div class="sec">تسجيل تحصيل — طريقة الدفع</div>' +
+      '<div class="seg" style="margin:0">' +
+      [['cash', 'نقد'], ['bank_transfer', 'تحويل'], ['amial_pay', 'أميال'], ['check', 'شيك']]
+        .map(function (m) {
+          return '<button data-collect="' + m[0] + '" aria-pressed="' +
+            (collectMethod === m[0]) + '">' + m[1] + '</button>';
+        }).join('') + '</div>' +
+      (collectMethod === 'amial_pay'
+        ? '<div class="note" style="margin:11px 0 0">«أميال» ليس رقمَ مرجعٍ ' +
+          'يكتبه الموظّف — <b>يُفتح QR باسم محفظة المالك</b>، ويُسجَّل ' +
+          'التحصيلُ بعد حركةٍ مدفوعة.</div>'
+        : '<div class="note" style="margin:11px 0 0;background:var(--surface-2);color:var(--ink-2)">' +
+          'رقمُ المرجع اختياريٌّ مع ' +
+          ({ cash: 'النقد', bank_transfer: 'التحويل', check: 'الشيك' }[collectMethod]) +
+          '.</div>') +
+      '<button class="btn" data-act="collect">' +
+      (collectMethod === 'amial_pay' ? 'عرض رمز الدفع' : 'تأكيد التحصيل') +
+      '</button></div>';
+  };
+
+  S.customers = function () {
+    titleEl.textContent = 'العملاء والديون';
+    var chipOf = { clear: ['مسدّد', 'ok'], due: ['آجل', 'wr'], late: ['متأخّر', 'bd'] };
+    var out = '<div class="card"><div class="sec">إجمالي الذمم</div>' +
+      '<div class="row" style="border:0;padding:2px 0"><span class="g">' +
+      '<span class="t">على ' + CUSTOMERS.filter(function (c) { return c[1] > 0; }).length +
+      ' عملاء</span></span><span class="v num" style="font-size:18px;color:var(--bad)">' +
+      money(CUSTOMERS.reduce(function (s, c) { return s + c[1]; }, 0)) + '</span></div></div>' +
+      '<div class="card"><div class="sec">العملاء</div>' +
+      rows(CUSTOMERS.map(function (c) {
+        return { t: c[0], s: c[3], v: c[1] ? money(c[1]) : '—', chip: chipOf[c[2]] };
+      })) + '</div>';
+
+    if (!has('corporate_accounts')) {
+      out += '<div class="note"><b>حسابات الشركات وسقوفُ ائتمانها</b> في باقة ' +
+        'المؤسسة — وهي التي تجعل الدَّينَ محكوماً بسقفٍ لا بذاكرة.</div>';
+    }
+    return out;
+  };
+
+  S.pricing = function () {
+    titleEl.textContent = 'التسعير';
+    if (!has('wholesale_multi_pricing')) {
+      return '<div class="note"><b>التسعيرُ المتعدّد مقفلٌ في باقتك.</b> ' +
+        'سعرُ العميل وسعرُ الشركة وشرائحُ الكمّيّة تُفتح في <b>باقة الأعمال</b> ' +
+        '(٣٥ ر.س / شهر) — وهي ما يميّز الجملةَ عن التجزئة.</div>' +
+        '<button class="btn" data-act="upgrade">ترقية إلى الأعمال</button>';
+    }
+    return '<div class="card"><div class="sec">قوائم الأسعار</div>' +
+      rows([
+        { t: 'سعر التجزئة', s: 'الأعلى — لمن يشتري بالمفرّق' },
+        { t: 'سعر الجملة', s: 'الافتراضيّ لعملاء الجملة' },
+        { t: 'سعر الشركات', s: 'يُربَط بحساب شركةٍ بعينها' }
+      ]) + '</div>' +
+      '<div class="card"><div class="sec">شرائح الكمّيّة — سكر ٥٠ كجم</div>' +
+      rows([
+        { t: '١ – ٩ أكياس', v: money(19800) },
+        { t: '١٠ – ٤٩ كيساً', v: money(19200) },
+        { t: '٥٠ فأكثر', v: money(18600) }
+      ]) + '</div>' +
+      '<div class="note"><b>والكاشيرُ لا يعدّل السعر</b> ما لم تُمنَح له كتابةٌ ' +
+      'صريحة — الشريحةُ تُطبَّق على الفاتورة من القائمة لا من يده.</div>';
+  };
+
+  S.stock = function () {
+    titleEl.textContent = 'الأصناف والمخزون';
+    if (!has('products')) {
+      return '<div class="note"><b>إدارةُ الأصناف تبدأ من باقة الأعمال.</b> ' +
+        'وفي المجّانيّة تُصدَر الفاتورةُ بسطرٍ حرٍّ باسمٍ وسعرٍ يُكتبان يدويّاً.</div>' +
+        '<button class="btn" data-act="upgrade">ترقية إلى الأعمال</button>';
+    }
+    return '<div class="card"><div class="sec">الأصناف</div>' +
+      rows(ITEMS.map(function (it) {
+        return { t: it[0], s: money(it[3]) + ' / ' + it[1], v: it[5] + ' ' + it[1],
+                 chip: it[5] < 20 ? ['قارب النفاد', 'bd'] : null };
+      })) + '</div>' +
+      '<div class="card"><div class="sec">الشراء والتوريد</div>' +
+      rows([
+        { t: 'الموردون', s: '٧ موردين' },
+        { t: 'طلبات الشراء', s: 'طلبان قيد التوريد' },
+        { t: 'جرد المخزون', s: has('inventory_audit') ? 'آخرُ جردٍ قبل ٩ أيّام' : 'باقة المؤسسة' }
+      ]) + '</div>';
+  };
+
+  S.reports = function () {
+    titleEl.textContent = 'التقارير والمالية';
+    if (!has('daily_reports')) {
+      return '<div class="note"><b>التقاريرُ تبدأ من باقة الأعمال.</b> ' +
+        'والمجّانيّةُ تُظهر إجماليَّ اليوم في الرئيسيّة وحدَه.</div>';
+    }
+    return '<div class="card"><div class="sec">هذا الشهر</div>' +
+      rows([
+        { t: 'المبيعات', v: money(24860000) },
+        { t: 'المحصَّل', v: money(19140000) },
+        { t: 'الذمم القائمة', v: money(853000) },
+        { t: 'الربح التقديريّ', v: money(2612000) }
+      ]) + '</div>' +
+      '<div class="card"><div class="sec">تقارير</div>' +
+      rows([
+        { t: 'مبيعات حسب العميل' },
+        { t: 'أعمار الذمم', s: 'ما تأخّر ٣٠ · ٦٠ · ٩٠ يوماً' },
+        { t: 'حركة صنف' },
+        { t: 'تقارير متقدّمة', s: has('advanced_reports') ? 'متاحة' : 'باقة المؤسسة' }
+      ]) + '</div>';
+  };
+
+  S.team = function () {
+    titleEl.textContent = 'الفريق والأجهزة';
+    if (!has('employees')) {
+      return '<div class="note"><b>الموظّفون يبدأون من باقة الأعمال.</b> ' +
+        'وفي المجّانيّة مقعدُ نقطة بيعٍ واحدٌ للمالك نفسِه.</div>';
+    }
+    return '<div class="card"><div class="sec">الموظّفون</div>' +
+      rows([
+        { t: 'أحمد — كاتب فواتير', s: 'إصدار فاتورة · بيع آجل', chip: ['نشط', 'ok'] },
+        { t: 'سالم — محصّل', s: 'تحصيل فقط', chip: ['نشط', 'ok'] },
+        { t: 'ناصر — مخزن', s: 'الأصناف والمخزون', chip: ['موقوف', 'wr'] }
+      ]) + '</div>' +
+      '<div class="card"><div class="sec">الأجهزة</div>' +
+      rows([
+        { t: 'جهاز المستودع', s: 'مربوط · آخر ظهور قبل ٤ دقائق', chip: ['مربوط', 'ok'] },
+        { t: 'جهاز المعرض', s: 'مربوط · آخر ظهور أمس', chip: ['مربوط', 'ok'] },
+        { t: 'الفروع', s: has('branches') ? 'فرعان' : 'باقة المؤسسة' }
+      ]) + '</div>';
+  };
+
+  /* ══ شاشةُ الموظّف ══ */
+  S.posHome = function () {
+    titleEl.textContent = 'أحمد — كاتب فواتير';
+    var t = [['🧾', 'فاتورة جديدة', 'newInvoice']];
+    if (posCan('credit')) t.push(['📋', 'الفواتير', 'invoices']);
+    if (posCan('refunds') && has('refunds')) t.push(['↩️', 'مرتجع', 'invoices']);
+    if (posCan('products') && has('products')) t.push(['📦', 'الأصناف', 'stock']);
+    if (posCan('reports') && has('daily_reports')) t.push(['📊', 'تقاريري', 'reports']);
+    t.push(['🧾', 'إيصالاتي', 'invoices']);
+    t.push(['🔔', 'الإشعارات', 'posHome']);
+    t.push(['👤', 'حسابي', 'posHome']);
+
+    return '<div class="card"><div class="sec">ورديّتي</div>' +
+      rows([
+        { t: 'فواتير أصدرتُها اليوم', v: '٧' },
+        { t: 'إجمالي ما أصدرتُ', v: money(1058500) },
+        { t: 'بدأت الورديّة', v: '٨:٠٥' }
+      ]) +
+      '<div class="note" style="margin:11px 0 0">لا يظهر لك رصيدُ المحفظة — ' +
+      '<b>الخادمُ لا يُرسله</b> لموظّف نقطة البيع.</div></div>' + tiles(t);
+  };
+
+  /* ══ الدرج — أقسامُ دليل الجملة السبعة ══ */
+  var SECTIONS = [
+    ['🏠', 'الرئيسية', 'الرصيد ومبيعات اليوم.', 'home', function () { return true; }],
+    ['🧾', 'فواتير الجملة والتحصيل', 'فواتير، حالة السداد، تحصيلات ومرتجعات.', 'invoices', function () { return true; }],
+    /* AMIAL-SIM-DRAWER-001 — أسماءُ الأقسام تتبع التطبيق حرفاً بحرف.
+       وقد أُلحق هذا المحاكي بدمجٍ مؤقّتٍ إلى خمسة أقسام، ثمّ رُدَّ الدرجُ
+       إلى سبعةٍ بحسب «دليل تاجر الجملة» — فرُدَّ معه. */
+    ['👥', 'العملاء والديون', 'العملاء، كشف الحساب، آجال الاستحقاق.', 'customers', function () { return true; }],
+    ['📦', 'الأصناف ومخزون الجملة', 'أصناف، باركود، مخزون، موردون وطلبات شراء.', 'stock', function () { return has('products'); }],
+    ['🏷️', 'التسعير', 'قوائم أسعار وشرائح كمّيّة وأسعار شركات.', 'pricing', function () { return has('wholesale_multi_pricing'); }],
+    ['📊', 'التقارير والمالية', 'المبيعات والربح والذمم والتدقيق.', 'reports', function () { return has('daily_reports'); }],
+    ['👤', 'الفريق والأجهزة', 'الموظّفون، الأدوار، أجهزة نقاط البيع، الفروع.', 'team', function () { return has('employees'); }]
+  ];
+
+  function renderDrawer() {
+    document.getElementById('dsub').textContent =
+      'تجارة جملة · باقة ' + PLAN_AR[plan] + (role === 'pos' ? ' · موظّف فواتير' : '');
+    var body = document.getElementById('dbody');
+
+    if (role === 'pos') {
+      body.innerHTML =
+        '<button class="ditem" data-go="posHome"><span class="ic">🏠</span><span>' +
+        '<span class="t">شاشتي</span><span class="s">ما مُنح لي وحدَه.</span></span></button>' +
+        '<button class="ditem" data-go="newInvoice"><span class="ic">🧾</span><span>' +
+        '<span class="t">فاتورة جديدة</span><span class="s">بيعُ الجملة فاتورةٌ لا سلّةُ كاشير.</span></span></button>' +
+        '<div class="dsep"></div>' +
+        '<button class="ditem" data-act="lockShift"><span class="ic">🔒</span><span>' +
+        '<span class="t">إغلاق الورديّة</span><span class="s">تسليمُ ما حُصّل نقداً.</span></span></button>' +
+        '<div class="dsep"></div>' +
+        '<div class="ditem" style="cursor:default"><span class="ic">ℹ️</span><span>' +
+        '<span class="s">قائمةُ المالك لا تُعرض لموظّف نقطة البيع — ' +
+        'لا الباقةُ ولا المحفظةُ ولا الفريق.</span></span></div>';
+      return;
+    }
+
+    body.innerHTML = SECTIONS.map(function (s) {
+      var open = s[4]();
+      return '<button class="ditem" data-go="' + s[3] + '"><span class="ic">' + s[0] +
+        '</span><span><span class="t">' + s[1] + (open ? '' : ' 🔒') +
+        '</span><span class="s">' + (open ? s[2] : 'مقفلٌ في باقتك.') +
+        '</span></span></button>';
+    }).join('') +
+      '<div class="dsep"></div>' +
+      '<button class="ditem" data-go="wallet"><span class="ic">💳</span><span>' +
+      '<span class="t">محفظتي</span><span class="s">الرصيد والسحب والتحويل.</span></span></button>' +
+      '<button class="ditem" data-go="caps"><span class="ic">⭐</span><span>' +
+      '<span class="t">مزايا باقتي</span><span class="s">ما فُتح وما بقي مقفلاً.</span></span></button>';
+  }
+
+  S.caps = function () {
+    titleEl.textContent = 'مزايا باقتي';
+    var all = OWN.concat(Object.keys(PLAN_GRANT));
+    var open = all.filter(has), shut = all.filter(function (c) { return !has(c); });
+    return '<div class="card"><div class="sec">باقتك: ' + PLAN_AR[plan] + ' · ' +
+      PLAN_PRICE[plan] + ' ر.س / شهر</div>' +
+      '<div class="row" style="border:0;padding:2px 0"><span class="g">' +
+      '<span class="t">قدراتٌ مفتوحة</span></span><span class="v num">' +
+      open.length + ' من ' + all.length + '</span></div></div>' +
+      '<div class="card"><div class="sec">مفتوحة</div>' +
+      rows(open.map(function (c) {
+        var g = granter(c);
+        return { t: NAMES[c] || c, s: 'من ' + g.label };
+      })) + '</div>' +
+      (shut.length ? '<div class="card"><div class="sec">مقفلة</div>' +
+        rows(shut.map(function (c) {
+          return { t: NAMES[c] || c, s: 'تُفتح في ' + granter(c).label, chip: ['مقفل', 'wr'] };
+        })) + '</div>' + '<button class="btn" data-act="upgrade">ترقية</button>' : '');
+  };
+
+  /* ══ الرسم ══ */
+  function render() {
+    var name = stack[stack.length - 1] || 'home';
+    if (!S[name]) name = 'home';
+    view.innerHTML = S[name]();
+    view.scrollTop = 0;
+    backBtn.hidden = stack.length < 2;
+    renderDrawer();
+    renderVerdict();
+  }
+
+  function renderVerdict() {
+    document.getElementById('vSub').textContent =
+      (role === 'owner' ? 'مالك' : 'موظّف فواتير') + ' · تجارة جملة · باقة ' +
+      PLAN_AR[plan] + ' (' + PLAN_PRICE[plan] + ' ر.س)';
+
+    var watch = ['wholesale_invoices', 'wholesale_collections', 'debts',
+      'wholesale_multi_pricing', 'products', 'daily_reports', 'employees',
+      'branches', 'corporate_accounts'];
+
+    document.getElementById('vList').innerHTML = watch.map(function (c) {
+      var on = has(c), g = granter(c);
+      return '<div class="grant"><span class="dot ' + (on ? 'on' : 'off') + '"></span>' +
+        '<span><b>' + (NAMES[c] || c) +
+        '<span class="src ' + g.kind + '">' + g.label + '</span></b>' +
+        '<span>' + (on
+          ? (g.kind === 'box' ? 'يصلها من مربّع الجملة — لا تُشترى ولا تُنزَع بالباقة.'
+                              : 'فتحتها الباقةُ الحاليّة.')
+          : 'مقفلة — تُفتح في ' + g.label + '.') + '</span></span></div>';
+    }).join('');
+  }
+
+  /* ══ الأحداث ══ */
+  document.getElementById('menu').addEventListener('click', function () {
+    drawer.classList.add('open'); scrim.classList.add('open');
+  });
+  scrim.addEventListener('click', closeDrawer);
+  backBtn.addEventListener('click', back);
+
+  document.getElementById('segRole').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-role]'); if (!b) return;
+    role = b.dataset.role;
+    [].forEach.call(this.children, function (x) {
+      x.setAttribute('aria-pressed', String(x.dataset.role === role));
+    });
+    stack = [role === 'pos' ? 'posHome' : 'home'];
+    cart = [];
+    document.getElementById('permHead').hidden = role !== 'pos';
+    document.getElementById('segPerms').hidden = role !== 'pos';
+    render();
+  });
+
+  document.getElementById('segPlan').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-plan]'); if (!b) return;
+    plan = b.dataset.plan;
+    [].forEach.call(this.children, function (x) {
+      x.setAttribute('aria-pressed', String(x.dataset.plan === plan));
+    });
+    render();
+  });
+
+  var permsEl = document.getElementById('segPerms');
+  permsEl.innerHTML = PERMS.map(function (p) {
+    return '<button data-perm="' + p[0] + '" aria-pressed="' + !!posPerms[p[0]] + '">' + p[1] + '</button>';
+  }).join('');
+  permsEl.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-perm]'); if (!b) return;
+    var k = b.dataset.perm;
+    if (k === 'sell') { toast('إصدارُ الفاتورة صلاحيّةٌ لا تُنزع عن كاتب الفواتير.'); return; }
+    posPerms[k] = posPerms[k] ? 0 : 1;
+    b.setAttribute('aria-pressed', String(!!posPerms[k]));
+    render();
+  });
+  document.getElementById('permHead').hidden = true;
+  permsEl.hidden = true;
+
+  /* الضغطُ داخل الشاشة والدرج */
+  document.addEventListener('click', function (e) {
+    // **وكلُّ سمةٍ جديدةٍ تُضاف هنا أيضاً.** أُضيف `data-collect` إلى
+    // المعالج ولا إلى هذا المحدّد، فكان الزرُّ يُضغط ولا يحدث شيء —
+    // ولا خطأَ في أيّ سجلّ. (القاعدة التاسعة.) التقطه المسبار.
+    var el = e.target.closest('[data-go],[data-act],[data-add],[data-tier],' +
+      '[data-pay],[data-collect],[data-line],[data-lock]');
+    if (!el || !el.closest('.phone')) return;
+
+    if (el.dataset.lock) { toast('مقفلٌ — يُفتح في ' + el.dataset.lock + '.'); return; }
+    if (el.dataset.tier !== undefined) { invTier = +el.dataset.tier; render(); return; }
+    if (el.dataset.collect) { collectMethod = el.dataset.collect; render(); return; }
+    if (el.dataset.pay) {
+      invPay = el.dataset.pay;
+      // تبديلُ الطريقة يُسقط حركةَ دفعٍ سابقة — فلا تُصدَر فاتورةُ آجلٍ
+      // بمعرّفِ حركةٍ التُقط لطريقةٍ أخرى.
+      if (invPay !== 'amial_pay') { paidTxn = null; shortCode = null; }
+      render(); return;
+    }
+    if (el.dataset.line !== undefined) {
+      cart.splice(+el.dataset.line, 1); render(); toast('حُذف السطر.'); return;
+    }
+    if (el.dataset.add !== undefined) {
+      var ix = +el.dataset.add, found = cart.filter(function (c) { return c.i === ix; })[0];
+      if (found) found.q++; else cart.push({ i: ix, q: 1 });
+      back(); toast('أُضيف ' + ITEMS[ix][0] + '.'); return;
+    }
+
+    var act = el.dataset.act;
+    if (act === 'issue') {
+      if (!canIssue()) return;
+      go('invoiceDone'); cart = []; return;
+    }
+    if (act === 'qrPaid') {
+      paidTxn = 'TX-' + newShortCode();
+      if (qrCtx === 'invoice') { back(); toast('وصلت الحركة — الفاتورةُ صارت قابلةً للإصدار.'); }
+      else { back(); toast('سُجّل التحصيل بعد حركةٍ مدفوعة.'); }
+      return;
+    }
+    if (act === 'qrCancel') { shortCode = null; back(); toast('أُلغي طلبُ الدفع.'); return; }
+    if (act === 'newAgain') {
+      paidTxn = null; shortCode = null; invPay = 'credit';
+      stack = [role === 'pos' ? 'posHome' : 'home']; go('newInvoice'); return;
+    }
+    if (act === 'pickCustomer') {
+      invCustomer = CUSTOMERS[(CUSTOMERS.indexOf(invCustomer) + 1) % CUSTOMERS.length];
+      render(); toast('العميل: ' + invCustomer[0]); return;
+    }
+    if (act === 'upgrade') {
+      plan = plan === 'free' ? 'business' : 'enterprise';
+      [].forEach.call(document.getElementById('segPlan').children, function (x) {
+        x.setAttribute('aria-pressed', String(x.dataset.plan === plan));
+      });
+      render(); toast('رُقّيت إلى باقة ' + PLAN_AR[plan] + '.'); return;
+    }
+    if (act === 'withdraw') { toast('طلبُ سحبٍ إلى وكيلٍ — يفتح شاشة السحب.'); return; }
+    if (act === 'transfer') { toast('تحويلٌ من المحفظة — يفتح شاشة الإرسال.'); return; }
+    if (act === 'collect') {
+      if (collectMethod === 'amial_pay') { qrCtx = 'collection'; shortCode = null; go('qr'); return; }
+      toast('سُجّل التحصيل ونزل من ذمّة العميل.'); return;
+    }
+    if (act === 'lockShift') { toast('أُغلقت الورديّة وسُلّم النقد.'); return; }
+
+    var to = el.dataset.go;
+    if (to === 'qr') { qrCtx = 'invoice'; shortCode = null; }
+    if (to) {
+      if (role === 'pos' && ['wallet', 'team', 'caps'].indexOf(to) > -1) {
+        toast('لا يُفتح لموظّف نقطة البيع.'); return;
+      }
+      go(to);
+    }
+  });
+
+  stack = ['home'];
+  render();
+})();
+</script>

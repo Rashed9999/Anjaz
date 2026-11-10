@@ -43,7 +43,7 @@ class OperationalCoveragePolicyTest extends TestCase
 
     public function test_unverified_location_blocks_money_but_not_reading(): void
     {
-        $user = User::factory()->create(['zone_code' => 'UNKNOWN']);
+        $user = User::factory()->withoutVerifiedResidence()->create(['zone_code' => 'UNKNOWN', 'residence_governorate' => null]);
         $policy = app(ZonePolicyService::class);
 
         $this->assertSame('ACCOUNT_LOCATION_UNVERIFIED', $policy->authorize($user, 'send_money')['decision_code']);

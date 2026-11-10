@@ -393,7 +393,9 @@ class MerchantFinancialTruthReportService
                 ->whereBetween('resolved_at', [$start, $end])
                 ->get(['id', 'credited_amount']);
 
-            $credit = '0';
+            // تُبدأ من الصفر المُطبَّع كبقيّة الخلايا — وإلّا خرجت «0» لا «0.0000»
+            // حين لا حركة، فاختلفت صيغةُ الخلية بين صفٍّ وآخر في التقرير نفسه.
+            $credit = $z;
             foreach ($returns as $r) {
                 $credit = MoneyService::add($credit, (string) ($r->credited_amount ?: '0'));
             }
@@ -404,7 +406,7 @@ class MerchantFinancialTruthReportService
                 ->whereBetween('created_at', [$start, $end])
                 ->get(['amount', 'method']);
 
-            $cash = '0'; $wallet = '0';
+            $cash = $z; $wallet = $z;
             foreach ($settlements as $s) {
                 if ($s->method === 'cash') {
                     $cash = MoneyService::add($cash, (string) $s->amount);

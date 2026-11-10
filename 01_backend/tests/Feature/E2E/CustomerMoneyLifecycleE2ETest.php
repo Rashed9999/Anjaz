@@ -133,8 +133,6 @@ class CustomerMoneyLifecycleE2ETest extends TestCase
         $sender = User::factory()->outsideZone('NORTH')->create([
             'kyc_tier' => 3,
             'is_kyc_verified' => 1,
-            'residence_governorate' => 'YE-AD',
-            'verified_residence_governorate' => 'YE-AD',
         ]);
         $receiver = User::factory()->create(['zone_code' => 'SOUTH']);
 
@@ -142,7 +140,7 @@ class CustomerMoneyLifecycleE2ETest extends TestCase
         $this->wallet($receiver->id, '0.0000');
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('SOUTH');
+        $this->expectExceptionMessage('RESIDENCE_OUTSIDE_OPERATIONAL_AREA');
 
         $this->txTrait()->customer_send_money_transaction($sender->id, $receiver->id, '100.0000', '2.0000');
     }

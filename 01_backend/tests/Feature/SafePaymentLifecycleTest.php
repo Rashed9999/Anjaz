@@ -155,15 +155,17 @@ class SafePaymentLifecycleTest extends TestCase
     }
 
     /** @test */
-    public function non_south_user_blocked()
+    public function party_without_verified_location_blocked()
     {
-        $northSeller = User::factory()->create(['zone_code' => 'NORTH']);
+        // AMIAL-ZONE-BOUNDARY-001: الضمانُ عمليّةُ دفترٍ لا يعبر فيها نقد، فلا
+        // يُحجَب جغرافياً. ما يُحجَب هو طرفٌ بلا إقامةٍ موثّقة (شرطُ هويّة).
+        $unverifiedSeller = User::factory()->withoutVerifiedResidence()->create(['zone_code' => 'UNKNOWN', 'residence_governorate' => null]);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('SOUTH');
+        $this->expectExceptionMessage('ACCOUNT_LOCATION_UNVERIFIED');
 
         $this->service->createAndFund(
-            $this->buyer, $northSeller, 'Test', 'Test', '50.0000',
+            $this->buyer, $unverifiedSeller, 'Test', 'Test', '50.0000',
         );
     }
 

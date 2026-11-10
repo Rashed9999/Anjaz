@@ -41,14 +41,21 @@ class CapabilityScreenMapGuardTest extends TestCase
     {
         $src = file_get_contents($this->mapFile());
 
-        preg_match('~static final Map<String, Widget Function\(\)> _map = \{(.*?)\n  \};~s',
+        // AMIAL-OWNER-WEB-PORTAL: الخريطةُ صارت شطرين — `_pos` (شاشاتُ الكاشير
+        // المحمولة) و`_ownerWebOnly` (رموزٌ تفتح إشعارَ «من بوّابة الويب»).
+        // وكلاهما بانٍ لرمز: الثاني يقود إلى شاشةٍ تقول أين توجد الخدمة.
+        preg_match('~static final Map<String, Widget Function\(\)> _pos = \{(.*?)\n  \};~s',
             $src, $m);
+        preg_match('~static const Set<String> _ownerWebOnly = \{(.*?)\n  \};~s',
+            $src, $w);
 
         $this->assertNotEmpty($m, 'خريطةُ القدرات لم تعد تُقرأ — تغيّرت بنيتُها');
+        $this->assertNotEmpty($w, 'قائمةُ قدرات بوّابة المالك لم تعد تُقرأ — تغيّرت بنيتُها');
 
         preg_match_all("~'([a-z_0-9.]+)':\s*\(\)~", $m[1], $c);
+        preg_match_all("~'([a-z_0-9.]+)'~", $w[1], $web);
 
-        return $c[1];
+        return array_values(array_unique(array_merge($c[1], $web[1])));
     }
 
     /** @test */

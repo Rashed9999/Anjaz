@@ -113,15 +113,20 @@ class CreditCollectionController extends Controller
             return $this->error('FORBIDDEN','هذا السند يخص موظفاً آخر',403);
         $receipt=Receipt::whereKey($item->receipt_id)->where('user_id',$owner->id)->first();
         if (!$receipt) return $this->error('NOT_FOUND','لم يُصدر السند',404);
-        $document=$documents->build($receipt);
-        $qrDataUri=null;
-        try {
-            $svg=\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(150)->margin(0)
-                ->generate($document['verification_url']);
-            $qrDataUri='data:image/svg+xml;base64,'.base64_encode($svg);
-        } catch (\Throwable) {}
-        $html=view($documents->a4View($document),compact('document','qrDataUri'))->render();
-        $pdf=\App\Support\ArabicPdf::render($html,['format'=>'A4','margin'=>14]);
+        // AMIAL-PDF-CACHE — سندُ تحصيلٍ مكتملٍ لا يتغيّر، فيُصيَّر مرّةً ويُخدَم
+        // من القرص؛ والتصييرُ في كلّ طلبٍ يعرّض الاتصال للقطع على شبكة جوّال.
+        $cacheKey='credit-collection-'.$receipt->receipt_number.'-'.(optional($receipt->updated_at)->timestamp ?? 0);
+        $pdf=app(\App\Services\PdfCacheService::class)->remember($cacheKey,function () use ($documents,$receipt) {
+            $document=$documents->build($receipt);
+            $qrDataUri=null;
+            try {
+                $svg=\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(150)->margin(0)
+                    ->generate($document['verification_url']);
+                $qrDataUri='data:image/svg+xml;base64,'.base64_encode($svg);
+            } catch (\Throwable) {}
+            $html=view($documents->a4View($document),compact('document','qrDataUri'))->render();
+            return \App\Support\ArabicPdf::render($html,['format'=>'A4','margin'=>14]);
+        });
         return response($pdf,200,[
             'Content-Type'=>'application/pdf','Content-Length'=>(string)strlen($pdf),
             'Content-Disposition'=>'inline; filename="COLLECTION-'.$receipt->receipt_number.'.pdf"',

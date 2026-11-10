@@ -55,6 +55,14 @@ class ApiContractLivenessTest extends TestCase
      */
     public function no_api_route_crashes_on_an_unauthenticated_request(): void
     {
+        // القناتان الموقّعتان (موثّق · أميال أعمال) تردّان ٥٠٣ «غير مضبوطة»
+        // حين يغيب سرُّهما — إغلاقٌ مقصودٌ لا انهيار. فيُضبط سرٌّ للاختبار
+        // فيصل الطلبُ إلى فحص التوقيع نفسِه ويُرفض هناك، وذاك ما يُقاس.
+        config([
+            'muwathaq.decision_secret' => str_repeat('m', 48),
+            'amial_business.inbound_secret' => str_repeat('b', 48),
+        ]);
+
         $broken = [];
         $seen = 0;
 

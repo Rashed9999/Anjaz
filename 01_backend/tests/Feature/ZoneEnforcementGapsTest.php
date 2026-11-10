@@ -39,23 +39,37 @@ class ZoneEnforcementGapsTest extends TestCase
         return $u->refresh();
     }
 
+    /**
+     * حسابٌ في الحالة التي كان يخرج بها من «إضافة» اللوحة: غيرُ موثَّق،
+     * ومنطقتُه UNKNOWN، ومحافظتُه مُعلَنةٌ غيرُ موثَّقة.
+     *
+     * الإنشاءُ نفسُه صار حصراً لموثّق (اللوحةُ تردّ ٤١٠ — يحرسه
+     * `test_hub_created_account_does_not_start_in_south`)، أمّا قرارُ
+     * الاعتماد وإسنادُ المنطقة فباقيان هنا، وهما موضوعُ هذه الاختبارات.
+     */
     private function createViaHub(array $extra = []): User
     {
-        // AMIAL-KYC-DOSSIER-FIXTURE-001 — **الهاتفُ يُلتقط قبل أن يُرسَل.**
-        //
-        // كان يُولَّد داخلَ المصفوفة، وملفُّ «اعرف عميلك» يشتقّ منه رقمَ
-        // الهويّة — فلو وُلّد مرّتين لاختلف الرقمان وسقط الاتّساق.
         $phone = $extra['phone'] ?? '77' . random_int(1000000, 9999999);
+        $dossier = array_filter(
+            $this->kycDossier($phone),
+            static fn ($v) => !$v instanceof \Illuminate\Http\UploadedFile,
+        );
+        $dossier = array_filter(
+            $dossier,
+            static fn ($key) => \Illuminate\Support\Facades\Schema::hasColumn('users', $key),
+            ARRAY_FILTER_USE_KEY,
+        );
 
-        $this->actingAs($this->admin(), 'user')
-            ->postJson('/admin/amial/hub/customers/users', array_merge([
-                'email' => 'registration-' . bin2hex(random_bytes(8)) . '@example.test',
-                'f_name' => 'اختبار', 'l_name' => 'مناطق',
-                'phone' => $phone,
-                'password' => 'Passw0rd!123',
-            ] + $this->kycDossier($phone), $extra))->assertSuccessful();
-
-        return User::latest('id')->first();
+        return User::factory()->withoutVerifiedResidence()->create(array_merge([
+            'type' => CUSTOMER_TYPE,
+            'f_name' => 'اختبار', 'l_name' => 'مناطق',
+            'phone' => '967' . $phone,
+            'zone_code' => 'UNKNOWN',
+            'is_kyc_verified' => 0,
+            'kyc_tier' => 0,
+            'is_phone_verified' => 0,
+            'residence_governorate' => null,
+        ], $dossier, $extra))->fresh();
     }
 
     // ===================== الثغرة ١: الاعتماد لا يُسند منطقة =====================
@@ -142,10 +156,17 @@ class ZoneEnforcementGapsTest extends TestCase
 
     public function test_hub_created_account_does_not_start_in_south(): void
     {
-        $user = $this->createViaHub(['residence_governorate' => 'YE-SN']);
+        // اللوحةُ لا تُنشئ حساباً أصلاً — فلا حسابَ يولد منها في الجنوب.
+        $phone = '77' . random_int(1000000, 9999999);
+        $this->actingAs($this->admin(), 'user')
+            ->postJson('/admin/amial/hub/customers/users', [
+                'f_name' => 'اختبار', 'l_name' => 'مناطق', 'phone' => $phone,
+                'residence_governorate' => 'YE-SN',
+            ])
+            ->assertStatus(410)
+            ->assertJsonPath('code', 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
 
-        $this->assertSame('UNKNOWN', $user->zone_code, 'الإنشاء لا يمنح منطقة تشغيلية');
-        $this->assertSame('YE-SN', $user->residence_governorate);
+        $this->assertDatabaseMissing('users', ['phone' => '967' . $phone]);
     }
 
     // ===================== الثغرة ٣: الواجهة القديمة بلا حراسة =====================
@@ -155,7 +176,7 @@ class ZoneEnforcementGapsTest extends TestCase
     {
         // كانت routes/api/v1/api.php خالية تماماً من amial.zone، وفيها
         // send-money وcash-out وadd-money وcash-in الوكيل.
-        $user = User::factory()->create(['type' => 2, 'zone_code' => 'NORTH']);
+        $user = User::factory()->outsideZone('NORTH')->create(['type' => 2]);
         EMoney::create([
             'user_id' => $user->id, 'current_balance' => '100000.0000',
             'held_balance' => '0.0000', 'pending_balance' => '0.0000',

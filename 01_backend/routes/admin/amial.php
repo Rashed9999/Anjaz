@@ -114,7 +114,10 @@ Route::get('/security-events', [SecurityEventsController::class, 'index'])
     ->middleware('platform:platform.security.act')->name('security-events.index');
 
 // ============ AMIAL-SAFE-PAYMENT-001 (v1.1) — Disputes resolution ============
-Route::prefix('safe-payments')->name('safe-payments.')->middleware('amial.idempotency')->group(function () {
+// حسمُ النزاع يحرّك مالَ الضمان (تحريرٌ للبائع أو ردٌّ للمشتري) — فلا يكفي
+// دخولُ اللوحة: `platform.disputes.decide` كما في مسار التطبيق نفسه.
+// وقراءةُ الضمانات وأدلّتها كشفُ معاملاتٍ: `platform.transactions.view` على المجموعة.
+Route::prefix('safe-payments')->name('safe-payments.')->middleware(['amial.idempotency', 'platform:platform.transactions.view'])->group(function () {
     Route::get('/', [AdminSafePaymentController::class, 'index'])->name('index');
     // AMIAL-SAFEPAY-EVIDENCE-001 — قبل مسار {ulid} كي لا يبتلعه
     Route::get('/evidence/{id}/file', [AdminSafePaymentController::class, 'evidenceFile'])
@@ -122,11 +125,11 @@ Route::prefix('safe-payments')->name('safe-payments.')->middleware('amial.idempo
     Route::get('/{ulid}', [AdminSafePaymentController::class, 'show'])
         ->where('ulid', '[A-Z0-9]{26}')->name('show');
     Route::post('/{ulid}/release', [AdminSafePaymentController::class, 'resolveRelease'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('release');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.disputes.decide')->name('release');
     Route::post('/{ulid}/refund', [AdminSafePaymentController::class, 'resolveRefund'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('refund');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.disputes.decide')->name('refund');
     Route::post('/{ulid}/partial', [AdminSafePaymentController::class, 'resolvePartial'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('partial');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.disputes.decide')->name('partial');
 });
 
 // ============ AMIAL-DONATIONS-001 (v1.2) ============

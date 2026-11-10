@@ -274,7 +274,10 @@ class AdminDefinedVerticalGuardTest extends TestCase
 
         $this->assertContains(self::CODE, VerticalRegistry::codes());
 
+        // تاجرٌ يختار قطاعَه أوّلَ مرّة: القطاعُ يُثبَّت بعد اختياره، وتبديلُه
+        // قرارُ إدارة (BUSINESS_TYPE_LOCKED ٤٠٩) — والمقيسُ هنا التحقّقُ وحده.
         $merchant = $this->merchantIn(A::BIZ_RETAIL);
+        MerchantProfile::where('user_id', $merchant->id)->update(['business_type' => null]);
 
         $this->actingAs($merchant, 'api')
             ->putJson('/api/v1/amial/merchant/business-type', ['business_type' => self::CODE])

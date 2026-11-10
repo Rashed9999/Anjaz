@@ -215,8 +215,11 @@ class BusinessRefundService
         // AMIAL-BUSINESS-AML-001 — قبل أي حركة: حجز أمني أو منطقة لا تسمح بالاسترداد،
         // ثم فحص الغسل (التاجر يرسل، الدافع الأصلي يستلم). المعلّق يبقى معلّقاً إن حُجز.
         $this->assertFinancialEligibility($merchant->id, 'refund');
-        $this->screenAml($merchant->id, (int) $refund->customer_user_id, 'business_refund',
-            MoneyService::normalize((string) $refund->amount), $refund->refund_ulid, ['business_reference' => $refund->business_reference]);
+        $payerId = (int) $refund->customer_user_id;
+        $refundAmount = MoneyService::normalize((string) $refund->amount);
+        $amlContext = ['business_reference' => $refund->business_reference];
+        // النداءُ في سطرٍ واحد: `AmlCoverageGuardTest` يقرأ النوعَ منه.
+        $this->screenAml($merchant->id, $payerId, 'business_refund', $refundAmount, $refund->refund_ulid, $amlContext);
 
         return DB::transaction(function () use ($refund, $merchant, $approval) {
             $locked = BusinessRefund::whereKey($refund->id)->lockForUpdate()->firstOrFail();

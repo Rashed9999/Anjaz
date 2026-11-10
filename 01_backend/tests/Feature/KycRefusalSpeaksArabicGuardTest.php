@@ -112,8 +112,8 @@ class KycRefusalSpeaksArabicGuardTest extends TestCase
 
         $missing = [];
 
-        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK,
-            KycDocument::TYPE_SELFIE] as $code) {
+        // الرفضُ على الفئة الثانية: وجهُ الهويّة وظهرُها (الصورةُ الحيّة للثالثة).
+        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK] as $code) {
             $label = KycDocument::TYPE_LABELS[$code];
 
             if (! str_contains($msg, $label)) {

@@ -28,9 +28,8 @@ class ZoneEnforcementE2ETest extends TestCase
     /** @test */
     public function trait_blocks_non_south_user_via_eligibility_check(): void
     {
-        $sender = User::factory()->create([
-            'type' => 2,
-            'zone_code' => 'NORTH', // ← خارج SOUTH
+        $sender = User::factory()->outsideZone('NORTH')->create([
+            'type' => 2, // ← إقامةٌ موثّقة خارج نطاق التشغيل
         ]);
         $receiver = User::factory()->create([
             'type' => 2,
@@ -55,7 +54,7 @@ class ZoneEnforcementE2ETest extends TestCase
 
         // المرسل في NORTH → يجب أن يُرفض من assertFinancialEligibility
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('SOUTH');
+        $this->expectExceptionMessage('RESIDENCE_OUTSIDE_OPERATIONAL_AREA');
 
         $trait->customer_send_money_transaction(
             from_user_id: $sender->id,
@@ -108,7 +107,9 @@ class ZoneEnforcementE2ETest extends TestCase
     /** @test */
     public function unknown_zone_user_is_blocked(): void
     {
-        $sender = User::factory()->create(['type' => 2, 'zone_code' => 'UNKNOWN']);
+        $sender = User::factory()->withoutVerifiedResidence()->create([
+            'type' => 2, 'zone_code' => 'UNKNOWN', 'residence_governorate' => null,
+        ]);
         $receiver = User::factory()->create(['type' => 2, 'zone_code' => 'SOUTH']);
 
         foreach ([$sender, $receiver] as $u) {
@@ -139,7 +140,7 @@ class ZoneEnforcementE2ETest extends TestCase
     /** @test */
     public function cash_out_also_blocks_non_south_user(): void
     {
-        $customer = User::factory()->create(['type' => 2, 'zone_code' => 'MIDDLE']);
+        $customer = User::factory()->outsideZone('MIDDLE')->create(['type' => 2]);
 
         EMoney::create([
             'user_id' => $customer->id,

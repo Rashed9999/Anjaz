@@ -64,12 +64,12 @@ class MuwathaqAccountOpeningTest extends TestCase
         $this->assertSame(202, $submission->fresh()->response_status);
         Http::assertSent(function (ClientRequest $request) use ($submission): bool {
             $body = $request->body();
-            $timestamp = $request->header('X-Amial-Timestamp');
+            $timestamp = ($request->header('X-Amial-Timestamp')[0] ?? '');
             $expected = hash_hmac('sha256', $timestamp.'.'.$body, 'core-to-muwathaq-secret');
 
             return $request->url() === 'https://muwathaq.test/api/v1/internal/applications'
-                && $request->header('Idempotency-Key') === $submission->event_ulid
-                && hash_equals($expected, (string) $request->header('X-Amial-Signature'))
+                && ($request->header('Idempotency-Key')[0] ?? '') === $submission->event_ulid
+                && hash_equals($expected, (string) ($request->header('X-Amial-Signature')[0] ?? ''))
                 && str_contains($body, 'account_opening.submitted')
                 && !str_contains($body, 'transaction_pin')
                 && !str_contains($body, 'password');

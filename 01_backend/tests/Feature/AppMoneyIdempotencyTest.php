@@ -288,6 +288,17 @@ class AppMoneyIdempotencyTest extends TestCase
                 continue;
             }
 
+            // AMIAL-BUSINESS-GATEWAY-001 — قناةُ خادمٍ لخادمٍ موقَّعة: كلُّ طلبٍ
+            // يحمل `X-Amial-Business-Nonce` يُكتب في `business_request_nonces`
+            // بقيدٍ فريد قبل التنفيذ، فلا يُنفَّذ طلبٌ موقَّعٌ مرّتين. وهذا أشدُّ
+            // من مفتاح التفرّد لا أضعف — ويُشترط أن يبقى الوسيطُ قائماً.
+            if (str_starts_with($uri, 'api/v1/business/')) {
+                $signed = collect($route->gatherMiddleware())->contains(
+                    fn ($m) => is_string($m) && str_contains($m, 'amial.business.signature'));
+                $signed ? $covered++ : $missing[] = $uri;
+                continue;
+            }
+
             $has = false;
 
             foreach ($route->gatherMiddleware() as $m) {
