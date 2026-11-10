@@ -171,10 +171,16 @@ class PaidEndpointBypassMatrixTest extends TestCase
                     continue;
                 }
 
-                $status = $this->hit($this->merchant($biz, $plan), $route)->getStatusCode();
+                $res = $this->hit($this->merchant($biz, $plan), $route);
+                $status = $res->getStatusCode();
                 $checked++;
 
-                if (! in_array($status, [402, 403], true)) {
+                // ٤٠٤ `NOT_FOR_BUSINESS_TYPE` رفضٌ من الخادم أيضاً: القدرةُ لا تخصّ
+                // قطاعَ هذا التاجر أصلاً (EnsureCapability) — فلا تفتحها باقة.
+                $refusedBySector = $status === 404
+                    && $res->json('code') === 'NOT_FOR_BUSINESS_TYPE';
+
+                if (! in_array($status, [402, 403], true) && ! $refusedBySector) {
                     $bypasses[] = sprintf('%s %s — %s على %s ردَّ %d (يحتاج %s)',
                         $route['method'], $route['uri'], $route['code'], $plan, $status, $min);
                 }

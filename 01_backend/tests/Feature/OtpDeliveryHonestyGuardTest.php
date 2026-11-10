@@ -41,9 +41,24 @@ class OtpDeliveryHonestyGuardTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * رمزُ العرض لا قيمةَ افتراضيّةَ له في أيّ بيئة (قرارٌ أمنيّ في
+     * `config/amial.php`)، فيُضبط هنا صراحةً كما في خادم التجربة —
+     * ومعه بذرةُ `AMIAL_DEMO_PHONES` التي يقرؤها `OtpPolicy` حين يفرغ الجدول.
+     */
+    private function configureDemoOtp(): void
+    {
+        config([
+            'amial.otp.demo_code' => '123456',
+            'amial.otp.demo_numbers' => ['967777100001'],
+        ]);
+        \Illuminate\Support\Facades\Cache::flush();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
+        $this->configureDemoOtp();
 
         DB::table('business_settings')->updateOrInsert(
             ['key' => 'phone_verification'],

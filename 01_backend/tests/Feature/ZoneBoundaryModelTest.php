@@ -34,7 +34,14 @@ class ZoneBoundaryModelTest extends TestCase
 
     private function user(string $zone, int $type = 2): User
     {
-        $u = User::factory()->create(['type' => $type, 'zone_code' => $zone]);
+        // التغطية تُقرأ من محافظة الإقامة الموثّقة؛ والمصنعُ مقيمٌ في عدن.
+        $u = match ($zone) {
+            'SOUTH' => User::factory()->create(['type' => $type, 'zone_code' => 'SOUTH']),
+            'UNKNOWN' => User::factory()->withoutVerifiedResidence()->create([
+                'type' => $type, 'zone_code' => 'UNKNOWN', 'residence_governorate' => null,
+            ]),
+            default => User::factory()->outsideZone($zone)->create(['type' => $type]),
+        };
         EMoney::create([
             'user_id' => $u->id, 'current_balance' => '100000.0000',
             'held_balance' => '0.0000', 'pending_balance' => '0.0000',
@@ -108,7 +115,7 @@ class ZoneBoundaryModelTest extends TestCase
         $decision = $this->policy()->authorize($this->user('UNKNOWN'), 'send_money');
 
         $this->assertFalse($decision['allowed']);
-        $this->assertSame('ACCOUNT_ZONE_UNKNOWN', $decision['decision_code']);
+        $this->assertSame('ACCOUNT_LOCATION_UNVERIFIED', $decision['decision_code']);
     }
 
     public function test_southern_customer_keeps_full_access(): void

@@ -61,10 +61,14 @@ class FamilyFundServiceTest extends TestCase
     /** @test */
     public function it_rejects_creation_from_non_south_users()
     {
-        $north = $this->tierTwoCustomer(['zone_code' => 'NORTH']);
+        $north = $this->tierTwoCustomer([
+            'zone_code' => 'NORTH',
+            'residence_governorate' => 'YE-SN',
+            'verified_residence_governorate' => 'YE-SN',
+        ]);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('SOUTH');
+        $this->expectExceptionMessage('RESIDENCE_OUTSIDE_OPERATIONAL_AREA');
 
         $this->service->create($north, 'Test');
     }

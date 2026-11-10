@@ -31,9 +31,23 @@ class NorthZoneOperationsBlockedTest extends TestCase
         $this->policy = app(ZonePolicyService::class);
     }
 
+    /**
+     * AMIAL-RESIDENCE-TEST-001 — المصنع الافتراضي مقيمٌ موثّقٌ في عدن، فـ
+     * `zone_code` وحده لم يعد يصنع مستخدماً خارج التغطية: التغطية تُقرأ من
+     * محافظة الإقامة الموثّقة. فالمنطقة تُبنى من الإقامة نفسها.
+     */
     private function userInZone(string $zone, int $type = 2): User
     {
-        return User::factory()->create(['type' => $type, 'zone_code' => $zone]);
+        if ($zone === 'SOUTH') {
+            return User::factory()->create(['type' => $type, 'zone_code' => 'SOUTH']);
+        }
+        if ($zone === 'UNKNOWN') {
+            return User::factory()->withoutVerifiedResidence()->create([
+                'type' => $type, 'zone_code' => 'UNKNOWN', 'residence_governorate' => null,
+            ]);
+        }
+
+        return User::factory()->outsideZone($zone)->create(['type' => $type]);
     }
 
     private function wallet(int $userId, string $balance = '0.0000', string $zone = 'SOUTH'): EMoney
@@ -142,9 +156,11 @@ class NorthZoneOperationsBlockedTest extends TestCase
     // ============================================================
 
     /** @test */
-    public function trait_blocks_north_sender_from_sending_money(): void
+    public function trait_blocks_unverified_location_sender_from_sending_money(): void
     {
-        $sender   = $this->userInZone('NORTH');
+        // AMIAL-ZONE-BOUNDARY-001: التحويل دفتريّ فلا يُحجَب جغرافياً؛ ما
+        // يُحجَب هو الحساب بلا إقامة موثّقة (شرط هويّة لا جغرافيا).
+        $sender   = $this->userInZone('UNKNOWN');
         $receiver = $this->userInZone('SOUTH');
         $admin    = $this->userInZone('SOUTH', 0);
         $this->wallet($admin->id);
@@ -172,9 +188,9 @@ class NorthZoneOperationsBlockedTest extends TestCase
     }
 
     /** @test */
-    public function north_funds_are_not_moved_when_blocked(): void
+    public function blocked_funds_are_not_moved(): void
     {
-        $sender   = $this->userInZone('NORTH');
+        $sender   = $this->userInZone('UNKNOWN');
         $receiver = $this->userInZone('SOUTH');
         $admin    = $this->userInZone('SOUTH', 0);
         $this->wallet($admin->id);
@@ -183,7 +199,7 @@ class NorthZoneOperationsBlockedTest extends TestCase
 
         try {
             $this->txTrait()->customer_send_money_transaction($sender->id, $receiver->id, '100.0000', '2.0000');
-            $this->fail('كان يجب رفض العملية لمستخدم شمالي');
+            $this->fail('كان يجب رفض العملية لحسابٍ بلا إقامة موثّقة');
         } catch (\RuntimeException $e) {
             // متوقع
         }
@@ -214,14 +230,16 @@ class NorthZoneOperationsBlockedTest extends TestCase
         $this->wallet($north->id, '0.0000', 'NORTH');
         $this->wallet($other->id, '0.0000');
 
-        // مرسل جنوبي → مستلم شمالي: مسموح (الفاعل في الجنوب) ويستلم المال
-        $txId = $this->txTrait()->customer_send_money_transaction($sender->id, $north->id, '100.0000', '2.0000');
-        $this->assertNotNull($txId);
-        $this->assertSame('100.0000', (string) EMoney::where('user_id', $north->id)->value('current_balance'));
-
-        // لكن المستلم الشمالي لا يستطيع تحريك المبلغ (محظور كفاعل)
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('SOUTH');
-        $this->txTrait()->customer_send_money_transaction($north->id, $other->id, '50.0000', '1.0000');
+        // مرسلٌ جنوبيّ → مستلمٌ مقيمٌ خارج النطاق: طبقةُ توثيق العميل تشترط
+        // أن يكون المستلمُ قادراً على الاستلام (إقامة موثّقة داخل النطاق)،
+        // فيُرفض التحويل كلُّه ولا يتحرّك قرش.
+        try {
+            $this->txTrait()->customer_send_money_transaction($sender->id, $north->id, '100.0000', '2.0000');
+            $this->fail('كان يجب رفض التحويل إلى مستلمٍ خارج نطاق التشغيل');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('RESIDENCE_OUTSIDE_OPERATIONAL_AREA', $e->getMessage());
+        }
+        $this->assertSame('1000.0000', (string) EMoney::where('user_id', $sender->id)->value('current_balance'));
+        $this->assertSame('0.0000', (string) EMoney::where('user_id', $north->id)->value('current_balance'));
     }
 }

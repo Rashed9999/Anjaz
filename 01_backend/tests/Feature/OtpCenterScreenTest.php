@@ -33,6 +33,26 @@ class OtpCenterScreenTest extends TestCase
     use RefreshDatabase;
     use ReadsAdminNavigation;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->configureDemoOtp();
+    }
+
+    /**
+     * رمزُ العرض لا قيمةَ افتراضيّةَ له في أيّ بيئة (قرارٌ أمنيّ في
+     * `config/amial.php`)، فيُضبط هنا صراحةً كما في خادم التجربة —
+     * ومعه بذرةُ `AMIAL_DEMO_PHONES` التي يقرؤها `OtpPolicy` حين يفرغ الجدول.
+     */
+    private function configureDemoOtp(): void
+    {
+        config([
+            'amial.otp.demo_code' => '123456',
+            'amial.otp.demo_numbers' => ['967777100001'],
+        ]);
+        \Illuminate\Support\Facades\Cache::flush();
+    }
+
     private function admin(string $role = PlatformRoleService::ADMIN, string $phone = '967770006001'): User
     {
         $u = new User();

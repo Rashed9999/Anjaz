@@ -74,7 +74,9 @@ class DebugbarStaysDevOnlyTest extends TestCase
             // فتُطوى الأسطرُ الموصولةُ أوّلاً.
             $joined = preg_replace('~\\\\\s*\n\s*~', ' ', $src);
 
-            preg_match_all('~^\s*RUN\s+composer\s+install[^\n]*~mi', (string) $joined, $m);
+            // **والأمرُ قد يسبقه `--mount=…` ومتغيّرُ بيئة** (طبقةُ ذاكرةِ
+            // composer في `Dockerfile`)، فيُقبل أيُّ `RUN` يحوي التركيب.
+            preg_match_all('~^\s*RUN\b[^\n]*\bcomposer\s+install\b[^\n]*~mi', (string) $joined, $m);
 
             $this->assertNotEmpty($m[0],
                 "«{$name}» لا يُركّب الاعتماديّاتِ إطلاقاً — أو تغيّرت الصيغةُ "

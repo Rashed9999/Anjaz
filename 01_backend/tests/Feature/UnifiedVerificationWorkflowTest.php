@@ -70,7 +70,8 @@ class UnifiedVerificationWorkflowTest extends TestCase
     /** @test */
     public function missing_policy_rows_fall_back_to_a_safe_customer_workflow(): void
     {
-        $customer = User::factory()->create([
+        // عميلٌ في أوّل الطريق (Tier 0) — المصنعُ الافتراضيُّ عميلٌ مكتمل Tier 2.
+        $customer = User::factory()->tierZero()->create([
             'type' => CUSTOMER_TYPE,
             'is_phone_verified' => false,
             'is_email_verified' => false,

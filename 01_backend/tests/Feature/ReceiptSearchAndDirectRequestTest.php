@@ -48,7 +48,8 @@ class ReceiptSearchAndDirectRequestTest extends TestCase
         ]);
 
         EMoney::create([
-            'user_id' => $u->id, 'current_balance' => '500000',
+            // تحت سقف رصيد الفئة الثانية (250,000) — وإلّا رُفض الاستلامُ بحقّ.
+            'user_id' => $u->id, 'current_balance' => '100000',
             'pending_balance' => '0', 'held_balance' => '0',
             'charge_earned' => '0', 'zone_code' => 'SOUTH', 'version' => 0,
         ]);

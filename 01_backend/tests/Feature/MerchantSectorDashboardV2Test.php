@@ -57,7 +57,7 @@ class MerchantSectorDashboardV2Test extends TestCase
         ]);
 
         PharmacyBatch::create([
-            'batch_ulid' => (string) IlluminateSupportStr::ulid(),
+            'batch_ulid' => (string) \Illuminate\Support\Str::ulid(),
             'product_id' => $low->id,
             'batch_number' => 'NEAR-001',
             'expiry_date' => now()->addDays(12)->toDateString(),
@@ -68,7 +68,7 @@ class MerchantSectorDashboardV2Test extends TestCase
         ]);
 
         PharmacyBatch::create([
-            'batch_ulid' => (string) IlluminateSupportStr::ulid(),
+            'batch_ulid' => (string) \Illuminate\Support\Str::ulid(),
             'product_id' => $expired->id,
             'batch_number' => 'EXP-001',
             'expiry_date' => now()->subDay()->toDateString(),

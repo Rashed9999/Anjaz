@@ -72,8 +72,9 @@ class MerchantPrintTrackingTest extends TestCase
         $this->assertSame('80mm', $profile->paper_size);
         $this->assertStringNotContainsString('192.168.1.50', $profile->endpoint_hash);
         $this->assertStringNotContainsString('192.168.1.50', (string) $profile->endpoint_hint);
-        $this->assertSame(['cut' => true, 'qr' => true], $profile->capabilities);
-        $this->assertSame(['paper_mm' => 80, 'port' => 9100], $profile->settings);
+        // عمودُ JSON في MySQL يعيد ترتيب المفاتيح؛ المقيسُ المحتوى لا الترتيب.
+        $this->assertEquals(['cut' => true, 'qr' => true], $profile->capabilities);
+        $this->assertEquals(['paper_mm' => 80, 'port' => 9100], $profile->settings);
         $this->assertSame([
             'source' => 'flutter_thermal_service',
             'payment_method' => 'cash',

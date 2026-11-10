@@ -42,7 +42,7 @@ class MerchantVerificationTest extends TestCase
 
         $this->svc = app(MerchantVerificationService::class);
         $this->merchant = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
-        $this->admin = User::factory()->create(['type' => 1]);
+        $this->admin = User::factory()->create(['type' => ADMIN_TYPE]); // المراجعُ موظّفٌ إداريّ (النوع ٠)
     }
 
     /** يصنع ملفاً وهمياً صالحاً. */

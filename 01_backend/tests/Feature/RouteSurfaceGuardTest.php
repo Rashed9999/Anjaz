@@ -68,7 +68,13 @@ class RouteSurfaceGuardTest extends TestCase
      * تبقى الثابتة موجودةً فارغةً عمداً: إبقاؤها يجعل إضافة استثناء قراراً
      * ظاهراً في المراجعة، لا تعديلاً صامتاً في منطق الاختبار.
      */
-    private const KNOWN_GET_WRITES = [];
+    private const KNOWN_GET_WRITES = [
+        // AMIAL-MERCHANT-WEB-REPORTS — تنزيلُ ملفّ تقريرٍ يملكه صاحبُ الجلسة
+        // نفسُه (`requested_by_user_id`). الكتابةُ الوحيدة `download_count`:
+        // عدّادٌ إحصائيٌّ لا يُعرض ولا يمسّ مالاً ولا صلاحيّة، وأقصى ما يفعله
+        // CSRF به زيادةُ رقمٍ لا يقرؤه أحد. والتنزيلُ بطبعه GET (رابطٌ يُفتح).
+        'merchant/data/report-exports/{ulid}/download',
+    ];
 
     public function test_no_get_route_writes_to_the_database(): void
     {

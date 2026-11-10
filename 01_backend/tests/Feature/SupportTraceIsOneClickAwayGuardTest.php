@@ -165,16 +165,20 @@ class SupportTraceIsOneClickAwayGuardTest extends TestCase
      * تدفع تكلفتَه من جيبها في كلّ فاتورة.
      */
     /** @test */
-    public function the_provider_fee_is_still_added_not_replaced(): void
+    public function bill_fee_comes_from_one_engine_and_the_biller_gets_the_full_principal(): void
     {
+        // AMIAL-BILLPAY-FREESADAD-001 (e0d6421d): رسمُ دفع الفاتورة يُحسب من
+        // محرّك الرسوم وحده (`BILL_PAY`)؛ وحقلا المنتج `fee_amount`/`fee_percent`
+        // إرثٌ في الكتالوج لا محرّكٌ ثانٍ. ويتحمّله العميلُ دائماً كي يصل
+        // المزوّدَ أصلُ الفاتورة كاملاً.
         $svc = (string) file_get_contents(base_path('app/Services/BillPayService.php'));
+        $code = preg_replace('~^\s*(//|\*|/\*).*$~m', '', $svc);
 
-        $this->assertStringContainsString('fee_amount', $svc);
-        $this->assertStringContainsString('fee_percent', $svc);
-
-        $this->assertMatchesRegularExpression(
-            '/add\(\$providerFee,\s*\$platformFee\)/u', $svc,
-            '**رسمُ المنصّة حلَّ محلَّ رسم المزوّد بدل أن يُضاف فوقه** — '
-            .'فتدفع المنصّةُ تكلفةَ المزوّد من جيبها في كلّ فاتورة.');
+        $this->assertMatchesRegularExpression("/->calculate\('BILL_PAY'/", $code,
+            'رسمُ الفاتورة لا يمرّ بمحرّك الرسوم');
+        $this->assertDoesNotMatchRegularExpression('/->fee_(amount|percent)\b/', $code,
+            '**محرّكُ رسومٍ ثانٍ** يقرأ حقلَي المنتج — فيُحسب الرسمُ مرّتين أو يختلف بين العرض والتنفيذ');
+        $this->assertStringContainsString("!== 'sender'", $code,
+            'لا شيءَ يمنع قاعدةً تُحمّل المزوّدَ الرسمَ فينقص أصلُ الفاتورة');
     }
 }

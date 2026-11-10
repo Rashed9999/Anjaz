@@ -211,7 +211,7 @@ class MerchantDashboardV2Test extends TestCase
             ->assertSee('التشغيل والمبيعات')
             ->assertSee('الفريق ونقاط البيع')
             ->assertSee('المالية والتقارير')
-            ->assertSee("api('dashboardV2')", false)
+            ->assertSee("api('dashboardV2'", false)
             ->assertSee('اتجاه المبيعات')
             ->assertSee('طرق الدفع');
 

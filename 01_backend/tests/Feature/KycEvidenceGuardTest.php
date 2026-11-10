@@ -107,7 +107,9 @@ class KycEvidenceGuardTest extends TestCase
         $this->assertContains('بطاقة الهوية — الظهر', $ev['missing'],
             'الناقصُ لا يُسمّى بعينه — «الملفّ ناقص» تُرسل المراجعَ يبحث '
             .'وتُنتج تذكرةَ دعمٍ لا إجراءً');
-        $this->assertContains('صورة شخصية حيّة', $ev['missing']);
+        // AMIAL-KYC-CENTRAL-GUARD-002: الفئةُ الثانية وجهُ الهويّة وظهرُها؛
+        // الصورةُ الحيّة شرطُ الفئة الثالثة لا الثانية.
+        $this->assertNotContains('صورة شخصية حيّة', $ev['missing']);
     }
 
     /** @test */
@@ -125,7 +127,8 @@ class KycEvidenceGuardTest extends TestCase
         $this->assertFalse($ev['complete'],
             'وثيقةٌ تنتظر المراجعةَ حُسبت معتمَدة — فيُعتمد حسابٌ لم تُقرأ '
             .'ورقةٌ من ورقه');
-        $this->assertCount(3, $ev['missing']);
+        // الفئةُ الثانية = وجهُ الهويّة وظهرُها، وكلاهما معلَّقٌ فكلاهما ناقص.
+        $this->assertCount(2, $ev['missing']);
     }
 
     /** @test */
@@ -217,6 +220,15 @@ class KycEvidenceGuardTest extends TestCase
 
                 // مصدرُ القرار الوحيد — وهو موضعُ الكتابة المشروع.
                 if (str_ends_with($path, 'Services/KycDocumentService.php')) {
+                    continue;
+                }
+
+                // AMIAL-MUWATHAQ-BOUNDARY — فتحُ الحساب صار حصراً لموثّق: المراجعةُ
+                // والمحافظةُ والمبدأُ الرباعيّ تقع هناك، ويصل القرارُ حدثاً موقَّعاً
+                // (`VerifyMuwathaqSignature`) فيُنفَّذ هنا. فهذان منفّذا قرارٍ
+                // واقعٍ لا بابٌ ثانٍ يصنعه — ولا يُنشئان حساباً بلا ذلك الحدث.
+                if (str_ends_with($path, 'Services/Muwathaq/MuwathaqProvisioningService.php')
+                    || str_ends_with($path, 'Services/Muwathaq/MuwathaqAccountOpeningService.php')) {
                     continue;
                 }
 

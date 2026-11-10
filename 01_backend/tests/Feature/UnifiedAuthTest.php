@@ -92,8 +92,9 @@ class UnifiedAuthTest extends TestCase
         $second->assertStatus(200);
         $this->assertNotEmpty($second->json('meta.last_login.at'));
         $this->assertArrayHasKey('ip', $second->json('meta.last_login'));
-        // zone_code = SOUTH → «الجنوب» (نظام المناطق الجاهز، لا GeoIP)
-        $this->assertEquals('الجنوب', $second->json('meta.last_login.zone'));
+        // AMIAL-COVERAGE-002: المحافظةُ تُفضَّل على اسم المنطقة — «عدن» يعرف
+        // صاحبُها إن كان الدخولُ دخولَه، و«الجنوب» ثماني محافظات لا تميّز.
+        $this->assertEquals('عدن', $second->json('meta.last_login.zone'));
     }
 
     /** @test */

@@ -1,0 +1,1021 @@
+<title>محاكي محطة الوقود</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
+<style>
+  :root{
+    --brand:#053391; --brand-lt:#1D4FB8; --brand-dk:#021F5C;
+    --ok:#0F7A46; --ok-bg:#E3F3E5;
+    --warn:#8A5A00; --warn-bg:#FFF6E0;
+    --bad:#B3261E; --bad-bg:#FDE7E7;
+    --cash:#7A5C00; --cash-bg:#FBF3DC;
+    --ground:#E7EBF3; --panel:#F4F6FA;
+    --surface:#FFFFFF; --surface-2:#F7F9FC;
+    --ink:#0F1729; --ink-2:#48536B; --ink-3:#7B869C;
+    --line:#D8DEEA; --line-2:#E9EDF5;
+    --shadow:0 1px 2px rgba(5,51,145,.06),0 8px 24px rgba(5,51,145,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --brand:#6E92E8; --brand-lt:#8FADF0; --brand-dk:#0A1B3D;
+      --ok:#5FCE93; --ok-bg:#123123;
+      --warn:#E5B65C; --warn-bg:#33260A;
+      --bad:#F2867E; --bad-bg:#3A1512;
+      --cash:#D9B25C; --cash-bg:#2E2409;
+      --ground:#0B1120; --panel:#0F1727;
+      --surface:#151E31; --surface-2:#1B2539;
+      --ink:#E9EDF6; --ink-2:#A6B2C8; --ink-3:#7A87A0;
+      --line:#2A354C; --line-2:#212B3E;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --brand:#6E92E8; --brand-lt:#8FADF0; --brand-dk:#0A1B3D;
+    --ok:#5FCE93; --ok-bg:#123123;
+    --warn:#E5B65C; --warn-bg:#33260A;
+    --bad:#F2867E; --bad-bg:#3A1512;
+    --cash:#D9B25C; --cash-bg:#2E2409;
+    --ground:#0B1120; --panel:#0F1727;
+    --surface:#151E31; --surface-2:#1B2539;
+    --ink:#E9EDF6; --ink-2:#A6B2C8; --ink-3:#7A87A0;
+    --line:#2A354C; --line-2:#212B3E;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  body{
+    margin:0; direction:rtl; background:var(--ground); color:var(--ink);
+    font-family:'Tajawal','Noto Kufi Arabic','Noto Sans Arabic','Segoe UI',
+                'Geeza Pro','Droid Arabic Naskh',system-ui,sans-serif;
+    font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{margin:0; text-wrap:balance; font-weight:800; letter-spacing:-.01em}
+  button{font:inherit; color:inherit; cursor:pointer}
+  .num{font-variant-numeric:tabular-nums}
+
+  .wrap{max-width:1180px; margin:0 auto; padding:24px 20px 56px}
+  .masthead{margin-bottom:20px}
+  .eyebrow{font-size:11px; font-weight:700; letter-spacing:.14em; color:var(--brand); margin-bottom:6px}
+  .masthead h1{font-size:27px; margin-bottom:6px}
+  .masthead p{margin:0; color:var(--ink-2); max-width:64ch; font-size:14px}
+
+  .bench{display:grid; grid-template-columns:minmax(0,352px) minmax(0,1fr); gap:24px; align-items:start}
+  @media (max-width:880px){ .bench{grid-template-columns:1fr} }
+
+  .rail{background:var(--surface); border:1px solid var(--line); border-radius:14px;
+        padding:14px; box-shadow:var(--shadow); margin-bottom:16px}
+  .rail h3{font-size:12px; letter-spacing:.1em; color:var(--ink-3); margin-bottom:9px; font-weight:700}
+  .rail h3 small{font-weight:500; letter-spacing:0; opacity:.85}
+  .seg{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px}
+  .seg:last-child{margin-bottom:0}
+  .seg button{flex:1 1 auto; min-width:78px; padding:7px 10px; border-radius:9px;
+    border:1px solid var(--line); background:var(--surface-2); color:var(--ink-2);
+    font-size:13px; font-weight:500; transition:.14s}
+  .seg button:hover{border-color:var(--brand-lt); color:var(--brand)}
+  .seg button[aria-pressed="true"]{background:var(--brand); border-color:var(--brand); color:#fff; font-weight:700}
+  :root[data-theme="dark"] .seg button[aria-pressed="true"],
+  :root:not([data-theme="light"]) .seg button[aria-pressed="true"]{color:var(--brand-dk)}
+  @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .seg button[aria-pressed="true"]{color:#fff}}
+
+  .verdict{background:var(--surface); border:1px solid var(--line); border-radius:14px;
+           padding:16px; box-shadow:var(--shadow)}
+  .verdict h3{font-size:15px; margin-bottom:4px}
+  .verdict .sub{font-size:12.5px; color:var(--ink-3); margin:0 0 12px}
+  .grant{border-top:1px solid var(--line-2); padding:9px 0; display:flex; gap:9px; align-items:flex-start}
+  .dot{width:8px; height:8px; border-radius:50%; margin-top:7px; flex:none}
+  .dot.on{background:var(--ok)} .dot.off{background:var(--ink-3); opacity:.5}
+  .dot.never{background:var(--bad)}
+  .grant b{font-size:13.5px; font-weight:700; display:block}
+  .grant span{font-size:12px; color:var(--ink-2); display:block; line-height:1.5}
+  .src{display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px;
+       border-radius:5px; margin-inline-start:5px; vertical-align:1px}
+  .src.box{background:var(--ok-bg); color:var(--ok)}
+  .src.plan{background:var(--cash-bg); color:var(--cash)}
+  .src.never{background:var(--bad-bg); color:var(--bad)}
+
+  .phone{width:352px; max-width:100%; height:722px; margin-inline:auto;
+    background:var(--surface); border:9px solid #10182B; border-radius:34px;
+    overflow:hidden; position:relative; display:flex; flex-direction:column;
+    box-shadow:0 18px 46px rgba(5,20,60,.28)}
+  .status{background:var(--brand); color:#fff; font-size:11px; padding:5px 16px;
+    display:flex; justify-content:space-between; flex:none; font-weight:500}
+  .appbar{background:var(--brand); color:#fff; padding:9px 13px 13px;
+    display:flex; align-items:center; gap:9px; flex:none}
+  .appbar h2{font-size:16.5px; flex:1; font-weight:700}
+  .iconbtn{background:rgba(255,255,255,.14); border:0; color:#fff; width:31px; height:31px;
+    border-radius:9px; font-size:15px; display:grid; place-items:center; flex:none}
+  .iconbtn:hover{background:rgba(255,255,255,.26)}
+  .screen{flex:1; overflow-y:auto; overflow-x:hidden; background:var(--panel); padding:13px}
+
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:13px; margin-bottom:11px}
+  .card:last-child{margin-bottom:0}
+  .balance{background:linear-gradient(135deg,var(--brand),var(--brand-lt));
+    color:#fff; border:0; border-radius:15px; padding:15px; margin-bottom:11px}
+  .balance .lbl{font-size:12px; opacity:.85}
+  .balance .amt{font-size:27px; font-weight:800; margin:3px 0 11px}
+  .balance .acts{display:flex; gap:8px}
+  .balance .acts button{flex:1; background:rgba(255,255,255,.17);
+    border:1px solid rgba(255,255,255,.3); color:#fff; padding:8px;
+    border-radius:9px; font-size:13px; font-weight:700}
+  .balance .acts button:hover{background:rgba(255,255,255,.3)}
+
+  .tiles{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+  .tile{background:var(--surface); border:1px solid var(--line); border-radius:13px;
+    padding:13px 11px; text-align:center; position:relative; transition:.14s}
+  .tile:hover{border-color:var(--brand-lt); transform:translateY(-1px)}
+  .tile .ic{font-size:21px; display:block; margin-bottom:5px}
+  .tile .nm{font-size:12.5px; font-weight:700; line-height:1.35; display:block}
+  .tile.lock{opacity:.62}
+  .tile.lock:hover{transform:none; border-color:var(--warn)}
+  .tile .lk{position:absolute; top:6px; inset-inline-start:8px; font-size:11px}
+
+  .row{display:flex; align-items:center; gap:10px; padding:10px 0;
+    border-bottom:1px solid var(--line-2); text-align:start; width:100%;
+    background:none; border-inline:0; border-top:0}
+  .row:last-child{border-bottom:0}
+  .row .g{flex:1; min-width:0}
+  .row .t{font-size:13.5px; font-weight:700; display:block}
+  .row .s{font-size:11.5px; color:var(--ink-3); display:block}
+  .row .v{font-size:13.5px; font-weight:700; white-space:nowrap}
+  .chip{font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap}
+  .chip.ok{background:var(--ok-bg); color:var(--ok)}
+  .chip.wr{background:var(--warn-bg); color:var(--warn)}
+  .chip.bd{background:var(--bad-bg); color:var(--bad)}
+  .chip.cs{background:var(--cash-bg); color:var(--cash)}
+
+  .btn{display:block; width:100%; padding:12px; border-radius:11px; border:0;
+    background:var(--brand); color:#fff; font-size:15px; font-weight:700; margin-top:10px}
+  .btn:hover{background:var(--brand-lt)}
+  .btn.ghost{background:var(--surface); color:var(--brand); border:1.5px solid var(--brand)}
+  .btn:disabled{background:var(--line); color:var(--ink-3); cursor:not-allowed}
+
+  .sec{font-size:11.5px; font-weight:700; color:var(--ink-3); letter-spacing:.08em; margin:14px 0 7px}
+  .sec:first-child{margin-top:0}
+  .note{background:var(--warn-bg); color:var(--warn); border-radius:10px;
+    padding:10px 11px; font-size:12.5px; line-height:1.55; margin-bottom:11px}
+  .note.bad{background:var(--bad-bg); color:var(--bad)}
+  .note.ok{background:var(--ok-bg); color:var(--ok)}
+  .note.cs{background:var(--cash-bg); color:var(--cash)}
+  .note b{font-weight:800}
+  .note code{font-family:ui-monospace,Menlo,monospace; font-size:11.5px}
+
+  /* لوحةُ الأرقام — `FuelCashierScreen` في التطبيق. */
+  .amount{background:var(--surface); border:1px solid var(--line); border-radius:13px;
+    padding:16px 13px; text-align:center; margin-bottom:11px}
+  .amount .big{font-size:33px; font-weight:800; color:var(--brand); line-height:1.2}
+  .amount .conv{font-size:12.5px; color:var(--ink-3); margin-top:3px}
+  .keypad{display:grid; grid-template-columns:repeat(3,1fr); gap:7px}
+  .keypad button{padding:14px; border-radius:11px; border:1px solid var(--line);
+    background:var(--surface); font-size:19px; font-weight:700}
+  .keypad button:hover{border-color:var(--brand-lt)}
+  .quick{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:9px}
+  .quick button{padding:9px 4px; border-radius:9px; border:1px solid var(--line);
+    background:var(--surface-2); font-size:12.5px; font-weight:700}
+  .quick button:hover{border-color:var(--brand-lt); color:var(--brand)}
+
+  .qr{width:154px; height:154px; margin-inline:auto; border-radius:9px;
+    background-color:var(--surface);
+    background-image:
+      repeating-linear-gradient(90deg,var(--ink) 0 7px,transparent 7px 14px),
+      repeating-linear-gradient(0deg,var(--ink) 0 7px,transparent 7px 14px);
+    background-size:14px 14px; border:7px solid var(--surface);
+    outline:2px solid var(--line); opacity:.88}
+
+  .scrim{position:absolute; inset:0; background:rgba(6,14,32,.5); opacity:0;
+    visibility:hidden; transition:.2s; z-index:8}
+  .scrim.open{opacity:1; visibility:visible}
+  .drawer{position:absolute; top:0; bottom:0; inset-inline-start:-101%; width:277px;
+    background:var(--surface); z-index:9; transition:inset-inline-start .22s;
+    visibility:hidden; display:flex; flex-direction:column}
+  .drawer.open{inset-inline-start:0; visibility:visible}
+  .dhead{background:var(--brand); color:#fff; padding:16px 14px}
+  .dhead .nm{font-size:15.5px; font-weight:800}
+  .dhead .sb{font-size:11.5px; opacity:.85}
+  .dbody{flex:1; overflow-y:auto; padding:7px 0}
+  .ditem{display:flex; gap:10px; align-items:flex-start; width:100%; padding:10px 14px;
+    background:none; border:0; text-align:start}
+  .ditem:hover{background:var(--surface-2)}
+  .ditem .ic{font-size:16px; margin-top:1px}
+  .ditem .t{font-size:13.5px; font-weight:700; display:block}
+  .ditem .s{font-size:11px; color:var(--ink-3); display:block; line-height:1.45}
+  .dsep{height:1px; background:var(--line-2); margin:6px 14px}
+
+  .toast{position:absolute; bottom:18px; inset-inline:16px; background:var(--ink);
+    color:var(--surface); padding:11px 14px; border-radius:11px; font-size:13px;
+    font-weight:500; text-align:center; z-index:20; opacity:0; transition:.2s;
+    pointer-events:none; line-height:1.5}
+  .toast.show{opacity:.97}
+  .toast.err{background:var(--bad); color:#fff}
+
+  .caption{font-size:12.5px; color:var(--ink-3); text-align:center; margin-top:11px}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="eyebrow">أميال باي · محاكي القطاعات</div>
+    <h1>محاكي محطة الوقود وموظّف المضخة</h1>
+    <p>شاشاتُ المحطّة كما يقرّرها الخادمُ اليوم. <b>وأخصُّ ما يُرى هنا ما
+      ليس في المحطّة:</b> لا أصنافَ ولا مخزونَ ولا دفترَ دَين — الائتمانُ
+      ببطاقةِ شركةٍ لا بدَينٍ على ورق. بدِّل الباقة واقرأ ما يُفتح وما لا
+      يُفتح أبداً.</p>
+  </header>
+
+  <div class="bench">
+    <div>
+      <div class="rail">
+        <h3>مَن يمسك الجهاز</h3>
+        <div class="seg" id="segRole">
+          <button data-role="owner" aria-pressed="true">صاحب المحطّة</button>
+          <button data-role="pos" aria-pressed="false">موظّف المضخة</button>
+        </div>
+        <h3>الباقة</h3>
+        <div class="seg" id="segPlan">
+          <button data-plan="free" aria-pressed="true">مجّاني</button>
+          <button data-plan="business" aria-pressed="false">الأعمال</button>
+          <button data-plan="enterprise" aria-pressed="false">مؤسسة</button>
+        </div>
+        <h3>صلاحيّاتُ الموظّف</h3>
+        <div class="seg" id="segPerms"></div>
+      </div>
+      <div class="verdict">
+        <h3>ما يقوله الخادم</h3>
+        <p class="sub" id="vSub"></p>
+        <div id="vList"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="phone">
+        <div class="status"><span>٩:٤١</span><span>▮▮▮ ⌁ ⬤</span></div>
+        <div class="appbar">
+          <button class="iconbtn" id="back" hidden aria-label="رجوع">→</button>
+          <button class="iconbtn" id="menu" aria-label="القائمة">☰</button>
+          <h2 id="title">الرئيسية</h2>
+        </div>
+        <div class="screen" id="view"></div>
+        <div class="scrim" id="scrim"></div>
+        <nav class="drawer" id="drawer" aria-label="قائمة المحطة">
+          <div class="dhead">
+            <div class="nm">محطة النصر للوقود</div>
+            <div class="sb" id="dsub">محطة وقود · الباقة المجّانيّة</div>
+          </div>
+          <div class="dbody" id="dbody"></div>
+        </nav>
+        <div class="toast" id="toast"></div>
+      </div>
+      <p class="caption">جرّب: بيع الوقود (لوحة أرقام) ثمّ «بيع آجل وبطاقة شركة» — شاشتان لا واحدة.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ════════════════════════════════════════════════════════════════
+     العقدُ مقروءٌ من الخادم لا مخترَع:
+
+       VerticalRegistry BIZ_FUEL->own() = fuel_pos · fuel_pumps ·
+         fuel_shifts
+       **ولا `F_DEBTS`** — والتعليقُ في السجلّ بنصّه: «ائتمانُ المحطّة
+       ببطاقاتٍ لا بدفترِ دَين».
+       ->paidDepth() = [PLAN_BUSINESS => fuel_products · fuel_companies
+                        · fuel_cards · fuel_variance]
+
+       FuelStationController: payment_method
+         required|in:cash,amial_pay,company_card,credit
+
+       AMIAL-VERTICAL-SCOPE-001 — الأصنافُ والمخزونُ مشروطةٌ بـ
+       CapabilityRegistry::GOODS، **والوقودُ ليس منها**. فلا تُفتح
+       بأيّ باقة.
+     ════════════════════════════════════════════════════════════════ */
+
+  var OWN = ['fuel_pos', 'fuel_pumps', 'fuel_shifts'];
+
+  var PLAN_RANK = { free: 0, business: 1, enterprise: 2 };
+  var PLAN_AR = { free: 'المجّانيّة', business: 'الأعمال', enterprise: 'المؤسسة' };
+  var PLAN_PRICE = { free: '٠', business: '٣٥', enterprise: '٩٩' };
+
+  var PLAN_GRANT = {
+    fuel_products: 'business', fuel_companies: 'business',
+    fuel_cards: 'business', fuel_variance: 'business',
+    daily_reports: 'business', employees: 'business',
+    employee_permissions: 'business', shift_close: 'business',
+    multi_pos: 'business', refunds: 'business',
+    branches: 'enterprise', rbac: 'enterprise', offline_pos: 'enterprise',
+    advanced_reports: 'enterprise'
+  };
+
+  /* ══════════════════════════════════════════════════════════════════
+     **وهذا هو ما سأل عنه صاحبُ المشروع:** «لماذا تاجر وقود لديه أصناف
+     ومخزون؟». وكان محقّاً — قِيس فإذا الوقودُ يصله ٣٩ ميزةً منها الأصناف
+     والمخزونُ والموردون، لأنّ `planFeatures` كانت تُصبّ على كلّ تاجرٍ
+     بلا نظرٍ إلى قطاعه. فصارت مشروطةً بـ`GOODS`، والوقودُ ليس منها.
+
+     **فهذه لا تُفتح بأيّ باقة** — لا لأنّها غالية، بل لأنّها **لا
+     تنطبق**. والفرقُ جوهريّ: «مقفلٌ» يَعِد بأنّ الدفعَ يفتحه.
+     ══════════════════════════════════════════════════════════════════ */
+  var NEVER = {
+    products: 1, inventory: 1, barcode: 1, suppliers: 1, purchases: 1,
+    low_stock_alerts: 1, inventory_audit: 1, debts: 1, quick_sale: 1
+  };
+
+  var NAMES = {
+    fuel_pos: 'بيع الوقود', fuel_pumps: 'المضخات والخزانات',
+    fuel_shifts: 'الورديات', fuel_products: 'أنواع الوقود وأسعاره',
+    fuel_companies: 'حسابات الشركات', fuel_cards: 'بطاقات الشركات',
+    fuel_variance: 'فروق الورديّة', daily_reports: 'تقارير يوميّة',
+    advanced_reports: 'تقارير متقدّمة', employees: 'الموظّفون',
+    employee_permissions: 'صلاحيّات الموظّفين', rbac: 'الأدوار',
+    multi_pos: 'أجهزة نقاط البيع', shift_close: 'إغلاق الورديّة',
+    branches: 'الفروع', refunds: 'المرتجعات', offline_pos: 'بيع دون اتّصال',
+    products: 'الأصناف', inventory: 'المخزون', barcode: 'الباركود',
+    suppliers: 'الموردون', purchases: 'طلبات الشراء', debts: 'دفتر الديون',
+    quick_sale: 'بيع سريع', low_stock_alerts: 'تنبيه نفاد المخزون',
+    inventory_audit: 'جرد المخزون'
+  };
+
+  var role = 'owner', plan = 'free';
+  var PERMS = [['sell', 'البيع'], ['credit', 'بيع آجل'],
+               ['shift', 'إغلاق ورديّة'], ['reports', 'تقارير']];
+  var perms = { sell: 1 };
+
+  function has(code) {
+    if (NEVER[code]) return false;
+    if (OWN.indexOf(code) > -1) return true;
+    var need = PLAN_GRANT[code];
+    return !!need && PLAN_RANK[plan] >= PLAN_RANK[need];
+  }
+  function granter(code) {
+    if (NEVER[code]) return { kind: 'never', label: 'لا ينطبق' };
+    if (OWN.indexOf(code) > -1) return { kind: 'box', label: 'مربّع الوقود' };
+    var need = PLAN_GRANT[code];
+    if (!need) return { kind: 'never', label: 'لا مانح' };
+    return { kind: 'plan', label: 'باقة ' + PLAN_AR[need] };
+  }
+  function can(p) { return role !== 'pos' || !!perms[p]; }
+
+  var money = function (n) { return Math.round(n).toLocaleString('en-US') + ' ر.ي'; };
+  var BALANCE = 8642300;
+
+  /* [الاسم, سعر اللتر, رصيد الخزان لتراً, سعة] */
+  var FUELS = [
+    ['بنزين ٩١', 1450, 18400, 30000],
+    ['بنزين ٩٥', 1690, 7200, 20000],
+    ['ديزل', 1280, 26800, 40000]
+  ];
+  var PUMPS = [
+    ['المضخة ١', 'بنزين ٩١', 'تعمل'],
+    ['المضخة ٢', 'بنزين ٩١', 'تعمل'],
+    ['المضخة ٣', 'بنزين ٩٥', 'تعمل'],
+    ['المضخة ٤', 'ديزل', 'متوقّفة']
+  ];
+  var COMPANIES = [
+    ['شركة النقل الوطنية', 4, 2400000, 1860000],
+    ['مؤسسة البناء الحديث', 2, 1200000, 340000],
+    ['أسطول الرحمة', 6, 3000000, 2980000]
+  ];  // [الاسم, بطاقات, سقف, مستهلك]
+
+  var view = document.getElementById('view'),
+      titleEl = document.getElementById('title'),
+      backBtn = document.getElementById('back'),
+      drawer = document.getElementById('drawer'),
+      scrim = document.getElementById('scrim'),
+      toastEl = document.getElementById('toast');
+  var stack = [], toastTimer;
+
+  /* حالةُ البيع */
+  var amt = '', mode = 'money', fuelIx = 0, pumpIx = 0;
+  var payMethod = 'cash', paidTxn = null, shortCode = null, card = null;
+
+  function toast(msg, bad) {
+    toastEl.textContent = msg;
+    toastEl.className = 'toast show' + (bad ? ' err' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.className = 'toast'; }, 3200);
+  }
+  function closeDrawer() { drawer.classList.remove('open'); scrim.classList.remove('open'); }
+  function go(name, keep) {
+    closeDrawer();
+    if (!keep && stack[stack.length - 1] !== name) stack.push(name);
+    render();
+  }
+  function back() { if (stack.length > 1) { stack.pop(); render(); } }
+  function newCode() { return String(Math.floor(100000 + Math.random() * 899999)); }
+
+  var value = function () { return parseInt(amt || '0', 10); };
+  function litres() {
+    return mode === 'money' ? value() / FUELS[fuelIx][1] : value();
+  }
+  function total() {
+    return mode === 'money' ? value() : value() * FUELS[fuelIx][1];
+  }
+
+  /* **ثلاثةُ موانعَ للبيع، ولكلٍّ رسالتُه.** */
+  function saleBlock() {
+    if (value() <= 0) return { why: 'empty', msg: 'أدخل المبلغ أو اللترات' };
+    if (litres() > FUELS[fuelIx][2]) {
+      return { why: 'tank', msg: 'الكمّيّة تتجاوز رصيدَ الخزّان (' +
+        FUELS[fuelIx][2].toLocaleString('en-US') + ' لتر)' };
+    }
+    if (PUMPS[pumpIx][2] === 'متوقّفة') {
+      return { why: 'pump', msg: 'المضخة متوقّفة — لا يُسجَّل بيعٌ عليها' };
+    }
+    if (payMethod === 'amial_pay' && !paidTxn) {
+      return { why: 'unpaid', msg: 'بانتظار دفع العميل عبر أميال باي' };
+    }
+    // ══════════════════════════════════════════════════════════════
+    // **`!card` تجعل الشركةَ الأولى غيرَ قابلةٍ للاختيار أبداً.**
+    // كان الشرطُ `!card`، و`card` فهرسٌ صفريُّ الأساس — فـ`!0` صحيحة،
+    // فيُختار أوّلُ صفٍّ ويبقى الزرُّ يقول «اختر البطاقة» **ولا خطأَ في
+    // أيّ سجلّ**. التقطه المسبار. والفحصُ على `null` لا على الصدق.
+    // ══════════════════════════════════════════════════════════════
+    if (payMethod === 'company_card' && card === null) {
+      return { why: 'card', msg: 'اختر بطاقة الشركة' };
+    }
+    if (payMethod === 'company_card' && card !== null &&
+        total() > COMPANIES[card][2] - COMPANIES[card][3]) {
+      return { why: 'limit', msg: 'المبلغ يتجاوز المتبقّي في سقف الشركة (' +
+        money(COMPANIES[card][2] - COMPANIES[card][3]) + ')' };
+    }
+    return null;
+  }
+
+  function tiles(list) {
+    return '<div class="tiles">' + list.map(function (t) {
+      var open = t[3] !== false;
+      return '<button class="tile' + (open ? '' : ' lock') + '" data-go="' + t[2] + '"' +
+        (open ? '' : ' data-lock="' + (t[4] || '') + '"') + '>' +
+        (open ? '' : '<span class="lk">🔒</span>') +
+        '<span class="ic">' + t[0] + '</span><span class="nm">' + t[1] + '</span></button>';
+    }).join('') + '</div>';
+  }
+  function rows(list) {
+    return list.map(function (r) {
+      return '<button class="row" data-go="' + (r.go || '') + '">' +
+        '<span class="g"><span class="t">' + r.t + '</span>' +
+        (r.s ? '<span class="s">' + r.s + '</span>' : '') + '</span>' +
+        (r.chip ? '<span class="chip ' + r.chip[1] + '">' + r.chip[0] + '</span>' : '') +
+        (r.v ? '<span class="v num">' + r.v + '</span>' : '') + '</button>';
+    }).join('');
+  }
+
+  var S = {};
+
+  S.home = function () {
+    titleEl.textContent = 'محطة النصر للوقود';
+    var t = [
+      ['⛽', 'بيع الوقود', 'sale'],
+      ['💳', 'بيع آجل وبطاقة شركة', 'cardSale'],
+      ['🎛️', 'المضخات والخزانات', 'pumps'],
+      ['🕐', 'الورديات', 'shifts'],
+      ['🏷️', 'أسعار الوقود', 'prices', has('fuel_products'), 'باقة الأعمال'],
+      ['🏢', 'حسابات الشركات', 'companies', has('fuel_companies'), 'باقة الأعمال'],
+      ['📊', 'التقارير', 'reports', has('daily_reports'), 'باقة الأعمال'],
+      ['👤', 'فريق المحطة', 'team', has('employees'), 'باقة الأعمال']
+    ];
+    return '<div class="balance"><div class="lbl">رصيد المحفظة</div>' +
+      '<div class="amt num">' + money(BALANCE) + '</div>' +
+      '<div class="acts"><button data-go="wallet">المحفظة</button>' +
+      '<button data-act="withdraw">سحب</button></div></div>' +
+      '<div class="card"><div class="sec">اليوم</div>' + rows([
+        { t: 'مبيعات اليوم', v: money(3184000) },
+        { t: 'اللترات المباعة', v: '٢٬٣٤٠ لتر' },
+        { t: 'ورديّةٌ مفتوحة', v: 'صباحيّة', chip: ['مفتوحة', 'ok'] },
+        { t: 'مضخّةٌ متوقّفة', v: 'المضخة ٤', chip: ['تنبيه', 'bd'] }
+      ]) + '</div>' + tiles(t) +
+      '<div class="note" style="margin-top:11px"><b>ولا أصنافَ ولا مخزونَ في هذه القائمة.</b> ' +
+      'المحطّةُ تبيع وقوداً بخزّاناتٍ ومضخّات — لا أصنافاً بباركود. ' +
+      'وهذه <b>لا تُفتح بأيّ باقة</b> لأنّها لا تنطبق.</div>';
+  };
+
+  /* ══════════════════════════════════════════════════════════════════
+     شاشتان للبيع، ولا تُستبدل إحداهما بالأخرى:
+       `FuelCashierScreen` — لوحةٌ رقميّة: نقدٌ وQR (٩٥٪ من يوم المحطّة)
+       `FuelSaleScreen`    — المطوّلة: بطاقةُ شركةٍ وبيعٌ آجل
+     وقد كُتب هذا في التطبيق بعد أن سأل صاحبُ المشروع: «شاشةُ بيع الوقود
+     كانت تحتوي على لوحة أرقام، الآن اختفت» — وكانت مبنيّةً ولا يفتحها
+     سطرٌ واحد.
+     ══════════════════════════════════════════════════════════════════ */
+  S.sale = function () {
+    titleEl.textContent = 'بيع الوقود';
+    var b = saleBlock();
+    var f = FUELS[fuelIx];
+
+    return '<div class="card" style="padding:9px 11px"><div class="seg" style="margin:0">' +
+      FUELS.map(function (x, ix) {
+        return '<button data-fuel="' + ix + '" aria-pressed="' + (ix === fuelIx) + '">' +
+          x[0] + '</button>';
+      }).join('') + '</div></div>' +
+      '<div class="amount"><div class="big num">' +
+      (mode === 'money' ? money(value()) : value().toLocaleString('en-US') + ' لتر') +
+      '</div><div class="conv num">' +
+      (mode === 'money'
+        ? '≈ ' + litres().toFixed(2) + ' لتر · ' + money(f[1]) + '/لتر'
+        : '≈ ' + money(total()) + ' · ' + money(f[1]) + '/لتر') +
+      '</div></div>' +
+      '<div class="seg" style="margin-bottom:9px">' +
+      '<button data-mode="money" aria-pressed="' + (mode === 'money') + '">بالريال</button>' +
+      '<button data-mode="litre" aria-pressed="' + (mode === 'litre') + '">باللتر</button>' +
+      '</div>' +
+      '<div class="quick">' + [10000, 5000, 50000, 20000].map(function (q) {
+        return '<button data-quick="' + q + '">' + (q / 1000) + 'k</button>';
+      }).join('') + '</div>' +
+      '<div class="keypad">' +
+      ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map(function (k) {
+        return '<button data-key="' + k + '">' + k + '</button>';
+      }).join('') + '</div>' +
+      '<div class="card" style="margin-top:11px"><div class="sec">المضخة</div>' +
+      '<div class="seg" style="margin:0">' + PUMPS.map(function (p, ix) {
+        return '<button data-pump="' + ix + '" aria-pressed="' + (ix === pumpIx) + '">' +
+          p[0].replace('المضخة ', 'م') + '</button>';
+      }).join('') + '</div>' +
+      (PUMPS[pumpIx][2] === 'متوقّفة'
+        ? '<div class="note bad" style="margin:11px 0 0"><b>هذه المضخة متوقّفة.</b> ' +
+          'ولا يُسجَّل بيعٌ عليها — تُشغَّل من «المضخات والخزانات».</div>' : '') +
+      '</div>' +
+      '<div class="card"><div class="sec">طريقة الدفع — نقدٌ أو أميال باي</div>' +
+      '<div class="seg" style="margin:0">' +
+      [['cash', 'نقداً'], ['amial_pay', 'أميال باي']].map(function (m) {
+        return '<button data-pay="' + m[0] + '" aria-pressed="' +
+          (payMethod === m[0]) + '">' + m[1] + '</button>';
+      }).join('') + '</div>' +
+      (payMethod === 'amial_pay'
+        ? (paidTxn
+            ? '<div class="note ok" style="margin:11px 0 0"><b>دُفعت.</b> ' +
+              'رقم الحركة <span class="num">' + paidTxn + '</span></div>'
+            : '<button class="btn" data-go="qr">عرض رمز الدفع</button>')
+        : '') +
+      '<div class="note cs" style="margin:11px 0 0"><b>وللبطاقة والآجل شاشةٌ أخرى.</b> ' +
+      'هذه اللوحةُ للنقد وأميال باي — وهما ٩٥٪ من يوم المحطّة.</div>' +
+      '<button class="btn ghost" data-go="cardSale">بيع آجل وبطاقة شركة</button></div>' +
+      '<div class="card"><button class="btn" data-act="finish"' +
+      (b ? ' disabled' : '') + '>' +
+      (b && b.why === 'pump' ? 'المضخة متوقّفة'
+        : b && b.why === 'tank' ? 'يتجاوز الخزّان'
+        : b && b.why === 'unpaid' ? 'بانتظار دفع العميل'
+        : 'تسجيل البيع') + '</button>' +
+      (b && b.why !== 'empty'
+        ? '<p style="font-size:11.5px;color:var(--bad);margin:8px 0 0">' + b.msg + '</p>'
+        : '') + '</div>';
+  };
+
+  S.cardSale = function () {
+    titleEl.textContent = 'بيع آجل وبطاقة شركة';
+    var b = saleBlock();
+
+    if (!has('fuel_companies')) {
+      return '<div class="note"><b>حسابات الشركات والبطاقات في باقة الأعمال.</b> ' +
+        'وهي ائتمانُ المحطّة — <b>لا دفترَ دَينٍ لها</b>: السقفُ على ' +
+        'البطاقة، والاستهلاكُ يُخصَم منه.</div>' +
+        '<button class="btn" data-act="upgrade">ترقية إلى الأعمال</button>';
+    }
+
+    return '<div class="amount"><div class="big num">' + money(total()) + '</div>' +
+      '<div class="conv num">' + litres().toFixed(2) + ' لتر · ' + FUELS[fuelIx][0] +
+      '</div></div>' +
+      '<div class="card"><div class="sec">طريقة الدفع</div><div class="seg" style="margin:0">' +
+      [['company_card', 'بطاقة شركة'], ['credit', 'آجل'],
+       ['cash', 'نقداً'], ['amial_pay', 'أميال']].map(function (m) {
+        return '<button data-pay="' + m[0] + '" aria-pressed="' +
+          (payMethod === m[0]) + '">' + m[1] + '</button>';
+      }).join('') + '</div></div>' +
+      (payMethod === 'company_card'
+        ? '<div class="card"><div class="sec">بطاقة الشركة</div>' +
+          COMPANIES.map(function (c, ix) {
+            var left = c[2] - c[3];
+            return '<button class="row" data-card="' + ix + '"' +
+              (ix === card ? ' style="background:var(--cash-bg)"' : '') + '>' +
+              '<span class="g"><span class="t">' + c[0] + '</span>' +
+              '<span class="s num">' + c[1] + ' بطاقات · المتبقّي ' + money(left) +
+              '</span></span>' +
+              (left < 200000 ? '<span class="chip bd">قارب السقف</span>' : '') +
+              '</button>';
+          }).join('') +
+          '<div class="note cs" style="margin:11px 0 0"><b>والسقفُ يُفحص قبل البيع.</b> ' +
+          'فما يتجاوزه يُرفَض — لا يُسجَّل ديناً على المحطّة.</div></div>'
+        : '') +
+      (payMethod === 'credit' && !can('credit')
+        ? '<div class="note bad">لا يُسمح لك بالبيع الآجل — تُمنَح الصلاحيّةُ من «فريق المحطة».</div>'
+        : '') +
+      '<div class="card"><button class="btn" data-act="finish"' +
+      (b || (payMethod === 'credit' && !can('credit')) ? ' disabled' : '') + '>' +
+      (b && b.why === 'card' ? 'اختر البطاقة'
+        : b && b.why === 'limit' ? 'يتجاوز السقف'
+        : 'تسجيل البيع') + '</button>' +
+      (b && b.why !== 'empty'
+        ? '<p style="font-size:11.5px;color:var(--bad);margin:8px 0 0">' + b.msg + '</p>'
+        : '') + '</div>';
+  };
+
+  S.qr = function () {
+    titleEl.textContent = 'الدفع — أميال باي';
+    if (!shortCode) shortCode = newCode();
+    return '<div class="card" style="text-align:center;padding:18px 14px">' +
+      '<div class="sec" style="text-align:center">المطلوب من العميل</div>' +
+      '<div class="num" style="font-size:26px;font-weight:800;color:var(--brand);margin-bottom:13px">' +
+      money(total()) + '</div><div class="qr" aria-label="رمز الدفع"></div>' +
+      '<div style="margin-top:12px;font-size:12px;color:var(--ink-3)">أو بالرمز القصير</div>' +
+      '<div class="num" style="font-size:27px;font-weight:800;letter-spacing:.14em">' +
+      shortCode + '</div></div>' +
+      '<div class="note">لا يُكتب رقمُ مرجعٍ هنا. <b>البيعُ يُسجَّل بعد حركةٍ ' +
+      'مدفوعةٍ فعلاً.</b></div>' +
+      '<button class="btn" data-act="qrPaid">محاكاة: دفع العميل</button>' +
+      '<button class="btn ghost" data-act="qrCancel">إلغاء الطلب</button>';
+  };
+
+  S.done = function () {
+    titleEl.textContent = 'تمّ البيع';
+    var names = { cash: 'نقداً', amial_pay: 'أميال باي',
+                  company_card: 'بطاقة شركة', credit: 'آجل' };
+    return '<div class="card" style="text-align:center;padding:26px 14px">' +
+      '<div style="font-size:44px">⛽</div>' +
+      '<h3 style="margin:9px 0 4px">سُجّل البيع</h3>' +
+      '<p style="color:var(--ink-2);font-size:13px;margin:0">' +
+      names[payMethod] + ' · ' + PUMPS[pumpIx][0] + ' · ' + FUELS[fuelIx][0] + '</p></div>' +
+      '<div class="card"><div class="sec">أثرُ البيعة</div>' + rows([
+        { t: 'خُصم من الخزّان', v: litres().toFixed(2) + ' لتر' },
+        { t: 'أُضيف إلى الورديّة', v: money(total()) },
+        { t: 'عدّاد المضخة', v: 'حُدِّث' }
+      ]) + '</div>' +
+      '<div class="card">' + rows([{ t: 'طباعة الإيصال' }, { t: 'إرسال للعميل' }]) + '</div>' +
+      '<button class="btn" data-act="again">بيعةٌ أخرى</button>';
+  };
+
+  S.pumps = function () {
+    titleEl.textContent = 'المضخات والخزانات';
+    return '<div class="card"><div class="sec">الخزّانات</div>' +
+      FUELS.map(function (f) {
+        var pct = Math.round(f[2] / f[3] * 100);
+        return '<button class="row"><span class="g"><span class="t">' + f[0] +
+          '</span><span class="s num">' + f[2].toLocaleString('en-US') + ' من ' +
+          f[3].toLocaleString('en-US') + ' لتر · ' + pct + '٪</span></span>' +
+          '<span class="chip ' + (pct < 25 ? 'bd' : pct < 45 ? 'wr' : 'ok') + '">' +
+          (pct < 25 ? 'منخفض' : pct < 45 ? 'يُراقَب' : 'جيّد') + '</span></button>';
+      }).join('') + '</div>' +
+      '<div class="card"><div class="sec">المضخات</div>' +
+      rows(PUMPS.map(function (p) {
+        return { t: p[0], s: p[1],
+          chip: p[2] === 'تعمل' ? ['تعمل', 'ok'] : ['متوقّفة', 'bd'] };
+      })) + '</div>' +
+      '<div class="note"><b>والقياسُ من العدّاد لا من رقمٍ مخزَّن.</b> ' +
+      'فرقُ الورديّة يُحسب: عدّادُ الإغلاق ناقص عدّادَ الفتح، مقابلَ ما سُجّل.</div>';
+  };
+
+  S.shifts = function () {
+    titleEl.textContent = 'الورديات';
+    return '<div class="card"><div class="sec">الورديّة المفتوحة</div>' + rows([
+      { t: 'صباحيّة — أحمد', s: 'فُتحت ٦:٠٠', chip: ['مفتوحة', 'ok'] },
+      { t: 'المسجَّل حتّى الآن', v: money(3184000) },
+      { t: 'عدّاد الفتح — م١', v: '١٬٢٨٤٬٠٠٠ لتر' }
+    ]) +
+      '<button class="btn"' + (can('shift') ? '' : ' disabled') + ' data-act="closeShift">' +
+      (can('shift') ? 'إغلاق الورديّة' : 'إغلاقُ الورديّة غيرُ مُصرَّحٍ لك') +
+      '</button></div>' +
+      '<div class="card"><div class="sec">ورديّاتٌ سابقة</div>' + rows([
+        { t: 'مسائيّة — سالم', s: 'أمس ١٤:٠٠ — ٢٢:٠٠',
+          v: has('fuel_variance') ? 'فرق −١٢ لتر' : '—',
+          chip: has('fuel_variance') ? ['فرق', 'wr'] : ['باقة الأعمال', 'wr'] },
+        { t: 'صباحيّة — أحمد', s: 'أمس ٦:٠٠ — ١٤:٠٠',
+          v: has('fuel_variance') ? 'مطابقة' : '—',
+          chip: has('fuel_variance') ? ['مطابقة', 'ok'] : ['باقة الأعمال', 'wr'] }
+      ]) + '</div>' +
+      (has('fuel_variance') ? '' :
+        '<div class="note"><b>فروقُ الورديّة في باقة الأعمال.</b> ' +
+        'ودونها تُغلَق الورديّةُ ولا يُقاس الفرقُ — <b>و«لم يُقَس» ليس «صفراً»</b>.</div>');
+  };
+
+  S.prices = function () {
+    titleEl.textContent = 'أسعار الوقود';
+    if (!has('fuel_products')) {
+      return '<div class="note"><b>تسعيرُ أنواع الوقود في باقة الأعمال.</b> ' +
+        'ودونها تُباع بالأسعار المضبوطة من إعدادات المحطّة.</div>' +
+        '<button class="btn" data-act="upgrade">ترقية إلى الأعمال</button>';
+    }
+    return '<div class="card"><div class="sec">السعر لكلّ لتر</div>' +
+      rows(FUELS.map(function (f) { return { t: f[0], v: money(f[1]) }; })) + '</div>' +
+      '<div class="note"><b>وتغييرُ السعر يُسجَّل في التدقيق</b> — من غيّره ومتى ' +
+      'ومن أيّ قيمةٍ إلى أيّ قيمة.</div>';
+  };
+
+  S.companies = function () {
+    titleEl.textContent = 'حسابات الشركات';
+    if (!has('fuel_companies')) {
+      return '<div class="note"><b>حسابات الشركات والبطاقات في باقة الأعمال.</b></div>' +
+        '<button class="btn" data-act="upgrade">ترقية إلى الأعمال</button>';
+    }
+    return '<div class="card"><div class="sec">الشركات</div>' +
+      rows(COMPANIES.map(function (c) {
+        var left = c[2] - c[3];
+        return { t: c[0], s: c[1] + ' بطاقات · سقف ' + money(c[2]),
+          v: money(left), chip: left < 200000 ? ['قارب السقف', 'bd'] : ['ضمن السقف', 'ok'] };
+      })) + '</div>' +
+      '<div class="note cs"><b>وهذا ائتمانُ المحطّة — لا دفترَ دَين.</b> ' +
+      'السقفُ على البطاقة يُفحَص قبل كلّ تعبئة، فما يتجاوزه يُرفَض في ' +
+      'المضخة لا يُقيَّد ديناً يُلاحَق لاحقاً.</div>';
+  };
+
+  S.reports = function () {
+    titleEl.textContent = 'التقارير والمالية';
+    if (!has('daily_reports')) {
+      return '<div class="note"><b>التقاريرُ تبدأ من باقة الأعمال.</b></div>';
+    }
+    return '<div class="card"><div class="sec">هذا الشهر</div>' + rows([
+      { t: 'اللترات المباعة', v: '٦٨٬٤٢٠ لتر' },
+      { t: 'المبيعات', v: money(94180000) },
+      { t: 'بطاقات الشركات', v: money(21400000) },
+      { t: 'فروق الورديّات', v: has('fuel_variance') ? '−٤٨ لتر' : 'باقة الأعمال',
+        chip: has('fuel_variance') ? ['يُراقَب', 'wr'] : null }
+    ]) + '</div>' +
+      '<div class="card"><div class="sec">تقارير</div>' + rows([
+        { t: 'مبيعات حسب المضخة' }, { t: 'مبيعات حسب نوع الوقود' },
+        { t: 'استهلاك الشركات' }, { t: 'التوريدات والخزّانات' }
+      ]) + '</div>';
+  };
+
+  S.team = function () {
+    titleEl.textContent = 'فريق المحطة';
+    if (!has('employees')) {
+      return '<div class="note"><b>الموظّفون يبدأون من باقة الأعمال.</b> ' +
+        'وفي المجّانيّة مقعدُ نقطة بيعٍ واحدٌ لصاحب المحطّة.</div>';
+    }
+    return '<div class="card"><div class="sec">الفريق</div>' + rows([
+      { t: 'أحمد — موظّف مضخة', s: 'بيع · إغلاق ورديّة', chip: ['نشط', 'ok'] },
+      { t: 'سالم — موظّف مضخة', s: 'بيع فقط', chip: ['نشط', 'ok'] },
+      { t: 'ناصر — مشرف', s: 'بيع · آجل · ورديّة · تقارير', chip: ['نشط', 'ok'] }
+    ]) + '</div>' +
+      '<div class="card"><div class="sec">الأجهزة</div>' + rows([
+        { t: 'جهاز المضخة ١', s: 'مربوط · آخر ظهور قبل دقيقتين', chip: ['مربوط', 'ok'] },
+        { t: 'جهاز المكتب', s: 'مربوط', chip: ['مربوط', 'ok'] }
+      ]) + '</div>';
+  };
+
+  S.wallet = function () {
+    titleEl.textContent = 'محفظة المحطة';
+    if (role === 'pos') {
+      return '<div class="note"><b>الرصيد لصاحب المحطّة وحده.</b> الخادمُ ' +
+        'يحذف <code>current_balance</code> من ردّ الإحصاءات لموظّف نقطة ' +
+        'البيع ويُرسل <code>balance_scope: owner_only</code>.</div>';
+    }
+    return '<div class="balance"><div class="lbl">الرصيد المتاح</div>' +
+      '<div class="amt num">' + money(BALANCE) + '</div>' +
+      '<div class="acts"><button data-act="withdraw">سحب</button>' +
+      '<button data-act="transfer">تحويل</button></div></div>' +
+      '<div class="card"><div class="sec">آخر الحركات</div>' + rows([
+        { t: 'مبيعات اليوم — أميال باي', s: 'اليوم', v: '+ ' + money(842000) },
+        { t: 'تحصيل شركة النقل الوطنية', s: 'أمس', v: '+ ' + money(1860000) },
+        { t: 'سحب إلى وكيل البسيري', s: 'أمس', v: '− ' + money(3000000) }
+      ]) + '</div>';
+  };
+
+  S.posHome = function () {
+    titleEl.textContent = 'أحمد — موظّف المضخة';
+    var t = [['⛽', 'بيع الوقود', 'sale']];
+    if (can('credit') && has('fuel_companies')) t.push(['💳', 'بيع آجل وبطاقة', 'cardSale']);
+    t.push(['🎛️', 'المضخات والخزانات', 'pumps']);
+    if (can('shift')) t.push(['🕐', 'ورديّتي', 'shifts']);
+    if (can('reports') && has('daily_reports')) t.push(['📊', 'تقاريري', 'reports']);
+    t.push(['🧾', 'إيصالاتي', 'shifts']);
+    t.push(['🔔', 'الإشعارات', 'posHome']);
+    t.push(['👤', 'حسابي', 'posHome']);
+
+    return '<div class="card"><div class="sec">ورديّتي</div>' + rows([
+      { t: 'بِعتُ اليوم', v: money(1284000) },
+      { t: 'اللترات', v: '٩٤٠ لتر' },
+      { t: 'بدأت الورديّة', v: '٦:٠٠' }
+    ]) +
+      '<div class="note" style="margin:11px 0 0">لا يظهر لك رصيدُ المحفظة — ' +
+      '<b>الخادمُ لا يُرسله</b> لموظّف نقطة البيع.</div></div>' + tiles(t);
+  };
+
+  S.caps = function () {
+    titleEl.textContent = 'مزايا باقتي';
+    var all = OWN.concat(Object.keys(PLAN_GRANT));
+    var never = Object.keys(NEVER);
+    var open = all.filter(has);
+    var shut = all.filter(function (c) { return !has(c); });
+
+    return '<div class="card"><div class="sec">باقتك: ' + PLAN_AR[plan] + ' · ' +
+      PLAN_PRICE[plan] + ' ر.س / شهر</div>' +
+      '<div class="row" style="border:0;padding:2px 0"><span class="g">' +
+      '<span class="t">قدراتٌ مفتوحة</span></span><span class="v num">' +
+      open.length + ' من ' + all.length + '</span></div></div>' +
+      '<div class="card"><div class="sec">مفتوحة</div>' +
+      rows(open.map(function (c) {
+        return { t: NAMES[c] || c, s: 'من ' + granter(c).label };
+      })) + '</div>' +
+      (shut.length ? '<div class="card"><div class="sec">مقفلة — تفتحها الترقية</div>' +
+        rows(shut.map(function (c) {
+          return { t: NAMES[c] || c, s: 'تُفتح في ' + granter(c).label, chip: ['مقفل', 'wr'] };
+        })) + '</div>' : '') +
+      '<div class="card"><div class="sec">لا تنطبق على محطة وقود</div>' +
+      rows(never.map(function (c) {
+        return { t: NAMES[c] || c, s: 'ليست من قطاعك', chip: ['لا ينطبق', 'bd'] };
+      })) + '</div>' +
+      '<div class="note bad"><b>و«لا ينطبق» ليست «مقفلة».</b> الترقيةُ لا ' +
+      'تفتحها أبداً — والمحطّةُ لا تبيع أصنافاً بباركود. وعرضُها مقفلةً ' +
+      'يَعِد بأنّ الدفعَ يفتحها.</div>' +
+      (shut.length ? '<button class="btn" data-act="upgrade">ترقية</button>' : '');
+  };
+
+  /* ══ الدرج — أحدَ عشرَ بنداً كما في التطبيق ══ */
+  var SECTIONS = [
+    ['⛽', 'بيع الوقود', 'لوحةُ أرقام — نقدٌ وأميال باي.', 'sale', function () { return true; }],
+    ['💳', 'بيع آجل وبطاقة شركة', 'المطوّلة — بطاقةُ شركةٍ وبيعٌ آجل.', 'cardSale', function () { return true; }],
+    ['🎛️', 'تشغيل المضخات والخزانات', 'حالةُ المضخات ومناسيبُ الخزّانات.', 'pumps', function () { return true; }],
+    ['🛢️', 'الخزانات والقياسات', 'القياسُ من العدّاد لا من رقمٍ مخزَّن.', 'pumps', function () { return true; }],
+    ['🚚', 'توريدات الوقود', 'ما دخل الخزّانات ومتى.', 'pumps', function () { return true; }],
+    ['🕐', 'الورديات وسجل البيع', 'الفتحُ والإغلاقُ وفرقُ العدّاد.', 'shifts', function () { return true; }],
+    ['🏷️', 'أسعار الوقود', 'السعرُ لكلّ لتر.', 'prices', function () { return has('fuel_products'); }],
+    ['🏢', 'حسابات الشركات والبطاقات', 'السقفُ على البطاقة — لا دفترَ دَين.', 'companies', function () { return has('fuel_companies'); }],
+    ['🧾', 'فواتير ومبيعات الوقود', 'سجلُّ البيعات.', 'reports', function () { return has('daily_reports'); }],
+    ['👤', 'فريق المحطة وصلاحياته', 'من يبيع ومن يُغلق الورديّة.', 'team', function () { return has('employees'); }],
+    ['⚙️', 'إعدادات المحطة', 'الإيصالُ والمضخاتُ والأسعارُ الافتراضيّة.', 'prices', function () { return true; }]
+  ];
+
+  function renderDrawer() {
+    document.getElementById('dsub').textContent =
+      'محطة وقود · باقة ' + PLAN_AR[plan] + (role === 'pos' ? ' · موظّف مضخة' : '');
+    var body = document.getElementById('dbody');
+
+    if (role === 'pos') {
+      body.innerHTML =
+        '<button class="ditem" data-go="posHome"><span class="ic">🏠</span><span>' +
+        '<span class="t">شاشتي</span><span class="s">ما مُنح لي وحدَه.</span></span></button>' +
+        '<button class="ditem" data-go="sale"><span class="ic">⛽</span><span>' +
+        '<span class="t">بيع الوقود</span><span class="s">لوحةُ الأرقام.</span></span></button>' +
+        '<button class="ditem" data-go="pumps"><span class="ic">🎛️</span><span>' +
+        '<span class="t">المضخات والخزانات</span><span class="s">الحالةُ والمناسيب.</span></span></button>' +
+        '<div class="dsep"></div>' +
+        '<button class="ditem" data-act="closeShift"><span class="ic">🔒</span><span>' +
+        '<span class="t">إغلاق الورديّة</span><span class="s">' +
+        (can('shift') ? 'تسليمُ ما حُصّل وقياسُ الفرق.' : 'غيرُ مُصرَّحٍ لك.') +
+        '</span></span></button>' +
+        '<div class="dsep"></div>' +
+        '<div class="ditem" style="cursor:default"><span class="ic">ℹ️</span><span>' +
+        '<span class="s">قائمةُ صاحب المحطّة لا تُعرض لموظّف المضخة — ' +
+        'لا الباقةُ ولا المحفظةُ ولا الأسعار.</span></span></div>';
+      return;
+    }
+
+    body.innerHTML = SECTIONS.map(function (s) {
+      var open = s[4]();
+      return '<button class="ditem" data-go="' + s[3] + '"><span class="ic">' + s[0] +
+        '</span><span><span class="t">' + s[1] + (open ? '' : ' 🔒') +
+        '</span><span class="s">' + (open ? s[2] : 'مقفلٌ في باقتك.') +
+        '</span></span></button>';
+    }).join('') +
+      '<div class="dsep"></div>' +
+      '<button class="ditem" data-go="wallet"><span class="ic">💳</span><span>' +
+      '<span class="t">محفظتي</span><span class="s">الرصيد والسحب والتحويل.</span></span></button>' +
+      '<button class="ditem" data-go="caps"><span class="ic">⭐</span><span>' +
+      '<span class="t">مزايا باقتي</span><span class="s">وما لا ينطبق على المحطّة.</span></span></button>';
+  }
+
+  function render() {
+    var name = stack[stack.length - 1] || 'home';
+    if (!S[name]) name = 'home';
+    view.innerHTML = S[name]();
+    view.scrollTop = 0;
+    backBtn.hidden = stack.length < 2;
+    renderDrawer();
+    renderVerdict();
+  }
+
+  function renderVerdict() {
+    document.getElementById('vSub').textContent =
+      (role === 'owner' ? 'صاحب المحطّة' : 'موظّف مضخة') + ' · محطة وقود · باقة ' +
+      PLAN_AR[plan] + ' (' + PLAN_PRICE[plan] + ' ر.س)';
+
+    var watch = ['fuel_pos', 'fuel_pumps', 'fuel_shifts', 'fuel_companies',
+      'fuel_variance', 'daily_reports', 'employees',
+      'products', 'inventory', 'debts'];
+
+    document.getElementById('vList').innerHTML = watch.map(function (c) {
+      var on = has(c), g = granter(c);
+      var why = g.kind === 'never'
+        ? (c === 'debts'
+            ? '**ائتمانُ المحطّة ببطاقاتٍ لا بدفترِ دَين** — ولا تُفتح بأيّ باقة.'
+            : 'ليست من قطاع الوقود — **ولا تُفتح بأيّ باقة**.')
+        : on
+          ? (g.kind === 'box' ? 'يصلها من مربّع الوقود — لا تُشترى ولا تُنزَع.'
+                              : 'فتحتها الباقةُ الحاليّة.')
+          : 'مقفلة — تُفتح في ' + g.label + '.';
+      return '<div class="grant"><span class="dot ' +
+        (g.kind === 'never' ? 'never' : on ? 'on' : 'off') + '"></span>' +
+        '<span><b>' + (NAMES[c] || c) + '<span class="src ' + g.kind + '">' +
+        g.label + '</span></b><span>' + why.replace(/\*\*/g, '') + '</span></span></div>';
+    }).join('');
+  }
+
+  /* ══ الأحداث ══ */
+  document.getElementById('menu').addEventListener('click', function () {
+    drawer.classList.add('open'); scrim.classList.add('open');
+  });
+  scrim.addEventListener('click', closeDrawer);
+  backBtn.addEventListener('click', back);
+
+  document.getElementById('segRole').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-role]'); if (!b) return;
+    role = b.dataset.role;
+    [].forEach.call(this.children, function (x) {
+      x.setAttribute('aria-pressed', String(x.dataset.role === role));
+    });
+    stack = [role === 'pos' ? 'posHome' : 'home'];
+    amt = ''; paidTxn = null; card = null; payMethod = 'cash';
+    render();
+  });
+
+  document.getElementById('segPlan').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-plan]'); if (!b) return;
+    plan = b.dataset.plan;
+    [].forEach.call(this.children, function (x) {
+      x.setAttribute('aria-pressed', String(x.dataset.plan === plan));
+    });
+    if (!has('fuel_companies')) { card = null; if (payMethod === 'company_card') payMethod = 'cash'; }
+    render();
+  });
+
+  var permsEl = document.getElementById('segPerms');
+  permsEl.innerHTML = PERMS.map(function (p) {
+    return '<button data-perm="' + p[0] + '" aria-pressed="' + !!perms[p[0]] + '">' +
+      p[1] + '</button>';
+  }).join('');
+  permsEl.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-perm]'); if (!b) return;
+    var k = b.dataset.perm;
+    if (k === 'sell' && role === 'pos') { toast('البيعُ صلاحيّةٌ لا تُنزع عن موظّف المضخة.'); return; }
+    perms[k] = perms[k] ? 0 : 1;
+    b.setAttribute('aria-pressed', String(!!perms[k]));
+    render();
+  });
+
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-go],[data-act],[data-key],[data-quick],[data-mode],' +
+      '[data-fuel],[data-pump],[data-pay],[data-card],[data-lock]');
+    if (!el || !el.closest('.phone')) return;
+
+    if (el.dataset.lock) { toast('مقفلٌ — يُفتح في ' + el.dataset.lock + '.'); return; }
+    if (el.dataset.key) {
+      var k = el.dataset.key;
+      if (k === 'C') amt = '';
+      else if (k === '⌫') amt = amt.slice(0, -1);
+      else if (amt.length < 9) amt += k;
+      paidTxn = null; render(); return;
+    }
+    if (el.dataset.quick) { amt = el.dataset.quick; mode = 'money'; paidTxn = null; render(); return; }
+    if (el.dataset.mode) { mode = el.dataset.mode; amt = ''; paidTxn = null; render(); return; }
+    if (el.dataset.fuel !== undefined) { fuelIx = +el.dataset.fuel; paidTxn = null; render(); return; }
+    if (el.dataset.pump !== undefined) { pumpIx = +el.dataset.pump; render(); return; }
+    if (el.dataset.card !== undefined) { card = +el.dataset.card; render(); return; }
+    if (el.dataset.pay) {
+      payMethod = el.dataset.pay;
+      if (payMethod !== 'amial_pay') { paidTxn = null; shortCode = null; }
+      if (payMethod !== 'company_card') card = null;
+      render(); return;
+    }
+
+    var act = el.dataset.act;
+    if (act === 'finish') {
+      var b = saleBlock();
+      if (b) { toast(b.msg, true); return; }
+      if (payMethod === 'credit' && !can('credit')) { toast('لا يُسمح لك بالبيع الآجل.', true); return; }
+      go('done'); return;
+    }
+    if (act === 'again') {
+      amt = ''; paidTxn = null; shortCode = null; card = null; payMethod = 'cash';
+      stack = [role === 'pos' ? 'posHome' : 'home']; go('sale'); return;
+    }
+    if (act === 'qrPaid') { paidTxn = 'TX-' + newCode(); back(); toast('وصلت الحركة.'); return; }
+    if (act === 'qrCancel') { shortCode = null; back(); toast('أُلغي طلبُ الدفع.'); return; }
+    if (act === 'closeShift') {
+      if (!can('shift')) { toast('إغلاقُ الورديّة غيرُ مُصرَّحٍ لك.', true); return; }
+      toast(has('fuel_variance')
+        ? 'أُغلقت الورديّة — الفرقُ المقيس: −١٢ لتر.'
+        : 'أُغلقت الورديّة. ولا فرقَ مقيس — «لم يُقَس» ليس «صفراً».');
+      return;
+    }
+    if (act === 'upgrade') {
+      plan = plan === 'free' ? 'business' : 'enterprise';
+      [].forEach.call(document.getElementById('segPlan').children, function (x) {
+        x.setAttribute('aria-pressed', String(x.dataset.plan === plan));
+      });
+      render(); toast('رُقّيت إلى باقة ' + PLAN_AR[plan] + '.'); return;
+    }
+    if (act === 'withdraw') { toast('طلبُ سحبٍ إلى وكيل.'); return; }
+    if (act === 'transfer') { toast('تحويلٌ من المحفظة.'); return; }
+
+    var to = el.dataset.go;
+    if (to === 'qr') { shortCode = null; }
+    if (to) {
+      if (role === 'pos' && ['wallet', 'team', 'caps', 'prices', 'companies'].indexOf(to) > -1) {
+        toast('لا يُفتح لموظّف المضخة.'); return;
+      }
+      go(to);
+    }
+  });
+
+  stack = ['home'];
+  render();
+})();
+</script>

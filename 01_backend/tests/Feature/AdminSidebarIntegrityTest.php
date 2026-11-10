@@ -185,9 +185,14 @@ class AdminSidebarIntegrityTest extends TestCase
             static fn (string $url): string => rtrim((string) parse_url($url, PHP_URL_PATH), '/'),
             $this->sidebarLinks($this->admin()),
         );
+        // AMIAL-MUWATHAQ-BOUNDARY: القرارُ يُتّخذ في موثّق — فالشريطُ يحمل باباً
+        // واحداً إليه، ولا بابَ اعتمادٍ موازياً هنا. ومركزُ التحقق يبقى
+        // موصولاً من «مساحة العمل» (يحرسه `AdminPanelReachabilityGuardTest`).
         $this->assertSame(1, count(array_filter(
-            $paths, static fn (string $path): bool => $path === '/admin/amial/kyc'
-        )), 'مركز التحقق يجب أن يظهر مرة واحدة فقط');
+            $paths, static fn (string $path): bool => $path === '/admin/amial/hub/muwathaq-openings'
+        )), 'بابُ موثّق يجب أن يظهر مرة واحدة فقط');
+        $this->assertNotContains('/admin/amial/kyc', $paths,
+            'بابُ اعتمادٍ ثانٍ في الشريط بجانب موثّق');
         $this->assertNotContains('/admin/amial/kyc/residence', $paths);
         $this->assertNotContains('/admin/amial/hub/verification', $paths);
         $this->assertNotContains('/admin/amial/merchants/verification', $paths,
@@ -195,7 +200,7 @@ class AdminSidebarIntegrityTest extends TestCase
         $this->actingAs($this->admin(), 'user')
             ->get('/admin/amial/kyc')->assertOk()
             ->assertSee('unified-verification-center')
-            ->assertSee('مركز التحقق والتوثيق الموحد');
+            ->assertSee('مراجعة ملفات التوثيق السابقة');
     }
 
     public function reorganising_did_not_drop_a_critical_panel(): void

@@ -36,18 +36,22 @@ class SecurityAuditFixesTest extends TestCase
     /** @test */
     public function enforce_zone_blocks_north_user()
     {
-        $user = User::factory()->create(['zone_code' => 'NORTH']);
+        // AMIAL-ZONE-BOUNDARY-001: الحجب على نقطة عبور النقد، والتغطية من
+        // محافظة الإقامة الموثّقة لا من zone_code وحده.
+        $user = User::factory()->outsideZone('NORTH')->create();
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('الجنوب فقط');
-        $this->policy->enforceZone($user);
+        $this->expectExceptionMessage('TX_ZONE_BLOCKED');
+        $this->policy->enforceZone($user, 'cash_out');
     }
 
     /** @test */
     public function enforce_zone_blocks_unknown_user()
     {
-        $user = User::factory()->create(['zone_code' => 'UNKNOWN']);
+        $user = User::factory()->withoutVerifiedResidence()->create([
+            'zone_code' => 'UNKNOWN', 'residence_governorate' => null,
+        ]);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('غير مُعيَّن');
+        $this->expectExceptionMessage('ACCOUNT_LOCATION_UNVERIFIED');
         $this->policy->enforceZone($user);
     }
 
@@ -87,15 +91,14 @@ class SecurityAuditFixesTest extends TestCase
     /** @test */
     public function full_policy_blocks_north_user_even_with_valid_amount()
     {
-        $user = User::factory()->create([
-            'zone_code' => 'NORTH',
+        $user = User::factory()->outsideZone('NORTH')->create([
             'kyc_tier' => 3,
             'sanction_status' => 'clear',
             'sanction_checked' => true,
         ]);
-        // رغم KYC tier 3 و sanction clear، الـ zone يمنعه
+        // رغم KYC tier 3 و sanction clear، التغطية النقدية تمنع السحب
         $this->expectException(\RuntimeException::class);
-        $this->policy->enforceFinancialPolicy($user, 'send_money', '100');
+        $this->policy->enforceFinancialPolicy($user, 'cash_out', '100');
     }
 
     /** @test */

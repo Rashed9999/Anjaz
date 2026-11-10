@@ -124,13 +124,14 @@ class ZoneAssignmentTest extends TestCase
     /** @test */
     public function unknown_zone_user_cannot_transact()
     {
-        $user = User::factory()->create();
+        // تسجيلٌ جديد: لا إقامة موثّقة بعد (المصنع الافتراضي مقيمٌ موثّق).
+        $user = User::factory()->withoutVerifiedResidence()->create(['residence_governorate' => null]);
         $this->zoneService->assignOnRegistration($user); // → UNKNOWN
         $user->refresh();
 
         $result = $this->policyService->authorize($user, 'send_money');
         $this->assertFalse($result['allowed']);
-        $this->assertEquals('ACCOUNT_ZONE_UNKNOWN', $result['decision_code']);
+        $this->assertEquals('ACCOUNT_LOCATION_UNVERIFIED', $result['decision_code']);
     }
 
     /** @test */

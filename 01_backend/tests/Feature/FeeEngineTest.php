@@ -187,6 +187,8 @@ class FeeEngineTest extends TestCase
     /** @test */
     public function simulate_matches_calculate_without_persisting()
     {
+        // الهجراتُ تبذر مخطّطاتٍ نظاميّة؛ المقيسُ أنّ المحاكاةَ لم تُضِف شيئاً.
+        $before = \Illuminate\Support\Facades\DB::table('fee_schemes')->count();
         $result = $this->svc->simulate([
             'code' => 'SEND_MONEY', 'fee_type' => 'percent', 'percent_rate' => '2.0000',
             'fixed_amount' => '0', 'agent_commission_percent' => '0', 'agent_commission_fixed' => '0',
@@ -195,7 +197,7 @@ class FeeEngineTest extends TestCase
 
         $this->assertSame(MoneyService::normalize('10'), $result['fee']); // 2% من 500
         // لم يُحفظ أي شيء
-        $this->assertDatabaseCount('fee_schemes', 0);
+        $this->assertDatabaseCount('fee_schemes', $before);
     }
 
     /** @test */

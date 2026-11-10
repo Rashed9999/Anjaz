@@ -262,7 +262,12 @@ class AgentController extends Controller
             // «غير معروف» ليس صفراً.
             // ══════════════════════════════════════════════════════════
             if (empty($user->transaction_pin)) {
-                if (! Helpers::pin_check($user->id, (string) $request->old_pin)) {
+                // كما في بابِ العميل: أوّلُ تعيينٍ يُثبت كلمةَ مرور الدخول نفسَها
+                // (لا `pin_check` التي قد تطابق رمزاً قديماً بلا عدّاد).
+                if (! \Illuminate\Support\Facades\Hash::check(
+                    (string) $request->old_pin,
+                    (string) $user->password,
+                )) {
                     return response()->json(['message' => translate('Old PIN is incorrect')], 401);
                 }
 

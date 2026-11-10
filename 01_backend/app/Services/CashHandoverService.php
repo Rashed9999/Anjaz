@@ -106,6 +106,16 @@ class CashHandoverService
                 throw new DomainException('لا تسليمَ بهذا المرجع');
             }
 
+            // **ولا يستلم من سلّم** — ويُفحص أوّلاً ليقول الرفضُ سببَه الحقيقيّ.
+            // وتسليمٌ يؤكّده صاحبُه ليس إثباتاً —
+            // هو الدعوى نفسُها مكتوبةً مرّتين.
+            if ((int) $h->delivered_by_user_id === (int) $receiver->id) {
+                throw new DomainException(
+                    'HANDOVER_SELF_CONFIRM_FORBIDDEN: من سلّم لا يستلم — '
+                    . 'يؤكّد التسليمَ من عدّ المالَ في يده'
+                );
+            }
+
             // التسليم الموجّه ليس قائمة عامة: لا يكفي أن يكون المؤكِّد
             // مختلفاً عن المرسِل، بل يجب أن يكون **هو المستلِم المحدد**.
             // بدونه يستطيع أي حساب آخر إغلاق استلام تاجر/وكيل لم يُسلَّم له.
@@ -121,15 +131,6 @@ class CashHandoverService
 
             if ($h->status !== 'pending') {
                 throw new DomainException('التسليمُ ليس معلّقاً — حالتُه: '.$h->status);
-            }
-
-            // **ولا يستلم من سلّم.** وتسليمٌ يؤكّده صاحبُه ليس إثباتاً —
-            // هو الدعوى نفسُها مكتوبةً مرّتين.
-            if ((int) $h->delivered_by_user_id === (int) $receiver->id) {
-                throw new DomainException(
-                    'HANDOVER_SELF_CONFIRM_FORBIDDEN: من سلّم لا يستلم — '
-                    . 'يؤكّد التسليمَ من عدّ المالَ في يده'
-                );
             }
 
             DB::table('cash_handovers')->where('id', $h->id)->update([

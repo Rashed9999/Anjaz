@@ -86,13 +86,13 @@ class MerchantAccountingDepthGuardTest extends TestCase
             ])->assertCreated();
 
         $poId = (int) $created->json('meta.order.id');
-        $this->assertDatabaseCount('merchant_fixed_assets', 0,
+        $this->assertSame(0, \Illuminate\Support\Facades\DB::table('merchant_fixed_assets')->count(),
             'إنشاء أمر شراء وحده أنشأ أصلاً قبل أن يصل شيء إلى المنشأة');
 
         $this->withHeader('Idempotency-Key', 'guard-asset-po-approve-2026')
             ->postJson("/merchant/data/purchase-orders/{$poId}/approve")
             ->assertOk();
-        $this->assertDatabaseCount('merchant_fixed_assets', 0,
+        $this->assertSame(0, \Illuminate\Support\Facades\DB::table('merchant_fixed_assets')->count(),
             'اعتماد أمر الشراء وحده أنشأ أصلاً قبل الاستلام');
 
         $itemId = (int) PurchaseOrder::with('items')->findOrFail($poId)->items->first()->id;
@@ -110,7 +110,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
         $this->assertSame(0, bccomp((string) $asset->acquisition_cost, '80000', 4));
         $this->assertSame(60, (int) $asset->useful_life_months);
         $this->assertSame($poId, (int) $asset->purchase_order_id);
-        $this->assertDatabaseCount('merchant_expenses', 0,
+        $this->assertSame(0, \Illuminate\Support\Facades\DB::table('merchant_expenses')->count(),
             'الأثاث سُجّل مصروفاً تشغيلياً كاملاً بدل أصل ثابت');
 
         $supplier->refresh();
@@ -350,7 +350,7 @@ class MerchantAccountingDepthGuardTest extends TestCase
 
         $expense = MerchantExpense::findOrFail($expenseId);
         $this->assertSame('voided', $expense->status);
-        $this->assertDatabaseHas('merchant_expenses', ['id' => $expenseId],
+        $this->assertTrue(\Illuminate\Support\Facades\DB::table('merchant_expenses')->where(['id' => $expenseId])->exists(),
             'إلغاء المصروف حذف الأصل التاريخي');
 
         $reversal = MerchantExpenseReversal::where('expense_id', $expenseId)->firstOrFail();
@@ -427,8 +427,10 @@ class MerchantAccountingDepthGuardTest extends TestCase
         $recipient = $this->merchant('967771240011');
 
         EMoney::whereIn('user_id', [$owner->id, $recipient->id])->delete();
+        // المحفظةُ تبدأ صفراً: حسابُ الدفتر يُفتح منها، فرصيدٌ هنا يصير
+        // «افتتاحيّاً» ثمّ يُموَّل فوقه فيتضاعف — وهو الانحرافُ الذي يرفضه الحارس.
         EMoney::create([
-            'user_id' => $owner->id, 'current_balance' => '1000.0000',
+            'user_id' => $owner->id, 'current_balance' => '0.0000',
             'pending_balance' => '0', 'held_balance' => '0', 'charge_earned' => '0',
             'zone_code' => 'SOUTH', 'version' => 0,
         ]);
@@ -456,12 +458,22 @@ class MerchantAccountingDepthGuardTest extends TestCase
             ],
             allowNegative: true,
         );
+        // ثمّ تُطابَق المحفظةُ التشغيليّةُ الدفترَ.
+        EMoney::where('user_id', $owner->id)->update([
+            'current_balance' => $ledger->computeBalanceFromLines($ownerWallet->id),
+        ]);
+        $this->assertSame(0, bccomp((string) EMoney::where('user_id', $owner->id)->value('current_balance'), '1000', 4),
+            'تجهيزُ الاختبار: الدفترُ لا يحمل 1000 للمالك');
 
-        FeeScheme::create([
+        // الهجرةُ `amial_supplier_wallet_payment_fee_scheme` تبذر المخطّطَ نفسَه
+        // (رسمٌ صفريّ فعّال)، والقيدُ الفريدُ يمنع ثانياً — فيُكتب فوقه.
+        FeeScheme::updateOrCreate([
             'code' => 'SUPPLIER_PAYMENT',
-            'label' => 'سداد مورد من المحفظة',
             'zone_code' => 'SOUTH',
             'applies_to' => 'merchant',
+            'is_active' => true,
+        ], [
+            'label' => 'سداد مورد من المحفظة',
             'fee_type' => 'fixed',
             'percent_rate' => '0',
             'fixed_amount' => '0',

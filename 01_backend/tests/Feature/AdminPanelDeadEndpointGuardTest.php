@@ -78,6 +78,11 @@ class AdminPanelDeadEndpointGuardTest extends TestCase
     private const EXEMPT = [
         // باب 6cash للتوافق مع روابط قديمة؛ لا يظهر في قائمة الملاحة الجديدة.
         'admin/amial/kyc/classic' => 'Legacy compatibility for saved links to old KYC page',
+        // الرابطُ يبنيه الخادمُ (`route('admin.amial.kyc.center.merchant-document')`
+        // في `UnifiedVerificationCenterController::merchantDocuments`) ويصل
+        // القالبَ داخل `merchant_verification.documents[].url`، فيعرضه
+        // `merchantVerificationCard` زرّاً — موصولٌ بالبيانات لا بنصّ القالب.
+        'admin/amial/kyc/center/accounts/{id}/merchant-documents/{type}' => 'URL is server-built and rendered from merchant_verification.documents[].url',
     ];
 
     /**

@@ -126,6 +126,19 @@ class GuardedKycDocumentService extends KycDocumentService
             }
             $ownership = null;
             if ($approve) {
+                // AMIAL-KYC-REFUSAL-AR-001 — الناقصُ يُسمّى أوّلاً وبالعربيّة مع
+                // الخطوة التالية، قبل حارس الملكية. وإلّا قال الرفضُ «لم تثبت
+                // الملكية» لمن لم يرفع وثيقةً أصلاً، فلا يعرف المراجعُ ماذا يطلب.
+                $completeness = $this->completenessFor($user, $requiredTier);
+                if (!$completeness['complete']) {
+                    throw new DomainException($this->sayMissing(
+                        'KYC_DOCUMENTS_INCOMPLETE',
+                        'لا يُعتمد الحسابُ قبل رفع هذه المستندات',
+                        $completeness['missing'],
+                        KycDocument::TYPE_LABELS,
+                        'ارفعها من نافذة «✏️ تعديل» ← قسمُ المستندات، ثمّ أعِد الاعتماد.'
+                    ));
+                }
                 $ownership = $this->ownership->assertReady($user, $requiredTier);
                 if ($requiredTier >= 3) {
                     $this->residence->assertVerified($user);

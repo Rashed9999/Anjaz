@@ -61,9 +61,10 @@ class CashierShiftCashDropGuardTest extends TestCase
         $this->assertSame($merchant->id, $movement->merchant_user_id);
 
         $closed = $svc->close($shift, '600', 'مطابقة بعد التسليم', $merchant);
-        $this->assertSame('600.0000', (string) $closed->expected_cash);
-        $this->assertSame('600.0000', (string) $closed->counted_cash);
-        $this->assertSame('0.0000', (string) $closed->variance);
+        // أعمدةُ الورديّة `decimal(14,2)` ومحوَّلةٌ `decimal:2` — النقدُ الورقيّ بالريال والهللة.
+        $this->assertSame('600.00', (string) $closed->expected_cash);
+        $this->assertSame('600.00', (string) $closed->counted_cash);
+        $this->assertSame('0.00', (string) $closed->variance);
 
         // الحدّ الفاصل: عهدة الدرج ليست المحفظة الإلكترونية.
         $this->assertSame('230000.0000', (string) $wallet->fresh()->current_balance);

@@ -69,6 +69,7 @@ class WholesaleReturnSettlementTest extends TestCase
             'customer_id' => $customer->id,
             'created_by_user_id' => $merchant->id,
             'invoice_date' => now()->toDateString(),
+            'due_date' => now()->toDateString(), // عمودٌ إلزاميّ في الجدول
             'subtotal' => '1000',
             'discount_amount' => '0',
             'tax_rate' => '0',

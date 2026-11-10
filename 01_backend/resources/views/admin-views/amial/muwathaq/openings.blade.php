@@ -26,8 +26,8 @@
 </div>
 @endsection
 
-@push('script_2')
-<script>
+@push('script')
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (async function () {
   const root = document.getElementById('muwathaq-openings');
   const escape = (v) => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));

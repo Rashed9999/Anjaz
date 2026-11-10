@@ -146,6 +146,9 @@ class UnifiedVerificationCenterTest extends TestCase
             'type' => AGENT_TYPE,
             'agent_number' => 'AG-902',
             'zone_code' => 'UNKNOWN',
+            // وكيلٌ لم تُعتمد هويّتُه بعد — المصنعُ الافتراضيُّ موثَّق.
+            'is_kyc_verified' => 0,
+            'kyc_tier' => 0,
         ]);
         AgentProfile::create([
             'user_id' => $agent->id,

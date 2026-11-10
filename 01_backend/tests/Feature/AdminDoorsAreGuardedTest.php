@@ -363,12 +363,17 @@ class AdminDoorsAreGuardedTest extends TestCase
             'admin.amial.aml.page',
             'admin.amial.security-events.index',
             'admin.amial.sentinel.index',
-            'admin.amial.recovery.index',
             'admin.expense.index',
         ] as $name) {
             $this->actingAs($support, 'user')->get(route($name))
                 ->assertForbidden();
         }
+
+        // الاستعادة: القراءةُ للدعم عمداً (يتابع حالةَ العميل — انظر
+        // `routes/admin/amial.php`)، أمّا القرارُ فيغيّر وسيلةَ الدخول ويُلغي
+        // الجلسات فله صلاحيّتان مستقلّتان لا يملكهما الدعم.
+        $this->assertFalse($support->hasPlatformPermission('platform.recovery.approve'));
+        $this->assertFalse($support->hasPlatformPermission('platform.recovery.reject'));
     }
 
     /** @test */

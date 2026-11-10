@@ -202,7 +202,7 @@ class RetailBranchStockTruthTest extends TestCase
         ])->value('on_hand'));
         $this->assertSame('9.000', (string) $product->fresh()->quantity);
         $this->assertSame(
-            '0',
+            0, // bccomp يُرجع int
             bccomp(
                 app(StockReservationService::class)->computedReserved(
                     $product->id, $secondLocation->id
