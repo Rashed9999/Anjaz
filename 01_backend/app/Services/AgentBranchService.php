@@ -62,11 +62,6 @@ class AgentBranchService
      */
     public function create(User $agent, array $data): AgentBranch
     {
-        // الفرع كان ينشئ مستخدماً ووكيلًا ومحفظة مباشرة داخل أميال باي؛ ذلك
-        // يناقض أن موثّق هو قناة الإنشاء الوحيدة. الحسابات/الفروع الجديدة
-        // تُنشأ كملف وكيل في موثّق ثم تصل هنا بعد اعتمادها عبر القناة الموقعة.
-        throw new DomainException('AGENT_ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
-
         if ((int) $agent->type !== AGENT_TYPE) {
             throw new DomainException('صاحب الحساب ليس وكيلاً');
         }
