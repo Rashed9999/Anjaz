@@ -44,8 +44,9 @@ on:
   pull_request:
     branches: ['**']
 
+# push وpull_request كانا يشغّلان الفحوص مرتين لنفس الالتزام لأنّ `github.ref` يختلف بينهما؛ المجموعة بالفرع تجعل الأحدث يلغي الأقدم.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -207,7 +208,7 @@ jobs:
         working-directory: 01_backend
         run: |
           # الذيل وحده أخفى 40 إخفاقاً؛ JUnit يعرض كل سبب دون تكرار المكدسات.
-          php artisan test --log-junit=phpunit_report.xml > phpunit_report.txt 2>&1 || {
+          php artisan test --parallel --processes="$(nproc)" --log-junit=phpunit_report.xml > phpunit_report.txt 2>&1 || {
             python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
