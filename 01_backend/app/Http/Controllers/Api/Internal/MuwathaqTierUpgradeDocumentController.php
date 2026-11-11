@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\Internal;
 
 use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
-use App\Models\MuwathaqTierUpgradeRequest;
+use App\Models\MuwathaqReviewRequest;
 use App\Services\AuditService;
 use App\Services\EncryptedFileStorage;
 use Illuminate\Http\Response;
@@ -14,7 +14,7 @@ class MuwathaqTierUpgradeDocumentController extends Controller
 {
     public function show(string $requestUlid, int $documentId): Response
     {
-        $req = MuwathaqTierUpgradeRequest::query()->where('request_ulid', $requestUlid)->firstOrFail();
+        $req = MuwathaqReviewRequest::query()->where('request_ulid', $requestUlid)->firstOrFail();
         abort_unless(in_array($documentId, (array) $req->document_ids, true), 404);
         $doc = KycDocument::query()->where('user_id', $req->user_id)->whereKey($documentId)->firstOrFail();
         abort_unless($doc->encrypted_path, 404);

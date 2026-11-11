@@ -3,7 +3,7 @@
 namespace App\Services\Muwathaq;
 
 use App\Models\KycDocument;
-use App\Models\MuwathaqTierUpgradeRequest as Req;
+use App\Models\MuwathaqReviewRequest as Req;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\Verification\AccountVerificationDecisionService;
@@ -44,7 +44,7 @@ class MuwathaqTierUpgradeService
             return null;
         }
         $req = DB::transaction(function () use ($user, $documents): Req {
-            $old = Req::query()->where('user_id', $user->id)->whereIn('status', Req::OPEN)->lockForUpdate()->first();
+            $old = Req::query()->where('kind', Req::KIND_TIER_UPGRADE)->where('user_id', $user->id)->whereIn('status', Req::OPEN)->lockForUpdate()->first();
             if ($old) {
                 $old->update(['status' => 'superseded', 'open_key' => null]);
             }
@@ -52,10 +52,11 @@ class MuwathaqTierUpgradeService
 
             return Req::query()->create([
                 'request_ulid' => $ulid,
+                'kind' => Req::KIND_TIER_UPGRADE,
                 'user_id' => $user->id,
                 'target_tier' => self::TIER,
                 'status' => 'submitted',
-                'open_key' => $user->id.':'.self::TIER,
+                'open_key' => 'tier:'.$user->id.':'.self::TIER,
                 'document_ids' => array_map(fn (KycDocument $d) => (int) $d->id, $documents),
                 'event_ulid' => (string) Str::ulid(),
                 'payload' => $this->payload($user, $ulid, $documents, $old?->request_ulid),

@@ -5,21 +5,24 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * CAP-01: طلب ترقية الفئة (Tier 2) الذي يملك قراره البشري نظام «موثّق».
- * أميال باي يحتفظ بالطلب والصندوق وتطبيق القرار فقط. إضافي بالكامل: لا يمس
- * users ولا kyc_documents ولا قضايا التحقق القائمة.
+ * CAP-01/CAP-02: طلب مراجعة يملك قراره البشري نظام «موثّق» — ترقية الفئة (tier_upgrade)
+ * أو إثبات السكن (residence_review). أميال باي يحتفظ بالطلب والصندوق وتطبيق القرار فقط.
+ * إضافي بالكامل: لا يمس users ولا kyc_documents ولا residence_verifications.
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('muwathaq_tier_upgrade_requests', function (Blueprint $table) {
+        Schema::create('muwathaq_review_requests', function (Blueprint $table) {
             $table->id();
             $table->string('request_ulid', 26)->unique();
+            $table->string('kind', 32)->default('tier_upgrade')->index();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-            $table->unsignedTinyInteger('target_tier');
+            $table->unsignedTinyInteger('target_tier')->nullable();
+            // residence_review: معرّف residence_verifications الذي يُراجَع.
+            $table->unsignedBigInteger('subject_id')->nullable()->index();
             $table->string('status', 24)->default('submitted')->index();
-            // user_id:tier ما دام الطلب مفتوحاً، NULL عند الانتهاء؛ UNIQUE يمنع طلبين مفتوحين.
+            // kind:user_id[:tier] ما دام الطلب مفتوحاً، NULL عند الانتهاء؛ UNIQUE يمنع طلبين مفتوحين.
             $table->string('open_key', 40)->nullable()->unique();
             $table->json('document_ids');
             $table->string('event_ulid', 26)->unique();
@@ -43,6 +46,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('muwathaq_tier_upgrade_requests');
+        Schema::dropIfExists('muwathaq_review_requests');
     }
 };

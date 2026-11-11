@@ -115,9 +115,9 @@ class UnifiedVerificationCenterController extends Controller
             });
         }
 
-        if (Schema::hasTable('muwathaq_tier_upgrade_requests')) {
+        if (Schema::hasTable('muwathaq_review_requests')) {
             $usersQuery->whereNotIn('users.id', function ($subquery) {
-                $subquery->select('user_id')->from('muwathaq_tier_upgrade_requests')->whereIn('status', \App\Models\MuwathaqTierUpgradeRequest::OPEN);
+                $subquery->select('user_id')->from('muwathaq_review_requests')->where('kind', \App\Models\MuwathaqReviewRequest::KIND_TIER_UPGRADE)->whereIn('status', \App\Models\MuwathaqReviewRequest::OPEN);
             });
         }
 

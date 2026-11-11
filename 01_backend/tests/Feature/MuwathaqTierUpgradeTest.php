@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\KycDocument;
-use App\Models\MuwathaqTierUpgradeRequest as Req;
+use App\Models\MuwathaqReviewRequest as Req;
 use App\Models\User;
 use App\Services\Muwathaq\MuwathaqTierUpgradeService;
 use App\Services\Verification\AccountVerificationDecisionService;

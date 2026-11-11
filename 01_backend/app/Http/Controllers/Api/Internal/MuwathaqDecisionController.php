@@ -33,6 +33,9 @@ class MuwathaqDecisionController extends Controller
             'context.verified_business_requirements' => 'nullable|boolean',
             'context.admin_provisioned' => 'nullable|boolean',
             'context.proposer_reference' => 'nullable|string|max:100',
+            'context.verified_residence' => 'nullable|boolean',
+            'context.document_name' => 'nullable|string|min:2|max:300',
+            'context.name_review_note' => 'nullable|string|max:500',
             'decision_seq' => 'nullable|integer|min:1',
         ]);
         if ($validator->fails()) {
@@ -45,9 +48,12 @@ class MuwathaqDecisionController extends Controller
             ], 422);
         }
 
-        $upgrade = \App\Models\MuwathaqTierUpgradeRequest::query()->where('request_ulid', $applicationUlid)->first();
+        $upgrade = \App\Models\MuwathaqReviewRequest::query()->where('request_ulid', $applicationUlid)->first();
         if ($upgrade !== null) {
-            $r = app(\App\Services\Muwathaq\MuwathaqTierUpgradeService::class)->receiveDecision(
+            $service = $upgrade->kind === \App\Models\MuwathaqReviewRequest::KIND_RESIDENCE
+                ? app(\App\Services\Muwathaq\MuwathaqResidenceReviewService::class)
+                : app(\App\Services\Muwathaq\MuwathaqTierUpgradeService::class);
+            $r = $service->receiveDecision(
                 $upgrade, (string) $request->input('decision'), (string) $request->input('decision_reference'),
                 $request->filled('decision_seq') ? (int) $request->input('decision_seq') : null,
                 $request->input('reason'), (array) $request->input('context', []),

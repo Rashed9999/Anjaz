@@ -37,7 +37,7 @@ class AccountVerificationDecisionService
     ): User {
         $this->assertIdentityReviewer($account, $reviewer);
         // CAP-01: طلب يملكه موثّق لا يُحسم من أي باب قديم.
-        if (\App\Models\MuwathaqTierUpgradeRequest::ownsOpenCaseFor((int) $account->id)) {
+        if (\App\Models\MuwathaqReviewRequest::ownsOpenCaseFor((int) $account->id)) {
             throw new DomainException('MUWATHAQ_OWNS_CASE');
         }
         return $this->applyDecision($account, $reviewer, $approve, $targetTier, $requestedGovernorate, $reason);

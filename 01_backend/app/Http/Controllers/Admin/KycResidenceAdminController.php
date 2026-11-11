@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\KycDocument;
-use App\Models\User;
+use App\Models\MuwathaqReviewRequest;
 use App\Services\Kyc\KycPrivacyService;
 use App\Services\Kyc\LegalNameService;
+use App\Services\Kyc\ResidenceDecisionApplier;
 use App\Services\Kyc\ResidenceVerificationService;
-use App\Services\KycDocumentService;
 use App\Services\KycOcrService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +36,10 @@ class KycResidenceAdminController extends Controller
 
         $rows = collect($residence->pendingQueue(200))
             ->filter(function (array $row) use ($privacy, $canRestricted, &$hidden) {
+                // CAP-02: ما يراجعه موثّق لا يظهر في الطابور القديم.
+                if (isset($row['id']) && MuwathaqReviewRequest::ownsResidenceVerification((int) $row['id'])) {
+                    return false;
+                }
                 if ($privacy->isRestricted((int) $row['user_id']) && !$canRestricted) {
                     $hidden++;
                     return false;
@@ -81,10 +85,7 @@ class KycResidenceAdminController extends Controller
     public function decide(
         Request $request,
         int $verificationId,
-        ResidenceVerificationService $residence,
-        KycPrivacyService $privacy,
-        KycDocumentService $documents,
-        LegalNameService $legalNames,
+        ResidenceDecisionApplier $applier,
     ): JsonResponse {
         $data = $request->validate([
             'status' => ['required', 'in:verified,needs_more_evidence,rejected'],
@@ -93,58 +94,25 @@ class KycResidenceAdminController extends Controller
             'name_review_note' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $row = DB::table('residence_verifications')->where('id', $verificationId)->first();
-        if (!$row) {
+        if (!DB::table('residence_verifications')->where('id', $verificationId)->exists()) {
             return response()->json(['message' => 'طلب إثبات السكن غير موجود.'], 404);
         }
-
-        $actor = $request->user();
-        $subject = User::findOrFail((int) $row->user_id);
+        // CAP-02: طلب يراجعه موثّق لا يُحسم من هنا (لا قرار مزدوج).
+        if (MuwathaqReviewRequest::ownsResidenceVerification($verificationId)) {
+            return response()->json([
+                'success' => false, 'code' => 'MUWATHAQ_OWNS_CASE',
+                'message' => 'هذا الطلب قيد المراجعة في موثّق؛ القرار يُتخذ هناك.',
+            ], 409);
+        }
 
         try {
-            // إن كانت الحالة ضمن مسار الخصوصية فحتى قرار السكن يمر من مفتاحها.
-            $privacy->assertReviewerAccess($subject, $actor, true);
-
-            if ($data['status'] === ResidenceVerificationService::STATUS_VERIFIED
-                && (string) $row->evidence_strength === 'supporting') {
-                throw new DomainException('RESIDENCE_STRONGER_EVIDENCE_REQUIRED');
-            }
-
-            $doc = $row->kyc_document_id ? KycDocument::find((int) $row->kyc_document_id) : null;
-            if (!$doc) {
-                throw new DomainException('RESIDENCE_EVIDENCE_DOCUMENT_INVALID');
-            }
-
-            if ($data['status'] === ResidenceVerificationService::STATUS_VERIFIED) {
-                $documentName = trim((string) ($data['document_name'] ?? ''));
-                if ($documentName === '') {
-                    throw new DomainException('RESIDENCE_DOCUMENT_NAME_REQUIRED');
-                }
-                $legalNames->confirmResidenceDocumentName(
-                    $verificationId,
-                    $actor,
-                    $documentName,
-                    $data['name_review_note'] ?? null,
-                );
-
-                if ($doc->status === KycDocument::STATUS_PENDING) {
-                    $documents->approve($doc, $actor);
-                } elseif ($doc->status !== KycDocument::STATUS_APPROVED) {
-                    throw new DomainException('RESIDENCE_DOCUMENT_MUST_BE_APPROVED');
-                }
-            } elseif ($doc->status === KycDocument::STATUS_PENDING) {
-                $documents->reject(
-                    $doc,
-                    $actor,
-                    trim((string) ($data['reason'] ?? '')) ?: 'دليل السكن يحتاج استكمالاً قبل الاعتماد.'
-                );
-            }
-
-            $state = $residence->decide(
+            $state = $applier->apply(
                 $verificationId,
-                $actor,
+                $request->user(),
                 (string) $data['status'],
                 $data['reason'] ?? null,
+                $data['document_name'] ?? null,
+                $data['name_review_note'] ?? null,
             );
         } catch (DomainException $e) {
             return response()->json([
