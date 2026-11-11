@@ -20,13 +20,21 @@ return [
     // CAP-01: مراجعة ترقية Tier 2 داخل موثّق. off افتراضياً؛ canary لا يمس إلا المعرّفات المسموحة.
     'tier_upgrade_mode' => env('MUWATHAQ_TIER_UPGRADE_MODE', 'off'),
     'tier_upgrade_user_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('MUWATHAQ_TIER_UPGRADE_USER_IDS', ''))))),
+    // أرقام حسابات/محافظ (8 أرقام) مسموحة في canary — بديل عن معرّف المستخدم الداخلي.
+    'tier_upgrade_accounts' => array_values(array_filter(array_map('trim', explode(',', (string) env('MUWATHAQ_TIER_UPGRADE_ACCOUNTS', ''))))),
 
     // CAP-02: مراجعة إثبات السكن داخل موثّق. off افتراضياً؛ canary لا يمس إلا المعرّفات المسموحة.
     'residence_review_mode' => env('MUWATHAQ_RESIDENCE_REVIEW_MODE', 'off'),
     // CAP-02b/c: طلبات تغيير البيان وتوثيق منشأة التاجر داخل موثّق. off افتراضياً.
     'profile_change_mode' => env('MUWATHAQ_PROFILE_CHANGE_MODE', 'off'),
     'profile_change_user_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('MUWATHAQ_PROFILE_CHANGE_USER_IDS', ''))))),
+    // أرقام حسابات/محافظ (8 أرقام) مسموحة في canary — بديل عن معرّف المستخدم الداخلي.
+    'profile_change_accounts' => array_values(array_filter(array_map('trim', explode(',', (string) env('MUWATHAQ_PROFILE_CHANGE_ACCOUNTS', ''))))),
     'merchant_verification_mode' => env('MUWATHAQ_MERCHANT_VERIFICATION_MODE', 'off'),
     'merchant_verification_user_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('MUWATHAQ_MERCHANT_VERIFICATION_USER_IDS', ''))))),
+    // أرقام حسابات/محافظ (8 أرقام) مسموحة في canary — بديل عن معرّف المستخدم الداخلي.
+    'merchant_verification_accounts' => array_values(array_filter(array_map('trim', explode(',', (string) env('MUWATHAQ_MERCHANT_VERIFICATION_ACCOUNTS', ''))))),
     'residence_review_user_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('MUWATHAQ_RESIDENCE_REVIEW_USER_IDS', ''))))),
+    // أرقام حسابات/محافظ (8 أرقام) مسموحة في canary — بديل عن معرّف المستخدم الداخلي.
+    'residence_review_accounts' => array_values(array_filter(array_map('trim', explode(',', (string) env('MUWATHAQ_RESIDENCE_REVIEW_ACCOUNTS', ''))))),
 ];

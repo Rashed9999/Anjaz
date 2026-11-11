@@ -30,10 +30,8 @@ class MuwathaqResidenceReviewService
         if (app(KycPrivacyService::class)->isRestricted($user)) {
             return false;
         }
-        $mode = (string) config('muwathaq.residence_review_mode', 'off');
 
-        return $mode === 'on'
-            || ($mode === 'canary' && in_array((int) $user->id, (array) config('muwathaq.residence_review_user_ids', []), true));
+        return MuwathaqCanary::allows('residence_review', $user);
     }
 
     /** null = المسار الإداري القديم يبقى المالك. */
