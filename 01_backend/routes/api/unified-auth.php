@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Auth\MerchantAccountOpeningController;
 use App\Http\Controllers\Api\V1\Auth\ProgressiveRegistrationController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use App\Http\Controllers\Api\Internal\MuwathaqDecisionController;
+use App\Http\Controllers\Api\Internal\MuwathaqTierUpgradeDocumentController;
 use App\Http\Controllers\Api\Internal\MuwathaqEvidenceDocumentController;
 use App\Http\Controllers\Api\Internal\MuwathaqOperationsController;
 use App\Http\Controllers\Api\Internal\MuwathaqProvisioningController;
@@ -97,6 +98,12 @@ Route::get('/internal/muwathaq/applications/{applicationUlid}/evidences/{evidenc
     ->whereUlid('applicationUlid')
     ->whereNumber('evidenceId')
     ->name('amial.internal.muwathaq.evidence.document');
+
+Route::get('/internal/muwathaq/tier-upgrades/{requestUlid}/documents/{documentId}', [MuwathaqTierUpgradeDocumentController::class, 'show'])
+    ->middleware(['muwathaq.signature', 'throttle:60,1'])
+    ->whereUlid('requestUlid')
+    ->whereNumber('documentId')
+    ->name('amial.internal.muwathaq.tier-upgrade.document');
 
 // دليل الحسابات للتشغيل داخل موثّق فقط، وسجل تدقيقه append-only في أميال باي.
 Route::get('/internal/muwathaq/account-directory', [MuwathaqOperationsController::class, 'directory'])

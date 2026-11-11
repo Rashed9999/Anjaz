@@ -161,6 +161,10 @@ class KycIdentityUpgradeController extends Controller
             ],
         ]);
 
+        // CAP-01: الميزة مغلقة افتراضياً؛ عند فتحها لهذا المستخدم يصبح موثّق مالك القرار.
+        // لا رجوع صامت بعد إنشاء الطلب: الإرسال المتعثر يبقى في الصندوق ويُعاد.
+        app(\App\Services\Muwathaq\MuwathaqTierUpgradeService::class)->openFor($user->fresh(), $uploaded);
+
         return response()->json([
             'success' => true,
             'code' => 'KYC_TIER2_PENDING_REVIEW',

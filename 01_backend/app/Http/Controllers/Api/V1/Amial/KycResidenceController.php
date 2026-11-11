@@ -105,6 +105,13 @@ class KycResidenceController extends Controller
             ], 422);
         }
 
+        // CAP-02: الميزة مغلقة افتراضياً؛ عند فتحها لهذا العميل يراجع موثّق الطلب.
+        $verificationId = (int) \Illuminate\Support\Facades\DB::table('residence_verifications')
+            ->where('user_id', $request->user()->id)->where('kyc_document_id', $doc->id)->value('id');
+        if ($verificationId > 0) {
+            app(\App\Services\Muwathaq\MuwathaqResidenceReviewService::class)->openFor($request->user()->fresh(), $verificationId);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'تم إرسال إثبات السكن للمراجعة. أصل الهوية لا يؤثر على أهلية الإقامة.',

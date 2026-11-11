@@ -49,6 +49,16 @@ class VerificationStatusController extends Controller
         $privacyState = $privacy->forUser($user);
         $docs = $this->documentStates((int) $user->id);
         $identity = $this->identityState($tier, $account, $docs);
+        // CAP-01: قرار موثّق على طلب الترقية لا يمر بحالة المستندات؛ بدونه يبقى التطبيق على
+        // «قيد المراجعة — لا ترفع مرة أخرى» بينما المراجع طلب استكمالاً أو رفض، فيعلق العميل.
+        if ($identity['status'] !== 'verified' && \Illuminate\Support\Facades\Schema::hasTable('muwathaq_review_requests')) {
+            $last = \App\Models\MuwathaqReviewRequest::query()->where('kind', \App\Models\MuwathaqReviewRequest::KIND_TIER_UPGRADE)
+                ->where('user_id', $user->id)->latest('id')->first();
+            if ($last !== null && in_array($last->status, ['needs_more_info', 'rejected'], true)) {
+                $identity['status'] = 'rejected';
+                $identity['reason'] = (string) ($last->decision_reason ?: 'المراجع طلب صوراً أوضح للهوية.');
+            }
+        }
 
         $phoneVerified = (bool) ($user->is_phone_verified ?? false);
         $emailVerified = (bool) ($user->is_email_verified ?? false);

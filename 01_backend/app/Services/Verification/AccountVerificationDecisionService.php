@@ -36,7 +36,28 @@ class AccountVerificationDecisionService
         ?string $reason = null,
     ): User {
         $this->assertIdentityReviewer($account, $reviewer);
+        // CAP-01: طلب يملكه موثّق لا يُحسم من أي باب قديم.
+        if (\App\Models\MuwathaqReviewRequest::ownsOpenCaseFor((int) $account->id)) {
+            throw new DomainException('MUWATHAQ_OWNS_CASE');
+        }
+        return $this->applyDecision($account, $reviewer, $approve, $targetTier, $requestedGovernorate, $reason);
+    }
 
+    /**
+     * CAP-01: قرار بشري صدر في موثّق (تحقق منه المستقبِل: توقيع + مراجع مستقل). المراجع الشكلي
+     * هنا حساب «الجسر» الإداري المحفوظ غير القابل للدخول (قرار المالك)، فيُسجَّل reviewed_by
+     * وactor_user_id بمعرّف حقيقي؛ كل فحوص التسلسل والمستندات والتكرار تبقى.
+     */
+    public function decideFromMuwathaq(User $account, bool $approve, int $targetTier, ?string $reason = null): User
+    {
+        $actor = app(\App\Services\Muwathaq\MuwathaqBridgeReviewer::class)->resolve();
+
+        return $this->applyDecision($account, $actor, $approve, $targetTier, null, $reason);
+    }
+
+    private function applyDecision(
+        User $account, User $reviewer, bool $approve, int $targetTier, ?string $requestedGovernorate, ?string $reason,
+    ): User {
         if ($approve && !in_array($targetTier, [2, 3], true)) {
             throw new DomainException('KYC_TIER_TARGET_INVALID');
         }

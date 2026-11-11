@@ -115,6 +115,12 @@ class UnifiedVerificationCenterController extends Controller
             });
         }
 
+        if (Schema::hasTable('muwathaq_review_requests')) {
+            $usersQuery->whereNotIn('users.id', function ($subquery) {
+                $subquery->select('user_id')->from('muwathaq_review_requests')->where('kind', \App\Models\MuwathaqReviewRequest::KIND_TIER_UPGRADE)->whereIn('status', \App\Models\MuwathaqReviewRequest::OPEN);
+            });
+        }
+
         // البحث لا يتقيّد بآخر 150 تسجيلًا: يستطيع المراجع فتح طلبٍ أقدم
         // برقم الحساب أو الهاتف، ولو خرج من نافذة الطابور السريع.
         if ($q === '') {

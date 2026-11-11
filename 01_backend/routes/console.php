@@ -195,6 +195,13 @@ Schedule::command('muwathaq:dispatch-pending')
     ->description('AMIAL-MUWATHAQ: Deliver pending account-opening cases');
 
 
+// CAP-01 — صندوق طلبات ترقية Tier 2.
+Schedule::call(fn () => app(\App\Services\Muwathaq\MuwathaqTierUpgradeService::class)->dispatchPending())
+    ->everyFiveMinutes()
+    ->name('muwathaq-deliver-pending-tier-upgrades')
+    ->withoutOverlapping()
+    ->description('AMIAL-MUWATHAQ: Deliver pending tier-upgrade requests');
+
 // AMIAL-MUWATHAQ-EVIDENCE-001 — الأدلة تصل مستقلة عن إنشاء القضية.
 // إذا سبق رفع السكن تسليم القضية بسبب انقطاع لحظي، تعاد المحاولة تلقائياً؛
 // لا يعتمد الحساب من ملخص ناقص ولا تضيع الوثيقة المشفرة.
