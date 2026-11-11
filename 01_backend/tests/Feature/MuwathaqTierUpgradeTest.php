@@ -210,6 +210,18 @@ class MuwathaqTierUpgradeTest extends TestCase
     }
 
     /** @test */
+    public function the_customer_app_is_told_to_resubmit_with_the_reviewer_reason(): void
+    {
+        [$u, $req] = $this->submitted();
+        $this->decide($req, ['decision' => 'needs_more_info', 'reason' => 'صورة الظهر غير واضحة'])->assertOk();
+        \Laravel\Passport\Passport::actingAs($u->fresh());
+        // بلا هذا كان التطبيق يعرض «الهوية قيد المراجعة — لا ترفع مرة أخرى» فيعلق العميل.
+        $this->getJson('/api/v1/amial/me/verification-status')->assertOk()
+            ->assertJsonPath('data.identity.status', 'rejected')
+            ->assertJsonPath('data.identity.reason', 'صورة الظهر غير واضحة');
+    }
+
+    /** @test */
     public function needs_more_info_is_closed_by_the_customer_resubmitting(): void
     {
         [$u, $req] = $this->submitted();
