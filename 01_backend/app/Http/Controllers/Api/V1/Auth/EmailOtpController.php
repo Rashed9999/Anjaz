@@ -203,11 +203,18 @@ class EmailOtpController extends Controller
                     $this->pins->setPin($user, (string) $request->input('new_pin'));
                 } else {
                     $user->password = Hash::make((string) $request->input('password'));
-                    // نجاح الرمز على هذا البريد هو إثبات ملكيته لحسابٍ أنشأه موثّق.
                     if ($provisioned) {
-                        $user->is_email_verified = 1;
+                        // نجاح الرمز على هذا البريد هو إثبات ملكيته لحسابٍ أنشأه موثّق؛ وحارس الهوية لا يسمح بالتوثيق إلا ضمن تفويضه.
+                        $this->identities->authorizeMutation($user, function () use ($user): void {
+                            $user->is_email_verified = 1;
+                            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'email_verified_at')) {
+                                $user->email_verified_at = now();
+                            }
+                            $user->save();
+                        });
+                    } else {
+                        $user->save();
                     }
-                    $user->save();
                 }
                 $this->revokeSessions($user);
                 $this->audit->record([
