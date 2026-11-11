@@ -18,6 +18,11 @@ return [
     'allowed_clock_skew_seconds' => (int) env('MUWATHAQ_ALLOWED_CLOCK_SKEW_SECONDS', 300),
 
     // CAP-01: مراجعة ترقية Tier 2 داخل موثّق. off افتراضياً؛ canary لا يمس إلا المعرّفات المسموحة.
+    // إثبات ملكية هاتف العميل: reviewer (الآن: علامة المراجع في موثّق تُفعّل is_phone_verified) أو otp
+    // (جاهز للتفعيل: لا يُفعَّل الهاتف من علامة المراجع، ويُثبته العميل برمز داخل التطبيق حين يُربط مزوّد SMS/WhatsApp).
+    // يُقلَّب المفتاحان معاً: MUWATHAQ_PHONE_VERIFICATION هنا وفي موثّق.
+    'phone_verification' => in_array(env('MUWATHAQ_PHONE_VERIFICATION', 'reviewer'), ['reviewer', 'otp'], true) ? env('MUWATHAQ_PHONE_VERIFICATION', 'reviewer') : 'reviewer',
+
     'tier_upgrade_mode' => env('MUWATHAQ_TIER_UPGRADE_MODE', 'off'),
     'tier_upgrade_user_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('MUWATHAQ_TIER_UPGRADE_USER_IDS', ''))))),
     // أرقام حسابات/محافظ (8 أرقام) مسموحة في canary — بديل عن معرّف المستخدم الداخلي.
