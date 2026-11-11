@@ -180,7 +180,7 @@ class MuwathaqTierUpgradeService
             if (in_array($r->status, Req::FINAL, true)) {
                 // تكرار الحدث نفسه آمن؛ أي قرار آخر على طلب منتهٍ يُرفض نهائياً.
                 return $r->decision_reference === $reference && $r->status === $decision
-                    ? $out(200, 'MUWATHAQ_DECISION_APPLIED', $r->status === 'approved')
+                    ? $out(200, 'MUWATHAQ_DECISION_APPLIED', true)
                     : $out(409, $r->status === 'superseded' ? 'SUPERSEDED' : 'REQUEST_FINAL');
             }
             if ($seq !== null && $seq <= $r->last_decision_seq) {
@@ -220,13 +220,13 @@ class MuwathaqTierUpgradeService
                         'reviewer_reference' => (string) ($context['reviewer_reference'] ?? '')],
                 ]);
 
-                return $out(200, 'MUWATHAQ_DECISION_APPLIED');
+                return $out(200, 'MUWATHAQ_DECISION_APPLIED', true);
             }
             if ($decision === 'under_review') {
                 $r->status = 'under_review';
                 $r->save();
 
-                return $out(200, 'MUWATHAQ_DECISION_APPLIED');
+                return $out(200, 'MUWATHAQ_DECISION_APPLIED', true);
             }
 
             $reviewer = trim((string) ($context['reviewer_reference'] ?? ''));
@@ -266,7 +266,9 @@ class MuwathaqTierUpgradeService
                     'bridge_reviewer_user_id' => app(MuwathaqBridgeReviewer::class)->find()?->id],
             ]);
 
-            return $out(200, 'MUWATHAQ_DECISION_APPLIED', $approve);
+            // applied=true = القرار سُجّل كما أُرسل (اعتماداً كان أو رفضاً). applied=false محجوز للحجب الحتمي
+            // وحده؛ موثّق يقرؤه «أعِد القضية للمراجعة»، فإعادته على رفضٍ سليم كانت تعيد فتح قضية محسومة.
+            return $out(200, 'MUWATHAQ_DECISION_APPLIED', true);
         });
     }
 }

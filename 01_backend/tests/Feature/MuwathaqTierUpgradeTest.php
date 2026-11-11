@@ -177,11 +177,12 @@ class MuwathaqTierUpgradeTest extends TestCase
     {
         [$u, $req] = $this->submitted();
         $this->decide($req, ['decision' => 'needs_more_info', 'reason' => 'x', 'decision_seq' => 1])->assertStatus(422);
-        $this->decide($req, ['decision' => 'needs_more_info', 'reason' => 'صورة الوجه غير واضحة', 'decision_seq' => 2])->assertOk()->assertJsonPath('meta.applied', false);
+        $this->decide($req, ['decision' => 'needs_more_info', 'reason' => 'صورة الوجه غير واضحة', 'decision_seq' => 2])->assertOk()->assertJsonPath('meta.applied', true);
         $this->assertSame('needs_more_info', $req->fresh()->status);
         $this->assertSame(0, (int) $u->fresh()->is_kyc_verified, 'الاستكمال ليس رفضاً');
         $this->assertTrue(Req::ownsOpenCaseFor((int) $u->id), 'الطلب ما زال مملوكاً لموثّق');
-        $this->decide($req, ['decision' => 'rejected', 'reason' => 'الصورة لا تطابق الهوية', 'decision_seq' => 3])->assertOk();
+        // الرفض المطبَّق يُعاد applied=true؛ false كان يجعل موثّق يعيد فتح قضية محسومة.
+        $this->decide($req, ['decision' => 'rejected', 'reason' => 'الصورة لا تطابق الهوية', 'decision_seq' => 3])->assertOk()->assertJsonPath('meta.applied', true);
         $this->assertSame(2, (int) $u->fresh()->is_kyc_verified);
         $this->assertSame('rejected', $req->fresh()->status);
     }
