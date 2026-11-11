@@ -24,7 +24,6 @@ class MuwathaqTierUpgradeService
 
     public function enabledFor(User $user): bool
     {
-        $mode = (string) config('muwathaq.tier_upgrade_mode', 'off');
         if (!app(MuwathaqBridgeService::class)->isConfigured()) {
             return false;
         }
@@ -33,8 +32,7 @@ class MuwathaqTierUpgradeService
             return false;
         }
 
-        return $mode === 'on'
-            || ($mode === 'canary' && in_array((int) $user->id, (array) config('muwathaq.tier_upgrade_user_ids', []), true));
+        return MuwathaqCanary::allows('tier_upgrade', $user);
     }
 
     /** null = المسار القديم يبقى مالك الطلب (الميزة مغلقة لهذا المستخدم)؛ وإلا طلب موثّق بصندوقه. */

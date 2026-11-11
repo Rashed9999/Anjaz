@@ -34,10 +34,8 @@ class MuwathaqAccountReviewService
         if ($kind === self::PROFILE && app(KycPrivacyService::class)->isRestricted($user)) {
             return false;
         }
-        $mode = (string) config("muwathaq.{$kind}_mode", 'off');
 
-        return $mode === 'on'
-            || ($mode === 'canary' && in_array((int) $user->id, (array) config("muwathaq.{$kind}_user_ids", []), true));
+        return MuwathaqCanary::allows($kind, $user);
     }
 
     public function openProfileChange(int $requestId): ?Req
