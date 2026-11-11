@@ -90,6 +90,12 @@ class MerchantVerificationAdminController extends Controller
         if ($status !== 'all') {
             $q->where('status', $status);
         }
+        // CAP-02c: ما يراجعه موثّق لا يظهر طلباً ينتظر قراراً هنا.
+        if (\Illuminate\Support\Facades\Schema::hasTable('muwathaq_review_requests')) {
+            $q->whereNotIn('id', function ($q) {
+                $q->select('subject_id')->from('muwathaq_review_requests')->where('kind', 'merchant_verification')->whereIn('status', \App\Models\MuwathaqReviewRequest::OPEN);
+            });
+        }
 
         $items = $q->orderBy('created_at')->paginate(15);
 
@@ -158,6 +164,9 @@ class MerchantVerificationAdminController extends Controller
         if (! $req) {
             return response()->json(['message' => 'الطلب غير موجود'], 404);
         }
+        if (\App\Services\Muwathaq\MuwathaqAccountReviewService::owns(\App\Services\Muwathaq\MuwathaqAccountReviewService::MERCHANT, $id)) {
+            return response()->json(['code' => 'MUWATHAQ_OWNS_CASE', 'message' => 'هذا الطلب قيد المراجعة في موثّق؛ القرار يُتخذ هناك.'], 409);
+        }
 
         try {
             $updated = $this->svc->approve($req, (int) $request->user()->id, $request->input('tier'));
@@ -190,6 +199,9 @@ class MerchantVerificationAdminController extends Controller
 
     private function decideWithReason(Request $request, int $id, callable $act, string $ok): JsonResponse
     {
+        if (\App\Services\Muwathaq\MuwathaqAccountReviewService::owns(\App\Services\Muwathaq\MuwathaqAccountReviewService::MERCHANT, $id)) {
+            return response()->json(['code' => 'MUWATHAQ_OWNS_CASE', 'message' => 'هذا الطلب قيد المراجعة في موثّق؛ القرار يُتخذ هناك.'], 409);
+        }
         // ③ الرفضُ بسببٍ مكتوب — «مرفوض» وحدَها تُنتج تذكرةَ دعمٍ لا إجراءً.
         $v = Validator::make($request->all(), ['reason' => 'required|string|min:5|max:1000']);
 

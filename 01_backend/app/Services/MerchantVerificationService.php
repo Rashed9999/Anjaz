@@ -76,7 +76,7 @@ class MerchantVerificationService
             throw new InvalidArgumentException('اسم النشاط التجاري مطلوب');
         }
 
-        return DB::transaction(function () use ($merchant, $profile, $data, $files) {
+        $submitted = DB::transaction(function () use ($merchant, $profile, $data, $files) {
             // ابحث عن طلب نشط (pending_review أو resubmission_required)
             $request = MerchantVerificationRequest::where('merchant_user_id', $merchant->id)
                 ->whereIn('status', ['pending_review', 'resubmission_required'])
@@ -117,6 +117,15 @@ class MerchantVerificationService
 
             return $request->fresh();
         });
+
+        // CAP-02c: الميزة مغلقة افتراضياً؛ عند فتحها يراجع موثّق المنشأة. تعذّر الإرسال لا يُسقط الطلب.
+        try {
+            app(\App\Services\Muwathaq\MuwathaqAccountReviewService::class)->openMerchantVerification($submitted);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('muwathaq merchant verification open failed', ['request_id' => $submitted->id, 'error' => $e->getMessage()]);
+        }
+
+        return $submitted;
     }
 
     /** Admin: موافقة على الطلب. */

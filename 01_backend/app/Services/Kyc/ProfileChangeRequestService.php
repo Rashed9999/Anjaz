@@ -185,6 +185,13 @@ class ProfileChangeRequestService
             'status' => self::STATUS_PENDING_REVIEW,
             'updated_at' => now(),
         ]);
+
+        // CAP-02b: الميزة مغلقة افتراضياً؛ عند فتحها يراجع موثّق الطلب. تعذّر الإرسال لا يُسقط الطلب.
+        try {
+            app(\App\Services\Muwathaq\MuwathaqAccountReviewService::class)->openProfileChange($requestId);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('muwathaq profile change open failed', ['request_id' => $requestId, 'error' => $e->getMessage()]);
+        }
     }
 
     /**
@@ -310,6 +317,10 @@ class ProfileChangeRequestService
         return DB::table('profile_change_requests as r')
             ->leftJoin('users as u', 'u.id', '=', 'r.user_id')
             ->where('r.status', self::STATUS_PENDING_REVIEW)
+            // CAP-02b: ما يراجعه موثّق لا يظهر في الطابور القديم.
+            ->when(\Illuminate\Support\Facades\Schema::hasTable('muwathaq_review_requests'), fn ($q) => $q->whereNotIn('r.id', function ($q) {
+                $q->select('subject_id')->from('muwathaq_review_requests')->where('kind', 'profile_change')->whereIn('status', \App\Models\MuwathaqReviewRequest::OPEN);
+            }))
             ->orderBy('r.created_at')
             ->limit($limit)
             ->get([

@@ -34,6 +34,8 @@ class MuwathaqDecisionController extends Controller
             'context.admin_provisioned' => 'nullable|boolean',
             'context.proposer_reference' => 'nullable|string|max:100',
             'context.verified_residence' => 'nullable|boolean',
+            'context.verified_change' => 'nullable|boolean',
+            'context.verified_business' => 'nullable|boolean',
             'context.document_name' => 'nullable|string|min:2|max:300',
             'context.name_review_note' => 'nullable|string|max:500',
             'decision_seq' => 'nullable|integer|min:1',
@@ -50,9 +52,11 @@ class MuwathaqDecisionController extends Controller
 
         $upgrade = \App\Models\MuwathaqReviewRequest::query()->where('request_ulid', $applicationUlid)->first();
         if ($upgrade !== null) {
-            $service = $upgrade->kind === \App\Models\MuwathaqReviewRequest::KIND_RESIDENCE
-                ? app(\App\Services\Muwathaq\MuwathaqResidenceReviewService::class)
-                : app(\App\Services\Muwathaq\MuwathaqTierUpgradeService::class);
+            $service = match ($upgrade->kind) {
+                \App\Models\MuwathaqReviewRequest::KIND_RESIDENCE => app(\App\Services\Muwathaq\MuwathaqResidenceReviewService::class),
+                \App\Services\Muwathaq\MuwathaqAccountReviewService::PROFILE, \App\Services\Muwathaq\MuwathaqAccountReviewService::MERCHANT => app(\App\Services\Muwathaq\MuwathaqAccountReviewService::class),
+                default => app(\App\Services\Muwathaq\MuwathaqTierUpgradeService::class),
+            };
             $r = $service->receiveDecision(
                 $upgrade, (string) $request->input('decision'), (string) $request->input('decision_reference'),
                 $request->filled('decision_seq') ? (int) $request->input('decision_seq') : null,

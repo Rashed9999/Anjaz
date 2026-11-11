@@ -80,6 +80,9 @@ class ProfileChangeRequestController extends Controller
             'decision' => ['required', 'in:approve,reject'],
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
+        if (\App\Services\Muwathaq\MuwathaqAccountReviewService::owns(\App\Services\Muwathaq\MuwathaqAccountReviewService::PROFILE, $id)) {
+            return back()->with('error', 'هذا الطلب قيد المراجعة في موثّق؛ القرار يُتخذ هناك.');
+        }
 
         try {
             $this->requests->decide(
