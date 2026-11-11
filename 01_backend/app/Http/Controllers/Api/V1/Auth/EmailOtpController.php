@@ -60,7 +60,8 @@ class EmailOtpController extends Controller
             // Recovery only trusts one verified canonical owner. A legacy
             // duplicate/unverified email receives the same generic public reply
             // as a missing account, preventing enumeration and wrong-account OTP.
-            $user = $this->identities->findVerifiedOwner($email);
+            $user = $this->identities->findVerifiedOwner($email)
+                ?? ($purpose === EmailOtpService::PURPOSE_PASSWORD_RESET ? $this->identities->findMuwathaqProvisionedOwner($email) : null);
             if (! $user) {
                 return $this->acceptedRecoveryReply($email);
             }
@@ -194,14 +195,26 @@ class EmailOtpController extends Controller
                     (string) $request->input('verification_token'),
                 );
                 $user = User::whereKey($challenge->user_id)->lockForUpdate()->first();
-                if (! $user || ! $this->identities->matchesVerifiedUser($user, (string) $challenge->identifier)) {
+                $provisioned = ! $pin && $user && $this->identities->findMuwathaqProvisionedOwner((string) $challenge->identifier)?->is($user);
+                if (! $user || (! $provisioned && ! $this->identities->matchesVerifiedUser($user, (string) $challenge->identifier))) {
                     throw new RuntimeException('EMAIL_IDENTITY_CHANGED');
                 }
                 if ($pin) {
                     $this->pins->setPin($user, (string) $request->input('new_pin'));
                 } else {
                     $user->password = Hash::make((string) $request->input('password'));
-                    $user->save();
+                    if ($provisioned) {
+                        // نجاح الرمز على هذا البريد هو إثبات ملكيته لحسابٍ أنشأه موثّق؛ وحارس الهوية لا يسمح بالتوثيق إلا ضمن تفويضه.
+                        $this->identities->authorizeMutation($user, function () use ($user): void {
+                            $user->is_email_verified = 1;
+                            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'email_verified_at')) {
+                                $user->email_verified_at = now();
+                            }
+                            $user->save();
+                        });
+                    } else {
+                        $user->save();
+                    }
                 }
                 $this->revokeSessions($user);
                 $this->audit->record([
