@@ -44,8 +44,9 @@ on:
   pull_request:
     branches: ['**']
 
+# push وpull_request كانا يشغّلان الفحوص مرتين لنفس الالتزام لأنّ `github.ref` يختلف بينهما؛ المجموعة بالفرع تجعل الأحدث يلغي الأقدم.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
