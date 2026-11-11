@@ -23,5 +23,10 @@ return [
 
     // CAP-02: مراجعة إثبات السكن داخل موثّق. off افتراضياً؛ canary لا يمس إلا المعرّفات المسموحة.
     'residence_review_mode' => env('MUWATHAQ_RESIDENCE_REVIEW_MODE', 'off'),
+    // CAP-02b/c: طلبات تغيير البيان وتوثيق منشأة التاجر داخل موثّق. off افتراضياً.
+    'profile_change_mode' => env('MUWATHAQ_PROFILE_CHANGE_MODE', 'off'),
+    'profile_change_user_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('MUWATHAQ_PROFILE_CHANGE_USER_IDS', ''))))),
+    'merchant_verification_mode' => env('MUWATHAQ_MERCHANT_VERIFICATION_MODE', 'off'),
+    'merchant_verification_user_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('MUWATHAQ_MERCHANT_VERIFICATION_USER_IDS', ''))))),
     'residence_review_user_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('MUWATHAQ_RESIDENCE_REVIEW_USER_IDS', ''))))),
 ];
