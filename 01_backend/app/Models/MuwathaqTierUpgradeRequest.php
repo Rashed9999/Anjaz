@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** طلب ترقية فئة يقرره مراجعو موثّق؛ تطبيق القرار على الحساب يبقى في أميال باي. */
 class MuwathaqTierUpgradeRequest extends Model
 {
-    public const OPEN = ['submitted', 'under_review'];
+    public const OPEN = ['submitted', 'under_review', 'needs_more_info'];
     public const FINAL = ['approved', 'rejected', 'superseded'];
 
     protected $fillable = [

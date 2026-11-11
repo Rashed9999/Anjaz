@@ -75,7 +75,7 @@ class MuwathaqTierUpgradeTest extends TestCase
     }
 
     /** @test */
-    public function delivery_is_signed_minimal_and_idempotent_by_event_key(): void
+    public function delivery_is_signed_carries_the_declared_identity_and_is_idempotent_by_event_key(): void
     {
         [$u, $req] = $this->submitted();
         Http::fake(['https://muwathaq.test/*' => Http::response(['accepted' => true], 202)]);
@@ -91,9 +91,14 @@ class MuwathaqTierUpgradeTest extends TestCase
             $this->assertSame('progressive_tier_upgrade', $d['application']['verification_path']);
             $this->assertSame($req->request_ulid, $d['application']['application_ulid']);
             $this->assertCount(2, $d['documents']);
-            $this->assertStringNotContainsString('identification_number', $body);
-            $this->assertStringNotContainsString('date_of_birth', $body);
+            // قرار المالك: بيانات الهوية المُصرَّح بها تُرسل ليطابقها المراجع بالوثيقة.
+            $this->assertSame($u->identification_number, $d['identity']['identification_number']);
+            $this->assertNotEmpty($d['identity']['identification_number']);
+            $this->assertArrayHasKey('date_of_birth', $d['identity']);
+            $this->assertArrayHasKey('expiry_date', $d['identity']);
             $this->assertStringNotContainsString((string) $u->password, $body);
+            $this->assertStringNotContainsString('transaction_pin', $body);
+            $this->assertStringNotContainsString('encrypted_path', $body);
 
             return true;
         });
@@ -139,6 +144,18 @@ class MuwathaqTierUpgradeTest extends TestCase
         $this->assertNull($req->fresh()->open_key);
         $this->decide($req, ['decision_reference' => $ref])->assertOk();
         $this->assertSame(1, \DB::table('audit_decisions')->where('action', 'MUWATHAQ_TIER_UPGRADE_DECISION')->count());
+        // قرار المالك: المراجع الشكلي حساب «جسر» إداري محفوظ لا يدخل، لا كائن عابر بلا معرّف.
+        $bridge = app(\App\Services\Muwathaq\MuwathaqBridgeReviewer::class)->find();
+        $this->assertNotNull($bridge);
+        $this->assertSame(ADMIN_TYPE, (int) $bridge->type);
+        $this->assertFalse((bool) $bridge->is_active, 'حساب الجسر لا يدخل لوحة الإدارة');
+        $this->assertSame(0, \DB::table('admin_user_permissions')->where('user_id', $bridge->id)->count());
+        $this->assertSame(
+            [(int) $bridge->id],
+            KycDocument::query()->where('user_id', $u->id)->whereIn('doc_type', [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK])
+                ->whereNotNull('reviewed_by')->distinct()->pluck('reviewed_by')->map(fn ($v) => (int) $v)->all(),
+            'reviewed_by يحمل معرّف حساب الجسر',
+        );
         $this->decide($req, ['decision' => 'rejected', 'reason' => 'سبب مختلف جداً'])->assertStatus(409)->assertJsonPath('code', 'REQUEST_FINAL');
     }
 
@@ -159,9 +176,12 @@ class MuwathaqTierUpgradeTest extends TestCase
     public function rejection_marks_the_account_rejected_and_needs_more_info_is_not_turned_into_a_rejection(): void
     {
         [$u, $req] = $this->submitted();
-        $this->decide($req, ['decision' => 'needs_more_info', 'reason' => 'صورة غير واضحة'])->assertStatus(409)->assertJsonPath('code', 'NEEDS_MORE_INFO_NOT_SUPPORTED');
-        $this->assertSame(0, (int) $u->fresh()->is_kyc_verified);
-        $this->decide($req, ['decision' => 'rejected', 'reason' => 'الصورة لا تطابق الهوية'])->assertOk();
+        $this->decide($req, ['decision' => 'needs_more_info', 'reason' => 'x', 'decision_seq' => 1])->assertStatus(422);
+        $this->decide($req, ['decision' => 'needs_more_info', 'reason' => 'صورة الوجه غير واضحة', 'decision_seq' => 2])->assertOk()->assertJsonPath('meta.applied', false);
+        $this->assertSame('needs_more_info', $req->fresh()->status);
+        $this->assertSame(0, (int) $u->fresh()->is_kyc_verified, 'الاستكمال ليس رفضاً');
+        $this->assertTrue(Req::ownsOpenCaseFor((int) $u->id), 'الطلب ما زال مملوكاً لموثّق');
+        $this->decide($req, ['decision' => 'rejected', 'reason' => 'الصورة لا تطابق الهوية', 'decision_seq' => 3])->assertOk();
         $this->assertSame(2, (int) $u->fresh()->is_kyc_verified);
         $this->assertSame('rejected', $req->fresh()->status);
     }
@@ -177,6 +197,29 @@ class MuwathaqTierUpgradeTest extends TestCase
         $this->decide($req, ['decision_seq' => 6])->assertOk()->assertJsonPath('code', 'MUWATHAQ_DECISION_BLOCKED')->assertJsonPath('meta.applied', false);
         $this->assertSame(0, (int) $u->fresh()->is_kyc_verified);
         $this->assertNotNull($req->fresh()->apply_code);
+    }
+
+    /** @test */
+    public function needs_more_info_is_closed_by_the_customer_resubmitting(): void
+    {
+        [$u, $req] = $this->submitted();
+        $this->decide($req, ['decision' => 'needs_more_info', 'reason' => 'ارفع ظهر البطاقة بوضوح'])->assertOk();
+        $docs = KycDocument::query()->where('user_id', $u->id)->get()->all();
+        $new = app(MuwathaqTierUpgradeService::class)->openFor($u->fresh(), $docs);
+        $this->assertSame('superseded', $req->fresh()->status);
+        $this->assertSame($req->request_ulid, $new->payload['application']['supersedes_application_ulid']);
+    }
+
+    /** @test */
+    public function a_restricted_privacy_review_stays_on_the_classic_path(): void
+    {
+        Queue::fake();
+        $u = $this->customer();
+        $this->establishKycEvidence($u, 2);
+        $u->forceFill(['is_kyc_verified' => 0, 'kyc_tier' => 1])->save();
+        $this->mock(\App\Services\Kyc\KycPrivacyService::class, fn ($m) => $m->shouldReceive('isRestricted')->andReturn(true));
+        $this->assertFalse(app(MuwathaqTierUpgradeService::class)->enabledFor($u->fresh()));
+        $this->assertNull(app(MuwathaqTierUpgradeService::class)->openFor($u->fresh(), []));
     }
 
     /** @test */

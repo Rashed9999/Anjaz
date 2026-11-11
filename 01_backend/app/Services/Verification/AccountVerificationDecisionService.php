@@ -44,13 +44,13 @@ class AccountVerificationDecisionService
     }
 
     /**
-     * CAP-01: قرار بشري صدر في موثّق (تحقق منه المستقبِل: توقيع + مراجع مستقل). هوية الخدمة
-     * كائن غير محفوظ بلا بيانات دخول ولا صلاحيات؛ كل فحوص التسلسل والمستندات والتكرار تبقى.
+     * CAP-01: قرار بشري صدر في موثّق (تحقق منه المستقبِل: توقيع + مراجع مستقل). المراجع الشكلي
+     * هنا حساب «الجسر» الإداري المحفوظ غير القابل للدخول (قرار المالك)، فيُسجَّل reviewed_by
+     * وactor_user_id بمعرّف حقيقي؛ كل فحوص التسلسل والمستندات والتكرار تبقى.
      */
     public function decideFromMuwathaq(User $account, bool $approve, int $targetTier, ?string $reason = null): User
     {
-        $actor = new User();
-        $actor->type = ADMIN_TYPE;
+        $actor = app(\App\Services\Muwathaq\MuwathaqBridgeReviewer::class)->resolve();
 
         return $this->applyDecision($account, $actor, $approve, $targetTier, null, $reason);
     }

@@ -14,7 +14,9 @@ use Illuminate\Support\Str;
 
 /**
  * CAP-01: مراجعة ترقية Tier 2 يملكها موثّق. أميال باي: الطلب + الصندوق + تطبيق القرار فقط.
- * لا رقم هوية ولا بيانات ميلاد في الحمولة؛ الوثيقتان تُسحبان موقّعتين عند العرض.
+ * بيانات الهوية المُصرَّح بها (الرقم والنوع والميلاد والإصدار والانتهاء) تُرسل في الحمولة الموقّعة
+ * بقرار المالك (2026-11-11) ليطابقها المراجع بالوثيقة؛ موثّق يخزّن الحمولة مشفّرة. الوثيقتان
+ * نفسهما لا تُنسخان: تُسحبان موقّعتين عند العرض.
  */
 class MuwathaqTierUpgradeService
 {
@@ -24,6 +26,10 @@ class MuwathaqTierUpgradeService
     {
         $mode = (string) config('muwathaq.tier_upgrade_mode', 'off');
         if (!app(MuwathaqBridgeService::class)->isConfigured()) {
+            return false;
+        }
+        // طابور المراجعة المقيّد (خصوصية مختارة) لم يُبنَ في موثّق بعد؛ يبقى في المسار القديم بصلاحيته المستقلة.
+        if (app(\App\Services\Kyc\KycPrivacyService::class)->isRestricted($user)) {
             return false;
         }
 
@@ -81,11 +87,28 @@ class MuwathaqTierUpgradeService
                 'email' => $user->email,
                 'gender' => $user->gender,
             ],
+            'identity' => [
+                'identification_type' => $user->identification_type,
+                'identification_number' => $user->identification_number,
+                'date_of_birth' => $this->day($user->date_of_birth),
+                'place_of_issue' => $user->id_place_of_issue,
+                'issue_date' => $this->day($user->identification_issue_date),
+                'expiry_date' => $this->day($user->identification_expiry_date),
+            ],
             'documents' => array_map(fn (KycDocument $d) => [
                 'id' => (int) $d->id, 'kind' => $d->doc_type, 'mime' => $d->original_mime,
                 'sha256' => $d->content_sha256, 'size' => (int) $d->size_bytes,
             ], $documents),
         ];
+    }
+
+    private function day(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $value instanceof \DateTimeInterface ? $value->format('Y-m-d') : substr((string) $value, 0, 10);
     }
 
     /** تسليم موقّع؛ يعيد false إن سُلّم سابقاً. يرمي عند الفشل ليعيد الـ job المحاولة. */
@@ -163,12 +186,41 @@ class MuwathaqTierUpgradeService
             if ($seq !== null && $seq <= $r->last_decision_seq) {
                 return $out(200, 'STALE_DECISION_IGNORED');
             }
-            if ($decision === 'needs_more_info') {
-                // لم يكتمل توافق Flutter مع حالة غير ثنائية؛ لا نحوّلها إلى رفض.
-                return $out(409, 'NEEDS_MORE_INFO_NOT_SUPPORTED');
-            }
             if ($seq !== null) {
                 $r->last_decision_seq = $seq;
+            }
+            if ($decision === 'needs_more_info') {
+                // ليس رفضاً: الحساب يبقى «قيد المراجعة» (is_kyc_verified=0) والطلب مفتوح حتى يعيد
+                // العميل رفع الهوية من الشاشة نفسها، فيستبدل طلبٌ جديد هذا الطلب (supersedes).
+                if (mb_strlen(trim((string) $reason)) < 5) {
+                    return $out(422, 'REASON_REQUIRED');
+                }
+                $r->status = 'needs_more_info';
+                $r->decision_reason = $reason;
+                $r->save();
+                $userId = (int) $r->user_id;
+                DB::afterCommit(function () use ($userId, $reason): void {
+                    try {
+                        app(\App\Services\NotificationService::class)->dispatch(
+                            User::query()->findOrFail($userId),
+                            'kyc_verification',
+                            'نحتاج استكمال وثائق الهوية',
+                            'راجعنا طلب ترقية حسابك ونحتاج منك: '.trim((string) $reason).' — أعد رفع صورتي الهوية من «توثيق الهوية».',
+                            data: ['is_kyc_verified' => 0, 'kyc_action' => 'resubmit_identity'],
+                        );
+                    } catch (\Throwable) {
+                        // الإشعار لا يعطّل القرار.
+                    }
+                });
+                app(AuditService::class)->record([
+                    'actor_type' => 'muwathaq_reviewer', 'actor_user_id' => null,
+                    'subject_type' => 'user', 'subject_id' => (string) $r->user_id,
+                    'action' => 'MUWATHAQ_TIER_UPGRADE_DECISION', 'decision_code' => 'NEEDS_MORE_INFO', 'severity' => 'info',
+                    'context' => ['request_ulid' => $r->request_ulid, 'decision_reference' => $reference,
+                        'reviewer_reference' => (string) ($context['reviewer_reference'] ?? '')],
+                ]);
+
+                return $out(200, 'MUWATHAQ_DECISION_APPLIED');
             }
             if ($decision === 'under_review') {
                 $r->status = 'under_review';
@@ -210,7 +262,8 @@ class MuwathaqTierUpgradeService
                 'subject_type' => 'user', 'subject_id' => (string) $r->user_id,
                 'action' => 'MUWATHAQ_TIER_UPGRADE_DECISION', 'decision_code' => strtoupper($decision), 'severity' => 'info',
                 'context' => ['request_ulid' => $r->request_ulid, 'decision_reference' => $reference,
-                    'reviewer_reference' => $reviewer, 'proposer_reference' => $proposer],
+                    'reviewer_reference' => $reviewer, 'proposer_reference' => $proposer,
+                    'bridge_reviewer_user_id' => app(MuwathaqBridgeReviewer::class)->find()?->id],
             ]);
 
             return $out(200, 'MUWATHAQ_DECISION_APPLIED', $approve);
