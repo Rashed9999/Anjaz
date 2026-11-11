@@ -90,6 +90,33 @@ class EmailIdentityService
         return $owner && $this->matchesVerifiedUser($owner, $email) ? $owner : null;
     }
 
+    /**
+     * حسابٌ اعتمده موثّق: أُنشئ بكلمة مرور عشوائية وبريدٍ لم يُثبَت بعد، وبابُ دخوله الأول هو «نسيت كلمة المرور».
+     * فيُقبل للاستعادة بالبريد حتى يثبت نجاحُ الرمز ملكيّة البريد (يُعلَّم عندها موثّقاً). عميلٌ واحد فقط بهذا البريد.
+     */
+    public function findMuwathaqProvisionedOwner(string $email): ?User
+    {
+        $email = $this->normalize($email);
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL) || ! Schema::hasTable('muwathaq_account_opening_applications')) {
+            return null;
+        }
+        $query = User::query()->whereNull('deleted_at')->where('is_active', 1)->where('is_email_verified', 0);
+        if (Schema::hasColumn('users', 'email_canonical')) {
+            $query->where('email_canonical', $email);
+        } else {
+            $query->whereRaw('LOWER(TRIM(email)) = ?', [$email]);
+        }
+        $matches = $query->limit(2)->get();
+        $user = $matches->count() === 1 ? $matches->first() : null;
+        if (! $user || $this->normalize((string) $user->email) !== $email) {
+            return null;
+        }
+        $approved = \Illuminate\Support\Facades\DB::table('muwathaq_account_opening_applications')
+            ->where('user_id', $user->id)->where('origin', 'muwathaq')->where('status', 'approved')->exists();
+
+        return $approved && $this->isAvailable($email, (int) $user->id) ? $user : null;
+    }
+
     public function matchesVerifiedUser(User $user, string $email): bool
     {
         if ($user->trashed() || ! (bool) $user->is_active || (int) ($user->is_email_verified ?? 0) !== 1) {

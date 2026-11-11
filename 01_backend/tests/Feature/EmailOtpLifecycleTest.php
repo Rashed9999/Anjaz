@@ -409,4 +409,36 @@ class EmailOtpLifecycleTest extends TestCase
         ], $payload);
         return app(EmailOtpController::class)->webhook($request);
     }
+
+    #[Test]
+    public function a_muwathaq_provisioned_account_can_recover_by_email_and_that_proves_the_address(): void
+    {
+        $user = User::factory()->create(['email' => 'new.customer@example.com', 'is_active' => 1, 'is_email_verified' => 0]);
+        DB::table('users')->where('id', $user->id)->update(['is_email_verified' => 0]);
+        $unrelated = User::factory()->create(['email' => 'other@example.com', 'is_active' => 1, 'is_email_verified' => 0]);
+        $svc = app(EmailIdentityService::class);
+
+        // بلا طلب موثّق معتمد: لا يُقبل (يبقى الرد العام الصامت).
+        $this->assertNull($svc->findMuwathaqProvisionedOwner('new.customer@example.com'));
+
+        $row = ['application_ulid' => (string) \Illuminate\Support\Str::ulid(), 'user_id' => $user->id, 'origin' => 'muwathaq', 'subject_kind' => 'customer',
+            'verification_path' => 'standard_customer', 'status' => 'approved', 'created_at' => now(), 'updated_at' => now()];
+        DB::table('muwathaq_account_opening_applications')->insert(array_intersect_key($row, array_flip(
+            \Illuminate\Support\Facades\Schema::getColumnListing('muwathaq_account_opening_applications'))));
+        $this->assertSame($user->id, $svc->findMuwathaqProvisionedOwner('New.Customer@example.com')?->id);
+        $this->assertNull($svc->findMuwathaqProvisionedOwner('other@example.com'), 'حساب عادي غير موثَّق لا يُقبل');
+
+        $this->postJson('/api/v1/auth/email-otp/request', ['email' => 'new.customer@example.com', 'purpose' => 'password_reset'])->assertOk();
+        $this->assertCount(1, $this->messages, 'يصل رمز الاستعادة فعلاً');
+        $verify = $this->postJson('/api/v1/auth/email-otp/verify', ['email' => 'new.customer@example.com', 'purpose' => 'password_reset', 'otp' => $this->code()])->assertOk();
+        $this->postJson('/api/v1/auth/password-reset/email', [
+            'challenge_id' => $verify->json('data.challenge_id'), 'email' => 'new.customer@example.com',
+            'verification_token' => $verify->json('data.verification_token'), 'password' => 'Str0ng-pass', 'password_confirmation' => 'Str0ng-pass',
+        ])->assertOk();
+
+        $user->refresh();
+        $this->assertTrue(Hash::check('Str0ng-pass', $user->password));
+        $this->assertSame(1, (int) $user->is_email_verified, 'نجاح الرمز أثبت ملكية البريد');
+        $this->assertNull($svc->findMuwathaqProvisionedOwner('new.customer@example.com'), 'بعد الإثبات يصير مساراً عادياً');
+    }
 }
