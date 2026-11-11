@@ -110,6 +110,13 @@ class MuwathaqResidenceReviewService
                 'evidence_strength' => (string) $row->evidence_strength,
                 'evidence_date' => $row->evidence_date ? substr((string) $row->evidence_date, 0, 10) : null,
             ],
+            'prechecks' => (function () use ($user, $doc) {
+                try {
+                    return app(MuwathaqPrecheckService::class)->for($user, [$doc]);
+                } catch (\Throwable) {
+                    return null;
+                }
+            })(),
             'documents' => [[
                 'id' => (int) $doc->id, 'kind' => 'address_proof', 'mime' => $doc->original_mime,
                 'sha256' => $doc->content_sha256, 'size' => (int) $doc->size_bytes,

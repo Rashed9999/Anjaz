@@ -96,11 +96,22 @@ class MuwathaqTierUpgradeService
                 'issue_date' => $this->day($user->identification_issue_date),
                 'expiry_date' => $this->day($user->identification_expiry_date),
             ],
+            'prechecks' => $this->prechecks($user, $documents),
             'documents' => array_map(fn (KycDocument $d) => [
                 'id' => (int) $d->id, 'kind' => $d->doc_type, 'mime' => $d->original_mime,
                 'sha256' => $d->content_sha256, 'size' => (int) $d->size_bytes,
             ], $documents),
         ];
+    }
+
+    /** فحوص أميال باي الآلية إشاراتٍ للمراجع؛ فشلها لا يمنع إنشاء الطلب. */
+    private function prechecks(User $user, array $documents): ?array
+    {
+        try {
+            return app(MuwathaqPrecheckService::class)->for($user, $documents);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function day(mixed $value): ?string

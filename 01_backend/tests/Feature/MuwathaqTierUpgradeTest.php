@@ -98,6 +98,15 @@ class MuwathaqTierUpgradeTest extends TestCase
             $this->assertArrayHasKey('expiry_date', $d['identity']);
             $this->assertStringNotContainsString((string) $u->password, $body);
             $this->assertStringNotContainsString('transaction_pin', $body);
+            // فحوص أميال باي تصل إشاراتٍ، و«غير معروف» يُقال لا يُخفى.
+            $keys = array_column($d['prechecks']['signals'], 'status', 'key');
+            $this->assertSame(['ocr', 'name_match', 'id_number', 'expiry', 'reuse', 'sanctions'], array_keys($keys));
+            if (\DB::table('sanction_list_entries')->where('is_active', true)->count() === 0) {
+                $this->assertSame('unknown', $keys['sanctions'], 'قائمة عقوبات فارغة = غير معروف لا «نظيف»');
+            }
+            foreach ($keys as $st) {
+                $this->assertContains($st, ['pass', 'warn', 'fail', 'unknown']);
+            }
             $this->assertStringNotContainsString('encrypted_path', $body);
 
             return true;
