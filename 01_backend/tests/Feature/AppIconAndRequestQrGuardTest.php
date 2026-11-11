@@ -89,7 +89,9 @@ class AppIconAndRequestQrGuardTest extends TestCase
                     continue;
                 }
 
-                if (filemtime($p) < $srcTime) {
+                // تسامحُ 10 ثوانٍ: `git checkout` يكتب الملفات بترتيبٍ أبجديّ (android قبل assets) فيفصل بينها أجزاءُ ثانية،
+                // وعبورُ حدّ الثانية كان يُسقط الحارس بلا أن يتغيّر الشعار. أيقونةٌ أقدمُ بأكثر من 10 ثوانٍ تبقى كاشفةً.
+                if (filemtime($p) < $srcTime - 10) {
                     $stale[] = sprintf('mipmap-%s/%s — %s (والأصل %s)',
                         $d, $f,
                         date('Y-m-d H:i', filemtime($p)),
