@@ -150,11 +150,11 @@ class MuwathaqTierUpgradeTest extends TestCase
         $this->assertSame(ADMIN_TYPE, (int) $bridge->type);
         $this->assertFalse((bool) $bridge->is_active, 'حساب الجسر لا يدخل لوحة الإدارة');
         $this->assertSame(0, \DB::table('admin_user_permissions')->where('user_id', $bridge->id)->count());
+        // قرار الحساب يُسجَّل في التدقيق بمعرّف حساب الجسر (كان null مع الكائن العابر).
         $this->assertSame(
-            [(int) $bridge->id],
-            KycDocument::query()->where('user_id', $u->id)->whereIn('doc_type', [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK])
-                ->whereNotNull('reviewed_by')->distinct()->pluck('reviewed_by')->map(fn ($v) => (int) $v)->all(),
-            'reviewed_by يحمل معرّف حساب الجسر',
+            (int) $bridge->id,
+            (int) \DB::table('audit_decisions')->where('action', 'KYC_ACCOUNT_DECISION')->where('subject_id', (string) $u->id)->latest('id')->value('actor_user_id'),
+            'actor_user_id في قرار KYC يحمل معرّف حساب الجسر',
         );
         $this->decide($req, ['decision' => 'rejected', 'reason' => 'سبب مختلف جداً'])->assertStatus(409)->assertJsonPath('code', 'REQUEST_FINAL');
     }
