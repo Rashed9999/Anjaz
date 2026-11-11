@@ -432,8 +432,8 @@ class EmailOtpLifecycleTest extends TestCase
         $this->assertCount(1, $this->messages, 'يصل رمز الاستعادة فعلاً');
         $verify = $this->postJson('/api/v1/auth/email-otp/verify', ['email' => 'new.customer@example.com', 'purpose' => 'password_reset', 'otp' => $this->code()])->assertOk();
         $this->postJson('/api/v1/auth/password-reset/email', [
-            'challenge_id' => $verify->json('data.challenge_id'), 'email' => 'new.customer@example.com',
-            'verification_token' => $verify->json('data.verification_token'), 'password' => 'Str0ng-pass', 'password_confirmation' => 'Str0ng-pass',
+            'challenge_id' => $verify->json('meta.challenge_id'), 'email' => 'new.customer@example.com',
+            'verification_token' => $verify->json('meta.verification_token'), 'password' => 'Str0ng-pass', 'password_confirmation' => 'Str0ng-pass',
         ])->assertOk();
 
         $user->refresh();
