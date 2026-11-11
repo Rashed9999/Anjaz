@@ -16,4 +16,8 @@ return [
      */
     'decision_secret' => env('MUWATHAQ_DECISION_SECRET'),
     'allowed_clock_skew_seconds' => (int) env('MUWATHAQ_ALLOWED_CLOCK_SKEW_SECONDS', 300),
+
+    // CAP-01: مراجعة ترقية Tier 2 داخل موثّق. off افتراضياً؛ canary لا يمس إلا المعرّفات المسموحة.
+    'tier_upgrade_mode' => env('MUWATHAQ_TIER_UPGRADE_MODE', 'off'),
+    'tier_upgrade_user_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('MUWATHAQ_TIER_UPGRADE_USER_IDS', ''))))),
 ];

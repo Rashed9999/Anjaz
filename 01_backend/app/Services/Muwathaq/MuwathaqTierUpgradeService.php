@@ -1,0 +1,219 @@
+<?php
+
+namespace App\Services\Muwathaq;
+
+use App\Models\KycDocument;
+use App\Models\MuwathaqTierUpgradeRequest as Req;
+use App\Models\User;
+use App\Services\AuditService;
+use App\Services\Verification\AccountVerificationDecisionService;
+use DomainException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+
+/**
+ * CAP-01: مراجعة ترقية Tier 2 يملكها موثّق. أميال باي: الطلب + الصندوق + تطبيق القرار فقط.
+ * لا رقم هوية ولا بيانات ميلاد في الحمولة؛ الوثيقتان تُسحبان موقّعتين عند العرض.
+ */
+class MuwathaqTierUpgradeService
+{
+    public const TIER = 2;
+
+    public function enabledFor(User $user): bool
+    {
+        $mode = (string) config('muwathaq.tier_upgrade_mode', 'off');
+        if (!app(MuwathaqBridgeService::class)->isConfigured()) {
+            return false;
+        }
+
+        return $mode === 'on'
+            || ($mode === 'canary' && in_array((int) $user->id, (array) config('muwathaq.tier_upgrade_user_ids', []), true));
+    }
+
+    /** null = المسار القديم يبقى مالك الطلب (الميزة مغلقة لهذا المستخدم)؛ وإلا طلب موثّق بصندوقه. */
+    public function openFor(User $user, array $documents): ?Req
+    {
+        if (!$this->enabledFor($user)) {
+            return null;
+        }
+        $req = DB::transaction(function () use ($user, $documents): Req {
+            $old = Req::query()->where('user_id', $user->id)->whereIn('status', Req::OPEN)->lockForUpdate()->first();
+            if ($old) {
+                $old->update(['status' => 'superseded', 'open_key' => null]);
+            }
+            $ulid = (string) Str::ulid();
+
+            return Req::query()->create([
+                'request_ulid' => $ulid,
+                'user_id' => $user->id,
+                'target_tier' => self::TIER,
+                'status' => 'submitted',
+                'open_key' => $user->id.':'.self::TIER,
+                'document_ids' => array_map(fn (KycDocument $d) => (int) $d->id, $documents),
+                'event_ulid' => (string) Str::ulid(),
+                'payload' => $this->payload($user, $ulid, $documents, $old?->request_ulid),
+            ]);
+        });
+        DB::afterCommit(fn () => \App\Jobs\DeliverMuwathaqTierUpgradeJob::dispatch($req->id));
+
+        return $req;
+    }
+
+    private function payload(User $user, string $ulid, array $documents, ?string $supersedes): array
+    {
+        return [
+            'event_version' => 1,
+            'event_type' => 'tier_upgrade.submitted',
+            'application' => [
+                'application_ulid' => $ulid,
+                'subject_kind' => 'customer',
+                'verification_path' => 'progressive_tier_upgrade',
+                'requested_tier' => self::TIER,
+                'current_tier' => (int) ($user->kyc_tier ?? 0),
+                'submitted_at' => now()->toIso8601String(),
+                'supersedes_application_ulid' => $supersedes,
+            ],
+            'applicant' => [
+                'amial_user_id' => $user->id,
+                'legal_name' => trim(implode(' ', array_filter([$user->f_name, $user->father_name, $user->grandfather_name, $user->family_name ?: $user->l_name]))),
+                'phone' => $user->phone,
+                'email' => $user->email,
+                'gender' => $user->gender,
+            ],
+            'documents' => array_map(fn (KycDocument $d) => [
+                'id' => (int) $d->id, 'kind' => $d->doc_type, 'mime' => $d->original_mime,
+                'sha256' => $d->content_sha256, 'size' => (int) $d->size_bytes,
+            ], $documents),
+        ];
+    }
+
+    /** تسليم موقّع؛ يعيد false إن سُلّم سابقاً. يرمي عند الفشل ليعيد الـ job المحاولة. */
+    public function deliver(int $id): bool
+    {
+        $req = DB::transaction(function () use ($id): ?Req {
+            $r = Req::query()->lockForUpdate()->find($id);
+            if ($r === null || $r->delivery_status === 'delivered') {
+                return null;
+            }
+            $r->attempts++;
+            $r->last_attempted_at = now();
+            $r->save();
+
+            return $r;
+        });
+        if ($req === null) {
+            return false;
+        }
+        $body = json_encode($req->payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        $ts = (string) time();
+        try {
+            $res = Http::acceptJson()->withHeaders([
+                'X-Amial-Timestamp' => $ts,
+                'X-Amial-Signature' => hash_hmac('sha256', $ts.'.'.$body, MuwathaqTransportSecrets::amialToMuwathaq()),
+                'Idempotency-Key' => $req->event_ulid,
+                'Content-Type' => 'application/json',
+            ])->timeout((int) config('muwathaq.timeout_seconds', 10))
+                ->send('POST', rtrim((string) config('muwathaq.base_url'), '/').'/api/v1/internal/applications', ['body' => $body]);
+        } catch (\Throwable $e) {
+            $req->update(['failure_code' => 'NETWORK_ERROR']);
+            throw $e;
+        }
+        if (!$res->successful()) {
+            $req->update(['failure_code' => 'HTTP_'.$res->status(), 'response_status' => $res->status()]);
+            throw new DomainException('موثّق رفض طلب الترقية (HTTP '.$res->status().').');
+        }
+        $req->update(['delivery_status' => 'delivered', 'delivered_at' => now(), 'response_status' => $res->status(), 'failure_code' => null]);
+
+        return true;
+    }
+
+    public function dispatchPending(int $limit = 100): int
+    {
+        if (!app(MuwathaqBridgeService::class)->isConfigured()) {
+            return 0;
+        }
+        $ids = Req::query()->where('delivery_status', 'pending')->whereIn('status', Req::OPEN)->oldest('id')->limit($limit)->pluck('id');
+        foreach ($ids as $id) {
+            \App\Jobs\DeliverMuwathaqTierUpgradeJob::dispatch((int) $id);
+        }
+
+        return $ids->count();
+    }
+
+    /**
+     * @return array{http:int, body:array}
+     * 409 = نهائي لا يُعاد؛ 200 مع applied=false = حجب أعمال حتمي؛ 5xx = إعادة.
+     */
+    public function receiveDecision(Req $req, string $decision, string $reference, ?int $seq, ?string $reason, array $context): array
+    {
+        return DB::transaction(function () use ($req, $decision, $reference, $seq, $reason, $context): array {
+            $r = Req::query()->lockForUpdate()->findOrFail($req->id);
+            $out = fn (int $http, string $code, bool $applied = false, ?string $apply = null): array => ['http' => $http, 'body' => [
+                'success' => $http < 300, 'code' => $code,
+                'meta' => ['kind' => 'tier_upgrade', 'request_ulid' => $r->request_ulid, 'status' => $r->status, 'applied' => $applied, 'apply_code' => $apply],
+            ]];
+
+            if (in_array($r->status, Req::FINAL, true)) {
+                // تكرار الحدث نفسه آمن؛ أي قرار آخر على طلب منتهٍ يُرفض نهائياً.
+                return $r->decision_reference === $reference && $r->status === $decision
+                    ? $out(200, 'MUWATHAQ_DECISION_APPLIED', $r->status === 'approved')
+                    : $out(409, $r->status === 'superseded' ? 'SUPERSEDED' : 'REQUEST_FINAL');
+            }
+            if ($seq !== null && $seq <= $r->last_decision_seq) {
+                return $out(200, 'STALE_DECISION_IGNORED');
+            }
+            if ($decision === 'needs_more_info') {
+                // لم يكتمل توافق Flutter مع حالة غير ثنائية؛ لا نحوّلها إلى رفض.
+                return $out(409, 'NEEDS_MORE_INFO_NOT_SUPPORTED');
+            }
+            if ($seq !== null) {
+                $r->last_decision_seq = $seq;
+            }
+            if ($decision === 'under_review') {
+                $r->status = 'under_review';
+                $r->save();
+
+                return $out(200, 'MUWATHAQ_DECISION_APPLIED');
+            }
+
+            $reviewer = trim((string) ($context['reviewer_reference'] ?? ''));
+            $proposer = trim((string) ($context['proposer_reference'] ?? ''));
+            if ($reviewer === '' || $proposer === '' || $reviewer === $proposer) {
+                return $out(409, 'INDEPENDENT_REVIEW_REQUIRED');
+            }
+            $approve = $decision === 'approved';
+            if ($approve && ($context['verified_identity'] ?? false) !== true) {
+                return $out(409, 'IDENTITY_NOT_AFFIRMED');
+            }
+            if (!$approve && mb_strlen(trim((string) $reason)) < 5) {
+                return $out(422, 'REASON_REQUIRED');
+            }
+
+            try {
+                app(AccountVerificationDecisionService::class)->decideFromMuwathaq(
+                    User::query()->findOrFail($r->user_id), $approve, $r->target_tier, $reason,
+                );
+            } catch (DomainException $e) {
+                $r->apply_code = Str::limit($e->getMessage(), 60, '');
+                $r->save();
+
+                return $out(200, 'MUWATHAQ_DECISION_BLOCKED', false, $r->apply_code);
+            }
+
+            $r->fill([
+                'status' => $decision, 'open_key' => null, 'decision_reference' => $reference, 'decision_reason' => $reason,
+                'decision_context' => $context, 'decided_at' => now(), 'applied_at' => now(), 'apply_code' => null,
+            ])->save();
+            app(AuditService::class)->record([
+                'actor_type' => 'muwathaq_reviewer', 'actor_user_id' => null,
+                'subject_type' => 'user', 'subject_id' => (string) $r->user_id,
+                'action' => 'MUWATHAQ_TIER_UPGRADE_DECISION', 'decision_code' => strtoupper($decision), 'severity' => 'info',
+                'context' => ['request_ulid' => $r->request_ulid, 'decision_reference' => $reference,
+                    'reviewer_reference' => $reviewer, 'proposer_reference' => $proposer],
+            ]);
+
+            return $out(200, 'MUWATHAQ_DECISION_APPLIED', $approve);
+        });
+    }
+}

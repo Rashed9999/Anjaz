@@ -32,6 +32,8 @@ class MuwathaqDecisionController extends Controller
             'context.verified_owner_identity' => 'nullable|boolean',
             'context.verified_business_requirements' => 'nullable|boolean',
             'context.admin_provisioned' => 'nullable|boolean',
+            'context.proposer_reference' => 'nullable|string|max:100',
+            'decision_seq' => 'nullable|integer|min:1',
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -41,6 +43,17 @@ class MuwathaqDecisionController extends Controller
                 'errors' => $validator->errors(),
                 'meta' => (object) [],
             ], 422);
+        }
+
+        $upgrade = \App\Models\MuwathaqTierUpgradeRequest::query()->where('request_ulid', $applicationUlid)->first();
+        if ($upgrade !== null) {
+            $r = app(\App\Services\Muwathaq\MuwathaqTierUpgradeService::class)->receiveDecision(
+                $upgrade, (string) $request->input('decision'), (string) $request->input('decision_reference'),
+                $request->filled('decision_seq') ? (int) $request->input('decision_seq') : null,
+                $request->input('reason'), (array) $request->input('context', []),
+            );
+
+            return response()->json($r['body'] + ['message' => '', 'errors' => (object) []], $r['http']);
         }
 
         try {
