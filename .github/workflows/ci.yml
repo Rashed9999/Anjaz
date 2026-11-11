@@ -208,7 +208,7 @@ jobs:
         working-directory: 01_backend
         run: |
           # الذيل وحده أخفى 40 إخفاقاً؛ JUnit يعرض كل سبب دون تكرار المكدسات.
-          php artisan test --parallel --processes="$(nproc)" --log-junit=phpunit_report.xml > phpunit_report.txt 2>&1 || {
+          php artisan test --log-junit=phpunit_report.xml > phpunit_report.txt 2>&1 || {
             python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
