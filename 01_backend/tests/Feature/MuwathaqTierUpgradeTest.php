@@ -81,7 +81,7 @@ class MuwathaqTierUpgradeTest extends TestCase
         Http::fake(['https://muwathaq.test/*' => Http::response(['accepted' => true], 202)]);
         $this->assertTrue(app(MuwathaqTierUpgradeService::class)->deliver($req->id));
         $this->assertFalse(app(MuwathaqTierUpgradeService::class)->deliver($req->id), 'لا إعادة إرسال بعد التسليم');
-        Http::assertSentCount(1);
+        Http::assertSentCount(3);
         Http::assertSent(function (ClientRequest $r) use ($req, $u): bool {
             $ts = $r->header('X-Amial-Timestamp')[0];
             $body = $r->body();
@@ -108,6 +108,17 @@ class MuwathaqTierUpgradeTest extends TestCase
                 $this->assertContains($st, ['pass', 'warn', 'fail', 'unknown']);
             }
             $this->assertStringNotContainsString('encrypted_path', $body);
+
+            return true;
+        });
+        Http::assertSent(function (ClientRequest $r) use ($req): bool {
+            if (!str_contains($r->url(), '/evidence/')) {
+                return false;
+            }
+            $ts = $r->header('X-Amial-Timestamp')[0];
+            $this->assertSame(hash_hmac('sha256', $ts.'.'.$r->body(), 'bridge-secret'), $r->header('X-Amial-Signature')[0]);
+            $this->assertSame(hash('sha256', $r->body()), $r->header('X-Amial-Evidence-Sha256')[0]);
+            $this->assertContains((int) $r->header('X-Amial-Evidence-Id')[0], array_map('intval', $req->document_ids));
 
             return true;
         });
