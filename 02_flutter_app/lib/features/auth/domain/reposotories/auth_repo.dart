@@ -24,9 +24,6 @@ class AuthRepo extends GetxService{
   Future<Response> verifyPhoneNumber({String? phoneNumber,String? otp}) async {
     return apiClient.postData(AppConstants.customerPhoneVerifyUri, {"phone": phoneNumber, "otp": otp});
   }
-   Future<Response> registration(Map<String,String> customerInfo,List<MultipartBody> multipartBody) async {
-     return await apiClient.postMultipartData(AppConstants.customerRegistrationUri, customerInfo,multipartBody);
-   }
    Future<Response> login({String? dialCode,String? phone, String? password}) async {
      return await apiClient.postData(
        AppConstants.customerLoginUri,

@@ -13,7 +13,7 @@ use Tests\TestCase;
 class CustomerVerificationReviewArchiveGuardTest extends TestCase
 {
     /** @test */
-    public function all_three_customer_verification_paths_use_the_final_review_screen(): void
+    public function the_customer_verification_paths_in_the_app_use_the_final_review_screen(): void
     {
         $review = file_get_contents(base_path(
             '../02_flutter_app/lib/features/kyc_verification/screens/customer_verification_review_screen.dart'
@@ -22,6 +22,7 @@ class CustomerVerificationReviewArchiveGuardTest extends TestCase
         $this->assertStringContainsString('مراجعة طلب التوثيق', (string) $review);
         $this->assertStringContainsString('تأكيد وإرسال للتوثيق', (string) $review);
         $this->assertStringContainsString('_declarationAccepted', (string) $review);
+        // التسجيل لم يعد مساراً من هذا التطبيق: يُفتح في موثّق (المسار الثالث السابق «إثبات السكن» صار هناك).
         $registration = file_get_contents(base_path(
             '../02_flutter_app/lib/features/auth/screens/quick_registration_screen.dart'
         ));
@@ -32,14 +33,15 @@ class CustomerVerificationReviewArchiveGuardTest extends TestCase
             '../02_flutter_app/lib/features/kyc_verification/screens/complete_my_account_screen.dart'
         ));
 
-        foreach ([$registration, $identity, $complete] as $src) {
+        foreach ([$identity, $complete] as $src) {
             $this->assertStringContainsString(
                 'CustomerVerificationReviewScreen',
                 (string) $src,
             );
         }
 
-        $this->assertStringContainsString("label: 'إثبات محل السكن'", (string) $registration);
+        $this->assertStringContainsString('muwathaqOpenCustomerAccountUrl', (string) $registration);
+        $this->assertStringNotContainsString('CustomerVerificationReviewScreen', (string) $registration, 'التسجيل في موثّق لا في التطبيق');
         $this->assertStringContainsString("label: 'وجه الهوية'", (string) $identity);
         $this->assertStringContainsString("label: 'ظهر الهوية'", (string) $identity);
         $this->assertStringContainsString("label: 'صورة السيلفي الحديثة'", (string) $complete);

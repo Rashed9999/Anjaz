@@ -23,38 +23,26 @@ void main() {
     expect(entry, isNot(contains('PageView(')));
   });
 
-  test('التسجيل السريع يحرس مراحل موثّق الأساسية ويضيف الهوية للذكر فقط', () {
-    expect(
-      quick,
-      contains("final labels = ['الحساب', 'البريد', 'الهاتف', 'السكن',"),
-    );
-    expect(
-      quick,
-      contains("if (_requiresIdentity) 'الهوية'"),
-    );
-    expect(quick, contains('0 => _basicsStep()'));
-    expect(quick, contains('1 => _emailStep()'));
-    expect(quick, contains('2 => _phoneStep()'));
-    expect(quick, contains('3 => _residenceStep()'));
-    expect(quick, contains('4 => _requiresIdentity ? _identityStep() : _successStep()'));
-    expect(quick, contains('_ => _successStep()'));
+  test('شاشة التسجيل تفتح موثّق ولا تجمع بياناتٍ ولا تنشئ مستخدماً في أميال باي', () {
+    expect(quick, contains('AppConstants.muwathaqOpenCustomerAccountUrl'));
+    expect(quick, contains('launchUrl('));
+    expect(quick, contains('LaunchMode.externalApplication'));
+    // لا حقول ولا نداءات: إنشاء الهوية والحساب في موثّق وحده.
+    expect(quick, isNot(contains('TextEditingController')));
+    expect(quick, isNot(contains('ApiClient')));
+    expect(quick, isNot(contains('postData')));
+    expect(quick, isNot(contains('/api/v1/auth/register')));
+    expect(quick, isNot(contains('transaction_pin')));
+    expect(quick, isNot(contains("'password'")));
   });
 
-  test('شريط التسجيل يشتق عدد أجزائه من قائمة المراحل', () {
-    expect(quick, contains('List.generate(labels.length'));
-    expect(quick, contains('labels[index]'));
+  test('المعالج القديم الميت (بريد/هاتف/سكن/هوية) لا يعود', () {
+    expect(File('lib/features/auth/screens/legacy/amial_full_registration_wizard_screen.dart').existsSync(), isFalse);
+    // الشاشة صغيرة: ما يطول عن 120 سطراً عاد إليه كود تسجيل.
+    expect('\n'.allMatches(quick).length, lessThan(120));
   });
 
-  test('كلمة الدخول وPIN المالي منفصلان ولا تُنشأ محفظة قبل قرار موثّق', () {
-    expect(quick, contains("'registration_password_min'.tr"));
-    expect(quick, contains("'registration_transaction_pin_digits'.tr"));
-    expect(quick, contains("'password': _password.text"));
-    expect(quick, contains("'password_confirmation': _passwordConfirm.text"));
-    expect(quick, contains("'transaction_pin': _pin.text"));
-    expect(quick, isNot(contains("'password': _pin.text")));
-    expect(quick, contains('المتطلبات تختلف حسب مسار موثّق. لا محفظة قبل الاعتماد.'));
-    expect(quick, contains('مسار المرأة الأولي لا يشترط الهوية أو السيلفي.'));
-    expect(quick, contains('مسار العميل الذكر يتطلب رفع وثيقة هوية'));
+  test('الاستعادة وإكمال الحساب يبقيان في التطبيق', () {
     expect(completion, contains("appBar: AppBar(title: const Text('إكمال حسابي'))"));
     expect(completion, contains('widget.targetTier >= 2'));
     expect(completion, contains('widget.targetTier >= 3'));

@@ -50,7 +50,8 @@ class AppConstants {
   static const double appVersion = 0.7; //flutter version 3.38.5
   static const String customerPhoneCheckUri = '/api/v1/customer/auth/check-phone';
   static const String customerPhoneVerifyUri = '/api/v1/customer/auth/verify-phone';
-  static const String customerRegistrationUri = '/api/v1/customer/auth/register';
+  /// فتح الحساب يتم في موثّق وحده؛ التطبيق يفتح هذه الصفحة ولا ينشئ مستخدماً بنفسه.
+  static const String muwathaqOpenCustomerAccountUrl = 'https://muwathaq.amialpay.com/open-account?type=customer';
   static const String customerUpdateProfile = '/api/v1/customer/update-profile';
   static const String customerLoginUri = '/api/v1/customer/auth/login';
   static const String customerLogoutUri = '/api/v1/customer/logout';
