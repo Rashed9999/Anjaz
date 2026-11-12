@@ -92,7 +92,9 @@ class AccountActivationController extends Controller
         // تاجر/وكيل: التفعيل تمّ ويدخلان من بوابتيهما.
         $user = $owner->fresh();
         if ((int) $user->type === CUSTOMER_TYPE) {
-            $login = $request->duplicate(null, ['role' => 'customer', 'phone' => (string) $user->phone, 'password' => $password]);
+            // الطلب JSON: `duplicate()` لا يبدّل جسمه، فيصل الدخول بلا role. نستبدل محتوى النسخة نفسها (مصدر الإدخال الفعليّ).
+            $login = $request->duplicate();
+            $login->replace(['role' => 'customer', 'phone' => (string) $user->phone, 'password' => $password]);
             $login->setUserResolver(fn () => null);
             $resp = app(UnifiedAuthController::class)->login($login);
             if ($resp->getStatusCode() === 200) {
