@@ -3,6 +3,7 @@
 namespace App\Services\Otp;
 
 use App\Models\User;
+use App\Services\Messaging\ProviderRegistry;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -33,6 +34,32 @@ class EmailOtpService
         self::PURPOSE_EMAIL_CHANGE,
         self::PURPOSE_ACCOUNT_ACTIVATION,
     ];
+
+    /**
+     * قنواتُ إيصال الرمز لغرضٍ ما بالترتيب، من الإعداد `amial_otp.<الغرض>_channel` (قيمةٌ أو قائمةٌ بفواصل).
+     * القيم: `sms` · `whatsapp` · `email`. مثلاً `sms,whatsapp,email` = الهاتف أولاً ثم البريد احتياطاً.
+     * **التحويل من البريد إلى الرسائل متغيّرُ بيئةٍ واحد** (`ACCOUNT_ACTIVATION_CHANNEL=sms,email`) بعد ضبط مزوّدٍ بـ`php artisan amial:messaging`.
+     * غرضا «تسجيل بريد» و«تغيير بريد» يثبتان ملكية **البريد نفسه** فيبقيان على البريد دائماً.
+     *
+     * @return list<string> فارغة = الغرض معطَّل
+     */
+    public function channelsFor(string $purpose): array
+    {
+        if (in_array($purpose, [self::PURPOSE_REGISTRATION, self::PURPOSE_EMAIL_CHANGE], true)) {
+            $configured = (string) config('amial_otp.'.($purpose === self::PURPOSE_REGISTRATION ? 'registration_channel' : 'email_change_channel'), 'email');
+
+            return in_array('email', array_map('trim', explode(',', $configured)), true) ? ['email'] : [];
+        }
+        $raw = (string) config('amial_otp.'.$purpose.'_channel', 'email');
+        $out = [];
+        foreach (array_map('trim', explode(',', strtolower($raw))) as $c) {
+            if (in_array($c, ['sms', 'whatsapp', 'email'], true) && !in_array($c, $out, true)) {
+                $out[] = $c;
+            }
+        }
+
+        return $out;
+    }
 
     /** صلاحيةُ الرمز بالدقائق حسب الغرض. */
     public function ttlMinutesFor(string $purpose): int
@@ -75,6 +102,7 @@ class EmailOtpService
         ?int $requestedById = null,
         array $meta = [],
         bool $afterCommit = false,
+        ?string $phone = null,
     ): array {
         $email = $this->normalizeEmail($email);
         $this->assertPurpose($purpose);
@@ -151,15 +179,15 @@ class EmailOtpService
             // Support approval must commit before an external email can escape.
             // Rollback discards this callback. Delivery failures remain visible
             // on the challenge; they must not undo an already committed approval.
-            DB::afterCommit(function () use ($email, $otp, $purpose, $challengeId): void {
+            DB::afterCommit(function () use ($email, $otp, $purpose, $challengeId, $phone): void {
                 try {
-                    $this->deliver($email, $otp, $purpose, $challengeId);
+                    $this->deliver($email, $otp, $purpose, $challengeId, $phone);
                 } catch (RuntimeException) {
                     // deliver() persisted a sanitized failure on this challenge.
                 }
             });
         } else {
-            $this->deliver($email, $otp, $purpose, $challengeId);
+            $this->deliver($email, $otp, $purpose, $challengeId, $phone);
         }
 
         return [
@@ -171,28 +199,53 @@ class EmailOtpService
         ];
     }
 
-    private function deliver(string $email, string $otp, string $purpose, string $challengeId): void
+    /**
+     * يوصل الرمز عبر قنوات الغرض بالترتيب (`channelsFor`) حتى تنجح إحداها: الهاتف (SMS/واتساب عبر `ProviderRegistry`) ثم البريد احتياطاً.
+     * قناةٌ بلا مزوّدٍ مفعَّل أو بلا رقمٍ تُتخطّى لا تُفشل الإرسال. تُسجَّل القناة التي نجحت في `otp_challenges.channel`.
+     */
+    private function deliver(string $email, string $otp, string $purpose, string $challengeId, ?string $phone = null): void
     {
-        try {
-            $providerId = $this->sendViaResend($email, $otp, $purpose, $challengeId);
+        $lastError = null;
+        $lastThrowable = null;
+        foreach ($this->channelsFor($purpose) ?: ['email'] as $channel) {
+            try {
+                if ($channel === 'email') {
+                    $providerId = $this->sendViaResend($email, $otp, $purpose, $challengeId);
+                } else {
+                    if (trim((string) $phone) === '') {
+                        $lastError = 'NO_PHONE';
+                        continue;
+                    }
+                    $result = app(ProviderRegistry::class)->sendOtp($channel, trim((string) $phone), $otp);
+                    if ($result !== 'success') {
+                        $lastError = strtoupper($channel).'_'.strtoupper($result);
+                        continue;
+                    }
+                    $providerId = null;
+                }
+            } catch (\Throwable $e) {
+                $lastThrowable = $e;
+                // Provider/transport errors can echo request data. Store only a
+                // bounded diagnostic code, never an email body, key or OTP.
+                $lastError = preg_match('/^RESEND_[A-Z0-9_]+$/', $e->getMessage()) ? $e->getMessage() : 'RESEND_TRANSPORT_ERROR';
+                continue;
+            }
             DB::table('otp_challenges')->where('challenge_id', $challengeId)->update([
+                'channel' => $channel,
                 'delivery_status' => DB::raw("CASE WHEN delivery_status = 'pending' THEN 'sent' ELSE delivery_status END"),
                 'provider_message_id' => $providerId,
                 'last_error' => null,
                 'updated_at' => now(),
             ]);
-        } catch (\Throwable $e) {
-            DB::table('otp_challenges')->where('challenge_id', $challengeId)->update([
-                'delivery_status' => DB::raw("CASE WHEN delivery_status = 'pending' THEN 'failed' ELSE delivery_status END"),
-                // Provider/transport errors can echo request data. Store only a
-                // bounded diagnostic code, never an email body, key or OTP.
-                'last_error' => preg_match('/^RESEND_[A-Z0-9_]+$/', $e->getMessage())
-                    ? $e->getMessage() : 'RESEND_TRANSPORT_ERROR',
-                'updated_at' => now(),
-            ]);
-            throw new RuntimeException('OTP_DELIVERY_FAILED', previous: $e);
-        }
 
+            return;
+        }
+        DB::table('otp_challenges')->where('challenge_id', $challengeId)->update([
+            'delivery_status' => DB::raw("CASE WHEN delivery_status = 'pending' THEN 'failed' ELSE delivery_status END"),
+            'last_error' => $lastError ?? 'NO_CHANNEL_AVAILABLE',
+            'updated_at' => now(),
+        ]);
+        throw new RuntimeException('OTP_DELIVERY_FAILED', previous: $lastThrowable);
     }
 
     /**

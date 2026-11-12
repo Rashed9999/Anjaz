@@ -34,6 +34,7 @@ class MuwathaqWelcomeEmailService
             requestedByType: 'system',
             requestedById: null,
             meta: ['application_ulid' => $applicationUlid, 'kind' => $kind],
+            phone: (string) $user->phone,
         );
         app(AuditService::class)->record([
             'actor_type' => 'system', 'actor_user_id' => null, 'subject_type' => 'user', 'subject_id' => (string) $user->id,

@@ -222,6 +222,7 @@ class ApprovalService
                         'reason' => mb_substr((string) $req->reason, 0, 500),
                     ],
                     afterCommit: true,
+                    phone: (string) $u->phone,
                 );
 
                 // نُبقي فقط معرّف التحدّي وحالة الإرسال والبريد المقنّع؛ لا OTP.

@@ -78,7 +78,7 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'أدخل بريدك والرمز الذي وصلك عليه، ثم اختر كلمة مرور ورمز PIN لتبدأ.',
+              'أدخل بريدك والرمز الذي وصلك (برسالة على هاتفك أو بالبريد)، ثم اختر كلمة مرور ورمز PIN لتبدأ.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),

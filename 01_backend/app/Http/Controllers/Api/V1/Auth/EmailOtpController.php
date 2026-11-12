@@ -80,6 +80,7 @@ class EmailOtpController extends Controller
                 requestedByType: 'user',
                 requestedById: $user?->id,
                 meta: ['ip' => $request->ip()],
+                phone: $user ? (string) $user->phone : null,
             );
         } catch (RuntimeException $e) {
             if ($user) {
@@ -463,8 +464,7 @@ class EmailOtpController extends Controller
 
     private function channelEnabled(string $purpose): bool
     {
-        $key = $purpose === EmailOtpService::PURPOSE_REGISTRATION ? 'registration_channel' : $purpose . '_channel';
-        return (string) config('amial_otp.' . $key, 'email') === 'email';
+        return $this->otp->channelsFor($purpose) !== [];
     }
 
     private function acceptedRecoveryReply(string $email, ?string $challengeId = null): JsonResponse

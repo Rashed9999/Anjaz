@@ -45,7 +45,7 @@ class AccountActivationController extends Controller
             return $this->fail('VALIDATION_FAILED', 'تحقّق من البريد والرمز وكلمة المرور ورمز PIN.', 422, $v->errors()->toArray());
         }
         $purpose = EmailOtpService::PURPOSE_ACCOUNT_ACTIVATION;
-        if ((string) config('amial_otp.account_activation_channel', 'email') !== 'email') {
+        if ($this->otp->channelsFor($purpose) === []) {
             return $this->fail('ACTIVATION_DISABLED', 'تفعيل الحساب بالبريد غير مفعّل حالياً.', 409);
         }
 
