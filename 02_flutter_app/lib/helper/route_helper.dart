@@ -1,11 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
-import 'package:amial_pay/common/models/signup_body_model.dart';
 import 'package:amial_pay/common/models/contact_model.dart';
 import 'package:amial_pay/features/auth/screens/unified_login_screen.dart';
 import 'package:amial_pay/features/auth/screens/amial_registration_wizard_screen.dart';
-import 'package:amial_pay/features/auth/screens/pin_set_screen.dart';
 import 'package:amial_pay/features/camera_verification/screens/camera_screen.dart';
 import 'package:amial_pay/features/home/screens/nav_bar_screen.dart';
 import 'package:amial_pay/features/forget_pin/screens/forget_pin_screen.dart';
@@ -58,7 +56,6 @@ class RouteHelper {
   static const String verifyScreen = '/verify_account';
   static const String selfieScreen = '/selfie_screen';
   static const String otherInfoScreen = '/other_info_screen';
-  static const String pinSetScreen = '/pin_set_screen';
   static const String welcomeScreen = '/welcome_screen';
   static const String loginScreen = '/login_screen';
   static const String fPhoneNumberScreen = '/f_phone_number';
@@ -177,10 +174,6 @@ class RouteHelper {
   static  String getSelfieRoute({required bool fromEditProfile}) => '$selfieScreen?page=${fromEditProfile?'edit-profile':'verify'}';
   static  String getNavBarRoute({String? selectedPage}) => (selectedPage?.isNotEmpty ?? false) ? '$navbar?selectedPage=$selectedPage' : navbar;
   static  String getOtherInformationRoute() => otherInfoScreen;
-  static  String getPinSetRoute({required SignUpBodyModel signUpBody}) {
-    String signUpData =  base64Url.encode(utf8.encode(jsonEncode(signUpBody.toJson())));
-    return '$pinSetScreen?signup=$signUpData';
-  }
   static  String getRequestMoneyRoute({String? phoneNumber,required bool fromEdit}) => '$requestMoney?phone-number=$phoneNumber&from-edit=${fromEdit?'edit-number':'home'}';
   static String  getForgetPassRoute({required String? countryCode, required String phoneNumber}) => '$fPhoneNumberScreen?country-code=$countryCode&phone-number=$phoneNumber';
   static String  getRequestMoneyBalanceInputRoute() => requestMoneyBalanceInput;
@@ -243,9 +236,6 @@ class RouteHelper {
     }),
     GetPage(name: selfieScreen, page: () => CameraScreen(fromEditProfile: Get.parameters['page'] == 'edit-profile')),
     GetPage(name: otherInfoScreen, page: () => const AmialRegistrationWizardScreen()),
-    GetPage(name: pinSetScreen, page: () => PinSetScreen(
-      signUpBody: SignUpBodyModel.fromJson(jsonDecode(utf8.decode(base64Url.decode(Get.parameters['signup']!)))),
-    )),
 
     GetPage(name: welcomeScreen, page: () => WelcomeScreen(
       countryCode: Get.parameters['country-code']!.replaceAll(' ', '+'),

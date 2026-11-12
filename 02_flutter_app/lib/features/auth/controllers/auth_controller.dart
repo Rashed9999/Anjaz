@@ -16,7 +16,6 @@ import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amial_pay/features/verification/controllers/verification_controller.dart';
 import 'package:amial_pay/data/api/api_checker.dart';
 import 'package:amial_pay/data/api/api_client.dart';
-import 'package:amial_pay/common/models/signup_body_model.dart';
 import 'package:amial_pay/common/models/response_model.dart';
 import 'package:amial_pay/features/auth/domain/models/user_short_data_model.dart';
 import 'package:amial_pay/features/auth/domain/quick_receive_preferences.dart';
@@ -254,55 +253,6 @@ class AuthController extends GetxController implements GetxService {
   }
 
 
-  // registration ..
-  Future<Response> registration(SignUpBodyModel signUpBody,List<MultipartBody> multipartBody) async{
-      _isLoading = true;
-      update();
-
-      Map<String, String> allCustomerInfo = {
-        'f_name': signUpBody.fName ?? '',
-        'l_name': signUpBody.lName ?? '',
-        'phone': signUpBody.phone!,
-        'dial_country_code': signUpBody.dialCountryCode!,
-        'password': signUpBody.password!,
-        'gender': signUpBody.gender!,
-        'occupation': signUpBody.occupation ?? '',
-      };
-      if(signUpBody.otp != null) {
-        allCustomerInfo.addAll({'otp': signUpBody.otp!});
-      }
-      if(signUpBody.email != '') {
-        allCustomerInfo.addAll({'email': signUpBody.email!});
-      }
-
-      Response response = await authRepo.registration(allCustomerInfo, multipartBody);
-
-      if (response.statusCode == 200) {
-        Get.find<CameraScreenController>().removeImage();
-
-        await setUserData(UserShortDataModel(
-          countryCode: signUpBody.dialCountryCode,
-          phone: signUpBody.phone,
-          name: '${signUpBody.fName} ${signUpBody.lName}'
-        ));
-
-        Get.find<AuthController>().bioAthPinSetup(signUpBody.password).then((value) {
-
-          Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
-        });
-
-        // Get.offAllNamed(RouteHelper.getWelcomeRoute(
-        //   countryCode: signUpBody.dialCountryCode,phoneNumber: signUpBody.phone,
-        //   password: signUpBody.password,
-        // ));
-
-      } else {
-        ApiChecker.checkApi(response);
-      }
-      _isLoading = false;
-      update();
-      return response;
-  }
 
 
   Future<Response> login({String? code, String? phone, String? password}) async {
