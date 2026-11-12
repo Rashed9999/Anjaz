@@ -85,6 +85,10 @@ Route::post('/auth/email-otp/webhook', [EmailOtpController::class, 'webhook'])
     ->name('amial.auth.email-otp.webhook');
 
 // ليس API للتطبيق أو المتصفح. موثّق يوقّع الجسم الخام ووقت الإرسال بـ HMAC.
+Route::post('/internal/muwathaq/identity-check', [\App\Http\Controllers\Api\Internal\MuwathaqIdentityCheckController::class, 'store'])
+    ->middleware(['muwathaq.signature', 'throttle:60,1'])
+    ->name('amial.internal.muwathaq.identity-check');
+
 Route::post('/internal/muwathaq/provisioning', [MuwathaqProvisioningController::class, 'store'])
     ->middleware(['muwathaq.signature', 'throttle:20,1'])
     ->name('amial.internal.muwathaq.provisioning');
