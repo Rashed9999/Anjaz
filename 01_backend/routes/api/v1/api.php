@@ -30,7 +30,7 @@ Route::middleware(['throttle:100,1'])->group(function () {
 
         Route::group(['prefix' => 'customer', 'namespace' => 'Auth'], function () {
             Route::group(['prefix' => 'auth', 'namespace' => 'Auth'], function () {
-                Route::post('register', [RegisterController::class, 'customerRegistration']);
+                Route::post('register', [AccountOpeningBoundaryController::class, 'customer']);
                 Route::post('login', [LoginController::class, 'customerLogin']);
 
                 Route::post('check-phone', [CustomerAuthController::class, 'checkPhone']);
@@ -124,7 +124,7 @@ Route::middleware(['throttle:100,1'])->group(function () {
 
         Route::group(['prefix' => 'agent', 'namespace' => 'Auth'], function () {
             Route::group(['prefix' => 'auth', 'namespace' => 'Auth'], function () {
-                Route::post('register', [RegisterController::class, 'agentRegistration']);
+                Route::post('register', [AccountOpeningBoundaryController::class, 'agent']);
                 Route::post('login', [LoginController::class, 'agentLogin']);
 
                 Route::post('check-phone', [AgentAuthController::class, 'checkPhone']);
