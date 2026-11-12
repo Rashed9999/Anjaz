@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Auth\AccountOpeningContractController;
 use App\Http\Controllers\Api\V1\Auth\AccountOpeningProgressController;
 use App\Http\Controllers\Api\V1\Auth\CustomerOpeningResumeController;
 use App\Http\Controllers\Api\V1\Auth\EmailOtpController;
+use App\Http\Controllers\Api\V1\Auth\AccountOpeningBoundaryController;
 use App\Http\Controllers\Api\V1\Auth\EmailRegistrationController;
 use App\Http\Controllers\Api\V1\Auth\MerchantAccountOpeningController;
 use App\Http\Controllers\Api\V1\Auth\ProgressiveRegistrationController;
