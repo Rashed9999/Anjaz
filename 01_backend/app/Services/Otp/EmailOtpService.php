@@ -3,6 +3,7 @@
 namespace App\Services\Otp;
 
 use App\Models\User;
+use App\Services\Messaging\ProviderRegistry;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -23,13 +24,67 @@ class EmailOtpService
     public const PURPOSE_PASSWORD_RESET = 'password_reset';
     public const PURPOSE_PIN_RECOVERY = 'pin_recovery';
     public const PURPOSE_EMAIL_CHANGE = 'email_change';
+    /** رمز تفعيل حسابٍ اعتمده موثّق: يصل عند الاعتماد، وصلاحيته أيامٌ لا دقائق (قد يقرأ العميل بريده لاحقاً). */
+    public const PURPOSE_ACCOUNT_ACTIVATION = 'account_activation';
 
     public const PURPOSES = [
         self::PURPOSE_REGISTRATION,
         self::PURPOSE_PASSWORD_RESET,
         self::PURPOSE_PIN_RECOVERY,
         self::PURPOSE_EMAIL_CHANGE,
+        self::PURPOSE_ACCOUNT_ACTIVATION,
     ];
+
+    /**
+     * قنواتُ إيصال الرمز لغرضٍ ما بالترتيب، من الإعداد `amial_otp.<الغرض>_channel` (قيمةٌ أو قائمةٌ بفواصل).
+     * القيم: `sms` · `whatsapp` · `email`. مثلاً `sms,whatsapp,email` = الهاتف أولاً ثم البريد احتياطاً.
+     * **التحويل من البريد إلى الرسائل متغيّرُ بيئةٍ واحد** (`ACCOUNT_ACTIVATION_CHANNEL=sms,email`) بعد ضبط مزوّدٍ بـ`php artisan amial:messaging`.
+     * غرضا «تسجيل بريد» و«تغيير بريد» يثبتان ملكية **البريد نفسه** فيبقيان على البريد دائماً.
+     *
+     * @return list<string> فارغة = الغرض معطَّل
+     */
+    public function channelsFor(string $purpose): array
+    {
+        if (in_array($purpose, [self::PURPOSE_REGISTRATION, self::PURPOSE_EMAIL_CHANGE], true)) {
+            $configured = (string) config('amial_otp.'.($purpose === self::PURPOSE_REGISTRATION ? 'registration_channel' : 'email_change_channel'), 'email');
+
+            return in_array('email', array_map('trim', explode(',', $configured)), true) ? ['email'] : [];
+        }
+        $raw = (string) config('amial_otp.'.$purpose.'_channel', 'email');
+        $out = [];
+        foreach (array_map('trim', explode(',', strtolower($raw))) as $c) {
+            if (in_array($c, ['sms', 'whatsapp', 'email'], true) && !in_array($c, $out, true)) {
+                $out[] = $c;
+            }
+        }
+
+        return $out;
+    }
+
+    /** صلاحيةُ الرمز بالدقائق حسب الغرض. */
+    public function ttlMinutesFor(string $purpose): int
+    {
+        if ($purpose === self::PURPOSE_ACCOUNT_ACTIVATION) {
+            return max(60, (int) config('amial_otp.activation_ttl_minutes', 4320));
+        }
+
+        return max(1, (int) config('amial_otp.ttl_minutes', 5));
+    }
+
+    /** «5 دقائق» · «3 أيام» · «6 ساعات» — للبريد. */
+    public static function ttlLabel(int $minutes): string
+    {
+        if ($minutes >= 1440 && $minutes % 1440 === 0) {
+            $d = intdiv($minutes, 1440);
+
+            return $d === 1 ? 'يوم واحد' : ($d === 2 ? 'يومين' : $d.' أيام');
+        }
+        if ($minutes >= 120) {
+            return intdiv($minutes, 60).' ساعات';
+        }
+
+        return $minutes.' دقائق';
+    }
 
     public function normalizeEmail(string $email): string
     {
@@ -47,6 +102,7 @@ class EmailOtpService
         ?int $requestedById = null,
         array $meta = [],
         bool $afterCommit = false,
+        ?string $phone = null,
     ): array {
         $email = $this->normalizeEmail($email);
         $this->assertPurpose($purpose);
@@ -92,7 +148,7 @@ class EmailOtpService
 
             $otp = (string) random_int(100000, 999999);
             $challengeId = (string) Str::ulid();
-            $ttl = max(1, (int) config('amial_otp.ttl_minutes', 5));
+            $ttl = $this->ttlMinutesFor($purpose);
             $resend = max(30, (int) config('amial_otp.resend_seconds', 60));
             $maxAttempts = max(3, min(10, (int) config('amial_otp.max_attempts', 5)));
 
@@ -123,15 +179,15 @@ class EmailOtpService
             // Support approval must commit before an external email can escape.
             // Rollback discards this callback. Delivery failures remain visible
             // on the challenge; they must not undo an already committed approval.
-            DB::afterCommit(function () use ($email, $otp, $purpose, $challengeId): void {
+            DB::afterCommit(function () use ($email, $otp, $purpose, $challengeId, $phone): void {
                 try {
-                    $this->deliver($email, $otp, $purpose, $challengeId);
+                    $this->deliver($email, $otp, $purpose, $challengeId, $phone);
                 } catch (RuntimeException) {
                     // deliver() persisted a sanitized failure on this challenge.
                 }
             });
         } else {
-            $this->deliver($email, $otp, $purpose, $challengeId);
+            $this->deliver($email, $otp, $purpose, $challengeId, $phone);
         }
 
         return [
@@ -143,28 +199,53 @@ class EmailOtpService
         ];
     }
 
-    private function deliver(string $email, string $otp, string $purpose, string $challengeId): void
+    /**
+     * يوصل الرمز عبر قنوات الغرض بالترتيب (`channelsFor`) حتى تنجح إحداها: الهاتف (SMS/واتساب عبر `ProviderRegistry`) ثم البريد احتياطاً.
+     * قناةٌ بلا مزوّدٍ مفعَّل أو بلا رقمٍ تُتخطّى لا تُفشل الإرسال. تُسجَّل القناة التي نجحت في `otp_challenges.channel`.
+     */
+    private function deliver(string $email, string $otp, string $purpose, string $challengeId, ?string $phone = null): void
     {
-        try {
-            $providerId = $this->sendViaResend($email, $otp, $purpose, $challengeId);
+        $lastError = null;
+        $lastThrowable = null;
+        foreach ($this->channelsFor($purpose) ?: ['email'] as $channel) {
+            try {
+                if ($channel === 'email') {
+                    $providerId = $this->sendViaResend($email, $otp, $purpose, $challengeId);
+                } else {
+                    if (trim((string) $phone) === '') {
+                        $lastError = 'NO_PHONE';
+                        continue;
+                    }
+                    $result = app(ProviderRegistry::class)->sendOtp($channel, trim((string) $phone), $otp);
+                    if ($result !== 'success') {
+                        $lastError = strtoupper($channel).'_'.strtoupper($result);
+                        continue;
+                    }
+                    $providerId = null;
+                }
+            } catch (\Throwable $e) {
+                $lastThrowable = $e;
+                // Provider/transport errors can echo request data. Store only a
+                // bounded diagnostic code, never an email body, key or OTP.
+                $lastError = preg_match('/^RESEND_[A-Z0-9_]+$/', $e->getMessage()) ? $e->getMessage() : 'RESEND_TRANSPORT_ERROR';
+                continue;
+            }
             DB::table('otp_challenges')->where('challenge_id', $challengeId)->update([
+                'channel' => $channel,
                 'delivery_status' => DB::raw("CASE WHEN delivery_status = 'pending' THEN 'sent' ELSE delivery_status END"),
                 'provider_message_id' => $providerId,
                 'last_error' => null,
                 'updated_at' => now(),
             ]);
-        } catch (\Throwable $e) {
-            DB::table('otp_challenges')->where('challenge_id', $challengeId)->update([
-                'delivery_status' => DB::raw("CASE WHEN delivery_status = 'pending' THEN 'failed' ELSE delivery_status END"),
-                // Provider/transport errors can echo request data. Store only a
-                // bounded diagnostic code, never an email body, key or OTP.
-                'last_error' => preg_match('/^RESEND_[A-Z0-9_]+$/', $e->getMessage())
-                    ? $e->getMessage() : 'RESEND_TRANSPORT_ERROR',
-                'updated_at' => now(),
-            ]);
-            throw new RuntimeException('OTP_DELIVERY_FAILED', previous: $e);
-        }
 
+            return;
+        }
+        DB::table('otp_challenges')->where('challenge_id', $challengeId)->update([
+            'delivery_status' => DB::raw("CASE WHEN delivery_status = 'pending' THEN 'failed' ELSE delivery_status END"),
+            'last_error' => $lastError ?? 'NO_CHANNEL_AVAILABLE',
+            'updated_at' => now(),
+        ]);
+        throw new RuntimeException('OTP_DELIVERY_FAILED', previous: $lastThrowable);
     }
 
     /**
@@ -383,7 +464,7 @@ class EmailOtpService
         $fromAddress = (string) config('amial_otp.resend.from_address', 'verify@amialpay.com');
         $fromName = (string) config('amial_otp.resend.from_name', 'Amial Pay');
         $apiUrl = (string) config('amial_otp.resend.api_url', 'https://api.resend.com/emails');
-        $minutes = max(1, (int) config('amial_otp.ttl_minutes', 5));
+        $minutes = $this->ttlMinutesFor($purpose);
         $copy = $this->emailCopy($purpose);
         $websiteUrl = rtrim((string) config('amial_otp.resend.website_url', 'https://amialpay.com'), '/');
         $logoUrl = (string) config(
@@ -399,6 +480,7 @@ class EmailOtpService
             'purposeDescription' => $copy['description'],
             'otp' => $otp,
             'minutes' => $minutes,
+            'ttlLabel' => self::ttlLabel($minutes),
             'reference' => $reference,
             'logoUrl' => $logoUrl,
             'websiteUrl' => $websiteUrl,
@@ -471,6 +553,12 @@ class EmailOtpService
                 'preheader' => 'أكد البريد الجديد قبل ربطه بحساب أميال باي.',
                 'label' => 'تغيير البريد الإلكتروني',
                 'description' => 'أدخل الرمز التالي لتأكيد ملكيتك لهذا البريد قبل ربطه بحساب أميال باي.',
+            ],
+            self::PURPOSE_ACCOUNT_ACTIVATION => [
+                'subject' => 'تم اعتماد حسابك — رمز تفعيل أميال باي',
+                'preheader' => 'افتح التطبيق واختر «تفعيل الحساب» وأدخل هذا الرمز مع بريدك.',
+                'label' => 'تفعيل حسابك',
+                'description' => 'تم اعتماد حسابك في أميال باي. افتح التطبيق واختر «تفعيل الحساب»، ثم أدخل بريدك الإلكتروني وهذا الرمز، واختر كلمة مرور ورمز PIN لتبدأ.',
             ],
             default => [
                 'subject' => 'رمز التحقق الأمني — أميال باي',

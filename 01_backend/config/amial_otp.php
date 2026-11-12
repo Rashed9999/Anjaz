@@ -10,6 +10,9 @@ return [
     'registration_channel' => env('REGISTRATION_OTP_CHANNEL', 'email'),
     'password_reset_channel' => env('PASSWORD_RESET_CHANNEL', 'email'),
     'pin_recovery_channel' => env('PIN_RECOVERY_CHANNEL', 'email'),
+    'account_activation_channel' => env('ACCOUNT_ACTIVATION_CHANNEL', 'email'),
+    // رمز تفعيل الحساب المعتمد من موثّق: 3 أيام (بالدقائق).
+    'activation_ttl_minutes' => (int) env('OTP_ACTIVATION_TTL_MINUTES', 4320),
 
     'ttl_minutes' => (int) env('OTP_TTL_MINUTES', 5),
     'resend_seconds' => (int) env('OTP_RESEND_SECONDS', 60),

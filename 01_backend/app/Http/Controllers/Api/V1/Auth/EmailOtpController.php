@@ -39,7 +39,7 @@ class EmailOtpController extends Controller
     {
         $v = Validator::make($request->all(), [
             'email' => 'required|email|max:255',
-            'purpose' => 'required|in:registration,password_reset,pin_recovery',
+            'purpose' => 'required|in:registration,password_reset,pin_recovery,account_activation',
         ]);
         if ($v->fails()) {
             return $this->validationError($v);
@@ -60,8 +60,11 @@ class EmailOtpController extends Controller
             // Recovery only trusts one verified canonical owner. A legacy
             // duplicate/unverified email receives the same generic public reply
             // as a missing account, preventing enumeration and wrong-account OTP.
-            $user = $this->identities->findVerifiedOwner($email)
-                ?? ($purpose === EmailOtpService::PURPOSE_PASSWORD_RESET ? $this->identities->findMuwathaqProvisionedOwner($email) : null);
+            // رمز التفعيل لا يخرج إلا لحسابٍ اعتمده موثّق ولم يُفعَّل بعد؛ ولا يُرسَل لمالكٍ موثّقٍ فعلاً.
+            $user = $purpose === EmailOtpService::PURPOSE_ACCOUNT_ACTIVATION
+                ? $this->identities->findMuwathaqProvisionedOwner($email)
+                : ($this->identities->findVerifiedOwner($email)
+                    ?? ($purpose === EmailOtpService::PURPOSE_PASSWORD_RESET ? $this->identities->findMuwathaqProvisionedOwner($email) : null));
             if (! $user) {
                 return $this->acceptedRecoveryReply($email);
             }
@@ -77,6 +80,7 @@ class EmailOtpController extends Controller
                 requestedByType: 'user',
                 requestedById: $user?->id,
                 meta: ['ip' => $request->ip()],
+                phone: $user ? (string) $user->phone : null,
             );
         } catch (RuntimeException $e) {
             if ($user) {
@@ -460,8 +464,7 @@ class EmailOtpController extends Controller
 
     private function channelEnabled(string $purpose): bool
     {
-        $key = $purpose === EmailOtpService::PURPOSE_REGISTRATION ? 'registration_channel' : $purpose . '_channel';
-        return (string) config('amial_otp.' . $key, 'email') === 'email';
+        return $this->otp->channelsFor($purpose) !== [];
     }
 
     private function acceptedRecoveryReply(string $email, ?string $challengeId = null): JsonResponse

@@ -45,7 +45,14 @@ final class MuwathaqProvisioningService {
   return $result;
  }
  private function activate(User $u,MuwathaqAccountOpeningApplication $a):void { $c=(array)$a->decision_context;$g=\App\Support\YemenGovernorates::codeFromName((string)($c['verified_residence_governorate']??''));if($g===null)throw new DomainException('MUWATHAQ_GOVERNORATE_REQUIRED');$u->is_phone_verified=(config('muwathaq.phone_verification','reviewer')!=='otp'&&!empty($c['verified_phone']))?1:0;$u->residence_governorate=$g;$u->verified_residence_governorate=$g;$u->residence_verified_at=now();$z=app(ZoneAssignmentService::class)->assignFromKyc($u,$g);
-  if($a->subject_kind==='customer'){if($a->verification_path===MuwathaqAccountOpeningService::PATH_WOMEN_PROGRESSIVE)$u->kyc_tier=max(1,min(3,(int)($a->requested_tier?:1)));else{if(empty($c['verified_identity']))throw new DomainException('MUWATHAQ_IDENTITY_REQUIRED');$u->is_kyc_verified=1;$u->kyc_tier=3;}$u->is_active=1;$u->save();return;}
+  if($a->subject_kind==='customer'){if($a->verification_path===MuwathaqAccountOpeningService::PATH_WOMEN_PROGRESSIVE){
+   // مستوى البداية للعميلة: 1 = هاتف + إقامة · 2 = + هوية · 3 = + ضمان ملكية. لا يُمنح مستوى بلا إثباته في قرار موثّق (دفاعٌ ثانٍ عن حدّ الثقة)،
+   // والهوية المُراجَعة ترفع `is_kyc_verified` كما يفعل اعتماد الترقية (decideAccountVerification) وإلا بقي الحدّ الفعليّ عند المستوى 1.
+   $t=max(1,min(3,(int)($a->requested_tier?:1)));
+   if($t>=2&&empty($c['verified_identity']))throw new DomainException('MUWATHAQ_IDENTITY_REQUIRED');
+   if($t>=3&&empty($c['verified_ownership_assurance']))throw new DomainException('MUWATHAQ_OWNERSHIP_ASSURANCE_REQUIRED');
+   $u->kyc_tier=$t; if($t>=2)$u->is_kyc_verified=1;
+  }else{if(empty($c['verified_identity']))throw new DomainException('MUWATHAQ_IDENTITY_REQUIRED');$u->is_kyc_verified=1;$u->kyc_tier=3;}$u->is_active=1;$u->save();return;}
   if($a->subject_kind==='merchant'){if(empty($c['verified_owner_identity'])||empty($c['verified_business_requirements']))throw new DomainException('MUWATHAQ_MERCHANT_REQUIREMENTS_REQUIRED');$p=MerchantProfile::query()->where('user_id',$u->id)->lockForUpdate()->firstOrFail();$p->verification_status='verified';$p->verified_at=now();$p->zone_code=$z;$p->save();$u->is_kyc_verified=1;$u->is_active=1;$u->save();return;}
   if(empty($c['admin_provisioned'])||empty($c['verified_owner_identity']))throw new DomainException('MUWATHAQ_AGENT_REQUIREMENTS_REQUIRED');$p=AgentProfile::query()->where('user_id',$u->id)->lockForUpdate()->firstOrFail();$p->status='active';$p->zone_code=$z;$p->save();$u->is_kyc_verified=1;$u->is_active=1;$u->save();
  }

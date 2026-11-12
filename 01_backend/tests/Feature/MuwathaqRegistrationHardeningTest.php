@@ -90,33 +90,37 @@ class MuwathaqRegistrationHardeningTest extends TestCase
     }
 
     /** @test */
-    public function the_welcome_email_goes_through_resend_with_the_sign_in_steps_and_an_idempotency_key(): void
+    public function the_approval_email_carries_a_three_day_activation_code_sent_through_resend(): void
     {
-        config(['amial_otp.resend.api_key' => 'rk_test', 'muwathaq.phone_verification' => 'reviewer']);
+        config(['amial_otp.resend.api_key' => 'rk_test']);
         Http::fake(['api.resend.com/*' => Http::response(['id' => 'msg_1'], 200)]);
         Queue::fake();
         $event = $this->event();
         $u = $this->provision($event);
-        $id = app(MuwathaqWelcomeEmailService::class)->send($u, 'customer', $event['application_ulid']);
-        $this->assertSame('msg_1', $id);
-        Http::assertSent(function (ClientRequest $r) use ($u, $event): bool {
+        $challengeId = app(MuwathaqWelcomeEmailService::class)->send($u, 'customer', $event['application_ulid']);
+        Http::assertSent(function (ClientRequest $r) use ($u, $challengeId): bool {
             $d = $r->data();
             $this->assertSame([$u->email], $d['to']);
-            $this->assertSame('muwathaq-welcome/'.$event['application_ulid'], $r->header('Idempotency-Key')[0]);
-            $this->assertStringContainsString('نسيت كلمة المرور', $d['text']);
-            $this->assertStringContainsString($u->email, $d['html']);
-            $this->assertStringNotContainsString('أثبت رقم هاتفك', $d['text'], 'وضع reviewer: لا خطوة هاتف');
+            $this->assertSame('email-otp/'.$challengeId, $r->header('Idempotency-Key')[0]);
+            $this->assertStringContainsString('تفعيل الحساب', $d['text']);
+            $this->assertMatchesRegularExpression('/(?<!\d)\d{6}(?!\d)/u', $d['text'], 'الرمز في نص البريد');
+            $this->assertStringContainsString('3 أيام', $d['text'], 'الصلاحية أيام لا دقائق');
+            $this->assertStringNotContainsString('نسيت كلمة المرور', $d['text'], 'لا طريق التفافيّ: الرمز هو باب الدخول الأول');
 
             return true;
         });
+        $row = DB::table('otp_challenges')->where('challenge_id', $challengeId)->first();
+        $this->assertSame('account_activation', $row->purpose);
+        $this->assertSame($u->id, (int) $row->user_id);
+        $this->assertEqualsWithDelta(4320 * 60, strtotime((string) $row->expires_at) - strtotime((string) $row->created_at), 5);
     }
 
     /** @test */
-    public function in_otp_mode_the_email_adds_the_phone_step_for_customers_only(): void
+    public function the_validity_label_reads_in_minutes_hours_or_days(): void
     {
-        config(['muwathaq.phone_verification' => 'otp']);
-        $this->assertContains('أثبت رقم هاتفك برمز يصلك داخل التطبيق ليكتمل توثيق حسابك.', MuwathaqWelcomeEmailService::steps('customer'));
-        $this->assertNotContains('أثبت رقم هاتفك برمز يصلك داخل التطبيق ليكتمل توثيق حسابك.', MuwathaqWelcomeEmailService::steps('merchant'));
+        $this->assertSame('5 دقائق', \App\Services\Otp\EmailOtpService::ttlLabel(5));
+        $this->assertSame('3 أيام', \App\Services\Otp\EmailOtpService::ttlLabel(4320));
+        $this->assertSame('يوم واحد', \App\Services\Otp\EmailOtpService::ttlLabel(1440));
     }
 
     /** @test */
@@ -131,7 +135,8 @@ class MuwathaqRegistrationHardeningTest extends TestCase
             (new SendMuwathaqWelcomeEmailJob($u->id, 'customer', (string) Str::ulid()))->handle(app(MuwathaqWelcomeEmailService::class));
         } catch (\RuntimeException $e) {
             $threw = true;
-            $this->assertSame('RESEND_HTTP_503', $e->getMessage());
+            $this->assertSame('OTP_DELIVERY_FAILED', $e->getMessage());
+            $this->assertSame('RESEND_HTTP_503', $e->getPrevious()?->getMessage());
         }
         $this->assertTrue($threw, 'فشل المزوّد يرمي ليُعاد');
 

@@ -333,7 +333,8 @@ class EmailOtpLifecycleTest extends TestCase
     {
         $user = User::factory()->create();
         $proof = $this->proof($user, 'pin_recovery');
-        config(['amial_otp.pin_recovery_channel' => 'sms']);
+        // «off» يعطّل الغرض. (كانت أيّ قيمةٍ غير email تعطّله؛ أمّا `sms`/`whatsapp` فصارت قنواتِ إيصالٍ حقيقية.)
+        config(['amial_otp.pin_recovery_channel' => 'off']);
         $this->assertSame(409, $this->otpRequest('requestCode', ['email' => $user->email, 'purpose' => 'pin_recovery'])->getStatusCode());
         $this->assertSame(409, $this->otpRequest('resetPin', $proof + ['new_pin' => '739582', 'new_pin_confirmation' => '739582'])->getStatusCode());
         $this->assertNull($this->row($proof['challenge_id'])->consumed_at);
