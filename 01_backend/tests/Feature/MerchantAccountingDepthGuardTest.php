@@ -623,4 +623,41 @@ class MerchantAccountingDepthGuardTest extends TestCase
         $this->assertSame('50.0000', (string) Supplier::whereKey($supplier->id)->value('current_debt'),
             'تنزيل PDF حرّك مديونية المورد');
     }
+
+    public function test_expense_void_uses_the_financial_utc_day_not_the_display_timezone(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow(
+            \Illuminate\Support\Carbon::parse('2026-11-11 22:30:00', 'UTC')
+        );
+
+        try {
+            $owner = $this->merchant('967771240044');
+            $this->actingAs($owner, 'merchant_web');
+
+            $created = $this->withHeader('Idempotency-Key', 'guard-expense-utc-boundary-create-2026')
+                ->postJson('/merchant/data/expenses', [
+                    'title' => 'مصروف عند حد اليوم',
+                    'amount' => '12000',
+                    'category' => 'utilities',
+                    'spent_on' => now()->toDateString(),
+                ])->assertCreated();
+
+            $expenseId = (int) $created->json('meta.expense.id');
+            $this->withHeader('Idempotency-Key', 'guard-expense-utc-boundary-void-2026')
+                ->deleteJson("/merchant/data/expenses/{$expenseId}", [
+                    'reason' => 'تصحيح قيد مسجل في نهاية اليوم',
+                ])->assertOk();
+
+            $reversal = MerchantExpenseReversal::where('expense_id', $expenseId)->firstOrFail();
+            $this->assertSame('2026-11-11', $reversal->effective_on?->toDateString(),
+                'منطقة العرض نقلت قيد العكس إلى يوم مالي تالٍ');
+
+            $report = app(\App\Services\CashierService::class)->profitReport($owner, 1);
+            $this->assertSame('12000.0000', $report['totals']['expense_reversals']);
+            $this->assertSame('0.0000', $report['totals']['cash_operating_expenses']);
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
 }
