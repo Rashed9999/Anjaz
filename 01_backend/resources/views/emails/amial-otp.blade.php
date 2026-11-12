@@ -47,7 +47,7 @@
                                 <td align="center" style="background:#F8FAFF;border:1px solid #D9E4FF;border-radius:14px;padding:22px 16px;">
                                     <div style="font-size:12px;line-height:18px;color:#5F6B7C;margin-bottom:8px;font-weight:700;">رمز التحقق</div>
                                     <div class="otp" dir="ltr" style="font-family:'Courier New',monospace;font-size:40px;line-height:48px;letter-spacing:10px;color:#053391;font-weight:800;white-space:nowrap;">{{ $otp }}</div>
-                                    <div style="font-size:13px;line-height:20px;color:#5F6B7C;margin-top:10px;">صالح لمدة <strong style="color:#1A2433;">{{ $minutes }} دقائق</strong> ويعمل مرة واحدة فقط</div>
+                                    <div style="font-size:13px;line-height:20px;color:#5F6B7C;margin-top:10px;">صالح لمدة <strong style="color:#1A2433;">{{ $ttlLabel ?? ($minutes.' دقائق') }}</strong> ويعمل مرة واحدة فقط</div>
                                 </td>
                             </tr>
                         </table>

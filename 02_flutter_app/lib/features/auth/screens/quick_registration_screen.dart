@@ -1,6 +1,8 @@
 import 'package:amial_pay/common/widgets/amial_brand_logo.dart';
+import 'package:amial_pay/features/auth/screens/activate_account_screen.dart';
 import 'package:amial_pay/util/app_constants.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// AMIAL-OPENING-OWNED-BY-MUWATHAQ-001
@@ -46,7 +48,7 @@ class QuickRegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               const Text(
-                'موثّق يستلم بيانات الطلب وأدلته. بعد الاعتماد يصلك بريد من أميال باي فيه خطوات الدخول إلى التطبيق.',
+                'موثّق يستلم بيانات الطلب وأدلته. بعد الاعتماد يصلك بريد برمز تفعيل؛ أدخله هنا مع بريدك واختر كلمة مرور ورمز PIN فيُفتح حسابك مباشرةً.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -54,6 +56,12 @@ class QuickRegistrationScreen extends StatelessWidget {
                 onPressed: () => _openMuwathaq(context),
                 icon: const Icon(Icons.verified_user_outlined),
                 label: const Text('الانتقال إلى موثّق'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => Get.to(() => const ActivateAccountScreen()),
+                icon: const Icon(Icons.key_outlined),
+                label: const Text('لديّ رمز تفعيل'),
               ),
             ],
           ),

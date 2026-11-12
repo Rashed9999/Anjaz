@@ -23,13 +23,41 @@ class EmailOtpService
     public const PURPOSE_PASSWORD_RESET = 'password_reset';
     public const PURPOSE_PIN_RECOVERY = 'pin_recovery';
     public const PURPOSE_EMAIL_CHANGE = 'email_change';
+    /** رمز تفعيل حسابٍ اعتمده موثّق: يصل عند الاعتماد، وصلاحيته أيامٌ لا دقائق (قد يقرأ العميل بريده لاحقاً). */
+    public const PURPOSE_ACCOUNT_ACTIVATION = 'account_activation';
 
     public const PURPOSES = [
         self::PURPOSE_REGISTRATION,
         self::PURPOSE_PASSWORD_RESET,
         self::PURPOSE_PIN_RECOVERY,
         self::PURPOSE_EMAIL_CHANGE,
+        self::PURPOSE_ACCOUNT_ACTIVATION,
     ];
+
+    /** صلاحيةُ الرمز بالدقائق حسب الغرض. */
+    public function ttlMinutesFor(string $purpose): int
+    {
+        if ($purpose === self::PURPOSE_ACCOUNT_ACTIVATION) {
+            return max(60, (int) config('amial_otp.activation_ttl_minutes', 4320));
+        }
+
+        return max(1, (int) config('amial_otp.ttl_minutes', 5));
+    }
+
+    /** «5 دقائق» · «3 أيام» · «6 ساعات» — للبريد. */
+    public static function ttlLabel(int $minutes): string
+    {
+        if ($minutes >= 1440 && $minutes % 1440 === 0) {
+            $d = intdiv($minutes, 1440);
+
+            return $d === 1 ? 'يوم واحد' : ($d === 2 ? 'يومين' : $d.' أيام');
+        }
+        if ($minutes >= 120) {
+            return intdiv($minutes, 60).' ساعات';
+        }
+
+        return $minutes.' دقائق';
+    }
 
     public function normalizeEmail(string $email): string
     {
@@ -92,7 +120,7 @@ class EmailOtpService
 
             $otp = (string) random_int(100000, 999999);
             $challengeId = (string) Str::ulid();
-            $ttl = max(1, (int) config('amial_otp.ttl_minutes', 5));
+            $ttl = $this->ttlMinutesFor($purpose);
             $resend = max(30, (int) config('amial_otp.resend_seconds', 60));
             $maxAttempts = max(3, min(10, (int) config('amial_otp.max_attempts', 5)));
 
@@ -383,7 +411,7 @@ class EmailOtpService
         $fromAddress = (string) config('amial_otp.resend.from_address', 'verify@amialpay.com');
         $fromName = (string) config('amial_otp.resend.from_name', 'Amial Pay');
         $apiUrl = (string) config('amial_otp.resend.api_url', 'https://api.resend.com/emails');
-        $minutes = max(1, (int) config('amial_otp.ttl_minutes', 5));
+        $minutes = $this->ttlMinutesFor($purpose);
         $copy = $this->emailCopy($purpose);
         $websiteUrl = rtrim((string) config('amial_otp.resend.website_url', 'https://amialpay.com'), '/');
         $logoUrl = (string) config(
@@ -399,6 +427,7 @@ class EmailOtpService
             'purposeDescription' => $copy['description'],
             'otp' => $otp,
             'minutes' => $minutes,
+            'ttlLabel' => self::ttlLabel($minutes),
             'reference' => $reference,
             'logoUrl' => $logoUrl,
             'websiteUrl' => $websiteUrl,
@@ -471,6 +500,12 @@ class EmailOtpService
                 'preheader' => 'أكد البريد الجديد قبل ربطه بحساب أميال باي.',
                 'label' => 'تغيير البريد الإلكتروني',
                 'description' => 'أدخل الرمز التالي لتأكيد ملكيتك لهذا البريد قبل ربطه بحساب أميال باي.',
+            ],
+            self::PURPOSE_ACCOUNT_ACTIVATION => [
+                'subject' => 'تم اعتماد حسابك — رمز تفعيل أميال باي',
+                'preheader' => 'افتح التطبيق واختر «تفعيل الحساب» وأدخل هذا الرمز مع بريدك.',
+                'label' => 'تفعيل حسابك',
+                'description' => 'تم اعتماد حسابك في أميال باي. افتح التطبيق واختر «تفعيل الحساب»، ثم أدخل بريدك الإلكتروني وهذا الرمز، واختر كلمة مرور ورمز PIN لتبدأ.',
             ],
             default => [
                 'subject' => 'رمز التحقق الأمني — أميال باي',

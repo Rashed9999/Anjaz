@@ -7,6 +7,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:amial_pay/common/widgets/amial_build_stamp.dart';
 import 'package:amial_pay/features/auth/controllers/unified_auth_controller.dart';
 import 'package:amial_pay/features/auth/screens/amial_biometric_setup_screen.dart';
+import 'package:amial_pay/features/auth/screens/activate_account_screen.dart';
 import 'package:amial_pay/features/auth/screens/amial_registration_wizard_screen.dart';
 import 'package:amial_pay/features/auth/domain/quick_receive_preferences.dart';
 import 'package:amial_pay/features/auth/screens/quick_receive_screen.dart';
@@ -640,9 +641,20 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             ),
             Align(
               alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: _openRecovery,
-                child: const Text('نسيت كلمة المرور؟'),
+              child: Wrap(
+                spacing: AmialSpacing.sm,
+                children: [
+                  TextButton(
+                    onPressed: _openRecovery,
+                    child: const Text('نسيت كلمة المرور؟'),
+                  ),
+                  if (_kind == AccountKind.customer)
+                    TextButton(
+                      onPressed: () =>
+                          Get.to(() => const ActivateAccountScreen()),
+                      child: const Text('لديّ رمز تفعيل'),
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: AmialSpacing.xs),

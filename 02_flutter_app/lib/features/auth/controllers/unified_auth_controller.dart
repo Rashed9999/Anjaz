@@ -22,6 +22,11 @@ class UnifiedAuthRepo {
     return apiClient.postData('/api/v1/auth/login', body);
   }
 
+  /// تفعيل حسابٍ اعتمده موثّق: بريد + رمز الاعتماد + كلمة مرور + PIN ← حمولة الدخول نفسها.
+  Future<Response> activate(Map<String, dynamic> body) {
+    return apiClient.postData('/api/v1/auth/activate', body);
+  }
+
   Future<Response> verifyOtp(String otpToken, String otpCode) {
     return apiClient.postData('/api/v1/auth/agent/verify-otp', {
       'otp_token': otpToken,
@@ -168,6 +173,22 @@ class UnifiedAuthController extends GetxController implements GetxService {
       final r = await repo.login(body);
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
         final meta = r.body['meta'] ?? {};
+        await _onLoginSuccess(meta, body);
+        return true;
+      }
+      lastError.value = _failureMessage(r, 'فشل تسجيل الدخول');
+      return false;
+    } catch (e) {
+      if (kDebugMode) debugPrint('login: $e');
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  /// ما يلي كلَّ دخولٍ ناجحٍ لأيّ مدخل (دخول عاديّ أو تفعيل حساب): حفظ الجلسة وتذكّر المستخدم وتحميل الصلاحيات.
+  Future<void> _onLoginSuccess(Map meta, Map<String, dynamic> body) async {
         await _saveAuth(meta);
         await _persistLastLogin(meta);
         currentRole.value = (meta['role'] ?? '').toString();
@@ -202,14 +223,46 @@ class UnifiedAuthController extends GetxController implements GetxService {
             kind: (body['role'] ?? meta['role'] ?? '').toString(),
           );
         }
-        // CRITICAL-001 — حمّل access بعد تسجيل الدخول الناجح
-        try { await Get.find<AccessController>().load(); } catch (_) {}
-        return true;
+    // CRITICAL-001 — حمّل access بعد تسجيل الدخول الناجح
+    try { await Get.find<AccessController>().load(); } catch (_) {}
+  }
+
+  /// تفعيل حساب اعتمده موثّق من داخل التطبيق. true = دخل العميل (جلسة مفتوحة).
+  /// false = إمّا فشل (في lastError)، أو نجح التفعيل دون دخولٍ تلقائيّ (activatedOnly=true).
+  final RxBool activatedOnly = false.obs;
+
+  Future<bool> activateAccount({
+    required String email,
+    required String otp,
+    required String password,
+    required String pin,
+  }) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      activatedOnly.value = false;
+      final r = await repo.activate({
+        'email': email,
+        'otp': otp,
+        'password': password,
+        'password_confirmation': password,
+        'pin': pin,
+        'pin_confirmation': pin,
+      });
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        if (r.body['code'] == 'LOGIN_OK') {
+          final meta = r.body['meta'] ?? {};
+          await _onLoginSuccess(meta, const {'role': 'customer'});
+          return true;
+        }
+        activatedOnly.value = true;
+        lastError.value = 'تم تفعيل حسابك. سجّل الدخول بهاتفك وكلمة المرور.';
+        return false;
       }
-      lastError.value = _failureMessage(r, 'فشل تسجيل الدخول');
+      lastError.value = _failureMessage(r, 'تعذّر تفعيل الحساب');
       return false;
     } catch (e) {
-      if (kDebugMode) debugPrint('login: $e');
+      if (kDebugMode) debugPrint('activate: $e');
       lastError.value = 'خطأ في الشبكة';
       return false;
     } finally {

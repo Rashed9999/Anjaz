@@ -68,6 +68,10 @@ Route::prefix('auth')->name('amial.auth.')->middleware(['amial.rate-limit:auth_l
     // باب التسجيل الكامل القديم باقٍ لتوافق العملاء التاريخيين فقط.
     Route::post('/register/email', [AccountOpeningBoundaryController::class, 'customer'])
         ->name('register.email');
+    // تفعيل حسابٍ اعتمده موثّق من داخل التطبيق: بريد + رمز الاعتماد + كلمة مرور + PIN ← حمولة الدخول.
+    Route::post('/activate', [\App\Http\Controllers\Api\V1\Auth\AccountActivationController::class, 'complete'])
+        ->middleware('amial.rate-limit:account_activation,8,10,true')
+        ->name('activate');
     Route::post('/password-reset/email', [EmailOtpController::class, 'resetPassword'])
         ->name('password-reset.email');
     Route::post('/pin-recovery/email', [EmailOtpController::class, 'resetPin'])
