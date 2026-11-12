@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\SecurityEventsController;
 use App\Http\Controllers\Admin\SupervisionController;
 use App\Http\Controllers\Admin\VerticalCenterController;
 use App\Http\Controllers\Admin\ZoneManagementController;
+use App\Http\Controllers\Api\V1\Auth\AccountOpeningBoundaryController;
 use Illuminate\Support\Facades\Route;
 
 /**
