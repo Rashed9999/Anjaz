@@ -9,8 +9,10 @@ use App\Services\Muwathaq\MuwathaqTierUpgradeService;
 use App\Services\Verification\AccountVerificationDecisionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
@@ -22,6 +24,7 @@ class MuwathaqTierUpgradeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Storage::fake('local');
         config(['muwathaq.decision_secret' => 'dec-secret', 'muwathaq.transport_secret' => null, 'muwathaq.bridge_secret' => 'bridge-secret',
             'muwathaq.base_url' => 'https://muwathaq.test', 'muwathaq.tier_upgrade_mode' => 'on']);
     }
@@ -41,6 +44,17 @@ class MuwathaqTierUpgradeTest extends TestCase
         $this->establishKycEvidence($u, 2);
         $u->forceFill(['is_kyc_verified' => 0, 'kyc_tier' => 1])->save();
         $docs = KycDocument::query()->where('user_id', $u->id)->whereIn('doc_type', [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK])->get()->all();
+        foreach ($docs as $document) {
+            $file = UploadedFile::fake()->image($document->doc_type.'.jpg', 16, 16);
+            $path = app(\App\Services\EncryptedFileStorage::class)->encryptAndStore($file, 'kyc/test');
+            $document->forceFill([
+                'encrypted_path' => $path,
+                'original_mime' => 'image/jpeg',
+                'size_bytes' => (int) $file->getSize(),
+                'content_sha256' => hash_file('sha256', $file->getRealPath()),
+            ])->save();
+        }
+        $docs = KycDocument::query()->whereKey(collect($docs)->pluck('id'))->get()->all();
         $req = app(MuwathaqTierUpgradeService::class)->openFor($u->fresh(), $docs);
         $this->assertNotNull($req);
 
