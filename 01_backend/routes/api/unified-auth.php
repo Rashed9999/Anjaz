@@ -56,16 +56,16 @@ Route::prefix('auth')->name('amial.auth.')->middleware(['amial.rate-limit:auth_l
         ->whereUlid('applicationUlid')
         ->name('account-opening.residence.submit');
 
-    Route::post('/register/quick', [ProgressiveRegistrationController::class, 'register'])
+    Route::post('/register/quick', [AccountOpeningBoundaryController::class, 'customer'])
         ->middleware('amial.rate-limit:quick_registration,5,10,true')
         ->name('register.quick');
 
-    Route::post('/register/merchant', [MerchantAccountOpeningController::class, 'register'])
+    Route::post('/register/merchant', [AccountOpeningBoundaryController::class, 'merchant'])
         ->middleware('amial.rate-limit:merchant_registration,5,10,true')
         ->name('register.merchant');
 
     // باب التسجيل الكامل القديم باقٍ لتوافق العملاء التاريخيين فقط.
-    Route::post('/register/email', [EmailRegistrationController::class, 'register'])
+    Route::post('/register/email', [AccountOpeningBoundaryController::class, 'customer'])
         ->name('register.email');
     Route::post('/password-reset/email', [EmailOtpController::class, 'resetPassword'])
         ->name('password-reset.email');
