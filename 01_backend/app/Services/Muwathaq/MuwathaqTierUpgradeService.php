@@ -156,6 +156,14 @@ class MuwathaqTierUpgradeService
             $req->update(['failure_code' => 'HTTP_'.$res->status(), 'response_status' => $res->status()]);
             throw new DomainException('موثّق رفض طلب الترقية (HTTP '.$res->status().').');
         }
+        try {
+            // P0: لا يصبح الطلب «مسلّماً» قبل أن يستلم موثّق أصل كل دليل
+            // ويخزّنه مشفراً تحت ملكيته. إعادة job آمنة لأن عقد موثّق idempotent.
+            app(MuwathaqEvidenceHandoffService::class)->deliver($req);
+        } catch (\Throwable $e) {
+            $req->update(['failure_code' => 'EVIDENCE_HANDOFF_FAILED', 'response_status' => $res->status()]);
+            throw $e;
+        }
         $req->update(['delivery_status' => 'delivered', 'delivered_at' => now(), 'response_status' => $res->status(), 'failure_code' => null]);
 
         return true;
