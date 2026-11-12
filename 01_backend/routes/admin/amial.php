@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\SecurityEventsController;
 use App\Http\Controllers\Admin\SupervisionController;
 use App\Http\Controllers\Admin\VerticalCenterController;
 use App\Http\Controllers\Admin\ZoneManagementController;
+use App\Http\Controllers\Api\V1\Auth\AccountOpeningBoundaryController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -877,7 +878,7 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->middleware('platform:platform.customers.lifecycle.manage')->name('users.profile.update');
 
     // إجراءات
-    Route::post('/{slug}/users', [$hc, 'storeUser'])
+    Route::post('/{slug}/users', [AccountOpeningBoundaryController::class, 'operator'])
         ->where('slug', 'customers|agents|merchants')->middleware('platform:platform.customers.lifecycle.manage')->name('users.store');
     Route::post('/users/{id}/toggle-active', [$hc, 'toggleActive'])
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('users.toggle-active');
