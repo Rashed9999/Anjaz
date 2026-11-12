@@ -16,7 +16,7 @@ use App\Http\Controllers\Api\V1\GeneralController;
 use App\Http\Controllers\Api\V1\LoginController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\OTPController;
-use App\Http\Controllers\Api\V1\RegisterController;
+use App\Http\Controllers\Api\V1\Auth\AccountOpeningBoundaryController;
 use App\Http\Controllers\Api\V1\Agent\Auth\AgentAuthController;
 use App\Http\Controllers\Api\V1\Agent\DisputeController as AgentDisputeController;
 use Illuminate\Support\Facades\Route;
@@ -30,7 +30,7 @@ Route::middleware(['throttle:100,1'])->group(function () {
 
         Route::group(['prefix' => 'customer', 'namespace' => 'Auth'], function () {
             Route::group(['prefix' => 'auth', 'namespace' => 'Auth'], function () {
-                Route::post('register', [RegisterController::class, 'customerRegistration']);
+                Route::post('register', [AccountOpeningBoundaryController::class, 'customer']);
                 Route::post('login', [LoginController::class, 'customerLogin']);
 
                 Route::post('check-phone', [CustomerAuthController::class, 'checkPhone']);
@@ -124,7 +124,7 @@ Route::middleware(['throttle:100,1'])->group(function () {
 
         Route::group(['prefix' => 'agent', 'namespace' => 'Auth'], function () {
             Route::group(['prefix' => 'auth', 'namespace' => 'Auth'], function () {
-                Route::post('register', [RegisterController::class, 'agentRegistration']);
+                Route::post('register', [AccountOpeningBoundaryController::class, 'agent']);
                 Route::post('login', [LoginController::class, 'agentLogin']);
 
                 Route::post('check-phone', [AgentAuthController::class, 'checkPhone']);

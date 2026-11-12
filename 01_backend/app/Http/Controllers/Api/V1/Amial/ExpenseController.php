@@ -240,7 +240,9 @@ class ExpenseController extends Controller
                         'reversal_ulid' => (string) Str::ulid(),
                         'merchant_user_id' => $u->id,
                         'amount' => (string) $e->amount,
-                        'effective_on' => $voidedAt->copy()->setTimezone('Asia/Riyadh')->toDateString(),
+                        // قيود المصروفات والتقرير المالي يعملان UTC؛ منطقة العرض لا تغيّر
+                        // اليوم المحاسبي للعكس، وإلا ينتقل قيد آخر الليل إلى تقرير الغد.
+                        'effective_on' => $voidedAt->toDateString(),
                         'reason' => mb_substr($reason, 0, 500),
                         'created_by' => $u->id,
                     ]

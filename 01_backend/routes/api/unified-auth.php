@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Auth\AccountOpeningContractController;
 use App\Http\Controllers\Api\V1\Auth\AccountOpeningProgressController;
 use App\Http\Controllers\Api\V1\Auth\CustomerOpeningResumeController;
 use App\Http\Controllers\Api\V1\Auth\EmailOtpController;
+use App\Http\Controllers\Api\V1\Auth\AccountOpeningBoundaryController;
 use App\Http\Controllers\Api\V1\Auth\EmailRegistrationController;
 use App\Http\Controllers\Api\V1\Auth\MerchantAccountOpeningController;
 use App\Http\Controllers\Api\V1\Auth\ProgressiveRegistrationController;
@@ -56,16 +57,16 @@ Route::prefix('auth')->name('amial.auth.')->middleware(['amial.rate-limit:auth_l
         ->whereUlid('applicationUlid')
         ->name('account-opening.residence.submit');
 
-    Route::post('/register/quick', [ProgressiveRegistrationController::class, 'register'])
+    Route::post('/register/quick', [AccountOpeningBoundaryController::class, 'customer'])
         ->middleware('amial.rate-limit:quick_registration,5,10,true')
         ->name('register.quick');
 
-    Route::post('/register/merchant', [MerchantAccountOpeningController::class, 'register'])
+    Route::post('/register/merchant', [AccountOpeningBoundaryController::class, 'merchant'])
         ->middleware('amial.rate-limit:merchant_registration,5,10,true')
         ->name('register.merchant');
 
     // باب التسجيل الكامل القديم باقٍ لتوافق العملاء التاريخيين فقط.
-    Route::post('/register/email', [EmailRegistrationController::class, 'register'])
+    Route::post('/register/email', [AccountOpeningBoundaryController::class, 'customer'])
         ->name('register.email');
     Route::post('/password-reset/email', [EmailOtpController::class, 'resetPassword'])
         ->name('password-reset.email');

@@ -60,20 +60,12 @@ class PostDeploySmokeGuardTest extends TestCase
     }
 
     /** @test */
-    public function muwathaq_has_its_own_external_smoke_gate_and_it_is_documented(): void
+    public function muwathaq_runtime_is_not_bundled_inside_amial_pay(): void
     {
-        $script = $this->read('../03_muwathaq/scripts/smoke.sh');
-
-        $this->assertMatchesRegularExpression('~^exit 1~m', $script,
-            'فحص موثّق لا يفشل برمز خروج غير صفري عند سقوط الخدمة.');
-        $this->assertStringContainsString('/health', $script,
-            'فحص موثّق لا يتحقق من قاعدة موثّق عبر /health.');
-        $this->assertStringContainsString('muwathaq.amialpay.com', $script,
-            'فحص موثّق لا يملك نطاق إنتاج افتراضياً.');
-
-        $readme = $this->read('../03_muwathaq/README.md');
-        $this->assertStringContainsString('scripts/smoke.sh', $readme,
-            'دليل موثّق لا يذكر فحص الدخان بعد النشر.');
+        // موثّق يملك الآن مستودعه ونشره واختباراته المستقلة. إعادة نسخه هنا
+        // تعني نسختين من قرار التحقق وقد يختلف سلوكهما من دون أن نلاحظ.
+        $this->assertDirectoryDoesNotExist(base_path('../03_muwathaq'),
+            'نسخة موثّق القديمة ما زالت مضمّنة داخل أميال باي؛ أبقِ فقط عقد الربط الموقّع في Pay.');
     }
 
     /**
