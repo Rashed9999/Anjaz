@@ -16,7 +16,7 @@ use App\Http\Controllers\Api\V1\GeneralController;
 use App\Http\Controllers\Api\V1\LoginController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\OTPController;
-use App\Http\Controllers\Api\V1\RegisterController;
+use App\Http\Controllers\Api\V1\Auth\AccountOpeningBoundaryController;
 use App\Http\Controllers\Api\V1\Agent\Auth\AgentAuthController;
 use App\Http\Controllers\Api\V1\Agent\DisputeController as AgentDisputeController;
 use Illuminate\Support\Facades\Route;
