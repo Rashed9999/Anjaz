@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\Muwathaq\MuwathaqProvisioningService;
 use App\Services\Muwathaq\MuwathaqWelcomeEmailService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -21,6 +22,13 @@ use Tests\TestCase;
 class AccountActivationTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // الدخول التلقائي بعد التفعيل يصدر رمز Passport شخصياً؛ قاعدة الاختبار بلا عميلٍ شخصيّ ما لم يُثبَّت (كما في LoginPayloadContractTest).
+        Artisan::call('passport:install', ['--no-interaction' => true]);
+    }
 
     private function event(array $applicant = [], string $kind = 'customer'): array
     {
