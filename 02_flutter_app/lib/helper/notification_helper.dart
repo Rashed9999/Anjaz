@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
@@ -301,7 +302,7 @@ class NotificationHelper {
     await _ensureAndroidChannel(flutterLocalNotificationsPlugin);
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('onMessage: ${message.notification?.title ?? message.data['title']}/${message.notification?.body ?? message.data['body']} \n ${message.data}');
+      if (kDebugMode) debugPrint('onMessage: ${message.notification?.title ?? message.data['title']}/${message.notification?.body ?? message.data['body']} \n ${message.data}');
 
 
       showNotification(message, flutterLocalNotificationsPlugin);
@@ -345,7 +346,7 @@ class NotificationHelper {
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-      debugPrint('onMessageOpenedApp: ${message.notification?.title ?? message.data['title']}/${message.notification?.body ?? message.data['body']} \n ${message.data}');
+      if (kDebugMode) debugPrint('onMessageOpenedApp: ${message.notification?.title ?? message.data['title']}/${message.notification?.body ?? message.data['body']} \n ${message.data}');
 
 
       await Get.find<ProfileController>().getProfileData(reload: true);

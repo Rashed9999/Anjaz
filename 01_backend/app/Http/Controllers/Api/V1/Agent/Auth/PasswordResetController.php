@@ -183,25 +183,21 @@ class PasswordResetController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $data = DB::table('password_resets')->where(['phone' => $request->phone])
-            ->where(['token' => $request['otp']])->first();
-
-        if (isset($data)) {
-
-            if ($request['password'] == $request['confirm_password']) {
-                $customer = $this->user->where(['phone' => $request->phone])->first();
-                $customer->password = bcrypt($request['confirm_password']);
-                $customer->save();
-
-                DB::table('password_resets')
-                    ->where(['phone' => $request->phone])
-                    ->where(['token' => $request['otp']])->delete();
-
-                return response()->json(['message' => 'Password changed successfully.'], 200);
-            }
+        // SEC-2026-11: التطابق أولاً (لا يُستهلك الرمز على خطأ كتابة)، ثم باب واحد يعدّ المحاولات
+        // وينهي الصلاحية ويستهلك الرمز مرة واحدة. كان التخمين هنا بلا عدّ ولا انتهاء.
+        if ($request['password'] != $request['confirm_password']) {
             return response()->json(['errors' => [
                 ['code' => 'mismatch', 'message' => "Password didn't match!"]
             ]], 401);
+        }
+        $customer = $this->user->where(['phone' => $request->phone])->first();
+        if ($customer && app(\App\Services\Otp\PasswordResetGuard::class)->consume((string) $request->phone, (string) $request['otp'])) {
+            $customer->password = bcrypt($request['confirm_password']);
+            $customer->save();
+            // جلسات ما قبل الاستعادة تُبطل: من سرق توكناً لا يبقى بعد تغيير كلمة المرور.
+            $customer->tokens()->delete();
+
+            return response()->json(['message' => 'Password changed successfully.'], 200);
         }
         return response()->json(['errors' => [
             ['code' => 'invalid', 'message' => 'Invalid OTP.']
