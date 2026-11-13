@@ -95,6 +95,18 @@ class RouteServiceProvider extends ServiceProvider
      */
     protected function configureRateLimiting()
     {
+        // SEC-2026-11: مسارات الدخول والاستعادة والرمز. المفتاح رقم الهاتف المستهدَف (لا الـIP وحده —
+        // CGNAT في اليمن)، فيُحدّ تخمين حساب بعينه من أي عدد من العناوين، ويبقى حدٌّ أوسع للجهاز.
+        RateLimiter::for('auth-sensitive', function (Request $request) {
+            $phone = preg_replace('/\D+/', '', (string) $request->input('phone', ''));
+            $device = substr(preg_replace('/[^A-Za-z0-9_\-]/', '', (string) $request->header('device-id', '')) ?: 'nodev', 0, 48);
+
+            return array_values(array_filter([
+                $phone !== '' ? Limit::perMinute(8)->by('authp:'.substr($phone, -12)) : null,
+                Limit::perMinute(40)->by('authd:'.$request->ip().'|'.$device),
+            ]));
+        });
+
         RateLimiter::for('api', function (Request $request) {
             $user = optional($request->user())->id;
 

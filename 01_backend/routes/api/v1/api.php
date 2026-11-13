@@ -29,7 +29,7 @@ Route::middleware(['throttle:100,1'])->group(function () {
         });
 
         Route::group(['prefix' => 'customer', 'namespace' => 'Auth'], function () {
-            Route::group(['prefix' => 'auth', 'namespace' => 'Auth'], function () {
+            Route::group(['prefix' => 'auth', 'namespace' => 'Auth', 'middleware' => 'throttle:auth-sensitive'], function () {
                 Route::post('register', [AccountOpeningBoundaryController::class, 'customer']);
                 Route::post('login', [LoginController::class, 'customerLogin']);
 
@@ -123,7 +123,7 @@ Route::middleware(['throttle:100,1'])->group(function () {
         });
 
         Route::group(['prefix' => 'agent', 'namespace' => 'Auth'], function () {
-            Route::group(['prefix' => 'auth', 'namespace' => 'Auth'], function () {
+            Route::group(['prefix' => 'auth', 'namespace' => 'Auth', 'middleware' => 'throttle:auth-sensitive'], function () {
                 Route::post('register', [AccountOpeningBoundaryController::class, 'agent']);
                 Route::post('login', [LoginController::class, 'agentLogin']);
 

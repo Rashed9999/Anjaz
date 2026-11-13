@@ -85,7 +85,9 @@ RUN echo "upload_max_filesize=50M"  >> /usr/local/etc/php/conf.d/amial.ini \
  && echo "memory_limit=256M"        >> /usr/local/etc/php/conf.d/amial.ini \
  && echo "max_execution_time=120"   >> /usr/local/etc/php/conf.d/amial.ini \
  && echo "opcache.enable=1"         >> /usr/local/etc/php/conf.d/amial.ini \
- && echo "opcache.memory_consumption=128" >> /usr/local/etc/php/conf.d/amial.ini
+ && echo "opcache.memory_consumption=128" >> /usr/local/etc/php/conf.d/amial.ini \
+ && echo "expose_php=Off"           >> /usr/local/etc/php/conf.d/amial.ini \
+ && echo "display_errors=Off"       >> /usr/local/etc/php/conf.d/amial.ini
 
 # ── php-fpm على المنفذ 9001 (يترك 9000 لخادم الويب على Railway) ──
 # مهم: منفذ Railway الديناميكي قد يكون 9000؛ لو ظلّ php-fpm عليه يتعارض
