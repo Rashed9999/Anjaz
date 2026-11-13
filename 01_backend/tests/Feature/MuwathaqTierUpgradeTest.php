@@ -142,6 +142,33 @@ class MuwathaqTierUpgradeTest extends TestCase
     }
 
     /** @test */
+    public function an_approval_applies_to_freshly_uploaded_documents_that_were_still_pending_in_pay(): void
+    {
+        // الإنتاج: العميل يرفع الوثيقتين فتبقيان «قيد المراجعة» في أميال باي؛ موثّق يراجعهما ويعتمد.
+        // كانت المساعدات تزرع وثائق معتمدة سلفاً فتخفي أنّ كل اعتماد من موثّق يُحجب بـ«لا يُعتمد قبل رفع المستندات».
+        [$u, $req] = $this->submitted();
+        KycDocument::query()->whereIn('id', $req->document_ids)->update(['status' => KycDocument::STATUS_PENDING, 'reviewed_by' => null, 'reviewed_at' => null]);
+        $this->decide($req)->assertOk()->assertJsonPath('meta.applied', true);
+        $this->assertSame(1, (int) $u->fresh()->is_kyc_verified);
+        $this->assertSame(2, (int) $u->fresh()->kyc_tier);
+        $bridge = app(\App\Services\Muwathaq\MuwathaqBridgeReviewer::class)->find();
+        foreach (KycDocument::query()->whereIn('id', $req->document_ids)->get() as $doc) {
+            $this->assertSame(KycDocument::STATUS_APPROVED, $doc->status, 'الوثيقة التي راجعها موثّق تُعتمد في أميال باي');
+            $this->assertSame((int) $bridge->id, (int) $doc->reviewed_by);
+        }
+    }
+
+    /** @test */
+    public function a_rejection_leaves_the_pending_documents_unapproved(): void
+    {
+        [$u, $req] = $this->submitted();
+        KycDocument::query()->whereIn('id', $req->document_ids)->update(['status' => KycDocument::STATUS_PENDING, 'reviewed_by' => null, 'reviewed_at' => null]);
+        $this->decide($req, ['decision' => 'rejected', 'reason' => 'الصورة غير واضحة للمطابقة'])->assertOk();
+        $this->assertSame(0, KycDocument::query()->whereIn('id', $req->document_ids)->where('status', KycDocument::STATUS_APPROVED)->count());
+        $this->assertSame(0, (int) $u->fresh()->is_kyc_verified);
+    }
+
+    /** @test */
     public function an_independent_signed_approval_is_applied_once_and_replays_are_noops(): void
     {
         [$u, $req] = $this->submitted();

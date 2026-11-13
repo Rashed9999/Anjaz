@@ -253,9 +253,16 @@ class MuwathaqTierUpgradeService
             }
 
             try {
-                app(AccountVerificationDecisionService::class)->decideFromMuwathaq(
-                    User::query()->findOrFail($r->user_id), $approve, $r->target_tier, $reason,
-                );
+                // الوثيقتان اللتان راجعهما موثّق (سُحبتا موقّعتين بمعرّفاتهما) تُعتمدان هنا باسم حساب الجسر، ثم يُطبَّق القرار؛
+                // وإلا يرفض `completenessFor` كلَّ اعتمادٍ لأنّ المستندات بقيت «قيد المراجعة» في أميال باي. نقطة حفظٍ واحدة:
+                // إن حُجب القرار تُعاد المستندات كما كانت.
+                DB::transaction(function () use ($r, $approve, $reason): void {
+                    $account = User::query()->findOrFail($r->user_id);
+                    if ($approve) {
+                        $this->approveReviewedDocuments($r, $account);
+                    }
+                    app(AccountVerificationDecisionService::class)->decideFromMuwathaq($account, $approve, $r->target_tier, $reason);
+                });
             } catch (DomainException $e) {
                 $r->apply_code = Str::limit($e->getMessage(), 60, '');
                 $r->save();
@@ -280,5 +287,21 @@ class MuwathaqTierUpgradeService
             // وحده؛ موثّق يقرؤه «أعِد القضية للمراجعة»، فإعادته على رفضٍ سليم كانت تعيد فتح قضية محسومة.
             return $out(200, 'MUWATHAQ_DECISION_APPLIED', true);
         });
+    }
+
+    /** يعتمد في أميال باي المستندات نفسها التي أُرسلت إلى موثّق وراجعها (لا غيرها)، ما دامت قيد المراجعة. */
+    private function approveReviewedDocuments(Req $r, User $account): void
+    {
+        $ids = array_map('intval', (array) ($r->document_ids ?? []));
+        if ($ids === []) {
+            return;
+        }
+        $bridge = app(MuwathaqBridgeReviewer::class)->resolve();
+        $expires = $account->identification_expiry_date ? (string) $account->identification_expiry_date : null;
+        $docs = KycDocument::query()->whereIn('id', $ids)->where('user_id', $account->id)
+            ->where('status', KycDocument::STATUS_PENDING)->lockForUpdate()->get();
+        foreach ($docs as $doc) {
+            app(\App\Services\KycDocumentService::class)->approve($doc, $bridge, $expires);
+        }
     }
 }
