@@ -51,7 +51,7 @@ class MuwathaqTierUpgradeTest extends TestCase
                 'encrypted_path' => $path,
                 'original_mime' => 'image/jpeg',
                 'size_bytes' => (int) $file->getSize(),
-                'content_sha256' => hash_file('sha256', $file->getRealPath()),
+                // البصمة الأصلية تبقى: إثبات ملكية الوثيقة مربوط بها، وتسليم الأصل إلى موثّق يحسب بصمته من الجسم المرسَل.
             ])->save();
         }
         $docs = KycDocument::query()->whereKey(collect($docs)->pluck('id'))->get()->all();
@@ -97,6 +97,9 @@ class MuwathaqTierUpgradeTest extends TestCase
         $this->assertFalse(app(MuwathaqTierUpgradeService::class)->deliver($req->id), 'لا إعادة إرسال بعد التسليم');
         Http::assertSentCount(3);
         Http::assertSent(function (ClientRequest $r) use ($req, $u): bool {
+            if (str_contains($r->url(), '/evidence/')) {
+                return false; // تسليم الأصل يُفحص في الاستدعاء التالي؛ هذا لحدث الطلب نفسه.
+            }
             $ts = $r->header('X-Amial-Timestamp')[0];
             $body = $r->body();
             $this->assertSame($req->event_ulid, $r->header('Idempotency-Key')[0]);
