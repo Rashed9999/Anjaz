@@ -171,6 +171,8 @@ class VerificationStatusController extends Controller
                         'today' => (string) $tier['today_used'],
                         'month' => (string) $tier['month_used'],
                         'year' => (string) $tier['year_used'],
+                        // شريط الحدود في «حسابي»: الرصيد الحاليّ مقابل حدّ الرصيد (الحدّان اليوميّ والشهريّ للحركة، والرصيد للتخزين).
+                        'balance' => (string) (\App\Models\EMoney::query()->where('user_id', $user->id)->value('current_balance') ?? '0'),
                     ],
                 ],
                 'usage_bar' => [
