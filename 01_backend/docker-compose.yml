@@ -30,7 +30,7 @@ services:
       - amial_mysql_data:/var/lib/mysql
       - ./docker/mysql-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"   # SEC-2026-11: محلي فقط، لا يُكشف للشبكة
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "amial_user", "-pdemo_local_only_pw"]
       interval: 5s
