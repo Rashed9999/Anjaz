@@ -9,8 +9,10 @@ use App\Services\Muwathaq\MuwathaqTierUpgradeService;
 use App\Services\Verification\AccountVerificationDecisionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
@@ -22,6 +24,7 @@ class MuwathaqTierUpgradeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Storage::fake('local');
         config(['muwathaq.decision_secret' => 'dec-secret', 'muwathaq.transport_secret' => null, 'muwathaq.bridge_secret' => 'bridge-secret',
             'muwathaq.base_url' => 'https://muwathaq.test', 'muwathaq.tier_upgrade_mode' => 'on']);
     }
@@ -41,6 +44,17 @@ class MuwathaqTierUpgradeTest extends TestCase
         $this->establishKycEvidence($u, 2);
         $u->forceFill(['is_kyc_verified' => 0, 'kyc_tier' => 1])->save();
         $docs = KycDocument::query()->where('user_id', $u->id)->whereIn('doc_type', [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK])->get()->all();
+        foreach ($docs as $document) {
+            $file = UploadedFile::fake()->image($document->doc_type.'.jpg', 16, 16);
+            $path = app(\App\Services\EncryptedFileStorage::class)->encryptAndStore($file, 'kyc/test');
+            $document->forceFill([
+                'encrypted_path' => $path,
+                'original_mime' => 'image/jpeg',
+                'size_bytes' => (int) $file->getSize(),
+                // البصمة الأصلية تبقى: إثبات ملكية الوثيقة مربوط بها، وتسليم الأصل إلى موثّق يحسب بصمته من الجسم المرسَل.
+            ])->save();
+        }
+        $docs = KycDocument::query()->whereKey(collect($docs)->pluck('id'))->get()->all();
         $req = app(MuwathaqTierUpgradeService::class)->openFor($u->fresh(), $docs);
         $this->assertNotNull($req);
 
@@ -81,8 +95,11 @@ class MuwathaqTierUpgradeTest extends TestCase
         Http::fake(['https://muwathaq.test/*' => Http::response(['accepted' => true], 202)]);
         $this->assertTrue(app(MuwathaqTierUpgradeService::class)->deliver($req->id));
         $this->assertFalse(app(MuwathaqTierUpgradeService::class)->deliver($req->id), 'لا إعادة إرسال بعد التسليم');
-        Http::assertSentCount(1);
+        Http::assertSentCount(3);
         Http::assertSent(function (ClientRequest $r) use ($req, $u): bool {
+            if (str_contains($r->url(), '/evidence/')) {
+                return false; // تسليم الأصل يُفحص في الاستدعاء التالي؛ هذا لحدث الطلب نفسه.
+            }
             $ts = $r->header('X-Amial-Timestamp')[0];
             $body = $r->body();
             $this->assertSame($req->event_ulid, $r->header('Idempotency-Key')[0]);
@@ -108,6 +125,17 @@ class MuwathaqTierUpgradeTest extends TestCase
                 $this->assertContains($st, ['pass', 'warn', 'fail', 'unknown']);
             }
             $this->assertStringNotContainsString('encrypted_path', $body);
+
+            return true;
+        });
+        Http::assertSent(function (ClientRequest $r) use ($req): bool {
+            if (!str_contains($r->url(), '/evidence/')) {
+                return false;
+            }
+            $ts = $r->header('X-Amial-Timestamp')[0];
+            $this->assertSame(hash_hmac('sha256', $ts.'.'.$r->body(), 'bridge-secret'), $r->header('X-Amial-Signature')[0]);
+            $this->assertSame(hash('sha256', $r->body()), $r->header('X-Amial-Evidence-Sha256')[0]);
+            $this->assertContains((int) $r->header('X-Amial-Evidence-Id')[0], array_map('intval', $req->document_ids));
 
             return true;
         });
@@ -139,6 +167,35 @@ class MuwathaqTierUpgradeTest extends TestCase
         $this->decide($old)->assertStatus(409)->assertJsonPath('code', 'SUPERSEDED');
         $this->assertSame(0, (int) $u->fresh()->is_kyc_verified);
         $this->assertNotSame($old->request_ulid, $new->request_ulid);
+    }
+
+    /** @test */
+    public function an_approval_applies_to_freshly_uploaded_documents_that_were_still_pending_in_pay(): void
+    {
+        // الإنتاج: العميل يرفع الوثيقتين فتبقيان «قيد المراجعة» في أميال باي؛ موثّق يراجعهما ويعتمد.
+        // كانت المساعدات تزرع وثائق معتمدة سلفاً فتخفي أنّ كل اعتماد من موثّق يُحجب بـ«لا يُعتمد قبل رفع المستندات».
+        [$u, $req] = $this->submitted();
+        KycDocument::query()->whereIn('id', $req->document_ids)->update(['status' => KycDocument::STATUS_PENDING, 'reviewed_by' => null, 'reviewed_at' => null]);
+        $this->decide($req)->assertOk()->assertJsonPath('meta.applied', true);
+        $this->assertSame(1, (int) $u->fresh()->is_kyc_verified);
+        $this->assertSame(2, (int) $u->fresh()->kyc_tier);
+        $bridge = app(\App\Services\Muwathaq\MuwathaqBridgeReviewer::class)->find();
+        foreach (KycDocument::query()->whereIn('id', $req->document_ids)->get() as $doc) {
+            $this->assertSame(KycDocument::STATUS_APPROVED, $doc->status, 'الوثيقة التي راجعها موثّق تُعتمد في أميال باي');
+            $this->assertSame((int) $bridge->id, (int) $doc->reviewed_by);
+        }
+    }
+
+    /** @test */
+    public function a_rejection_leaves_the_pending_documents_unapproved(): void
+    {
+        [$u, $req] = $this->submitted();
+        $updated = KycDocument::query()->whereIn('id', $req->document_ids)->update(['status' => KycDocument::STATUS_PENDING, 'reviewed_by' => null, 'reviewed_at' => null]);
+        $this->assertSame(2, $updated, 'يُعاد فتح الوثيقتين المعلنتين للاختبار قبل قرار الرفض');
+        $this->assertSame(2, KycDocument::query()->whereIn('id', $req->document_ids)->where('status', KycDocument::STATUS_PENDING)->count(), 'تبدأ وثائق الرفض قيد المراجعة');
+        $this->decide($req, ['decision' => 'rejected', 'reason' => 'الصورة غير واضحة للمطابقة'])->assertOk();
+        $this->assertSame(0, KycDocument::query()->whereIn('id', $req->document_ids)->where('status', KycDocument::STATUS_APPROVED)->count());
+        $this->assertSame(2, (int) $u->fresh()->is_kyc_verified, 'الرفض يُسجَّل حالةً مرفوضة (2) لا موثّقة');
     }
 
     /** @test */
