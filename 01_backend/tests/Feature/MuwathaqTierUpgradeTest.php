@@ -162,7 +162,9 @@ class MuwathaqTierUpgradeTest extends TestCase
     public function a_rejection_leaves_the_pending_documents_unapproved(): void
     {
         [$u, $req] = $this->submitted();
-        KycDocument::query()->whereIn('id', $req->document_ids)->update(['status' => KycDocument::STATUS_PENDING, 'reviewed_by' => null, 'reviewed_at' => null]);
+        $updated = KycDocument::query()->whereIn('id', $req->document_ids)->update(['status' => KycDocument::STATUS_PENDING, 'reviewed_by' => null, 'reviewed_at' => null]);
+        $this->assertSame(2, $updated, 'يُعاد فتح الوثيقتين المعلنتين للاختبار قبل قرار الرفض');
+        $this->assertSame(2, KycDocument::query()->whereIn('id', $req->document_ids)->where('status', KycDocument::STATUS_PENDING)->count(), 'تبدأ وثائق الرفض قيد المراجعة');
         $this->decide($req, ['decision' => 'rejected', 'reason' => 'الصورة غير واضحة للمطابقة'])->assertOk();
         $this->assertSame(0, KycDocument::query()->whereIn('id', $req->document_ids)->where('status', KycDocument::STATUS_APPROVED)->count());
         $this->assertSame(0, (int) $u->fresh()->is_kyc_verified);
