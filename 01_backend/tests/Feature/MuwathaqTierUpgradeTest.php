@@ -165,7 +165,7 @@ class MuwathaqTierUpgradeTest extends TestCase
         KycDocument::query()->whereIn('id', $req->document_ids)->update(['status' => KycDocument::STATUS_PENDING, 'reviewed_by' => null, 'reviewed_at' => null]);
         $this->decide($req, ['decision' => 'rejected', 'reason' => 'الصورة غير واضحة للمطابقة'])->assertOk();
         $this->assertSame(0, KycDocument::query()->whereIn('id', $req->document_ids)->where('status', KycDocument::STATUS_APPROVED)->count());
-        $this->assertSame(0, (int) $u->fresh()->is_kyc_verified);
+        $this->assertSame(2, (int) $u->fresh()->is_kyc_verified, 'الرفض يُسجَّل حالةً مرفوضة (2) لا موثّقة');
     }
 
     /** @test */
