@@ -171,6 +171,36 @@ class AgentCounterTierLimitsTest extends TestCase
         $this->assertDatabaseHas('customer_turnover_usage', ['user_id' => $customer->id, 'transaction_type' => 'agent_withdraw', 'direction' => 'out']);
     }
 
+    /**
+     * حدودُ حساب الذكر (المستوى ٣): العملية ١ مليون، واليوم ٢ مليون. وهي ما يمنحه المسار القياسي عند الاعتماد،
+     * فلا يكون الشبّاك باباً خلفياً حولها كذلك.
+     *
+     * @test
+     */
+    public function a_male_tier_three_account_is_bound_by_its_own_limits_at_the_counter(): void
+    {
+        $customer = $this->customer(3);
+
+        try {
+            $this->counter()->deposit($this->branch, $customer, '1100000', $this->branch->account);
+            $this->fail('أُودع فوق حدّ العملية الواحدة للمستوى ٣ (مليون)');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('حد', $e->getMessage());
+        }
+
+        $this->counter()->deposit($this->branch, $customer, '900000', $this->branch->account);
+        $this->counter()->deposit($this->branch, $customer, '900000', $this->branch->account);
+
+        try {
+            $this->counter()->deposit($this->branch, $customer, '300000', $this->branch->account);
+            $this->fail('تجاوز الحدّ اليومي للمستوى ٣ (مليونان) عبر الشبّاك');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('اليومي', $e->getMessage());
+        }
+
+        $this->assertSame('1800000.0000', $this->balanceOf($customer));
+    }
+
     /** @test */
     public function a_higher_tier_keeps_its_higher_limits(): void
     {

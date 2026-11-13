@@ -98,7 +98,9 @@ class AgentDailySettlementTest extends TestCase
     {
         $c = User::factory()->create([
             'type' => CUSTOMER_TYPE, 'phone' => '96777280' . random_int(1000, 9999),
-            'is_active' => 1, 'is_kyc_verified' => 1,
+            // مستوى ٣: مبالغُ هذه الاختبارات (حتى ٣٠٠ ألف ورصيدٌ ٥٠٠ ألف) فوق حدود المستوى ٢ (٢٥٠ ألفاً)
+            // التي صار الشبّاك يفرضها (AMIAL-COUNTER-TIER-LIMITS-001)، والتسوية لا تتعلق بمستوى العميل.
+            'is_active' => 1, 'is_kyc_verified' => 1, 'kyc_tier' => 3,
         ]);
         EMoney::updateOrCreate(['user_id' => $c->id], ['current_balance' => '500000']);
 
