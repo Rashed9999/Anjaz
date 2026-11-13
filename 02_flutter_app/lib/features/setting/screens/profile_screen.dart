@@ -24,6 +24,7 @@ import 'package:amial_pay/features/setting/widgets/menu_item.dart' as widget;
 import 'package:amial_pay/features/setting/widgets/profile_holder.dart';
 import 'package:amial_pay/features/setting/widgets/status_menu.dart';
 import 'package:amial_pay/features/setting/widgets/user_info_widget.dart';
+import 'package:amial_pay/features/setting/widgets/usage_limits_bar.dart';
 import 'package:amial_pay/features/requested_money/screens/requested_money_list_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
@@ -129,6 +130,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               children: [
                 const UserInfoWidget(),
+
+                // شريط حدود الاستخدام: كم استهلكتَ وكم بقي قبل أن يُرفض تحويلك (الأرقام من الخادم).
+                UsageLimitsBarLoader(
+                  onUpgrade: () => Get.to(() => const CustomerVerificationCenterScreen()),
+                ),
 
                 ProfileHeader(title: 'setting'.tr),
 
