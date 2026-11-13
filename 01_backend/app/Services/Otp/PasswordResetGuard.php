@@ -2,6 +2,7 @@
 
 namespace App\Services\Otp;
 
+use App\Support\Phone;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -19,8 +20,14 @@ class PasswordResetGuard
 
     public function consume(string $phone, string $otp): bool
     {
-        return DB::transaction(function () use ($phone, $otp): bool {
-            $row = DB::table('password_resets')->where('phone', $phone)->lockForUpdate()->first();
+        // الرقم يصل بصيغٍ عدّة (+967… · 967… · 00967… · 7…) فيُبحث بكلّها، وإلا رُفض رمزٌ صحيح أو أفلت عدّاد المحاولات.
+        $variants = Phone::variants($phone);
+        if ($variants === []) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($variants, $otp): bool {
+            $row = DB::table('password_resets')->whereIn('phone', $variants)->orderByDesc('created_at')->lockForUpdate()->first();
             if ($row === null) {
                 return false;
             }
@@ -33,7 +40,7 @@ class PasswordResetGuard
             }
             if (!hash_equals((string) $row->token, $otp)) {
                 $fails = (int) ($row->otp_hit_count ?? 0) + 1;
-                DB::table('password_resets')->where('phone', $phone)->update([
+                DB::table('password_resets')->whereIn('phone', $variants)->update([
                     'otp_hit_count' => $fails,
                     'is_temp_blocked' => $fails >= self::MAX_FAILS ? 1 : 0,
                     'temp_block_time' => $fails >= self::MAX_FAILS ? now() : null,
@@ -41,7 +48,7 @@ class PasswordResetGuard
 
                 return false;
             }
-            DB::table('password_resets')->where('phone', $phone)->delete();
+            DB::table('password_resets')->whereIn('phone', $variants)->delete();
 
             return true;
         });
