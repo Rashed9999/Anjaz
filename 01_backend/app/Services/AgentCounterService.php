@@ -6,6 +6,8 @@ use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentShift;
 use App\Models\EMoney;
 use App\Services\ReceiptService;
+use App\Services\CustomerTurnoverService;
+use App\Services\KycTierService;
 use App\Models\User;
 use App\Traits\PostsToLedger;
 use DomainException;
@@ -138,6 +140,11 @@ class AgentCounterService
             throw new DomainException('المبلغ لا يغطّي رسم العملية');
         }
 
+        // حدودُ مستوى العميل تُفرض عند المال لا عند الشاشة: كان الشبّاك يودع ما شاء في محفظة
+        // مستوى يحدّه بـ٢٥٠ ألفاً، فالتحويلُ والتطبيقُ يمنعان والوكيلُ لا. فحصٌ مسبق هنا (رسالةٌ مبكرة)،
+        // ثم فحصٌ وتسجيلٌ ذرّيّان داخل القفل أدناه.
+        $this->enforceCustomerTier($customer, $net, 'deposit');
+
         $branchBalance = (string) (EMoney::where('user_id', $branch->branch_user_id)
             ->value('current_balance') ?? '0');
 
@@ -157,6 +164,9 @@ class AgentCounterService
             $ids = [$branch->branch_user_id, $customer->id];
             sort($ids);
             EMoney::whereIn('user_id', $ids)->lockForUpdate()->get();
+
+            // الحدّ والعدّاد داخل القفل: شبّاكان متزامنان لا يتجاوزان معاً ما لا يتجاوزه أحدهما.
+            $this->enforceCustomerTier($customer, $net, 'deposit', $reference);
 
             // **يُعاد فحصُ رصيد الفرع داخل القفل.** والفحصُ قبله لقطةٌ:
             // شبّاكان في الفرع نفسه يقرآنها معاً فيمرّان على رصيدٍ يكفي
@@ -322,6 +332,9 @@ class AgentCounterService
         // الأوراق حيث تُعدّ.
         $total = bcadd($amount, $q['fee'], 4);
 
+        // انظر الإيداع: حدّ العملية والحدّ اليومي والشهري للمستوى يُفرضان عند الشبّاك أيضاً.
+        $this->enforceCustomerTier($customer, $amount, 'withdraw');
+
         $customerBalance = (string) (EMoney::where('user_id', $customer->id)
             ->value('current_balance') ?? '0');
 
@@ -346,6 +359,8 @@ class AgentCounterService
             $ids = [$branch->branch_user_id, $customer->id];
             sort($ids);
             EMoney::whereIn('user_id', $ids)->lockForUpdate()->get();
+
+            $this->enforceCustomerTier($customer, $amount, 'withdraw', $reference);
 
             // يُعاد الفحص داخل القفل: بين الفحص الأوّل وبدء المعاملة قد
             // يكون شبّاكٌ آخر في الفرع نفسه أفرغ الدرج.
@@ -497,6 +512,48 @@ class AgentCounterService
     }
 
     // ── الفحوص المشتركة ─────────────────────────────────────────────────
+
+    /**
+     * حدودُ مستوى التوثيق للعميل الفرد عند الشبّاك — الإيداع والسحب.
+     *
+     * **الثغرة التي أُغلقت:** كان `AgentCounterService` يفحص حالةَ الحساب والرصيد والنقد ولا يسأل المستوى.
+     * فعميلةٌ بالمستوى الثاني (٢٥٠ ألفاً) أُودع في محفظتها وسُحب منها فوق ٣٠٠ ألف، بينما التحويلُ من
+     * التطبيق وطلبُ السحب والفواتير كلُّها تمنع. وحارسٌ يعمل في بعض الأبواب دون بعض ليس حارساً.
+     *
+     * - `$reference === null`: فحصٌ مسبق بلا تسجيل (لرسالةٍ مبكرة).
+     * - بمرجع: فحصٌ وتسجيلٌ لأصل الحركة في عدّاد الحركة تحت القفل (يحسب في الحدّ اليومي والشهري والسنوي).
+     *
+     * الأصلُ فقط: الرسمُ والعمولةُ لا يستهلكان الحدّ. ولا يمسّ هذا غير العميل الفرد: التاجر والوكيل
+     * لهما سياساتهما المستقلة (`isIndividualCustomer`).
+     */
+    private function enforceCustomerTier(User $customer, string $principal, string $op, ?string $reference = null): void
+    {
+        $tiers = app(KycTierService::class);
+        if (!$tiers->isIndividualCustomer($customer)) {
+            return;
+        }
+
+        try {
+            if ($op === 'deposit') {
+                $tiers->assertIndividualCanReceive($customer, $principal);
+            } else {
+                $tiers->assertIndividualTransactionAllowed($customer, $principal, 'cash_out');
+            }
+
+            if ($reference !== null) {
+                app(CustomerTurnoverService::class)->recordPosted(
+                    user: $customer,
+                    amount: $principal,
+                    direction: $op === 'deposit' ? 'in' : 'out',
+                    sourceKey: 'agent_counter:' . $reference,
+                    transactionType: $op === 'deposit' ? 'agent_deposit' : 'agent_withdraw',
+                );
+            }
+        } catch (\RuntimeException $e) {
+            // الواجهات تلتقط DomainException وتعرض الرسالة العربية؛ RuntimeException كانت ستخرج ٥٠٠.
+            throw new DomainException($e->getMessage(), 0, $e);
+        }
+    }
 
     private function assertOperable(AgentBranch $branch, User $customer, string $amount): void
     {
