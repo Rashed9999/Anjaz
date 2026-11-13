@@ -9,8 +9,10 @@ use App\Services\Muwathaq\MuwathaqTierUpgradeService;
 use App\Services\Verification\AccountVerificationDecisionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
@@ -22,6 +24,7 @@ class MuwathaqTierUpgradeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Storage::fake('local');
         config(['muwathaq.decision_secret' => 'dec-secret', 'muwathaq.transport_secret' => null, 'muwathaq.bridge_secret' => 'bridge-secret',
             'muwathaq.base_url' => 'https://muwathaq.test', 'muwathaq.tier_upgrade_mode' => 'on']);
     }
@@ -41,6 +44,17 @@ class MuwathaqTierUpgradeTest extends TestCase
         $this->establishKycEvidence($u, 2);
         $u->forceFill(['is_kyc_verified' => 0, 'kyc_tier' => 1])->save();
         $docs = KycDocument::query()->where('user_id', $u->id)->whereIn('doc_type', [KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK])->get()->all();
+        foreach ($docs as $document) {
+            $file = UploadedFile::fake()->image($document->doc_type.'.jpg', 16, 16);
+            $path = app(\App\Services\EncryptedFileStorage::class)->encryptAndStore($file, 'kyc/test');
+            $document->forceFill([
+                'encrypted_path' => $path,
+                'original_mime' => 'image/jpeg',
+                'size_bytes' => (int) $file->getSize(),
+                'content_sha256' => hash_file('sha256', $file->getRealPath()),
+            ])->save();
+        }
+        $docs = KycDocument::query()->whereKey(collect($docs)->pluck('id'))->get()->all();
         $req = app(MuwathaqTierUpgradeService::class)->openFor($u->fresh(), $docs);
         $this->assertNotNull($req);
 
@@ -81,7 +95,7 @@ class MuwathaqTierUpgradeTest extends TestCase
         Http::fake(['https://muwathaq.test/*' => Http::response(['accepted' => true], 202)]);
         $this->assertTrue(app(MuwathaqTierUpgradeService::class)->deliver($req->id));
         $this->assertFalse(app(MuwathaqTierUpgradeService::class)->deliver($req->id), 'لا إعادة إرسال بعد التسليم');
-        Http::assertSentCount(1);
+        Http::assertSentCount(3);
         Http::assertSent(function (ClientRequest $r) use ($req, $u): bool {
             $ts = $r->header('X-Amial-Timestamp')[0];
             $body = $r->body();
@@ -108,6 +122,17 @@ class MuwathaqTierUpgradeTest extends TestCase
                 $this->assertContains($st, ['pass', 'warn', 'fail', 'unknown']);
             }
             $this->assertStringNotContainsString('encrypted_path', $body);
+
+            return true;
+        });
+        Http::assertSent(function (ClientRequest $r) use ($req): bool {
+            if (!str_contains($r->url(), '/evidence/')) {
+                return false;
+            }
+            $ts = $r->header('X-Amial-Timestamp')[0];
+            $this->assertSame(hash_hmac('sha256', $ts.'.'.$r->body(), 'bridge-secret'), $r->header('X-Amial-Signature')[0]);
+            $this->assertSame(hash('sha256', $r->body()), $r->header('X-Amial-Evidence-Sha256')[0]);
+            $this->assertContains((int) $r->header('X-Amial-Evidence-Id')[0], array_map('intval', $req->document_ids));
 
             return true;
         });
