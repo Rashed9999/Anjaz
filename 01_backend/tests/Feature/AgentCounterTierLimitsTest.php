@@ -201,6 +201,46 @@ class AgentCounterTierLimitsTest extends TestCase
         $this->assertSame('1800000.0000', $this->balanceOf($customer));
     }
 
+    /**
+     * المستوى ١ (موثّق جزئياً — هاتف وسكن): ١٠٠ ألف للعملية والرصيد واليوم والشهر. وهو ما تفتحه الأنثى
+     * في المسار التدريجي قبل أي هوية، فأوسعُ الأبواب (الشبّاك) يجب ألا يتجاوزه.
+     *
+     * @test
+     */
+    public function a_tier_one_account_cannot_exceed_one_hundred_thousand_at_the_counter(): void
+    {
+        $customer = $this->customer(1);
+
+        try {
+            $this->counter()->deposit($this->branch, $customer, '120000', $this->branch->account);
+            $this->fail('أُودع ١٢٠ ألفاً في محفظة المستوى ١ (حدّها ١٠٠ ألف)');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('حد', $e->getMessage());
+        }
+
+        $this->counter()->deposit($this->branch, $customer, '60000', $this->branch->account);
+
+        try {
+            $this->counter()->deposit($this->branch, $customer, '60000', $this->branch->account);
+            $this->fail('الرصيد تجاوز ١٠٠ ألف في المستوى ١');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('حد', $e->getMessage());
+        }
+
+        $this->assertSame('60000.0000', $this->balanceOf($customer));
+    }
+
+    /** @test */
+    public function a_tier_one_account_cannot_withdraw_above_its_single_transaction_limit(): void
+    {
+        $customer = $this->customer(1);
+        // رصيدٌ سابقٌ فوق الحدّ (قبل الإصلاح): السحبُ بعمليةٍ واحدة لا يتجاوز حدّ العملية.
+        EMoney::where('user_id', $customer->id)->update(['current_balance' => '300000']);
+
+        $this->expectException(DomainException::class);
+        $this->counter()->withdraw($this->branch, $customer, '150000', $this->branch->account);
+    }
+
     /** @test */
     public function a_higher_tier_keeps_its_higher_limits(): void
     {
