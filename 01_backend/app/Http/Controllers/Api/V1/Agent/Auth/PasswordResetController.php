@@ -60,7 +60,7 @@ class PasswordResetController extends Controller
             $otp = (string) app(\App\Services\Otp\OtpPolicy::class)->codeFor((string) $request->phone);
 
             DB::table('password_resets')->updateOrInsert(['phone' => $request->phone], [
-                'token' => $otp,
+                'token' => \App\Services\Otp\PasswordResetGuard::digest($otp),
                 'otp_hit_count' => 0,
                 'is_temp_blocked' => 0,
                 'temp_block_time' => null,
@@ -102,7 +102,8 @@ class PasswordResetController extends Controller
         $maxOtpHitTime = Helpers::get_business_settings('otp_resend_time') ?? 60;    // seconds
         $tempBlockTime = Helpers::get_business_settings('temporary_block_time') ?? 600;   // seconds
 
-        $data = DB::table('password_resets')->where(['token' => $request['otp'], 'phone' => $request->phone])->first();
+        $data = DB::table('password_resets')->where('phone', $request->phone)
+            ->whereIn('token', [\App\Services\Otp\PasswordResetGuard::digest((string) $request['otp']), (string) $request['otp']])->first();
         if (isset($data)) {
 
             if(isset($data->temp_block_time ) && Carbon::parse($data->temp_block_time)->DiffInSeconds() <= $tempBlockTime){

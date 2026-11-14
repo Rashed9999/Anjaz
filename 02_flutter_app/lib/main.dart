@@ -30,6 +30,12 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterL
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // AMIAL-SEC-LOGS-001 — `debugPrint` يطبع في نسخة الإنتاج أيضاً (يظهر في Logcat على جهاز المستخدم،
+  // وفيه مسارات وأخطاء API ماليّة). في الإصدار يُجعل لا-شيء؛ يبقى كاملاً في التطوير.
+  if (!kDebugMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
+
   // AMIAL-FCM-001: كانت هنا إعدادات مشروع القالب gem-b5006 مكتوبةً يدوياً،
   // وهي لمشروع لا تملكه ولا حزمتنا مسجّلة فيه. صارت تُقرأ من AmialFirebaseOptions
   // المطابق لـ android/app/google-services.json.

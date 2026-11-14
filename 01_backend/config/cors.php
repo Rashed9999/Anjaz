@@ -19,11 +19,13 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    // AMIAL-SEC-CORS-001 — لا `*` في الإنتاج. تطبيقُ الجوال لا يخضع لـCORS أصلاً (طلباتٌ أصليّة)،
+    // فالمسموح هنا نطاقاتُ الويب الرسميّة وحدَها: CORS_ALLOWED_ORIGINS (مفصولةٌ بفواصل) وإلا APP_URL.
+    'allowed_origins' => array_values(array_filter(array_map('trim', explode(',', (string) env('CORS_ALLOWED_ORIGINS', env('APP_URL', '')))))),
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['*'],
+    'allowed_headers' => ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Idempotency-Key', 'X-Device-Id', 'X-Request-Id', 'Accept-Language'],
 
     'exposed_headers' => [],
 

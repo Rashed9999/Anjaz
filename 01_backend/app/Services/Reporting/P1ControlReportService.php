@@ -332,7 +332,7 @@ class P1ControlReportService
         if (! Schema::hasColumn($table, $column)) return [];
 
         return DB::table($table)
-            ->selectRaw("COALESCE({$column}, 'unknown') as value, COUNT(*) as total")
+            ->selectRaw("COALESCE(".DB::getQueryGrammar()->wrap($column).", 'unknown') as value, COUNT(*) as total")
             ->groupBy($column)
             ->orderByDesc('total')
             ->get()

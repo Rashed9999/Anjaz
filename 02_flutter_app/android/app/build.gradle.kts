@@ -72,9 +72,11 @@ android {
             // فيرفض Android التحديث لأن الناشر يبدو مختلفاً.
             signingConfig = signingConfigs.getByName("release")
 
-            // تعطيل minify/shrink للتسليم السريع — أعِد تفعيلها للـ production الحقيقي
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // AMIAL-SEC-OBFUSCATE-001 — R8: تصغيرٌ وتعتيمٌ للشيفرة الأصلية وإزالةُ المورد غير المستعمل
+            // لتصعيب الهندسة العكسية للـAPK. (كان معطَّلاً «للتسليم السريع».)
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         getByName("debug") {
             // AMIAL-FCM-001: أُزيل applicationIdSuffix = ".debug".

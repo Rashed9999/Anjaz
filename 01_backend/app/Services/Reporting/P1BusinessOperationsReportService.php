@@ -276,7 +276,7 @@ class P1BusinessOperationsReportService
     private function countTicketsBy($query, string $column): array
     {
         return (clone $query)
-            ->selectRaw("{$column} as value, COUNT(*) as total")
+            ->selectRaw(DB::getQueryGrammar()->wrap($column)." as value, COUNT(*) as total")
             ->groupBy($column)
             ->orderByDesc('total')
             ->get()
