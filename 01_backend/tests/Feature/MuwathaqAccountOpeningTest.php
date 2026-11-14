@@ -120,6 +120,85 @@ class MuwathaqAccountOpeningTest extends TestCase
         $this->assertSame(1, (int) $user->fresh()->kyc_tier);
     }
 
+    /**
+     * AMIAL-WOMEN-TIER-VERIFIED-001 — كان tier=2 يُكتب هنا بلا رفع is_kyc_verified، فيبقى
+     * effectiveTier() يحسبها 1 للأبد (tier>=2 && !is_verified ⇒ يتجاهل kyc_tier الحقيقي)
+     * رغم اعتماد موثّق صراحةً. هذا هو المسار الذي تسلكه التسجيلات داخل تطبيق أميال باي
+     * (ProgressiveRegistrationController)، لا مسار فتح الحساب المباشر في موثّق (المُصلَح سلفاً
+     * في MuwathaqProvisioningService ومختبَر في CustomerLevelsFromMuwathaqTest).
+     *
+     * @test
+     */
+    public function a_woman_approved_at_tier_two_through_the_in_app_path_is_fully_marked_verified(): void
+    {
+        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female', 'kyc_tier' => 0]);
+        $service = app(MuwathaqAccountOpeningService::class);
+        $application = $service->submitFor($user);
+        $application->update(['requested_tier' => 2]);
+
+        foreach ([MuwathaqOpeningEvidence::PHONE, MuwathaqOpeningEvidence::RESIDENCE] as $kind) {
+            MuwathaqOpeningEvidence::query()->create([
+                'application_id' => $application->id,
+                'kind' => $kind,
+                'state' => MuwathaqOpeningEvidence::STATE_SUBMITTED,
+                'submitted_at' => now(),
+            ]);
+        }
+
+        $service->receiveDecision(
+            $application->application_ulid,
+            MuwathaqAccountOpeningApplication::STATUS_APPROVED,
+            'muwathaq-review-tier2',
+            'اعتماد هوية',
+            [
+                'verified_phone' => true,
+                'verified_residence_governorate' => 'YE-AD',
+                'verified_identity' => true,
+            ],
+        );
+
+        $fresh = $user->fresh();
+        $this->assertSame(2, (int) $fresh->kyc_tier);
+        $this->assertSame(1, (int) $fresh->is_kyc_verified, 'كانت تبقى 0 رغم اعتماد موثّق لتير 2');
+        $this->assertSame(2, app(\App\Services\KycTierService::class)->effectiveTier($fresh),
+            'كان effectiveTier() يحسبها 1 للأبد رغم اعتماد موثّق لمستوى 2');
+    }
+
+    /**
+     * AMIAL-WOMEN-TIER-VERIFIED-001 — الدفاع الثاني: تير 2 بلا هوية مراجَعة يُرفض صراحةً، لا
+     * يُكتب بصمت كما كان قبل الإصلاح (المسار كان يقبل السياق بلا تحقق من verified_identity).
+     *
+     * @test
+     */
+    public function a_woman_cannot_reach_tier_two_through_the_in_app_path_without_identity_review(): void
+    {
+        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'gender' => 'female', 'kyc_tier' => 0]);
+        $service = app(MuwathaqAccountOpeningService::class);
+        $application = $service->submitFor($user);
+        $application->update(['requested_tier' => 2]);
+
+        foreach ([MuwathaqOpeningEvidence::PHONE, MuwathaqOpeningEvidence::RESIDENCE] as $kind) {
+            MuwathaqOpeningEvidence::query()->create([
+                'application_id' => $application->id,
+                'kind' => $kind,
+                'state' => MuwathaqOpeningEvidence::STATE_SUBMITTED,
+                'submitted_at' => now(),
+            ]);
+        }
+
+        $this->expectException(\DomainException::class);
+        $service->receiveDecision(
+            $application->application_ulid,
+            MuwathaqAccountOpeningApplication::STATUS_APPROVED,
+            'muwathaq-review-tier2-no-id',
+            'اعتماد بلا هوية',
+            [
+                'verified_phone' => true,
+                'verified_residence_governorate' => 'YE-AD',
+            ],
+        );
+    }
+
     /** @test */
     public function standard_customer_cannot_be_approved_without_identity_confirmation_from_muwathaq(): void
     {
