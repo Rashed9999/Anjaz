@@ -22,7 +22,8 @@ class AccountOpeningBoundaryTest extends TestCase
         $cases = [
             ['/api/v1/customer/auth/register', ['account_type' => 'customer'], 'customer', '/open-account?type=customer'],
             ['/api/v1/customer/auth/register', ['account_type' => 'merchant'], 'merchant', '/open-account?type=merchant'],
-            ['/api/v1/agent/auth/register', [], 'agent', '/accounts/new-agent'],
+            // AMIAL-AGENT-LEGACY-RETIRED-001 — '/api/v1/agent/auth/register' أُزيل مع الجيل القديم
+            // كلّه (كان أصلاً يردّ 'retired' بلا تسجيل)؛ تسجيل الوكيل الجديد عبر '/accounts/new-agent' فقط.
             ['/api/v1/auth/register/quick', [], 'customer', '/open-account?type=customer'],
             ['/api/v1/auth/register/merchant', [], 'merchant', '/open-account?type=merchant'],
             ['/api/v1/auth/register/email', [], 'customer', '/open-account?type=customer'],

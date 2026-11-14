@@ -22,7 +22,6 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\{AdminMiddleware,
-    AgentMiddleware,
     Authenticate,
     BlockInProduction,
     CheckDeviceId,
@@ -190,7 +189,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             // جمهورٌ آخر: يدخل ليخدم عملاء فرعه لا ليرى المنصّة.
             'agent.portal' => \App\Http\Middleware\AgentPortalMiddleware::class,
             'customerAuth' => CustomerMiddleware::class,
-            'agentAuth' => AgentMiddleware::class,
+            // AMIAL-AGENT-LEGACY-RETIRED-001 — 'agentAuth' (AgentMiddleware) أُزيل مع مساراته.
             'trackLastActiveAt' => TrackLastActiveAt::class,
             'inactiveAuthCheck' => InactiveAuthCheck::class,
             'deviceVerify' => DeviceVerifyMiddleware::class,
