@@ -1530,12 +1530,22 @@ class AdminHubController extends Controller
         // ══════════════════════════════════════════════════════════════
         $blockers = [];
 
-        // AMIAL-MUWATHAQ-ORIGIN-ADMIN-001 — حسابٌ فتحه موثّق: وثائقُ هويّته محفوظةٌ **لدى موثّق** (فصلُ الملكية)،
+        // AMIAL-MUWATHAQ-ORIGIN-ADMIN-001 — حسابٌ راجعه موثّق: وثائقُ هويّته محفوظةٌ **لدى موثّق** (فصلُ الملكية)،
         // وقراره نافذٌ هنا. فلا تُحسب «ناقصةً» ولا يُعرض رفعُها واعتمادُها من أميال باي: كانت اللوحةُ تقول للمشغّل
         // «وثائق الهويّة ناقصة» عن حسابٍ موثَّقٍ فعلاً، وتُغريه بتوثيقه مرّةً ثانية من جهةٍ لا تملك الدليل.
+        //
+        // AMIAL-MUWATHAQ-ORIGIN-ADMIN-002 — **والإصلاحُ الأوّل غطّى نصف الحسابات فقط.**
+        // قُيد الاستثناءُ بـ`origin = 'muwathaq'` — وهو ما تكتبه `MuwathaqProvisioningService`
+        // لحسابٍ فُتح مباشرةً في athaq.amialpay.com وحدَه. أمّا التسجيلُ داخل التطبيق الذي
+        // يُحال إلى موثّق (`MuwathaqAccountOpeningService::submitFor`) فلا يكتب `origin` إطلاقاً،
+        // فيبقى على افتراضه `'amial_legacy'` — ووثائقُه أيضاً خارج `kyc_documents`
+        // (`AccountOpeningEvidencePolicy`/`muwathaq_opening_evidences` لكلّ مسارات موثّق،
+        // لا لِـ`origin = muwathaq` وحدَه). فكلُّ حسابٍ اعتمده موثّق عبر هذا المسار كان
+        // يظهر «وثائق ناقصة» زوراً — وهي بالضبط شكوى صاحب المشروع عن حساب نور السالمي
+        // (مسار PATH_WOMEN_PROGRESSIVE، مستوى 2، قرار موثّق MWT-D0FC218BDDA116F96FD3).
+        // فصار الشرطُ حالةَ الطلب وحدَها، بلا قيدٍ على مصدره.
         $muwathaq = \App\Models\MuwathaqAccountOpeningApplication::query()
             ->where('user_id', $user->id)
-            ->where('origin', 'muwathaq')
             ->where('status', \App\Models\MuwathaqAccountOpeningApplication::STATUS_APPROVED)
             ->orderByDesc('id')
             ->first();

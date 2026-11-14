@@ -195,8 +195,11 @@ class AccountSecurityController extends Controller
         $user = $request->user();
 
         if ($user->pin_locked_until !== null && $user->pin_locked_until->isFuture()) {
+            // AMIAL-AGENT-LEGACY-CLEANUP-001 — ورفضٌ لا يقول متى ينتهي يُنتج محاولةً
+            // كلَّ ثانيةٍ ثمّ مكالمةَ دعم؛ المدّة هنا كما في CustomerAuthController.
+            $mins = max(1, (int) ceil(now()->diffInMinutes($user->pin_locked_until, false)));
             return $this->error('PIN_LOCKED',
-                'الرمزُ مقفلٌ مؤقّتاً بعد محاولاتٍ خاطئة — أعِد المحاولة لاحقاً',
+                "الرمزُ مقفلٌ مؤقّتاً بعد محاولاتٍ خاطئة — أعِد المحاولة بعد {$mins} دقيقة",
                 429);
         }
 

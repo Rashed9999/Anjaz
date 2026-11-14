@@ -13,9 +13,9 @@ use Tests\TestCase;
  * ZoneEnforcementE2ETest — يثبت end-to-end أن الـ Zone Policy يعمل **فعلاً**.
  *
  * يغطي:
- *   1. الميدلوير `amial.zone:send_money` يرفض non-SOUTH user مع HTTP 403
- *   2. لو middleware تم bypass-ه (مثلاً admin يستدعي trait مباشرة)،
- *      الـ assertFinancialEligibility() في TransactionTrait يلتقط الـ violation
+ *   1. send_money عملٌ دفتريّ (AMIAL-ZONE-BOUNDARY-002): مرسلٌ خارج النطاق
+ *      يُحوّل بنجاح — الحجبُ الجغرافيّ ليس لهذا الفعل
+ *   2. cash_out يبقى محجوباً جغرافياً (نقدٌ حقيقيّ يحتاج وكلاء)
  *   3. SOUTH user يمر بدون مشاكل
  *
  * هذا الـ test هو الجواب الصادق على سؤال:
@@ -25,8 +25,16 @@ class ZoneEnforcementE2ETest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
-    public function trait_blocks_non_south_user_via_eligibility_check(): void
+    /**
+     * AMIAL-ZONE-BOUNDARY-002 — send_money عملٌ دفتريّ: كلتا الطبقتين
+     * (`ZonePolicyService::LEDGER_ACTIONS` و`KycTierService::LEDGER_ONLY_FEATURES`)
+     * تُعفيانه من حجب المحافظة التشغيلية عمداً، فمرسلٌ خارج النطاق يُحوّل
+     * بنجاح الآن — والحجبُ الجغرافيّ يبقى على النقد وحده (انظر
+     * `cash_out_also_blocks_non_south_user` أدناه).
+     *
+     * @test
+     */
+    public function non_south_sender_can_still_send_money_as_a_ledger_action(): void
     {
         $sender = User::factory()->outsideZone('NORTH')->create([
             'type' => 2, // ← إقامةٌ موثّقة خارج نطاق التشغيل
@@ -52,16 +60,17 @@ class ZoneEnforcementE2ETest extends TestCase
             use \App\Traits\TransactionTrait;
         };
 
-        // المرسل في NORTH → يجب أن يُرفض من assertFinancialEligibility
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('RESIDENCE_OUTSIDE_OPERATIONAL_AREA');
-
-        $trait->customer_send_money_transaction(
+        // المرسل في NORTH، ومع ذلك send_money عملٌ دفتريّ لا يُحجب جغرافياً.
+        $txId = $trait->customer_send_money_transaction(
             from_user_id: $sender->id,
             to_user_id: $receiver->id,
             amount: '100.0000',
             charge: '2.0000',
         );
+
+        $this->assertNotNull($txId);
+        $this->assertSame('898.0000', (string) EMoney::where('user_id', $sender->id)->value('current_balance'));
+        $this->assertSame('1100.0000', (string) EMoney::where('user_id', $receiver->id)->value('current_balance'));
     }
 
     /** @test */

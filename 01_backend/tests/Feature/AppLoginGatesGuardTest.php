@@ -67,7 +67,7 @@ class AppLoginGatesGuardTest extends TestCase
     /**
      * @test
      *
-     * **ونقطتا الوكيل والأدمن ما زالتا تعملان — لبوّابتَي الويب.**
+     * **نقطتا الوكيل والأدمن ما زالتا تعملان — لبوّابتَي الويب.**
      *
      * ══════════════════════════════════════════════════════════════════
      * هذا الشقُّ هو ما يمنع «تنظيفاً» يمتدّ إلى الخادم فيُسقط بوّابةَ
@@ -75,13 +75,15 @@ class AppLoginGatesGuardTest extends TestCase
      *
      * (وإخفاءُ زرٍّ ليس حمايةً — والعكسُ صحيح: حذفُ زرٍّ ليس سبباً لحذف
      * ما خلفه.)
+     *
+     * **AMIAL-AGENT-LEGACY-RETIRED-001:** `api/v1/agent/auth/login` (الجيل القديم من حساب الوكيل
+     * الفردي بمحفظة شخصية) أُزيل عمداً بقرار صاحب المشروع — لا يبقى في هذا الحارس.
      */
     public function the_agent_and_admin_endpoints_still_serve_the_web_portals(): void
     {
         $routes = collect(app('router')->getRoutes())->map->uri();
 
-        foreach (['api/v1/agent/auth/login' => 'دخولُ الوكيل',
-                  'agent/login' => 'بوّابةُ الوكيل على الويب',
+        foreach (['agent/login' => 'بوّابةُ الوكيل على الويب',
                   'admin/auth/login' => 'دخولُ لوحة الإدارة'] as $uri => $what) {
             $this->assertTrue($routes->contains($uri),
                 "{$what} ({$uri}) اختفى — حذفُ بوّابةٍ من التطبيق أسقط خدمةً حقيقيّة");

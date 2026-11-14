@@ -178,12 +178,12 @@ class AppMoneyIdempotencyTest extends TestCase
      */
     public function every_app_money_route_carries_the_middleware(): void
     {
+        // AMIAL-AGENT-LEGACY-RETIRED-001 — 'api/v1/agent/send-money' و'api/v1/agent/withdraw' (الجيل
+        // القديم) أُزيلا؛ مسارات الوكيل الحيّة اليوم (الشبّاك وشبكة الوكلاء) تحت 'agent/*' و'amial/agent/*'.
         $must = [
             'api/v1/customer/send-money',
             'api/v1/customer/cash-out',
             'api/v1/customer/withdraw',
-            'api/v1/agent/send-money',
-            'api/v1/agent/withdraw',
         ];
 
         $missing = [];

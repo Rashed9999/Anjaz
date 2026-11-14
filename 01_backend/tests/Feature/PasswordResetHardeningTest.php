@@ -20,7 +20,9 @@ class PasswordResetHardeningTest extends TestCase
     private function seedReset(string $phone, string $otp = '654321', int $ageSeconds = 0): User
     {
         $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => $phone, 'password' => bcrypt('1111')]);
-        DB::table('password_resets')->insert(['phone' => $phone, 'token' => $otp, 'otp_hit_count' => 0, 'is_temp_blocked' => 0, 'created_at' => now()->subSeconds($ageSeconds)]);
+        // AMIAL-SEC-RESET-HASH-002 — الكاتبُ الوحيد يكتب البصمةَ دائماً اليوم؛
+        // بذرُ الاختبار يطابقه، وإلا رُفض رمزٌ صحيحٌ زُرع خاماً بالخطأ.
+        DB::table('password_resets')->insert(['phone' => $phone, 'token' => PasswordResetGuard::digest($otp), 'otp_hit_count' => 0, 'is_temp_blocked' => 0, 'created_at' => now()->subSeconds($ageSeconds)]);
 
         return $user;
     }
@@ -57,9 +59,12 @@ class PasswordResetHardeningTest extends TestCase
         $this->assertTrue(Hash::check('1111', $user->fresh()->password));
     }
 
-    public function test_valid_code_works_once_for_customer_and_agent_routes(): void
+    public function test_valid_code_works_once_for_customer_routes(): void
     {
-        foreach (['customer' => '+967770000004', 'agent' => '+967770000005'] as $role => $phone) {
+        // AMIAL-AGENT-LEGACY-CLEANUP-001 — حُذف `/api/v1/agent/auth/*` كلّه
+        // (PR #46): محفظةُ الوكيل الفرديّ القديمة، لا بابَ استعادة كلمةَ
+        // مرورٍ ذاتيّاً للوكيل اليوم — تُدار من لوحة الإدارة.
+        foreach (['customer' => '+967770000004'] as $role => $phone) {
             $user = $this->seedReset($phone);
             $this->submit($phone, '654321', '2222', '3333', $role)->assertStatus(401);
             $this->assertSame(1, DB::table('password_resets')->where('phone', $phone)->count(), 'عدم التطابق لا يستهلك الرمز');

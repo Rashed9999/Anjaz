@@ -127,14 +127,44 @@ class CustomerMoneyLifecycleE2ETest extends TestCase
     }
 
     /** @test */
-    public function transfer_from_user_outside_south_zone_is_blocked(): void
+    public function transfer_from_user_outside_south_zone_still_moves_ledger_money(): void
     {
-        // اجتز بوابة KYC كي يعزل الاختبار حارس المنطقة الذي يقصده.
+        // AMIAL-ZONE-BOUNDARY-002 — send_money عملٌ دفتريّ، لا نقدٌ يعبر
+        // فيه؛ فمن توثّق سكنُه خارج نطاق التشغيل يُحوّل كما يُحوّل غيرُه،
+        // والحجبُ الجغرافيّ يبقى على النقد (cash_out/cash_in) وحده.
         $sender = User::factory()->outsideZone('NORTH')->create([
             'kyc_tier' => 3,
             'is_kyc_verified' => 1,
         ]);
-        $receiver = User::factory()->create(['zone_code' => 'SOUTH']);
+        // المصنع الافتراضي = إقامةٌ موثّقة في عدن (داخل نطاق التشغيل).
+        $receiver = User::factory()->create([
+            'kyc_tier' => 3,
+            'is_kyc_verified' => 1,
+        ]);
+
+        $this->wallet($sender->id, '1000.0000');
+        $this->wallet($receiver->id, '0.0000');
+
+        $this->txTrait()->customer_send_money_transaction($sender->id, $receiver->id, '100.0000', '2.0000');
+
+        $this->assertSame('898.0000', (string) EMoney::where('user_id', $sender->id)->value('current_balance'));
+        $this->assertSame('100.0000', (string) EMoney::where('user_id', $receiver->id)->value('current_balance'));
+    }
+
+    /** @test */
+    public function transfer_to_a_user_outside_south_zone_is_still_blocked(): void
+    {
+        // والاستقبالُ النقديّ المحتمَل (عبر عدّاد الوكيل) يبقى محجوباً:
+        // المستلِمُ خارج نطاق التشغيل لا يُقبل منه receive_money.
+        // المصنع الافتراضي = إقامةٌ موثّقة في عدن (داخل نطاق التشغيل).
+        $sender = User::factory()->create([
+            'kyc_tier' => 3,
+            'is_kyc_verified' => 1,
+        ]);
+        $receiver = User::factory()->outsideZone('NORTH')->create([
+            'kyc_tier' => 3,
+            'is_kyc_verified' => 1,
+        ]);
 
         $this->wallet($sender->id, '1000.0000');
         $this->wallet($receiver->id, '0.0000');

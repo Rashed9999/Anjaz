@@ -38,7 +38,7 @@ class PasswordResetGuard
             if ($blocked || $expired) {
                 return false;
             }
-            if (!hash_equals((string) $row->token, self::digest($otp)) && !hash_equals((string) $row->token, $otp)) {
+            if (!hash_equals((string) $row->token, self::digest($otp))) {
                 $fails = (int) ($row->otp_hit_count ?? 0) + 1;
                 DB::table('password_resets')->whereIn('phone', $variants)->update([
                     'otp_hit_count' => $fails,
@@ -55,11 +55,14 @@ class PasswordResetGuard
     }
 
     /**
-     * AMIAL-SEC-RESET-HASH-001 — رمزُ الاستعادة لا يُخزَّن نصّاً صريحاً.
+     * AMIAL-SEC-RESET-HASH-001 — رمزُ الاستعادة لا يُخزَّن نصّاً صريحاً، ولا يُقبل نصّاً صريحاً.
      *
      * بصمةٌ مفتاحيّة (HMAC-SHA256 بمفتاح التطبيق): تسرُّبُ الجدول وحدَه لا يكشف رمزاً
-     * ما زال صالحاً. وما كُتب نصّاً قبل هذا الإصلاح يُقبل مقارنةً مباشرةً إلى أن
-     * ينتهي أجله (دقائق) ثم يُحذف مع أوّل استهلاك أو طلبٍ جديد.
+     * ما زال صالحاً. كان `consume()` يقبل مؤقّتاً مقارنةً مباشرةً بالنصّ الصريح —
+     * توافقاً مع صفوفٍ كتبتها نسخةٌ أقدم من الكاتب الوحيد قبل هذا الإصلاح، ومدّتُها
+     * أقصر من `TTL_SECONDS` أصلاً. مرّ ما يكفي من النشرات منذ الكاتب الوحيد صار
+     * يكتب البصمةَ دائماً، فلا صفَّ نصّيّاً صريحاً يبقى حيّاً — فأُزيل القبولُ
+     * المباشر نهائيّاً: مقارنةٌ واحدةٌ بالبصمة لا بديل لها.
      */
     public static function digest(string $otp): string
     {

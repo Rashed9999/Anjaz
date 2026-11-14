@@ -26,7 +26,7 @@ class AmialMaintenanceMode
         'api/v1/amial/ping',
         'api/v1/auth/',          // الدخول الموحّد
         'api/v1/customer/auth/',
-        'api/v1/agent/auth/',
+        // AMIAL-AGENT-LEGACY-RETIRED-001 — 'api/v1/agent/auth/' أُزيل مع الجيل القديم من حساب الوكيل.
         'health',
     ];
 

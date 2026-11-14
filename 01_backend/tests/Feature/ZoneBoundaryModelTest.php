@@ -125,70 +125,10 @@ class ZoneBoundaryModelTest extends TestCase
         }
     }
 
-    // ============ الحدّ الحقيقي: موقع الوكيل ============
-
-    private function agentCashRequest(User $agent, ?array $coords): \Illuminate\Testing\TestResponse
-    {
-        \App\Models\UserLogHistory::create([
-            'user_id' => $agent->id, 'device_id' => 'dev', 'is_active' => 1,
-        ]);
-
-        $test = $this->actingAs($agent, 'api')->withHeader('device-id', 'dev');
-        if ($coords !== null) {
-            $test = $test->withHeaders([
-                'X-Amial-Lat' => (string) $coords[0],
-                'X-Amial-Lng' => (string) $coords[1],
-            ]);
-        }
-
-        return $test->postJson('/api/v1/agent/send-money', []);
-    }
-
-    public function test_agent_operating_from_the_north_is_blocked(): void
-    {
-        // الثغرة الحقيقية: وكيل معتمد في عدن يأخذ هاتفه إلى صنعاء. منطقة
-        // حسابه ما زالت SOUTH فيمرّ كل فحص — ويصرف بسعر خاطئ في كل عملية.
-        $agent = $this->user('SOUTH', AGENT_TYPE);
-
-        $response = $this->agentCashRequest($agent, [15.3694, 44.1910]); // صنعاء
-
-        $response->assertStatus(403);
-        $this->assertSame('AGENT_OUTSIDE_OPERATIONAL_ZONE', $response->json('code'));
-    }
-
-    public function test_agent_operating_from_within_the_zone_passes_the_location_gate(): void
-    {
-        $agent = $this->user('SOUTH', AGENT_TYPE);
-
-        $response = $this->agentCashRequest($agent, [12.7855, 45.0187]); // عدن
-
-        // ملاحظة: المسار القديم يردّ 403 لأخطاء التحقّق أيضاً، فلا يصلح
-        // رمز الحالة وحده معياراً — نفحص سبب الرفض لا رقمه.
-        $this->assertNotSame('AGENT_OUTSIDE_OPERATIONAL_ZONE', $response->json('code'));
-        $this->assertNotSame('AGENT_LOCATION_REQUIRED', $response->json('code'));
-    }
-
-    public function test_soft_mode_lets_an_agent_without_location_through(): void
-    {
-        // نشرٌ آمن: الوكلاء الذين لم يحدّثوا التطبيق بعد لا يتعطّلون.
-        config(['amial.agent_location_mode' => 'soft']);
-        $agent = $this->user('SOUTH', AGENT_TYPE);
-
-        $response = $this->agentCashRequest($agent, null);
-        $this->assertNotSame('AGENT_LOCATION_REQUIRED', $response->json('code'));
-        $this->assertNotSame('AGENT_OUTSIDE_OPERATIONAL_ZONE', $response->json('code'));
-    }
-
-    public function test_strict_mode_requires_a_location(): void
-    {
-        config(['amial.agent_location_mode' => 'strict']);
-        $agent = $this->user('SOUTH', AGENT_TYPE);
-
-        $response = $this->agentCashRequest($agent, null);
-
-        $response->assertStatus(403);
-        $this->assertSame('AGENT_LOCATION_REQUIRED', $response->json('code'));
-    }
+    // AMIAL-AGENT-LEGACY-RETIRED-001 — كانت هنا 4 حالات تختبر حارس الموقع على `/api/v1/agent/send-money`
+    // (الجيل القديم من حساب الوكيل الفردي)؛ أُزيل المسار نفسه مع الجيل القديم كلّه. الحارس
+    // (`EnforceAgentCashLocation` / `amial.agent-location`) يبقى حيّاً على `amial/agent/withdraw/execute`
+    // (سحب العميل عبر الوكيل الحقيقي)، وتغطيته هناك لا هنا.
 
     public function test_customer_location_is_never_enforced(): void
     {

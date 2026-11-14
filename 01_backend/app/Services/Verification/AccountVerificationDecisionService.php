@@ -110,6 +110,17 @@ class AccountVerificationDecisionService
             // Notification delivery is intentionally non-blocking.
         }
 
+        // AMIAL-WOMEN-TIER3-001 — موثّق لا يملك قرار المستوى الثالث للمرأة
+        // (لا باب فتحٍ ولا ترقية يسمحان به)، فأميال باي يقرّر ويُبلَّغ موثّق
+        // بعد الاعتماد الفعليّ وحده — لا قبله، ولا لرفضٍ لم يغيّر شيئاً.
+        if ($approve && $targetTier === 3 && $result->gender === 'female') {
+            try {
+                app(\App\Services\Muwathaq\WomenTierThreeService::class)->notifyMuwathaq($result);
+            } catch (\Throwable) {
+                // التزامن تبليغيٌّ لاحقٌ؛ فشلُه لا يُسقط قرار الهوية المُطبَّق فعلاً.
+            }
+        }
+
         return $result;
     }
 

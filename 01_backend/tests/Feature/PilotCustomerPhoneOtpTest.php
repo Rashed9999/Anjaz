@@ -220,11 +220,15 @@ class PilotCustomerPhoneOtpTest extends TestCase
         $this->assertSame(1, (int) $fresh->kyc_tier);
         $this->assertSame(1, app(KycTierService::class)->effectiveTier($fresh));
 
-        // لكن الخدمة المالية نفسها تبقى خلف سياسة التغطية.
+        // AMIAL-ZONE-BOUNDARY-002 — والتحويلُ الإلكترونيّ (ledger) لا يحتاج
+        // نطاقَ تشغيلٍ أصلاً: لا نقدٌ يعبر فيه.
+        app(KycTierService::class)->assertFeatureAllowed($fresh, 'send_money');
+
+        // لكن الاستقبالَ عبر عدّاد الوكيل (نقدٌ حقيقيّ) يبقى خلف سياسة التغطية.
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('خارج نطاق تشغيل أميال الحالي');
 
-        app(KycTierService::class)->assertFeatureAllowed($fresh, 'send_money');
+        app(KycTierService::class)->assertFeatureAllowed($fresh, 'receive_money');
     }
 
     /** @test */

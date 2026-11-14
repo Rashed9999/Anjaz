@@ -209,11 +209,21 @@ class MuwathaqAccountOpeningService
 
         if ($application->verification_path === self::PATH_WOMEN_PROGRESSIVE) {
             $tier = max(1, min(3, (int) ($application->requested_tier ?: 1)));
+            if ($tier >= 2 && ($context['verified_identity'] ?? false) !== true) {
+                throw new DomainException('المستوى الثاني يتطلب مراجعة هوية من موثّق.');
+            }
             if ($tier >= 3 && ($context['verified_ownership_assurance'] ?? false) !== true) {
                 throw new DomainException('المستوى الثالث يتطلب ضمان ملكية حضوريًا أو بيومتريًا اختياريًا من موثّق.');
             }
             // توافق مؤقت لحواجز المال القديمة؛ لا يفرض صورة شخصية على المرأة.
             $user->kyc_tier = max($tier, (int) ($user->kyc_tier ?? 0));
+            // AMIAL-WOMEN-TIER-VERIFIED-001 — كان لا يُرفع هنا إطلاقاً، فيبقى effectiveTier()
+            // يحسب المستوى الفعلي 1 كحدٍّ أقصى للأبد مهما اعتمد موثّق (tier>=2 && !is_verified ⇒
+            // يُعاد حسابه بـ tierOneReady لا بقيمة kyc_tier الحقيقية). الهوية المُراجَعة ترفعه، تمامًا
+            // كما يفعل المسار الموازي الصحيح (MuwathaqProvisioningService::activate) والمسار القياسي أسفله.
+            if ($tier >= 2) {
+                $user->is_kyc_verified = 1;
+            }
         } else {
             if (($context['verified_identity'] ?? false) !== true) {
                 throw new DomainException('لا يفعّل الحساب القياسي قبل إثبات الهوية من موثّق.');

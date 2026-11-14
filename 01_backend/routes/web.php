@@ -8,6 +8,19 @@ use App\Http\Controllers\LandingPageController;
 use App\Http\Controllers\Web\RegistrationController;
 use App\Http\Controllers\Api\V1\Amial\ReceiptController;
 
+// AMIAL-AGENT-SUBDOMAIN-001 — مدخلٌ ودّي لشركات الصرافة: agents.<النطاق> يُحيل إلى
+// نفس التطبيق ونفس القاعدة تحت /agent/*، لا تطبيقٌ ولا قاعدةٌ منفصلة. إحالةٌ فقط
+// (لا تكرارَ مسارات ولا تصادمَ أسماء)؛ كل روابط الواجهة تُبنى بـ APP_URL فتعود
+// الجلسة إلى النطاق الرئيسي من أوّل صفحة. آمنة الإزالة بحذف هذه الكتلة وحدها.
+$amialAgentSubdomainHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+if ($amialAgentSubdomainHost !== null) {
+    Route::domain('agents.'.$amialAgentSubdomainHost)->group(function () {
+        Route::get('/{path?}', function (string $path = '') {
+            return redirect(rtrim(config('app.url'), '/').'/agent/'.ltrim($path, '/'), 301);
+        })->where('path', '.*');
+    });
+}
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes
