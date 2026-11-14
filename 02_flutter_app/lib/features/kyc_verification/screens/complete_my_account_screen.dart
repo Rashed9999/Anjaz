@@ -509,7 +509,7 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
             onChanged: (v) => setState(() => _accountPurpose = v),
           ),
         if (missing.contains('is_pep')) ...[
-          const Text('هل أنت شخص ذو صفة سياسية بارزة (PEP)؟', style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text('هل أنت شخص ذو صفة سياسية بارزة؟', style: TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           SegmentedButton<bool>(
             segments: const [
@@ -573,12 +573,12 @@ class _CompleteMyAccountScreenState extends State<CompleteMyAccountScreen> {
         _ownershipOption(
           'restricted_review',
           'خصوصية إضافية',
-          'السيلفي يراه فقط مراجع KYC المقيد، مع Trace ID وعلامة مائية.',
+          'السيلفي يراه فقط مراجع التحقق المقيَّد، مع معرّف تتبّع وعلامة مائية.',
         ),
         _ownershipOption(
           'standard',
           'مراجعة محمية',
-          'السيلفي يراجعه فريق KYC المخول مع التتبع والعلامة المائية.',
+          'السيلفي يراجعه فريق التحقق المخوَّل مع التتبّع والعلامة المائية.',
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(

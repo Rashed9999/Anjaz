@@ -111,10 +111,8 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     if (last != null) {
       _lastUser = last;
       _phoneCtrl.text = last.phone;
-      _kind = AccountKind.values.firstWhere(
-        (item) => item.name == last.kind,
-        orElse: () => AccountKind.customer,
-      );
+      // AMIAL-CUSTOMER-ONLY-LOGIN-001 — لم يعد نوع الحساب يُستعاد من آخر دخول:
+      // هذا التطبيق للعميل فقط، ودوماً AccountKind.customer (انظر الملاحظة أعلى _kindSelector).
     }
   }
 
@@ -379,7 +377,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             children: [
               AmialLanguageChip(onDark: dark),
               const Spacer(),
-              _kindSelector(context, dark: dark),
             ],
           ),
           const SizedBox(height: AmialSpacing.xl),
@@ -436,6 +433,12 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     );
   }
 
+  // AMIAL-CUSTOMER-ONLY-LOGIN-001 — هذا التطبيق لعملاء أميال باي حصراً.
+  // التاجر يدخل عبر بوابة الويب (amialpay.com/merchant)، ونقطة البيع تطبيقٌ
+  // مستقلٌّ لم يُجهَّز بعد — فصار منتقي نوع الحساب هنا غيرَ مُستدعًى عمداً،
+  // ولم يُحذف (ولا الأكواد التي يفرّعها `_kind`) لأنها الأساس الذي يُبنى
+  // عليه ذلك التطبيق المستقل يوماً، لا بقيّةً مهجورة.
+  // ignore: unused_element
   Widget _kindSelector(BuildContext context, {required bool dark}) {
     return PopupMenuButton<AccountKind>(
       tooltip: 'نوع الحساب',
