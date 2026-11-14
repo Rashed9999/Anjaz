@@ -56,14 +56,14 @@ class SecuritySweepGuardTest extends TestCase
         Storage::fake('public');
         Storage::disk('public')->put('user/identity/abc123.png', 'PNGDATA');
 
-        $this->assertNotSame(200, $this->get('/admin/amial/legacy-identity/abc123.png')->getStatusCode(), 'ضيفٌ يقرأ صورة هويّة.');   // ضيفٌ ⇒ ردٌّ أو 404
+        $this->assertNotSame(200, $this->get('/admin/amial/hub/legacy-identity/abc123.png')->getStatusCode(), 'ضيفٌ يقرأ صورة هويّة.');   // ضيفٌ ⇒ ردٌّ أو 404
 
         $admin = User::factory()->create(['type' => ADMIN_TYPE, 'role' => 'super_admin', 'phone' => '967770009771']);
         app(PlatformRoleService::class)->assign($admin, PlatformRoleService::ADMIN);
 
-        $this->actingAs($admin->refresh(), 'user')->get('/admin/amial/legacy-identity/abc123.png')->assertOk();
-        $this->actingAs($admin, 'user')->get('/admin/amial/legacy-identity/missing.png')->assertNotFound();
-        $this->actingAs($admin, 'user')->get('/admin/amial/legacy-identity/..%2F..%2F.env')->assertNotFound();
+        $this->actingAs($admin->refresh(), 'user')->get('/admin/amial/hub/legacy-identity/abc123.png')->assertOk();
+        $this->actingAs($admin, 'user')->get('/admin/amial/hub/legacy-identity/missing.png')->assertNotFound();
+        $this->actingAs($admin, 'user')->get('/admin/amial/hub/legacy-identity/..%2F..%2F.env')->assertNotFound();
     }
 
     /** @test */
