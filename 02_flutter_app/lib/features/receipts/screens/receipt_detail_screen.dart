@@ -655,22 +655,22 @@ ${Get.find<ReceiptsController>().getPublicVerificationUrl(receipt.verificationCo
     ));
   }
 
-  /// AMIAL-ZONE-AR-001: تحويل رمز المنطقة إلى اسمها العربي.
-  /// نفس خريطة `ZonePolicyService::zoneNameAr` في الخادم.
+  /// AMIAL-ZONE-AR-001 (مُصحَّح) — كانت الخريطة هنا مختلفة عن مصدرها الحقيقي
+  /// `ZonePolicyService::zoneNameAr` في الخادم (EAST/WEST/ALL لا وجود لها هناك)،
+  /// وبلا احتياطٍ عربي: رمزٌ غير مُعرَّف مثل UNKNOWN كان يُطبع خاماً في إيصال العميل.
+  /// صارت مطابقةً حرفياً لخريطة الخادم، والاحتياطُ نصٌّ عربيٌّ دائماً — لا رمزٌ خام.
   String _zoneAr(String code) {
     switch (code.trim().toUpperCase()) {
       case 'SOUTH':
         return 'الجنوب';
       case 'NORTH':
         return 'الشمال';
-      case 'EAST':
-        return 'الشرق';
-      case 'WEST':
-        return 'الغرب';
-      case 'ALL':
-        return 'كل المناطق';
+      case 'MIDDLE':
+        return 'الوسط';
+      case 'OTHER':
+        return 'أخرى';
       default:
-        return code.isEmpty ? '—' : code;
+        return 'غير محددة';
     }
   }
 
