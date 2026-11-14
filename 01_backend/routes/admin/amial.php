@@ -833,6 +833,9 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     // مرآة الحسابات الجديدة داخل أميال باي: قراءة فقط. قرار الحساب لا يمر
     // من لوحة الإدارة بل من موثّق عبر القناة الموقّعة.
     Route::get('/muwathaq-openings', [App\Http\Controllers\Admin\MuwathaqOpeningApprovalController::class, 'index'])->middleware('platform:platform.customers.view')->name('muwathaq-openings.index');
+    // سجلّ كلّ حسابات موثّق بكلّ أنواعها وحالاتها (قراءة فقط؛ الوثائق تُفتح في موثّق لا هنا).
+    Route::get('/muwathaq-accounts', [App\Http\Controllers\Admin\MuwathaqOpeningApprovalController::class, 'registry'])->middleware('platform:platform.customers.view')->name('muwathaq-accounts.index');
+    Route::get('/muwathaq-accounts.json', [App\Http\Controllers\Admin\MuwathaqOpeningApprovalController::class, 'registryList'])->middleware('platform:platform.customers.view')->name('muwathaq-accounts.list');
     Route::get('/muwathaq-openings.json', [App\Http\Controllers\Admin\MuwathaqOpeningApprovalController::class, 'list'])->middleware('platform:platform.customers.view')->name('muwathaq-openings.list');
     Route::get('/customers', [$hc, 'customers'])->middleware('platform:platform.customers.view')->name('customers');
     Route::get('/agents', [$hc, 'agents'])->middleware('platform:platform.customers.view')->name('agents');
