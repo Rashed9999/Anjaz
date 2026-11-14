@@ -111,15 +111,18 @@ class AccountDossierPrintService
         $committeeReviewer = $reviewCase && $reviewCase->reviewed_by
             ? User::find((int) $reviewCase->reviewed_by) : null;
 
+        $images = $this->images($user, $reviewer);
+
         return [
             'user' => $user,
             'identity' => $this->identity($user),
             'activity' => $this->activity($user),
+            'signature_card' => $this->signatureCard($user, $images),
             'dossier' => $dossier,
             'payload' => $dossier ? (array) $dossier->payload_encrypted : [],
             'verification_dossiers' => $verificationDossiers,
             'evidence' => $this->evidence->for($user, 2, $reviewer),
-            'images' => $this->images($user, $reviewer),
+            'images' => $images,
             'ai_review' => $aiReview ? [
                 'model' => $aiReview->model,
                 'created_at' => $aiReview->created_at?->format('Y-m-d H:i'),
@@ -237,6 +240,37 @@ class AccountDossierPrintService
         }
 
         return [];
+    }
+
+    /**
+     * AMIAL-ACCOUNT-PRINT-003 — **بطاقة توقيع، بلا تصنّع توقيعٍ لم يقع.**
+     *
+     * طلب صاحبُ المشروع مظهراً بمستوى حزمة بنكٍ ورقيّة (غلافٌ · بطاقة
+     * توقيعٍ بصورة · شروطٌ وأحكام). فتح الحساب عند أميال باي رقميٌّ بالكامل
+     * — لا توقيعَ حضوريّاً وقت الطباعة، **فلا تُرسَم خانةُ توقيعٍ فارغة**
+     * تُوحي بإجراءٍ لم يحدث (القاعدة السابعة: الغيابُ يُقال ولا يُملأ).
+     * البطاقةُ هنا صورةٌ وهويّةٌ فقط — وصورتُها نفسُ صورة `images()` إن
+     * وُجدت (لا فكٌّ ثانٍ للتشفير، ونفسُ حجب البيانات البيومترية).
+     *
+     * @param array<int,array<string,mixed>> $images
+     */
+    private function signatureCard(User $user, array $images): array
+    {
+        $photo = null;
+        foreach ($images as $img) {
+            if (($img['label'] ?? null) === KycDocument::TYPE_LABELS[KycDocument::TYPE_SELFIE] && $img['data_uri']) {
+                $photo = $img['data_uri'];
+                break;
+            }
+        }
+
+        return [
+            'photo_data_uri' => $photo,
+            'full_name' => trim((string) ($user->f_name.' '.$user->l_name)) ?: '—',
+            'account_number' => (string) ($user->account_number ?: $user->id),
+            'phone' => (string) ($user->phone ?: '—'),
+            'type_label' => $this->typeLabel((int) $user->type),
+        ];
     }
 
     private function typeLabel(int $type): string

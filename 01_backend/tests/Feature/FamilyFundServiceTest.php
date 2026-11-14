@@ -59,18 +59,22 @@ class FamilyFundServiceTest extends TestCase
     }
 
     /** @test */
-    public function it_rejects_creation_from_non_south_users()
+    public function it_creates_funds_from_non_south_users_too()
     {
+        // AMIAL-ZONE-BOUNDARY-002 — إنشاء الصندوق والمساهمة فيه عملٌ دفتريّ
+        // (`family_fund`/`family_fund_contribute` في كلتا طبقتي السياسة
+        // ضمن LEDGER_ACTIONS/LEDGER_ONLY_FEATURES)؛ لا نقد يعبر فيه، فمن
+        // توثّق سكنُه خارج نطاق التشغيل ينشئ الصندوق كما ينشئه غيره.
         $north = $this->tierTwoCustomer([
             'zone_code' => 'NORTH',
             'residence_governorate' => 'YE-SN',
             'verified_residence_governorate' => 'YE-SN',
         ]);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('RESIDENCE_OUTSIDE_OPERATIONAL_AREA');
+        $fund = $this->service->create($north, 'Test');
 
-        $this->service->create($north, 'Test');
+        $this->assertInstanceOf(FamilyFund::class, $fund);
+        $this->assertSame($north->id, $fund->owner_user_id);
     }
 
     /** @test */

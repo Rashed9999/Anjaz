@@ -22,6 +22,17 @@ td,th{border:1px solid #cbd5e1;padding:5px;text-align:right;width:25%}
 .doc{border:1px solid #cbd5e1;padding:6px;margin:8px 0;page-break-inside:avoid}
 .doc img{max-width:100%;max-height:330px}
 .doc .cap{font-size:9px;color:#475569;margin-bottom:4px}
+.sigcard{border:2px solid #053391;border-radius:6px;padding:10px;margin:8px 0;page-break-inside:avoid}
+.sigcard .photo{width:90px;height:110px;border:1px solid #cbd5e1;text-align:center;vertical-align:top}
+.sigcard .photo img{max-width:86px;max-height:106px}
+.sigcard .photo .ph{color:#94a3b8;font-size:8px;padding-top:40px}
+.sigcard .fields{padding-right:10px}
+.sigcard .fields .row{margin-bottom:4px}
+.sigcard .fields .lbl{color:#64748b;font-size:8px}
+.sigcard .fields .val{font-weight:bold;font-size:11px}
+.terms h2{font-size:11px;margin:10px 0 3px}
+.terms p{margin:0 0 6px;line-height:1.5}
+.terms .alert-info{background:#eef2ff;border:1px solid #bcd0ff;padding:7px;margin-bottom:8px;font-size:9px}
 </style></head>
 <body>
 
@@ -72,6 +83,28 @@ td,th{border:1px solid #cbd5e1;padding:5px;text-align:right;width:25%}
     @endforeach
   </tbody></table>
 @endif
+
+{{-- AMIAL-ACCOUNT-PRINT-003 — صورةٌ وهويّةٌ فقط؛ لا خانةَ توقيعٍ مصطنَعة
+     لإجراءٍ رقميٍّ لم يمرّ بتوقيعٍ حضوريّ وقت الطباعة. --}}
+<h3>بطاقة التوقيع</h3>
+<div class="sigcard">
+  <table style="border:none;width:100%"><tr style="border:none">
+    <td class="photo" style="border:1px solid #cbd5e1">
+      @if($signature_card['photo_data_uri'])
+        <img src="{{ $signature_card['photo_data_uri'] }}" alt="صورة الحساب">
+      @else
+        <div class="ph">لا صورة شخصية مرفوعة</div>
+      @endif
+    </td>
+    <td class="fields" style="border:none">
+      <div class="row"><span class="lbl">الاسم الكامل</span><br><span class="val">{{ $signature_card['full_name'] }}</span></div>
+      <div class="row"><span class="lbl">رقم الحساب</span><br><span class="val">{{ $signature_card['account_number'] }}</span></div>
+      <div class="row"><span class="lbl">رقم الجوال</span><br><span class="val">{{ $signature_card['phone'] }}</span></div>
+      <div class="row"><span class="lbl">نوع الحساب</span><br><span class="val">{{ $signature_card['type_label'] }}</span></div>
+    </td>
+  </tr></table>
+</div>
+<p class="muted">الحسابُ يُفتَح رقميّاً بالكامل — بلا توقيعٍ ورقيٍّ حضوريّ، فلا تحمل هذه البطاقةُ خانةَ توقيع.</p>
 
 {{-- **لقطةُ التسجيل — وغيابُها يُقال ولا يُترك فراغاً بلا سبب.** --}}
 @if($dossier)
@@ -231,6 +264,14 @@ td,th{border:1px solid #cbd5e1;padding:5px;text-align:right;width:25%}
     </p>
   @endif
 @endif
+
+{{-- AMIAL-TERMS-SHARED-001 — النصّ نفسُه الذي تعرضه صفحة الموقع (`/terms`)،
+     لا نسخةٌ ثانيةٌ قد تنحرف عنها. النسخةُ السارية وقت الطباعة فقط —
+     لا إقرارٌ بأنّ صاحب الحساب وافق على هذا النصّ بعينه تاريخيّاً. --}}
+<h3>شروط الاستخدام — النسخة السارية وقت الطباعة ({{ $printed_at }})</h3>
+<div class="terms">
+  @include('site._terms-content')
+</div>
 
 <p class="muted">
   هذه ورقةٌ إداريّةٌ تحمل بياناتٍ شخصيّةً وصورَ هويّة. فتحُها وطباعتُها

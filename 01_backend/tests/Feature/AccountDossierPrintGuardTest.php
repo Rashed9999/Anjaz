@@ -232,6 +232,45 @@ class AccountDossierPrintGuardTest extends TestCase
         $this->assertStringContainsString('موزِّع (أمّ)', $html);
     }
 
+    /**
+     * AMIAL-ACCOUNT-PRINT-003 — **بطاقة التوقيع بلا خانة توقيعٍ مصطنَعة.**
+     * الحسابُ رقميٌّ من أوّله، فلا تُرسَم خانةُ توقيعٍ فارغة تُوحي بتوقيعٍ
+     * حضوريٍّ لم يحدث — والبطاقةُ صورةٌ وهويّةٌ فقط.
+     *
+     * @test
+     */
+    public function the_signature_card_shows_identity_without_a_fabricated_signature_box(): void
+    {
+        $u = $this->account();
+
+        $html = view('pdf.account-dossier', $this->service()->data($u))->render();
+
+        $this->assertStringContainsString('بطاقة التوقيع', $html);
+        $this->assertStringContainsString('بلا توقيعٍ ورقيٍّ حضوريّ', $html,
+            'لم يُقل صراحةً أنّ لا توقيع ورقيّاً — فقد تُقرأ الخانةُ الفارغة إجراءً ناقصاً');
+        $this->assertStringNotContainsString('توقيع العميل', $html,
+            'ظهرت عبارةٌ تُوحي بخانة توقيعٍ للعميل لم يوقّعها فعلاً');
+    }
+
+    /**
+     * AMIAL-TERMS-SHARED-001 — مصدرٌ واحدٌ للشروط: نفس الجملة التي تظهر
+     * في صفحة `/terms` العامّة تظهر هنا حرفيّاً — لا نسخةٌ قد تنحرف عنها.
+     *
+     * @test
+     */
+    public function the_terms_shown_are_the_same_shared_content_as_the_public_terms_page(): void
+    {
+        $u = $this->account();
+
+        $html = view('pdf.account-dossier', $this->service()->data($u))->render();
+
+        $this->assertStringContainsString('شروط الاستخدام', $html);
+        $this->assertStringContainsString(
+            'لكلّ عمليّةٍ إيصالٌ يُعتمد مرجعاً عند الخلاف',
+            $html,
+            'الشروطُ المطبوعة ليست نفس نصّ صفحة /terms — نسختان قد تنحرفان');
+    }
+
     /** @test */
     public function a_customer_account_shows_no_activity_section_at_all(): void
     {
