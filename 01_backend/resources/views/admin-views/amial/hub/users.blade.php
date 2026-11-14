@@ -262,7 +262,8 @@
                 </div>
 
                 {{-- ② الوثائق --}}
-                <div class="mb-4">
+                <div class="alert alert-info small d-none mb-4" id="edit-muwathaq-note" role="status"></div>
+                <div class="mb-4" id="edit-docs-block">
                     <h6 class="fw-bold mb-2">وثائق الهويّة</h6>
                     <div class="table-responsive">
                         <table class="table table-sm align-middle">
@@ -823,6 +824,22 @@
                   `<li class="list-group-item px-0 py-1">⛔ ${esc(b.text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</li>`
                 ).join('') + '</ul>';
 
+        // ②-أ حسابٌ فتحه موثّق: الوثائق محفوظةٌ لديه ولا تُرفع ولا تُعتمد هنا (يظهر المرجع بدل «ناقصة»).
+        const mwNote = document.getElementById('edit-muwathaq-note');
+        const docsBlock = document.getElementById('edit-docs-block');
+        if (d.muwathaq) {
+            mwNote.classList.remove('d-none');
+            mwNote.innerHTML = 'فتح هذا الحساب <strong>موثّق</strong>'
+                + (d.muwathaq.tier ? ' (المستوى ' + esc(String(d.muwathaq.tier)) + ')' : '')
+                + ' — المرجع <span dir="ltr">' + esc(d.muwathaq.reference) + '</span>'
+                + (d.muwathaq.decided_at ? ' · ' + esc(d.muwathaq.decided_at) : '')
+                + '. وثائق الهويّة محفوظةٌ لدى موثّق، ولا تُرفع ولا تُعتمد من هنا.';
+            docsBlock.classList.add('d-none');
+        } else {
+            mwNote.classList.add('d-none');
+            docsBlock.classList.remove('d-none');
+        }
+
         // ② الوثائق
         document.getElementById('edit-docs').innerHTML = d.documents.map(doc => `
             <tr>
@@ -867,7 +884,8 @@
         showZoneHint();
 
         document.getElementById('edit-phone').textContent = d.phone || '';
-        document.getElementById('edit-approve-account').disabled = d.kyc === 1;
+        document.getElementById('edit-approve-account').disabled = d.kyc === 1 || !!d.muwathaq;
+        document.getElementById('edit-approve-account').title = d.muwathaq ? 'الحساب معتمدٌ من موثّق' : '';
         document.getElementById('edit-loading').classList.add('d-none');
         document.getElementById('edit-body').classList.remove('d-none');
     }
