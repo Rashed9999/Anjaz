@@ -1530,7 +1530,17 @@ class AdminHubController extends Controller
         // ══════════════════════════════════════════════════════════════
         $blockers = [];
 
-        if (!$completeness['complete']) {
+        // AMIAL-MUWATHAQ-ORIGIN-ADMIN-001 — حسابٌ فتحه موثّق: وثائقُ هويّته محفوظةٌ **لدى موثّق** (فصلُ الملكية)،
+        // وقراره نافذٌ هنا. فلا تُحسب «ناقصةً» ولا يُعرض رفعُها واعتمادُها من أميال باي: كانت اللوحةُ تقول للمشغّل
+        // «وثائق الهويّة ناقصة» عن حسابٍ موثَّقٍ فعلاً، وتُغريه بتوثيقه مرّةً ثانية من جهةٍ لا تملك الدليل.
+        $muwathaq = \App\Models\MuwathaqAccountOpeningApplication::query()
+            ->where('user_id', $user->id)
+            ->where('origin', 'muwathaq')
+            ->where('status', \App\Models\MuwathaqAccountOpeningApplication::STATUS_APPROVED)
+            ->orderByDesc('id')
+            ->first();
+
+        if (!$completeness['complete'] && $muwathaq === null) {
             $missing = array_map(
                 fn ($t) => KycDocument::TYPE_LABELS[$t] ?? $t,
                 (array) $completeness['missing'],
@@ -1574,7 +1584,13 @@ class AdminHubController extends Controller
             'is_active' => (int) ($user->is_active ?? 0) === 1,
             'zone_code' => $zone,
             'would_be_zone' => $wouldBeZone,
-            'documents' => $documents,
+            'documents' => $muwathaq === null ? $documents : [],
+            // يُملأ لحسابٍ فتحه موثّق: المرجع والمستوى وتاريخ القرار (بلا أيّ بيانات هويّة).
+            'muwathaq' => $muwathaq === null ? null : [
+                'reference' => (string) $muwathaq->decision_reference,
+                'tier' => $muwathaq->requested_tier === null ? null : (int) $muwathaq->requested_tier,
+                'decided_at' => optional($muwathaq->muwathaq_decided_at ?? $muwathaq->decided_at)->toDateTimeString(),
+            ],
             'doc_types' => array_map(fn ($t) => [
                 'value' => $t, 'label' => KycDocument::TYPE_LABELS[$t] ?? $t,
             ], KycDocument::ALL_TYPES),

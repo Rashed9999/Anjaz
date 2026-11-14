@@ -38,7 +38,7 @@ class PasswordResetGuard
             if ($blocked || $expired) {
                 return false;
             }
-            if (!hash_equals((string) $row->token, $otp)) {
+            if (!hash_equals((string) $row->token, self::digest($otp)) && !hash_equals((string) $row->token, $otp)) {
                 $fails = (int) ($row->otp_hit_count ?? 0) + 1;
                 DB::table('password_resets')->whereIn('phone', $variants)->update([
                     'otp_hit_count' => $fails,
@@ -52,5 +52,17 @@ class PasswordResetGuard
 
             return true;
         });
+    }
+
+    /**
+     * AMIAL-SEC-RESET-HASH-001 — رمزُ الاستعادة لا يُخزَّن نصّاً صريحاً.
+     *
+     * بصمةٌ مفتاحيّة (HMAC-SHA256 بمفتاح التطبيق): تسرُّبُ الجدول وحدَه لا يكشف رمزاً
+     * ما زال صالحاً. وما كُتب نصّاً قبل هذا الإصلاح يُقبل مقارنةً مباشرةً إلى أن
+     * ينتهي أجله (دقائق) ثم يُحذف مع أوّل استهلاك أو طلبٍ جديد.
+     */
+    public static function digest(string $otp): string
+    {
+        return hash_hmac('sha256', $otp, (string) config('app.key'));
     }
 }

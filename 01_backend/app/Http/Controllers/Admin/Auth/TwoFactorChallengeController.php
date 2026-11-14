@@ -106,10 +106,10 @@ class TwoFactorChallengeController extends Controller
 
         RateLimiter::clear($key);
 
-        $remember = (bool) $request->session()->pull('amial.2fa.remember', false);
-        $request->session()->forget('amial.2fa.pending_user');
+        $request->session()->forget(['amial.2fa.remember', 'amial.2fa.pending_user']);
 
-        auth('user')->login($admin, $remember);
+        // لا «تذكّرني» للإدارة (AMIAL-ADMIN-NO-REMEMBER-001): جلسةٌ عاديةٌ تنتهي بالخمول.
+        auth('user')->login($admin, false);
 
         // **وتُجدَّد الجلسة بعد المصادقة** — وإلّا بقي المعرّفُ القديم
         // صالحاً لمن التقطه قبل الرمز (session fixation).

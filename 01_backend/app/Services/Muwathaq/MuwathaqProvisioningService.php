@@ -26,7 +26,7 @@ final class MuwathaqProvisioningService {
     $u->legal_name_status='declared'; $u->legal_name_verified_at=null;
    }
    $u->phone=$phone; $u->dial_country_code=(string)($a['dial_country_code']??''); $u->email=$email; $u->gender=$kind==='customer'?(string)($a['gender']??''):null;
-   $u->type=match($kind){'agent'=>AGENT_TYPE,'merchant'=>MERCHANT_TYPE,default=>CUSTOMER_TYPE}; $u->password=Hash::make(Str::random(64)); $u->is_active=0; $u->is_phone_verified=0; $u->is_email_verified=0; $u->is_kyc_verified=0; $u->kyc_tier=0; $u->zone_code=ZoneAssignmentService::ZONE_UNKNOWN; if(Schema::hasColumn('users','requires_pin_setup'))$u->requires_pin_setup=true; $this->applyDeclaredIdentity($u,(array)($e['identity']??[])); $u->save();
+   $u->type=match($kind){'agent'=>AGENT_TYPE,'merchant'=>MERCHANT_TYPE,default=>CUSTOMER_TYPE}; $u->password=Hash::make(Str::random(64)); $u->is_active=0; $u->is_phone_verified=0; $u->is_email_verified=0; $u->is_kyc_verified=0; $u->kyc_tier=0; $u->zone_code=ZoneAssignmentService::ZONE_UNKNOWN; if(Schema::hasColumn('users','requires_pin_setup'))$u->requires_pin_setup=true; $this->applyDeclaredIdentity($u,(array)($e['identity']??[])); $this->applyDeclaredProfile($u,(array)($e['profile']??[])); $u->save();
    if($kind==='customer'&&Schema::hasTable('legal_name_events'))DB::table('legal_name_events')->insert(['user_id'=>$u->id,'event_type'=>'DECLARED_AT_REGISTRATION','source'=>'muwathaq','old_name_encrypted'=>null,'new_name_encrypted'=>\Illuminate\Support\Facades\Crypt::encryptString((string)$u->declared_legal_name),'document_id'=>null,'reviewer_id'=>null,'match_status'=>null,'match_score'=>null,'reason'=>null,'created_at'=>now()]);
    $s=(array)($e['subject']??[]);
    if($kind==='merchant'){ $m=Merchant::query()->where('user_id',$u->id)->first(); if(!$m){ /* AMIAL-BUSINESS-GATEWAY-001: كان firstOrCreate يسقط بـMassAssignmentException (لا fillable في Merchant) فيسقط اعتماد كل تاجر؛ الإسناد الصريح كما في MerchantAccountOpeningController. */ $m=new Merchant; $m->user_id=$u->id; $m->store_name=trim((string)($s['store_name']??'')); $m->address=trim((string)($s['operating_address']??''))?:'—'; $m->save(); } if(trim((string)$m->merchant_number)==='')app(MerchantNumberService::class)->assignTo($m); MerchantProfile::firstOrCreate(['user_id'=>$u->id],['business_type'=>(string)$e['business_type'],'verification_status'=>'unverified','zone_code'=>ZoneAssignmentService::ZONE_UNKNOWN,'subscription_plan'=>\App\Support\Access\AccessConstants::PLAN_FREE,'subscription_expires_at'=>now()->addDays(30),'daily_receive_limit'=>'5000000','single_receive_limit'=>'1000000','monthly_receive_limit'=>'50000000','can_transfer_out'=>true]); app(VerticalBootstrapService::class)->ensureFor($u); }
@@ -58,6 +58,30 @@ final class MuwathaqProvisioningService {
  }
 
  /** هوية العميل كما صرّح بها عند التسجيل (رقمها ونوعها وانتهاؤها) تُحفظ، فيُكشف تكرارُها في كل تسجيلٍ بعدها. التصريحُ لا يُوثَّق به الحساب. */
+ /**
+  * AMIAL-MUWATHAQ-PROFILE-HANDOFF-001 — ملفُّ «اعرف عميلك» المصرَّح به يصل مع التهيئة.
+  *
+  * كان موثّق يجمع المهنة ومصدر الدخل والغرض والمديرية والاسم الإنجليزي ثم لا يُرسل منها شيئاً، فيظهر ملفُّ العميل في أميال باي
+  * «٧ حقول ناقصة» ويُطلب من العميل إدخال ما أدخله، ولا يمكن فحصُ العقوبات بلا اسمٍ إنجليزي. وهو ملفٌّ تصريحيٌّ لا وثيقة:
+  * الوثائق والصور تبقى لدى موثّق. ما لا يُعرَف قيمتُه لا يُكتب (لا تُخمَّن)، والملفُّ مكمِّلٌ فلا يُسقط فشلُه التهيئة.
+  */
+ private function applyDeclaredProfile(User $u,array $p):void
+ {
+  if($p===[])return;
+  try{
+   $income=['salary'=>'salary','business'=>'business','freelance'=>'business','remittance'=>'remittance','pension'=>'other','other'=>'other'];
+   $purpose=['daily'=>'payments','savings'=>'savings','business'=>'business','remittance'=>'remittance','other'=>'other'];
+   $clean=fn(string $k,int $max=190):string=>mb_substr(trim((string)($p[$k]??'')),0,$max);
+   $in=[];
+   $nameEn=$clean('name_en',120); if(preg_match('/^[A-Za-z][A-Za-z .\'\-]{2,}$/',$nameEn)===1)$in['name_en']=$nameEn;
+   foreach(['residence_district'=>80,'residence_area'=>120]as$k=>$max){ $v=$clean($k,$max); if($v!=='')$in[$k]=$v; }   // حدودُ أعمدة users (المخالفُ كان يُسقط save() كلَّه)
+   $src=(string)($p['income_source']??''); if(isset($income[$src]))$in['income_source']=$income[$src];
+   $why=(string)($p['account_purpose']??''); if(isset($purpose[$why]))$in['account_purpose']=$purpose[$why];
+   if($in!==[])\App\Support\Kyc\KycProfileFields::fill($u,\Illuminate\Http\Request::create('/','POST',$in));
+   $occ=$clean('occupation',100); if($occ!==''&&Schema::hasColumn('users','occupation'))$u->occupation=$occ;
+   $dob=$clean('birth_date',10); if(preg_match('/^\d{4}-\d{2}-\d{2}$/',$dob)===1&&Schema::hasColumn('users','date_of_birth'))$u->date_of_birth=$dob;
+  }catch(\Throwable){/* الملفُّ مكمِّلٌ لا شرط */}
+ }
  private function applyDeclaredIdentity(User $u,array $id):void
  {
   $digits=preg_replace('/[^\d]/','',\App\Services\EncryptionService::foldDigits(trim((string)($id['identification_number']??''))));

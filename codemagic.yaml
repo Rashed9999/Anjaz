@@ -108,7 +108,8 @@ workflows:
           cd 02_flutter_app
           # --split-per-abi ينتج APK منفصلاً لكل معالج (arm64 للهواتف الحديثة)
           # فبدل حزمة عملاقة تحوي كل المعماريات، حجم كل ملف ~الثلث.
-          flutter build apk --release --split-per-abi
+          # AMIAL-SEC-OBFUSCATE-001: تعتيمُ Dart (رموز التصحيح تُحفظ خارج الـAPK لقلب الانهيارات).
+          flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols
     artifacts:
       # ستجد عدّة ملفات؛ نزّل «arm64-v8a» للهواتف الحديثة (الأصغر والأنسب).
       - 02_flutter_app/build/app/outputs/flutter-apk/*.apk

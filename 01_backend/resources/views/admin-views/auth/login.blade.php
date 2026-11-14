@@ -117,12 +117,8 @@
                         </div>
                     </div>
 
-                    <div class="remember-row mb-4">
-                        <div class="form-check m-0">
-                            <input class="form-check-input" type="checkbox" name="remember" id="remember" value="1">
-                            <label class="form-check-label" for="remember">تذكرني على هذا الجهاز</label>
-                        </div>
-                    </div>
+                    {{-- لا «تذكرني» للإدارة (AMIAL-ADMIN-NO-REMEMBER-001): الجلسة تنتهي بالخمول. --}}
+                    <p class="small text-muted mb-4">تنتهي جلسة لوحة الإدارة تلقائياً بعد فترة خمول.</p>
 
                     <button type="submit" class="btn btn-primary w-100 login-submit"
                             data-testid="login-submit" id="admin-login-submit">

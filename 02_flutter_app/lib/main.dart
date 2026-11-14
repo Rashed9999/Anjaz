@@ -4,6 +4,7 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:camera/camera.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -29,6 +30,12 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterL
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // AMIAL-SEC-LOGS-001 — `debugPrint` يطبع في نسخة الإنتاج أيضاً (يظهر في Logcat على جهاز المستخدم،
+  // وفيه مسارات وأخطاء API ماليّة). في الإصدار يُجعل لا-شيء؛ يبقى كاملاً في التطوير.
+  if (!kDebugMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
 
   // AMIAL-FCM-001: كانت هنا إعدادات مشروع القالب gem-b5006 مكتوبةً يدوياً،
   // وهي لمشروع لا تملكه ولا حزمتنا مسجّلة فيه. صارت تُقرأ من AmialFirebaseOptions

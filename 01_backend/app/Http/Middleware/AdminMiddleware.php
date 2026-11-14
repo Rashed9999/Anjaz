@@ -18,6 +18,22 @@ class AdminMiddleware
     public function handle(Request $request, Closure $next): mixed
     {
         if (Auth::guard('user')->check() && Auth::user()->type === ADMIN_TYPE) {
+            // AMIAL-ADMIN-IDLE-001 — جلسةُ الإدارة تنتهي بالخمول (٣٠ دقيقة افتراضياً): لوحةٌ فيها أموالٌ وهويّات لا تبقى مفتوحةً
+            // على هاتفٍ تُرك أو ضاع. كل طلبٍ يجدّد المهلة، فمن يعمل لا يُقاطَع.
+            $idle = max(5, (int) config('amial.admin_idle_minutes', 30)) * 60;
+            $last = (int) $request->session()->get('admin_last_activity', 0);
+
+            if ($last > 0 && (time() - $last) > $idle) {
+                Auth::guard('user')->logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return redirect()->route('admin.auth.login')
+                    ->withErrors(['انتهت جلستك بعد فترة خمول. سجّل الدخول من جديد.']);
+            }
+
+            $request->session()->put('admin_last_activity', time());
+
             return $next($request);
         }
 

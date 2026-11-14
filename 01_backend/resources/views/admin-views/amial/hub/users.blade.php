@@ -73,7 +73,9 @@
                 <div class="card-header d-flex gap-2 flex-wrap align-items-center">
                     <input type="text" id="search-box" class="form-control" style="max-width:280px"
                            placeholder="بحث بالاسم أو الهاتف أو الرقم…">
-                    @php($muwathaqOpenUrl = rtrim((string) config('muwathaq.base_url'), '/'))
+                    @php
+                        $muwathaqOpenUrl = rtrim((string) config('muwathaq.base_url'), '/');
+                    @endphp
                     @if($muwathaqOpenUrl !== '')
                         <a class="btn btn-primary ms-auto" target="_blank" rel="noopener"
                            href="{{ $hubType == 1 ? $muwathaqOpenUrl.'/accounts/new-agent' : $muwathaqOpenUrl.'/open-account?type='.($hubType == 3 ? 'merchant' : 'customer') }}">
@@ -117,98 +119,29 @@
 {{-- ===== Modal: إضافة مستخدم ===== --}}
 <div class="modal fade" id="modal-add" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
-        <div class="modal-header"><div><h5 class="modal-title mb-1">ملف فتح {{ $hubType == 3 ? 'منشأة' : ($hubType == 1 ? 'وكيل' : 'عميل') }}</h5>
-            <small class="text-muted">نموذج واحد: تُحفظ البيانات في الحساب ونسخة إلكترونية قابلة للطباعة في الأرشيف.</small></div>
+        <div class="modal-header"><div><h5 class="modal-title mb-1">فتح {{ $hubType == 3 ? 'منشأة' : ($hubType == 1 ? 'وكيل' : 'عميل') }} — في موثّق</h5>
+            <small class="text-muted">أميال باي يستلم الحساب بعد قرار موثّق، ولا ينشئه.</small></div>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <form class="modal-body" id="opening-dossier-form" enctype="multipart/form-data">
-            <div class="alert alert-warning small py-2">الحساب يُنشأ <strong>قيد مراجعة الامتثال</strong>، ولا تُعدّ الورقة الموقعة أو إدخال الموظف تحققاً من ملكية الهاتف. لا تُحفظ كلمة السر أو PIN في الأرشيف.</div>
-            <div class="accordion" id="opening-dossier-sections">
-                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#opening-owner">1. صاحب الحساب والاتصال</button></h2>
-                    <div id="opening-owner" class="accordion-collapse collapse show"><div class="accordion-body"><div class="row g-3">
-                        <div class="col-md-4"><label class="form-label">الاسم الأول *</label><input class="form-control" name="f_name" required></div>
-                        <div class="col-md-4"><label class="form-label">اسم الأب</label><input class="form-control" name="father_name"></div>
-                        <div class="col-md-4"><label class="form-label">الاسم الأخير *</label><input class="form-control" name="l_name" required></div>
-                        <div class="col-md-6"><label class="form-label">الاسم بالإنجليزية</label><input class="form-control" name="name_en" dir="ltr"></div>
-                        <div class="col-md-3"><label class="form-label">الجنس *</label><select class="form-select" name="gender" required><option value="">اختر</option><option value="male">ذكر</option><option value="female">أنثى</option><option value="other">آخر</option></select></div>
-                        <div class="col-md-3"><label class="form-label">تاريخ الميلاد *</label><input class="form-control" name="date_of_birth" type="date" required></div>
-                        <div class="col-md-3"><label class="form-label">مفتاح الدولة *</label><input class="form-control" name="dial_country_code" value="+967" dir="ltr" required></div>
-                        <div class="col-md-4"><label class="form-label">رقم الجوال *</label><input class="form-control" name="phone" dir="ltr" placeholder="771234567" required></div>
-                        <div class="col-md-5"><label class="form-label">البريد الإلكتروني *</label><input class="form-control" name="email" type="email" dir="ltr" maxlength="255" required></div>
-                    </div></div></div></div>
-                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-identity">2. الهوية والعنوان</button></h2>
-                    <div id="opening-identity" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3">
-                        <div class="col-md-3"><label class="form-label">نوع الهوية *</label><select class="form-select" name="identification_type" required><option value="">اختر</option><option value="nid">بطاقة شخصية</option><option value="passport">جواز سفر</option><option value="driving_licence">رخصة قيادة</option><option value="trade_license">ترخيص تجاري</option></select></div>
-                        <div class="col-md-3"><label class="form-label">رقم الهوية *</label><input class="form-control" name="identification_number" required></div>
-                        <div class="col-md-3"><label class="form-label">تاريخ الإصدار</label><input class="form-control" name="identification_issue_date" type="date"></div>
-                        <div class="col-md-3"><label class="form-label">تاريخ الانتهاء</label><input class="form-control" name="identification_expiry_date" type="date"></div>
-                        <div class="col-md-4"><label class="form-label">مكان الإصدار</label><input class="form-control" name="id_place_of_issue"></div>
-                        <div class="col-md-4"><label class="form-label">بلد الميلاد</label><input class="form-control" name="country_of_birth" value="اليمن"></div>
-                        <div class="col-md-4"><label class="form-label">الحالة الاجتماعية</label><select class="form-select" name="marital_status"><option value="">غير محدد</option><option value="single">أعزب</option><option value="married">متزوج</option><option value="divorced">مطلق</option><option value="widowed">أرمل</option></select></div>
-                        <div class="col-md-6"><label class="form-label">العنوان التفصيلي *</label><input class="form-control" name="address" required></div>
-                        <div class="col-md-3"><label class="form-label">محافظة السكن</label><select class="form-select" name="residence_governorate"><option value="">اختر</option>@foreach(\App\Support\YemenGovernorates::all() as $governorate)<option value="{{ $governorate['code'] }}">{{ $governorate['name'] }}</option>@endforeach</select></div>
-                        <div class="col-md-3"><label class="form-label">المديرية *</label><input class="form-control" name="residence_district" required></div>
-                        <div class="col-md-6"><label class="form-label">المنطقة / الحي</label><input class="form-control" name="residence_area"></div>
-                        <div class="col-md-6"><label class="form-label">علامة مميزة</label><input class="form-control" name="residence_landmark"></div>
-                        <div class="col-md-3"><label class="form-label">وجه الهوية *</label><input class="form-control" name="identity_front" type="file" accept="image/*,application/pdf" required></div>
-                        <div class="col-md-3"><label class="form-label">ظهر الهوية *</label><input class="form-control" name="identity_back" type="file" accept="image/*,application/pdf" required></div>
-                        <div class="col-md-3"><label class="form-label">صورة شخصية *</label><input class="form-control" name="selfie" type="file" accept="image/*" required></div>
-                        <div class="col-md-3"><label class="form-label">إثبات العنوان</label><input class="form-control" name="address_proof" type="file" accept="image/*,application/pdf"></div>
-                    </div></div></div></div>
-                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-financial">3. العمل والامتثال والمراجع</button></h2>
-                    <div id="opening-financial" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3">
-                        <div class="col-md-4"><label class="form-label">المهنة</label><input class="form-control" name="occupation"></div><div class="col-md-4"><label class="form-label">جهة العمل</label><input class="form-control" name="employer_name"></div><div class="col-md-4"><label class="form-label">المسمى الوظيفي</label><input class="form-control" name="job_title"></div>
-                        <div class="col-md-6"><label class="form-label">عنوان العمل</label><input class="form-control" name="work_address"></div>
-                        <div class="col-md-3"><label class="form-label">مصدر الدخل *</label><select class="form-select" name="income_source" required><option value="">اختر</option><option value="salary">راتب</option><option value="business">تجارة</option><option value="remittance">حوالات</option><option value="investment">استثمار</option><option value="rent">إيجار</option><option value="other">أخرى</option></select></div>
-                        <div class="col-md-3"><label class="form-label">الغرض من الحساب *</label><select class="form-select" name="account_purpose" required><option value="">اختر</option><option value="payments">مدفوعات</option><option value="remittance">حوالات</option><option value="business">تجارة</option><option value="savings">ادخار</option><option value="salary">راتب</option><option value="other">أخرى</option></select></div>
-                        <div class="col-md-4"><label class="form-label">الدخل الشهري</label><input class="form-control" name="monthly_income" type="number" min="0"></div><div class="col-md-2"><label class="form-label">العملة</label><input class="form-control" name="monthly_income_currency" value="YER" maxlength="3" dir="ltr"></div>
-                        <div class="col-md-3"><label class="form-label">شخص سياسي بارز؟ *</label><select class="form-select" name="is_pep" required><option value="">اختر</option><option value="0">لا</option><option value="1">نعم</option></select></div><div class="col-md-9"><label class="form-label">المنصب أو الصلة (إن وجدت)</label><input class="form-control" name="pep_position"></div>
-                        <div class="col-md-4"><label class="form-label">مرجع أول: الاسم</label><input class="form-control" name="kin_name"></div><div class="col-md-4"><label class="form-label">جوال المرجع</label><input class="form-control" name="kin_phone" dir="ltr"></div><div class="col-md-4"><label class="form-label">الصلة</label><input class="form-control" name="kin_relation"></div>
-                        <div class="col-md-4"><label class="form-label">مرجع ثانٍ: الاسم</label><input class="form-control" name="kin2_name"></div><div class="col-md-4"><label class="form-label">جوال المرجع</label><input class="form-control" name="kin2_phone" dir="ltr"></div><div class="col-md-4"><label class="form-label">الصلة</label><input class="form-control" name="kin2_relation"></div>
-                    </div></div></div></div>
-                @if($hubType == 3)
-                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-business">4. هوية المنشأة</button></h2>
-                    <div id="opening-business" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3">
-                        <div class="col-md-6"><label class="form-label">اسم المنشأة / المتجر *</label><input class="form-control" name="store_name" required></div>
-                        <div class="col-md-3"><label class="form-label">نوع النشاط *</label>{{-- AMIAL-VERTICAL-OOP-004 — **القائمةُ تُولَّد من مصدر الأسماء.**
-
-                                 كانت ستّةَ خياراتٍ مكتوبةً بيدها، وهجاؤها
-                                 يخالف ما تعرضه اللوحاتُ الأخرى («محطة وقود»
-                                 هنا و«محطّة وقود» في ٣٦٠). **فالتاجرُ يُنشَأ
-                                 باسمٍ ويُعرَض بآخر.** والأخطرُ أنّ قطاعاً
-                                 يُضاف في الشيفرة لا يظهر هنا أبداً: يُنشئه
-                                 المديرُ فلا يجده في القائمة. --}}
-                            <select class="form-select" name="business_type" required><option value="">اختر</option>@foreach(\App\Domain\Verticals\VerticalRegistry::labels() as $bizCode => $bizLabel)<option value="{{ $bizCode }}">{{ $bizLabel }}</option>@endforeach</select></div>
-                        <div class="col-md-3"><label class="form-label">الباقة</label><select class="form-select" name="plan"><option value="free">مجاني — 0 ر.س</option><option value="business">الأعمال — 35 ر.س</option><option value="enterprise">مؤسسة — 99 ر.س</option></select></div>
-                        <div class="col-md-4"><label class="form-label">رقم السجل / الترخيص *</label><input class="form-control" name="business_registration_number" required></div><div class="col-md-4"><label class="form-label">الشكل القانوني</label><input class="form-control" name="business_legal_form" placeholder="مؤسسة فردية، شركة…"></div><div class="col-md-4"><label class="form-label">فئة النشاط</label><input class="form-control" name="business_category"></div>
-                        <div class="col-md-6"><label class="form-label">المفوض بالتوقيع *</label><input class="form-control" name="authorized_signatory_name" required></div><div class="col-md-6"><label class="form-label">هوية المفوض *</label><input class="form-control" name="authorized_signatory_id" required></div>
-                    </div></div></div></div>
-                @endif
-                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-consent">{{ $hubType == 3 ? '5' : '4' }}. الإقرار والأرشفة</button></h2>
-                    <div id="opening-consent" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3"><div class="col-md-6"><label class="form-label">نسخة النموذج الورقي الموقّع (اختياري)</label><input class="form-control" name="signed_paper_form" type="file" accept="application/pdf,image/jpeg,image/png"><small class="text-muted">PDF أو JPG/PNG حتى 8MB. تُشفّر النسخة وتُربط بهذا الملف.</small></div><div class="col-md-6"><label class="form-label">بيانات الدخول الأولية</label><input class="form-control mb-2" name="password" type="password" minlength="8" placeholder="كلمة سر مؤقتة (8 أحرف على الأقل)" required dir="ltr"><input class="form-control" name="pin" inputmode="numeric" maxlength="4" placeholder="PIN معاملات من 4 أرقام (اختياري)" dir="ltr"></div><div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="declaration_accepted" value="1" id="declaration-accepted" required><label class="form-check-label" for="declaration-accepted">أقرّ بأن البيانات قُدّمت من صاحبها أو مفوضه، وبأنه اطّلع على الموافقات المطلوبة. ستُراجع الهوية والهاتف قبل اعتماد الحساب.</label></div></div></div></div></div>
+        {{-- AMIAL-NO-ACCOUNT-CREATION-001 — أميال باي لا ينشئ حسابات. كان هنا نموذجُ «فتح ملف» كاملٌ يبدو منشِئاً، والخادمُ يردّه
+             بـ410 (ACCOUNT_CREATION_OWNED_BY_MUWATHAQ): واجهةٌ تقول ما لا تفعله. فصار الباب إلى موثّق مباشرةً. --}}
+        <div class="modal-body">
+            @php
+                $muwathaqBase = rtrim(trim((string) config('muwathaq.base_url')), '/');
+                $muwathaqPath = $hubType == 1 ? '/accounts/new-agent' : ($hubType == 3 ? '/open-account?type=merchant' : '/open-account?type=customer');
+                $subjectWord = $hubType == 3 ? 'منشأة' : ($hubType == 1 ? 'وكيل' : 'عميل');
+            @endphp
+            <div class="alert alert-info mb-3">
+                <strong>أميال باي لا ينشئ حسابات.</strong>
+                فتح الحسابات (عميل · تاجر · وكيل) يتم حصراً في <strong>موثّق</strong>: هناك تُجمع البيانات والوثائق، ويراجعها موظف،
+                ويعتمدها معتمد آخر (أربع عيون)، ثم يهيّئ أميال باي المحفظة والحدود بقناة موقّعة.
             </div>
-            {{-- ══════════════════════════════════════════════════════════
-                 AMIAL-HUB-MODAL-NEST-001 — **`</div>` واحدٌ كان ناقصاً،
-                 وبه ماتت ثلاثُ نوافذَ في ثلاث صفحات.**
-
-                 `<div class="accordion" id="opening-dossier-sections">`
-                 فُتح ولم يُغلَق، فابتلع `#modal-add` كلَّ ما بعده:
-                 `#modal-transfer` و`#modal-edit` و`#modal-tx` صارت
-                 **أبناءً له**. وهو `display:none` ما لم يُفتَح، والابنُ
-                 تحت أبٍ مخفيٍّ لا يُرسَم مهما فُتح.
-
-                 فتُضغط «✏️ تعديل» فتُضاف `.show` إلى عنصرٍ **مقاسُه
-                 صفرٌ في صفر** — لا نافذةَ ولا زرَّ حفظٍ ولا خطأ في أيّ
-                 سجلّ. وهو ما وصل بنصّه: «جرّبتهم لا يعملو».
-
-                 وقِيس في متصفّحٍ حقيقيّ:
-                   #modal-edit → أبوه #modal-add · العرض ٠ · الارتفاع ٠
-                   بين الافتتاحين: <div>=٨٢ و</div>=٨١ — الفرقُ واحد.
-            ══════════════════════════════════════════════════════════ --}}
-            </div>
-            <div class="text-danger small" id="add-error"></div>
-        </form>
-        <div class="modal-footer">
-            <button class="btn btn-primary" id="add-submit">حفظ ملف الفتح وإنشاء الحساب</button>
+            @if ($muwathaqBase !== '')
+                <a class="btn btn-primary" href="{{ $muwathaqBase . $muwathaqPath }}" target="_blank" rel="noopener">
+                    فتح طلب {{ $subjectWord }} في موثّق ↗
+                </a>
+            @else
+                <span class="text-danger small">عنوان موثّق غير مضبوط في MUWATHAQ_BASE_URL.</span>
+            @endif
         </div>
     </div></div>
 </div>
@@ -262,7 +195,8 @@
                 </div>
 
                 {{-- ② الوثائق --}}
-                <div class="mb-4">
+                <div class="alert alert-info small d-none mb-4" id="edit-muwathaq-note" role="status"></div>
+                <div class="mb-4" id="edit-docs-block">
                     <h6 class="fw-bold mb-2">وثائق الهويّة</h6>
                     <div class="table-responsive">
                         <table class="table table-sm align-middle">
@@ -823,6 +757,22 @@
                   `<li class="list-group-item px-0 py-1">⛔ ${esc(b.text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</li>`
                 ).join('') + '</ul>';
 
+        // ②-أ حسابٌ فتحه موثّق: الوثائق محفوظةٌ لديه ولا تُرفع ولا تُعتمد هنا (يظهر المرجع بدل «ناقصة»).
+        const mwNote = document.getElementById('edit-muwathaq-note');
+        const docsBlock = document.getElementById('edit-docs-block');
+        if (d.muwathaq) {
+            mwNote.classList.remove('d-none');
+            mwNote.innerHTML = 'فتح هذا الحساب <strong>موثّق</strong>'
+                + (d.muwathaq.tier ? ' (المستوى ' + esc(String(d.muwathaq.tier)) + ')' : '')
+                + ' — المرجع <span dir="ltr">' + esc(d.muwathaq.reference) + '</span>'
+                + (d.muwathaq.decided_at ? ' · ' + esc(d.muwathaq.decided_at) : '')
+                + '. وثائق الهويّة محفوظةٌ لدى موثّق، ولا تُرفع ولا تُعتمد من هنا.';
+            docsBlock.classList.add('d-none');
+        } else {
+            mwNote.classList.add('d-none');
+            docsBlock.classList.remove('d-none');
+        }
+
         // ② الوثائق
         document.getElementById('edit-docs').innerHTML = d.documents.map(doc => `
             <tr>
@@ -867,7 +817,8 @@
         showZoneHint();
 
         document.getElementById('edit-phone').textContent = d.phone || '';
-        document.getElementById('edit-approve-account').disabled = d.kyc === 1;
+        document.getElementById('edit-approve-account').disabled = d.kyc === 1 || !!d.muwathaq;
+        document.getElementById('edit-approve-account').title = d.muwathaq ? 'الحساب معتمدٌ من موثّق' : '';
         document.getElementById('edit-loading').classList.add('d-none');
         document.getElementById('edit-body').classList.remove('d-none');
     }
@@ -963,23 +914,6 @@
                 ? await post(`${base}/agents/${transferUserId}/credit`, {amount, reference: reason})
                 : await post(`${base}/transfer`, {to_user_id: transferUserId, amount, reason});
             bootstrap.Modal.getInstance(document.getElementById('modal-transfer')).hide();
-            alert(j.message); loadUsers();
-        } catch (err) { errEl.textContent = err.message; }
-    });
-
-    document.getElementById('add-submit').addEventListener('click', async () => {
-        const errEl = document.getElementById('add-error');
-        errEl.textContent = '';
-        try {
-            const form = document.getElementById('opening-dossier-form');
-            if (!form.reportValidity()) return;
-            const r = await fetch(`${base}/${slug}/users`, {
-                method: 'POST', headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
-                body: new FormData(form),
-            });
-            const j = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error(j.message || ('خطأ ' + r.status));
-            bootstrap.Modal.getInstance(document.getElementById('modal-add')).hide();
             alert(j.message); loadUsers();
         } catch (err) { errEl.textContent = err.message; }
     });

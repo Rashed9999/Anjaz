@@ -239,7 +239,9 @@ class User extends Authenticatable
         if (is_array($imageUrlArray)) {
             foreach ($imageUrlArray as $key => $item) {
                 if (Storage::disk('public')->exists('user/identity/' . $item)) {
-                    $imageUrlArray[$key] = dynamicStorage(path: 'storage/app/public/user/identity/' . $item);
+                    $imageUrlArray[$key] = \Illuminate\Support\Facades\Route::has('admin.amial.hub.legacy-identity')
+                        ? route('admin.amial.hub.legacy-identity', ['file' => $item])
+                        : null;
                 } else {
                     $imageUrlArray[$key] = dynamicAsset(path: 'public/assets/admin/img/900x400/img1.jpg');
                 }

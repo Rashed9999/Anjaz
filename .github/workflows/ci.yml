@@ -439,7 +439,7 @@ jobs:
       - name: بناء APK واحد قابل للتثبيت
         run: |
           if [ "$APK_BUILD_TYPE" = "release" ]; then
-            flutter build apk --release --split-per-abi
+            flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols
             SRC="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
             ABI="arm64-v8a"
           else
