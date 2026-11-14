@@ -73,7 +73,9 @@
                 <div class="card-header d-flex gap-2 flex-wrap align-items-center">
                     <input type="text" id="search-box" class="form-control" style="max-width:280px"
                            placeholder="بحث بالاسم أو الهاتف أو الرقم…">
-                    @php($muwathaqOpenUrl = rtrim((string) config('muwathaq.base_url'), '/'))
+                    @php
+                        $muwathaqOpenUrl = rtrim((string) config('muwathaq.base_url'), '/');
+                    @endphp
                     @if($muwathaqOpenUrl !== '')
                         <a class="btn btn-primary ms-auto" target="_blank" rel="noopener"
                            href="{{ $hubType == 1 ? $muwathaqOpenUrl.'/accounts/new-agent' : $muwathaqOpenUrl.'/open-account?type='.($hubType == 3 ? 'merchant' : 'customer') }}">
