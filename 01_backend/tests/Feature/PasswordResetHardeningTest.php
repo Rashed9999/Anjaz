@@ -20,7 +20,9 @@ class PasswordResetHardeningTest extends TestCase
     private function seedReset(string $phone, string $otp = '654321', int $ageSeconds = 0): User
     {
         $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => $phone, 'password' => bcrypt('1111')]);
-        DB::table('password_resets')->insert(['phone' => $phone, 'token' => $otp, 'otp_hit_count' => 0, 'is_temp_blocked' => 0, 'created_at' => now()->subSeconds($ageSeconds)]);
+        // AMIAL-SEC-RESET-HASH-002 — الكاتبُ الوحيد يكتب البصمةَ دائماً اليوم؛
+        // بذرُ الاختبار يطابقه، وإلا رُفض رمزٌ صحيحٌ زُرع خاماً بالخطأ.
+        DB::table('password_resets')->insert(['phone' => $phone, 'token' => PasswordResetGuard::digest($otp), 'otp_hit_count' => 0, 'is_temp_blocked' => 0, 'created_at' => now()->subSeconds($ageSeconds)]);
 
         return $user;
     }

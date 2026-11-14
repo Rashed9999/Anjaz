@@ -117,8 +117,11 @@ class PasswordResetController extends Controller
         $maxOtpHitTime = Helpers::get_business_settings('otp_resend_time') ?? 60;
         $tempBlockTime = Helpers::get_business_settings('temporary_block_time') ?? 600;
 
+        // AMIAL-SEC-RESET-HASH-002 — البصمةُ وحدَها، لا النصّ الصريح. كانت
+        // هذه المقارنةُ تقبل الرمزَ الخام أيضاً (توافقاً مؤقّتاً مع صفوفٍ
+        // قديمة لم يبقَ منها شيءٌ حيٌّ اليوم — انظر PasswordResetGuard).
         $data = DB::table('password_resets')->where('phone', $request->phone)
-            ->whereIn('token', [\App\Services\Otp\PasswordResetGuard::digest((string) $request['otp']), (string) $request['otp']])->first();
+            ->where('token', \App\Services\Otp\PasswordResetGuard::digest((string) $request['otp']))->first();
 
         if (isset($data)) {
 

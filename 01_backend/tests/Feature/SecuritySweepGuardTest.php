@@ -40,7 +40,7 @@ class SecuritySweepGuardTest extends TestCase
     }
 
     /** @test */
-    public function a_digested_token_is_consumed_and_a_legacy_clear_one_still_works_once(): void
+    public function a_digested_token_is_consumed_once_and_never_twice(): void
     {
         $phone = '967770000771';
         User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => $phone]);
@@ -50,6 +50,49 @@ class SecuritySweepGuardTest extends TestCase
         $this->assertFalse(app(PasswordResetGuard::class)->consume($phone, '000000'), 'رمزٌ خاطئ قُبل.');
         $this->assertTrue(app(PasswordResetGuard::class)->consume($phone, '482913'));
         $this->assertFalse(app(PasswordResetGuard::class)->consume($phone, '482913'), 'الرمز لا يُستهلك مرّتين.');
+    }
+
+    /**
+     * AMIAL-SEC-RESET-HASH-002 — **القبولُ المؤقّت للنصّ الصريح أُزيل نهائيّاً.**
+     * مرّ ما يكفي من النشرات منذ أن صار الكاتبُ الوحيد يكتب البصمةَ دائماً
+     * (`SEC-2026-11`)، فلا صفَّ نصّيّاً صريحاً حيٍّ يبقى — ومقارنةٌ مباشرةٌ
+     * بالنصّ الصريح لم تعد مسموحةً أصلاً، ولو تصادف أن يحمل الصفُّ نصّاً خاماً.
+     *
+     * @test
+     */
+    public function a_row_written_as_plain_text_is_refused_not_accepted(): void
+    {
+        $phone = '967770000772';
+        User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => $phone]);
+
+        // صفٌّ متخيَّلٌ كُتب نصّاً خاماً — كما كانت تكتبه نسخةٌ أقدم من الكاتب.
+        DB::table('password_resets')->insert(['phone' => $phone, 'token' => '482913', 'otp_hit_count' => 0, 'is_temp_blocked' => 0, 'created_at' => now()]);
+
+        $this->assertFalse(app(PasswordResetGuard::class)->consume($phone, '482913'),
+            'رمزٌ خامٌ في الصفّ ما زال يُقبل — والبصمةُ هي المقارنة الوحيدة المسموحة اليوم.');
+    }
+
+    /**
+     * AMIAL-SEC-RESET-HASH-002 — **وبابُ `verify-token` كان يحمل نفس القبول
+     * المزدوج بصمةً أو نصّاً خاماً، مستقلّاً عن `PasswordResetGuard::consume()`
+     * — فإصلاح الباب الأوّل وحده كان يترك هذا الثاني مفتوحاً.**
+     *
+     * @test
+     */
+    public function verify_token_endpoint_also_only_accepts_the_digest(): void
+    {
+        $phone = '967770000773';
+        User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => $phone]);
+
+        DB::table('password_resets')->insert(['phone' => $phone, 'token' => '482913', 'otp_hit_count' => 0, 'is_temp_blocked' => 0, 'created_at' => now()]);
+
+        $this->postJson('/api/v1/customer/auth/verify-token', ['phone' => $phone, 'otp' => '482913'])
+            ->assertStatus(400);
+
+        DB::table('password_resets')->where('phone', $phone)->update(['token' => PasswordResetGuard::digest('482913')]);
+
+        $this->postJson('/api/v1/customer/auth/verify-token', ['phone' => $phone, 'otp' => '482913'])
+            ->assertOk();
     }
 
     /** @test */
