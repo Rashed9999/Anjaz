@@ -1,0 +1,662 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_business_refunds_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_cash_out_screen.dart';
+import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_accept_payment_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_transactions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
+import 'package:amial_pay/features/merchant/screens/inventory_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
+import 'package:amial_pay/features/suppliers/screens/suppliers_screen.dart';
+import 'package:amial_pay/features/access/widgets/access_gate.dart';
+import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
+import 'package:amial_pay/features/merchant/screens/split_bill_create_screen.dart';
+import 'package:amial_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
+import 'package:amial_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
+import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_account_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_payout_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_sales_history_screen.dart';
+
+/// **ملكيّةُ المنشأة، وغيابُ المتحكّم لا يُقرأ ملكيّةً.**
+///
+/// اللوحةُ تُفتح في مسارات اختبارٍ وشاشاتٍ لا يُسجَّل فيها
+/// `AccessController`. **فغيابُه يُقرأ «لستَ المالك»** — أضيقُ
+/// الاحتمالين، فلا يُفتح بابُ مالٍ على مجهول. (القاعدة السابعة.)
+bool _isOwner() => Get.isRegistered<AccessController>()
+    ? Get.find<AccessController>().isMerchantOwner
+    : false;
+
+/// AMIAL-MERCHANT-APP-001 (v1.6)
+class MerchantDashboardScreen extends StatefulWidget {
+  const MerchantDashboardScreen({super.key});
+
+  @override
+  State<MerchantDashboardScreen> createState() => _MerchantDashboardScreenState();
+}
+
+class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Get.find<MerchantController>().loadProfile();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AmialColors.background,
+      body: RefreshIndicator(
+        onRefresh: () => Get.find<MerchantController>().loadProfile(),
+        color: AmialColors.primary,
+        child: Obx(() {
+          final ctrl = Get.find<MerchantController>();
+          final merchant = ctrl.merchant.value;
+
+          return ListView(
+            children: [
+              // ====== Header ======
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AmialColors.primary, Color(0xFF1D4FB8)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius:
+                      BorderRadius.vertical(bottom: Radius.circular(24)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 26,
+                          backgroundColor: Colors.white24,
+                          backgroundImage: merchant?.logoUrl != null
+                              ? NetworkImage(merchant!.logoUrl!)
+                              : null,
+                          child: merchant?.logoUrl == null
+                              ? const Icon(Icons.store,
+                                  color: Colors.white, size: 28)
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('تاجر أميال باي',
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 12)),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      merchant?.displayName ?? '...',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  if (merchant?.verified == true) ...[
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.verified,
+                                        color: AmialColors.yellow, size: 16),
+                                  ],
+                                ],
+                              ),
+                              if (merchant?.merchantNumber != null)
+                                Text(
+                                  'رقم التاجر: ${merchant!.merchantNumber}',
+                                  style: const TextStyle(
+                                      color: Colors.white70, fontSize: 11),
+                                ),
+                            ],
+                          ),
+                        ),
+                        // AMIAL-NOTIFICATIONS-001 — جرس الإشعارات مع badge
+                        _NotificationBell(),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.account_balance_wallet,
+                              color: Colors.white, size: 28),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('رصيد محفظة أميال الإلكتروني',
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 12)),
+                              const SizedBox(height: 2),
+                              // **«غير معروف» ليس صفراً ولا «null».** الخادمُ
+                              // يحجب الرصيدَ عن موظّف نقطة البيع، فيُقال
+                              // ذلك ولا يُطبع رقمٌ ولا كلمةٌ إنجليزيّة.
+                              Text(
+                                ctrl.stats.value.balance == null
+                                    ? 'غير معروض لحسابك'
+                                    : '${ctrl.stats.value.balance} ر.ي',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // AMIAL-MERCHANT-VERIFY-001 — Banner لغير الموثَّقين
+              if (merchant?.verified != true)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => Get.to(() => const MerchantVerificationScreen()),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AmialColors.yellow.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AmialColors.yellowDark),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: AmialColors.yellowDark,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.verified_user, color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('وثّق متجرك',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          Text('احصل على شارة موثَّق وزِد ثقة عملائك',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                        ])),
+                        const Icon(Icons.chevron_left, color: AmialColors.yellowDark),
+                      ]),
+                    ),
+                  ),
+                ),
+
+              // ====== Quick Actions ======
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _ActionCard(
+                        icon: Icons.qr_code,
+                        color: AmialColors.primary,
+                        label: 'استلام دفعة',
+                        onTap: () =>
+                            Get.to(() => const MerchantAcceptPaymentScreen()),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _ActionCard(
+                        icon: Icons.undo,
+                        color: const Color(0xFFEF4444),
+                        label: 'استرجاع',
+                        onTap: () => Get.to(() => const MerchantRefundScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ====== Today's stats ======
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AmialColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.bar_chart, color: AmialColors.primary),
+                          SizedBox(width: 8),
+                          Text('إحصاءات اليوم',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 14)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _StatRow(
+                        label: 'المبيعات',
+                        value: '${ctrl.stats.value.todaySales} ر.ي',
+                        icon: Icons.trending_up,
+                        color: const Color(0xFF10B981),
+                      ),
+                      const Divider(height: 24),
+                      _StatRow(
+                        label: 'الاسترجاعات',
+                        value: '${ctrl.stats.value.todayRefunds} ر.ي',
+                        icon: Icons.undo,
+                        color: const Color(0xFFEF4444),
+                      ),
+                      const Divider(height: 24),
+                      _StatRow(
+                        label: 'الصافي',
+                        value: '${ctrl.stats.value.todayNet} ر.ي',
+                        icon: Icons.account_balance_wallet,
+                        color: AmialColors.primary,
+                      ),
+                      const Divider(height: 24),
+                      _StatRow(
+                        label: 'عدد العمليات',
+                        value: '${ctrl.stats.value.todayTransactionsCount}',
+                        icon: Icons.receipt_long,
+                        color: AmialColors.yellow,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // ====== Wallet, distinct from POS sales ======
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('محفظة أميال',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
+                    // **بابُ المال من اللوحة** — كان يقود إلى شاشة الحركات
+                    // باسمٍ ثانٍ للشيء نفسِه. والمحفظةُ تجمعهما.
+                    //
+                    // **ولمالكِه وحدَه**: محفظةُ المنشأة مالُ صاحبها،
+                    // والكاشيرُ يقرأ مبيعاتِ ورديّته لا رصيدَ متجره.
+                    if (_isOwner())
+                      TextButton(
+                        key: const Key('merchant-dashboard-wallet'),
+                        onPressed: () => Get.to(() => const MerchantWalletScreen()),
+                        child: const Text('عرض الكل'),
+                      ),
+                  ],
+                ),
+              ),
+
+              // ====== Verification status alert ======
+              if (merchant != null && !merchant.verified)
+                Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AmialColors.yellow.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: AmialColors.yellow.withValues(alpha: 0.5)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.warning_amber, color: AmialColors.primary),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'حسابك غير موثق بعد. أكمل عملية التوثيق للحصول على شارة التاجر الموثق.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // ====== Quick links ======
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                  _LinkTile(
+                      icon: Icons.insights_outlined,
+                      label: 'تقرير المال التشغيلي',
+                      onTap: () => Get.to(() => const FinancialTruthReportScreen(dailyOnly: true)),
+                    ),
+                    _LinkTile(
+                      icon: Icons.receipt_long_outlined,
+                      label: 'سجل مبيعات نقاط البيع والفواتير',
+                      onTap: () => Get.to(() => const MerchantSalesHistoryScreen()),
+                    ),
+                    _LinkTile(
+                      icon: Icons.receipt_long,
+                      label: 'دفتر العملاء والديون',
+                      onTap: () => Get.to(() => const CreditDashboardScreen()),
+                    ),
+                    // AMIAL-POS-001 (التصميم 36): كاشير بشبكة منتجات وسلة ووسائل دفع
+                    _LinkTile(
+                      icon: Icons.point_of_sale,
+                      label: 'الكاشير',
+                      onTap: () => Get.to(() => const CashierPosScreen()),
+                    ),
+                    // AMIAL-INVENTORY-001 (التصميم 42): إدارة المخزون — باقة البداية فأعلى
+                    AccessGate(
+                      feature: 'inventory',
+                      fallback: _LinkTile(
+                        icon: Icons.inventory_2_outlined,
+                        label: 'إدارة المخزون 🔒 (ترقية)',
+                        onTap: () => Get.to(() => const PlansCatalogScreen()),
+                      ),
+                      child: _LinkTile(
+                        icon: Icons.inventory_2_outlined,
+                        label: 'إدارة المخزون',
+                        onTap: () => Get.to(() => const InventoryScreen()),
+                      ),
+                    ),
+                    // التقرير المالي لا يخلط البيع بالتحصيل أو حركة المحفظة.
+                    AccessGate(
+                      feature: 'profit_reports',
+                      fallback: _LinkTile(
+                        icon: Icons.trending_up_rounded,
+                        label: 'التقرير المالي 🔒 (ترقية)',
+                        onTap: () => Get.to(() => const PlansCatalogScreen()),
+                      ),
+                      child: _LinkTile(
+                        icon: Icons.trending_up_rounded,
+                        label: 'تقارير الربحية',
+                        onTap: () => Get.to(() => const ProfitReportScreen()),
+                      ),
+                    ),
+                    // AMIAL-SUPPLIERS-001 (68): الموردون — لباقات Business فأعلى
+                    AccessGate(
+                      feature: 'suppliers',
+                      child: _LinkTile(
+                        icon: Icons.local_shipping_outlined,
+                        label: 'الموردون وأوامر الشراء',
+                        onTap: () => Get.to(() => const SuppliersScreen()),
+                      ),
+                    ),
+                    // AMIAL-AUDIT-FIX-001: وصل شاشتَي تقسيم الفاتورة (كانتا غير موصولتين)
+                    _LinkTile(
+                      icon: Icons.call_split,
+                      label: 'تقسيم فاتورة',
+                      onTap: () => Get.to(() => const SplitBillCreateScreen()),
+                    ),
+                    _LinkTile(
+                      icon: Icons.groups,
+                      label: 'حصصي في الفواتير المقسّمة',
+                      onTap: () => Get.to(() => const SplitBillMySharesScreen()),
+                    ),
+                    // ══════════════════════════════════════════════════
+                    // **«قريباً» عن مبنيٍّ أسوأ من غياب الزرّ.**
+                    //
+                    // الغيابُ يُسأل عنه، و«قريباً» تُصدَّق فيُكفّ عن
+                    // السؤال — ولا خطأَ في أيّ سجلّ. وكانت على ثلاثة
+                    // أبوابٍ **اثنان منها مبنيّان منذ شهور** ويُفتحان من
+                    // شاشة الخدمات.
+                    //
+                    // والثالث «سحب للبنك» — **ولا سحبَ بنكيَّ في المنصّة
+                    // أصلاً**، والسحبُ عبر الوكيل يعمل. فالتاجرُ كان يقرأ
+                    // «قريباً» فيظنّ أنّه لا يستطيع إخراجَ مال بيعه وهو
+                    // يستطيع. فيُسمّى بما هو، ويُفتح على ما يعمل.
+                    // ══════════════════════════════════════════════════
+                    // AMIAL-MERCHANT-CASHOUT-001 — السحب اليومي عبر أي وكيل؛ والمبالغ
+                    // الكبيرة فوق حدّه تبقى عبر طلب المستحقات من الإدارة.
+                    _LinkTile(
+                      icon: Icons.storefront,
+                      label: 'merchant_cash_out_title'.tr,
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const MerchantCashOutScreen()),
+                    ),
+                    _LinkTile(
+                      icon: Icons.account_balance,
+                      label: 'merchant_large_payout'.tr,
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const MerchantPayoutScreen()),
+                    ),
+                    _LinkTile(
+                      icon: Icons.assignment_return,
+                      label: 'business_refunds_title'.tr,
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const MerchantBusinessRefundsScreen()),
+                    ),
+                    _LinkTile(
+                      icon: Icons.people,
+                      label: 'موظفو نقاط البيع',
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const MerchantStaffScreen()),
+                    ),
+                    _LinkTile(
+                      icon: Icons.settings,
+                      label: 'إعدادات المتجر',
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const MerchantAccountScreen()),
+                    ),
+                    // **وبابُ «خدماتي» من اللوحة** — والتاجرُ يبدأ يومَه
+                    // منها، فما لا يُوصل إليه من لوحته غيرُ موجودٍ عنده.
+                    _LinkTile(
+                      icon: Icons.apps_rounded,
+                      label: 'كل الخدمات',
+                      ownerOnly: true,
+                      onTap: () => Get.to(() => const MerchantServicesHubScreen()),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final VoidCallback onTap;
+  const _ActionCard(
+      {required this.icon, required this.color, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AmialColors.border),
+        ),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: color.withValues(alpha: 0.15),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(height: 8),
+            Text(label,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  const _StatRow(
+      {required this.label, required this.value, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: color.withValues(alpha: 0.15),
+          child: Icon(icon, color: color, size: 16),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
+        Text(value,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+      ],
+    );
+  }
+}
+
+class _LinkTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-OWNER-GATE-001 — **بابُ المالك يُحرَس بالملكيّة لا بالميزة.**
+  ///
+  /// **ولمَ لا تكفي الميزة:** `restrictToPosPermissions` في الخادم
+  /// **تُبقي لموظّف نقطة البيع ما مُنح من صلاحيّات صاحبه**. فمن أُعطي
+  /// `employees` — مديرُ عمليّاتٍ مثلاً — **يملك الميزةَ ولا يملك
+  /// المتجر**. فحاجزٌ يسأل `has('employees')` يمرّره، ثمّ يردّه الخادمُ
+  /// بـ٤٠٣ عند أوّل فعل.
+  ///
+  /// **وزرٌّ يُرسَم ثمّ يُصفَع أسوأُ من غيابه**: الغيابُ يُسأل عنه،
+  /// والرفضُ يُقرأ عطلاً في التطبيق. (القاعدة الثامنة: الهويّة تحدّد
+  /// النطاق، لا القائمة المنسدلة.)
+  ///
+  /// **وكانت هذه اللوحةُ لا تستورد `AccessController` إطلاقاً** — أي
+  /// أنّ روابطَها كلَّها بلا سؤالِ صلاحيّةٍ واحد.
+  /// ══════════════════════════════════════════════════════════════════
+  final bool ownerOnly;
+
+  const _LinkTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.ownerOnly = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (ownerOnly && !_isOwner()) return const SizedBox.shrink();
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: AmialColors.border),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: AmialColors.primary),
+        title: Text(label, style: const TextStyle(fontSize: 13)),
+        trailing: const Icon(Icons.chevron_left, size: 20),
+        onTap: onTap,
+        dense: true,
+      ),
+    );
+  }
+}
+
+/// AMIAL-NOTIFICATIONS-001 — أيقونة الجرس مع badge للإشعارات غير المقروءة.
+class _NotificationBell extends StatefulWidget {
+  @override
+  State<_NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<_NotificationBell> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        Get.find<NotificationsCenterController>().refreshUnreadCount();
+      } catch (_) {}
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    NotificationsCenterController? c;
+    try {
+      c = Get.find<NotificationsCenterController>();
+    } catch (_) {}
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 26),
+          onPressed: () async {
+            await Get.to(() => const NotificationsCenterScreen());
+            // عند العودة، حدّث العدد
+            c?.refreshUnreadCount();
+          },
+        ),
+        if (c != null)
+          Obx(() {
+            final n = c!.unreadCount.value;
+            if (n <= 0) return const SizedBox.shrink();
+            return Positioned(
+              right: 6,
+              top: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                decoration: BoxDecoration(
+                  color: AmialColors.red,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AmialColors.primary, width: 1),
+                ),
+                child: Text(
+                  n > 99 ? '99+' : '$n',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+}

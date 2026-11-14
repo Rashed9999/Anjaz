@@ -144,6 +144,8 @@ void main() {
           'ورقةُ النتيجة الموحّدة — وبها يمرّ الدفعُ والتسديدُ والدفعُ الآمن',
       'lib/features/merchant/screens/cashier_payment_screen.dart':
           'شبّاكُ بيع التاجر — ولا يمرّ بالورقة الموحّدة',
+      'lib/features/merchant/screens/merchant_accept_payment_screen.dart':
+          'طلبُ الدفع من التاجر',
     };
 
     doors.forEach((path, why) {

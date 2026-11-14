@@ -1,0 +1,379 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/merchant/screens/sales_breakdown_screen.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+
+/// AMIAL-PROFIT-001 — «تقارير الربحية» (التصميم 48):
+/// بطاقة إجمالي الأرباح + هامش الربح وإجمالي المبيعات + اتجاه أشرطة يومي
+/// + تحليل المنتجات (صافي الربح لكل منتج) + مشاركة.
+class ProfitReportScreen extends StatefulWidget {
+  const ProfitReportScreen({super.key});
+
+  @override
+  State<ProfitReportScreen> createState() => _ProfitReportScreenState();
+}
+
+class _ProfitReportScreenState extends State<ProfitReportScreen> {
+  CashierController get c => Get.find<CashierController>();
+  int _days = 7;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => c.loadProfitReport(days: _days));
+  }
+
+  double _d(dynamic v) => double.tryParse('$v') ?? 0;
+
+  Future<void> _share() async {
+    final t = c.profitReport.value?['totals'] ?? {};
+    await Share.share('''
+تقرير ربحية — أميال باي (آخر $_days أيام)
+إجمالي المبيعات: ${AmialMoney.yer(t['revenue'])}
+إجمالي التكلفة: ${AmialMoney.yer(t['cost'])}
+الربح الإجمالي: ${AmialMoney.yer(t['gross_profit'] ?? t['profit'])}
+المصروفات النقدية: ${AmialMoney.yer(t['cash_operating_expenses'])}
+إهلاك الأصول: ${AmialMoney.yer(t['depreciation_expense'])}
+إجمالي مصروفات التشغيل: ${AmialMoney.yer(t['operating_expenses'])}
+صافي الربح: ${AmialMoney.yer(t['net_profit'] ?? t['profit'])}
+هامش صافي الربح: ${t['net_margin_percent'] ?? t['margin_percent']}%
+عدد العمليات: ${t['sales_count']}
+''');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AmialColors.background,
+      appBar: AppBar(
+        title: const Text('تقارير الربحية'),
+        actions: [
+          // AMIAL-SALES-BREAKDOWN-001 — **البابُ إلى التفصيل.**
+          //
+          // هذه الشاشةُ تقول الإجماليَّ وأعلى عشرةِ منتجاتٍ ربحاً، وتلك
+          // تقول كلَّ صنفٍ وكلَّ تصنيف. وكلتاهما خلف `profit_reports`،
+          // فلا بابَ يُعرض ثمّ يُرفض. (وشاشةٌ لا يُوصل إليها ليست مبنيّة
+          // — القاعدة الثانية عشرة.)
+          IconButton(
+            icon: const Icon(Icons.list_alt_rounded),
+            tooltip: 'المبيعات بالصنف',
+            onPressed: () => Get.to(() => const SalesBreakdownScreen()),
+          ),
+          IconButton(icon: const Icon(Icons.share), onPressed: _share),
+        ],
+      ),
+      body: Obx(() {
+        final report = c.profitReport.value;
+        if (c.isLoadingProfit.value && report == null) {
+          return const Center(
+              child: CircularProgressIndicator(color: AmialColors.primary));
+        }
+        final totals = report?['totals'] ?? {};
+        final hasNetProfit = totals['net_profit'] != null;
+        final daily = (report?['daily'] as List?) ?? [];
+        final products = (report?['products'] as List?) ?? [];
+        final maxRevenue = daily.fold<double>(
+            1, (m, e) => _d(e['revenue']) > m ? _d(e['revenue']) : m);
+
+        return RefreshIndicator(
+          onRefresh: () => c.loadProfitReport(days: _days),
+          color: AmialColors.primary,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // ====== الفترة ======
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [7, 30, 90].map((d) {
+                  final selected = _days == d;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: ChoiceChip(
+                      label: Text('آخر $d يوم',
+                          style: const TextStyle(fontSize: 12)),
+                      selected: selected,
+                      selectedColor: AmialColors.primary,
+                      backgroundColor: Colors.white,
+                      labelStyle: TextStyle(
+                          color:
+                              selected ? Colors.white : AmialColors.primary),
+                      onSelected: (_) {
+                        setState(() => _days = d);
+                        c.loadProfitReport(days: d);
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 14),
+
+              // ====== بطاقة الإجماليات ======
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Column(children: [
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AmialColors.successSurface,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                          '${totals['sales_count'] ?? 0} عملية',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: AmialColors.success,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    const Spacer(),
+                    Text(hasNetProfit ? 'صافي الربح بعد المصروفات' : 'الربح الإجمالي قبل المصروفات',
+                        style: const TextStyle(
+                            fontSize: 13, color: AmialColors.textSecondary)),
+                  ]),
+                  const SizedBox(height: 10),
+                  Text(AmialMoney.yer(hasNetProfit ? totals['net_profit'] : totals['profit']),
+                      style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: AmialColors.primary)),
+                  const Divider(height: 28),
+                  if (hasNetProfit) ...[
+                    Row(children: [
+                      Expanded(
+                        child: Column(children: [
+                          Text(AmialMoney.yer(totals['gross_profit'] ?? totals['profit']),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                          const Text('الربح الإجمالي',
+                              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+                        ]),
+                      ),
+                      Container(height: 34, width: 1, color: AmialColors.border),
+                      Expanded(
+                        child: Column(children: [
+                          Text(AmialMoney.yer(totals['cash_operating_expenses']),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AmialColors.red)),
+                          const Text('مصروفات نقدية',
+                              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+                        ]),
+                      ),
+                      Container(height: 34, width: 1, color: AmialColors.border),
+                      Expanded(
+                        child: Column(children: [
+                          Text(AmialMoney.yer(totals['depreciation_expense']),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AmialColors.red)),
+                          const Text('إهلاك الأصول',
+                              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+                        ]),
+                      ),
+                    ]),
+                    const Divider(height: 28),
+                  ],
+                  Row(children: [
+                    Expanded(
+                      child: Column(children: [
+                        Text('${hasNetProfit ? (totals['net_margin_percent'] ?? 0) : (totals['margin_percent'] ?? 0)}%',
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AmialColors.yellowDark)),
+                        Text(hasNetProfit ? 'هامش صافي الربح' : 'هامش الربح',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: AmialColors.textMuted)),
+                      ]),
+                    ),
+                    Container(
+                        height: 34, width: 1, color: AmialColors.border),
+                    Expanded(
+                      child: Column(children: [
+                        FittedBox(
+                          child: Text(AmialMoney.yer(totals['revenue']),
+                              style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                        const Text('إجمالي المبيعات',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: AmialColors.textMuted)),
+                      ]),
+                    ),
+                    Container(
+                        height: 34, width: 1, color: AmialColors.border),
+                    Expanded(
+                      child: Column(children: [
+                        FittedBox(
+                          child: Text(AmialMoney.yer(totals['cost']),
+                              style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFDC0A0B))),
+                        ),
+                        const Text('التكلفة',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: AmialColors.textMuted)),
+                      ]),
+                    ),
+                  ]),
+                ]),
+              ),
+              const SizedBox(height: 18),
+
+              // ====== الاتجاه اليومي ======
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text('اتجاه المبيعات ($_days أيام)',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 15)),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                height: 150,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: daily.isEmpty
+                    ? const Center(
+                        child: Text('لا بيانات',
+                            style: TextStyle(color: AmialColors.textMuted)))
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: daily.map<Widget>((e) {
+                          final rev = _d(e['revenue']);
+                          final ratio = (rev / maxRevenue).clamp(0.04, 1.0);
+                          final isMax = rev >= maxRevenue && rev > 0;
+                          final label = '${e['date']}'.length >= 10
+                              ? '${e['date']}'.substring(8)
+                              : '';
+                          return Expanded(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 3),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Expanded(
+                                    child: FractionallySizedBox(
+                                      heightFactor: ratio,
+                                      alignment: Alignment.bottomCenter,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: isMax
+                                              ? AmialColors.primary
+                                              : const Color(0xFFDCE5F2),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(label,
+                                      style: const TextStyle(
+                                          fontSize: 9,
+                                          color: AmialColors.textMuted)),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+              ),
+              const SizedBox(height: 18),
+
+              // ====== تحليل المنتجات ======
+              const Align(
+                alignment: Alignment.centerRight,
+                child: Text('أعلى المنتجات ربحاً',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              ),
+              const SizedBox(height: 10),
+              if (products.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                      child: Text('لا مبيعات بمنتجات في هذه الفترة',
+                          style: TextStyle(color: AmialColors.textMuted))),
+                )
+              else
+                ...products.map((p) {
+                  final profit = _d(p['profit']);
+                  final revenue = _d(p['revenue']);
+                  final positive = profit >= 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(children: [
+                        Row(children: [
+                          Text(
+                              '${positive ? '+' : ''}${AmialMoney.yer(profit)}',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: positive
+                                      ? AmialColors.success
+                                      : AmialColors.red)),
+                          const Spacer(),
+                          Expanded(
+                            flex: 2,
+                            child: Text('${p['name']}',
+                                textAlign: TextAlign.right,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14)),
+                          ),
+                        ]),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('الإيراد: ${AmialMoney.yer(revenue)}',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AmialColors.textSecondary)),
+                            Text(
+                                'الكمية المباعة: ${AmialMoney.fmt(p['qty'])}',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AmialColors.textSecondary)),
+                          ],
+                        ),
+                      ]),
+                    ),
+                  );
+                }),
+
+              const SizedBox(height: 8),
+              const Text(
+                'تكلفة البضاعة تُحفظ لحظة البيع حتى لا يتغير ربح الماضي عند تغير سعر الشراء لاحقاً. المصروفات التشغيلية تُعرض منفصلة وتُخصم من صافي الربح.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+}

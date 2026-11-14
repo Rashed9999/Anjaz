@@ -31,6 +31,8 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   final profile = File('lib/features/setting/screens/profile_screen.dart');
   final services = File('lib/features/me/screens/my_services_screen.dart');
+  final dashboard =
+      File('lib/features/merchant/screens/merchant_dashboard_screen.dart');
 
   /// هل بناءُ هذه الشاشة محروسٌ بهذه القدرة؟
   ///
@@ -59,7 +61,7 @@ void main() {
   }
 
   test('الملفّاتُ في مكانها — وإلّا فحصنا العدم', () {
-    for (final f in [profile, services]) {
+    for (final f in [profile, services, dashboard]) {
       expect(f.existsSync(), isTrue, reason: 'ملفٌّ مفقود: ${f.path}');
     }
   });
@@ -115,4 +117,62 @@ void main() {
     }
   });
 
+  test('ولوحةُ التاجر لا تقول «قريباً» عمّا هو مبنيٌّ ويعمل', () {
+    final src = dashboard.readAsStringSync();
+
+    // ══════════════════════════════════════════════════════════════
+    // ثلاثةُ أبوابٍ كانت تقول «قريباً»، **واثنان منها مبنيّان منذ
+    // شهور** ويُفتحان من شاشة الخدمات. والثالث «سحب للبنك» — ولا سحبَ
+    // بنكيَّ في المنصّة، **والسحبُ عبر الوكيل يعمل**. فالتاجرُ يقرأ
+    // «قريباً» فيظنّ أنّه لا يستطيع إخراجَ مال بيعه، وهو يستطيع.
+    //
+    // **و«قريباً» عن مبنيٍّ أسوأ من غياب الزرّ**: الغيابُ يُسأل عنه،
+    // و«قريباً» تُصدَّق فيُكفّ عن السؤال — ولا خطأَ في أيّ سجلّ.
+    // ══════════════════════════════════════════════════════════════
+    expect(src.contains('_comingSoon'), isFalse,
+        reason: 'عادت «قريباً» إلى لوحة التاجر — وقد كانت على ثلاثة '
+            'أبوابٍ اثنان منها مبنيّان ويعملان.');
+
+    for (final screen in [
+      'MerchantStaffScreen',
+      'MerchantServicesHubScreen',
+    ]) {
+      expect(src.contains('const $screen()'), isTrue,
+          reason: 'سقط بابُ «$screen» من لوحة التاجر — والتاجرُ يبدأ '
+              'يومَه من لوحته، فما لا يُوصل إليه منها غيرُ موجودٍ عنده.');
+    }
+  });
+
+  test('وسحبُ المال يبقى مبلوغاً من اللوحة — مباشرةً أو عبر المحفظة', () {
+    // ══════════════════════════════════════════════════════════════
+    // AMIAL-MERCHANT-WALLET-001 — **الضمانةُ هي الوصول، لا الموضع.**
+    //
+    // كان هذا الفحصُ يشترط `WithdrawRequestScreen` **في اللوحة نفسِها**،
+    // لأنّها كانت الموضعَ الوحيد. ثمّ جُمع المالُ المبعثرُ في «محفظة
+    // المتجر» — الرصيدُ والحركاتُ والسحبُ والتحويل — فصار السحبُ داخلها.
+    //
+    // **ولا يُلَيَّن الحارسُ ليمرّ التغيير.** الشرطُ الأصليُّ باقٍ بحرفه:
+    // **يبلغ التاجرُ سحبَ ماله من لوحته**. وما تغيّر أنّ الطريقَ صار
+    // خطوتين، **فتُفحَص الخطوتان معاً**: اللوحةُ تفتح المحفظة،
+    // والمحفظةُ تفتح السحب. وسقوطُ أيٍّ منهما يُسقط هذا الفحص.
+    //
+    // (ولو قُبلت «المحفظةُ موجودة» وحدَها لكان هذا حارساً يكذب: بابٌ
+    // يقود إلى غرفةٍ لا بابَ فيها.)
+    // ══════════════════════════════════════════════════════════════
+    final src = dashboard.readAsStringSync();
+
+    final directly = src.contains('const MerchantPayoutScreen()');
+
+    final viaWallet = src.contains('const MerchantWalletScreen()') &&
+        File('lib/features/merchant/screens/merchant_wallet_screen.dart')
+            .readAsStringSync()
+            .contains('const MerchantPayoutScreen()');
+
+    expect(directly || viaWallet, isTrue,
+        reason: '**لا يبلغ التاجرُ سحبَ ماله من لوحته.** '
+            'مباشرةً: $directly · عبر المحفظة: $viaWallet.\n\n'
+            'والسحبُ عبر الوكيل **مبنيٌّ ويعمل منذ شهور**؛ وكانت اللوحةُ '
+            'تقول عنه «قريباً» فيظنّ التاجرُ أنّه لا يستطيع إخراجَ مال '
+            'بيعه. فإن سقط البابُ عاد الظنُّ نفسُه بلا كلمةٍ تقوله.');
+  });
 }
