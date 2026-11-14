@@ -73,7 +73,7 @@ class MuwathaqProfileHandoffTest extends TestCase
         $this->assertEmpty($u->name_en, 'اسمٌ غير لاتينيّ كُتب في حقل الاسم الإنجليزي');
         $this->assertEmpty($u->income_source, 'مصدرُ دخلٍ مجهولٌ خُمِّن');
         $this->assertEmpty($u->account_purpose);
-        $this->assertLessThanOrEqual(190, mb_strlen((string) $u->residence_district), 'قيمةٌ بلا سقف');
+        $this->assertLessThanOrEqual(80, mb_strlen((string) $u->residence_district), 'قيمةٌ بلا سقف');
     }
 
     /** @test */

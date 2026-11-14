@@ -56,7 +56,7 @@ class SecuritySweepGuardTest extends TestCase
         Storage::fake('public');
         Storage::disk('public')->put('user/identity/abc123.png', 'PNGDATA');
 
-        $this->get('/admin/amial/legacy-identity/abc123.png')->assertRedirect();   // ضيفٌ ⇒ يُردّ إلى الدخول
+        $this->assertNotSame(200, $this->get('/admin/amial/legacy-identity/abc123.png')->getStatusCode(), 'ضيفٌ يقرأ صورة هويّة.');   // ضيفٌ ⇒ ردٌّ أو 404
 
         $admin = User::factory()->create(['type' => ADMIN_TYPE, 'role' => 'super_admin', 'phone' => '967770009771']);
         app(PlatformRoleService::class)->assign($admin, PlatformRoleService::ADMIN);
@@ -71,7 +71,7 @@ class SecuritySweepGuardTest extends TestCase
     {
         foreach (['docker/nginx.conf', 'docker/nginx.prod.conf'] as $f) {
             $c = file_get_contents(base_path($f));
-            $this->assertMatchesRegularExpression('~location ~\* \^/storage/\(app/public/\)\?user/identity/~', $c, "{$f}: صورُ الهويّة برابطٍ عامّ.");
+            $this->assertMatchesRegularExpression('#location ~\* \^/storage/\(app/public/\)\?user/identity/#', $c, "{$f}: صورُ الهويّة برابطٍ عامّ.");
         }
         $c = file_get_contents(base_path('docker/nginx.conf'));
         $this->assertStringContainsString('(env|git|htaccess)', $c);

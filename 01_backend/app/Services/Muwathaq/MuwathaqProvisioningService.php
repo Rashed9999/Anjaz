@@ -74,11 +74,11 @@ final class MuwathaqProvisioningService {
    $clean=fn(string $k,int $max=190):string=>mb_substr(trim((string)($p[$k]??'')),0,$max);
    $in=[];
    $nameEn=$clean('name_en',120); if(preg_match('/^[A-Za-z][A-Za-z .\'\-]{2,}$/',$nameEn)===1)$in['name_en']=$nameEn;
-   foreach(['residence_district','residence_area']as$k){ $v=$clean($k); if($v!=='')$in[$k]=$v; }
+   foreach(['residence_district'=>80,'residence_area'=>120]as$k=>$max){ $v=$clean($k,$max); if($v!=='')$in[$k]=$v; }   // حدودُ أعمدة users (المخالفُ كان يُسقط save() كلَّه)
    $src=(string)($p['income_source']??''); if(isset($income[$src]))$in['income_source']=$income[$src];
    $why=(string)($p['account_purpose']??''); if(isset($purpose[$why]))$in['account_purpose']=$purpose[$why];
    if($in!==[])\App\Support\Kyc\KycProfileFields::fill($u,\Illuminate\Http\Request::create('/','POST',$in));
-   $occ=$clean('occupation'); if($occ!==''&&Schema::hasColumn('users','occupation'))$u->occupation=$occ;
+   $occ=$clean('occupation',100); if($occ!==''&&Schema::hasColumn('users','occupation'))$u->occupation=$occ;
    $dob=$clean('birth_date',10); if(preg_match('/^\d{4}-\d{2}-\d{2}$/',$dob)===1&&Schema::hasColumn('users','date_of_birth'))$u->date_of_birth=$dob;
   }catch(\Throwable){/* الملفُّ مكمِّلٌ لا شرط */}
  }
