@@ -24,7 +24,6 @@ REQUIRED = (
     "01_backend/scripts/verify.sh",
     "02_flutter_app/assets/language/ar.json",
     "02_flutter_app/assets/language/en.json",
-    "02_flutter_app/lib/features/merchant/screens/merchant_services_hub_screen.dart",
 )
 
 

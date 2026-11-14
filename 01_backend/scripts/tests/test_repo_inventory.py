@@ -2,7 +2,6 @@
 
 import importlib.util
 from pathlib import Path
-import re
 import sys
 import tempfile
 import unittest
@@ -71,7 +70,17 @@ Route::prefix('api')->middleware(['api', 'auth:api'])->name('api.')->group(funct
 
 
 class RestoredSourceContractTest(unittest.TestCase):
-    """Static regressions for the repaired files, not UI/HTTP execution."""
+    """Static regressions for the repaired files, not UI/HTTP execution.
+
+    AMIAL-AUDIT-20260911 added these as a static contract for
+    merchant_services_hub_screen.dart after restoring it from corruption.
+    AMIAL-MERCHANT-WEB-ONLY-001 (commit d30f78b0, 2026-09-27) later retired
+    that screen's in-app door entirely — the owner is routed to the web
+    portal instead, and routes/merchant-web.php wires the same
+    MerchantOperationsCenterController directly. The Flutter-file-contract
+    tests below went stale at that point and were never updated; only the
+    backend-endpoint test, which still describes a live surface, is kept.
+    """
 
     @classmethod
     def setUpClass(cls):
@@ -92,19 +101,6 @@ class RestoredSourceContractTest(unittest.TestCase):
             self.assertTrue(row["uri"].startswith("/api/v1/amial/merchant/operations-center"))
         write = next(r for r in rows if r["method"] == "POST")
         self.assertIn("amial.rate-limit:merchant_role_create,20,1", write["middleware"])
-
-    def test_owner_entrypoint_is_present_without_new_capability(self):
-        source = (self.root / "02_flutter_app/lib/features/merchant/screens/merchant_services_hub_screen.dart").read_text()
-        self.assertRegex(source, r"if \(access\.isMerchantOwner\)[\s\S]{0,1000}MerchantOperationsCenterScreen\(\)")
-        self.assertNotIn("access.has('operations_center')", source)
-
-    def test_restored_service_codes_exist_in_backend(self):
-        hub = (self.root / "02_flutter_app/lib/features/merchant/screens/merchant_services_hub_screen.dart").read_text()
-        constants = (self.root / "01_backend/app/Support/Access/AccessConstants.php").read_text()
-        codes = set(re.findall(r"_Svc\('([a-z0-9_]+)'", hub))
-        known = set(re.findall(r"const F_\w+ = '([a-z0-9_]+)'", constants))
-        self.assertGreaterEqual(len(codes), 20)
-        self.assertTrue(codes <= known, codes - known)
 
 
 if __name__ == "__main__":
