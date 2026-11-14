@@ -30,7 +30,9 @@ class SecuritySweepGuardTest extends TestCase
     /** @test */
     public function reset_tokens_are_never_stored_in_clear_text_by_the_writers(): void
     {
-        foreach (['Customer', 'Agent'] as $role) {
+        // AMIAL-AGENT-LEGACY-CLEANUP-001 — حُذف `Api/V1/Agent/Auth/PasswordResetController`
+        // (PR #46) مع محفظة الوكيل الفرديّ القديمة؛ لا بابَ استعادةٍ ذاتيّةٍ للوكيل اليوم.
+        foreach (['Customer'] as $role) {
             $src = file_get_contents(app_path("Http/Controllers/Api/V1/{$role}/Auth/PasswordResetController.php"));
             $this->assertStringNotContainsString("'token' => \$otp,", $src, "{$role}: الرمزُ يُخزَّن نصّاً صريحاً.");
             $this->assertStringContainsString('PasswordResetGuard::digest($otp)', $src, "{$role}: الكتابةُ لا تمرّ بالبصمة.");

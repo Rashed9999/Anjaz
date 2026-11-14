@@ -147,13 +147,17 @@ class PinBruteForceGuardTest extends TestCase
         // تحت شرط عدم وجود transaction_pin، وسائر المحاولات عبر خدمة القفل.
         $this->assertSame(0, substr_count($fn, 'Helpers::pin_check('),
             "{$relPath}: مسار التحقق القديم لا يجب أن يتجاوز القفل");
-        $this->assertSame(1, substr_count($fn, 'Hash::check('),
-            "{$relPath}: التعيين الأول وحده يجوز له إثبات كلمة المرور");
+
         $firstTime = strpos($fn, 'empty($user->transaction_pin)');
-        $legacy = strpos($fn, 'Hash::check(');
-        $this->assertNotFalse($firstTime);
-        $this->assertGreaterThan($firstTime, $legacy,
-            "{$relPath}: إثبات كلمة المرور خارج فرع التعيين الأول");
+        $this->assertNotFalse($firstTime, "{$relPath}: لا فرع تعيينٍ أوّل");
+
+        // AMIAL-AGENT-LEGACY-CLEANUP-001 — AccountSecurityController يحمل
+        // Hash::check() إضافيّاً **قبل** هذا الفرع (الرمز لا يساوي كلمة
+        // المرور — فحصٌ مشروعٌ لا بديلٌ للقفل)، فالعدّ من هنا فصاعداً لا
+        // من أوّل الدالّة، وإلّا رفض هذا الفحصَ المشروع بالخطأ نفسه.
+        $afterFirstTime = substr($fn, $firstTime);
+        $this->assertSame(1, substr_count($afterFirstTime, 'Hash::check('),
+            "{$relPath}: التعيين الأول وحده يجوز له إثبات كلمة المرور");
     }
 
     /**
@@ -177,8 +181,11 @@ class PinBruteForceGuardTest extends TestCase
     public static function doors(): array
     {
         return [
+            // AMIAL-AGENT-LEGACY-CLEANUP-001 — حُذف الجيل القديم لمحفظة الوكيل الفرديّ
+            // (`Api/V1/Agent/*`؛ انظر PR #46)، وبابُ تغيير الرمز اليوم لكلّ الأنواع —
+            // عميلاً كان أو وكيلاً — هو `AccountSecurityController::changePin` الموحَّد.
             'العميل' => ['app/Http/Controllers/Api/V1/Customer/Auth/CustomerAuthController.php'],
-            'الوكيل' => ['app/Http/Controllers/Api/V1/Agent/AgentController.php'],
+            'الوكيل' => ['app/Http/Controllers/Api/V1/Amial/AccountSecurityController.php'],
         ];
     }
 

@@ -406,6 +406,20 @@ class KycTierService
         }
     }
 
+    /**
+     * AMIAL-ZONE-BOUNDARY-002 — نفس إعفاء `ZonePolicyService::LEDGER_ACTIONS` (لا نقد يعبر، فلا
+     * معنى لحجبها جغرافياً: «العقوبة على السفر لا على المخاطرة»)، هنا أيضاً. كان هذا الحارس
+     * يفرض نطاق تشغيل جغرافي (`assertOperationalResidence`) على send_money/safe_payment/family_fund
+     * تماماً كما على cash_out — فمن انتقل أو ولد خارج محافظات التشغيل يُرفض تحويله الإلكتروني
+     * رغم أن لا ورقة نقدية تعبر فيه، بينما السحب/الإيداع يبقى محجوباً فعلياً (وبحقٍّ: محافظة
+     * تشغيلية تعني وجود وكلاء فيها، وتحويل الأموال لنقدٍ حقيقي يحتاجهم).
+     */
+    // **و'receive_money' عمداً خارج هذه القائمة رغم أنه استقبالٌ إلكتروني غالباً:**
+    // AgentCounterService::deposit (إيداعٌ نقديٌّ حقيقي عبر الوكيل) يستعمل الاسم نفسه
+    // ليُجيز استلام العميل. إعفاؤه هنا كان يُعفي ذلك الإيداع النقدي أيضاً — وهو
+    // بالضبط ما يجب أن يبقى مربوطاً بمحافظة تشغيلية فيها وكلاء.
+    private const LEDGER_ONLY_FEATURES = ['send_money', 'safe_payment', 'family_fund'];
+
     public function assertFeatureAllowed(User $user, string $feature): array
     {
         $limits = $this->getLimitsForUser($user);
@@ -418,7 +432,9 @@ class KycTierService
             throw new RuntimeException($message);
         }
 
-        $this->assertOperationalResidence($user);
+        if (!in_array($feature, self::LEDGER_ONLY_FEATURES, true)) {
+            $this->assertOperationalResidence($user);
+        }
 
         $features = $limits['allowed_features'];
         if (!in_array('*', $features, true) && !in_array($feature, $features, true)) {

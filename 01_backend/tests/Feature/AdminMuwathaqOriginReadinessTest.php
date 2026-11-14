@@ -63,6 +63,37 @@ class AdminMuwathaqOriginReadinessTest extends TestCase
         $this->assertSame(2, $d['muwathaq']['tier']);
     }
 
+    /**
+     * AMIAL-MUWATHAQ-ORIGIN-ADMIN-002 — **نفسُ العطل، لحسابٍ بدأ تسجيلَه داخل التطبيق**
+     * وأحاله موثّق (`MuwathaqAccountOpeningService::submitFor`، لا `MuwathaqProvisioningService`).
+     * هذا المسار لا يكتب `origin` إطلاقاً فيبقى على افتراضه `amial_legacy` لا `muwathaq` —
+     * وهو تحديداً حساب نور السالمي (مسار PATH_WOMEN_PROGRESSIVE، مستوى ٢) الذي أبلغ عنه صاحبُ
+     * المشروع: معتمَدٌ من موثّق فعلاً، واللوحةُ تقول «وثائق ناقصة».
+     *
+     * @test
+     */
+    public function an_in_app_registration_approved_by_muwathaq_is_also_not_reported_as_missing_documents(): void
+    {
+        $admin = $this->admin();
+        $customer = User::factory()->create(['type' => CUSTOMER_TYPE, 'role' => 'customer', 'phone' => '967781545525', 'kyc_tier' => 2, 'is_kyc_verified' => 1]);
+
+        MuwathaqAccountOpeningApplication::query()->create([
+            'application_ulid' => strtoupper(substr(str_replace('-', '', (string) Str::uuid()) . 'ABCDEFGHJK', 0, 26)),
+            'user_id' => $customer->id, // بلا 'origin' — يبقى على الافتراض amial_legacy
+            'subject_kind' => 'customer', 'verification_path' => 'women_progressive', 'requested_tier' => 2,
+            'status' => MuwathaqAccountOpeningApplication::STATUS_APPROVED,
+            'submitted_at' => now(), 'decided_at' => now(), 'muwathaq_decided_at' => now(),
+            'decision_reference' => 'MWT-D0FC218BDDA116F96FD3', 'decision_context' => [], 'evidence_completed_at' => now(),
+        ]);
+
+        $d = $this->readiness($admin, $customer);
+
+        $this->assertNotContains('DOCUMENTS_INCOMPLETE', array_column($d['blockers'], 'code'),
+            'قيل «وثائق ناقصة» عن حسابٍ اعتمده موثّق عبر مسار التسجيل داخل التطبيق');
+        $this->assertNotNull($d['muwathaq'], 'لم تُعرض ملاحظة موثّق لحسابٍ origin فيه amial_legacy');
+        $this->assertSame('MWT-D0FC218BDDA116F96FD3', $d['muwathaq']['reference']);
+    }
+
     /** @test */
     public function a_normal_account_still_reports_its_missing_documents(): void
     {

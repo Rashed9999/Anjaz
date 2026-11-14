@@ -2,11 +2,16 @@
 
 namespace App\Services\Admin;
 
+use App\Models\AgentProfile;
 use App\Models\KycDocument;
 use App\Models\KycAiReview;
+use App\Models\Merchant;
+use App\Models\MerchantProfile;
 use App\Models\RegistrationDossier;
 use App\Models\User;
+use App\CentralLogics\Helpers;
 use App\Services\KycDocumentService;
+use App\Services\ZonePolicyService;
 use App\Support\ArabicPdf;
 use App\Support\YemenGovernorates;
 use Illuminate\Support\Facades\DB;
@@ -106,14 +111,18 @@ class AccountDossierPrintService
         $committeeReviewer = $reviewCase && $reviewCase->reviewed_by
             ? User::find((int) $reviewCase->reviewed_by) : null;
 
+        $images = $this->images($user, $reviewer);
+
         return [
             'user' => $user,
             'identity' => $this->identity($user),
+            'activity' => $this->activity($user),
+            'signature_card' => $this->signatureCard($user, $images),
             'dossier' => $dossier,
             'payload' => $dossier ? (array) $dossier->payload_encrypted : [],
             'verification_dossiers' => $verificationDossiers,
             'evidence' => $this->evidence->for($user, 2, $reviewer),
-            'images' => $this->images($user, $reviewer),
+            'images' => $images,
             'ai_review' => $aiReview ? [
                 'model' => $aiReview->model,
                 'created_at' => $aiReview->created_at?->format('Y-m-d H:i'),
@@ -168,6 +177,99 @@ class AccountDossierPrintService
             ['إثبات الهاتف', ((int) ($user->is_phone_verified ?? 0) === 1) ? 'مثبت' : 'غير مثبت'],
             ['حالة الحساب', ((int) $user->is_active === 1) ? 'نشط' : 'موقوف'],
             ['تاريخ الإنشاء', optional($user->created_at)->format('Y-m-d H:i') ?: '—'],
+        ];
+    }
+
+    /**
+     * AMIAL-ACCOUNT-PRINT-002 — **حقولُ التاجر والوكيل من سجلّهما الحيّ، لا
+     * من لقطة التسجيل.** `$payload` (أعلاه) لقطةٌ عند التسجيل فقط — تغيب
+     * كليّاً عن حسابٍ فُتح قبل الأرشيف أو عُدِّل بعده (حدٌّ غُيِّر، منطقةٌ
+     * أُسندت عند الاعتماد، باقةٌ تبدّلت). **فحسابُ تاجرٍ حقيقيٌّ نشطٌ كان
+     * يُطبَع بلا سطرٍ واحدٍ عن نشاطه** إن لم يُصادف أن يحمل لقطةً — تماماً
+     * العطل نفسه الذي عولج في `identity()` أعلاه، واقعاً هنا على الباقي.
+     * (القاعدة السادسة: الرقم من مصدره لا من لقطةٍ قد تشيخ.)
+     *
+     * @return array<int,array{0:string,1:string}>
+     */
+    private function activity(User $user): array
+    {
+        if ((int) $user->type === MERCHANT_TYPE) {
+            $m = Merchant::where('user_id', $user->id)->first();
+            $p = MerchantProfile::where('user_id', $user->id)->first();
+            if ($m === null && $p === null) {
+                return [];
+            }
+
+            return [
+                ['اسم المنشأة', (string) ($m->store_name ?: '—')],
+                ['رقم التاجر', (string) ($m->merchant_number ?: '—')],
+                ['عنوان النشاط', (string) ($m->address ?: 'غير محدَّد')],
+                ['نوع النشاط', (string) ($p->business_type ?: '—')],
+                ['حالة التوثيق التجاري', match ($p->verification_status ?? null) {
+                    'verified' => 'معتمَد', 'unverified' => 'غير معتمَد', default => (string) ($p->verification_status ?: '—'),
+                }],
+                ['منطقة التشغيل', ZonePolicyService::zoneNameAr($p->zone_code ?? null)],
+                ['الباقة', (string) ($p->subscription_plan ?: '—')],
+                ['حدّ الاستقبال اليوميّ', $p ? Helpers::money((string) $p->daily_receive_limit) . ' ر.ي' : '—'],
+                ['حدّ العمليّة الواحدة', $p ? Helpers::money((string) $p->single_receive_limit) . ' ر.ي' : '—'],
+            ];
+        }
+
+        if ((int) $user->type === AGENT_TYPE) {
+            $a = AgentProfile::where('user_id', $user->id)->first();
+            if ($a === null) {
+                return [];
+            }
+
+            return [
+                ['اسم الوكالة/الفرع', (string) ($a->business_name ?: '—')],
+                ['رقم الوكيل', (string) ($user->agent_number ?: '—')],
+                ['رتبة الوكيل', $a->agent_level === 'distributor' ? 'موزِّع (أمّ)' : 'فرع'],
+                ['رقم الترخيص', (string) ($a->license_number ?: 'غير مسجَّل')],
+                ['مدينة التشغيل', (string) ($a->location_city ?: 'غير محدَّدة')],
+                ['عنوان الموقع', (string) ($a->location_address ?: 'غير محدَّد')],
+                ['منطقة التشغيل', ZonePolicyService::zoneNameAr($a->zone_code ?? null)],
+                ['حالة الوكيل', match ($a->status) {
+                    'active' => 'نشط', 'pending_approval' => 'بانتظار الاعتماد', 'suspended' => 'موقوف',
+                    default => (string) $a->status,
+                }],
+                ['حدّ الإيداع اليوميّ', Helpers::money((string) $a->daily_cash_in_limit) . ' ر.ي'],
+                ['حدّ السحب اليوميّ', Helpers::money((string) $a->daily_cash_out_limit) . ' ر.ي'],
+                ['نسبة العمولة', ((string) $a->commission_rate) . '%'],
+            ];
+        }
+
+        return [];
+    }
+
+    /**
+     * AMIAL-ACCOUNT-PRINT-003 — **بطاقة توقيع، بلا تصنّع توقيعٍ لم يقع.**
+     *
+     * طلب صاحبُ المشروع مظهراً بمستوى حزمة بنكٍ ورقيّة (غلافٌ · بطاقة
+     * توقيعٍ بصورة · شروطٌ وأحكام). فتح الحساب عند أميال باي رقميٌّ بالكامل
+     * — لا توقيعَ حضوريّاً وقت الطباعة، **فلا تُرسَم خانةُ توقيعٍ فارغة**
+     * تُوحي بإجراءٍ لم يحدث (القاعدة السابعة: الغيابُ يُقال ولا يُملأ).
+     * البطاقةُ هنا صورةٌ وهويّةٌ فقط — وصورتُها نفسُ صورة `images()` إن
+     * وُجدت (لا فكٌّ ثانٍ للتشفير، ونفسُ حجب البيانات البيومترية).
+     *
+     * @param array<int,array<string,mixed>> $images
+     */
+    private function signatureCard(User $user, array $images): array
+    {
+        $photo = null;
+        foreach ($images as $img) {
+            if (($img['label'] ?? null) === KycDocument::TYPE_LABELS[KycDocument::TYPE_SELFIE] && $img['data_uri']) {
+                $photo = $img['data_uri'];
+                break;
+            }
+        }
+
+        return [
+            'photo_data_uri' => $photo,
+            'full_name' => trim((string) ($user->f_name.' '.$user->l_name)) ?: '—',
+            'account_number' => (string) ($user->account_number ?: $user->id),
+            'phone' => (string) ($user->phone ?: '—'),
+            'type_label' => $this->typeLabel((int) $user->type),
         ];
     }
 

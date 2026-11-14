@@ -240,17 +240,18 @@ final class FeeOperationRegistry
                 labelEn: 'Withdrawal to external method',
                 category: 'payout',
 
-                // **جهتان لهذه العمليّة**: العميلُ والوكيل. ولكلٍّ نسخةٌ
-                // مستقلّة — ورسمُ سحبِ الوكيل ليس رسمَ سحبِ العميل.
-                actors: ['customer', 'agent'],
+                // AMIAL-AGENT-LEGACY-CLEANUP-001 — كان للوكيل هنا نسخةٌ مستقلّة عبر
+                // `Api/V1/Agent/TransactionController` (محفظةُ الوكيل الفرديّ القديمة،
+                // حُذفت في PR #46). سحبُ الوكيل اليوم عبر عدّاده — `AGENT_WITHDRAW`
+                // أعلاه، مستهلِكُه `AgentCounterService` — لا هذا الرمز.
+                actors: ['customer'],
                 bearers: ['sender'],
                 agentCommission: false,
                 zoneScoped: true,
                 consumers: [
                     'app/Http/Controllers/Api/V1/Customer/TransactionController.php',
-                    'app/Http/Controllers/Api/V1/Agent/TransactionController.php',
                 ],
-                owner: 'Customer\\TransactionController::withdrawRequest · Agent\\TransactionController',
+                owner: 'Customer\\TransactionController::withdrawRequest',
             ),
 
             // ══════════════════════════════════════════════════════════

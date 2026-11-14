@@ -57,9 +57,12 @@ class PasswordResetHardeningTest extends TestCase
         $this->assertTrue(Hash::check('1111', $user->fresh()->password));
     }
 
-    public function test_valid_code_works_once_for_customer_and_agent_routes(): void
+    public function test_valid_code_works_once_for_customer_routes(): void
     {
-        foreach (['customer' => '+967770000004', 'agent' => '+967770000005'] as $role => $phone) {
+        // AMIAL-AGENT-LEGACY-CLEANUP-001 — حُذف `/api/v1/agent/auth/*` كلّه
+        // (PR #46): محفظةُ الوكيل الفرديّ القديمة، لا بابَ استعادة كلمةَ
+        // مرورٍ ذاتيّاً للوكيل اليوم — تُدار من لوحة الإدارة.
+        foreach (['customer' => '+967770000004'] as $role => $phone) {
             $user = $this->seedReset($phone);
             $this->submit($phone, '654321', '2222', '3333', $role)->assertStatus(401);
             $this->assertSame(1, DB::table('password_resets')->where('phone', $phone)->count(), 'عدم التطابق لا يستهلك الرمز');
