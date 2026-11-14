@@ -287,7 +287,8 @@ class UnifiedLoginController extends Controller
     private function enterAdmin(Request $request, User $user, string $key)
     {
         Auth::guard('agent_staff')->logout();
-        Auth::guard('user')->login($user, $request->boolean('remember'));
+        // لا «تذكّرني» للإدارة (AMIAL-ADMIN-NO-REMEMBER-001) — ولو أُرسل الخيار من النموذج.
+        Auth::guard('user')->login($user, false);
         $request->session()->regenerate();
         RateLimiter::clear($key);
 

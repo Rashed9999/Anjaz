@@ -158,7 +158,9 @@ class LoginController extends Controller
             }
         }
 
-        auth('user')->login($admin, $request->boolean('remember'));
+        // AMIAL-ADMIN-NO-REMEMBER-001 — لا «تذكّرني» للإدارة: كوكي التذكّر تُبقي اللوحة (أموال وهويّات) مفتوحةً لسنوات على هاتفٍ
+        // قد يضيع أو يُستعار. الجلسةُ العاديةُ فقط، وتنتهي بالخمول (AdminMiddleware).
+        auth('user')->login($admin, false);
         $request->session()->regenerate();
 
         return redirect()->route('admin.dashboard');
