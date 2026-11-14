@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\AgentProfile;
 use App\Models\KycDocument;
+use App\Models\Merchant;
+use App\Models\MerchantProfile;
 use App\Models\RegistrationDossier;
 use App\Models\User;
 use App\Services\Admin\AccountDossierPrintService;
@@ -174,6 +177,71 @@ class AccountDossierPrintGuardTest extends TestCase
         $html = view('pdf.account-dossier', $this->service()->data($u))->render();
 
         $this->assertStringContainsString('لا وثيقةَ واحدةً مرفوعةً لهذا الحساب', $html);
+    }
+
+    /**
+     * AMIAL-ACCOUNT-PRINT-002 — **تاجرٌ نشطٌ بلا لقطة تسجيل يُطبَع بنشاطه
+     * الحقيقيّ**، لا بورقةٍ خاليةٍ من كلّ ما يخصّ منشأته — لأنّ `$payload`
+     * لقطةٌ قد تغيب، والسجلّ الحيّ لا يغيب أبداً طالما الحساب موجود.
+     *
+     * @test
+     */
+    public function a_merchant_account_prints_its_live_business_activity_even_without_a_dossier_snapshot(): void
+    {
+        $u = $this->account(MERCHANT_TYPE);
+        $m = new Merchant();
+        $m->user_id = $u->id;
+        $m->store_name = 'بقالة النور';
+        $m->address = 'شارع الستين';
+        $m->merchant_number = 'MR-0099';
+        $m->save();
+        MerchantProfile::create([
+            'user_id' => $u->id, 'business_type' => 'retail',
+            'verification_status' => 'verified', 'zone_code' => 'SOUTH',
+            'subscription_plan' => 'free',
+            'daily_receive_limit' => '5000000', 'single_receive_limit' => '1000000',
+            'monthly_receive_limit' => '50000000', 'can_transfer_out' => true,
+        ]);
+
+        $this->assertSame(0, RegistrationDossier::where('subject_user_id', $u->id)->count());
+
+        $html = view('pdf.account-dossier', $this->service()->data($u->fresh()))->render();
+
+        $this->assertStringContainsString('بقالة النور', $html, 'اسم المنشأة الحيّ لم يُطبَع');
+        $this->assertStringContainsString('MR-0099', $html);
+        $this->assertStringContainsString('بيانات النشاط', $html);
+    }
+
+    /** @test */
+    public function an_agent_account_prints_its_live_branch_activity_even_without_a_dossier_snapshot(): void
+    {
+        $u = $this->account(AGENT_TYPE);
+        AgentProfile::create([
+            'user_id' => $u->id, 'agent_level' => 'distributor',
+            'business_name' => 'صرافة الوادي', 'location_city' => 'المكلا',
+            'location_address' => 'شارع السلام', 'status' => 'active', 'zone_code' => 'SOUTH',
+            'daily_cash_in_limit' => '2000000', 'daily_cash_out_limit' => '2000000',
+            'single_transaction_limit' => '500000', 'min_float_balance' => '0',
+            'commission_rate' => '1.5',
+        ]);
+
+        $html = view('pdf.account-dossier', $this->service()->data($u->fresh()))->render();
+
+        $this->assertStringContainsString('صرافة الوادي', $html, 'اسم الوكالة الحيّ لم يُطبَع');
+        $this->assertStringContainsString('المكلا', $html);
+        $this->assertStringContainsString('موزِّع (أمّ)', $html);
+    }
+
+    /** @test */
+    public function a_customer_account_shows_no_activity_section_at_all(): void
+    {
+        // **ولا قسمَ نشاطٍ فارغٍ لعميلٍ فرديّ** — القسمُ يختفي كلّياً لا
+        // يظهر خاوياً.
+        $u = $this->account(CUSTOMER_TYPE);
+
+        $data = $this->service()->data($u);
+
+        $this->assertSame([], $data['activity']);
     }
 
     /** @test */

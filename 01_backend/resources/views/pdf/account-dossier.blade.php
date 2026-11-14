@@ -8,6 +8,10 @@
 <html lang="ar" dir="rtl">
 <head><meta charset="utf-8"><style>
 body{font-family:dejavusans,sans-serif;color:#172033;font-size:10px}
+.band{background:#053391;color:#fff;padding:10px 14px;border-radius:6px;margin-bottom:10px}
+.band .brand{font-size:16px;font-weight:bold}
+.band .sub{font-size:10px;color:#cfe0ff;margin-top:2px}
+.band img{height:28px}
 .head{border-bottom:2px solid #053391;padding-bottom:9px;margin-bottom:12px}
 .badge{background:#eef2ff;padding:3px 7px;border-radius:4px}
 h3{font-size:12px;background:#f1f5f9;padding:6px;margin:14px 0 0}
@@ -20,6 +24,16 @@ td,th{border:1px solid #cbd5e1;padding:5px;text-align:right;width:25%}
 .doc .cap{font-size:9px;color:#475569;margin-bottom:4px}
 </style></head>
 <body>
+
+<div class="band">
+  <table style="border:none;width:100%"><tr style="border:none">
+    <td style="border:none;width:40px;padding:0"><img src="{{ public_path('branding/logo.png') }}" alt="أميال باي"></td>
+    <td style="border:none;padding:0 0 0 8px">
+      <div class="brand">أميال باي — ملفّ فتح الحساب الرسمي</div>
+      <div class="sub">نسخةٌ إداريّةٌ للأرشفة والمراجعة — ليست وثيقةَ اعتمادٍ مستقلّة</div>
+    </td>
+  </tr></table>
+</div>
 
 @php
   $labels = ['declared_legal_name'=>'الاسم القانوني المصرّح به','verified_legal_name'=>'الاسم القانوني الموثق','legal_name_status'=>'حالة الاسم','family_name'=>'اللقب / اسم العائلة','gender'=>'الجنس','name_en'=>'الاسم بالإنجليزية','father_name'=>'اسم الأب','grandfather_name'=>'اسم الجد','date_of_birth'=>'تاريخ الميلاد','dial_country_code'=>'مفتاح الدولة','phone'=>'رقم الجوال','phone_canonical'=>'رقم الجوال الموحّد','email'=>'البريد الإلكتروني','identification_type'=>'نوع الهوية','identification_number'=>'رقم الهوية','identification_issue_date'=>'تاريخ الإصدار','identification_expiry_date'=>'تاريخ الانتهاء','id_place_of_issue'=>'مكان الإصدار','country_of_birth'=>'بلد الميلاد','birth_governorate'=>'محافظة الميلاد','dual_nationality'=>'جنسية أخرى','marital_status'=>'الحالة الاجتماعية','address'=>'العنوان','origin_governorate'=>'محافظة الأصل','residence_governorate'=>'محافظة السكن','residence_district'=>'المديرية','residence_area'=>'المنطقة/الحي','residence_landmark'=>'علامة مميزة','housing_type'=>'نوع السكن','occupation'=>'المهنة','employer_name'=>'جهة العمل','job_title'=>'المسمى الوظيفي','work_address'=>'عنوان العمل','income_source'=>'مصدر الدخل','monthly_income'=>'الدخل الشهري','monthly_income_currency'=>'عملة الدخل','account_purpose'=>'الغرض من الحساب','is_pep'=>'شخص سياسي بارز','pep_position'=>'المنصب أو الصلة','kin_name'=>'المرجع الأول','kin_phone'=>'جوال المرجع الأول','kin_relation'=>'صلة المرجع الأول','kin2_name'=>'المرجع الثاني','kin2_phone'=>'جوال المرجع الثاني','kin2_relation'=>'صلة المرجع الثاني','store_name'=>'اسم المنشأة','business_type'=>'نوع النشاط','plan'=>'الباقة','business_registration_number'=>'رقم السجل/الترخيص','business_legal_form'=>'الشكل القانوني','business_category'=>'فئة النشاط','authorized_signatory_name'=>'المفوض بالتوقيع','authorized_signatory_id'=>'هوية المفوض','verification_target_label'=>'حالة التوثيق المطلوبة','confirmed_by_customer_at'=>'وقت تأكيد العميل','residence_evidence_type'=>'نوع إثبات السكن','ownership_method'=>'طريقة إثبات صاحب الحساب','review_mode'=>'نمط المراجعة'];
@@ -44,6 +58,20 @@ td,th{border:1px solid #cbd5e1;padding:5px;text-align:right;width:25%}
     </tr>
   @endforeach
 </tbody></table>
+
+{{-- AMIAL-ACCOUNT-PRINT-002 — من السجلّ الحيّ (AgentProfile/MerchantProfile)
+     لا من لقطة التسجيل؛ يظهر لحساب تاجرٍ أو وكيلٍ نشطٍ ولو لم يحمل أي لقطة. --}}
+@if(count($activity ?? []))
+  <h3>بيانات النشاط — من السجلّ الحيّ</h3>
+  <table><tbody>
+    @foreach(array_chunk($activity, 2) as $pair)
+      <tr>
+        @foreach($pair as $row)<th>{{ $row[0] }}</th><td>{{ $row[1] }}</td>@endforeach
+        @if(count($pair) === 1)<th></th><td></td>@endif
+      </tr>
+    @endforeach
+  </tbody></table>
+@endif
 
 {{-- **لقطةُ التسجيل — وغيابُها يُقال ولا يُترك فراغاً بلا سبب.** --}}
 @if($dossier)
