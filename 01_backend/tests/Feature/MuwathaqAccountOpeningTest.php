@@ -144,6 +144,14 @@ class MuwathaqAccountOpeningTest extends TestCase
                 'submitted_at' => now(),
             ]);
         }
+        // تير 2 للنساء يلزمه وثيقة هوية (AccountOpeningEvidencePolicy::women).
+        MuwathaqOpeningEvidence::query()->create([
+            'application_id' => $application->id,
+            'kind' => MuwathaqOpeningEvidence::IDENTITY_DOCUMENT,
+            'state' => MuwathaqOpeningEvidence::STATE_SUBMITTED,
+            'submitted_at' => now(),
+            'file_encrypted_path' => 'muwathaq/identity/'.$application->id.'.enc',
+        ]);
 
         $service->receiveDecision(
             $application->application_ulid,
@@ -185,8 +193,18 @@ class MuwathaqAccountOpeningTest extends TestCase
                 'submitted_at' => now(),
             ]);
         }
+        // الأدلّةُ كاملة — فالرفضُ المتوقَّع سببُه غيابُ verified_identity
+        // في سياق القرار وحده، لا نقصُ أدلّةٍ آخر.
+        MuwathaqOpeningEvidence::query()->create([
+            'application_id' => $application->id,
+            'kind' => MuwathaqOpeningEvidence::IDENTITY_DOCUMENT,
+            'state' => MuwathaqOpeningEvidence::STATE_SUBMITTED,
+            'submitted_at' => now(),
+            'file_encrypted_path' => 'muwathaq/identity/'.$application->id.'.enc',
+        ]);
 
         $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('المستوى الثاني يتطلب مراجعة هوية من موثّق.');
         $service->receiveDecision(
             $application->application_ulid,
             MuwathaqAccountOpeningApplication::STATUS_APPROVED,
