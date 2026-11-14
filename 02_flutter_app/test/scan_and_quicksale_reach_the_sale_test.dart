@@ -26,47 +26,6 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   String read(String rel) => File(rel).readAsStringSync();
 
-  group('AMIAL-SCAN-DEADEND-001 — المسحُ يقود إلى بيع', () {
-    late String home;
-
-    setUpAll(() {
-      home = read('lib/features/access/screens/role_based_home_screens.dart');
-    });
-
-    test('الأصنافُ الممسوحةُ تُضاف إلى سلّة الكاشير', () {
-      final at = home.indexOf('ContinuousScannerScreen');
-      expect(at, isNot(-1), reason: 'لم يعد زرُّ المسح موجوداً — راجع الحارس');
-
-      // نافذةُ المعالج بعد فتح الماسح.
-      final handler = home.substring(at, at + 900);
-
-      expect(handler.contains('addToCart'), isTrue,
-          reason: '**المسحُ لا يضيف شيئاً إلى السلّة** — يمسح البائعُ '
-              'أصنافَه ثمّ لا يحدث شيء. (كان يعرض إشعاراً ويرمي النتيجة.)');
-    });
-
-    test('ويُفتَح الكاشيرُ بعده لإتمام البيع', () {
-      final at = home.indexOf('ContinuousScannerScreen');
-      final handler = home.substring(at, at + 900);
-
-      expect(handler.contains('CashierPosScreen'), isTrue,
-          reason: '**المسحُ لا يقود إلى الكاشير** — فالسلّةُ تمتلئ في '
-              'مكانٍ لا يراه البائع، وهو تكرارٌ بلا وجهة.');
-    });
-
-    test('ولا يكتفي بإشعارٍ ثمّ يصمت', () {
-      final at = home.indexOf('ContinuousScannerScreen');
-      final handler = home.substring(at, at + 900);
-
-      // الصياغةُ القديمة: إشعارٌ فيه «تم مسح» ولا شيء بعده.
-      final onlyToast = handler.contains('تم مسح') &&
-          !handler.contains('addToCart');
-
-      expect(onlyToast, isFalse,
-          reason: '**عاد الزرُّ إشعاراً بلا أثر** — وهو العطلُ الأصليّ.');
-    });
-  });
-
   group('AMIAL-QUICKSALE-PRIMARY-001 — البيعُ السريع يبدأ بالمبلغ', () {
     late String pos;
 

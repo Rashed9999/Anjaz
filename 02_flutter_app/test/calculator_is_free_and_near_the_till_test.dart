@@ -95,25 +95,4 @@ void main() {
               'والسلّةُ أمامه، فشاشةٌ مستقلّةٌ تُخرجه منها');
     }
   });
-
-  test('⑥ وفي اللوحات الثلاث، بلا بوّابةِ باقة', () {
-    for (final p in const [
-      'lib/features/access/screens/role_based_home_screens.dart',
-      'lib/features/pharmacy/screens/pharmacy_dashboard_screen.dart',
-    ]) {
-      final code = _code(p);
-
-      expect(code.contains('QuickCalculatorSheet'), isTrue,
-          reason: 'لا بلاطةَ حاسبةٍ في $p');
-
-      // **مجّانيّةٌ لكلّ الباقات** — فلا `AccessGate` يلفّها.
-      final i = code.indexOf("Key('calc-tile')");
-      expect(i, greaterThan(-1));
-
-      final before = code.substring((i - 300).clamp(0, i), i);
-      expect(before.contains('AccessGate'), isFalse,
-          reason: 'حُجبت الحاسبةُ خلف قدرةٍ في $p — وهي أداةٌ لا تُحرّك '
-              'ريالاً، وبيعُها بيعُ آلةٍ حاسبةٍ في هاتفٍ فيه واحدةٌ مجّاناً');
-    }
-  });
 }

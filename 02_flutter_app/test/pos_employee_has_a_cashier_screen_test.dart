@@ -33,8 +33,6 @@ void main() {
       File('lib/features/merchant/screens/pos_employee_home_screen.dart');
   final access =
       File('lib/features/access/controllers/access_controller.dart');
-  final dashboard =
-      File('lib/features/merchant/screens/merchant_dashboard_screen.dart');
   final restaurantCashier =
       File('lib/features/restaurant/screens/restaurant_cashier_screen.dart');
   final genericCashier =
@@ -45,7 +43,6 @@ void main() {
       dispatcher,
       posHome,
       access,
-      dashboard,
       restaurantCashier,
       genericCashier,
     ]) {
@@ -217,58 +214,5 @@ void main() {
       expect(src.contains(ownerAction), isFalse,
           reason: 'واجهة كاشير المطعم تحمل صلاحية تشغيل ليست من عمله: ' + ownerAction);
     }
-  });
-
-  test('وأبوابُ المالك في لوحته محروسةٌ بالملكيّة لا بالميزة', () {
-    // ══════════════════════════════════════════════════════════════
-    // **وتُنزع التعليقاتُ قبل الفحص.**
-    //
-    // فقد كتبتُ في اللوحة تعليقاً يقول «`ownerOnly: true` — انظر
-    // `_LinkTile`»، **فكان يُرضي هذا الحارسَ وحدَه بلا حاجزٍ واحد**.
-    // وهو بعينه ما وقع من قبلُ في هذا المشروع: حارسٌ مرّ لأنّ الكلمة
-    // وردت في تعليقٍ عربيٍّ يشرح العطل — **فالتعليقُ الذي يصف الحاجزَ
-    // كان يُغني عنه**. (القاعدة الثانية.)
-    // ══════════════════════════════════════════════════════════════
-    final src = dashboard
-        .readAsStringSync()
-        .replaceAll(RegExp(r'//[^\n]*'), '')
-        .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
-
-    // القالبُ المطلوب: `ownerOnly: true` يسبق كلَّ واحدٍ من هذه الشاشات.
-    const mustBeOwnerGated = [
-      'MerchantWalletScreen',
-      'MerchantStaffScreen',
-      'MerchantServicesHubScreen',
-    ];
-
-    final ungated = <String>[];
-
-    for (final screen in mustBeOwnerGated) {
-      // **يُبحَث عن النداء لا عن الاسم** — وسطرُ الاستيراد في رأس
-      // الملفّ يحمل الاسمَ نفسَه ولا حاجزَ قبله، فالبحثُ عنه يجعل
-      // الحارسَ يسقط أبداً ولو كان الزرُّ محروساً. (وقد سقط أوّلَ
-      // تشغيلٍ لهذا السبب، فصُحّح.)
-      final at = src.indexOf('const $screen()');
-      expect(at, greaterThan(-1), reason: 'اختفى $screen من اللوحة');
-
-      // **يُفتَّش عن الحاجز في الكتلة السابقة للنداء وحدَها** — ووجودُه
-      // في مكانٍ آخر من الملفّ لا يحرس هذا الزرّ.
-      //
-      // **وصورتا الحاجز كلتاهما مقبولتان**: `ownerOnly: true` وسمٌ على
-      // `_LinkTile` يُخفيه، و`if (_isOwner())` شرطٌ يسبق عنصراً ليس
-      // منها. والمفحوصُ الحراسةُ لا شكلُها.
-      final window = src.substring((at - 420).clamp(0, at), at);
-      if (!window.contains('ownerOnly: true') &&
-          !window.contains('_isOwner()')) {
-        ungated.add('  $screen');
-      }
-    }
-
-    expect(ungated, isEmpty,
-        reason: '**أبوابُ مالكٍ بلا حدِّ ملكيّة:**\n${ungated.join('\n')}\n\n'
-            '**وحاجزُ الميزة وحدَه لا يكفي هنا**: `restrictToPosPermissions` '
-            'تُبقي للكاشير ما مُنح من صلاحيّات صاحبه، فمن أُعطي '
-            '`employees` (مديرُ عمليّاتٍ مثلاً) **يملك الميزةَ ولا يملك '
-            'المتجر** — فيمرّ الحاجزُ ويردّ الخادمُ ٤٠٣.');
   });
 }

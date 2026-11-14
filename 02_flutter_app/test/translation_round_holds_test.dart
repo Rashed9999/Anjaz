@@ -84,18 +84,18 @@ List<String> _translatedLiterals(String src) {
   return out;
 }
 
-const _theFive = [
-  'lib/features/access/screens/role_based_home_screens.dart',
-  'lib/features/merchant/screens/merchant_services_hub_screen.dart',
+// الثلاثةُ التي كانت هنا (role_based_home_screens، merchant_services_hub_screen،
+// pharmacy_dashboard_screen) حُذفت: لوحةُ المالك انتقلت إلى الويب، فلا شاشةَ
+// منها تبقى تُقاس. الباقيتان شاشتا موظّف POS الحقيقيتان.
+const _theTwo = [
   'lib/features/plans/screens/plans_catalog_screen.dart',
   'lib/features/merchant/screens/cashier_pos_screen.dart',
-  'lib/features/pharmacy/screens/pharmacy_dashboard_screen.dart',
 ];
 
 void main() {
-  test('① الشاشات الخمس المترجمة لا يعود إليها نص محفور', () {
+  test('① الشاشتان المترجمتان لا يعود إليهما نص محفور', () {
     final left = <String>[];
-    for (final p in _theFive) {
+    for (final p in _theTwo) {
       final n = _hardCodedIn(File(p));
       if (n > 0) left.add('$p → $n');
     }
