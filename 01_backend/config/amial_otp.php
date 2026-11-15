@@ -10,8 +10,8 @@ return [
     'registration_channel' => env('REGISTRATION_OTP_CHANNEL', 'email'),
     'password_reset_channel' => env('PASSWORD_RESET_CHANNEL', 'email'),
     'pin_recovery_channel' => env('PIN_RECOVERY_CHANNEL', 'email'),
-    // Keep Resend email first. SMS runs only when email submission fails and a provider is explicitly enabled.
-    'account_activation_channel' => env('ACCOUNT_ACTIVATION_CHANNEL', 'email,sms'),
+    // SMS first for account activation. Email is a fallback if SMS cannot be sent.
+    'account_activation_channel' => env('ACCOUNT_ACTIVATION_CHANNEL', 'sms,email'),
     // رمز تفعيل الحساب المعتمد من موثّق: 3 أيام (بالدقائق).
     'activation_ttl_minutes' => (int) env('OTP_ACTIVATION_TTL_MINUTES', 4320),
 
