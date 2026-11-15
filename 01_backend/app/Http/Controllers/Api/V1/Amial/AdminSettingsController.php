@@ -34,14 +34,16 @@ use Illuminate\Support\Facades\Validator;
  */
 class AdminSettingsController extends AmialApiController // AMIAL-FIX-007
 {
-    private const SMS_PROVIDERS = ['twilio', 'nexmo', '2factor', 'msg91'];
+    private const SMS_PROVIDERS = ['sms_gate', 'twilio', 'nexmo', '2factor', 'msg91'];
     private const SMS_FIELDS = [
+        // AMIAL-MESSAGING-003 — SMSGate: شريحةٌ على هاتف أندرويد تملكه أميال.
+        'sms_gate' => ['base_url', 'username', 'password', 'device_id', 'sim_number', 'ttl', 'otp_template'],
         'twilio' => ['sid', 'token', 'messaging_service_sid', 'otp_template'],
         'nexmo' => ['api_key', 'api_secret', 'from', 'otp_template'],
         '2factor' => ['api_key'],
         'msg91' => ['auth_key', 'template_id'],
     ];
-    private const SECRET_KEYS = ['token', 'api_secret', 'auth_key', 'api_key', 'sid'];
+    private const SECRET_KEYS = ['token', 'api_secret', 'auth_key', 'api_key', 'sid', 'password'];
 
     public function __construct(private readonly FeeService $fees) {}
 
