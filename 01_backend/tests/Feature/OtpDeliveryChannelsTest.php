@@ -44,7 +44,7 @@ class OtpDeliveryChannelsTest extends TestCase
     }
 
     #[Test]
-    public function the_channel_list_is_parsed_validated_and_defaults_to_email(): void
+    public function the_channel_list_is_parsed_validated_and_defaults_to_sms_for_activation(): void
     {
         $svc = $this->service();
         $this->assertSame(['sms', 'email'], $svc->channelsFor('account_activation'), 'الرسائل أولاً والبريد احتياطياً');
@@ -94,7 +94,7 @@ class OtpDeliveryChannelsTest extends TestCase
     public function missing_email_provider_key_does_not_prevent_sms_first(): void
     {
         config(['amial_otp.resend.api_key' => '',
-                'amial_otp.account_activation_channel' => 'email,sms']);
+                'amial_otp.account_activation_channel' => 'sms,email']);
         Http::fake();
         $this->registry('success');
         $row = $this->row($this->issue()['challenge_id']);
