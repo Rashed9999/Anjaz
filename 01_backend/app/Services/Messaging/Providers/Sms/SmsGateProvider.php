@@ -3,6 +3,7 @@
 namespace App\Services\Messaging\Providers\Sms;
 
 use App\Services\Messaging\AbstractProvider;
+use App\Support\Phone;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -45,7 +46,7 @@ final class SmsGateProvider extends AbstractProvider
         $c = (array) config('services.smsgate', []);
         $base = rtrim((string) $c['base_url'], '/');
         $url = $base . '/api/3rdparty/v1/messages';
-        $phone = $this->normalize($to, true);
+        $phone = '+' . Phone::canonical($to);
         $body = [
             'phoneNumbers' => [$phone],
             'textMessage' => [
