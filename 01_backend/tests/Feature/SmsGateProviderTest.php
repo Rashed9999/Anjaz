@@ -46,6 +46,13 @@ class SmsGateProviderTest extends TestCase
             ->contains(fn ($p) => $p instanceof SmsGateProvider));
     }
 
+    public function test_foreign_numbers_are_not_sent_through_a_local_yemeni_sim(): void
+    {
+        Http::fake();
+        $this->assertFalse(app(SmsGateProvider::class)->sendOtp('+966501234567', '735912'));
+        Http::assertNothingSent();
+    }
+
     public function test_queued_message_is_not_reported_as_sent(): void
     {
         Http::fakeSequence()
