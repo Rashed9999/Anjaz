@@ -69,13 +69,13 @@ class DemoOtpBlocksLaunchGuardTest extends TestCase
     }
 
     /** @test */
-    public function the_deployed_entrypoint_has_the_same_explicit_demo_otp_gate(): void
+    public function the_deployed_entrypoint_has_a_non_bypassable_demo_otp_gate(): void
     {
         $sh = $this->deployedEntrypoint();
         $block = $this->slice($sh, 'AMIAL-DEMO-OTP-GUARD-002', 'fi');
 
         $this->assertStringContainsString('AMIAL_DEMO_OTP', $block);
-        $this->assertStringContainsString('AMIAL_ALLOW_DEMO_OTP', $block);
+        $this->assertStringNotContainsString('AMIAL_ALLOW_DEMO_OTP', $block);
         $this->assertStringContainsString('exit 1', $block,
             'مدخل Coolify يذكر الحارس لكنه لا يوقف الإقلاع.');
     }
@@ -87,13 +87,11 @@ class DemoOtpBlocksLaunchGuardTest extends TestCase
      * يُفتح بيدٍ تعرف أنّها تفتحه. (نفسُ نمط `AMIAL_ALLOW_DEBUG`.)
      */
     /** @test */
-    public function it_has_an_explicit_opt_in_not_a_silent_hole(): void
+    public function production_cannot_opt_in_to_fixed_phone_codes(): void
     {
         $sh = $this->entrypoint();
-
-        $this->assertStringContainsString('AMIAL_ALLOW_DEMO_OTP', $sh,
-            '**لا منفذَ صريحٌ للتجربة.** فمن احتاج تجربةً على خادمٍ حقيقيٍّ '
-            .'ينزع الحاجزَ كلَّه — ولا يعود.');
+        $this->assertStringContainsString('AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED', $sh);
+        $this->assertStringNotContainsString('&& [ "$AMIAL_ALLOW_DEMO_OTP" != "true" ]', $sh);
     }
 
     /**
