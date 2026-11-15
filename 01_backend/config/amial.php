@@ -529,12 +529,13 @@ return [
 
         // لا يوجد رمز عرض افتراضي، في أي بيئة. وضع التجربة يحتاج قيمةً
         // صريحة في متغير البيئة مع AMIAL_ALLOW_DEMO_OTP=true عند الخادم العام.
-        'demo_code' => env('AMIAL_DEMO_OTP', ''),
+        'demo_code' => env('APP_ENV', 'production') === 'production'
+            ? '' : env('AMIAL_DEMO_OTP', ''),
 
         // بوابة تطوير صريحة فقط — لا تُفعّل افتراضياً. حسابات العرض
         // المسجّلة وحدها تستخدم `demo_code`؛ لا يُفتح الرمز لكل رقم حقيقي.
         // لا تُشغّل هذه البوابة في الإنتاج إلا لحالة اختبار مصرح بها.
-        'pilot_customer_phone_enabled' => filter_var(
+        'pilot_customer_phone_enabled' => env('APP_ENV', 'production') !== 'production' && filter_var(
             env('AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED', false),
             FILTER_VALIDATE_BOOL,
         ),
