@@ -31,14 +31,13 @@ fi
 # ومن نسي إفراغَ الرمز عند الإطلاق **يُوقَف الإقلاعُ فيتذكّر** — لا أن
 # يُطلق منصّةً ماليّةً بابُها مفتوحٌ ولا يدري.
 PILOT_CUSTOMER_PHONE_OTP_ENABLED="${AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED:-false}"
-if { [ -n "$AMIAL_DEMO_OTP" ] || [ "$PILOT_CUSTOMER_PHONE_OTP_ENABLED" = "true" ]; } \
-   && [ "$AMIAL_ALLOW_DEMO_OTP" != "true" ]; then
+if [ -n "$AMIAL_DEMO_OTP" ] || [ "$PILOT_CUSTOMER_PHONE_OTP_ENABLED" = "true" ]; then
     echo "❌ مانع إطلاق: OTP الهاتف ما زال في وضع Pilot ثابت."
     echo "   لا يجوز الانتقال للإنتاج الحقيقي قبل:"
     echo "   1) ربط مزود SMS/WhatsApp OTP فعلي واختبار وصوله."
     echo "   2) AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED=false"
     echo "   3) AMIAL_DEMO_OTP= (فارغ)"
-    echo "   للتجربة على خادم حقيقي فقط: AMIAL_ALLOW_DEMO_OTP=true"
+    echo "   لا يوجد استثناء OTP تجريبي في الإنتاج؛ استخدم بيئة تطوير معزولة."
     exit 1
 fi
 
