@@ -46,7 +46,14 @@ final class SmsGateProvider extends AbstractProvider
         $c = (array) config('services.smsgate', []);
         $base = rtrim((string) $c['base_url'], '/');
         $url = $base . '/api/3rdparty/v1/messages';
-        $phone = '+' . Phone::canonical($to);
+        $canonical = Phone::canonical($to);
+        // This inexpensive local-SIM pilot is for Yemeni mobile numbers only.
+        // Never accidentally route international SMS through a consumer SIM.
+        if (preg_match('/^9677[0-9]{8}$/', $canonical) !== 1) {
+            Log::warning('smsgate.otp.recipient_out_of_scope');
+            return false;
+        }
+        $phone = '+' . $canonical;
         $body = [
             'phoneNumbers' => [$phone],
             'textMessage' => [
