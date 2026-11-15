@@ -56,7 +56,7 @@ class SmsGateProviderTest extends TestCase
         Http::assertSent(fn ($request) =>
             $request->method() === 'POST'
             && $request->url() === 'https://sms.example.test/api/3rdparty/v1/messages'
-            && $request['phoneNumbers'] === ['+783545525']
+            && $request['phoneNumbers'] === ['+967783545525']
             && $request['simNumber'] === 1
             && $request['textMessage']['text'] === 'رمز التحقق من أميال باي: 735912'
         );
