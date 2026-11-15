@@ -47,7 +47,7 @@ class OtpDeliveryChannelsTest extends TestCase
     public function the_channel_list_is_parsed_validated_and_defaults_to_email(): void
     {
         $svc = $this->service();
-        $this->assertSame(['email'], $svc->channelsFor('account_activation'), 'الافتراضي بريد');
+        $this->assertSame(['email', 'sms'], $svc->channelsFor('account_activation'), 'البريد أولاً والرسائل احتياطياً');
         config(['amial_otp.account_activation_channel' => ' SMS , whatsapp,email,sms,bogus ']);
         $this->assertSame(['sms', 'whatsapp', 'email'], $svc->channelsFor('account_activation'));
         config(['amial_otp.account_activation_channel' => 'off']);
@@ -62,6 +62,32 @@ class OtpDeliveryChannelsTest extends TestCase
         config(['amial_otp.registration_channel' => 'sms,email', 'amial_otp.email_change_channel' => 'sms']);
         $this->assertSame(['email'], $this->service()->channelsFor('registration'));
         $this->assertSame([], $this->service()->channelsFor('email_change'), 'لا بريدَ في السلسلة = معطّل لا يُحوَّل إلى هاتف');
+    }
+
+    #[Test]
+    public function accepted_email_does_not_send_backup_sms(): void
+    {
+        config(['amial_otp.resend.api_key' => 'rk_test',
+                'amial_otp.account_activation_channel' => 'email,sms']);
+        Http::fake(['api.resend.com/*' => Http::response(['id' => 'email_ok'], 200)]);
+        $this->registry('success');
+        $row = $this->row($this->issue()['challenge_id']);
+        $this->assertSame('email', $row->channel);
+        $this->assertSame('email_ok', $row->provider_message_id);
+        Http::assertSentCount(1);
+    }
+
+    #[Test]
+    public function sms_backup_activates_only_when_email_submission_is_rejected(): void
+    {
+        config(['amial_otp.resend.api_key' => 'rk_test',
+                'amial_otp.account_activation_channel' => 'email,sms']);
+        Http::fake(['api.resend.com/*' => Http::response(['message' => 'temporary_failure'], 503)]);
+        $this->registry('success');
+        $row = $this->row($this->issue()['challenge_id']);
+        $this->assertSame('sms', $row->channel);
+        $this->assertSame('sent', $row->delivery_status);
+        Http::assertSentCount(3);
     }
 
     #[Test]
