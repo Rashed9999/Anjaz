@@ -21,8 +21,8 @@ class MuwathaqWelcomeEmailService
     /** @throws RuntimeException عند تعذّر الإرسال ليُعاد من المهمة (RESEND_API_KEY_MISSING لا يُعاد). */
     public function send(User $user, string $kind, string $applicationUlid): string
     {
-        // Do not short-circuit the configured SMS fallback if Resend has no key.
-        // EmailOtpService::issue handles email first and SMS only on email submission failure.
+        // Route activation OTP via the purpose-specific SMS-first policy.
+        // If the SMS provider is unavailable, EmailOtpService tries email next.
         $email = mb_strtolower(trim((string) $user->email));
         if ($email === '') {
             throw new RuntimeException('WELCOME_EMAIL_NO_ADDRESS');
