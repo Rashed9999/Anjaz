@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\AuditService;
 use App\Services\Otp\EmailOtpService;
 use RuntimeException;
+use Illuminate\Support\Facades\DB;
 
 /**
  * رسالة ما بعد اعتماد موثّق = **بريد التفعيل برمزه**: الحساب أُنشئ بكلمة مرور عشوائية، فيفتح صاحبه التطبيق ← «تفعيل الحساب»
@@ -20,9 +21,8 @@ class MuwathaqWelcomeEmailService
     /** @throws RuntimeException عند تعذّر الإرسال ليُعاد من المهمة (RESEND_API_KEY_MISSING لا يُعاد). */
     public function send(User $user, string $kind, string $applicationUlid): string
     {
-        if ((string) config('amial_otp.resend.api_key', '') === '') {
-            throw new RuntimeException('RESEND_API_KEY_MISSING');
-        }
+        // Do not short-circuit the configured SMS fallback if Resend has no key.
+        // EmailOtpService::issue handles email first and SMS only on email submission failure.
         $email = mb_strtolower(trim((string) $user->email));
         if ($email === '') {
             throw new RuntimeException('WELCOME_EMAIL_NO_ADDRESS');
@@ -36,10 +36,11 @@ class MuwathaqWelcomeEmailService
             meta: ['application_ulid' => $applicationUlid, 'kind' => $kind],
             phone: (string) $user->phone,
         );
+        $channel = (string) DB::table('otp_challenges')->where('challenge_id', $meta['challenge_id'])->value('channel');
         app(AuditService::class)->record([
             'actor_type' => 'system', 'actor_user_id' => null, 'subject_type' => 'user', 'subject_id' => (string) $user->id,
-            'action' => 'MUWATHAQ_WELCOME_EMAIL_SENT', 'decision_code' => 'SENT', 'severity' => 'info',
-            'context' => ['application_ulid' => $applicationUlid, 'challenge_id' => $meta['challenge_id']],
+            'action' => $channel === 'sms' ? 'MUWATHAQ_WELCOME_SMS_SENT' : 'MUWATHAQ_WELCOME_EMAIL_SENT', 'decision_code' => 'SENT', 'severity' => 'info',
+            'context' => ['application_ulid' => $applicationUlid, 'challenge_id' => $meta['challenge_id'], 'channel' => $channel],
         ]);
 
         return $meta['challenge_id'];
