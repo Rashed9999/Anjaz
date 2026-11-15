@@ -82,9 +82,9 @@ class AdminSettingsCenterTest extends TestCase
         ])->assertOk()->assertJsonPath('meta.enabled', false);
         $this->assertSame('verysecretkey99', $row->fresh()->live_values['api_key']);
 
-        // GET يعرض الأربعة بمفاتيح الحقول
+        // GET يعرض الخمسة (SMSGate + الأربعة) بمفاتيح الحقول
         $r = $this->getJson('/api/v1/amial/admin/settings/sms')->assertOk();
-        $this->assertCount(4, $r->json('meta.providers'));
+        $this->assertCount(5, $r->json('meta.providers'));
     }
 
     // ---------- إشعارات واتساب ----------
