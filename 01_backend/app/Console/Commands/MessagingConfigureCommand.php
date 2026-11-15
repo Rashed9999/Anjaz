@@ -123,6 +123,10 @@ class MessagingConfigureCommand extends Command
     /** **ولا يُقال «معطَّل» وحدَها** — تُقال العلّة، وإلّا أُرسل قارئُها يبحث. */
     private function whyNot(MessageProvider $p): string
     {
+        if ($p->key() === 'smsgate') {
+            return 'يُضبط عبر AMIAL_SMSGATE_* في Coolify فقط (لا يُحفظ سرّه في قاعدة البيانات)';
+        }
+
         $row = DB::table('addon_settings')
             ->where('key_name', $p->key())
             ->where('settings_type', $p->channel() === 'whatsapp' ? 'whatsapp_config' : 'sms_config')
@@ -166,6 +170,11 @@ class MessagingConfigureCommand extends Command
      */
     private function apply(ProviderRegistry $registry, string $key): int
     {
+        if ($key === 'smsgate') {
+            $this->error('SMSGate تُدار أسرارها من Coolify؛ اضبط AMIAL_SMSGATE_* وأعد تشغيل الخدمة.');
+            return self::FAILURE;
+        }
+
         // ══════════════════════════════════════════════════════════
         // **ومفتاحٌ واحدٌ لقناتين يجعل الاختيارَ صامتاً.** `twilio`
         // مزوّدُ واتسابٍ **ومزوّدُ رسائلَ قصيرة**، والأخذُ بأوّل مطابقٍ

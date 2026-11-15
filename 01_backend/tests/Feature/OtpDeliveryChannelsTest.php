@@ -12,8 +12,8 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * الهاتف هو القناة الأولى لرموز التفعيل والاستعادة، والبريد احتياطها. الافتراضيُّ اليوم البريد (لا مزوّدَ رسائل بعد)،
- * والتحويل إلى الهاتف متغيّرُ بيئةٍ واحد: `ACCOUNT_ACTIVATION_CHANNEL=sms,whatsapp,email` بعد `php artisan amial:messaging`.
+ * SMS أولاً لرموز تفعيل الحساب، والبريد احتياطي عند فشل الإرسال عبر الهاتف.
+ * إثبات ملكية البريد عند التسجيل وتغييره يبقى بريدًا حصريًا.
  */
 class OtpDeliveryChannelsTest extends TestCase
 {
@@ -44,10 +44,10 @@ class OtpDeliveryChannelsTest extends TestCase
     }
 
     #[Test]
-    public function the_channel_list_is_parsed_validated_and_defaults_to_email(): void
+    public function the_channel_list_is_parsed_validated_and_defaults_to_sms_for_activation(): void
     {
         $svc = $this->service();
-        $this->assertSame(['email'], $svc->channelsFor('account_activation'), 'الافتراضي بريد');
+        $this->assertSame(['sms', 'email'], $svc->channelsFor('account_activation'), 'الرسائل أولاً والبريد احتياطياً');
         config(['amial_otp.account_activation_channel' => ' SMS , whatsapp,email,sms,bogus ']);
         $this->assertSame(['sms', 'whatsapp', 'email'], $svc->channelsFor('account_activation'));
         config(['amial_otp.account_activation_channel' => 'off']);
@@ -62,6 +62,44 @@ class OtpDeliveryChannelsTest extends TestCase
         config(['amial_otp.registration_channel' => 'sms,email', 'amial_otp.email_change_channel' => 'sms']);
         $this->assertSame(['email'], $this->service()->channelsFor('registration'));
         $this->assertSame([], $this->service()->channelsFor('email_change'), 'لا بريدَ في السلسلة = معطّل لا يُحوَّل إلى هاتف');
+    }
+
+    #[Test]
+    public function successful_sms_activation_does_not_send_email(): void
+    {
+        config(['amial_otp.resend.api_key' => 'rk_test',
+                'amial_otp.account_activation_channel' => 'sms,email']);
+        Http::fake();
+        $this->registry('success');
+        $row = $this->row($this->issue()['challenge_id']);
+        $this->assertSame('sms', $row->channel);
+        $this->assertSame('sent', $row->delivery_status);
+        Http::assertNothingSent();
+    }
+
+    #[Test]
+    public function email_is_only_used_when_sms_delivery_fails(): void
+    {
+        config(['amial_otp.resend.api_key' => 'rk_test',
+                'amial_otp.account_activation_channel' => 'sms,email']);
+        Http::fake(['api.resend.com/*' => Http::response(['id' => 'email_fallback'], 200)]);
+        $this->registry('error');
+        $row = $this->row($this->issue()['challenge_id']);
+        $this->assertSame('email', $row->channel);
+        $this->assertSame('email_fallback', $row->provider_message_id);
+        Http::assertSentCount(1);
+    }
+
+    #[Test]
+    public function missing_email_provider_key_does_not_prevent_sms_first(): void
+    {
+        config(['amial_otp.resend.api_key' => '',
+                'amial_otp.account_activation_channel' => 'sms,email']);
+        Http::fake();
+        $this->registry('success');
+        $row = $this->row($this->issue()['challenge_id']);
+        $this->assertSame('sms', $row->channel);
+        Http::assertNothingSent();
     }
 
     #[Test]
