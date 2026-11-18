@@ -178,7 +178,7 @@ class AgentBranchService
             throw new DomainException('رقم هاتف الفرع غير صالح');
         }
 
-        $dupPhone = User::where('phone', $phone)
+        $dupPhone = User::whereIn('phone', \App\Support\Phone::variants($phone))
             ->where('id', '!=', $branch->branch_user_id)->exists();
         if ($dupPhone) {
             throw new DomainException('الهاتف مستعمل في حسابٍ آخر');
