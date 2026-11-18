@@ -121,7 +121,9 @@ return [
     // تبقى القيم null حتى تُعتمد رسميّاً؛ عند غيابها يُمنع السحب بأمان (fail-closed).
     'branch_working_hours' => [
         'timezone' => env('AMIAL_BRANCH_WORKING_HOURS_TIMEZONE'),
-        'exception_roles' => null,
+        'exception_roles' => array_values(array_filter(array_map(
+            'trim', explode(',', (string) env('AMIAL_BRANCH_WORKING_HOURS_EXCEPTION_ROLES', ''))
+        ))),
         'exception_capability' => env('AMIAL_BRANCH_WORKING_HOURS_EXCEPTION_CAPABILITY'),
     ],
 

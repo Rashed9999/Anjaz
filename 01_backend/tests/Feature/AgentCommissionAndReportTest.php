@@ -361,6 +361,21 @@ class AgentCommissionAndReportTest extends TestCase
         ]);
     }
 
+    public function test_week_schedule_preserves_friday_and_explicit_overnight_close_boundary(): void
+    {
+        $branch = app(AgentReportService::class)->setWorkingHours($this->branch, [
+            'timezone' => 'Asia/Aden',
+            'fri' => ['open' => '20:00', 'close' => '02:00', 'overnight' => true],
+            'sat' => ['open' => '09:00', 'close' => '12:00'],
+        ]);
+        $policy = app(\App\Services\Agent\BranchWorkingHoursPolicy::class);
+        foreach (['2026-11-20 19:59' => false, '2026-11-20 20:00' => true,
+            '2026-11-21 01:59' => true, '2026-11-21 02:00' => false,
+            '2026-11-21 09:00' => true, '2026-11-22 09:00' => false] as $time => $expected) {
+            $this->assertSame($expected, $policy->evaluateWindow($branch, \Carbon\Carbon::parse($time, 'Asia/Aden'))['open'], $time);
+        }
+    }
+
     /** @test */
     public function a_day_with_no_hours_is_stored_as_closed_not_dropped(): void
     {

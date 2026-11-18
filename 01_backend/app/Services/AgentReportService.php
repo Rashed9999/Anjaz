@@ -209,23 +209,27 @@ class AgentReportService
 
         foreach ($days as $d) {
             $row = $hours[$d] ?? null;
-            if (!is_array($row) || empty($row['open']) || empty($row['close'])) {
+            if ($row === null || $row === []) {
                 $clean[$d] = null;   // مغلق
                 continue;
             }
 
+            if (!is_array($row)) throw new DomainException("جدول غير صالح في {$d}");
+
             foreach (['open', 'close'] as $k) {
-                if (!preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', (string) $row[$k])) {
+                if (!preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', (string) ($row[$k] ?? ''))) {
                     throw new DomainException("صيغة وقت غير صحيحة في {$d} — استعمل HH:MM");
                 }
             }
 
             // فتحٌ بعد إغلاق يمرّ في الحفظ ويُغلق الفرع طول اليوم في التنفيذ.
-            if ($row['open'] >= $row['close']) {
+            $overnight = ($row['overnight'] ?? false) === true;
+            if ($row['open'] === $row['close'] || ($row['open'] > $row['close']) !== $overnight) {
                 throw new DomainException("وقت الفتح في {$d} ليس قبل الإغلاق");
             }
 
             $clean[$d] = ['open' => $row['open'], 'close' => $row['close']];
+            if ($overnight) $clean[$d]['overnight'] = true;
         }
 
         // الاحتفاظ بالمنطقة الزمنية المعتمدة للفرع إن وُجدت دون افتراض قيمة عند غيابها.

@@ -173,6 +173,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ── الفروع ───────────────────────────────────────────────────────
+    const weekdays = {sun:'الأحد', mon:'الإثنين', tue:'الثلاثاء', wed:'الأربعاء', thu:'الخميس', fri:'الجمعة', sat:'السبت'};
+
+    function renderDay(day, label, slot) {
+        return `<div class="row g-1 align-items-center mb-1" data-weekday="${day}">
+            <span class="col-2">${label}</span>
+            <label class="col">فتح <input class="form-control" type="time" data-open value="${esc(slot?.open || '')}"></label>
+            <label class="col">إغلاق <input class="form-control" type="time" data-close value="${esc(slot?.close || '')}"></label>
+            <label class="col"><input type="checkbox" data-overnight ${slot?.overnight === true ? 'checked' : ''}> إغلاق في اليوم التالي</label>
+        </div>`;
+    }
+
     function renderBranches(rows) {
         if (!rows.length) {
             $('sg-branches').innerHTML =
@@ -203,15 +214,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                 </div>
                 <button class="btn btn-sm btn-outline-primary mt-2" data-sg-save="${b.id}">حفظ حدود الفرع</button>
-                <div class="row g-2 mt-2 pt-2 border-top align-items-end">
-                    <div class="col-4"><label class="form-label small mb-0">فتح الدوام (أحد–خميس)</label>
-                        <input type="time" class="form-control form-control-sm" data-sg="open"
-                               value="${esc((b.working_hours && b.working_hours.sun && b.working_hours.sun.open) || '08:00')}"></div>
-                    <div class="col-4"><label class="form-label small mb-0">الإغلاق</label>
-                        <input type="time" class="form-control form-control-sm" data-sg="close"
-                               value="${esc((b.working_hours && b.working_hours.sun && b.working_hours.sun.close) || '17:00')}"></div>
-                    <div class="col-4"><button class="btn btn-sm btn-outline-secondary w-100" data-sg-hours="${b.id}">حفظ ساعات العمل</button></div>
-                </div>
+                <p class="small mt-2">اترك الوقتين فارغين في أيام الإغلاق.</p>
+                ${Object.entries(weekdays).map(([day, label]) => renderDay(day, label, b.working_hours?.[day])).join('')}
+                <label>المنطقة الزمنية للفرع <input class="form-control" dir="ltr" data-timezone value="${esc(b.working_hours?.timezone || '')}"></label>
+                <button class="btn btn-sm btn-outline-secondary mt-2" data-sg-hours="${b.id}">حفظ ساعات العمل</button>
             </div>`).join('');
     }
 
@@ -219,12 +225,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const hBtn = e.target.closest('button[data-sg-hours]');
         if (hBtn) {
             const box = hBtn.closest('[data-sg-branch]');
-            const open = box.querySelector('[data-sg="open"]').value;
-            const close = box.querySelector('[data-sg="close"]').value;
-            const hours = {};
-            ['sun','mon','tue','wed','thu'].forEach(d => { hours[d] = {open, close}; });
-            hours.fri = null; hours.sat = null;
+            const hours = {timezone: box.querySelector('[data-timezone]').value.trim()};
             try {
+                for (const row of box.querySelectorAll('[data-weekday]')) {
+                    const open = row.querySelector('[data-open]').value;
+                    const close = row.querySelector('[data-close]').value;
+                    const overnight = row.querySelector('[data-overnight]').checked;
+                    if ((!open !== !close) || (overnight && !open)) throw new Error('أكمل وقتي الفتح والإغلاق');
+                    hours[row.dataset.weekday] = open ? {open, close, overnight} : null;
+                }
                 const j = await post(`/branches/${hBtn.dataset.sgHours}/hours`, {hours});
                 alert(j.message);
                 load();

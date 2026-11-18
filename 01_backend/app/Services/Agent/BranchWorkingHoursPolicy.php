@@ -87,12 +87,9 @@ class BranchWorkingHoursPolicy
         $hhmm = $localNow->format('H:i');
         $slot = $hours[$dayKey] ?? null;
 
-        $open = is_array($slot)
-            && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', (string) ($slot['open'] ?? '')) === 1
-            && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', (string) ($slot['close'] ?? '')) === 1
-            && $slot['open'] < $slot['close']
-            && $hhmm >= $slot['open']
-            && $hhmm < $slot['close'];
+        $previousDay = strtolower($localNow->copy()->subDay()->format('D'));
+        $open = $this->containsTime($slot, $hhmm, false)
+            || $this->containsTime($hours[$previousDay] ?? null, $hhmm, true);
 
         return [
             'open' => $open,
@@ -100,6 +97,20 @@ class BranchWorkingHoursPolicy
             'day' => $dayKey,
             'local_time' => $hhmm,
         ];
+    }
+
+    private function containsTime(mixed $slot, string $time, bool $previousDay): bool
+    {
+        if (!is_array($slot)) return false;
+        $start = $slot['open'] ?? '';
+        $end = $slot['close'] ?? '';
+        foreach ([$start, $end] as $value) {
+            if (!is_string($value) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/D', $value)) return false;
+        }
+        if (($slot['overnight'] ?? false) === true) {
+            return $start > $end && ($previousDay ? $time < $end : $time >= $start);
+        }
+        return !$previousDay && $start < $end && $time >= $start && $time < $end;
     }
 
     /**

@@ -47,13 +47,21 @@ window.__amialPost = window.__amialPost || (function () {
                 },
                 body: payload,
             });
-            // الخادم استجاب: نمسح المفتاح ليحصل أي طلب جديد لاحقاً على مفتاح جديد،
-            // أمّا عند انقطاع الشبكة (قبل الوصول هنا) فيبقى المفتاح لإعادة المحاولة.
-            keys.delete(op);
             if (r.status === 401) {
                 window.location.assign(base + '/login');
             }
-            const j = await r.json().catch(() => ({}));
+            let j;
+            try {
+                j = await r.json();
+            } catch {
+                j = null;
+            }
+            if (!j || typeof j !== 'object' || r.status >= 500 || j.code === 'IDEMPOTENCY_IN_PROGRESS') {
+                const message = 'نتيجة العملية غير مؤكدة. أعد التحقق من العملية نفسها قبل تسليم النقد.';
+                if (opts.throwOnError) throw new Error(message);
+                return {success: false, pending: true, message};
+            }
+            keys.delete(op);
             if (opts.throwOnError && (!r.ok || (opts.checkSuccess && j.success === false))) {
                 throw new Error(j.message || opts.fallbackError || ('خطأ ' + r.status));
             }
