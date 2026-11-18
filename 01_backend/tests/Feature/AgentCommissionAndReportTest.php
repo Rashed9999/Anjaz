@@ -117,8 +117,8 @@ class AgentCommissionAndReportTest extends TestCase
     private function seedFee(string $code): void
     {
         FeeScheme::create([
-            'code' => $code,
-            'label' => 'رسم ' . $code,
+            'code' => strtoupper($code),
+            'label' => 'رسم ' . strtoupper($code),
             'fee_type' => 'percent',
             'percent_rate' => '1.00',
             'fixed_amount' => '0',
@@ -235,7 +235,7 @@ class AgentCommissionAndReportTest extends TestCase
     public function the_two_shares_always_sum_to_exactly_the_fee(): void
     {
         FeeScheme::create([
-            'code' => 'agent_deposit', 'label' => 'نسبة مبالَغ فيها',
+            'code' => 'AGENT_DEPOSIT', 'label' => 'نسبة مبالَغ فيها',
             'fee_type' => 'percent', 'percent_rate' => '1.00', 'fixed_amount' => '0',
             'agent_commission_percent' => '200', 'agent_commission_fixed' => '0',
             'bearer' => 'sender', 'zone_code' => 'SOUTH', 'applies_to' => 'agent',

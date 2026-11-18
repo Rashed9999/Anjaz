@@ -106,6 +106,23 @@ return [
 
         // فرقٌ فوق هذا الحدّ في يومٍ واحد يُعلَّم «مشبوهاً» ويُرفع للإدارة.
         'suspicious_variance' => env('AMIAL_SETTLEMENT_SUSPICIOUS_VARIANCE', '50000'),
+
+        // AGT-GAP-018: حوكمة Four-Eyes للتسوية اليوميّة — تبقى null حتى تُعتمد صراحةً.
+        // عند غياب أي إعداد معتمد يُمنع التجاوز وتبقى التسوية معلّقة بأمان.
+        'four_eyes' => [
+            'threshold' => env('AMIAL_DAILY_SETTLEMENT_FOUR_EYES_THRESHOLD'),
+            'currency' => env('AMIAL_DAILY_SETTLEMENT_CURRENCY'),
+            'first_approver_permission' => env('AMIAL_DAILY_SETTLEMENT_FIRST_APPROVER_PERMISSION'),
+            'second_approver_permission' => env('AMIAL_DAILY_SETTLEMENT_SECOND_APPROVER_PERMISSION'),
+        ],
+    ],
+
+    // AGT-GAP-018: ضابط ساعات العمل الرسميّة وصلاحيات الاستثناء عند السحب —
+    // تبقى القيم null حتى تُعتمد رسميّاً؛ عند غيابها يُمنع السحب بأمان (fail-closed).
+    'branch_working_hours' => [
+        'timezone' => env('AMIAL_BRANCH_WORKING_HOURS_TIMEZONE'),
+        'exception_roles' => null,
+        'exception_capability' => env('AMIAL_BRANCH_WORKING_HOURS_EXCEPTION_CAPABILITY'),
     ],
 
     // تخطّي كابتشا دخول الأدمن — للعرض/الاختبار فقط (الإنتاج: false)

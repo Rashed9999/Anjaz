@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Exceptions\DuplicateTransactionException;
+use App\Models\Agent\AgentStaff;
 use App\Services\IdempotencyService;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -67,8 +68,12 @@ class EnforceIdempotency
         }
         $request->attributes->set('amial.idempotency_key', $key);
 
-        $userId = $request->user()?->id;
-        $endpoint = $request->method() . ' ' . $request->path();
+        $actor = $request->user() ?? $request->attributes->get('agent_staff');
+        $isAgentStaff = $actor instanceof AgentStaff
+            || ($request->attributes->get('agent_staff') instanceof AgentStaff);
+        $userId = $actor?->id;
+        // عزل نطاق agent_staff عن users لمنع تصادم المعرّفات في idempotency_keys.
+        $endpoint = ($isAgentStaff ? 'agent_staff:' : '') . $request->method() . ' ' . $request->path();
 
         try {
             $check = $this->idempotency->begin(
@@ -123,6 +128,8 @@ class EnforceIdempotency
             // نجاح — نخزن للـ replay
             $transactionId = $responseBody['data']['transaction_id']
                 ?? $responseBody['data']['order']['order_ulid']
+                ?? $responseBody['result']['transaction_id']
+                ?? $responseBody['result']['reference']
                 ?? $responseBody['transaction_id']
                 ?? null;
             $this->idempotency->complete(

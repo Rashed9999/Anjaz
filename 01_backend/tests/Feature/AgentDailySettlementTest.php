@@ -78,10 +78,19 @@ class AgentDailySettlementTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        config()->set('amial.branch_working_hours.timezone', 'Asia/Riyadh');
+        config()->set('amial.daily_settlement.four_eyes', [
+            'threshold' => '500000',
+            'currency' => 'YER',
+            'first_approver_permission' => 'platform.settlements.decide',
+            'second_approver_permission' => 'platform.settlements.decide',
+        ]);
+
         $this->branch = AgentBranch::create([
             'agent_user_id' => $this->company->id, 'branch_user_id' => $bu->id,
             'name' => 'فرع المكلا', 'code' => 'MKL', 'city' => 'حضرموت',
             'phone' => $bu->phone, 'is_active' => true,
+            'working_hours' => array_fill_keys(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], ['open' => '00:00', 'close' => '23:59']),
         ]);
         $this->branch->till()->create([
             'cash_on_hand' => '3000000', 'max_cash_on_hand' => '9000000', 'min_cash_alert' => '100000',
@@ -470,5 +479,43 @@ class AgentDailySettlementTest extends TestCase
 
         $this->assertSame('0.0000', bcsub($after, $before, 4));
         $this->assertSame(AgentDailySettlement::STATUS_REJECTED, $row->fresh()->status);
+    }
+
+    /**
+     * @test
+     *
+     * AGT-GAP-004 — نسخةٌ قديمةٌ من الصفّ (قرأها طلبٌ متزامنٌ قبل القبول الأوّل) لا تقبل
+     * التسويةَ ثانيةً ولا تحرّك المالَ مرّتين: القفلُ وفحصُ الحالة داخل المعاملة.
+     */
+    public function a_stale_row_cannot_accept_or_reject_a_settlement_twice(): void
+    {
+        $this->workDay('300000', '100000');
+
+        $row = app(AgentDailySettlementService::class)
+            ->submit($this->company, $this->hq, now()->toDateString(), $this->inWindow());
+
+        $stale = clone $row;
+        $before = (string) EMoney::where('user_id', $this->company->id)->value('current_balance');
+
+        app(AgentDailySettlementService::class)->accept($row, $this->admin, 'استُلم النقد');
+        $afterFirst = (string) EMoney::where('user_id', $this->company->id)->value('current_balance');
+
+        try {
+            app(AgentDailySettlementService::class)->accept($stale, $this->admin, 'نقرةٌ ثانية');
+            $this->fail('القبول الثاني مرّ');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('ليست بانتظار القرار', $e->getMessage());
+        }
+
+        try {
+            app(AgentDailySettlementService::class)->reject(clone $stale, $this->admin, 'رفضٌ متأخّرٌ بعد القبول');
+            $this->fail('الرفض بعد القبول مرّ');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('ليست بانتظار القرار', $e->getMessage());
+        }
+
+        $this->assertSame('200000.0000', bcsub($afterFirst, $before, 4));
+        $this->assertSame($afterFirst, (string) EMoney::where('user_id', $this->company->id)->value('current_balance'));
+        $this->assertSame(AgentDailySettlement::STATUS_ACCEPTED, $row->fresh()->status);
     }
 }

@@ -34,13 +34,16 @@ class AgentStaffController extends Controller
 
         return response()->json([
             'data' => $this->staff->listFor($actor),
-            'can_manage' => !$actor->isTeller(),
+            'can_manage' => $actor->isHeadOffice() || $actor->isBranchManager(),
             'roles' => AgentStaff::ROLE_LABELS,
         ]);
     }
 
     public function store(Request $request): JsonResponse
     {
+        if (!$this->actor($request)->hasCapability('manage_staff')) {
+            return response()->json(['success' => false, 'message' => 'إدارة الموظّفين من صلاحية الإدارة'], 403);
+        }
         $request->validate([
             'name' => 'required|string|max:120',
             'password' => 'required|string|min:6',
@@ -69,9 +72,43 @@ class AgentStaffController extends Controller
         ]);
     }
 
+    /** AGT-GAP-015 — نقل موظّف بين الفروع أو تعديل دوره. */
+    public function transfer(Request $request, int $id): JsonResponse
+    {
+        $actor = $this->actor($request);
+
+        if (!$actor->isHeadOffice()) {
+            return response()->json(['success' => false, 'message' => 'نقل الموظّفين من صلاحية الإدارة العامّة'], 403);
+        }
+
+        $request->validate([
+            'branch_id' => 'nullable|integer',
+            'role' => 'nullable|string',
+        ]);
+
+        try {
+            $moved = $this->staff->transfer(
+                $actor,
+                $id,
+                $request->filled('branch_id') ? (int) $request->input('branch_id') : null,
+                $request->input('role'),
+            );
+        } catch (DomainException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'نُقل الموظّف ' . $moved->name,
+        ]);
+    }
+
     /** تعديلُ حدود موظّفٍ ودوامه — بعد تعيينه. */
     public function updateLimits(Request $request, int $id): JsonResponse
     {
+        if (!$this->actor($request)->hasCapability('manage_staff')) {
+            return response()->json(['success' => false, 'message' => 'إدارة الموظّفين من صلاحية الإدارة'], 403);
+        }
         $request->validate([
             'max_txn_amount' => 'nullable|numeric|min:0',
             'daily_limit' => 'nullable|numeric|min:0',
@@ -94,6 +131,9 @@ class AgentStaffController extends Controller
 
     public function setActive(Request $request, int $id): JsonResponse
     {
+        if (!$this->actor($request)->hasCapability('manage_staff')) {
+            return response()->json(['success' => false, 'message' => 'إدارة الموظّفين من صلاحية الإدارة'], 403);
+        }
         $request->validate(['active' => 'required|boolean']);
 
         try {
@@ -110,6 +150,9 @@ class AgentStaffController extends Controller
 
     public function resetPassword(Request $request, int $id): JsonResponse
     {
+        if (!$this->actor($request)->hasCapability('manage_staff')) {
+            return response()->json(['success' => false, 'message' => 'إدارة الموظّفين من صلاحية الإدارة'], 403);
+        }
         $request->validate(['password' => 'required|string|min:6']);
 
         try {
@@ -146,6 +189,10 @@ class AgentStaffController extends Controller
     /** إغلاق ورديّة صرّافٍ غادر ولم يُغلق — بيد المدير. */
     public function closeShift(Request $request, int $shiftId): JsonResponse
     {
+        if ($this->actor($request)->isAuditor()) {
+            return response()->json(['success' => false, 'message' => 'حساب المدقق للقراءة فقط'], 403);
+        }
+
         $request->validate([
             'counted_cash' => 'required|numeric|min:0',
             'note' => 'nullable|string|max:500',
@@ -265,8 +312,8 @@ class AgentStaffController extends Controller
 
         $actor = $this->actor($request);
 
-        if ($actor->isTeller()) {
-            // ولا يُراجع الصرّافُ ورديّةَ نفسه: من عدّ الدرج لا يُصدّق على عدّه.
+        if (!$actor->isHeadOffice() && !$actor->isBranchManager()) {
+            // ولا يُراجع الصرّافُ أو المدقق أو مسؤول الخزنة فروق الورديّات.
             return response()->json([
                 'success' => false,
                 'message' => 'مراجعة الفروق من صلاحية الإدارة — لا يُصدّق الصرّاف على عدّ نفسه',
@@ -281,6 +328,14 @@ class AgentStaffController extends Controller
 
         if ($shift->status !== \App\Models\Agent\AgentShift::STATUS_CLOSED) {
             return response()->json(['success' => false, 'message' => 'الورديّة لم تُغلق بعد'], 422);
+        }
+
+        // AGT-GAP-009 — من أغلق الوردية وعدّ النقد لا يُصادق على فرق عدّه بنفسه.
+        if ((int) $shift->closed_by === (int) $actor->id && !$actor->isHeadOffice()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'من عدّ النقد عند إغلاق الورديّة لا يُصادق على فرق عدّه — تُرفع للإدارة العامّة',
+            ], 403);
         }
 
         $shift->forceFill([
@@ -316,6 +371,9 @@ class AgentStaffController extends Controller
         $request->validate(['phone' => 'required|string|max:20']);
 
         $actor = $this->actor($request);
+        if (!$actor->hasCapability('manage_staff')) {
+            return response()->json(['success' => false, 'message' => 'إدارة الموظّفين من صلاحية الإدارة'], 403);
+        }
         $target = AgentStaff::find($id);
 
         if (!$target || (int) $target->agent_user_id !== (int) $actor->agent_user_id) {
@@ -335,6 +393,9 @@ class AgentStaffController extends Controller
     public function unlinkWhatsapp(Request $request, int $id): JsonResponse
     {
         $actor = $this->actor($request);
+        if (!$actor->hasCapability('manage_staff')) {
+            return response()->json(['success' => false, 'message' => 'إدارة الموظّفين من صلاحية الإدارة'], 403);
+        }
 
         if ($actor->isTeller()) {
             return response()->json(['success' => false, 'message' => 'فكُّ الربط من صلاحية الإدارة'], 403);

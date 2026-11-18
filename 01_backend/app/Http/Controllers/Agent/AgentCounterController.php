@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Services\CustomerWithdrawService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use App\Services\AgentCounterService;
 use App\Services\AgentShiftService;
 use App\Services\AgentShiftStatementService;
@@ -66,9 +67,14 @@ class AgentCounterController extends Controller
     {
         $request->validate(['opening_float' => 'required|numeric|min:0']);
 
+        $staff = $this->requireStaff($request);
+        if (!$staff->hasCapability('open_shift')) {
+            return response()->json(['success' => false, 'message' => 'الورديّات للصرّافين وحدهم'], 403);
+        }
+
         try {
             $shift = $this->shifts->open(
-                $this->requireStaff($request),
+                $staff,
                 (string) $request->input('opening_float'),
             );
         } catch (DomainException $e) {
@@ -90,6 +96,9 @@ class AgentCounterController extends Controller
         ]);
 
         $staff = $this->requireStaff($request);
+        if (!$staff->is_active) {
+            return response()->json(['success' => false, 'message' => 'حساب الموظّف موقوف'], 403);
+        }
         $shift = $staff->openShift();
 
         if (!$shift) {
@@ -120,7 +129,7 @@ class AgentCounterController extends Controller
     /** إيداع: العميل يسلّم نقداً. الفرع من الورديّة. */
     public function deposit(Request $request): JsonResponse
     {
-        return $this->operate($request, 'deposit');
+        return $this->operateDeposit($request);
     }
 
     /**
@@ -138,7 +147,8 @@ class AgentCounterController extends Controller
         ], 410);
     }
 
-    private function operate(Request $request, string $op): JsonResponse
+    /** تنفيذ إيداع الشبّاك حصراً؛ السحب يمرّ فقط من `withdrawByCode()`. */
+    private function operateDeposit(Request $request): JsonResponse
     {
         $request->validate([
             'customer_id' => 'required|integer',
@@ -147,6 +157,9 @@ class AgentCounterController extends Controller
         ]);
 
         $staff = $this->requireStaff($request);
+        if (!$staff->is_active) {
+            return response()->json(['success' => false, 'message' => 'حساب الموظّف موقوف'], 403);
+        }
         $shift = $staff->openShift();
 
         if (!$shift) {
@@ -176,11 +189,10 @@ class AgentCounterController extends Controller
         //
         // والفرق بينهما ليس لفظيّاً: الحدّ يُتجاوز بموافقة مدير، والصلاحية
         // لا تُتجاوز بشيء. فمن لا يملك «سحب» لا يصرف ولو وافق مديرُه.
-        if (!$staff->hasCapability($op)) {
+        if (!$staff->hasCapability('deposit')) {
             return response()->json([
                 'success' => false,
-                'message' => 'حسابك لا يملك صلاحية ' . ($op === 'deposit' ? 'الإيداع' : 'السحب')
-                    . ' — راجع إدارة شركتك',
+                'message' => 'حسابك لا يملك صلاحية الإيداع — راجع إدارة شركتك',
             ], 403);
         }
 
@@ -191,34 +203,9 @@ class AgentCounterController extends Controller
             return response()->json(['success' => false, 'message' => 'الفرع أو العميل غير موجود'], 404);
         }
 
-        // ── الحدود: تُفحص كلُّها، وتُتجاوز بموافقةٍ مستهلَكة ─────────────
-        //
-        // **وحدُّ العمليّة الواحدة وحده لا يحمي شيئاً.** من حدُّه نصف مليون
-        // يمرّر مليوناً في عمليّتين — وهو النمط الذي تبحث عنه قواعد غسل
-        // الأموال. فالحدّ اليوميّ وعددُ العمليّات هما ما يُوقف التقسيم.
-        $breach = $this->limitBreach($staff, $amount);
-
-        if ($breach !== null) {
-            // موافقةٌ من المدير تُستهلَك **مرّةً واحدة**: موافقةٌ تُستعمل
-            // مرّتين تعني أنّه وافق على مليونٍ فمرّ مليونان باسمه.
-            $approval = app(\App\Services\AgentTellerRequestService::class)
-                ->consumeFor($staff, $op, $amount);
-
-            if (!$approval) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $breach,
-                    'needs_approval' => true,
-                ], 422);
-            }
-        }
-
-        // ── إشاراتُ الخطر: تمنع الحمراء وحدها ───────────────────────────
-        //
-        // ولا تُفحص للعرض فقط: عميلٌ محظورٌ يُمنع هنا، لا يُرصَد غداً في
-        // تقرير. والصفراء تُعرَض على الشاشة قبل الضغط ولا تُوقف الفرع.
+        // ── إشاراتُ الخطر قبل استهلاك أي موافقة ──────────────────────────
         $risk = app(\App\Services\AgentTellerRiskService::class)
-            ->assess($customer, $amount, $op, $staff);
+            ->assess($customer, $amount, 'deposit', $staff);
 
         if ($risk['blocked']) {
             $first = collect($risk['flags'])
@@ -231,17 +218,46 @@ class AgentCounterController extends Controller
             ], 422);
         }
 
+        // ── الحدود والموافقة داخل المعاملة المالية (AGT-GAP-008) ─────────
+        // استهلاك الموافقة بعد المخاطر وداخل المعاملة يضمن عدم حرقها إذا فشل الإيداع.
+        $breach = $this->limitBreach($staff, $amount);
+
         try {
-            $result = $op === 'deposit'
-                ? $this->counter->deposit($branch, $customer, $amount, $branch->account, $request->input('note'), $shift)
-                : $this->counter->withdraw($branch, $customer, $amount, $branch->account, $request->input('note'), $shift);
+            $result = DB::transaction(function () use ($breach, $staff, $amount, $branch, $customer, $request, $shift) {
+                $lockedShift = AgentShift::where('id', $shift->id)->lockForUpdate()->first();
+
+                if (!$lockedShift || !$lockedShift->isOpen()) {
+                    throw new DomainException('الورديّة مغلقة — افتح ورديّة قبل العمل على الشبّاك');
+                }
+
+                if ($breach !== null) {
+                    $approval = app(\App\Services\AgentTellerRequestService::class)
+                        ->consumeFor($staff, 'deposit', $amount, (int) $customer->id);
+
+                    if (!$approval) {
+                        throw new DomainException('__NEEDS_APPROVAL__');
+                    }
+                }
+
+                return $this->counter->deposit(
+                    $branch, $customer, $amount, $branch->account, $request->input('note'), $lockedShift
+                );
+            });
         } catch (DomainException $e) {
+            if ($e->getMessage() === '__NEEDS_APPROVAL__') {
+                return response()->json([
+                    'success' => false,
+                    'message' => $breach,
+                    'needs_approval' => true,
+                ], 422);
+            }
+
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
 
         return response()->json([
             'success' => true,
-            'message' => $op === 'deposit' ? 'تمّ الإيداع' : 'تمّ السحب — سلّم النقد للعميل',
+            'message' => 'تمّ الإيداع',
             'result' => $result,
             'shift' => $this->shifts->state($shift->fresh()),
         ]);
@@ -300,19 +316,28 @@ class AgentCounterController extends Controller
     /** قراءة عمليةٍ برمزها قبل الدفع — الصرّاف يرى ما سيدفع. */
     public function lookupWithdrawal(Request $request): JsonResponse
     {
-        $code = strtoupper(trim((string) $request->query('op_code', '')));
+        $staff = $this->staff($request);
+        $code = strtoupper(trim((string) ($request->input('op_code') ?? $request->query('op_code', ''))));
 
         if ($code === '') {
             return response()->json(['success' => false, 'message' => 'أدخل رمز العملية'], 422);
         }
 
+        if ($limited = $this->opCodeThrottleResponse($staff, $code, 'lookup')) {
+            return $limited;
+        }
+
         $req = WithdrawalRequest::where('op_code', $code)->first();
 
         if (!$req) {
+            $this->hitOpCodeFailure($staff, $code, 'lookup_not_found');
+
             return response()->json(['success' => false, 'message' => 'رمز العملية غير صحيح'], 404);
         }
 
         if ($req->status !== 'pending') {
+            $this->hitOpCodeFailure($staff, $code, 'lookup_not_pending');
+
             return response()->json([
                 'success' => false,
                 'message' => $req->status === 'completed'
@@ -322,6 +347,8 @@ class AgentCounterController extends Controller
         }
 
         if ($req->expires_at && $req->expires_at->isPast()) {
+            $this->hitOpCodeFailure($staff, $code, 'lookup_expired');
+
             return response()->json([
                 'success' => false,
                 'message' => 'انتهت صلاحية الرمز — يطلب العميل رمزاً جديداً من تطبيقه',
@@ -329,7 +356,6 @@ class AgentCounterController extends Controller
         }
 
         $customer = User::find($req->customer_user_id);
-        $staff = $this->staff($request);
         $shift = $staff?->openShift();
 
         // النقد المطلوب هو `amount` وحده: الرسم إلكترونيّ ولا يخرج من الدرج.
@@ -369,6 +395,9 @@ class AgentCounterController extends Controller
         ]);
 
         $staff = $this->requireStaff($request);
+        if (!$staff->is_active) {
+            return response()->json(['success' => false, 'message' => 'حساب الموظّف موقوف'], 403);
+        }
         $shift = $staff->openShift();
 
         if (!$shift) {
@@ -379,9 +408,16 @@ class AgentCounterController extends Controller
         }
 
         $code = strtoupper(trim((string) $request->input('op_code')));
+
+        if ($limited = $this->opCodeThrottleResponse($staff, $code, 'execute')) {
+            return $limited;
+        }
+
         $req = WithdrawalRequest::where('op_code', $code)->first();
 
         if (!$req || $req->status !== 'pending') {
+            $this->hitOpCodeFailure($staff, $code, 'execute_invalid');
+
             return response()->json(['success' => false, 'message' => 'رمز العملية غير صالح'], 422);
         }
 
@@ -389,9 +425,6 @@ class AgentCounterController extends Controller
 
         // ══════════════════════════════════════════════════════════════
         // **البابُ الثاني للسحب — ويُحرَس كالأوّل** (القاعدة الرابعة).
-        //
-        // للسحب مدخلان: هذا (برمز العميل) وذاك (`operate`). وحارسٌ على
-        // أحدهما وحده ليس حارساً: من يجد بابه مغلقاً يدخل من الآخر.
         // ══════════════════════════════════════════════════════════════
         if (app(\App\Services\AgentWorkTimeService::class)->isOnBreak($staff, (int) $shift->id)) {
             return response()->json([
@@ -405,19 +438,6 @@ class AgentCounterController extends Controller
                 'success' => false,
                 'message' => 'حسابك لا يملك صلاحية السحب — راجع إدارة شركتك',
             ], 403);
-        }
-
-        $breach = $this->limitBreach($staff, $amount);
-
-        if ($breach !== null) {
-            $approval = app(\App\Services\AgentTellerRequestService::class)
-                ->consumeFor($staff, 'withdraw', $amount);
-
-            if (!$approval) {
-                return response()->json([
-                    'success' => false, 'message' => $breach, 'needs_approval' => true,
-                ], 422);
-            }
         }
 
         $customerForRisk = \App\Models\User::find($req->customer_user_id);
@@ -452,18 +472,55 @@ class AgentCounterController extends Controller
             ], 422);
         }
 
+        // AGT-GAP-018: ضابط ساعات العمل الرسميّة (فحص مسبق قبل استهلاك أي موافقة).
         try {
-            $result = DB::transaction(function () use ($branch, $shift, $req, $request, $code, $amount) {
-                $fresh = $shift->fresh();
+            app(\App\Services\Agent\BranchWorkingHoursPolicy::class)
+                ->checkOrConsumeForWithdrawal($branch, $staff, $amount, (int) $req->customer_user_id, consume: false);
+        } catch (DomainException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        $breach = $this->limitBreach($staff, $amount);
+
+        try {
+            $result = DB::transaction(function () use ($branch, $shift, $staff, $req, $request, $code, $amount, $breach) {
+                $fresh = AgentShift::where('id', $shift->id)->lockForUpdate()->first();
 
                 if (!$fresh || !$fresh->isOpen() || !$fresh->canPayOut($amount)) {
                     throw new DomainException('تغيّر رصيد درجك — أعد المحاولة');
                 }
 
+                // AGT-GAP-018: التحقّق الذريّ واستهلاك استثناء ساعات العمل مرّة واحدة تحت القفل.
+                $hoursCheck = app(\App\Services\Agent\BranchWorkingHoursPolicy::class)
+                    ->checkOrConsumeForWithdrawal($branch, $staff, $amount, (int) $req->customer_user_id, consume: true);
+
+                // AGT-GAP-008: استهلاك موافقة تجاوز الحد داخل معاملة السحب وربطها بالعميل.
+                if ($breach !== null) {
+                    $approval = app(\App\Services\AgentTellerRequestService::class)
+                        ->consumeFor($staff, 'withdraw', $amount, (int) $req->customer_user_id);
+
+                    if (!$approval) {
+                        throw new DomainException('__NEEDS_APPROVAL__');
+                    }
+                }
+
                 // المحفظة التي تُعوَّض هي **محفظة الفرع**: هو من دفع النقد،
                 // لا الشركة الأمّ. وتعويضُ الأمّ يترك الفرع ناقصاً كلّ يوم.
+                // AGT-GAP-001/002: سياقُ الشباك يُكتب في قيد الدفتر والإيصال معاً.
                 $out = app(CustomerWithdrawService::class)->execute(
                     $branch->account, $code, (string) $request->input('identifier', ''),
+                    [
+                        'branch_id' => (int) $branch->id,
+                        'branch_name' => $branch->name,
+                        'branch_code' => $branch->code,
+                        'branch_city' => $branch->city,
+                        'shift_id' => $fresh->id,
+                        'staff_id' => $staff->id,
+                        'teller_name' => $staff->name,
+                        'teller_code' => $staff->username,
+                        'actor_id' => $staff->id,
+                        'working_hours_exception_request' => $hoursCheck['exception_request'],
+                    ],
                 );
 
                 // والنقد يخرج من درج الصرّاف — فيُعرَف صاحبُ العجز عند الجرد.
@@ -476,8 +533,16 @@ class AgentCounterController extends Controller
                 return $out;
             });
         } catch (DomainException | \RuntimeException | \InvalidArgumentException $e) {
+            if ($e->getMessage() === '__NEEDS_APPROVAL__') {
+                return response()->json([
+                    'success' => false, 'message' => $breach, 'needs_approval' => true,
+                ], 422);
+            }
+
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
+
+        RateLimiter::clear('agent-opcode-code:' . sha1($code));
 
         return response()->json([
             'success' => true,
@@ -496,6 +561,9 @@ class AgentCounterController extends Controller
         ]);
 
         $staff = $this->requireStaff($request);
+        if (!$staff->is_active) {
+            return response()->json(['success' => false, 'message' => 'حساب الموظّف موقوف'], 403);
+        }
         $shift = $staff->openShift();
 
         if (!$shift) {
@@ -630,6 +698,69 @@ class AgentCounterController extends Controller
     }
 
     // ── مساعدات ─────────────────────────────────────────────────────────
+
+    /** AGT-GAP-007: فحص حد المحاولات الفاشلة على رمز السحب وتسجيل تنبيه أمني. */
+    private function opCodeThrottleResponse(?\App\Models\Agent\AgentStaff $staff, string $code, string $action): ?JsonResponse
+    {
+        $maxAttempts = 10;
+        $staffKey = 'agent-opcode-staff:' . (int) ($staff?->id ?? 0);
+        $codeKey = 'agent-opcode-code:' . sha1($code);
+
+        if (!RateLimiter::tooManyAttempts($staffKey, $maxAttempts)
+            && !RateLimiter::tooManyAttempts($codeKey, $maxAttempts)) {
+            return null;
+        }
+
+        $seconds = max(
+            RateLimiter::availableIn($staffKey),
+            RateLimiter::availableIn($codeKey),
+        );
+
+        app(\App\Services\AuditService::class)->record([
+            'actor_type' => 'agent',
+            'actor_user_id' => $staff?->agent_user_id,
+            'action' => 'agent.counter.opcode_bruteforce_blocked',
+            'decision_code' => 'RATE_LIMITED',
+            'severity' => 'critical',
+            'subject_type' => 'agent_staff',
+            'subject_id' => (string) ($staff?->id ?? 0),
+            'metadata' => [
+                'action' => $action,
+                'branch_id' => $staff?->branch_id,
+                'retry_after_seconds' => $seconds,
+            ],
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'محاولات فاشلة كثيرة للتحقق من رمز السحب — انتظر ' . max(1, $seconds) . ' ثانية',
+        ], 429);
+    }
+
+    private function hitOpCodeFailure(?\App\Models\Agent\AgentStaff $staff, string $code, string $reason): void
+    {
+        $staffKey = 'agent-opcode-staff:' . (int) ($staff?->id ?? 0);
+        $codeKey = 'agent-opcode-code:' . sha1($code);
+
+        RateLimiter::hit($staffKey, 600);
+        RateLimiter::hit($codeKey, 600);
+
+        if (RateLimiter::attempts($staffKey) >= 10 || RateLimiter::attempts($codeKey) >= 10) {
+            app(\App\Services\AuditService::class)->record([
+                'actor_type' => 'agent',
+                'actor_user_id' => $staff?->agent_user_id,
+                'action' => 'agent.counter.opcode_bruteforce_blocked',
+                'decision_code' => 'RATE_LIMITED',
+                'severity' => 'critical',
+                'subject_type' => 'agent_staff',
+                'subject_id' => (string) ($staff?->id ?? 0),
+                'metadata' => [
+                    'reason' => $reason,
+                    'branch_id' => $staff?->branch_id,
+                ],
+            ]);
+        }
+    }
 
     private function staff(Request $request): ?AgentStaff
     {

@@ -325,6 +325,22 @@ class AgentNetworkService
                 'note' => $note,
             ]);
 
+            $agentWallet = $this->ledger->getOrCreateUserWallet($agent->id);
+            $holdAccount = $this->ledger->getOrCreateSystemAccount(
+                'AGENT_PAYOUT_HOLD', 'liability', 'حجز مستحقات صرف الوكلاء قيد الاعتماد', 'credit'
+            );
+            $this->ledger->post(
+                sourceType: 'agent_payout_hold',
+                sourceId: $settlement->settlement_ulid,
+                description: 'حجز رصيد الوكيل عند طلب الصرف النقدي',
+                lines: [
+                    ['account' => $agentWallet->account_code, 'direction' => 'debit', 'amount' => $normalized],
+                    ['account' => $holdAccount->account_code, 'direction' => 'credit', 'amount' => $normalized],
+                ],
+                idempotencyKey: "agent_payout_hold_{$settlement->settlement_ulid}",
+                createdByUserId: $agent->id,
+            );
+
             $this->audit->record([
                 'actor_type' => 'agent',
                 'actor_user_id' => $agent->id,
@@ -448,18 +464,23 @@ class AgentNetworkService
                 $this->guard->captureHold($settlement->agent_user_id, $amount,
                     "agent_payout:{$settlement->settlement_ulid}");
 
-                // قيدٌ معاكسٌ لقيد الشحن: محفظة الوكيل → احتياطي النقد.
+                // قيدٌ معاكسٌ لقيد الشحن: من حساب الحجز (أو محفظة الوكيل للطلبات القديمة) → احتياطي النقد.
                 $reserve = $this->ledger->getOrCreateSystemAccount(
                     'CASH_RESERVE', 'asset', 'احتياطي النقد', 'debit'
                 );
-                $agentWallet = $this->ledger->getOrCreateUserWallet($settlement->agent_user_id);
+                $hasHoldEntry = \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', "agent_payout_hold_{$settlement->settlement_ulid}")->exists();
+                $debitAccount = $hasHoldEntry
+                    ? $this->ledger->getOrCreateSystemAccount(
+                        'AGENT_PAYOUT_HOLD', 'liability', 'حجز مستحقات صرف الوكلاء قيد الاعتماد', 'credit'
+                    )
+                    : $this->ledger->getOrCreateUserWallet($settlement->agent_user_id);
 
                 $this->ledger->post(
                     sourceType: 'agent_payout',
                     sourceId: $settlement->settlement_ulid,
                     description: 'صرف رصيد الوكيل نقداً',
                     lines: [
-                        ['account' => $agentWallet->account_code, 'direction' => 'debit', 'amount' => $amount],
+                        ['account' => $debitAccount->account_code, 'direction' => 'debit', 'amount' => $amount],
                         ['account' => $reserve->account_code, 'direction' => 'credit', 'amount' => $amount],
                     ],
                     idempotencyKey: "agent_payout_{$settlement->settlement_ulid}",
@@ -581,10 +602,28 @@ class AgentNetworkService
             // هو صُرف، ولا هو عاد إليه — ويكتشفه بعد أسبوعٍ حين يعجز عن
             // إيداعٍ ورصيدُه يقول إنّه يستطيع.
             if ($settlement->settlement_type === 'payout') {
-                $this->guard->releaseHoldUpTo(
+                $released = $this->guard->releaseHoldUpTo(
                     $settlement->agent_user_id, (string) $settlement->amount,
                     "agent_payout_rejected:{$settlement->settlement_ulid}",
                 );
+                if (MoneyService::isPositive($released)
+                    && \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', "agent_payout_hold_{$settlement->settlement_ulid}")->exists()) {
+                    $agentWallet = $this->ledger->getOrCreateUserWallet($settlement->agent_user_id);
+                    $holdAccount = $this->ledger->getOrCreateSystemAccount(
+                        'AGENT_PAYOUT_HOLD', 'liability', 'حجز مستحقات صرف الوكلاء قيد الاعتماد', 'credit'
+                    );
+                    $this->ledger->post(
+                        sourceType: 'agent_payout_rejected',
+                        sourceId: $settlement->settlement_ulid,
+                        description: 'فكّ حجز رصيد الوكيل بعد رفض طلب الصرف',
+                        lines: [
+                            ['account' => $holdAccount->account_code, 'direction' => 'debit', 'amount' => $released],
+                            ['account' => $agentWallet->account_code, 'direction' => 'credit', 'amount' => $released],
+                        ],
+                        idempotencyKey: "agent_payout_reject_{$settlement->settlement_ulid}",
+                        createdByUserId: $approver->id,
+                    );
+                }
             }
 
             $settlement->status = 'rejected';

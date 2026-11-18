@@ -80,9 +80,10 @@ class AgentSupervisionService
             }
         }
 
-        $emoneyParents = (string) (EMoney::whereIn('user_id', $parentIds)->sum('current_balance') ?: '0');
-        $emoneyBranches = (string) (EMoney::whereIn('user_id', $branches->pluck('branch_user_id'))
-            ->sum('current_balance') ?: '0');
+        $emoneyParents = MoneyService::normalize((string) (EMoney::whereIn('user_id', $parentIds)->sum('current_balance') ?: '0'));
+        $emoneyBranches = MoneyService::normalize((string) (EMoney::whereIn('user_id', $branches->pluck('branch_user_id'))
+            ->sum('current_balance') ?: '0'));
+        $cash = MoneyService::normalize($cash);
 
         // وكيلٌ بلا فرعٍ نشِط لا يخدم أحداً — وهذا أهمّ من رصيده.
         $withBranches = $branches->where('is_active', true)->pluck('agent_user_id')->unique();

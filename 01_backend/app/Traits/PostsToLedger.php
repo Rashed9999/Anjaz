@@ -424,7 +424,10 @@ trait PostsToLedger
         string $description,
     ): void {
         $ledger = $this->ledgerService();
-        $userWallet = $ledger->getOrCreateUserWallet($fromUserId);
+        $hasHoldEntry = \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', "bill_pay_hold_{$sourceId}")->exists();
+        $debitAccount = $hasHoldEntry
+            ? $this->billPayHold()
+            : $ledger->getOrCreateUserWallet($fromUserId);
         $billerAccount = $ledger->getOrCreateSystemAccount(
             "BILLER_PAYABLE_{$providerId}", 'liability', "مستحقات المزود {$providerId}", 'credit'
         );
@@ -434,7 +437,7 @@ trait PostsToLedger
 
         $netToBiller = bcsub($grossAmount, $feeAmount, 4);
         $lines = [
-            ['account' => $userWallet->account_code, 'direction' => 'debit', 'amount' => $grossAmount],
+            ['account' => $debitAccount->account_code, 'direction' => 'debit', 'amount' => $grossAmount],
             ['account' => $billerAccount->account_code, 'direction' => 'credit', 'amount' => $netToBiller],
         ];
         if (bccomp($feeAmount, '0', 4) > 0) {
@@ -447,6 +450,203 @@ trait PostsToLedger
             description: $description,
             lines: $lines,
             idempotencyKey: "bill_pay_{$sourceId}",
+        );
+    }
+
+    protected function ledgerBillPayHold(
+        int $userId,
+        string $totalDebit,
+        string $orderUlid,
+    ): void {
+        $ledger = $this->ledgerService();
+        $wallet = $ledger->getOrCreateUserWallet($userId);
+
+        $ledger->post(
+            sourceType: 'bill_pay_hold',
+            sourceId: $orderUlid,
+            description: 'حجز مبلغ الفاتورة والرسوم لحين تأكيد المزوّد',
+            lines: [
+                ['account' => $wallet->account_code, 'direction' => 'debit', 'amount' => $totalDebit],
+                ['account' => $this->billPayHold()->account_code, 'direction' => 'credit', 'amount' => $totalDebit],
+            ],
+            idempotencyKey: "bill_pay_hold_{$orderUlid}",
+        );
+    }
+
+    protected function ledgerBillPayReleased(
+        int $userId,
+        string $totalDebit,
+        string $orderUlid,
+    ): void {
+        if (!\App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', "bill_pay_hold_{$orderUlid}")->exists()) {
+            return;
+        }
+
+        $ledger = $this->ledgerService();
+        $wallet = $ledger->getOrCreateUserWallet($userId);
+
+        $ledger->post(
+            sourceType: 'bill_pay_release',
+            sourceId: $orderUlid,
+            description: 'فكّ حجز مبلغ الفاتورة بعد فشل العملية لدى المزوّد',
+            lines: [
+                ['account' => $this->billPayHold()->account_code, 'direction' => 'debit', 'amount' => $totalDebit],
+                ['account' => $wallet->account_code, 'direction' => 'credit', 'amount' => $totalDebit],
+            ],
+            idempotencyKey: "bill_pay_release_{$orderUlid}",
+        );
+    }
+
+    protected function ledgerPendingTransferHold(
+        int $senderUserId,
+        string $totalDebit,
+        string $transferUlid,
+    ): void {
+        $ledger = $this->ledgerService();
+        $senderWallet = $ledger->getOrCreateUserWallet($senderUserId);
+
+        $ledger->post(
+            sourceType: 'pending_transfer_hold',
+            sourceId: $transferUlid,
+            description: 'حجز مبلغ التحويل خلال نافذة الإلغاء',
+            lines: [
+                ['account' => $senderWallet->account_code, 'direction' => 'debit', 'amount' => $totalDebit],
+                ['account' => $this->pendingTransferHold()->account_code, 'direction' => 'credit', 'amount' => $totalDebit],
+            ],
+            idempotencyKey: "pending_transfer_hold_{$transferUlid}",
+        );
+    }
+
+    protected function ledgerPendingTransferReleased(
+        int $senderUserId,
+        string $totalDebit,
+        string $transferUlid,
+        string $why = 'cancelled',
+    ): void {
+        if (!\App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', "pending_transfer_hold_{$transferUlid}")->exists()) {
+            return;
+        }
+
+        $ledger = $this->ledgerService();
+        $senderWallet = $ledger->getOrCreateUserWallet($senderUserId);
+
+        $ledger->post(
+            sourceType: 'pending_transfer_release',
+            sourceId: $transferUlid,
+            description: $why === 'failed'
+                ? 'استرداد التحويل المعلّق لعدم أهلية المستلم'
+                : 'إلغاء التحويل خلال نافذة الإلغاء — فكّ الحجز',
+            lines: [
+                ['account' => $this->pendingTransferHold()->account_code, 'direction' => 'debit', 'amount' => $totalDebit],
+                ['account' => $senderWallet->account_code, 'direction' => 'credit', 'amount' => $totalDebit],
+            ],
+            idempotencyKey: "pending_transfer_rel_{$transferUlid}",
+        );
+    }
+
+    protected function ledgerPendingTransferCompleted(
+        int $senderUserId,
+        int $recipientUserId,
+        string $grossAmount,
+        string $feeAmount,
+        string $transferUlid,
+        ?string $transactionId = null,
+    ): void {
+        $ledger = $this->ledgerService();
+        $hasHoldEntry = \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', "pending_transfer_hold_{$transferUlid}")->exists();
+        $debitAccount = $hasHoldEntry
+            ? $this->pendingTransferHold()
+            : $ledger->getOrCreateUserWallet($senderUserId);
+        $toWallet = $ledger->getOrCreateUserWallet($recipientUserId);
+        $feeAccount = $ledger->getOrCreateSystemAccount(
+            'PLATFORM_FEE', 'revenue', 'رسوم المنصة', 'credit'
+        );
+
+        $netAmount = bcsub($grossAmount, $feeAmount, 4);
+        $lines = [
+            ['account' => $debitAccount->account_code, 'direction' => 'debit', 'amount' => $grossAmount],
+            ['account' => $toWallet->account_code, 'direction' => 'credit', 'amount' => $netAmount],
+        ];
+        if (bccomp($feeAmount, '0', 4) > 0) {
+            $lines[] = ['account' => $feeAccount->account_code, 'direction' => 'credit', 'amount' => $feeAmount];
+        }
+
+        $ledger->post(
+            sourceType: 'send_money',
+            sourceId: $transferUlid,
+            description: 'تحويل (بعد نافذة الإلغاء)',
+            lines: $lines,
+            idempotencyKey: "send_money_{$transferUlid}",
+            metadata: $transactionId === null ? [] : ['transaction_id' => $transactionId],
+        );
+    }
+
+    protected function ledgerWrongTransferHold(
+        int $recipientUserId,
+        string $heldAmount,
+        string $claimUlid,
+    ): void {
+        $ledger = $this->ledgerService();
+        $wallet = $ledger->getOrCreateUserWallet($recipientUserId);
+
+        $ledger->post(
+            sourceType: 'wrong_transfer_hold',
+            sourceId: $claimUlid,
+            description: 'حجز احترازي لدعوى تحويل بالخطأ',
+            lines: [
+                ['account' => $wallet->account_code, 'direction' => 'debit', 'amount' => $heldAmount],
+                ['account' => $this->wrongTransferHold()->account_code, 'direction' => 'credit', 'amount' => $heldAmount],
+            ],
+            idempotencyKey: "wtc_hold_{$claimUlid}",
+        );
+    }
+
+    protected function ledgerWrongTransferReleased(
+        int $recipientUserId,
+        string $releasedAmount,
+        string $claimUlid,
+    ): void {
+        if (!\App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', "wtc_hold_{$claimUlid}")->exists()) {
+            return;
+        }
+
+        $ledger = $this->ledgerService();
+        $wallet = $ledger->getOrCreateUserWallet($recipientUserId);
+
+        $ledger->post(
+            sourceType: 'wrong_transfer_release',
+            sourceId: $claimUlid,
+            description: 'فكّ الحجز الاحترازي لدعوى تحويل بالخطأ',
+            lines: [
+                ['account' => $this->wrongTransferHold()->account_code, 'direction' => 'debit', 'amount' => $releasedAmount],
+                ['account' => $wallet->account_code, 'direction' => 'credit', 'amount' => $releasedAmount],
+            ],
+            idempotencyKey: "wtc_rel_{$claimUlid}",
+        );
+    }
+
+    protected function ledgerWrongTransferCaptured(
+        int $recipientUserId,
+        int $claimantUserId,
+        string $heldAmount,
+        string $claimUlid,
+    ): void {
+        $ledger = $this->ledgerService();
+        $hasHoldEntry = \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', "wtc_hold_{$claimUlid}")->exists();
+        $debitAccount = $hasHoldEntry
+            ? $this->wrongTransferHold()
+            : $ledger->getOrCreateUserWallet($recipientUserId);
+        $claimantWallet = $ledger->getOrCreateUserWallet($claimantUserId);
+
+        $ledger->post(
+            sourceType: 'wrong_transfer_recovery',
+            sourceId: $claimUlid,
+            description: 'استردادُ تحويلٍ إلى رقمٍ خاطئ',
+            lines: [
+                ['account' => $debitAccount->account_code, 'direction' => 'debit', 'amount' => $heldAmount],
+                ['account' => $claimantWallet->account_code, 'direction' => 'credit', 'amount' => $heldAmount],
+            ],
+            idempotencyKey: "wtc_cap_{$claimUlid}",
         );
     }
 
@@ -548,6 +748,7 @@ trait PostsToLedger
         string $platformProfit,
         string $sourceId,
         ?string $transactionId = null,
+        array $metadata = [],
     ): void {
         $ledger = $this->ledgerService();
         $agent = $ledger->getOrCreateUserWallet($agentUserId);
@@ -586,7 +787,7 @@ trait PostsToLedger
             // **مرجعُ القيد رقمُ الطلب، لا رقمُ المعاملة.** فيُحمَل رقمُ
             // المعاملة معه ليصل قياسُ التغطية إليه — وإلّا أخرج إنذاراً
             // كاذباً عن مسارٍ مغطّىً، **وإنذارٌ كاذبٌ يُفقد التقريرَ كلَّه**.
-            metadata: $transactionId === null ? [] : ['transaction_id' => $transactionId],
+            metadata: ($transactionId === null ? [] : ['transaction_id' => $transactionId]) + $metadata,
         );
     }
 
@@ -665,6 +866,30 @@ trait PostsToLedger
         return $this->ledgerService()->getOrCreateSystemAccount(
             'CASH_OUT_HOLD', 'liability',
             'سحوبات نقديّة محجوزة (طُلبت ولم تُصرف)', 'credit'
+        );
+    }
+
+    private function billPayHold(): \App\Models\Ledger\LedgerAccount
+    {
+        return $this->ledgerService()->getOrCreateSystemAccount(
+            'BILL_PAY_HOLD', 'liability',
+            'مبالغ فواتير محجوزة بانتظار تأكيد المزوّد', 'credit'
+        );
+    }
+
+    private function pendingTransferHold(): \App\Models\Ledger\LedgerAccount
+    {
+        return $this->ledgerService()->getOrCreateSystemAccount(
+            'PENDING_TRANSFER_HOLD', 'liability',
+            'تحويلات محجوزة خلال نافذة الإلغاء', 'credit'
+        );
+    }
+
+    private function wrongTransferHold(): \App\Models\Ledger\LedgerAccount
+    {
+        return $this->ledgerService()->getOrCreateSystemAccount(
+            'WRONG_TRANSFER_HOLD', 'liability',
+            'حجز احترازي لدعاوى التحويل بالخطأ', 'credit'
         );
     }
 

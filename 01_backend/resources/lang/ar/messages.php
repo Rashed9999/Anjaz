@@ -528,4 +528,8 @@
   'سجّل طلب الإصدار' => 'سجّل طلب الإصدار',
   'Dispute status updated successfully.' => 'حُدِّثت حالة البلاغ.',
   'العميل المطلوب منه الدفع غير موجود' => 'العميل المطلوب منه الدفع غير موجود',
+  'Amount must be greater than zero!' => 'يجب أن يكون المبلغ أكبر من الصفر!',
+  'Your account do not have enough balance.' => 'رصيد حسابك غير كافٍ.',
+  'Withdraw request send !' => 'تم إرسال طلب السحب!',
+  'Withdraw request send failed!' => 'فشل إرسال طلب السحب!',
 );

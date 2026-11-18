@@ -8,3 +8,5 @@
      وهذا الملفّ هو ما تُضمّنه اللوحة فعلاً، وهو ما يُفحص. --}}
 @include('agent-views._workspace')
 @include('agent-views._counter')
+
+@include('partials._app_dialogs')

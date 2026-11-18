@@ -562,9 +562,11 @@
                     const v = prompt('الحدّ اليوميّ للإيداع النقديّ (ريال):', cur);
                     if (v === null) return;
                     if (!/^\d+(\.\d+)?$/.test(v.trim())) { alert('أدخل رقماً صحيحاً'); return; }
+                    const reason = prompt('سبب تعديل الحدّ (٥ أحرف على الأقل):');
+                    if (!reason || reason.trim().length < 5) { alert('السبب إلزاميّ'); return; }
 
                     const j = await post(`{{ url('admin/amial/agents') }}/${id}/limits`,
-                        {daily_cash_in_limit: v.trim()}, 'PUT');
+                        {daily_cash_in_limit: v.trim(), reason: reason.trim()}, 'PUT');
                     alert(j.message || 'حُدّثت الحدود'); loadUsers(); return;
                 }
             } catch (err) { alert(err.message); }

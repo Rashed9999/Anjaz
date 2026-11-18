@@ -208,6 +208,20 @@
                         </div>
                     </div></div>
                 </div>
+                <div class="modal fade" id="br-edit-modal" tabindex="-1">
+                    <div class="modal-dialog"><div class="modal-content">
+                        <div class="modal-header"><h5 class="modal-title">تعديل بيانات الفرع</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                        <div class="modal-body">
+                            <div class="mb-2"><label class="form-label">اسم الفرع</label><input class="form-control" id="bre-name"></div>
+                            <div class="mb-2"><label class="form-label">هاتف الفرع</label><input class="form-control" id="bre-phone" dir="ltr"></div>
+                            <div class="mb-2"><label class="form-label">المدينة</label><input class="form-control" id="bre-city"></div>
+                            <div class="mb-2"><label class="form-label">العنوان</label><input class="form-control" id="bre-address"></div>
+                            <div class="text-danger small mt-2" id="bre-err"></div>
+                        </div>
+                        <div class="modal-footer"><button class="btn btn-primary" id="bre-save">حفظ التعديل</button></div>
+                    </div></div>
+                </div>
             </div>
         </div>
 
@@ -351,6 +365,7 @@
 
 <script src="{{ asset('assets/vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
 @include('partials._app_dialogs')
+@include('agent-views._post_helper')
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const BASE = '{{ url('agent') }}';
@@ -375,11 +390,7 @@
 
     async function get(p) { return (await fetch(BASE + p, {headers: {'Accept': 'application/json'}})).json(); }
     async function post(p, b) {
-        return (await fetch(BASE + p, {
-            method: 'POST',
-            headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF},
-            body: JSON.stringify(b || {}),
-        })).json();
+        return window.__amialPost(BASE, p, b, CSRF, {throwOnError: false});
     }
 
     // AMIAL-AGENT-STAFF-002 — وصولٌ لا يسقط على عنصرٍ غائب.
@@ -541,7 +552,7 @@
         $el('ag-branch-list').innerHTML = branches.length ? `
             <div class="table-responsive"><table class="table" data-testid="ag-branch-table">
                 <thead class="thead-light"><tr><th>الفرع</th><th>المدينة</th>
-                    <th class="text-end">نقد الدرج</th><th class="text-end">الرصيد الإلكترونيّ</th><th>الحالة</th></tr></thead>
+                    <th class="text-end">نقد الدرج</th><th class="text-end">الرصيد الإلكترونيّ</th><th>الحالة</th><th></th></tr></thead>
                 <tbody>${branches.map(b => `
                     <tr class="${b.cash_is_low ? 'table-warning' : ''}">
                         <td><strong>${esc(b.name)}</strong><div class="small text-muted">${esc(b.code)} • ${esc(b.phone)}</div></td>
@@ -551,6 +562,7 @@
                         <td>${b.is_active ? '<span class="badge bg-success">يعمل</span>' : '<span class="badge bg-secondary">موقوف</span>'}
                             ${b.cash_is_low ? '<span class="badge bg-warning text-dark">نقد منخفض</span>' : ''}
                             ${b.cash_is_overloaded ? '<span class="badge bg-danger">نقد فوق الحدّ</span>' : ''}</td>
+                        <td><button class="btn btn-sm btn-outline-primary" data-edit-br="${b.id}" data-name="${esc(b.name)}" data-phone="${esc(b.phone)}" data-city="${esc(b.city || '')}" data-address="${esc(b.address || '')}">تعديل</button></td>
                     </tr>`).join('')}</tbody>
             </table></div>`
             : '<div class="alert alert-secondary">لا فروع بعد — أضف فرعك الأوّل</div>';
@@ -569,6 +581,35 @@
     // شبّاكاً وهي بلا شبّاك.
 
     // ---------- الفروع ----------
+    let editBranchId = null;
+    $el('ag-branch-list').addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-edit-br]');
+        if (!b) return;
+        editBranchId = b.dataset.editBr;
+        $el('bre-name').value = b.dataset.name || '';
+        $el('bre-phone').value = b.dataset.phone || '';
+        $el('bre-city').value = b.dataset.city || '';
+        $el('bre-address').value = b.dataset.address || '';
+        $el('bre-err').textContent = '';
+        new bootstrap.Modal($el('br-edit-modal')).show();
+    });
+    $el('bre-save').onclick = async () => {
+        $el('bre-err').textContent = '';
+        $el('bre-save').disabled = true;
+        try {
+            const j = await post(`/branches/${editBranchId}/update`, {
+                name: $el('bre-name').value.trim(),
+                phone: $el('bre-phone').value.trim(),
+                city: $el('bre-city').value.trim() || null,
+                address: $el('bre-address').value.trim() || null,
+            });
+            if (!j.success) { $el('bre-err').textContent = j.message || 'تعذّر التحديث'; return; }
+            bootstrap.Modal.getInstance($el('br-edit-modal'))?.hide();
+            alert(j.message || 'حُدّث الفرع');
+            await loadOverview();
+        } finally { $el('bre-save').disabled = false; }
+    };
+
     $el('ag-new-branch').onclick = () => {
         $el('br-err').textContent = '';
         new bootstrap.Modal($el('br-modal')).show();
@@ -654,9 +695,9 @@
     async function cashMove(dir) {
         const id = $el('ag-till-branch').value;
         if (!id) return;
-        const amount = prompt(dir === 'in' ? 'مبلغ التوريد إلى الفرع:' : 'مبلغ التوريد من الفرع:');
+        const amount = await window.amialDialog.request(dir === 'in' ? 'مبلغ التوريد إلى الفرع:' : 'مبلغ التوريد من الفرع:', {title: 'توريد نقد'});
         if (!amount) return;
-        const note = prompt('السبب (٥ أحرف على الأقل):');
+        const note = await window.amialDialog.request('السبب (٥ أحرف على الأقل):', {title: 'سبب التوريد'});
         if (!note || note.length < 5) { alert('السبب إلزامي'); return; }
 
         const j = await post(`/branches/${id}/cash`, {direction: dir, amount, note});
@@ -670,9 +711,9 @@
     $el('ag-fund').onclick = async () => {
         const id = $el('ag-till-branch').value;
         if (!id) return;
-        const amount = prompt('مبلغ الشحن (رصيد إلكترونيّ — يمكّن الفرع من قبول الإيداعات):');
+        const amount = await window.amialDialog.request('مبلغ الشحن (رصيد إلكترونيّ — يمكّن الفرع من قبول الإيداعات):', {title: 'شحن رصيد الفرع'});
         if (!amount) return;
-        const note = prompt('السبب (٥ أحرف على الأقل):');
+        const note = await window.amialDialog.request('السبب (٥ أحرف على الأقل):', {title: 'سبب الشحن'});
         if (!note || note.length < 5) { alert('السبب إلزامي'); return; }
 
         const j = await post(`/branches/${id}/fund`, {amount, note});
@@ -686,9 +727,9 @@
     $el('ag-collect').onclick = async () => {
         const id = $el('ag-till-branch').value;
         if (!id) return;
-        const amount = prompt('مبلغ السحب من الفرع (رصيد إلكترونيّ يعود إلى الشركة):');
+        const amount = await window.amialDialog.request('مبلغ السحب من الفرع (رصيد إلكترونيّ يعود إلى الشركة):', {title: 'سحب رصيد من الفرع'});
         if (!amount) return;
-        const note = prompt('السبب (٥ أحرف على الأقل):');
+        const note = await window.amialDialog.request('السبب (٥ أحرف على الأقل):', {title: 'سبب السحب'});
         if (!note || note.length < 5) { alert('السبب إلزامي'); return; }
 
         const j = await post(`/branches/${id}/collect`, {amount, note});
@@ -1070,7 +1111,7 @@
 
     $el('ag-daily-submit').addEventListener('click', async () => {
         const d = $el('ag-daily-date').value || new Date().toISOString().slice(0, 10);
-        if (!confirm('سيُرفع كشفُ يوم ' + d + ' إلى أميال، ويُنفَّذ التحويل بعد قبولهم. متابعة؟')) return;
+        if (!await window.amialDialog.ask('سيُرفع كشفُ يوم ' + d + ' إلى أميال، ويُنفَّذ التحويل بعد قبولهم. متابعة؟', {title: 'رفع التسوية اليوميّة'})) return;
         const j = await post('/daily-settlement', {date: d});
         alert(j.message || (j.success ? 'تمّ' : 'فشل'));
         loadDaily(); loadOverview();
@@ -1107,9 +1148,9 @@
         if (!btn) return;
         const isFund = btn.hasAttribute('data-bfund');
         const id = isFund ? btn.dataset.bfund : btn.dataset.bcollect;
-        const amount = prompt(isFund ? 'مبلغ الشحن للفرع:' : 'مبلغ السحب من الفرع:');
+        const amount = await window.amialDialog.request(isFund ? 'مبلغ الشحن للفرع:' : 'مبلغ السحب من الفرع:', {title: isFund ? 'شحن فرع' : 'سحب من فرع'});
         if (!amount) return;
-        const note = prompt('السبب (٥ أحرف على الأقل):');
+        const note = await window.amialDialog.request('السبب (٥ أحرف على الأقل):', {title: 'السبب'});
         if (!note || note.length < 5) { alert('السبب إلزامي'); return; }
         const j = await post(`/branches/${id}/${isFund ? 'fund' : 'collect'}`, {amount, note});
         alert(j.message || (j.success ? 'تم' : 'فشل'));
@@ -1153,9 +1194,9 @@
     $el('ag-count').onclick = async () => {
         const id = $el('ag-till-branch').value;
         if (!id) return;
-        const counted = prompt('المبلغ المعدود فعلاً في الدرج:');
+        const counted = await window.amialDialog.request('المبلغ المعدود فعلاً في الدرج:', {title: 'جرد الخزنة'});
         if (counted === null) return;
-        const note = prompt('ملاحظة الجرد (١٠ أحرف على الأقل — تفسير الفرق هو الفائدة كلّها):');
+        const note = await window.amialDialog.request('ملاحظة الجرد (١٠ أحرف على الأقل — تفسير الفرق هو الفائدة كلّها):', {title: 'ملاحظة الجرد'});
         if (!note || note.length < 10) { alert('الملاحظة إلزامية'); return; }
 
         const j = await post(`/branches/${id}/count`, {counted_amount: counted, note});
@@ -1209,9 +1250,9 @@
     $el('ag-settle-load').onclick = loadSettlements;
 
     $el('ag-payout').onclick = async () => {
-        const amount = prompt('مبلغ الصرف (رصيد إلكترونيّ تُعيده وتستلم مقابله نقداً):');
+        const amount = await window.amialDialog.request('مبلغ الصرف (رصيد إلكترونيّ تُعيده وتستلم مقابله نقداً):', {title: 'طلب صرف رصيد'});
         if (!amount) return;
-        const note = prompt('ملاحظة (اختياري):') || null;
+        const note = (await window.amialDialog.request('ملاحظة (اختياري):', {title: 'ملاحظة الصرف'})) || null;
         try {
             const j = await post('/settlements/payout', {amount, note});
             alert(j.message || 'أُرسل الطلب');

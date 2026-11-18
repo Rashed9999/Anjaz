@@ -104,6 +104,7 @@
 </div>
 
 @once
+@include('agent-views._post_helper')
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 document.addEventListener('DOMContentLoaded', function () {
     const root = '{{ url('agent') }}';
@@ -123,15 +124,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function post(p, body) {
-        const r = await fetch(root + p, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'Accept': 'application/json',
-                      'X-CSRF-TOKEN': csrf()},
-            body: JSON.stringify(body || {}),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(j.message || 'تعذّر التنفيذ');
-        return j;
+        return window.__amialPost(root, p, body, csrf(), {throwOnError: true, fallbackError: 'تعذّر التنفيذ'});
     }
 
     // ── الأمان ───────────────────────────────────────────────────────
@@ -210,10 +203,34 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                 </div>
                 <button class="btn btn-sm btn-outline-primary mt-2" data-sg-save="${b.id}">حفظ حدود الفرع</button>
+                <div class="row g-2 mt-2 pt-2 border-top align-items-end">
+                    <div class="col-4"><label class="form-label small mb-0">فتح الدوام (أحد–خميس)</label>
+                        <input type="time" class="form-control form-control-sm" data-sg="open"
+                               value="${esc((b.working_hours && b.working_hours.sun && b.working_hours.sun.open) || '08:00')}"></div>
+                    <div class="col-4"><label class="form-label small mb-0">الإغلاق</label>
+                        <input type="time" class="form-control form-control-sm" data-sg="close"
+                               value="${esc((b.working_hours && b.working_hours.sun && b.working_hours.sun.close) || '17:00')}"></div>
+                    <div class="col-4"><button class="btn btn-sm btn-outline-secondary w-100" data-sg-hours="${b.id}">حفظ ساعات العمل</button></div>
+                </div>
             </div>`).join('');
     }
 
     $('sg-branches').addEventListener('click', async (e) => {
+        const hBtn = e.target.closest('button[data-sg-hours]');
+        if (hBtn) {
+            const box = hBtn.closest('[data-sg-branch]');
+            const open = box.querySelector('[data-sg="open"]').value;
+            const close = box.querySelector('[data-sg="close"]').value;
+            const hours = {};
+            ['sun','mon','tue','wed','thu'].forEach(d => { hours[d] = {open, close}; });
+            hours.fri = null; hours.sat = null;
+            try {
+                const j = await post(`/branches/${hBtn.dataset.sgHours}/hours`, {hours});
+                alert(j.message);
+                load();
+            } catch (err) { alert(err.message); }
+            return;
+        }
         const b = e.target.closest('button[data-sg-save]');
         if (!b) return;
         const box = b.closest('[data-sg-branch]');

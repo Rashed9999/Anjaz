@@ -1391,6 +1391,7 @@ trait TransactionTrait
         $audit = app(AuditService::class);
 
         $txId = DB::transaction(function () use ($from_user_id, $to_user_id, $amount, $bonus, $idempotencyKey, $guard, $audit) {
+            $guard->lockWalletsOrdered([$from_user_id, $to_user_id]);
             $adminWallet = $guard->debit($from_user_id, $amount, 'admin_add_money');
             $primaryId = (string) Str::ulid();
 
@@ -1489,22 +1490,20 @@ trait TransactionTrait
 
             // AMIAL-LEDGER-BLOCKING-003: القيد داخل المعاملة، وفشله يُسقطها.
             //
-            // وهنا آكدُ من غيره: يُنشأ مالٌ داخل المنصّة مقابل نقدٍ خارجها،
-            // فسطرُ CASH_RESERVE ليس توثيقاً بل هو ما يجعل الزيادة مشروعة.
-            // بدونه يصير الرصيد رقماً ظهر من العدم — وهو ما تسمّيه الوثيقة
-            // Zero Money Creation وتمنعه.
+            // `add_money_transaction` يخصم من محفظة الإدارة (`$from_user_id`) ويودع في
+            // محفظة العميل (`$to_user_id`) في `e_money`؛ فيجب أن يطابق القيد الدفتري
+            // الطرفين أنفسهما (`USER_WALLET_{from}` → `USER_WALLET_{to}`) حتى لا ينحرف
+            // رصيد محفظة الإدارة في المصالحة الليلية.
             $ledger = app(\App\Services\LedgerService::class);
-            $reserve = $ledger->getOrCreateSystemAccount(
-                'CASH_RESERVE', 'asset', 'احتياطي النقد (إيداعات النظام)', 'debit'
-            );
-            $userWallet = $ledger->getOrCreateUserWallet($to_user_id);
+            $adminLedgerWallet = $ledger->getOrCreateUserWallet($from_user_id, (string) ($adminWallet->zone_code ?? 'SOUTH'));
+            $userWallet = $ledger->getOrCreateUserWallet($to_user_id, (string) ($customerWallet->zone_code ?? 'SOUTH'));
             $ledgerTotal = MoneyService::add($amount, $bonus);
             $ledger->post(
                 sourceType: 'add_money',
                 sourceId: (string) $primaryId,
-                description: 'إضافة رصيد من النظام',
+                description: 'إضافة رصيد من محفظة النظام إلى العميل',
                 lines: [
-                    ['account' => $reserve->account_code, 'direction' => 'debit', 'amount' => $ledgerTotal],
+                    ['account' => $adminLedgerWallet->account_code, 'direction' => 'debit', 'amount' => $ledgerTotal],
                     ['account' => $userWallet->account_code, 'direction' => 'credit', 'amount' => $ledgerTotal],
                 ],
                 idempotencyKey: "add_money_{$primaryId}",
@@ -1676,6 +1675,8 @@ trait TransactionTrait
         $this->assertFinancialEligibility($disputed_user_id);
 
         DB::transaction(function () use ($ref_transaction_id, $dispute_claimed_user_id, $disputed_user_id, $amount) {
+            $this->guard()->lockWalletsOrdered([$dispute_claimed_user_id, $disputed_user_id]);
+
             // إضافة للمطالِب
             $claimedWallet = $this->guard()->credit($dispute_claimed_user_id, $amount, 'dispute_refund');
 
@@ -1713,6 +1714,15 @@ trait TransactionTrait
                 'decision_code' => 'DISPUTE_RESOLVED',
                 'zone_code' => $disputedWallet->zone_code ?? 'SOUTH',
             ]);
+
+            $this->ledgerTransfer(
+                fromUserId: $disputed_user_id,
+                toUserId: $dispute_claimed_user_id,
+                amount: $amount,
+                sourceType: 'dispute_resolution',
+                sourceId: $ref_transaction_id,
+                description: 'عكس معاملة بسبب نزاع معتمد',
+            );
 
             $this->audit()->record([
                 'actor_type' => 'admin',

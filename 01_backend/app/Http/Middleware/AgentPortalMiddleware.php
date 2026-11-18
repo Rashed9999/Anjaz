@@ -2,44 +2,58 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentStaff;
+use App\Support\Agent\AgentCompanyStatus;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 /**
  * AMIAL-AGENT-PORTAL-001 / AMIAL-AGENT-STAFF-001 — بوّابة شركة الصرافة.
  *
  * **الهويّة تحدّد النطاق، لا القائمة المنسدلة.**
  *
- * أوّل صياغةٍ لهذه البوّابة جعلت الوكيل حساباً واحداً يختار الفرع من قائمةٍ
- * قبل كلّ عملية. وذلك تصميمُ محلٍّ واحد، لا تصميمُ شركةٍ مركزها الشحر ولها
- * آلاف الفروع وآلاف الموظّفين على كمبيوتراتٍ في فروعهم. وكان أثرُه أخطر من
- * إزعاج الواجهة: موظّفٌ واحدٌ يملك مفاتيح كلّ الفروع.
- *
- * فصار الدخول لثلاثة أدوار، ونطاقُ كلٍّ منها يُحسب هنا من حسابه:
- *
  *   • `head_office`    — الإدارة العامّة: كلّ فروع شركته، ولا تقف على شبّاك.
  *   • `branch_manager` — فرعُه وحده.
  *   • `teller`         — فرعُه وحده، وعملُه محصورٌ في ورديّته.
- *
- * ويبقى الدخول بحساب المستخدم (`User` من نوع وكيل) مقبولاً للتوافق مع
- * الشركات التي لم تُنشئ موظّفيها بعد — ويُعامَل معاملة الإدارة العامّة.
  */
 class AgentPortalMiddleware
 {
+    public const SESSION_PASSWORD_FP_KEY = 'agent_staff_pw_fp';
+
+    public static function passwordFingerprint(AgentStaff $staff): string
+    {
+        return hash('sha256', (string) $staff->password);
+    }
+
     public function handle(Request $request, Closure $next): mixed
     {
         $staff = Auth::guard('agent_staff')->user();
 
         if ($staff instanceof AgentStaff) {
-            if (!$staff->is_active) {
-                Auth::guard('agent_staff')->logout();
+            // قراءة أحدث صف من القاعدة دائماً لضمان نفاذ التعطيل وتصفير كلمة المرور فوراً.
+            $staff = AgentStaff::find($staff->id);
 
-                return $this->reject($request, 'الحساب معطَّل — راجع إدارة شركتك');
+            if (!$staff || !$staff->is_active) {
+                return $this->terminateSession($request, 'الحساب معطَّل — راجع إدارة شركتك');
             }
+
+            // AGT-GAP-013 — تصفير كلمة المرور من المدير يُبطل الجلسة المفتوحة فوراً.
+            if ($request->hasSession() && $request->session()->has(self::SESSION_PASSWORD_FP_KEY)) {
+                $expected = (string) $request->session()->get(self::SESSION_PASSWORD_FP_KEY);
+                if (!hash_equals($expected, self::passwordFingerprint($staff))) {
+                    return $this->terminateSession($request, 'انتهت الجلسة لتغيير كلمة المرور — أعد الدخول');
+                }
+            }
+
+            // AGT-GAP-006 — إيقاف شركة الصرافة يطرد جلسات موظفيها فوراً.
+            $companyStatus = AgentCompanyStatus::inspect((int) $staff->agent_user_id);
+            if (!$companyStatus['operable']) {
+                return $this->terminateSession($request, (string) $companyStatus['reason']);
+            }
+
+            // AGT-GAP-005 — ليرى EnforceIdempotency وبقية الوسطاء حارس الموظفين لا user.
+            Auth::shouldUse('agent_staff');
 
             $request->attributes->set('agent_staff', $staff);
             $request->attributes->set('agent_root_id', (int) $staff->agent_user_id);
@@ -53,12 +67,19 @@ class AgentPortalMiddleware
         }
 
         // **حارسٌ واحدٌ لا حارسان.**
-        //
-        // كان هنا رجوعٌ إلى حارس `user` لمن يدخل بهاتف الشركة. وهو نفس حارس
-        // لوحة الإدارة، فكانت جلسةُ البوّابة تُعطّل لوحة الإدارة بحلقة إعادة
-        // توجيهٍ لا تنتهي. وقد أُزيل الرجوع من أصله: صاحب الشركة يُفتح له
-        // حسابُ «إدارةٍ عامّة» على حارس البوّابة عند الدخول.
         return $this->reject($request, 'الجلسة غير صالحة');
+    }
+
+    private function terminateSession(Request $request, string $message): mixed
+    {
+        Auth::guard('agent_staff')->logout();
+
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
+
+        return $this->reject($request, $message);
     }
 
     private function reject(Request $request, string $message): mixed

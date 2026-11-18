@@ -27,8 +27,9 @@ class ReconciliationCaseService
             if ($userId < 1) {
                 continue;
             }
+            $currency = \App\Support\Money\Currencies::normalize((string) ($row['currency'] ?? \App\Support\Money\Currencies::BASE));
             if (!($row['diverged'] ?? false)) {
-                $this->markVerifying($userId);
+                $this->markVerifying($userId, $currency);
                 continue;
             }
 
@@ -118,6 +119,8 @@ class ReconciliationCaseService
                 'actual_source' => 'ledger_accounts.current_balance',
             ];
 
+            $currency = \App\Support\Money\Currencies::normalize((string) ($row['currency'] ?? \App\Support\Money\Currencies::BASE));
+
             if (! $case) {
                 ReconciliationCase::create([
                     'case_ulid' => (string) Str::ulid(),
@@ -127,7 +130,7 @@ class ReconciliationCaseService
                     'expected_amount' => $computed,
                     'actual_amount' => $stored,
                     'difference' => $gap,
-                    'currency' => 'YER',
+                    'currency' => $currency,
                     'status' => 'detected',
                     'severity' => 'warning',
                     'first_detected_at' => $now,
@@ -159,11 +162,13 @@ class ReconciliationCaseService
     private function recordWalletDivergence(array $row): void
     {
         $userId = (int) $row['user_id'];
+        $currency = \App\Support\Money\Currencies::normalize((string) ($row['currency'] ?? \App\Support\Money\Currencies::BASE));
 
-        DB::transaction(function () use ($row, $userId): void {
+        DB::transaction(function () use ($row, $userId, $currency): void {
             $case = ReconciliationCase::query()
                 ->where('case_type', 'wallet')
                 ->where('subject_user_id', $userId)
+                ->where('currency', $currency)
                 ->whereIn('status', ReconciliationCase::OPEN_STATUSES)
                 ->lockForUpdate()->first();
 
@@ -181,7 +186,7 @@ class ReconciliationCaseService
                     'expected_amount' => $expected,
                     'actual_amount' => $actual,
                     'difference' => $gap,
-                    'currency' => 'YER',
+                    'currency' => $currency,
                     'status' => 'detected',
                     'severity' => 'warning',
                     'first_detected_at' => $now,
@@ -301,10 +306,13 @@ class ReconciliationCaseService
         }
     }
 
-    private function markVerifying(int $userId): void
+    private function markVerifying(int $userId, string $currency = \App\Support\Money\Currencies::BASE): void
     {
+        $cur = \App\Support\Money\Currencies::normalize($currency);
         ReconciliationCase::query()
-            ->where('case_type', 'wallet')->where('subject_user_id', $userId)
+            ->where('case_type', 'wallet')
+            ->where('subject_user_id', $userId)
+            ->where('currency', $cur)
             ->whereIn('status', array_diff(ReconciliationCase::OPEN_STATUSES, ['verifying']))
             ->update([
                 'status' => 'verifying',
@@ -335,7 +343,7 @@ class ReconciliationCaseService
     private function evidence(array $row): array
     {
         return array_intersect_key($row, array_flip([
-            'user_id', 'wallet_balance', 'ledger_balance', 'gap', 'missing_wallet',
+            'user_id', 'currency', 'wallet_balance', 'ledger_balance', 'gap', 'missing_wallet',
         ]));
     }
 

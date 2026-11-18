@@ -124,7 +124,7 @@ class AgentBranchService
                 DB::table('agent_profiles')->insert([
                     'user_id' => $branchUser->id,
                     'parent_agent_id' => $agent->id,
-                    'agent_level' => 2,
+                    'agent_level' => 'sub_agent',
                     'business_name' => (string) $data['name'],
                     'location_city' => $data['city'] ?? null,
                     'location_address' => $data['address'] ?? null,
@@ -165,6 +165,58 @@ class AgentBranchService
     }
 
     /** فروع الوكيل مع أرصدتها — النقديّ والإلكترونيّ معاً. */
+    /** AGT-GAP-015 — تعديل بيانات الفرع (الاسم، الهاتف، المدينة، العنوان) مع التدقيق. */
+    public function updateBranch(AgentBranch $branch, User $actor, array $data): AgentBranch
+    {
+        $name = trim((string) ($data['name'] ?? $branch->name));
+        if (mb_strlen($name) < 2) {
+            throw new DomainException('اسم الفرع إلزاميّ');
+        }
+
+        $phone = preg_replace('/\D+/', '', (string) ($data['phone'] ?? $branch->phone));
+        if (strlen($phone) < 8) {
+            throw new DomainException('رقم هاتف الفرع غير صالح');
+        }
+
+        $dupPhone = User::where('phone', $phone)
+            ->where('id', '!=', $branch->branch_user_id)->exists();
+        if ($dupPhone) {
+            throw new DomainException('الهاتف مستعمل في حسابٍ آخر');
+        }
+
+        return DB::transaction(function () use ($branch, $actor, $name, $phone, $data) {
+            $before = $branch->only(['name', 'phone', 'city', 'address']);
+
+            $branch->forceFill([
+                'name' => $name,
+                'phone' => $phone,
+                'city' => $data['city'] ?? $branch->city,
+                'address' => $data['address'] ?? $branch->address,
+            ])->save();
+
+            User::where('id', $branch->branch_user_id)->update([
+                'f_name' => $name,
+                'phone' => $phone,
+            ]);
+
+            $this->audit->record([
+                'actor_type' => 'agent',
+                'actor_user_id' => $actor->id,
+                'subject_type' => 'agent_branch',
+                'subject_id' => (string) $branch->id,
+                'action' => 'AGENT_BRANCH_UPDATED',
+                'decision_code' => 'UPDATED',
+                'severity' => 'notice',
+                'context' => [
+                    'before' => $before,
+                    'after' => $branch->only(['name', 'phone', 'city', 'address']),
+                ],
+            ]);
+
+            return $branch->fresh();
+        });
+    }
+
     public function listFor(User $agent): array
     {
         return AgentBranch::with(['account:id,phone', 'till'])

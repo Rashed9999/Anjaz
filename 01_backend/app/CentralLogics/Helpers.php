@@ -887,7 +887,14 @@ class Helpers
     public static function add_refer_commission(?string $unique_id): void
     {
         $user = User::where('unique_id', $unique_id)->first();
+        if (!$user) {
+            return;
+        }
         $admin_id = self::get_admin_id();
+        $commission = \App\Services\MoneyService::normalize(self::get_business_settings('refer_commission') ?? 0);
+        if (!\App\Services\MoneyService::isPositive($commission)) {
+            return;
+        }
 
         //START TRANSACTION
         DB::beginTransaction();
@@ -896,12 +903,14 @@ class Helpers
         $data['to_user_id'] = $user->id;
 
         try {
+            app(\App\Services\FinancialGuardService::class)->lockWalletsOrdered([(int) $admin_id, (int) $user->id]);
+
             //customer transaction
             $data['user_id'] = $data['to_user_id'];
             $data['type'] = 'credit';
             $data['transaction_type'] = 'refer_commission';
             $data['ref_trans_id'] = null;
-            $data['amount'] = self::get_business_settings('refer_commission')??0;
+            $data['amount'] = (float) $commission;
             $customer_transaction = Helpers::make_transaction($data);
 
             if ($customer_transaction == null) {
@@ -919,8 +928,22 @@ class Helpers
                 throw new TransactionFailedException('Transaction from receiver is failed');
             }
 
+            $ledger = app(\App\Services\LedgerService::class);
+            $adminAccount = $ledger->getOrCreateUserWallet((int) $admin_id);
+            $userAccount = $ledger->getOrCreateUserWallet((int) $user->id);
+            $ledger->post(
+                sourceType: 'refer_commission',
+                sourceId: (string) $customer_transaction,
+                description: 'عمولة إحالة من النظام إلى المستخدم',
+                lines: [
+                    ['account' => $adminAccount->account_code, 'direction' => 'debit', 'amount' => $commission],
+                    ['account' => $userAccount->account_code, 'direction' => 'credit', 'amount' => $commission],
+                ],
+                idempotencyKey: "refer_commission:{$customer_transaction}",
+            );
+
             DB::commit();
-        } catch (TransactionFailedException $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
             throw new TransactionFailedException('Refer commission failed');
         }
