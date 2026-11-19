@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:amial_pay/features/merchant/services/merchant_business_api_adapter.dart';
+import 'package:amial_pay/features/merchant/services/merchant_business_backend_config.dart';
 import 'package:amial_pay/features/merchant/services/offline_sale_queue.dart';
 import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
 import 'package:amial_pay/features/favorite_number/controllers/fav_number_controller.dart';
@@ -129,6 +131,16 @@ Future<Map<String, Map<String, String>>> init() async {
     uniqueId: Get.find(),
     deiceInfo: Get.find(),
   ));
+
+  // AMIAL-BUSINESS-UNIFY-U2 — محوّل خادم أميال أعمال الاختياري لكل تاجر (مُعطّل افتراضياً).
+  final businessConfig = Get.put(
+    MerchantBusinessBackendConfig(sharedPreferences: sharedPreferences),
+    permanent: true,
+  );
+  Get.put(
+    MerchantBusinessApiAdapter(config: businessConfig),
+    permanent: true,
+  );
 
   // AMIAL-OFFLINE-POS-001 — طابور مبيعات دون اتصال
   Get.put(OfflineSaleQueue(), permanent: true);

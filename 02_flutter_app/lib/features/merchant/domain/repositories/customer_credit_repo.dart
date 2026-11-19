@@ -1,17 +1,34 @@
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/merchant/services/merchant_business_api_adapter.dart';
 
 /// AMIAL-CUSTOMER-CREDIT-001 — نظام ديون العملاء (Flutter).
 class CustomerCreditRepo extends GetxService {
   final ApiClient apiClient;
-  CustomerCreditRepo({required this.apiClient});
+  final MerchantBusinessApiAdapter? _injectedBusinessAdapter;
+  CustomerCreditRepo({
+    required this.apiClient,
+    MerchantBusinessApiAdapter? businessAdapter,
+  }) : _injectedBusinessAdapter = businessAdapter;
 
   static const _base = '/api/v1/amial/merchant/credit';
+
+  MerchantBusinessApiAdapter? get _business {
+    final adapter = _injectedBusinessAdapter ??
+        (Get.isRegistered<MerchantBusinessApiAdapter>()
+            ? Get.find<MerchantBusinessApiAdapter>()
+            : null);
+    return (adapter != null && adapter.isEnabledForActiveMerchant) ? adapter : null;
+  }
 
   Future<Response> dashboard() => apiClient.getData('$_base/dashboard');
 
   Future<Response> listCustomers({String? search, String? filter}) {
+    final biz = _business;
+    if (biz != null) {
+      return biz.listContacts(search: search);
+    }
     final q = <String, dynamic>{};
     if (search != null && search.isNotEmpty) q['search'] = search;
     if (filter != null && filter.isNotEmpty) q['filter'] = filter;
@@ -37,12 +54,22 @@ class CustomerCreditRepo extends GetxService {
 
   /// A cash collection is not a wallet deposit; the server issues its voucher.
   Future<Response> collectCash(
-      int id, String amount, String key, {String? note}) =>
-      apiClient.postData('$_base/customers/$id/collect-cash', {
-        'amount': amount,
-        'idempotency_key': key,
-        if (note != null && note.isNotEmpty) 'note': note,
-      });
+      int id, String amount, String key, {String? note}) {
+    final biz = _business;
+    if (biz != null) {
+      return biz.collectFromContact(
+        contactId: id,
+        amount: amount,
+        method: 'cash',
+        idempotencyKey: key,
+      );
+    }
+    return apiClient.postData('$_base/customers/$id/collect-cash', {
+      'amount': amount,
+      'idempotency_key': key,
+      if (note != null && note.isNotEmpty) 'note': note,
+    });
+  }
 
   /// Request payment; the customer must authorize it in their own Amial app.
   Future<Response> requestWallet(int id, String amount, String key) =>
