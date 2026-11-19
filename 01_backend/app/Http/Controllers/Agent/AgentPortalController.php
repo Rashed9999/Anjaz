@@ -49,10 +49,6 @@ class AgentPortalController extends Controller
 
     public function loginPage()
     {
-        if (Auth::guard('agent_staff')->check()) {
-            return redirect()->route('agent.dashboard');
-        }
-
         return view('agent-views.login');
     }
 
