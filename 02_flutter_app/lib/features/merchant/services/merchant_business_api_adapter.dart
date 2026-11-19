@@ -352,17 +352,20 @@ class MerchantBusinessApiAdapter extends GetxService {
   }
 
   Response _decode(http.Response r) {
+    final text = r.bodyBytes.isNotEmpty
+        ? utf8.decode(r.bodyBytes, allowMalformed: true)
+        : '';
     dynamic decoded;
     try {
-      decoded = r.body.isNotEmpty ? jsonDecode(r.body) : null;
+      decoded = text.isNotEmpty ? jsonDecode(text) : null;
     } catch (_) {
-      decoded = {'ok': false, 'message': r.body};
+      decoded = {'ok': false, 'message': text};
     }
     return Response(
       statusCode: r.statusCode,
       statusText: r.reasonPhrase,
       body: decoded,
-      bodyString: r.body,
+      bodyString: text,
     );
   }
 }

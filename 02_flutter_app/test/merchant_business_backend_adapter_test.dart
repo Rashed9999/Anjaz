@@ -26,6 +26,13 @@ import 'package:amial_pay/features/merchant/services/offline_sale_queue.dart';
 
 class _MockApiClient extends Mock implements ApiClient {}
 
+http.Response _jsonResponse(Map<String, dynamic> body, int statusCode) =>
+    http.Response.bytes(
+      utf8.encode(jsonEncode(body)),
+      statusCode,
+      headers: const {'content-type': 'application/json; charset=utf-8'},
+    );
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -86,43 +93,37 @@ void main() {
       httpClient: MockClient((req) async {
         requests.add(req);
         if (req.url.path == '/api/v1/mobile/pos/barcode') {
-          return http.Response(
-            jsonEncode({
-              'ok': true,
-              'code': 'OK',
-              'data': {
-                'currency': 'YER',
-                'kind': 'scale',
-                'item': {'id': 9, 'name': 'سمك ديرك', 'price': '3000.0000', 'scanned_quantity': '1.250'},
-              },
-            }),
-            200,
-          );
+          return _jsonResponse({
+            'ok': true,
+            'code': 'OK',
+            'data': {
+              'currency': 'YER',
+              'kind': 'scale',
+              'item': {'id': 9, 'name': 'سمك ديرك', 'price': '3000.0000', 'scanned_quantity': '1.250'},
+            },
+          }, 200);
         }
         if (req.url.path == '/api/v1/mobile/pos/sales') {
-          return http.Response(
-            jsonEncode({
-              'ok': true,
-              'code': 'OK',
-              'replayed': false,
-              'data': {
-                'currency': 'YER',
-                'invoice': {'id': 77, 'number': 'INV-000001', 'total': '1500.0000'},
-              },
-            }),
-            201,
-          );
+          return _jsonResponse({
+            'ok': true,
+            'code': 'OK',
+            'replayed': false,
+            'data': {
+              'currency': 'YER',
+              'invoice': {'id': 77, 'number': 'INV-000001', 'total': '1500.0000'},
+            },
+          }, 201);
         }
         if (req.url.path == '/api/v1/mobile/pos/sales/77/returns') {
-          return http.Response(jsonEncode({'ok': true, 'code': 'OK', 'replayed': false, 'data': {'return': {'id': 5}}}), 201);
+          return _jsonResponse({'ok': true, 'code': 'OK', 'replayed': false, 'data': {'return': {'id': 5}}}, 201);
         }
         if (req.url.path == '/api/v1/mobile/contacts/12/collect') {
-          return http.Response(jsonEncode({'ok': true, 'code': 'OK', 'replayed': false, 'data': {'remaining_receivable': '500.0000'}}), 201);
+          return _jsonResponse({'ok': true, 'code': 'OK', 'replayed': false, 'data': {'remaining_receivable': '500.0000'}}, 201);
         }
         if (req.url.path == '/api/v1/mobile/fuel/sales') {
-          return http.Response(jsonEncode({'ok': true, 'code': 'OK', 'replayed': false, 'data': {'invoice': {'id': 88, 'total': '7000.0000'}}}), 201);
+          return _jsonResponse({'ok': true, 'code': 'OK', 'replayed': false, 'data': {'invoice': {'id': 88, 'total': '7000.0000'}}}, 201);
         }
-        return http.Response(jsonEncode({'ok': true, 'data': {}}), 200);
+        return _jsonResponse({'ok': true, 'data': {}}, 200);
       }),
     );
 
@@ -189,12 +190,12 @@ void main() {
         callCount++;
         final body = jsonDecode(req.body) as Map<String, dynamic>;
         if (body['client_uuid'] == 'op-ok') {
-          return http.Response(jsonEncode({'ok': true, 'replayed': true, 'data': {'invoice': {'id': 1}}}), 201);
+          return _jsonResponse({'ok': true, 'replayed': true, 'data': {'invoice': {'id': 1}}}, 201);
         }
         if (body['client_uuid'] == 'op-503') {
-          return http.Response(jsonEncode({'ok': false, 'message': 'unavailable'}), 503);
+          return _jsonResponse({'ok': false, 'message': 'unavailable'}, 503);
         }
-        return http.Response(jsonEncode({'ok': false, 'code': 'IDEMPOTENCY_CONFLICT', 'message': 'مفتاح مكرر بحمولة مختلفة'}), 409);
+        return _jsonResponse({'ok': false, 'code': 'IDEMPOTENCY_CONFLICT', 'message': 'مفتاح مكرر بحمولة مختلفة'}, 409);
       }),
     );
 
