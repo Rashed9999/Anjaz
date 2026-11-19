@@ -7,6 +7,7 @@ use App\Models\AgentProfile;
 use App\Models\AgentSettlement;
 use App\Models\User;
 use App\Services\AgentNetworkService;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ class AdminAgentNetworkController extends Controller
 {
     public function __construct(
         private readonly AgentNetworkService $network,
+        private readonly AuditService $audit,
     ) {}
 
     /** GET /admin/amial/agents — قائمة الوكلاء */
@@ -53,7 +55,22 @@ class AdminAgentNetworkController extends Controller
         $profile = AgentProfile::where('user_id', $userId)->first();
         if (!$profile) return $this->error('NOT_FOUND', 'الوكيل غير موجود', 404);
 
-        $profile->update(['status' => 'active']);
+        DB::transaction(function () use ($request, $profile, $userId): void {
+            $profile->update(['status' => 'active']);
+            User::where('id', $userId)->update(['is_active' => 1, 'is_temp_blocked' => 0]);
+
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $request->user()?->id,
+                'subject_type' => 'user',
+                'subject_id' => (string) $userId,
+                'action' => 'agent.network.approve',
+                'decision_code' => 'APPROVED',
+                'severity' => 'critical',
+                'metadata' => ['profile_id' => $profile->id],
+            ]);
+        });
+
         return $this->ok(['user_id' => $userId, 'status' => 'active'], 'APPROVED', 'تم تفعيل الوكيل');
     }
 
@@ -66,7 +83,25 @@ class AdminAgentNetworkController extends Controller
         $profile = AgentProfile::where('user_id', $userId)->first();
         if (!$profile) return $this->error('NOT_FOUND', 'الوكيل غير موجود', 404);
 
-        $profile->update(['status' => 'suspended']);
+        $reason = (string) $request->input('reason');
+
+        DB::transaction(function () use ($request, $profile, $userId, $reason): void {
+            $profile->update(['status' => 'suspended']);
+            User::where('id', $userId)->update(['is_temp_blocked' => 1]);
+
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $request->user()?->id,
+                'subject_type' => 'user',
+                'subject_id' => (string) $userId,
+                'action' => 'agent.network.suspend',
+                'decision_code' => 'SUSPENDED',
+                'reason' => $reason,
+                'severity' => 'critical',
+                'metadata' => ['profile_id' => $profile->id],
+            ]);
+        });
+
         return $this->ok(['user_id' => $userId, 'status' => 'suspended'], 'SUSPENDED', 'تم إيقاف الوكيل');
     }
 
@@ -79,16 +114,50 @@ class AdminAgentNetworkController extends Controller
             'single_transaction_limit' => 'sometimes|numeric|min:0',
             'min_float_balance' => 'sometimes|numeric|min:0',
             'commission_rate' => 'sometimes|numeric|min:0|max:100',
+            'reason' => 'required|string|min:5|max:500',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $profile = AgentProfile::where('user_id', $userId)->first();
-        if (!$profile) return $this->error('NOT_FOUND', 'الوكيل غير موجود', 404);
+        $agentUser = User::find($userId);
+        if (!$agentUser) return $this->error('NOT_FOUND', 'الوكيل غير موجود', 404);
 
-        $profile->update($request->only([
-            'daily_cash_in_limit', 'daily_cash_out_limit',
-            'single_transaction_limit', 'min_float_balance', 'commission_rate',
-        ]));
+        $reason = (string) $request->input('reason');
+        $operational = $request->only([
+            'daily_cash_in_limit', 'daily_cash_out_limit', 'single_transaction_limit',
+        ]);
+        $extra = $request->only(['min_float_balance', 'commission_rate']);
+
+        try {
+            DB::transaction(function () use ($request, $agentUser, $userId, $operational, $extra, $reason): void {
+                $profile = AgentProfile::where('user_id', $userId)->lockForUpdate()->first();
+                if (!$profile) {
+                    throw new \RuntimeException('ملف الوكيل غير موجود');
+                }
+
+                if ($operational !== []) {
+                    $this->network->updateOperationalLimits($agentUser, $request->user(), $operational, $reason);
+                }
+
+                if ($extra !== []) {
+                    $before = $profile->only(array_keys($extra));
+                    $profile->refresh()->fill($extra)->save();
+                    $this->audit->record([
+                        'actor_type' => 'admin',
+                        'actor_user_id' => $request->user()?->id,
+                        'subject_type' => 'agent_profile',
+                        'subject_id' => (string) $profile->id,
+                        'action' => 'agent.network.extra_limits_updated',
+                        'decision_code' => 'UPDATED',
+                        'reason' => $reason,
+                        'severity' => 'high',
+                        'metadata' => ['before' => $before, 'after' => $extra],
+                    ]);
+                }
+            });
+        } catch (\RuntimeException $e) {
+            $status = $e->getMessage() === 'ملف الوكيل غير موجود' ? 404 : 422;
+            return $this->error('LIMITS_UPDATE_FAILED', $e->getMessage(), $status);
+        }
 
         return $this->ok(['user_id' => $userId], 'UPDATED', 'تم تحديث الحدود');
     }

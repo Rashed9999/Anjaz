@@ -49,7 +49,7 @@ class AgentStaffService
             ? ($data['branch_id'] ?? null)
             : $actor->branch_id;
 
-        if ($role !== AgentStaff::ROLE_HEAD_OFFICE && empty($branchId)) {
+        if (!in_array($role, [AgentStaff::ROLE_HEAD_OFFICE, AgentStaff::ROLE_AUDITOR], true) && empty($branchId)) {
             throw new DomainException('اختر الفرع الذي يعمل فيه الموظّف');
         }
 
@@ -415,6 +415,72 @@ class AgentStaffService
         if ($actor->isTeller()) {
             throw new DomainException('الصرّاف لا يُدير الموظّفين');
         }
+
+        if (!$actor->isHeadOffice() && !$actor->isBranchManager()) {
+            throw new DomainException('إدارة الموظّفين من صلاحية الإدارة');
+        }
+    }
+
+    /**
+     * AGT-GAP-015 — نقل موظّف بين الفروع أو تعديل دوره بقرار تدقيق.
+     * يُرفض النقل ما دامت للموظّف ورديّةٌ مفتوحة.
+     */
+    public function transfer(AgentStaff $actor, int $staffId, ?int $branchId, ?string $role = null): AgentStaff
+    {
+        if (!$actor->isHeadOffice()) {
+            throw new DomainException('نقل الموظّفين وتغيير أدوارهم من صلاحية الإدارة العامّة');
+        }
+
+        $staff = $this->findInScope($actor, $staffId);
+
+        if ($staff->id === $actor->id) {
+            throw new DomainException('لا تنقل حسابك الشخصي من هنا');
+        }
+
+        if ($staff->openShift()) {
+            throw new DomainException('أغلق ورديّة الموظّف أوّلاً — لا يُنقل ودرجه مفتوح');
+        }
+
+        $targetRole = $role !== null && $role !== '' ? $role : $staff->role;
+        if (!array_key_exists($targetRole, AgentStaff::ROLE_LABELS)) {
+            throw new DomainException('دور غير معروف');
+        }
+
+        if (!in_array($targetRole, [AgentStaff::ROLE_HEAD_OFFICE, AgentStaff::ROLE_AUDITOR], true) && empty($branchId)) {
+            throw new DomainException('اختر الفرع الجديد للموظّف');
+        }
+
+        $branch = null;
+        if ($branchId) {
+            $branch = AgentBranch::where('id', $branchId)
+                ->where('agent_user_id', $actor->agent_user_id)->first();
+            if (!$branch) {
+                throw new DomainException('الفرع غير تابعٍ لشركتك');
+            }
+        }
+
+        $before = ['branch_id' => $staff->branch_id, 'role' => $staff->role];
+
+        $staff->forceFill([
+            'branch_id' => $branch?->id,
+            'role' => $targetRole,
+        ])->save();
+
+        $this->audit->record([
+            'actor_type' => 'agent',
+            'actor_user_id' => $actor->agent_user_id,
+            'action' => 'agent.staff.transfer',
+            'severity' => 'high',
+            'subject_type' => 'agent_staff',
+            'subject_id' => (string) $staff->id,
+            'metadata' => [
+                'by_staff_id' => $actor->id,
+                'before' => $before,
+                'after' => ['branch_id' => $staff->branch_id, 'role' => $staff->role],
+            ],
+        ]);
+
+        return $staff->fresh();
     }
 
     private function findInScope(AgentStaff $actor, int $staffId): AgentStaff

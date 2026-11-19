@@ -197,6 +197,7 @@
 </div>
 
 @once
+@include('agent-views._post_helper')
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 document.addEventListener('DOMContentLoaded', function () {
     const root = '{{ url('agent') }}';
@@ -212,14 +213,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let busy = false;
 
     async function post(url, body) {
-        const r = await fetch(root + url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
-            body: JSON.stringify(body || {}),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok || j.success === false) throw new Error(j.message || ('خطأ ' + r.status));
-        return j;
+        return window.__amialPost(root, url, body, csrf, {throwOnError: true, checkSuccess: true});
     }
 
     async function loadState() {
@@ -256,7 +250,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     $('ct-open').addEventListener('click', async () => {
-        const v = prompt('العهدة الافتتاحيّة — النقد الذي تستلمه من خزنة الفرع الآن (اكتب 0 إن بدأت بلا نقد):', '0');
+        const v = await window.amialDialog.request('العهدة الافتتاحيّة — النقد الذي تستلمه من خزنة الفرع الآن (اكتب 0 إن بدأت بلا نقد):', {title: 'فتح الورديّة', initial: '0'});
         if (v === null) return;
         try { const j = await post('/counter/shift/open', {opening_float: v}); alert(j.message); render(j.shift ? {shift: j.shift, can_operate: true, staff: {role: 'teller'}} : {}); loadState(); }
         catch (e) { alert(e.message); }
@@ -264,17 +258,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     $('ct-close').addEventListener('click', async () => {
         // لا يُعرَض المتوقَّع قبل السؤال: صرّافٌ يرى الرقم يكتبه بدل أن يعدّ.
-        const counted = prompt('اعدّ ما في درجك الآن واكتب المبلغ:');
+        const counted = await window.amialDialog.request('اعدّ ما في درجك الآن واكتب المبلغ:', {title: 'إغلاق الورديّة'});
         if (counted === null) return;
-        const note = prompt('ملاحظة (إلزاميّة إن وُجد فرق — عشرة أحرف فأكثر):', '') || '';
+        const note = (await window.amialDialog.request('ملاحظة (إلزاميّة إن وُجد فرق — عشرة أحرف فأكثر):', {title: 'ملاحظة الإغلاق', initial: ''})) || '';
         try { const j = await post('/counter/shift/close', {counted_cash: counted, note}); alert(j.message); loadState(); }
         catch (e) { alert(e.message); }
     });
 
     $('ct-refill').addEventListener('click', async () => {
-        const dir = confirm('موافق = استلام نقدٍ من خزنة الفرع إلى درجك.\\nإلغاء = تسليم نقدٍ من درجك إلى الخزنة.')
-            ? 'to_drawer' : 'to_safe';
-        const amount = prompt('المبلغ:');
+        const toDrawer = await window.amialDialog.ask('تأكيد = استلام نقدٍ من خزنة الفرع إلى درجك.\\nإلغاء = تسليم نقدٍ من درجك إلى الخزنة.', {title: 'توريد الدرج', okLabel: 'إلى الدرج'});
+        const dir = toDrawer ? 'to_drawer' : 'to_safe';
+        const amount = await window.amialDialog.request('المبلغ:', {title: toDrawer ? 'استلام من الخزنة' : 'تسليم إلى الخزنة'});
         if (!amount) return;
         try { const j = await post('/counter/shift/refill', {amount, direction: dir}); alert(j.message); loadState(); }
         catch (e) { alert(e.message); }
@@ -525,9 +519,12 @@ document.addEventListener('DOMContentLoaded', function () {
         $('wd-op').style.display = 'none';
         box.innerHTML = '<div class="text-muted small">جارٍ التحقّق…</div>';
 
-        const r = await fetch(root + '/counter/withdrawal?op_code=' + encodeURIComponent(code),
-            {headers: {'Accept': 'application/json'}});
-        const j = await r.json();
+        const r = await fetch(root + '/counter/withdrawal/lookup', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf},
+            body: JSON.stringify({op_code: code}),
+        });
+        const j = await r.json().catch(() => ({}));
 
         if (!r.ok || j.success === false) {
             box.innerHTML = `<div class="alert alert-danger py-2 mb-0 small">${esc(j.message)}</div>`;

@@ -103,7 +103,7 @@ final class FeeOperationRegistry
 
             new FeeOperation(
                 code: 'CASH_OUT',
-                labelAr: 'سحب نقديّ من وكيل',
+                labelAr: 'سحب نقديّ من وكيل (برمز العميل)',
                 labelEn: 'Cash out at agent',
                 category: 'cash',
                 actors: ['customer'],
@@ -118,7 +118,7 @@ final class FeeOperationRegistry
                     'app/Services/CustomerWithdrawService.php',
                     'app/Traits/TransactionTrait.php',
                 ],
-                owner: 'App\\Services\\CustomerWithdrawService',
+                owner: 'App\\Services\\CustomerWithdrawService (cash_out_executed)',
             ),
 
             new FeeOperation(
@@ -136,15 +136,15 @@ final class FeeOperationRegistry
 
             new FeeOperation(
                 code: 'AGENT_WITHDRAW',
-                labelAr: 'سحب من شبّاك الوكيل',
-                labelEn: 'Agent counter withdrawal',
+                labelAr: 'سحب من شبّاك الوكيل (مسار مباشر مفصول عن CASH_OUT)',
+                labelEn: 'Agent counter withdrawal (legacy/direct channel)',
                 category: 'cash',
                 actors: ['agent'],
                 bearers: ['sender', 'receiver'],
                 agentCommission: true,
                 zoneScoped: true,
                 consumers: ['app/Services/AgentCounterService.php'],
-                owner: 'App\\Services\\AgentCounterService::quote',
+                owner: 'App\\Services\\AgentCounterService::quote (agent_withdraw)',
             ),
 
             new FeeOperation(

@@ -423,6 +423,7 @@ class BillPayService
                     amount: $totalDebited,
                     reason: "bill_pay_hold:{$order->order_ulid}",
                 );
+                $this->ledgerBillPayHold($user->id, $totalDebited, $order->order_ulid);
 
                 $order->update([
                     'wallet_transaction_id' => $order->order_ulid,
@@ -614,6 +615,7 @@ class BillPayService
                 amount: (string) $order->total_debited,
                 reason: "bill_pay_release:{$order->order_ulid}",
             );
+            $this->ledgerBillPayReleased($order->user_id, (string) $order->total_debited, $order->order_ulid);
             return;
         }
 

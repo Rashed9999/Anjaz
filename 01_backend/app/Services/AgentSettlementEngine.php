@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\Agent\AgentLedgerSources;
 use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentCashMovement;
 use App\Models\Agent\AgentShift;
@@ -148,8 +149,17 @@ class AgentSettlementEngine
         $returned = $this->settledAmount($agent, 'payout');
 
         // سحبُ العميل يُدخل رصيداً إلى الفرع، وإيداعُه يُخرجه.
-        $fromWithdrawals = $this->ledgerFlow($walletIds, 'agent_withdraw', 'in');
-        $toDeposits = $this->ledgerFlow($walletIds, 'agent_deposit', 'out');
+        // فصل `CASH_OUT` (`cash_out_executed`) عن `AGENT_WITHDRAW` (`agent_withdraw` − `agent_withdraw_fee`)
+        // وشمل `agent_deposit_fee` يضمن صفر انحراف حتى عند وجود حصة منصة غير صفرية.
+        $fromCashOut = $this->ledgerFlow($walletIds, AgentLedgerSources::LIVE_WITHDRAW, 'in');
+        $fromLegacyGross = $this->ledgerFlow($walletIds, AgentLedgerSources::LEGACY_WITHDRAW, 'in');
+        $legacyWithdrawFees = $this->ledgerFlow($walletIds, 'agent_withdraw_fee', 'out');
+        $fromAgentWithdraw = bcsub($fromLegacyGross, $legacyWithdrawFees, 4);
+        $fromWithdrawals = bcadd($fromCashOut, $fromAgentWithdraw, 4);
+
+        $toDepositsPrincipal = $this->ledgerFlow($walletIds, AgentLedgerSources::DEPOSIT, 'out');
+        $toDepositsFee = $this->ledgerFlow($walletIds, 'agent_deposit_fee', 'out');
+        $toDeposits = bcadd($toDepositsPrincipal, $toDepositsFee, 4);
 
         $expected = bcsub(
             bcadd(bcsub($bought, $returned, 4), $fromWithdrawals, 4),
@@ -172,6 +182,8 @@ class AgentSettlementEngine
             'breakdown' => [
                 'bought' => $bought,
                 'returned' => $returned,
+                'from_cash_out' => $fromCashOut,
+                'from_agent_withdraw' => $fromAgentWithdraw,
                 'from_withdrawals' => $fromWithdrawals,
                 'to_deposits' => $toDeposits,
             ],
@@ -361,7 +373,7 @@ class AgentSettlementEngine
      *
      * @param  array<int>  $walletIds
      */
-    private function ledgerFlow(array $walletIds, string $sourceType, string $direction): string
+    private function ledgerFlow(array $walletIds, string|array $sourceType, string $direction): string
     {
         if ($walletIds === []) {
             return '0.0000';
@@ -381,7 +393,7 @@ class AgentSettlementEngine
         $v = DB::table('ledger_entry_lines as l')
             ->join('ledger_journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
             ->whereIn('l.account_id', $codes)
-            ->where('e.source_type', $sourceType)
+            ->whereIn('e.source_type', (array) $sourceType)
             ->where('l.direction', $ledgerDirection)
             ->sum('l.amount');
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Services\LedgerService;
+use App\Services\MoneyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -59,11 +60,11 @@ class AgentStatsController extends Controller
             'message' => 'OK',
             'errors' => (object)[],
             'meta' => [
-                'today_cash_in' => $todayCashIn,
-                'today_cash_out' => $todayCashOut,
-                'today_commission' => $todayCommission,
+                'today_cash_in' => MoneyService::normalize($todayCashIn),
+                'today_cash_out' => MoneyService::normalize($todayCashOut),
+                'today_commission' => MoneyService::normalize($todayCommission),
                 'today_count' => $cashOutCount + $cashInCount,
-                'current_balance' => $balance,
+                'current_balance' => MoneyService::normalize($balance),
             ],
         ]);
     }

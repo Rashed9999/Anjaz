@@ -26,12 +26,16 @@ class AgentStaff extends AuthUser implements Authenticatable
 
     public const ROLE_HEAD_OFFICE = 'head_office';
     public const ROLE_BRANCH_MANAGER = 'branch_manager';
+    public const ROLE_TREASURY_OFFICER = 'treasury_officer';
     public const ROLE_TELLER = 'teller';
+    public const ROLE_AUDITOR = 'auditor';
 
     public const ROLE_LABELS = [
         self::ROLE_HEAD_OFFICE => 'الإدارة العامّة',
         self::ROLE_BRANCH_MANAGER => 'مدير فرع',
+        self::ROLE_TREASURY_OFFICER => 'مسؤول خزنة',
         self::ROLE_TELLER => 'صرّاف (شبّاك)',
+        self::ROLE_AUDITOR => 'مدقق / محاسب',
     ];
 
     protected $fillable = [
@@ -92,6 +96,16 @@ class AgentStaff extends AuthUser implements Authenticatable
         return $this->role === self::ROLE_TELLER;
     }
 
+    public function isTreasuryOfficer(): bool
+    {
+        return $this->role === self::ROLE_TREASURY_OFFICER;
+    }
+
+    public function isAuditor(): bool
+    {
+        return $this->role === self::ROLE_AUDITOR;
+    }
+
     /**
      * الفروع التي يراها هذا الموظّف.
      *
@@ -102,7 +116,7 @@ class AgentStaff extends AuthUser implements Authenticatable
      */
     public function visibleBranchIds(): array
     {
-        if ($this->isHeadOffice()) {
+        if ($this->isHeadOffice() || ($this->isAuditor() && !$this->branch_id)) {
             return AgentBranch::where('agent_user_id', $this->agent_user_id)
                 ->pluck('id')->map(fn ($v) => (int) $v)->all();
         }
@@ -165,6 +179,12 @@ class AgentStaff extends AuthUser implements Authenticatable
             self::ROLE_HEAD_OFFICE => array_merge($none, [
                 'override_limit' => true, 'close_shift' => true,
                 'view_reports' => true, 'manage_staff' => true, 'transfer' => true,
+            ]),
+            self::ROLE_TREASURY_OFFICER => array_merge($none, [
+                'close_shift' => true, 'view_reports' => true,
+            ]),
+            self::ROLE_AUDITOR => array_merge($none, [
+                'view_reports' => true,
             ]),
             default => $none,
         };

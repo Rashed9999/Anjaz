@@ -104,6 +104,7 @@
 </div>
 
 @once
+@include('agent-views._post_helper')
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 document.addEventListener('DOMContentLoaded', function () {
     const root = '{{ url('agent') }}';
@@ -123,15 +124,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function post(p, body) {
-        const r = await fetch(root + p, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'Accept': 'application/json',
-                      'X-CSRF-TOKEN': csrf()},
-            body: JSON.stringify(body || {}),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(j.message || 'تعذّر التنفيذ');
-        return j;
+        return window.__amialPost(root, p, body, csrf(), {throwOnError: true, fallbackError: 'تعذّر التنفيذ'});
     }
 
     // ── الأمان ───────────────────────────────────────────────────────
@@ -180,6 +173,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ── الفروع ───────────────────────────────────────────────────────
+    const weekdays = {sun:'الأحد', mon:'الإثنين', tue:'الثلاثاء', wed:'الأربعاء', thu:'الخميس', fri:'الجمعة', sat:'السبت'};
+
+    function renderDay(day, label, slot) {
+        return `<div class="row g-1 align-items-center mb-1" data-weekday="${day}">
+            <span class="col-2">${label}</span>
+            <label class="col">فتح <input class="form-control" type="time" data-open value="${esc(slot?.open || '')}"></label>
+            <label class="col">إغلاق <input class="form-control" type="time" data-close value="${esc(slot?.close || '')}"></label>
+            <label class="col"><input type="checkbox" data-overnight ${slot?.overnight === true ? 'checked' : ''}> إغلاق في اليوم التالي</label>
+        </div>`;
+    }
+
     function renderBranches(rows) {
         if (!rows.length) {
             $('sg-branches').innerHTML =
@@ -210,10 +214,32 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                 </div>
                 <button class="btn btn-sm btn-outline-primary mt-2" data-sg-save="${b.id}">حفظ حدود الفرع</button>
+                <p class="small mt-2">اترك الوقتين فارغين في أيام الإغلاق.</p>
+                ${Object.entries(weekdays).map(([day, label]) => renderDay(day, label, b.working_hours?.[day])).join('')}
+                <label>المنطقة الزمنية للفرع <input class="form-control" dir="ltr" data-timezone value="${esc(b.working_hours?.timezone || '')}"></label>
+                <button class="btn btn-sm btn-outline-secondary mt-2" data-sg-hours="${b.id}">حفظ ساعات العمل</button>
             </div>`).join('');
     }
 
     $('sg-branches').addEventListener('click', async (e) => {
+        const hBtn = e.target.closest('button[data-sg-hours]');
+        if (hBtn) {
+            const box = hBtn.closest('[data-sg-branch]');
+            const hours = {timezone: box.querySelector('[data-timezone]').value.trim()};
+            try {
+                for (const row of box.querySelectorAll('[data-weekday]')) {
+                    const open = row.querySelector('[data-open]').value;
+                    const close = row.querySelector('[data-close]').value;
+                    const overnight = row.querySelector('[data-overnight]').checked;
+                    if ((!open !== !close) || (overnight && !open)) throw new Error('أكمل وقتي الفتح والإغلاق');
+                    hours[row.dataset.weekday] = open ? {open, close, overnight} : null;
+                }
+                const j = await post(`/branches/${hBtn.dataset.sgHours}/hours`, {hours});
+                alert(j.message);
+                load();
+            } catch (err) { alert(err.message); }
+            return;
+        }
         const b = e.target.closest('button[data-sg-save]');
         if (!b) return;
         const box = b.closest('[data-sg-branch]');

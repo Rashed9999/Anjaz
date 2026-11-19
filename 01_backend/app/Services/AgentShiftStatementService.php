@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\Agent\AgentLedgerSources;
 use App\Models\Agent\AgentCashMovement;
 use App\Models\Agent\AgentShift;
 use App\Models\Agent\AgentStaff;
@@ -201,8 +202,8 @@ class AgentShiftStatementService
         }
 
         $entries = DB::table('ledger_journal_entries')
-            ->whereIn('source_id', $references)
-            ->whereIn('source_type', ['agent_deposit', 'agent_withdraw'])
+            ->whereIn('source_id', AgentLedgerSources::expandReferences($references))
+            ->whereIn('source_type', AgentLedgerSources::ALL)
             ->get(['source_type', 'total_amount', 'metadata']);
 
         if ($entries->isEmpty()) {
@@ -217,13 +218,21 @@ class AgentShiftStatementService
         foreach ($entries as $e) {
             $amt = bcadd((string) $e->total_amount, '0', 4);
 
-            if ($e->source_type === 'agent_deposit') {
+            $meta = json_decode((string) $e->metadata, true) ?: [];
+
+            if ($e->source_type === AgentLedgerSources::DEPOSIT) {
                 $out = bcadd($out, $amt, 4);
             } else {
-                $in = bcadd($in, $amt, 4);
+                // السحبُ الحيّ (`cash_out_executed`) والموروث (`agent_withdraw`):
+                // ما دخل محفظةَ الفرع هو مبلغُ النقد + العمولة دون حصة المنصّة.
+                $agentCredit = $meta['agent_credit'] ?? (
+                    isset($meta['cash_paid'])
+                        ? bcadd((string) $meta['cash_paid'], (string) ($meta['commission'] ?? '0'), 4)
+                        : $amt
+                );
+                $in = bcadd($in, bcadd((string) $agentCredit, '0', 4), 4);
             }
 
-            $meta = json_decode((string) $e->metadata, true) ?: [];
             $fees = bcadd($fees, (string) ($meta['fee'] ?? '0'), 4);
             $commission = bcadd($commission, (string) ($meta['commission'] ?? '0'), 4);
         }

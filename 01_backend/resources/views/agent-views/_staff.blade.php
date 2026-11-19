@@ -209,6 +209,8 @@
                 <select class="form-select" id="st-role">
                     <option value="teller">صرّاف (شبّاك)</option>
                     <option value="branch_manager">مدير فرع</option>
+                    <option value="treasury_officer">مسؤول خزنة</option>
+                    <option value="auditor">مدقق / محاسب (قراءة فقط)</option>
                 </select></div>
             <div class="mb-2" id="st-branch-wrap"><label class="form-label">الفرع</label>
                 <select class="form-select" id="st-branch"></select></div>
@@ -257,7 +259,32 @@
     </div></div>
 </div>
 
+{{-- نافذة نقل موظّف أو تغيير دوره (AGT-GAP-015) --}}
+<div class="modal fade" id="tr-modal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="tr-title">نقل موظّف</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="mb-2"><label class="form-label">الدور الجديد</label>
+                <select class="form-select" id="tr-role">
+                    <option value="teller">صرّاف (شبّاك)</option>
+                    <option value="branch_manager">مدير فرع</option>
+                    <option value="treasury_officer">مسؤول خزنة</option>
+                    <option value="auditor">مدقق / محاسب (قراءة فقط)</option>
+                    <option value="head_office">الإدارة العامّة</option>
+                </select></div>
+            <div class="mb-2"><label class="form-label">الفرع</label>
+                <select class="form-select" id="tr-branch"></select></div>
+            <div class="text-danger small" id="tr-err"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" id="tr-save">حفظ النقل</button>
+        </div>
+    </div></div>
+</div>
+
 @once
+@include('agent-views._post_helper')
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 document.addEventListener('DOMContentLoaded', function () {
     const root = '{{ url('agent') }}';
@@ -270,14 +297,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!$('st-tbody')) return;   // صرّافٌ — لا شاشة موظّفين في صفحته
 
     async function post(url, body) {
-        const r = await fetch(root + url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
-            body: JSON.stringify(body || {}),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok || j.success === false) throw new Error(j.message || ('خطأ ' + r.status));
-        return j;
+        return window.__amialPost(root, url, body, csrf, {throwOnError: true, checkSuccess: true});
     }
     const get = async (u) => (await fetch(root + u, {headers: {'Accept': 'application/json'}})).json();
 
@@ -345,6 +365,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     <button class="btn btn-sm btn-outline-success" data-do="wa" data-id="${s.id}"
                             data-name="${esc(s.name)}" data-phone="${esc((s.whatsapp && s.whatsapp.number) || s.phone || '')}"
                             data-linked="${s.whatsapp ? 1 : 0}">واتساب</button>
+                    <button class="btn btn-sm btn-outline-warning" data-do="transfer" data-id="${s.id}"
+                            data-name="${esc(s.name)}" data-role="${esc(s.role)}"
+                            data-branch="${s.branch_id || ''}">نقل</button>
                     <button class="btn btn-sm ${s.is_active ? 'btn-outline-danger' : 'btn-outline-success'}"
                             data-do="toggle" data-id="${s.id}" data-active="${s.is_active ? 0 : 1}">
                         ${s.is_active ? 'تعطيل' : 'تفعيل'}</button>
@@ -388,11 +411,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 openLimits(b.dataset);
                 return;
             }
+            if (b.dataset.do === 'transfer') {
+                openTransfer(b.dataset);
+                return;
+            }
             if (b.dataset.do === 'toggle') {
                 const j = await post(`/staff/${b.dataset.id}/active`, {active: b.dataset.active === '1'});
                 alert(j.message);
             } else {
-                const p = prompt('كلمة السرّ الجديدة (٦ أحرف فأكثر):');
+                const p = await window.amialDialog.request('كلمة السرّ الجديدة (٦ أحرف فأكثر):', {title: 'تعيين كلمة سرّ'});
                 if (!p) return;
                 const j = await post(`/staff/${b.dataset.id}/password`, {password: p});
                 alert(j.message);
@@ -536,7 +563,7 @@ document.addEventListener('DOMContentLoaded', function () {
     $('wa-unlink').addEventListener('click', async () => {
         // فكُّ الربط يقطع القناة فوراً — وقطعُ قناةٍ بالخطأ يترك مديراً
         // بلا تنبيهات وهو لا يدري أنّه بلا تنبيهات.
-        if (!confirm('فكُّ الربط يُوقف الاستعلام والتنبيهات فوراً. أتُتابع؟')) return;
+        if (!await window.amialDialog.ask('فكُّ الربط يُوقف الاستعلام والتنبيهات فوراً. أتُتابع؟', {title: 'فكّ ربط واتساب', okLabel: 'فكّ الربط', danger: true})) return;
         $('wa-err').textContent = '';
         try {
             const j = await post(`/staff/${waStaffId}/whatsapp/unlink`, {});
@@ -792,7 +819,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // الزرّ يُحسم أوّلاً — وأزرار المراجعة قبل زرّ الإغلاق بالنيابة.
         const rev = e.target.closest('button[data-review]');
         if (rev) {
-            const note = prompt('سببُ القرار (عشرة أحرف فأكثر — يُسجَّل باسمك):');
+            const note = await window.amialDialog.request('سببُ القرار (عشرة أحرف فأكثر — يُسجَّل باسمك):', {title: 'مراجعة فرق الورديّة'});
             if (!note || note.trim().length < 10) { alert('السبب إلزاميّ — عشرة أحرف فأكثر'); return; }
             try {
                 const j = await post(`/staff/shifts/${rev.dataset.review}/review`,
@@ -805,9 +832,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const b = e.target.closest('button[data-close]');
         if (!b) return;
         // صرّافٌ غادر ولم يُغلق يترك درجاً مقفلاً على النظام لا على الواقع.
-        const counted = prompt('اعدّ ما في درج الصرّاف واكتب المبلغ:');
+        const counted = await window.amialDialog.request('اعدّ ما في درج الصرّاف واكتب المبلغ:', {title: 'إغلاق ورديّة بالنيابة'});
         if (counted === null) return;
-        const note = prompt('سبب الإغلاق بالنيابة (عشرة أحرف فأكثر إن وُجد فرق):', '') || '';
+        const note = (await window.amialDialog.request('سبب الإغلاق بالنيابة (عشرة أحرف فأكثر إن وُجد فرق):', {title: 'ملاحظة الإغلاق', initial: ''})) || '';
         try {
             const j = await post(`/staff/shifts/${b.dataset.close}/close`, {counted_cash: counted, note});
             alert(j.message); loadShifts();

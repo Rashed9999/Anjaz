@@ -41,7 +41,21 @@ class AgentTellerRequestService
         $reason = trim((string) ($data['reason'] ?? ''));
 
         // طلبُ الوقت الإضافيّ ليس مبلغاً — يُقاس بالدقائق لا بالريالات.
-        $isOvertime = ($data['kind'] ?? '') === 'overtime';
+        $kind = (string) ($data['kind'] ?? '');
+        $isOvertime = $kind === AgentTellerRequest::KIND_OVERTIME;
+        $isAfterHours = $kind === AgentTellerRequest::KIND_AFTER_HOURS_WITHDRAWAL;
+
+        if ($isAfterHours) {
+            app(\App\Services\Agent\BranchWorkingHoursPolicy::class)->assertExceptionPolicyApproved();
+
+            if (($data['operation'] ?? '') !== 'withdraw') {
+                throw new DomainException('استثناء ساعات العمل مخصّص لعمليّات السحب فقط');
+            }
+
+            if (empty($data['customer_user_id'])) {
+                throw new DomainException('استثناء السحب خارج ساعات العمل يجب أن يرتبط بعميل محدّد');
+            }
+        }
 
         if (!$isOvertime && bccomp($amount, '0', 4) <= 0) {
             throw new DomainException('المبلغ لا يكون صفراً');
@@ -75,8 +89,13 @@ class AgentTellerRequestService
                 'branch_id' => $staff->branch_id,
                 'staff_id' => $staff->id,
                 'shift_id' => $shift?->id,
-                'kind' => in_array(($data['kind'] ?? ''), ['over_limit', 'restricted_op', 'overtime'], true)
-                    ? $data['kind'] : 'over_limit',
+                'kind' => in_array(($data['kind'] ?? ''), [
+                    AgentTellerRequest::KIND_OVER_LIMIT,
+                    AgentTellerRequest::KIND_RESTRICTED_OP,
+                    AgentTellerRequest::KIND_OVERTIME,
+                    AgentTellerRequest::KIND_AFTER_HOURS_WITHDRAWAL,
+                ], true)
+                    ? $data['kind'] : AgentTellerRequest::KIND_OVER_LIMIT,
                 'operation' => in_array(($data['operation'] ?? ''), ['deposit', 'withdraw'], true)
                     ? $data['operation'] : 'deposit',
                 'amount' => $amount,
@@ -153,57 +172,69 @@ class AgentTellerRequestService
     /** قرارُ المدير — قبولاً أو رفضاً، وكلاهما بسبب. */
     public function decide(AgentStaff $manager, int $id, bool $approve, string $note = ''): AgentTellerRequest
     {
-        if ($manager->isTeller()) {
-            throw new DomainException('القرار من صلاحية المدير');
-        }
-
-        $row = AgentTellerRequest::find($id);
-
-        if (!$row || !in_array((int) $row->branch_id, $manager->visibleBranchIds(), true)) {
-            throw new DomainException('الطلب خارج نطاقك');
-        }
-
-        if ($row->status !== AgentTellerRequest::STATUS_PENDING) {
-            throw new DomainException('هذا الطلب حُسم بالفعل');
-        }
-
-        if ($row->expires_at && $row->expires_at->isPast()) {
-            $row->update(['status' => AgentTellerRequest::STATUS_EXPIRED]);
-            throw new DomainException('انقضت مهلة الطلب — يطلب الصرّاف من جديد');
-        }
-
-        // **لا يوافق أحدٌ على طلب نفسه.** ومديرُ فرعٍ يفتح ورديّةً لا
-        // يصير صرّافاً، لكنّ الحارس يُكتب لأنّ الأدوار تتغيّر.
-        if ((int) $row->staff_id === (int) $manager->id) {
-            throw new DomainException('لا تُوافق على طلبك — يقرّره غيرك');
+        if ($manager->isTeller() || $manager->isAuditor() || !$manager->is_active) {
+            throw new DomainException('القرار من صلاحية الإدارة المعتمدة فقط');
         }
 
         if (!$approve && mb_strlen(trim($note)) < 10) {
             throw new DomainException('سببُ الرفض إلزاميّ — عشرة أحرف فأكثر');
         }
 
-        $row->update([
-            'status' => $approve ? AgentTellerRequest::STATUS_APPROVED : AgentTellerRequest::STATUS_REJECTED,
-            'decided_by_staff_id' => $manager->id,
-            'decision_note' => $note ?: null,
-            'decided_at' => now(),
-        ]);
+        return DB::transaction(function () use ($manager, $id, $approve, $note) {
+            $row = AgentTellerRequest::whereKey($id)->lockForUpdate()->first();
 
-        $this->audit->record([
-            'actor_type' => 'agent',
-            'actor_user_id' => $manager->agent_user_id,
-            'action' => 'agent.teller_request.' . ($approve ? 'approve' : 'reject'),
-            'decision_code' => $approve ? 'APPROVED' : 'REJECTED',
-            'severity' => 'high',
-            'subject_type' => 'agent_teller_request',
-            'subject_id' => $row->request_number,
-            'metadata' => [
-                'manager_staff_id' => $manager->id, 'teller_staff_id' => $row->staff_id,
-                'amount' => (string) $row->amount, 'note' => $note,
-            ],
-        ]);
+            if (!$row || !in_array((int) $row->branch_id, $manager->visibleBranchIds(), true)) {
+                throw new DomainException('الطلب خارج نطاقك');
+            }
 
-        return $row->fresh();
+            if ($row->kind === AgentTellerRequest::KIND_AFTER_HOURS_WITHDRAWAL) {
+                $policy = app(\App\Services\Agent\BranchWorkingHoursPolicy::class)->assertExceptionPolicyApproved();
+
+                if (!in_array($manager->role, $policy['roles'], true) || !$manager->hasCapability($policy['capability'])) {
+                    throw new DomainException('لا تملك الدور أو الصلاحية المعتمدة لاعتماد استثناء ساعات العمل');
+                }
+            } elseif (!$manager->isHeadOffice() && !$manager->isBranchManager()) {
+                throw new DomainException('القرار من صلاحية المدير');
+            }
+
+            if ($row->status !== AgentTellerRequest::STATUS_PENDING) {
+                throw new DomainException('هذا الطلب حُسم بالفعل');
+            }
+
+            if ($row->expires_at && $row->expires_at->isPast()) {
+                $row->update(['status' => AgentTellerRequest::STATUS_EXPIRED]);
+                throw new DomainException('انقضت مهلة الطلب — يطلب الصرّاف من جديد');
+            }
+
+            // **لا يوافق أحدٌ على طلب نفسه.** ومديرُ فرعٍ يفتح ورديّةً لا
+            // يصير صرّافاً، لكنّ الحارس يُكتب لأنّ الأدوار تتغيّر.
+            if ((int) $row->staff_id === (int) $manager->id) {
+                throw new DomainException('لا تُوافق على طلبك — يقرّره غيرك');
+            }
+
+            $row->update([
+                'status' => $approve ? AgentTellerRequest::STATUS_APPROVED : AgentTellerRequest::STATUS_REJECTED,
+                'decided_by_staff_id' => $manager->id,
+                'decision_note' => $note ?: null,
+                'decided_at' => now(),
+            ]);
+
+            $this->audit->record([
+                'actor_type' => 'agent',
+                'actor_user_id' => $manager->agent_user_id,
+                'action' => 'agent.teller_request.' . ($approve ? 'approve' : 'reject'),
+                'decision_code' => $approve ? 'APPROVED' : 'REJECTED',
+                'severity' => 'high',
+                'subject_type' => 'agent_teller_request',
+                'subject_id' => $row->request_number,
+                'metadata' => [
+                    'manager_staff_id' => $manager->id, 'teller_staff_id' => $row->staff_id,
+                    'kind' => $row->kind, 'amount' => (string) $row->amount, 'note' => $note,
+                ],
+            ]);
+
+            return $row->fresh();
+        });
     }
 
     /**
@@ -212,24 +243,38 @@ class AgentTellerRequestService
      * **ومرّةً واحدة.** موافقةٌ تُستعمل مرّتين تعني أنّ مديراً وافق على
      * مليونٍ فمرّ مليونان باسمه.
      */
-    public function consumeFor(AgentStaff $staff, string $operation, string $amount): ?AgentTellerRequest
-    {
-        $row = AgentTellerRequest::where('staff_id', $staff->id)
-            ->where('operation', $operation)
-            ->where('status', AgentTellerRequest::STATUS_APPROVED)
-            ->whereNull('used_at')
-            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-            // موافقةٌ على مليونٍ تُغطّي ثمانمئة ألف، ولا تُغطّي مليوناً ومئة.
-            ->whereRaw('amount >= ?', [$amount])
-            ->orderBy('id')->first();
+    public function consumeFor(
+        AgentStaff $staff,
+        string $operation,
+        string $amount,
+        ?int $customerUserId = null,
+    ): ?AgentTellerRequest {
+        // AGT-GAP-008 — قفل ذري داخل معاملة، وربط بالنوع والعميل، ومقارنة رقمية بـ bccomp.
+        return DB::transaction(function () use ($staff, $operation, $amount, $customerUserId) {
+            $query = AgentTellerRequest::where('staff_id', $staff->id)
+                ->where('kind', AgentTellerRequest::KIND_OVER_LIMIT)
+                ->where('operation', $operation)
+                ->where('status', AgentTellerRequest::STATUS_APPROVED)
+                ->whereNull('used_at')
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()));
 
-        if (!$row) {
-            return null;
-        }
+            if ($customerUserId !== null) {
+                $query->where(fn ($q) => $q->where('customer_user_id', $customerUserId)->orWhereNull('customer_user_id'));
+            } else {
+                $query->whereNull('customer_user_id');
+            }
 
-        $row->update(['status' => AgentTellerRequest::STATUS_USED, 'used_at' => now()]);
+            $candidates = $query->orderBy('id')->lockForUpdate()->get();
+            $row = $candidates->first(fn (AgentTellerRequest $c) => bccomp((string) $c->amount, $amount, 4) >= 0);
 
-        return $row;
+            if (!$row) {
+                return null;
+            }
+
+            $row->update(['status' => AgentTellerRequest::STATUS_USED, 'used_at' => now()]);
+
+            return $row;
+        });
     }
 
     // ══════════════════════════════════════════════════════════════════

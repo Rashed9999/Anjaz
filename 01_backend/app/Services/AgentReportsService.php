@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\Agent\AgentLedgerSources;
 use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentCashMovement;
 use App\Models\Agent\AgentDailySettlement;
@@ -173,8 +174,8 @@ class AgentReportsService
         }
 
         $rows = DB::table('ledger_journal_entries')
-            ->whereIn('source_id', $refs)
-            ->whereIn('source_type', ['agent_deposit', 'agent_withdraw'])
+            ->whereIn('source_id', AgentLedgerSources::expandReferences($refs))
+            ->whereIn('source_type', AgentLedgerSources::ALL)
             ->pluck('metadata');
 
         $fees = '0.0000';

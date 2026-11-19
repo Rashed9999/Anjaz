@@ -100,7 +100,7 @@ class AgentNetworkDoorGuardTest extends TestCase
 
         $this->actingAs($this->operator(PlatformRoleService::ADMIN), 'user')
             ->putJson("/admin/amial/agents/{$this->agent->id}/limits",
-                ['daily_cash_in_limit' => '9000000'])
+                ['daily_cash_in_limit' => '9000000', 'reason' => 'رفع الحد التشغيلي للوكيل'])
             ->assertOk();
     }
 

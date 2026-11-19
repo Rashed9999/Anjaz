@@ -164,21 +164,22 @@ class ReconciliationService
 
         return DB::table('ledger_accounts as a')
             ->leftJoin('ledger_entry_lines as l', 'l.account_id', '=', 'a.id')
-            ->groupBy('a.id', 'a.account_code', 'a.normal_balance', 'a.current_balance')
-            ->selectRaw("a.id, a.account_code, a.normal_balance, a.current_balance,
+            ->groupBy('a.id', 'a.account_code', 'a.normal_balance', 'a.current_balance', 'a.currency')
+            ->selectRaw("a.id, a.account_code, a.normal_balance, a.current_balance, a.currency,
                 COALESCE(SUM(CASE WHEN l.direction = 'debit'  THEN l.amount ELSE 0 END), 0) AS d,
                 COALESCE(SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END), 0) AS c")
             ->get()
             ->map(function ($r) {
-                $d = number_format((float) $r->d, 4, '.', '');
-                $c = number_format((float) $r->c, 4, '.', '');
+                $d = bcadd((string) ($r->d ?? '0'), '0', 4);
+                $c = bcadd((string) ($r->c ?? '0'), '0', 4);
                 $computed = $r->normal_balance === 'debit'
                     ? bcsub($d, $c, 4) : bcsub($c, $d, 4);
-                $stored = number_format((float) $r->current_balance, 4, '.', '');
+                $stored = bcadd((string) ($r->current_balance ?? '0'), '0', 4);
 
                 return [
                     'account_id' => (int) $r->id,
                     'account_code' => (string) $r->account_code,
+                    'currency' => (string) ($r->currency ?: \App\Support\Money\Currencies::BASE),
                     'stored' => $stored,
                     'computed' => $computed,
                     'drift' => bcsub($computed, $stored, 4),

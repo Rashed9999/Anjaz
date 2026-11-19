@@ -39,6 +39,22 @@ class MerchantPayoutService
                 'request_note' => $note ? mb_substr(trim($note), 0, 500) : null,
             ]);
 
+            $merchantWallet = $this->ledger->getOrCreateUserWallet($merchant->id);
+            $holdAccount = $this->ledger->getOrCreateSystemAccount(
+                'MERCHANT_PAYOUT_HOLD', 'liability', 'حجز مستحقات التجار قيد الاعتماد والصرف', 'credit'
+            );
+            $this->ledger->post(
+                sourceType: 'merchant_payout_hold',
+                sourceId: $payout->payout_ulid,
+                description: 'حجز مستحقات التاجر عند طلب السحب',
+                lines: [
+                    ['account' => $merchantWallet->account_code, 'direction' => 'debit', 'amount' => $amount],
+                    ['account' => $holdAccount->account_code, 'direction' => 'credit', 'amount' => $amount],
+                ],
+                idempotencyKey: "merchant_payout_hold_{$payout->payout_ulid}",
+                createdByUserId: $merchant->id,
+            );
+
             $this->audit->record([
                 'actor_type' => 'merchant', 'actor_user_id' => $merchant->id,
                 'subject_type' => 'merchant_payout_request', 'subject_id' => $payout->payout_ulid,
@@ -87,8 +103,26 @@ class MerchantPayoutService
             if ($payout->status !== MerchantPayoutRequest::STATUS_PENDING) {
                 throw new RuntimeException('الطلب ليس بانتظار الاعتماد');
             }
-            $this->guard->releaseHoldUpTo($payout->merchant_user_id, (string) $payout->amount,
+            $released = $this->guard->releaseHoldUpTo($payout->merchant_user_id, (string) $payout->amount,
                 "merchant_payout_rejected:{$payout->payout_ulid}");
+            if (MoneyService::isPositive($released)
+                && \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', "merchant_payout_hold_{$payout->payout_ulid}")->exists()) {
+                $merchantWallet = $this->ledger->getOrCreateUserWallet($payout->merchant_user_id);
+                $holdAccount = $this->ledger->getOrCreateSystemAccount(
+                    'MERCHANT_PAYOUT_HOLD', 'liability', 'حجز مستحقات التجار قيد الاعتماد والصرف', 'credit'
+                );
+                $this->ledger->post(
+                    sourceType: 'merchant_payout_rejected',
+                    sourceId: $payout->payout_ulid,
+                    description: 'فكّ حجز مستحقات التاجر بعد رفض الطلب',
+                    lines: [
+                        ['account' => $holdAccount->account_code, 'direction' => 'debit', 'amount' => $released],
+                        ['account' => $merchantWallet->account_code, 'direction' => 'credit', 'amount' => $released],
+                    ],
+                    idempotencyKey: "merchant_payout_reject_{$payout->payout_ulid}",
+                    createdByUserId: $admin->id,
+                );
+            }
             $payout->update([
                 'status' => MerchantPayoutRequest::STATUS_REJECTED,
                 'rejected_by_id' => $admin->id, 'rejected_at' => now(),
@@ -115,13 +149,18 @@ class MerchantPayoutService
             $amount = (string) $payout->amount;
             $this->guard->captureHold($payout->merchant_user_id, $amount,
                 "merchant_payout:{$payout->payout_ulid}");
-            $merchantWallet = $this->ledger->getOrCreateUserWallet($payout->merchant_user_id);
+            $hasHoldEntry = \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', "merchant_payout_hold_{$payout->payout_ulid}")->exists();
+            $debitAccount = $hasHoldEntry
+                ? $this->ledger->getOrCreateSystemAccount(
+                    'MERCHANT_PAYOUT_HOLD', 'liability', 'حجز مستحقات التجار قيد الاعتماد والصرف', 'credit'
+                )
+                : $this->ledger->getOrCreateUserWallet($payout->merchant_user_id);
             $reserve = $this->ledger->getOrCreateSystemAccount('CASH_RESERVE', 'asset', 'احتياطي النقد', 'debit');
             $this->ledger->post(
                 sourceType: 'merchant_payout', sourceId: $payout->payout_ulid,
                 description: 'صرف مستحقات التاجر نقداً',
                 lines: [
-                    ['account' => $merchantWallet->account_code, 'direction' => 'debit', 'amount' => $amount],
+                    ['account' => $debitAccount->account_code, 'direction' => 'debit', 'amount' => $amount],
                     ['account' => $reserve->account_code, 'direction' => 'credit', 'amount' => $amount],
                 ],
                 idempotencyKey: "merchant_payout_{$payout->payout_ulid}",

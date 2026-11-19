@@ -81,10 +81,13 @@ class AgentStaffPortalTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        config()->set('amial.branch_working_hours.timezone', 'Asia/Riyadh');
+
         $b = AgentBranch::create([
             'agent_user_id' => $this->company->id, 'branch_user_id' => $bu->id,
             'name' => $name, 'code' => $code, 'city' => 'حضرموت',
             'phone' => $bu->phone, 'is_active' => true,
+            'working_hours' => array_fill_keys(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], ['open' => '00:00', 'close' => '23:59']),
         ]);
 
         $b->till()->create([
@@ -587,7 +590,9 @@ class AgentStaffPortalTest extends TestCase
      */
     public function an_agent_can_request_a_payout_and_the_amount_is_held(): void
     {
-        EMoney::where('user_id', $this->company->id)->update(['current_balance' => '900000']);
+        $admin0 = User::factory()->create(['type' => ADMIN_TYPE, 'role' => 'super_admin', 'phone' => '967770007711']);
+        $net = app(\App\Services\AgentNetworkService::class);
+        $net->approveSettlement($net->requestTopup($this->company, '900000', null, 'cash', 'شحن مبدئي للاختبار'), $admin0);
 
         $r = $this->actingAs($this->hq, 'agent_staff')
             ->postJson(route('agent.settlements.payout'),
@@ -682,7 +687,9 @@ class AgentStaffPortalTest extends TestCase
     /** @test */
     public function rejecting_a_payout_releases_the_hold(): void
     {
-        EMoney::where('user_id', $this->company->id)->update(['current_balance' => '900000']);
+        $admin0 = User::factory()->create(['type' => ADMIN_TYPE, 'role' => 'super_admin', 'phone' => '967770007712']);
+        $net = app(\App\Services\AgentNetworkService::class);
+        $net->approveSettlement($net->requestTopup($this->company, '900000', null, 'cash', 'شحن مبدئي للاختبار'), $admin0);
 
         $ulid = $this->actingAs($this->hq, 'agent_staff')
             ->postJson(route('agent.settlements.payout'), ['amount' => '300000'])

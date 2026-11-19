@@ -13,12 +13,14 @@ class AgentDailySettlement extends Model
 
     public const STATUS_DRAFT = 'draft';
     public const STATUS_SUBMITTED = 'submitted';
+    public const STATUS_PENDING_SECOND_APPROVAL = 'pending_second_approval';
     public const STATUS_ACCEPTED = 'accepted';
     public const STATUS_REJECTED = 'rejected';
 
     public const STATUS_LABELS = [
         self::STATUS_DRAFT => 'لم تُرفع بعد',
         self::STATUS_SUBMITTED => 'مرفوعة — بانتظار أميال',
+        self::STATUS_PENDING_SECOND_APPROVAL => 'موافقة أولى — بانتظار المعتمد الثاني',
         self::STATUS_ACCEPTED => 'قُبلت ونُفّذ التحويل',
         self::STATUS_REJECTED => 'مرفوضة',
     ];
@@ -55,8 +57,11 @@ class AgentDailySettlement extends Model
         'net_float' => 'decimal:4',
         'conversion_amount' => 'decimal:4',
         'submitted_at' => 'datetime',
+        'first_approved_at' => 'datetime',
+        'second_approved_at' => 'datetime',
         'decided_at' => 'datetime',
         'unlocked_at' => 'datetime',
+        'approvals_required' => 'integer',
         'detail' => 'array',
     ];
 }

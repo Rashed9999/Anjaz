@@ -45,8 +45,10 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff, 
         Route::post('/withdraw', [$counter, 'withdraw'])->name('withdraw');
 
         // السحب برمز العملية الذي يُصدره العميل من تطبيقه — لا برقم هاتفه.
-        Route::get('/withdrawal', [$counter, 'lookupWithdrawal'])->name('withdrawal.lookup');
-        Route::post('/withdrawal', [$counter, 'withdrawByCode'])->name('withdrawal.execute');
+        // AGT-GAP-007: POST للاستعلام حتى لا يظهر الرمز في URL، مع الإبقاء على GET مؤقتاً للتوافق.
+        Route::post('/withdrawal/lookup', [$counter, 'lookupWithdrawal'])->middleware('throttle:30,1')->name('withdrawal.lookup.post');
+        Route::get('/withdrawal', [$counter, 'lookupWithdrawal'])->middleware('throttle:30,1')->name('withdrawal.lookup');
+        Route::post('/withdrawal', [$counter, 'withdrawByCode'])->middleware('throttle:30,1')->name('withdrawal.execute');
     });
 
     // ── الموظّفون والورديّات ──────────────────────────────────────────
@@ -56,6 +58,7 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff, 
         Route::post('/{id}/active', [$staff, 'setActive'])->where('id', '[0-9]+')->name('active');
         Route::post('/{id}/password', [$staff, 'resetPassword'])->where('id', '[0-9]+')->name('password');
         Route::post('/{id}/limits', [$staff, 'updateLimits'])->where('id', '[0-9]+')->name('limits');
+        Route::post('/{id}/transfer', [$staff, 'transfer'])->where('id', '[0-9]+')->middleware('amial.idempotency')->name('transfer');
         Route::get('/shifts', [$staff, 'shifts'])->name('shifts');
         Route::post('/shifts/{id}/close', [$staff, 'closeShift'])->where('id', '[0-9]+')->name('shifts.close');
 
@@ -142,10 +145,11 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff, 
     Route::post('/settlements/payout', [$c, 'requestPayout'])->middleware('amial.idempotency')->name('settlements.payout');
 
     Route::post('/branches', [$c, 'createBranch'])->name('branch.create');
+    Route::post('/branches/{id}/update', [$c, 'updateBranch'])->where('id', '[0-9]+')->name('branch.update');
     Route::post('/branches/{id}/fund', [$c, 'fundBranch'])->where('id', '[0-9]+')->middleware('amial.idempotency')->name('branch.fund');
     Route::post('/branches/{id}/collect', [$c, 'collectBranch'])->where('id', '[0-9]+')->middleware('amial.idempotency')->name('branch.collect');
     Route::get('/branch-settlement', [$c, 'branchSettlement'])->name('branch.settlement');
     Route::post('/branches/{id}/cash', [$c, 'moveCash'])->where('id', '[0-9]+')
         ->middleware('amial.idempotency')->name('branch.cash');
-    Route::post('/branches/{id}/count', [$c, 'countTill'])->where('id', '[0-9]+')->name('branch.count');
+    Route::post('/branches/{id}/count', [$c, 'countTill'])->where('id', '[0-9]+')->middleware('amial.idempotency')->name('branch.count');
 });

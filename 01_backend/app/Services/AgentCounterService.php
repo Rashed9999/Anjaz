@@ -2,12 +2,19 @@
 
 namespace App\Services;
 
+use App\Support\Agent\AgentCompanyStatus;
 use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentShift;
+use App\Models\Agent\AgentStaff;
 use App\Models\EMoney;
+use App\Models\Ledger\LedgerJournalEntry;
+use App\Services\Agent\BranchWorkingHoursPolicy;
+use App\Services\AgentWorkTimeService;
 use App\Services\ReceiptService;
 use App\Services\CustomerTurnoverService;
 use App\Services\KycTierService;
+use App\Models\AgentProfile;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Traits\PostsToLedger;
 use DomainException;
@@ -123,9 +130,10 @@ class AgentCounterService
      */
     public function deposit(
         AgentBranch $branch, User $customer, string $amount, User $actor,
-        ?string $note = null, ?AgentShift $shift = null
+        ?string $note = null, ?AgentShift $shift = null, ?string $idempotencyKey = null
     ): array {
         $this->assertOperable($branch, $customer, $amount);
+        $this->assertShiftStaffControls($branch, $shift, 'deposit', $amount, (int) $customer->id, false);
 
         $q = $this->quote('AGENT_DEPOSIT', $amount, (string) $branch->account?->zone_code);
 
@@ -140,30 +148,52 @@ class AgentCounterService
             throw new DomainException('المبلغ لا يغطّي رسم العملية');
         }
 
-        // حدودُ مستوى العميل تُفرض عند المال لا عند الشاشة: كان الشبّاك يودع ما شاء في محفظة
-        // مستوى يحدّه بـ٢٥٠ ألفاً، فالتحويلُ والتطبيقُ يمنعان والوكيلُ لا. فحصٌ مسبق هنا (رسالةٌ مبكرة)،
-        // ثم فحصٌ وتسجيلٌ ذرّيّان داخل القفل أدناه.
+        // حدودُ مستوى العميل تُفرض عند المال لا عند الشاشة.
         $this->enforceCustomerTier($customer, $net, 'deposit');
+
+        // AGT-GAP-011 — فرض حدود شركة الصرافة (AgentProfile) عند وجود ملف لها.
+        if (AgentProfile::where('user_id', $branch->agent_user_id)->exists()) {
+            try {
+                app(AgentNetworkService::class)->assertCashInAllowed((int) $branch->agent_user_id, $amount);
+            } catch (\RuntimeException $e) {
+                throw new DomainException($e->getMessage(), 0, $e);
+            }
+        }
 
         $branchBalance = (string) (EMoney::where('user_id', $branch->branch_user_id)
             ->value('current_balance') ?? '0');
 
-        // القيد على **الصافي** لا على الإجماليّ: الفرع يمنح ما يصل العميل.
-        if (bccomp($branchBalance, $net, 4) < 0) {
+        // AGT-GAP-003 — القيد على **كلّ ما يخرج من محفظة الفرع**: الصافي الذي يصل العميل
+        // **و**حصّةُ المنصّة التي تُخصَم منه في `settlePlatformShare`. فحصُ الصافي وحدَه
+        // كان يُمرّر عمليّةً تُهبط رصيدَ الفرع تحت الصفر.
+        $requiredFloat = bcadd($net, (string) ($q['platform'] ?? '0'), 4);
+
+        if (bccomp($branchBalance, $requiredFloat, 4) < 0) {
             throw new DomainException(sprintf(
                 'رصيد الفرع الإلكترونيّ %s ولا يكفي لإيداع %s — اطلب شحن رصيد من الوكيل الأمّ',
-                $branchBalance, $net,
+                $branchBalance, $requiredFloat,
             ));
         }
 
         $reference = 'DEP-' . strtoupper(Str::random(10));
+        $ledgerIdemKey = ($idempotencyKey !== null && trim($idempotencyKey) !== '')
+            ? 'agent_deposit_idem_' . trim($idempotencyKey)
+            : null;
 
-        return DB::transaction(function () use ($branch, $customer, $amount, $actor, $note, $reference, $q, $net, $shift) {
+        return DB::transaction(function () use ($branch, $customer, $amount, $actor, $note, $reference, $q, $net, $shift, $ledgerIdemKey) {
             // القفل على الصفّين معاً وبترتيبٍ ثابت (الأصغر أوّلاً): ترتيبان
             // مختلفان في مسارين متزامنين يُنتجان جمود قفل.
             $ids = [$branch->branch_user_id, $customer->id];
             sort($ids);
             EMoney::whereIn('user_id', $ids)->lockForUpdate()->get();
+
+            if ($shift) {
+                $shift = AgentShift::where('id', $shift->id)->lockForUpdate()->first();
+            }
+
+            if ($ledgerIdemKey !== null && LedgerJournalEntry::where('idempotency_key', $ledgerIdemKey)->exists()) {
+                throw new DomainException('تم تنفيذ عمليّة الإيداع بهذا المفتاح مسبقاً — منع تكرار القيد');
+            }
 
             // الحدّ والعدّاد داخل القفل: شبّاكان متزامنان لا يتجاوزان معاً ما لا يتجاوزه أحدهما.
             $this->enforceCustomerTier($customer, $net, 'deposit', $reference);
@@ -174,15 +204,42 @@ class AgentCounterService
             $lockedBranch = (string) (EMoney::where('user_id', $branch->branch_user_id)
                 ->value('current_balance') ?? '0');
 
-            if (bccomp($lockedBranch, $net, 4) < 0) {
+            $requiredFloat = bcadd($net, (string) ($q['platform'] ?? '0'), 4);
+
+            if (bccomp($lockedBranch, $requiredFloat, 4) < 0) {
                 throw new DomainException(sprintf(
                     'رصيد الفرع الإلكترونيّ %s ولا يكفي لإيداع %s — اطلب شحن رصيد من الوكيل الأمّ',
-                    $lockedBranch, $net,
+                    $lockedBranch, $requiredFloat,
                 ));
+            }
+
+            // إعادة فحص حدود الشركة داخل القفل لمنع تجاوز الحد اليومي بالتوازي.
+            if (AgentProfile::where('user_id', $branch->agent_user_id)->exists()) {
+                try {
+                    app(AgentNetworkService::class)->assertCashInAllowed((int) $branch->agent_user_id, $amount);
+                } catch (\RuntimeException $e) {
+                    throw new DomainException($e->getMessage(), 0, $e);
+                }
             }
 
             EMoney::where('user_id', $branch->branch_user_id)->decrement('current_balance', $net);
             EMoney::where('user_id', $customer->id)->increment('current_balance', $net);
+
+            // AGT-GAP-011 — تسجيل العملية في transactions وagent_float_logs لتظهر في dailyStats.
+            Transaction::create([
+                'transaction_id' => $reference,
+                'user_id' => (int) $branch->branch_user_id,
+                'transaction_type' => 'cash_in',
+                'debit' => $net,
+                'credit' => '0.0000',
+                'charge' => $q['fee'],
+                'balance' => bcsub($lockedBranch, $net, 4),
+                'amount' => $amount,
+                'from_user_id' => (int) $branch->branch_user_id,
+                'to_user_id' => (int) $customer->id,
+                'zone_code' => (string) ($branch->account?->zone_code ?? ''),
+            ]);
+            app(AgentNetworkService::class)->recordFloatMovement((int) $branch->agent_user_id, 'cash_in', $amount);
 
             // النقد الداخل هو **الإجماليّ**: العميل سلّم `amount` ورقاً.
             // وتسجيلُ الصافي يجعل الجرد ينقص بمقدار الرسوم كلّ يوم.
@@ -210,13 +267,22 @@ class AgentCounterService
                 sourceType: 'agent_deposit',
                 sourceId: $reference,
                 description: "إيداع نقديّ عبر فرع {$branch->name}",
+                idempotencyKey: $ledgerIdemKey ?? ('agent_deposit_' . $reference),
                 metadata: [
+                    'fee_code' => 'AGENT_DEPOSIT',
                     'branch_id' => $branch->id, 'actor_id' => $actor->id,
+                    'shift_id' => $shift?->id, 'staff_id' => $shift?->staff_id,
                     'gross' => $amount, 'fee' => $q['fee'], 'commission' => $q['commission'],
                 ],
             );
 
-            $this->settlePlatformShare($branch, $q['platform'], $reference, 'agent_deposit_fee');
+            $this->settlePlatformShare(
+                $branch,
+                $q['platform'],
+                $reference,
+                'agent_deposit_fee',
+                $ledgerIdemKey ? ($ledgerIdemKey . '_fee') : null,
+            );
 
             $this->audit->record([
                 'actor_type' => 'agent',
@@ -319,9 +385,10 @@ class AgentCounterService
      */
     public function withdraw(
         AgentBranch $branch, User $customer, string $amount, User $actor,
-        ?string $note = null, ?AgentShift $shift = null
+        ?string $note = null, ?AgentShift $shift = null, ?string $idempotencyKey = null
     ): array {
         $this->assertOperable($branch, $customer, $amount);
+        $this->assertShiftStaffControls($branch, $shift, 'withdraw', $amount, (int) $customer->id, false);
 
         $q = $this->quote('AGENT_WITHDRAW', $amount, (string) $branch->account?->zone_code);
 
@@ -354,11 +421,24 @@ class AgentCounterService
         $this->assertCashAvailable($branch, $shift, $amount);
 
         $reference = 'WDR-' . strtoupper(Str::random(10));
+        $ledgerIdemKey = ($idempotencyKey !== null && trim($idempotencyKey) !== '')
+            ? 'agent_withdraw_idem_' . trim($idempotencyKey)
+            : null;
 
-        return DB::transaction(function () use ($branch, $customer, $amount, $actor, $note, $reference, $q, $total, $shift) {
+        return DB::transaction(function () use ($branch, $customer, $amount, $actor, $note, $reference, $q, $total, $shift, $ledgerIdemKey) {
             $ids = [$branch->branch_user_id, $customer->id];
             sort($ids);
             EMoney::whereIn('user_id', $ids)->lockForUpdate()->get();
+
+            if ($shift) {
+                $shift = AgentShift::where('id', $shift->id)->lockForUpdate()->first();
+            }
+
+            if ($ledgerIdemKey !== null && LedgerJournalEntry::where('idempotency_key', $ledgerIdemKey)->exists()) {
+                throw new DomainException('تم تنفيذ عمليّة السحب بهذا المفتاح مسبقاً — منع تكرار القيد');
+            }
+
+            $this->assertShiftStaffControls($branch, $shift, 'withdraw', $amount, (int) $customer->id, true);
 
             $this->enforceCustomerTier($customer, $amount, 'withdraw', $reference);
 
@@ -389,6 +469,20 @@ class AgentCounterService
             EMoney::where('user_id', $customer->id)->decrement('current_balance', $total);
             EMoney::where('user_id', $branch->branch_user_id)->increment('current_balance', $total);
 
+            Transaction::create([
+                'transaction_id' => $reference,
+                'user_id' => (int) $customer->id,
+                'transaction_type' => 'agent_withdraw',
+                'debit' => $total,
+                'credit' => '0.0000',
+                'charge' => $q['fee'],
+                'balance' => bcsub($lockedBalance, $total, 4),
+                'amount' => $amount,
+                'from_user_id' => (int) $customer->id,
+                'to_user_id' => (int) $branch->branch_user_id,
+                'zone_code' => (string) ($branch->account?->zone_code ?? ''),
+            ]);
+
             // النقد الخارج هو المطلوب وحده — الرسم لم يخرج من الدرج.
             if ($shift) {
                 $this->shifts->recordDrawer(
@@ -402,20 +496,32 @@ class AgentCounterService
                 );
             }
 
+            $agentCredit = bcadd($amount, $q['commission'], 4);
+
             $this->ledgerTransfer(
                 fromUserId: (int) $customer->id,
                 toUserId: (int) $branch->branch_user_id,
                 amount: $total,
                 sourceType: 'agent_withdraw',
                 sourceId: $reference,
-                description: "سحب نقديّ من فرع {$branch->name}",
+                description: "سحب نقديّ مباشر من فرع {$branch->name}",
+                idempotencyKey: $ledgerIdemKey ?? ('agent_withdraw_' . $reference),
                 metadata: [
+                    'fee_code' => 'AGENT_WITHDRAW',
                     'branch_id' => $branch->id, 'actor_id' => $actor->id,
+                    'shift_id' => $shift?->id, 'staff_id' => $shift?->staff_id,
                     'cash_paid' => $amount, 'fee' => $q['fee'], 'commission' => $q['commission'],
+                    'agent_credit' => $agentCredit,
                 ],
             );
 
-            $this->settlePlatformShare($branch, $q['platform'], $reference, 'agent_withdraw_fee');
+            $this->settlePlatformShare(
+                $branch,
+                $q['platform'],
+                $reference,
+                'agent_withdraw_fee',
+                $ledgerIdemKey ? ($ledgerIdemKey . '_fee') : null,
+            );
 
             $this->audit->record([
                 'actor_type' => 'agent',
@@ -484,7 +590,7 @@ class AgentCounterService
      * شيئاً ويُثقلان الدفتر.
      */
     private function settlePlatformShare(
-        AgentBranch $branch, string $platformShare, string $reference, string $sourceType
+        AgentBranch $branch, string $platformShare, string $reference, string $sourceType, ?string $idempotencyKey = null
     ): void {
         if (bccomp($platformShare, '0', 4) <= 0) {
             return;
@@ -507,8 +613,48 @@ class AgentCounterService
                 ['account' => $branchWallet->account_code, 'direction' => 'debit', 'amount' => $platformShare],
                 ['account' => $feeAccount->account_code, 'direction' => 'credit', 'amount' => $platformShare],
             ],
-            idempotencyKey: $sourceType . '_' . $reference,
+            idempotencyKey: $idempotencyKey ?? ($sourceType . '_' . $reference),
         );
+    }
+
+    /**
+     * توحيد ضوابط الصلاحيات والاستراحة وساعات العمل عند تنفيذ العملية بورديّة موظّف.
+     */
+    private function assertShiftStaffControls(
+        AgentBranch $branch,
+        ?AgentShift $shift,
+        string $op,
+        string $amount,
+        int $customerUserId,
+        bool $consumeHoursException,
+    ): void {
+        if (!$shift || !$shift->staff_id) {
+            return;
+        }
+
+        $staff = AgentStaff::find($shift->staff_id);
+
+        if (!$staff || !$staff->is_active) {
+            throw new DomainException('حساب الموظّف غير نشط — لا تُنفَّذ عمليّات');
+        }
+
+        if (app(AgentWorkTimeService::class)->isOnBreak($staff, (int) $shift->id)) {
+            throw new DomainException('الموظّف في استراحة — أنهِ الاستراحة قبل تنفيذ عمليّة');
+        }
+
+        if (!$staff->hasCapability($op)) {
+            throw new DomainException('حساب الموظّف لا يملك الصلاحية المطلوبة');
+        }
+
+        if ($op === 'withdraw') {
+            app(BranchWorkingHoursPolicy::class)->checkOrConsumeForWithdrawal(
+                $branch,
+                $staff,
+                $amount,
+                $customerUserId,
+                consume: $consumeHoursException,
+            );
+        }
     }
 
     // ── الفحوص المشتركة ─────────────────────────────────────────────────
@@ -564,6 +710,10 @@ class AgentCounterService
         if (!$branch->is_active) {
             throw new DomainException('الفرع موقوف — لا تُنفَّذ عليه عمليات');
         }
+
+        // AGT-GAP-006 — إيقاف الشركة الأم أو الفرع يمنع تنفيذ الإيداع والسحب فوراً.
+        AgentCompanyStatus::assertOperable((int) $branch->agent_user_id);
+        AgentCompanyStatus::assertOperable((int) $branch->branch_user_id);
 
         // حالةُ العميل تُفحص هنا لا في الواجهة: موظّف الشبّاك قد لا يقرأ
         // التحذير، والمنع يجب أن يقع عند المال لا عند الشاشة.

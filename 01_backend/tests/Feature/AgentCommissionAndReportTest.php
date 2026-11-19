@@ -117,8 +117,8 @@ class AgentCommissionAndReportTest extends TestCase
     private function seedFee(string $code): void
     {
         FeeScheme::create([
-            'code' => $code,
-            'label' => 'رسم ' . $code,
+            'code' => strtoupper($code),
+            'label' => 'رسم ' . strtoupper($code),
             'fee_type' => 'percent',
             'percent_rate' => '1.00',
             'fixed_amount' => '0',
@@ -235,7 +235,7 @@ class AgentCommissionAndReportTest extends TestCase
     public function the_two_shares_always_sum_to_exactly_the_fee(): void
     {
         FeeScheme::create([
-            'code' => 'agent_deposit', 'label' => 'نسبة مبالَغ فيها',
+            'code' => 'AGENT_DEPOSIT', 'label' => 'نسبة مبالَغ فيها',
             'fee_type' => 'percent', 'percent_rate' => '1.00', 'fixed_amount' => '0',
             'agent_commission_percent' => '200', 'agent_commission_fixed' => '0',
             'bearer' => 'sender', 'zone_code' => 'SOUTH', 'applies_to' => 'agent',
@@ -359,6 +359,21 @@ class AgentCommissionAndReportTest extends TestCase
         app(AgentReportService::class)->setWorkingHours($this->branch, [
             'sun' => ['open' => '18:00', 'close' => '09:00'],
         ]);
+    }
+
+    public function test_week_schedule_preserves_friday_and_explicit_overnight_close_boundary(): void
+    {
+        $branch = app(AgentReportService::class)->setWorkingHours($this->branch, [
+            'timezone' => 'Asia/Aden',
+            'fri' => ['open' => '20:00', 'close' => '02:00', 'overnight' => true],
+            'sat' => ['open' => '09:00', 'close' => '12:00'],
+        ]);
+        $policy = app(\App\Services\Agent\BranchWorkingHoursPolicy::class);
+        foreach (['2026-11-20 19:59' => false, '2026-11-20 20:00' => true,
+            '2026-11-21 01:59' => true, '2026-11-21 02:00' => false,
+            '2026-11-21 09:00' => true, '2026-11-22 09:00' => false] as $time => $expected) {
+            $this->assertSame($expected, $policy->evaluateWindow($branch, \Carbon\Carbon::parse($time, 'Asia/Aden'))['open'], $time);
+        }
     }
 
     /** @test */

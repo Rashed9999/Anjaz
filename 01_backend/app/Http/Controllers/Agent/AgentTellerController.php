@@ -71,11 +71,14 @@ class AgentTellerController extends Controller
 
     public function submitRequest(Request $request): JsonResponse
     {
+        if ($this->actor($request)->isAuditor()) {
+            return $this->error('حساب المدقق للقراءة فقط', 403);
+        }
         $request->validate([
             'amount' => 'nullable|numeric|min:0',
             'reason' => 'required|string|max:500',
             'operation' => 'nullable|string|in:deposit,withdraw',
-            'kind' => 'nullable|string|in:over_limit,restricted_op,overtime',
+            'kind' => 'nullable|string|in:over_limit,restricted_op,overtime,after_hours_withdrawal',
             'customer_id' => 'nullable|integer',
         ]);
 
@@ -104,6 +107,10 @@ class AgentTellerController extends Controller
 
     public function decideRequest(Request $request, int $id): JsonResponse
     {
+        $actor = $this->actor($request);
+        if ($actor->isTeller() || $actor->isAuditor()) {
+            return $this->error('القرار من صلاحية الإدارة المختصّة', 403);
+        }
         $request->validate([
             'approve' => 'required|boolean',
             'note' => 'nullable|string|max:500',
@@ -156,6 +163,10 @@ class AgentTellerController extends Controller
 
     public function decideEmergency(Request $request, int $id): JsonResponse
     {
+        $actor = $this->actor($request);
+        if (!$actor->isHeadOffice() && !$actor->isBranchManager()) {
+            return $this->error('إدارة بلاغات الطوارئ من صلاحية المدير', 403);
+        }
         $request->validate([
             'status' => 'required|string|in:acknowledged,resolved,false_alarm',
             'note' => 'nullable|string|max:1000',

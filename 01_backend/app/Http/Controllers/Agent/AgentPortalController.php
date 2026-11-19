@@ -12,11 +12,12 @@ use App\Models\User;
 use App\Services\AgentBranchService;
 use App\Services\AgentNetworkService;
 use App\Services\AgentDailySettlementService;
-use App\Services\AgentCounterService;
 use App\Services\AgentReportService;
 use App\Services\AgentReportsService;
 use App\Services\AgentStaffService;
 use App\Services\AgentTillService;
+use App\Http\Middleware\AgentPortalMiddleware;
+use App\Support\Agent\AgentCompanyStatus;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,7 +40,6 @@ class AgentPortalController extends Controller
     public function __construct(
         private readonly AgentBranchService $branches,
         private readonly AgentTillService $till,
-        private readonly AgentCounterService $counter,
         private readonly AgentReportService $reports,
         private readonly \App\Services\AuditService $audit,
     ) {
@@ -93,16 +93,20 @@ class AgentPortalController extends Controller
                 return back()->withErrors(['username' => 'الحساب معطَّل — راجع إدارة شركتك'])->withInput();
             }
 
-            // شركةٌ أُوقفت لا يعمل موظّفوها — وإلّا بقي الشبّاك يخدم بعد
-            // إيقاف الشركة نفسها.
-            $company = User::find($staff->agent_user_id);
-            if (!$company || (int) $company->is_active !== 1) {
-                return back()->withErrors(['username' => 'حساب الشركة موقوف — راجع إدارة أميال'])->withInput();
+            // AGT-GAP-006 — فحص موحد لحالة الشركة (is_active وis_temp_blocked وagent_profiles.status).
+            $companyStatus = AgentCompanyStatus::inspect((int) $staff->agent_user_id);
+            if (!$companyStatus['operable']) {
+                return back()->withErrors(['username' => $companyStatus['reason']])->withInput();
             }
 
             Auth::guard('user')->logout();
             Auth::guard('agent_staff')->login($staff, (bool) $request->boolean('remember'));
             $request->session()->regenerate();
+            // AGT-GAP-013 — حفظ بصمة كلمة المرور لإبطال الجلسات فوراً عند تصفيرها.
+            $request->session()->put(
+                AgentPortalMiddleware::SESSION_PASSWORD_FP_KEY,
+                AgentPortalMiddleware::passwordFingerprint($staff),
+            );
             RateLimiter::clear($throttleKey);
 
             $staff->forceFill(['last_login_at' => now()])->save();
@@ -122,8 +126,9 @@ class AgentPortalController extends Controller
             return back()->withErrors(['username' => 'هذه البوّابة للوكلاء وموظّفيهم'])->withInput();
         }
 
-        if ((int) ($user->is_temp_blocked ?? 0) === 1) {
-            return back()->withErrors(['username' => 'الحساب موقوف — راجع إدارة أميال'])->withInput();
+        $userStatus = AgentCompanyStatus::inspect((int) $user->id);
+        if (!$userStatus['operable']) {
+            return back()->withErrors(['username' => $userStatus['reason']])->withInput();
         }
 
         // **لا تُفتح جلسةٌ على حارس `user` من هذه البوّابة أبداً.**
@@ -143,9 +148,18 @@ class AgentPortalController extends Controller
         // سرّ حساب الشركة، ولا تُخزَّن مرّتين.
         $hq = app(AgentStaffService::class)->ensurePortalAccount($user);
 
+        $hqStatus = AgentCompanyStatus::inspect((int) $hq->agent_user_id);
+        if (!$hqStatus['operable']) {
+            return back()->withErrors(['username' => $hqStatus['reason']])->withInput();
+        }
+
         Auth::guard('user')->logout();
         Auth::guard('agent_staff')->login($hq, (bool) $request->boolean('remember'));
         $request->session()->regenerate();
+        $request->session()->put(
+            AgentPortalMiddleware::SESSION_PASSWORD_FP_KEY,
+            AgentPortalMiddleware::passwordFingerprint($hq),
+        );
         RateLimiter::clear($throttleKey);
 
         $hq->forceFill(['last_login_at' => now()])->save();
@@ -483,48 +497,6 @@ class AgentPortalController extends Controller
         ]);
     }
 
-    public function deposit(Request $request, int $id): JsonResponse
-    {
-        return $this->counterOp($request, $id, 'deposit');
-    }
-
-    public function withdraw(Request $request, int $id): JsonResponse
-    {
-        return $this->counterOp($request, $id, 'withdraw');
-    }
-
-    private function counterOp(Request $request, int $id, string $op): JsonResponse
-    {
-        $request->validate([
-            'customer_phone' => 'required|string',
-            'amount' => 'required|numeric|min:1',
-            'note' => 'sometimes|nullable|string|max:500',
-        ]);
-
-        $branch = $this->authorizedBranch($request, $id);
-
-        $phone = preg_replace('/\D+/', '', (string) $request->input('customer_phone'));
-        $customer = User::where('phone', $phone)->first();
-
-        if (!$customer) {
-            return $this->error('لا عميل بهذا الرقم', 404);
-        }
-
-        try {
-            $out = $op === 'deposit'
-                ? $this->counter->deposit($branch, $customer, (string) $request->input('amount'),
-                    $this->companyUser($request), $request->input('note'))
-                : $this->counter->withdraw($branch, $customer, (string) $request->input('amount'),
-                    $this->companyUser($request), $request->input('note'));
-        } catch (DomainException $e) {
-            return $this->error($e->getMessage(), 422);
-        }
-
-        return $this->ok($out, $op === 'deposit'
-            ? "تمّ الإيداع — المرجع {$out['reference']}"
-            : "تمّ السحب — سلّم العميل {$out['amount']} نقداً. المرجع {$out['reference']}");
-    }
-
     // ── العمولات والتسويات والتقارير (الفصل ٠٣) ─────────────────────────
 
     public function commissions(Request $request, int $id): JsonResponse
@@ -600,6 +572,11 @@ class AgentPortalController extends Controller
 
     public function setWorkingHours(Request $request, int $id): JsonResponse
     {
+        $staff = $request->attributes->get('agent_staff');
+        if ($staff instanceof AgentStaff && ($staff->isTeller() || $staff->isAuditor() || $staff->isTreasuryOfficer())) {
+            return $this->error('ضبط ساعات العمل من صلاحية الإدارة', 403);
+        }
+
         $branch = $this->authorizedBranch($request, $id);
 
         try {
@@ -665,7 +642,8 @@ class AgentPortalController extends Controller
             'me' => $staff instanceof AgentStaff ? [
                 'name' => $staff->name, 'username' => $staff->username,
                 'role_label' => $staff->roleLabel(),
-                'can_manage' => !$staff->isTeller(),
+                'can_manage' => $staff->isHeadOffice() || $staff->isBranchManager(),
+                'can_treasury' => $staff->isHeadOffice() || $staff->isBranchManager() || $staff->isTreasuryOfficer(),
             ] : null,
             'branches' => $branches,
             // **وضعيّة التشفير تُقاس من الطلب لا من متغيّر بيئة.**
@@ -699,8 +677,8 @@ class AgentPortalController extends Controller
 
         $staff = $request->attributes->get('agent_staff');
 
-        if ($staff instanceof AgentStaff && $staff->isTeller()) {
-            return $this->error('ضبطُ حدود الخزنة من صلاحية الإدارة', 403);
+        if ($staff instanceof AgentStaff && ($staff->isTeller() || $staff->isAuditor())) {
+            return $this->error('ضبطُ حدود الخزنة من صلاحية الإدارة أو مسؤول الخزنة', 403);
         }
 
         $branch = $this->authorizedBranch($request, $id);
@@ -745,7 +723,7 @@ class AgentPortalController extends Controller
 
         $staff = $request->attributes->get('agent_staff');
 
-        if ($staff instanceof AgentStaff && $staff->isTeller()) {
+        if ($staff instanceof AgentStaff && ($staff->isTeller() || $staff->isAuditor() || $staff->isTreasuryOfficer())) {
             return $this->error('التعاميم من صلاحية الإدارة', 403);
         }
 
@@ -776,7 +754,7 @@ class AgentPortalController extends Controller
     {
         $staff = $request->attributes->get('agent_staff');
 
-        if ($staff instanceof AgentStaff && $staff->isTeller()) {
+        if ($staff instanceof AgentStaff && ($staff->isTeller() || $staff->isAuditor() || $staff->isTreasuryOfficer())) {
             return $this->error('التعاميم من صلاحية الإدارة', 403);
         }
 
@@ -827,6 +805,14 @@ class AgentPortalController extends Controller
             'password' => \Illuminate\Support\Facades\Hash::make((string) $request->input('password')),
         ])->save();
 
+        // تُحدّث بصمة الجلسة الحالية فقط حتى تبقى نشطة، بينما تسقط أي جلسة مسروقة/أخرى فوراً.
+        if ($request->hasSession() && $request->session()->has(AgentPortalMiddleware::SESSION_PASSWORD_FP_KEY)) {
+            $request->session()->put(
+                AgentPortalMiddleware::SESSION_PASSWORD_FP_KEY,
+                AgentPortalMiddleware::passwordFingerprint($staff),
+            );
+        }
+
         $this->audit->record([
             'actor_type' => 'agent',
             'actor_user_id' => $staff->agent_user_id,
@@ -875,6 +861,31 @@ class AgentPortalController extends Controller
      * يسحبه مديرُ فرعٍ إلى فرعه بنفسه. وكان يستطيع — لأنّ فرعه ضمن فروعه
      * المسموحة، والخدمة تفحص أبوّة الفرع لا رتبةَ الطالب.
      */
+    /** AGT-GAP-015 — تعديل بيانات الفرع من الإدارة العامّة. */
+    public function updateBranch(Request $request, int $id): JsonResponse
+    {
+        if ($guard = $this->headOfficeOnly($request, 'تعديل الفروع')) {
+            return $guard;
+        }
+
+        $request->validate([
+            'name' => 'required|string|max:120',
+            'phone' => 'required|string',
+            'city' => 'sometimes|nullable|string|max:80',
+            'address' => 'sometimes|nullable|string|max:500',
+        ]);
+
+        $branch = $this->authorizedBranch($request, $id);
+
+        try {
+            $updated = $this->branches->updateBranch($branch, $this->companyUser($request), $request->all());
+        } catch (DomainException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        return $this->ok(['branch' => ['id' => $updated->id, 'name' => $updated->name]], 'حُدّثت بيانات الفرع');
+    }
+
     public function fundBranch(Request $request, int $id): JsonResponse
     {
         if ($guard = $this->headOfficeOnly($request, 'شحن رصيد الفروع')) {
@@ -1070,6 +1081,11 @@ class AgentPortalController extends Controller
             'note' => 'required|string|min:5|max:500',
         ]);
 
+        $staff = $request->attributes->get('agent_staff');
+        if ($staff instanceof AgentStaff && ($staff->isTeller() || $staff->isAuditor())) {
+            return $this->error('توريد الخزنة من صلاحية الإدارة أو مسؤول الخزنة', 403);
+        }
+
         $branch = $this->authorizedBranch($request, $id);
 
         try {
@@ -1086,6 +1102,11 @@ class AgentPortalController extends Controller
 
     public function countTill(Request $request, int $id): JsonResponse
     {
+        $staff = $request->attributes->get('agent_staff');
+        if ($staff instanceof AgentStaff && ($staff->isTeller() || $staff->isAuditor())) {
+            return $this->error('جرد الخزنة من صلاحية الإدارة أو مسؤول الخزنة', 403);
+        }
+
         $request->validate([
             'counted_amount' => 'required|numeric|min:0',
             'note' => 'required|string|min:10|max:500',

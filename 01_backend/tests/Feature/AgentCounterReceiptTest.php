@@ -69,10 +69,13 @@ class AgentCounterReceiptTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        config()->set('amial.branch_working_hours.timezone', 'Asia/Riyadh');
+
         $this->branch = AgentBranch::create([
             'agent_user_id' => $this->company->id, 'branch_user_id' => $bu->id,
             'name' => 'فرع المكلا', 'code' => 'MKL', 'city' => 'حضرموت',
             'phone' => $bu->phone, 'is_active' => true,
+            'working_hours' => array_fill_keys(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], ['open' => '00:00', 'close' => '23:59']),
         ]);
         $this->branch->till()->create([
             'cash_on_hand' => '3000000', 'max_cash_on_hand' => '9000000', 'min_cash_alert' => '100000',

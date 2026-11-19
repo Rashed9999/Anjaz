@@ -54,11 +54,14 @@ class AmialLedgerBackfill extends Command
         $failed = 0;
         $totalOpened = '0';
 
-        EMoney::orderBy('user_id')->chunkById($chunk, function ($wallets) use (
+        EMoney::anyCurrency()->orderBy('user_id')->orderBy('currency')->chunkById($chunk, function ($wallets) use (
             $ledger, $dry, $approvedCases, &$opened, &$already, &$empty, &$failed, &$totalOpened
         ) {
             foreach ($wallets as $wallet) {
                 $userId = (int) $wallet->user_id;
+                $currency = \App\Support\Money\Currencies::normalize(
+                    (string) ($wallet->currency ?: \App\Support\Money\Currencies::BASE)
+                );
                 $balance = (string) ($wallet->current_balance ?? '0');
 
                 if (bccomp($balance, '0', 4) <= 0) {
@@ -67,7 +70,9 @@ class AmialLedgerBackfill extends Command
                 }
 
                 $account = $ledger->getOrCreateUserWallet(
-                    $userId, (string) ($wallet->zone_code ?? 'SOUTH')
+                    $userId,
+                    (string) ($wallet->zone_code ?? 'SOUTH'),
+                    $currency,
                 );
 
                 // ما دخل الدفتر فعلاً — لا يُعاد. والمقارنة بالقيود لا
@@ -79,9 +84,11 @@ class AmialLedgerBackfill extends Command
                 }
 
                 if ($dry) {
-                    $this->line("  سيُفتح: مستخدم {$userId} برصيد {$balance}");
+                    $this->line("  سيُفتح: مستخدم {$userId} ({$currency}) برصيد {$balance}");
                     $opened++;
-                    $totalOpened = bcadd($totalOpened, $balance, 4);
+                    if (\App\Support\Money\Currencies::isBase($currency)) {
+                        $totalOpened = bcadd($totalOpened, $balance, 4);
+                    }
                     continue;
                 }
 
@@ -90,6 +97,7 @@ class AmialLedgerBackfill extends Command
                         $case = ReconciliationCase::query()
                             ->where('case_type', 'wallet')
                             ->where('subject_user_id', $userId)
+                            ->where('currency', $currency)
                             ->where('status', 'pending_approval')
                             ->whereNotNull('maker_admin_id')
                             ->whereNotNull('checker_admin_id')
@@ -102,6 +110,7 @@ class AmialLedgerBackfill extends Command
 
                         $ledger->reconcileWalletBalance($userId, 'تصحيحٌ معتمَدٌ لانحراف محفظة', [
                             'case_ulid' => $case->case_ulid,
+                            'currency' => $currency,
                             'maker_admin_id' => (int) $case->maker_admin_id,
                             'checker_admin_id' => (int) $case->checker_admin_id,
                             'approval_note' => (string) $case->action_taken,
@@ -109,16 +118,18 @@ class AmialLedgerBackfill extends Command
                     } else {
                         // رصيدُ الدفتر صفرٌ هنا قطعاً (‏فُحص أعلاه)، والخدمةُ
                         // تُعيد فحصَه تحت القفل: لا شيءَ يُناقَض فلا تصحيح.
-                        $ledger->openWalletBalance($userId, 'ترحيل أوّليّ للمحافظ القائمة عند النشر');
+                        $ledger->openWalletBalance($userId, 'ترحيل أوّليّ للمحافظ القائمة عند النشر', $currency);
                     }
 
                     $opened++;
-                    $totalOpened = bcadd($totalOpened, $balance, 4);
+                    if (\App\Support\Money\Currencies::isBase($currency)) {
+                        $totalOpened = bcadd($totalOpened, $balance, 4);
+                    }
                 } catch (\Throwable $e) {
                     // لا يُوقَف الترحيل كلّه لأجل محفظة واحدة: الأهمّ أن تُدخَل
                     // البقيّة، وتُسمّى الفاشلة بالاسم كي تُعالج يدوياً.
                     $failed++;
-                    $this->error("  فشل مستخدم {$userId}: {$e->getMessage()}");
+                    $this->error("  فشل مستخدم {$userId} ({$currency}): {$e->getMessage()}");
                 }
             }
         });

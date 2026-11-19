@@ -180,6 +180,7 @@ class WrongTransferRecoveryService
                     $recipientId, $amount, 'wrong_transfer_claim:'.$claim->claim_ulid);
 
                 if (MoneyService::isPositive($held)) {
+                    $this->ledgerWrongTransferHold($recipientId, $held, $claim->claim_ulid);
                     $claim->held_amount = $held;
                     $claim->status = WrongTransferClaim::HOLDING;
                     $claim->save();
@@ -563,14 +564,11 @@ class WrongTransferRecoveryService
 
         $this->recordBothSides($claim, $held, 'استردادُ تحويلٍ إلى رقمٍ خاطئ');
 
-        $this->ledgerTransfer(
-            fromUserId: (int) $claim->recipient_user_id,
-            toUserId: (int) $claim->claimant_user_id,
-            amount: $held,
-            sourceType: 'wrong_transfer_recovery',
-            sourceId: $claim->claim_ulid,
-            description: 'استردادُ تحويلٍ إلى رقمٍ خاطئ',
-            idempotencyKey: 'wtc_cap_'.$claim->claim_ulid,
+        $this->ledgerWrongTransferCaptured(
+            recipientUserId: (int) $claim->recipient_user_id,
+            claimantUserId: (int) $claim->claimant_user_id,
+            heldAmount: $held,
+            claimUlid: $claim->claim_ulid,
         );
     }
 
@@ -640,6 +638,9 @@ class WrongTransferRecoveryService
                 $released = $this->guard()->releaseHoldUpTo(
                     (int) $claim->recipient_user_id, $held,
                     'wrong_transfer_release:'.$claim->claim_ulid);
+                if (MoneyService::isPositive($released)) {
+                    $this->ledgerWrongTransferReleased((int) $claim->recipient_user_id, $released, $claim->claim_ulid);
+                }
             }
 
             $claim->held_amount = MoneyService::normalize('0');

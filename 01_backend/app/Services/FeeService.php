@@ -40,6 +40,7 @@ class FeeService
      */
     public function calculate(string $code, string|int|float $amount, array $context = []): array
     {
+        $code = strtoupper(trim($code));
         $zone = $context['zone_code'] ?? 'SOUTH';
         $appliesTo = $context['applies_to'] ?? 'customer';
 

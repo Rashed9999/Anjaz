@@ -121,13 +121,17 @@ class AgentTellerWorkspaceService
             ->whereNotNull('customer_user_id')
             ->distinct()->count('customer_user_id');
 
+        $isTeller = $staff->isTeller();
+
         return [
             // «لا ورديّة» ليست «درجٌ فيه صفر» — القاعدة السابعة.
+            // AGT-GAP-010: إخفاء رقم خزنة الفرع ورصيده عن الصراف مع إشارة منطقية فقط.
             'drawer_cash' => $drawer,
             'drawer_known' => $shift !== null,
-            'branch_emoney' => $emoney,
-            'branch_safe' => $safe === null ? null : (string) $safe,
-            'safe_known' => $safe !== null,
+            'branch_emoney' => $isTeller ? null : $emoney,
+            'branch_safe' => $isTeller ? null : ($safe === null ? null : (string) $safe),
+            'safe_known' => $isTeller ? false : ($safe !== null),
+            'can_refill_from_safe' => $safe !== null && bccomp((string) $safe, '0', 4) > 0,
             'customers_served' => $served,
             'deposits_total' => $dep,
             'deposits_count' => (int) ($ops['customer_deposit']->n ?? 0),
@@ -152,23 +156,14 @@ class AgentTellerWorkspaceService
             return null;
         }
 
-        if (!\Illuminate\Support\Facades\Schema::hasTable('ledger_entry_lines')) {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('ledger_journal_entries')) {
             return null;   // «غير معروف» لا صفر
         }
 
-        // **الأعمدة تُقرأ من المخطّط لا من الذاكرة.** كتبتُ `l.credit`
-        // أوّلاً وهو عمودٌ لا وجود له — والجدول فيه `direction` و`amount`.
-        // وخطأٌ كهذا لا يُسقط استعلاماً وحده: يُسقط بناء الشاشة كلّها
-        // بـ٥٠٠، فيقف الصرّاف أمام صفحةٍ بيضاء لأجل رقم عمولة.
-        $v = DB::table('ledger_entry_lines as l')
-            ->join('ledger_journal_entries as j', 'j.id', '=', 'l.journal_entry_id')
-            ->whereDate('j.created_at', $date)
-            ->where('j.source_type', 'like', 'agent_%_fee')
-            ->where('l.direction', 'credit')
-            ->where('l.metadata', 'like', '%"branch_id":' . $branch->id . '%')
-            ->sum('l.amount');
+        // AGT-GAP-010 — القراءة من تقرير العمولات الموحد (يدعم الإيداع والسحب الحي).
+        $rep = app(AgentReportService::class)->commissions($branch, $date, $date);
 
-        return bcadd((string) ($v ?: '0'), '0', 4);
+        return bcadd((string) ($rep['total_commission'] ?? '0'), '0', 4);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -345,7 +340,7 @@ class AgentTellerWorkspaceService
             ->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $staff->branch_id))
             ->where(fn ($q) => $q->where('audience', 'all')
                 ->orWhere('audience', $staff->isTeller() ? 'tellers' : 'managers'))
-            ->orderByRaw("field(severity, 'critical', 'warning', 'info')")
+            ->orderByRaw("CASE severity WHEN 'critical' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END")
             ->orderByDesc('id')->limit(10)->get()
             ->map(fn (AgentAnnouncement $a) => [
                 'id' => (int) $a->id,

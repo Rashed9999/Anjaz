@@ -212,6 +212,7 @@
 </div>
 
 @once
+@include('agent-views._post_helper')
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 document.addEventListener('DOMContentLoaded', function () {
     const BASE = '{{ url('agent') }}';
@@ -229,15 +230,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function post(p, body) {
-        const r = await fetch(BASE + p, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'Accept': 'application/json',
-                      'X-CSRF-TOKEN': csrf()},
-            body: JSON.stringify(body || {}),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(j.message || 'تعذّر التنفيذ');
-        return j;
+        return window.__amialPost(BASE, p, body, csrf(), {throwOnError: true, fallbackError: 'تعذّر التنفيذ'});
     }
 
     // يُتاح لبقيّة الشاشة: الشبّاك ينادي `wsLogEvent` و`wsAssess`.
@@ -274,11 +267,13 @@ document.addEventListener('DOMContentLoaded', function () {
             card('💰', 'النقد في درجك',
                  k.drawer_known ? fmt(k.drawer_cash) : null,
                  k.drawer_known ? 'ر.ي' : 'لا ورديّة مفتوحة', 'success'),
-            card('📲', 'رصيد الفرع الإلكترونيّ',
-                 k.branch_emoney === null ? null : fmt(k.branch_emoney), 'يحدّ الإيداع'),
-            card('🏦', 'خزنة الفرع',
-                 k.safe_known ? fmt(k.branch_safe) : null,
-                 k.safe_known ? 'تحدّ السحب' : 'لا خزنة مضبوطة'),
+            k.branch_emoney !== null
+                ? card('📲', 'رصيد الفرع الإلكترونيّ', fmt(k.branch_emoney), 'يحدّ الإيداع')
+                : '',
+            k.safe_known
+                ? card('🏦', 'خزنة الفرع', fmt(k.branch_safe), 'تحدّ السحب')
+                : card('🏦', 'التوريد من الخزنة', k.can_refill_from_safe ? 'متاح للتوريد' : 'غير متاح',
+                       k.can_refill_from_safe ? 'اطلب توريداً عند الحاجة' : 'راجع مدير الفرع'),
             card('👥', 'عملاء خدمتَهم اليوم', fmt(k.customers_served)),
             card('💵', 'إيداعات اليوم', fmt(k.deposits_total), `${k.deposits_count} عمليّة`),
             card('💸', 'سحوبات اليوم', fmt(k.withdrawals_total), `${k.withdrawals_count} عمليّة`),
@@ -701,7 +696,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     $('ws-ot-ask').addEventListener('click', async () => {
-        const reason = prompt('سببُ الوقت الإضافيّ اليوم (عشرة أحرف فأكثر):');
+        const reason = await window.amialDialog.request('سببُ الوقت الإضافيّ اليوم (عشرة أحرف فأكثر):', {title: 'طلب وقت إضافيّ'});
         if (!reason) return;
         try {
             const j = await post('/teller/request', {kind: 'overtime', amount: 0, reason: reason});

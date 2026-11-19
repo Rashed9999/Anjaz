@@ -231,8 +231,11 @@ class AgentTellerWorkspaceTest extends TestCase
 
         $this->assertTrue($m['kpis']['drawer_known']);
         $this->assertSame(0, bccomp('100000', $m['kpis']['drawer_cash'], 4));
-        // الخزنة نقصت بالعهدة — ودرجُه غيرُ خزنة فرعه.
-        $this->assertSame(0, bccomp('2900000', $m['kpis']['branch_safe'], 4));
+        // الصراف لا يرى رصيد خزنة الفرع (AGT-GAP-010)، لكن الخزنة نقصت بالعهدة في القاعدة.
+        $this->assertNull($m['kpis']['branch_safe']);
+        $this->assertFalse($m['kpis']['safe_known']);
+        $this->assertTrue($m['kpis']['can_refill_from_safe']);
+        $this->assertSame(0, bccomp('2900000', (string) $this->branch->till->fresh()->cash_on_hand, 4));
     }
 
     /**

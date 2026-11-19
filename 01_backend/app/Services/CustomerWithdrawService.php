@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\Agent\AgentCompanyStatus;
 use App\CentralLogics\Helpers;
 
 use App\Models\User;
@@ -207,7 +208,16 @@ class CustomerWithdrawService
     /**
      * تنفيذ الوكيل. $identifier = هاتف العميل أو رقم حسابه أو هويته الوطنية.
      */
-    public function execute(User $agent, string $opCode, string $identifier): array
+    /**
+     * AGT-GAP-001/002 — `$context` يحمل سياقَ الشباك (الفرع والورديّة والصرّاف) حين
+     * يُنفَّذ السحبُ من شباك وكيل: `branch_id` و`branch_name` و`branch_code` و`shift_id`
+     * و`staff_id` و`teller_name` و`teller_code`. فيُكتب في `metadata` القيد والإيصال
+     * فتقرؤه محرّكاتُ التسوية والتقارير، ويمرّ الإيصالُ من حارس الفروع. وغيابُه (مسار
+     * تطبيق العميل/الوكيل المباشر) لا يغيّر شيئاً ممّا كان.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    public function execute(User $agent, string $opCode, string $identifier, array $context = []): array
     {
         // AMIAL-WITHDRAW-EXPIRE-001 — **فكُّ حجزٍ كان يُردَّ مع الاستثناء.**
         //
@@ -222,7 +232,7 @@ class CustomerWithdrawService
         // فصار الانتهاءُ يقع في معاملةٍ مستقلّةٍ **تُثبَّت** قبل أن يُرمى.
         $this->expireIfPast($opCode);
 
-        return DB::transaction(function () use ($agent, $opCode, $identifier) {
+        return DB::transaction(function () use ($agent, $opCode, $identifier, $context) {
             $req = WithdrawalRequest::where('op_code', $opCode)->lockForUpdate()->first();
             if (!$req) {
                 throw new RuntimeException('رقم العملية غير صحيح');
@@ -245,6 +255,19 @@ class CustomerWithdrawService
             }
             if ($identifier !== '' && !$this->identifierMatches($req->customer_user_id, $identifier)) {
                 throw new RuntimeException('معرّف العميل لا يطابق صاحب العملية');
+            }
+
+            // AGT-GAP-006 — إيقاف الشركة الأم أو الوكيل يمنع تنفيذ السحب عند المال.
+            $agentStatus = AgentCompanyStatus::inspect((int) $agent->id);
+            if (!$agentStatus['operable']) {
+                throw new RuntimeException((string) $agentStatus['reason']);
+            }
+            $companyId = (int) (\App\Models\Agent\AgentBranch::where('branch_user_id', $agent->id)->value('agent_user_id') ?? 0);
+            if ($companyId > 0) {
+                $companyStatus = AgentCompanyStatus::inspect($companyId);
+                if (!$companyStatus['operable']) {
+                    throw new RuntimeException((string) $companyStatus['reason']);
+                }
             }
 
             // النقد يخرج من درج الوكيل هنا؛ لذلك يُفحص حد السحب لا حد الإيداع.
@@ -327,6 +350,14 @@ class CustomerWithdrawService
                 platformProfit: (string) $req->platform_profit,
                 sourceId: (string) $req->id,
                 transactionId: $txId,
+                metadata: array_merge($context, [
+                    'fee_code' => 'CASH_OUT',
+                    'op_code' => $opCode,
+                    'fee' => MoneyService::normalize((string) $req->fee),
+                    'commission' => MoneyService::normalize((string) $req->agent_commission),
+                    'cash_paid' => MoneyService::normalize((string) $req->amount),
+                    'agent_credit' => MoneyService::normalize($agentCredit),
+                ]),
             );
 
             $req->update([
@@ -374,7 +405,7 @@ class CustomerWithdrawService
             // يُصدَر بعد نجاح كل القيود، ويلتقط أي خطأ بصمت عبر
             // safeIssueSingleReceipt — العملية المالية تمّت، وفشل الإيصال
             // يُسجَّل ولا يُبطلها.
-            $receiptNumber = $this->safeIssueSingleReceipt('debit', [
+            $receiptPayload = [
                 'user_id' => $req->customer_user_id,
                 'counterparty_user_id' => $agent->id,
                 'reference_transaction_id' => $txId,
@@ -382,12 +413,17 @@ class CustomerWithdrawService
                 'amount' => (string) $req->amount,
                 'fee' => (string) $req->fee,
                 'zone_code' => $req->zone_code,
-                'metadata' => [
+                'metadata' => array_merge($context, [
                     'op_code' => $opCode,
                     'agent_user_id' => $agent->id,
                     'channel' => 'customer_withdraw',
-                ],
-            ]);
+                ]),
+            ];
+            if (isset($context['branch_id'])) {
+                $receiptPayload['reference_type'] = 'agent_branch';
+                $receiptPayload['reference_id'] = (int) $context['branch_id'];
+            }
+            $receiptNumber = $this->safeIssueSingleReceipt('debit', $receiptPayload);
 
             // رقم الإيصال يُعاد ليطبعه الصرّاف للعميل الواقف أمامه.
             return [
