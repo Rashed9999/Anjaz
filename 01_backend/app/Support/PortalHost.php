@@ -56,11 +56,46 @@ class PortalHost
     }
 
     /**
+     * عنوان بوابة «أميال أعمال» المستقلة (مثل https://merchant.amialpay.com).
+     * يُقرأ من AMIAL_BUSINESS_PORTAL_URL، أو يُشتقّ من AMIAL_BUSINESS_WEBHOOK_URL عند تفعيل القناة.
+     */
+    public static function businessPortalUrl(): ?string
+    {
+        if (! (bool) config('amial_business.redirect_merchant_login', true)) {
+            return null;
+        }
+
+        $explicit = rtrim(trim((string) config('amial_business.portal_url', '')), '/');
+        if ($explicit !== '' && (str_starts_with($explicit, 'https://') || str_starts_with($explicit, 'http://'))) {
+            return $explicit;
+        }
+
+        $webhook = trim((string) config('amial_business.webhook_url', ''));
+        $inbound = trim((string) config('amial_business.inbound_secret', ''));
+        if ($webhook !== '' && $inbound !== '') {
+            $parsed = parse_url($webhook);
+            if (!empty($parsed['scheme']) && !empty($parsed['host'])) {
+                $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+
+                return strtolower((string) $parsed['scheme']) . '://' . strtolower((string) $parsed['host']) . $port;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Direct HTTPS merchant sign-in for navigation only.
-     * Keep the legacy route before merchant DNS/TLS is configured.
+     * Prefer the standalone Amial Business portal (/login) when configured;
+     * otherwise keep legacy host/route fallback.
      */
     public static function merchantLoginUrl(): string
     {
+        $businessPortal = self::businessPortalUrl();
+        if ($businessPortal !== null) {
+            return $businessPortal . '/login';
+        }
+
         $host = self::merchant();
 
         return $host !== null

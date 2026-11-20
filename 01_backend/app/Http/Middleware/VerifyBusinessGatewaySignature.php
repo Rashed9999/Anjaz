@@ -58,6 +58,10 @@ class VerifyBusinessGatewaySignature
             return $this->error('BUSINESS_REQUEST_REPLAYED', 'هذا الطلب أُرسل سابقاً', 409);
         }
 
+        if ($request->routeIs('amial.business.auth.verify-owner')) {
+            return $next($request);
+        }
+
         $linkUlid = (string) $request->header('X-Amial-Business-Link', '');
         $link = preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/', $linkUlid)
             ? BusinessLink::where('link_ulid', $linkUlid)->first()

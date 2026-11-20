@@ -314,6 +314,81 @@ class BusinessGatewayController extends Controller
         return $this->ok(app(\App\Services\BusinessGateway\BusinessEntitlementService::class)->for($this->resolveLink($request)));
     }
 
+    /**
+     * التحقق الخادمي الموقّع من دخول مالك المنشأة القادم من بوابة أميال أعمال.
+     * يتحقق من التاجر المعتمد والنشط، يضمن وجود BusinessLink له، ويعيد هويته دون كلمة مرور أو أرصدة.
+     */
+    public function verifyOwner(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'identifier' => ['required', 'string', 'max:191'],
+            'password' => ['required', 'string', 'max:200'],
+        ]);
+        if ($v->fails()) {
+            return $this->validationError($v);
+        }
+
+        $identifier = trim((string) $request->input('identifier'));
+        $password = (string) $request->input('password');
+        $rateKey = 'business-gateway:verify-owner:'.hash('sha256', mb_strtolower($identifier));
+
+        if (RateLimiter::tooManyAttempts($rateKey, 10)) {
+            return $this->error('TOO_MANY_ATTEMPTS', 'محاولات كثيرة؛ أعد المحاولة لاحقاً.', 429);
+        }
+
+        $merchantId = \App\Models\Merchant::where('merchant_number', $identifier)->value('user_id');
+        $phones = preg_match('/^[+0-9\s\-()]+$/', $identifier) === 1
+            ? \App\Support\Phone::variants($identifier) : [];
+
+        $owner = \App\Models\User::query()
+            ->where('type', MERCHANT_TYPE)
+            ->where('role', \App\Support\Access\AccessConstants::ROLE_MERCHANT)
+            ->where(function ($query) use ($identifier, $merchantId, $phones) {
+                $query->whereRaw('LOWER(TRIM(email)) = ?', [mb_strtolower($identifier)]);
+                if ($phones !== []) {
+                    $query->orWhereIn('phone', $phones);
+                }
+                if ($merchantId) {
+                    $query->orWhere('id', $merchantId);
+                }
+            })->first();
+
+        $profile = $owner
+            ? \App\Models\MerchantProfile::where('user_id', $owner->id)->first()
+            : null;
+
+        if (!$owner
+            || !\Illuminate\Support\Facades\Hash::check($password, (string) $owner->password)
+            || (int) $owner->is_active !== 1
+            || (int) ($owner->is_temp_blocked ?? 0) === 1
+            || !$profile) {
+            RateLimiter::hit($rateKey, 900);
+
+            return $this->error('INVALID_CREDENTIALS', 'تعذر الدخول؛ تحقق من البيانات أو حالة حساب المنشأة.', 401);
+        }
+
+        if ((string) $profile->verification_status !== 'verified') {
+            return $this->error('KYC_REQUIRED', 'حساب المنشأة قيد المراجعة ولم يُعتمد بعد.', 403);
+        }
+
+        RateLimiter::clear($rateKey);
+
+        return $this->guard(function () use ($owner) {
+            $link = $this->links->link($owner);
+            if (!$link->isActive()) {
+                return $this->error('BUSINESS_LINK_INACTIVE', 'ربط المنشأة بأميال أعمال موقوف.', 403);
+            }
+
+            return $this->ok($this->links->summary($link) + [
+                'owner' => [
+                    'name' => trim(($owner->f_name ?? '').' '.($owner->l_name ?? '')),
+                    'email' => $owner->email,
+                    'phone' => $owner->phone,
+                ],
+            ]);
+        });
+    }
+
     private function resolveLink(Request $request): BusinessLink
     {
         return $request->attributes->get('business_link');

@@ -21,8 +21,15 @@ use Illuminate\Contracts\View\View;
 /** بوابة المالك: حساب تاجر فقط، جلسة مستقلة، ومنع محاولات التخمين. */
 class WebAuthController extends Controller
 {
-    public function login(): View
+    public function login(Request $request): View|RedirectResponse
     {
+        if (! $request->boolean('legacy')) {
+            $portal = \App\Support\PortalHost::businessPortalUrl();
+            if ($portal !== null) {
+                return redirect()->away($portal . '/login');
+            }
+        }
+
         return view('merchant-web.login');
     }
 
@@ -170,6 +177,39 @@ class WebAuthController extends Controller
         }
 
         RateLimiter::clear($key);
+
+        if (! $request->boolean('legacy')) {
+            $portal = \App\Support\PortalHost::businessPortalUrl();
+            $webhookSecret = trim((string) config('amial_business.webhook_secret', ''));
+            if ($portal !== null && $webhookSecret !== '') {
+                $links = app(\App\Services\BusinessGateway\BusinessLinkService::class);
+                $link = $links->link($owner);
+                if ($link->isActive()) {
+                    $ts = time();
+                    $payloadArr = $links->summary($link) + [
+                        'ts' => $ts,
+                        'nonce' => \Illuminate\Support\Str::random(32),
+                        'owner' => [
+                            'name' => trim(($owner->f_name ?? '') . ' ' . ($owner->l_name ?? '')),
+                            'email' => $owner->email,
+                            'phone' => $owner->phone,
+                        ],
+                    ];
+                    $json = json_encode($payloadArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    $payloadB64 = rtrim(strtr(base64_encode((string) $json), '+/', '-_'), '=');
+                    $sig = \App\Services\BusinessGateway\BusinessGatewaySignature::outbound(
+                        (string) $ts,
+                        (string) $json,
+                        $webhookSecret,
+                    );
+
+                    return redirect()->away(
+                        $portal . '/auth/amial-pay-sso?payload=' . rawurlencode($payloadB64) . '&sig=' . rawurlencode($sig)
+                    );
+                }
+            }
+        }
+
         Auth::guard('merchant_web')->login($owner, $request->boolean('remember'));
         $request->session()->regenerate();
 

@@ -19,6 +19,11 @@ return [
     'webhook_url' => env('AMIAL_BUSINESS_WEBHOOK_URL'),
     'webhook_timeout_seconds' => (int) env('AMIAL_BUSINESS_WEBHOOK_TIMEOUT_SECONDS', 10),
 
+    // عنوان بوابة أميال أعمال الجديدة (مثل https://merchant.amialpay.com).
+    // إن تُرك فارغاً وكانت webhook_url مضبوطة على HTTPS مع inbound_secret، يُشتقّ المضيف تلقائياً.
+    'portal_url' => rtrim((string) env('AMIAL_BUSINESS_PORTAL_URL', ''), '/'),
+    'redirect_merchant_login' => (bool) env('AMIAL_BUSINESS_REDIRECT_MERCHANT_LOGIN', true),
+
     // التاجر الذي يعتمده موثّق يُربط تلقائياً. يُطفأ بمتغير بيئة إن لزم.
     'auto_link_on_approval' => (bool) env('AMIAL_BUSINESS_AUTO_LINK', true),
 
