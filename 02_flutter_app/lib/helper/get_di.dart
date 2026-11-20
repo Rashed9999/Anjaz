@@ -132,11 +132,12 @@ Future<Map<String, Map<String, String>>> init() async {
     deiceInfo: Get.find(),
   ));
 
-  // AMIAL-BUSINESS-UNIFY-U2 — محوّل خادم أميال أعمال الاختياري لكل تاجر (مُعطّل افتراضياً).
+  // AMIAL-BUSINESS-UNIFY-U2 — محوّل خادم أميال أعمال الاختياري لكل تاجر (مُعطّل افتراضياً، الرمز مشفّر عبر FlutterSecureStorage).
   final businessConfig = Get.put(
     MerchantBusinessBackendConfig(sharedPreferences: sharedPreferences),
     permanent: true,
   );
+  await businessConfig.primeTokenCache();
   Get.put(
     MerchantBusinessApiAdapter(config: businessConfig),
     permanent: true,

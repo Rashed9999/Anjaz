@@ -8,7 +8,9 @@ import 'package:amial_pay/features/merchant/services/merchant_business_backend_c
 ///
 /// يعمل فقط عندما يكون `merchantBusinessBackendEnabled` مفعّلاً صراحةً للتاجر النشط
 /// مع رمز Bearer خاص بأميال أعمال. لا يغيّر ترويسات `ApiClient` الخاصة بالمحفظة
-/// أو العملاء، ويحافظ على تنسيق السلاسل العشرية و`Idempotency-Key` و`client_uuid`.
+/// أو العملاء، ويحافظ على تنسيق السلاسل العشرية و`Idempotency-Key` و`client_uuid`
+/// وتوافق غلاف `{ success, meta }` الكامل مع `CashierController` و`CashierRefundController`
+/// و`CustomerCreditController` (B3).
 class MerchantBusinessApiAdapter extends GetxService {
   static const String _mobilePrefix = '/api/v1/mobile';
   static const Duration _timeout = Duration(seconds: 30);
@@ -132,7 +134,38 @@ class MerchantBusinessApiAdapter extends GetxService {
     return res;
   }
 
-  Future<Response> saleDetail(String saleIdOrUlid) => _get('/pos/sales/$saleIdOrUlid');
+  Future<Response> saleDetail(String saleIdOrUlid) async {
+    final res = await _get('/pos/sales/$saleIdOrUlid');
+    if (res.statusCode == 200 && res.body is Map) {
+      final data = (res.body as Map)['data'];
+      if (data is Map && data['invoice'] is Map) {
+        final inv = Map<String, dynamic>.from(data['invoice'] as Map);
+        final refundable = inv['refundable'] is Map
+            ? Map<String, dynamic>.from(inv['refundable'] as Map)
+            : <String, dynamic>{};
+        return Response(
+          statusCode: 200,
+          statusText: res.statusText,
+          body: {
+            'success': true,
+            'ok': true,
+            'code': 'OK',
+            'data': data,
+            'meta': {
+              'sale': inv,
+              'invoice': inv,
+              'lines': inv['lines'] ?? const [],
+              'currency': data['currency'],
+              'refunded_so_far': refundable['refunded_so_far'] ?? inv['returned_total'] ?? '0',
+              'remaining': refundable['remaining'] ?? inv['total'] ?? '0',
+              'available_methods': refundable['available_methods'] ?? const [],
+            },
+          },
+        );
+      }
+    }
+    return res;
+  }
 
   // ── الورديات ────────────────────────────────────────────────────
 
@@ -154,26 +187,129 @@ class MerchantBusinessApiAdapter extends GetxService {
 
   // ── السلات المعلّقة ──────────────────────────────────────────────
 
-  Future<Response> heldTickets() => _get('/pos/held-carts');
+  Future<Response> heldTickets() async {
+    final res = await _get('/pos/held-carts');
+    if (res.statusCode == 200 && res.body is Map) {
+      final data = (res.body as Map)['data'];
+      if (data is Map && data['held_carts'] is List) {
+        final tickets = (data['held_carts'] as List).map((e) {
+          final m = Map<String, dynamic>.from(e as Map);
+          return _adaptHeldTicket(m);
+        }).toList();
+        return Response(
+          statusCode: 200,
+          statusText: res.statusText,
+          body: {
+            'success': true,
+            'ok': true,
+            'code': 'OK',
+            'data': data,
+            'meta': {'tickets': tickets, 'currency': data['currency']},
+          },
+        );
+      }
+    }
+    return res;
+  }
 
-  Future<Response> holdCart(Map<String, dynamic> data) => _post('/pos/held-carts', data);
+  Future<Response> holdCart(Map<String, dynamic> data) async {
+    final rawItems = (data['items'] is List) ? data['items'] as List : const [];
+    final items = rawItems.map((entry) {
+      final m = Map<String, dynamic>.from(entry as Map);
+      final qty = m['quantity'] ?? m['qty'] ?? '1';
+      return <String, dynamic>{
+        'product_id': m['product_id'],
+        'quantity': '$qty',
+        if (m['unit_price'] != null) 'unit_price': '${m['unit_price']}',
+        if (m['unit_id'] != null) 'unit_id': m['unit_id'],
+      };
+    }).toList();
 
-  Future<Response> resumeHeld(String cartId) => _post('/pos/held-carts/$cartId/resume', const {});
+    final noteParts = <String>[
+      if (data['label'] != null && '${data['label']}'.trim().isNotEmpty) '${data['label']}'.trim(),
+      if (data['customer_name'] != null && '${data['customer_name']}'.trim().isNotEmpty) '${data['customer_name']}'.trim(),
+      if (data['note'] != null && '${data['note']}'.trim().isNotEmpty) '${data['note']}'.trim(),
+      if (data['notes'] != null && '${data['notes']}'.trim().isNotEmpty) '${data['notes']}'.trim(),
+    ];
 
-  Future<Response> discardHeld(String cartId) => _delete('/pos/held-carts/$cartId');
+    final res = await _post('/pos/held-carts', {
+      if (data['customer_id'] != null) 'customer_id': data['customer_id'],
+      if (noteParts.isNotEmpty) 'note': noteParts.join(' · '),
+      'items': items,
+    });
+    return _adaptSingleHeldResponse(res);
+  }
+
+  Future<Response> resumeHeld(String cartId) async {
+    final res = await _post('/pos/held-carts/$cartId/resume', const {});
+    return _adaptSingleHeldResponse(res);
+  }
+
+  Future<Response> discardHeld(String cartId) async {
+    final res = await _delete('/pos/held-carts/$cartId');
+    return _adaptSingleHeldResponse(res);
+  }
 
   // ── المرتجعات ───────────────────────────────────────────────────
 
-  Future<Response> createReturn(String invoiceId, Map<String, dynamic> body) {
+  Future<Response> createReturn(String invoiceIdOrUlid, Map<String, dynamic> body) async {
     final key = _extractIdempotencyKey(body);
-    return _post('/pos/sales/$invoiceId/returns', body, idempotencyKey: key);
+    final adapted = adaptReturnPayload(body);
+    final res = await _post('/pos/sales/$invoiceIdOrUlid/returns', adapted, idempotencyKey: key);
+    if ((res.statusCode == 200 || res.statusCode == 201) && res.body is Map) {
+      final map = res.body as Map;
+      final data = map['data'];
+      if (data is Map && data['return'] is Map) {
+        return Response(
+          statusCode: res.statusCode,
+          statusText: res.statusText,
+          body: {
+            'success': true,
+            'ok': true,
+            'code': map['code'] ?? 'OK',
+            'replayed': map['replayed'] ?? false,
+            'data': data,
+            'meta': {
+              'refund': data['return'],
+              'return': data['return'],
+              'currency': data['currency'],
+              'replayed': map['replayed'] ?? false,
+            },
+          },
+        );
+      }
+    }
+    return res;
   }
 
   // ── العملاء والتحصيل الآجل ──────────────────────────────────────
 
-  Future<Response> listContacts({String? search}) => _get('/contacts', query: {
-        if (search != null && search.isNotEmpty) 'q': search,
-      });
+  Future<Response> listContacts({String? search}) async {
+    final res = await _get('/contacts', query: {
+      if (search != null && search.isNotEmpty) 'q': search,
+    });
+    if (res.statusCode == 200 && res.body is Map) {
+      final data = (res.body as Map)['data'];
+      if (data is Map && data['contacts'] is List) {
+        return Response(
+          statusCode: 200,
+          statusText: res.statusText,
+          body: {
+            'success': true,
+            'ok': true,
+            'code': 'OK',
+            'data': data,
+            'meta': {
+              'customers': data['contacts'],
+              'contacts': data['contacts'],
+              'currency': data['currency'],
+            },
+          },
+        );
+      }
+    }
+    return res;
+  }
 
   Future<Response> collectFromContact({
     required int contactId,
@@ -181,17 +317,42 @@ class MerchantBusinessApiAdapter extends GetxService {
     required String method,
     required String idempotencyKey,
     int? cashBoxId,
-  }) =>
-      _post(
-        '/contacts/$contactId/collect',
-        {
-          'amount': amount,
-          'method': method,
-          'client_operation_id': idempotencyKey,
-          if (cashBoxId != null) 'cash_box_id': cashBoxId,
-        },
-        idempotencyKey: idempotencyKey,
-      );
+  }) async {
+    final res = await _post(
+      '/contacts/$contactId/collect',
+      {
+        'amount': amount,
+        'method': method,
+        'client_operation_id': idempotencyKey,
+        if (cashBoxId != null) 'cash_box_id': cashBoxId,
+      },
+      idempotencyKey: idempotencyKey,
+    );
+    if ((res.statusCode == 200 || res.statusCode == 201) && res.body is Map) {
+      final map = res.body as Map;
+      final data = map['data'];
+      if (data is Map) {
+        return Response(
+          statusCode: res.statusCode,
+          statusText: res.statusText,
+          body: {
+            'success': true,
+            'ok': true,
+            'code': map['code'] ?? 'OK',
+            'replayed': map['replayed'] ?? false,
+            'data': data,
+            'meta': {
+              'payment': data['payment'],
+              'remaining_receivable': data['remaining_receivable'],
+              'currency': data['currency'],
+              'replayed': map['replayed'] ?? false,
+            },
+          },
+        );
+      }
+    }
+    return res;
+  }
 
   // ── محطات الوقود (Mobile Fuel API — sector:fuel) ─────────────────
 
@@ -234,11 +395,18 @@ class MerchantBusinessApiAdapter extends GetxService {
 
   // ── محوّلات الحمولة (Payload/Response Adaptation) ─────────────────
 
-  /// يحوّل حمولة الكاشير القديمة أو الحديثة إلى عقد `/api/v1/mobile/pos/sales`
-  /// مع الحفاظ على السلاسل العشرية و`client_uuid` وتجاهل الحقول المحلية `_offline_*`.
+  /// يحوّل حمولة الكاشير القديمة (`CashierController`) أو الحديثة إلى عقد `/api/v1/mobile/pos/sales`:
+  /// - `amial_pay` => `wallet`
+  /// - `amount_received` / `cash_tendered` / `paid_amount` / `total` (للنقدي) => `tendered`
+  /// - `items[].qty` => `items[].quantity` (سلسلة عشرية)
   Map<String, dynamic> adaptSalePayload(Map<String, dynamic> raw) {
-    final method = '${raw['method'] ?? raw['payment_method'] ?? 'cash'}';
-    final tenderedRaw = raw['tendered'] ?? raw['cash_tendered'] ?? raw['paid_amount'];
+    final rawMethod = '${raw['method'] ?? raw['payment_method'] ?? 'cash'}';
+    final method = rawMethod == 'amial_pay' ? 'wallet' : rawMethod;
+    final tenderedRaw = raw['tendered'] ??
+        raw['amount_received'] ??
+        raw['cash_tendered'] ??
+        raw['paid_amount'] ??
+        (method == 'cash' ? raw['total'] : null);
     final clientKey = _extractIdempotencyKey(raw);
     final rawItems = (raw['items'] is List) ? raw['items'] as List : const [];
 
@@ -264,6 +432,72 @@ class MerchantBusinessApiAdapter extends GetxService {
       if (clientKey != null) 'client_uuid': clientKey,
       'items': items,
     };
+  }
+
+  /// يحوّل حمولة المرتجع من `CashierRefundController` (`items`) أو مباشرة (`quantities`) إلى عقد `/returns`.
+  Map<String, dynamic> adaptReturnPayload(Map<String, dynamic> raw) {
+    final quantities = <String, String>{};
+    if (raw['quantities'] is Map) {
+      (raw['quantities'] as Map).forEach((k, v) {
+        if (v != null && '$v'.trim().isNotEmpty) {
+          quantities['$k'] = '$v';
+        }
+      });
+    } else if (raw['items'] is List) {
+      for (final entry in (raw['items'] as List)) {
+        if (entry is Map) {
+          final lineId = entry['line_id'] ?? entry['sales_invoice_line_id'] ?? entry['id'];
+          final q = entry['quantity'] ?? entry['qty'];
+          if (lineId != null && q != null && '$q'.trim().isNotEmpty) {
+            quantities['$lineId'] = '$q';
+          }
+        }
+      }
+    }
+    final key = _extractIdempotencyKey(raw);
+    return <String, dynamic>{
+      'quantities': quantities,
+      if (raw['reason'] != null && '${raw['reason']}'.trim().isNotEmpty) 'reason': '${raw['reason']}',
+      if (key != null) 'client_operation_id': key,
+    };
+  }
+
+  Map<String, dynamic> _adaptHeldTicket(Map<String, dynamic> cart) {
+    final rawItems = (cart['items'] is List) ? cart['items'] as List : const [];
+    final normalizedItems = rawItems.map((e) {
+      final m = Map<String, dynamic>.from(e as Map);
+      return <String, dynamic>{
+        ...m,
+        'qty': m['qty'] ?? m['quantity'] ?? 1,
+        'price': m['price'] ?? m['unit_price'] ?? '0',
+      };
+    }).toList();
+    return <String, dynamic>{
+      ...cart,
+      'ticket_ulid': '${cart['id'] ?? cart['reference'] ?? ''}',
+      'items': normalizedItems,
+    };
+  }
+
+  Response _adaptSingleHeldResponse(Response res) {
+    if ((res.statusCode == 200 || res.statusCode == 201) && res.body is Map) {
+      final data = (res.body as Map)['data'];
+      if (data is Map && data['held_cart'] is Map) {
+        final ticket = _adaptHeldTicket(Map<String, dynamic>.from(data['held_cart'] as Map));
+        return Response(
+          statusCode: res.statusCode,
+          statusText: res.statusText,
+          body: {
+            'success': true,
+            'ok': true,
+            'code': 'OK',
+            'data': data,
+            'meta': {'ticket': ticket, 'currency': data['currency']},
+          },
+        );
+      }
+    }
+    return res;
   }
 
   String? _extractIdempotencyKey(Map<String, dynamic> payload) {
