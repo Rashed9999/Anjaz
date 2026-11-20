@@ -159,8 +159,13 @@ class CashierRepo extends GetxService {
   }
 
   /// **تراجعٌ عن الاستئناف** — وبدونه تضيع السلّةُ إن سقط الدفع.
-  Future<Response> reopenHeld(String ulid) =>
-      apiClient.postData('$_base/held/$ulid/reopen', {});
+  Future<Response> reopenHeld(String ulid) {
+    final biz = _business;
+    if (biz != null) {
+      return biz.reopenHeld(ulid);
+    }
+    return apiClient.postData('$_base/held/$ulid/reopen', {});
+  }
 
   Future<Response> voidHeld(String ulid, String reason) {
     final biz = _business;

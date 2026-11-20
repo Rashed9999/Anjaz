@@ -22,7 +22,23 @@ class CustomerCreditRepo extends GetxService {
     return (adapter != null && adapter.isEnabledForActiveMerchant) ? adapter : null;
   }
 
-  Future<Response> dashboard() => apiClient.getData('$_base/dashboard');
+  Response _unsupportedInBusinessMode() => const Response(
+        statusCode: 501,
+        statusText: 'Not Implemented',
+        body: {
+          'success': false,
+          'ok': false,
+          'code': 'NOT_SUPPORTED_IN_BUSINESS_MODE',
+          'message': 'هذه العملية متاحة عبر بوابة أميال أعمال الويب للتجار المرحّلين.',
+          'data': null,
+          'errors': {},
+        },
+      );
+
+  Future<Response> dashboard() {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
+    return apiClient.getData('$_base/dashboard');
+  }
 
   Future<Response> listCustomers({String? search, String? filter}) {
     final biz = _business;
@@ -35,16 +51,23 @@ class CustomerCreditRepo extends GetxService {
     return apiClient.getData('$_base/customers', query: q.isEmpty ? null : q);
   }
 
-  Future<Response> upsertCustomer(Map<String, dynamic> data) =>
-      apiClient.postData('$_base/customers', data);
+  Future<Response> upsertCustomer(Map<String, dynamic> data) {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
+    return apiClient.postData('$_base/customers', data);
+  }
 
-  Future<Response> showCustomer(int id) =>
-      apiClient.getData('$_base/customers/$id');
+  Future<Response> showCustomer(int id) {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
+    return apiClient.getData('$_base/customers/$id');
+  }
 
-  Future<Response> lookupByPhone(String phone) =>
-      apiClient.getData('$_base/lookup', query: {'phone': phone});
+  Future<Response> lookupByPhone(String phone) {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
+    return apiClient.getData('$_base/lookup', query: {'phone': phone});
+  }
 
   Future<Response> statement(int id, {String? from, String? to}) {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
     final q = <String, dynamic>{};
     if (from != null) q['from'] = from;
     if (to != null) q['to'] = to;
@@ -72,38 +95,52 @@ class CustomerCreditRepo extends GetxService {
   }
 
   /// Request payment; the customer must authorize it in their own Amial app.
-  Future<Response> requestWallet(int id, String amount, String key) =>
-      apiClient.postData('$_base/customers/$id/request-wallet', {
-        'amount': amount,
-        'idempotency_key': key,
-      });
+  Future<Response> requestWallet(int id, String amount, String key) {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
+    return apiClient.postData('$_base/customers/$id/request-wallet', {
+      'amount': amount,
+      'idempotency_key': key,
+    });
+  }
 
-  Future<Response> confirmWallet(int collectionId) =>
-      apiClient.postData('$_base/collections/$collectionId/confirm', {});
+  Future<Response> confirmWallet(int collectionId) {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
+    return apiClient.postData('$_base/collections/$collectionId/confirm', {});
+  }
 
-  Future<Response> pendingCollections() =>
-      apiClient.getData('$_base/collections/pending');
+  Future<Response> pendingCollections() {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
+    return apiClient.getData('$_base/collections/pending');
+  }
 
-  Future<Response> collectionStatus(int collectionId) =>
-      apiClient.getData('$_base/collections/$collectionId');
+  Future<Response> collectionStatus(int collectionId) {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
+    return apiClient.getData('$_base/collections/$collectionId');
+  }
 
-  Future<Response> receiptPdf(int collectionId) =>
-      apiClient.getData('$_base/collections/$collectionId/receipt',
-          headers: {'Accept': 'application/pdf'});
+  Future<Response> receiptPdf(int collectionId) {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
+    return apiClient.getData('$_base/collections/$collectionId/receipt',
+        headers: {'Accept': 'application/pdf'});
+  }
 
   // Legacy callers still produce a verifiable cash collection and voucher.
   Future<Response> recordPayment(int id, String amount, {String? note}) =>
       collectCash(id, amount, const Uuid().v4(), note: note);
 
-  Future<Response> recordReturn(int id, String amount, {String? note}) =>
-      apiClient.postData('$_base/customers/$id/return', {
-        'amount': amount,
-        if (note != null && note.isNotEmpty) 'note': note,
-      });
+  Future<Response> recordReturn(int id, String amount, {String? note}) {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
+    return apiClient.postData('$_base/customers/$id/return', {
+      'amount': amount,
+      if (note != null && note.isNotEmpty) 'note': note,
+    });
+  }
 
-  Future<Response> recordAdjustment(int id, String signedAmount, String note) =>
-      apiClient.postData('$_base/customers/$id/adjustment', {
-        'signed_amount': signedAmount,
-        'note': note,
-      });
+  Future<Response> recordAdjustment(int id, String signedAmount, String note) {
+    if (_business != null) return Future.value(_unsupportedInBusinessMode());
+    return apiClient.postData('$_base/customers/$id/adjustment', {
+      'signed_amount': signedAmount,
+      'note': note,
+    });
+  }
 }

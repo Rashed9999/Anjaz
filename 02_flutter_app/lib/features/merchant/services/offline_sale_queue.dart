@@ -67,12 +67,15 @@ class OfflineSaleQueue extends GetxService {
     final targetBackend = (adapter != null && adapter.isEnabledForActiveMerchant)
         ? 'business'
         : 'legacy';
+    final merchantId = adapter?.config.activeMerchantId;
     final list = _read(sp)
       ..add({
         ...payload,
         '_offline_state': 'pending',
         '_offline_attempts': 0,
         '_offline_backend': payload['_offline_backend'] ?? targetBackend,
+        if (targetBackend == 'business' && merchantId != null && merchantId.isNotEmpty)
+          '_offline_merchant_id': payload['_offline_merchant_id'] ?? merchantId,
         '_offline_queued_at': DateTime.now().toIso8601String(),
       });
     await _write(sp, list);
@@ -108,16 +111,24 @@ class OfflineSaleQueue extends GetxService {
         continue;
       }
       try {
-        final useBusiness = payload['_offline_backend'] == 'business' &&
+        final isBusinessItem = payload['_offline_backend'] == 'business';
+        final queuedMerchant = '${payload['_offline_merchant_id'] ?? ''}'.trim();
+        final activeMerchant = adapter?.config.activeMerchantId?.trim() ?? '';
+        final merchantMatches = queuedMerchant.isNotEmpty && queuedMerchant == activeMerchant;
+        final useBusiness = isBusinessItem &&
             adapter != null &&
-            adapter.isEnabledForActiveMerchant;
+            adapter.isEnabledForActiveMerchant &&
+            merchantMatches;
         final Response r;
         if (useBusiness) {
           r = await adapter.recordSale(payload);
-        } else if (payload['_offline_backend'] == 'business') {
-          // التاجر تراجع عن التحويل قبل مزامنة هذه العملية: تُحفظ للمحاولة أو المراجعة
-          // ولا تُرسل خطأً لخادم أميال باي القديم بحمولة غير متوافقة.
-          remaining.add(_markRetry(payload, 'بانتظار تفعيل خادم أميال أعمال لمزامنة هذه العملية'));
+        } else if (isBusinessItem) {
+          // حماية عزل المنشآت على الأجهزة المشتركة (F-04): لا تُرسل عملية business
+          // إلى خادم أميال باي القديم ولا إلى منشأة تاجر آخر أبداً.
+          final waitReason = (adapter != null && adapter.isEnabledForActiveMerchant && !merchantMatches)
+              ? 'بانتظار تسجيل دخول التاجر صاحب هذه العملية لمزامنتها بأمان'
+              : 'بانتظار تفعيل خادم أميال أعمال لمزامنة هذه العملية';
+          remaining.add(_markRetry(payload, waitReason));
           continue;
         } else {
           final api = _injectedApiClient ?? Get.find<ApiClient>();

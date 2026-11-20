@@ -107,17 +107,112 @@ class MerchantBusinessApiAdapter extends GetxService {
   Future<Response> quote(Map<String, dynamic> data) => _post('/pos/quote', data);
 
   Future<Response> recordSale(Map<String, dynamic> legacyOrMobilePayload) async {
+    final violation = validateSaleGuardrails(legacyOrMobilePayload);
+    if (violation != null) {
+      return violation;
+    }
     final key = _extractIdempotencyKey(legacyOrMobilePayload);
     final adapted = adaptSalePayload(legacyOrMobilePayload);
     final res = await _post('/pos/sales', adapted, idempotencyKey: key);
     return _adaptSaleResponse(res);
   }
 
+  Future<Response> walletStatus(String invoiceIdOrUlid) async {
+    final res = await _get('/pos/sales/$invoiceIdOrUlid/wallet-status');
+    return _adaptSaleResponse(res);
+  }
+
+  Future<Response> cancelWallet(String invoiceIdOrUlid) async {
+    final res = await _post('/pos/sales/$invoiceIdOrUlid/wallet-cancel', const {});
+    return _adaptSaleResponse(res);
+  }
+
+  /// ضوابط منع تشويه الفاتورة أو الازدواج عند تفعيل خادم أميال أعمال (F-01).
+  /// تعيد استجابة 422 صريحة قبل أي طلب شبكة إذا وُجدت ميزة قديمة غير مدعومة أو تحصيل مسبق.
+  Response? validateSaleGuardrails(Map<String, dynamic> raw) {
+    final rawMethod = '${raw['method'] ?? raw['payment_method'] ?? 'cash'}';
+    final method = rawMethod == 'amial_pay' ? 'wallet' : rawMethod;
+
+    if (method != 'cash' && method != 'credit' && method != 'wallet') {
+      return _guardrailError(
+        'PAYMENT_METHOD_NOT_SUPPORTED_IN_BUSINESS_MODE',
+        'وسيلة الدفع ($rawMethod) غير مدعومة بعد عبر أميال أعمال؛ استخدم نقداً أو آجلاً أو محفظة أميال باي.',
+      );
+    }
+
+    if (method == 'wallet' &&
+        raw['paid_transaction_id'] != null &&
+        '${raw['paid_transaction_id']}'.trim().isNotEmpty) {
+      return _guardrailError(
+        'LEGACY_WALLET_PRECOLLECTION_NOT_ALLOWED',
+        'في وضع أميال أعمال يُنشأ طلب QR من فاتورة أميال أعمال أولاً ولا يُستخدم التحصيل المسبق القديم.',
+      );
+    }
+
+    if (method == 'credit' && raw['customer_id'] == null) {
+      return _guardrailError(
+        'CUSTOMER_ID_REQUIRED_IN_BUSINESS_MODE',
+        'يجب اختيار عميل مسجّل من قائمة عملاء أميال أعمال (customer_id) للبيع الآجل.',
+      );
+    }
+
+    final rawItems = (raw['items'] is List) ? raw['items'] as List : const [];
+    if (rawItems.isEmpty) {
+      return _guardrailError(
+        'FREE_AMOUNT_NOT_SUPPORTED_IN_BUSINESS_MODE',
+        'البيع بمبلغ حرّ بلا أصناف غير مدعوم عبر أميال أعمال؛ أضف صنفاً للسلة أولاً.',
+      );
+    }
+
+    final discount = double.tryParse('${raw['discount_amount'] ?? 0}') ?? 0;
+    if (discount > 0 || raw['promotion_id'] != null) {
+      return _guardrailError(
+        'DISCOUNT_NOT_SUPPORTED_IN_BUSINESS_MODE',
+        'الخصومات والعروض الترويجية غير مدعومة بعد في وضع أميال أعمال المحمول.',
+      );
+    }
+
+    final redeemPoints = double.tryParse('${raw['redeem_points'] ?? 0}') ?? 0;
+    if (redeemPoints > 0) {
+      return _guardrailError(
+        'LOYALTY_NOT_SUPPORTED_IN_BUSINESS_MODE',
+        'استبدال نقاط الولاء غير مدعوم بعد في وضع أميال أعمال المحمول.',
+      );
+    }
+
+    final currency = '${raw['currency'] ?? ''}'.trim();
+    if (currency.isNotEmpty && currency.toUpperCase() != 'YER') {
+      return _guardrailError(
+        'MULTI_CURRENCY_NOT_SUPPORTED_IN_BUSINESS_MODE',
+        'القبض بعملة غير العملة الأساس غير مدعوم بعد في وضع أميال أعمال المحمول.',
+      );
+    }
+
+    return null;
+  }
+
+  Response _guardrailError(String code, String message) => Response(
+        statusCode: 422,
+        statusText: 'Unprocessable Entity',
+        body: {
+          'success': false,
+          'ok': false,
+          'code': code,
+          'message': message,
+          'data': null,
+          'errors': {},
+        },
+      );
+
   Future<Response> sales({int limit = 30}) async {
     final res = await _get('/pos/sales', query: {'limit': '$limit'});
     if (res.statusCode == 200 && res.body is Map) {
       final data = (res.body as Map)['data'];
       if (data is Map && data['invoices'] is List) {
+        final adaptedSales = (data['invoices'] as List)
+            .whereType<Map>()
+            .map((e) => _adaptInvoiceMap(Map<String, dynamic>.from(e)))
+            .toList();
         return Response(
           statusCode: 200,
           statusText: res.statusText,
@@ -126,7 +221,7 @@ class MerchantBusinessApiAdapter extends GetxService {
             'ok': true,
             'code': 'OK',
             'data': data,
-            'meta': {'sales': data['invoices'], 'currency': data['currency']},
+            'meta': {'sales': adaptedSales, 'currency': data['currency']},
           },
         );
       }
@@ -139,10 +234,13 @@ class MerchantBusinessApiAdapter extends GetxService {
     if (res.statusCode == 200 && res.body is Map) {
       final data = (res.body as Map)['data'];
       if (data is Map && data['invoice'] is Map) {
-        final inv = Map<String, dynamic>.from(data['invoice'] as Map);
+        final inv = _adaptInvoiceMap(Map<String, dynamic>.from(data['invoice'] as Map));
         final refundable = inv['refundable'] is Map
             ? Map<String, dynamic>.from(inv['refundable'] as Map)
             : <String, dynamic>{};
+        final remainingStr = '${refundable['remaining'] ?? inv['total'] ?? '0'}';
+        final remainingNum = double.tryParse(remainingStr) ?? 0;
+        final fullyRefunded = refundable['fully_refunded'] == true || remainingNum <= 0;
         return Response(
           statusCode: 200,
           statusText: res.statusText,
@@ -155,9 +253,16 @@ class MerchantBusinessApiAdapter extends GetxService {
               'sale': inv,
               'invoice': inv,
               'lines': inv['lines'] ?? const [],
+              'totals': {
+                'revenue': inv['total'] ?? '0',
+                'known_cost': null,
+                'gross_profit': null,
+                'unknown_cost_lines': 0,
+              },
               'currency': data['currency'],
               'refunded_so_far': refundable['refunded_so_far'] ?? inv['returned_total'] ?? '0',
-              'remaining': refundable['remaining'] ?? inv['total'] ?? '0',
+              'remaining': remainingStr,
+              'fully_refunded': fullyRefunded,
               'available_methods': refundable['available_methods'] ?? const [],
             },
           },
@@ -245,6 +350,11 @@ class MerchantBusinessApiAdapter extends GetxService {
     return _adaptSingleHeldResponse(res);
   }
 
+  Future<Response> reopenHeld(String cartId) async {
+    final res = await _post('/pos/held-carts/$cartId/reopen', const {});
+    return _adaptSingleHeldResponse(res);
+  }
+
   Future<Response> discardHeld(String cartId) async {
     final res = await _delete('/pos/held-carts/$cartId');
     return _adaptSingleHeldResponse(res);
@@ -291,6 +401,15 @@ class MerchantBusinessApiAdapter extends GetxService {
     if (res.statusCode == 200 && res.body is Map) {
       final data = (res.body as Map)['data'];
       if (data is Map && data['contacts'] is List) {
+        final adapted = (data['contacts'] as List).whereType<Map>().map((raw) {
+          final c = Map<String, dynamic>.from(raw);
+          return <String, dynamic>{
+            ...c,
+            'customer_name': c['customer_name'] ?? c['name'] ?? '',
+            'customer_phone': c['customer_phone'] ?? c['phone'] ?? '',
+            'current_balance': c['current_balance'] ?? c['receivable'] ?? '0',
+          };
+        }).toList();
         return Response(
           statusCode: 200,
           statusText: res.statusText,
@@ -300,8 +419,8 @@ class MerchantBusinessApiAdapter extends GetxService {
             'code': 'OK',
             'data': data,
             'meta': {
-              'customers': data['contacts'],
-              'contacts': data['contacts'],
+              'customers': adapted,
+              'contacts': adapted,
               'currency': data['currency'],
             },
           },
@@ -412,11 +531,12 @@ class MerchantBusinessApiAdapter extends GetxService {
 
     final items = rawItems.map((entry) {
       final m = Map<String, dynamic>.from(entry as Map);
-      final qty = m['quantity'] ?? m['qty'];
+      final hasAmount = m['amount'] != null && '${m['amount']}'.trim().isNotEmpty;
+      final qty = hasAmount ? m['quantity'] : (m['quantity'] ?? m['qty']);
       return <String, dynamic>{
         'product_id': m['product_id'],
-        if (qty != null) 'quantity': '$qty',
-        if (m['amount'] != null) 'amount': '${m['amount']}',
+        if (qty != null && '$qty'.trim().isNotEmpty) 'quantity': '$qty',
+        if (hasAmount) 'amount': '${m['amount']}',
         if (m['unit_price'] != null) 'unit_price': '${m['unit_price']}',
         if (m['unit_id'] != null) 'unit_id': m['unit_id'],
       };
@@ -446,7 +566,10 @@ class MerchantBusinessApiAdapter extends GetxService {
     } else if (raw['items'] is List) {
       for (final entry in (raw['items'] as List)) {
         if (entry is Map) {
-          final lineId = entry['line_id'] ?? entry['sales_invoice_line_id'] ?? entry['id'];
+          final lineId = entry['sale_item_id'] ??
+              entry['line_id'] ??
+              entry['sales_invoice_line_id'] ??
+              entry['id'];
           final q = entry['quantity'] ?? entry['qty'];
           if (lineId != null && q != null && '$q'.trim().isNotEmpty) {
             quantities['$lineId'] = '$q';
@@ -468,6 +591,7 @@ class MerchantBusinessApiAdapter extends GetxService {
       final m = Map<String, dynamic>.from(e as Map);
       return <String, dynamic>{
         ...m,
+        'name': m['name'] ?? m['description'] ?? 'صنف',
         'qty': m['qty'] ?? m['quantity'] ?? 1,
         'price': m['price'] ?? m['unit_price'] ?? '0',
       };
@@ -475,7 +599,47 @@ class MerchantBusinessApiAdapter extends GetxService {
     return <String, dynamic>{
       ...cart,
       'ticket_ulid': '${cart['id'] ?? cart['reference'] ?? ''}',
+      'label': cart['label'] ?? cart['note'] ?? cart['reference'] ?? '',
+      'total': cart['total'] ?? cart['total_snapshot'] ?? '0',
+      'items_count': cart['items_count'] ?? normalizedItems.length,
+      'opened_by_name': cart['opened_by_name'] ?? '',
       'items': normalizedItems,
+    };
+  }
+
+  Map<String, dynamic> _adaptInvoiceMap(Map<String, dynamic> inv) {
+    final customer = inv['customer'] is Map ? inv['customer'] as Map : null;
+    final rawLines = inv['lines'] is List ? inv['lines'] as List : const [];
+    final adaptedLines = rawLines.whereType<Map>().map((rawLine) {
+      final l = Map<String, dynamic>.from(rawLine);
+      final qtyNum = double.tryParse('${l['quantity'] ?? 0}') ?? 0;
+      final retNum = double.tryParse('${l['returned_quantity'] ?? 0}') ?? 0;
+      final computedRem = (qtyNum - retNum).clamp(0, qtyNum);
+      final refundableQty = l['refundable_quantity'] ?? computedRem.toStringAsFixed(4);
+      final name = l['name'] ?? l['description'] ?? '';
+      return <String, dynamic>{
+        ...l,
+        'name': name,
+        'qty': l['qty'] ?? l['quantity'] ?? '1',
+        'price': l['price'] ?? l['unit_price'] ?? '0',
+        'refundable_quantity': '$refundableQty',
+      };
+    }).toList();
+
+    final ulid = '${inv['sale_ulid'] ?? inv['ulid'] ?? inv['id'] ?? ''}';
+    return <String, dynamic>{
+      ...inv,
+      'sale_ulid': ulid,
+      'invoice_number': inv['invoice_number'] ?? inv['number'],
+      'total_amount': inv['total_amount'] ?? inv['total'] ?? '0',
+      'refunded_total': inv['refunded_total'] ?? inv['returned_total'] ?? '0',
+      'amount_received': inv['amount_received'] ?? inv['amount_tendered'],
+      'created_at': inv['created_at'] ?? inv['issued_at'],
+      'customer_name': inv['customer_name'] ?? customer?['name'],
+      'customer_phone': inv['customer_phone'] ?? customer?['phone'],
+      'items_count': inv['items_count'] ?? adaptedLines.length,
+      'lines': adaptedLines,
+      'items': adaptedLines,
     };
   }
 
@@ -534,6 +698,7 @@ class MerchantBusinessApiAdapter extends GetxService {
       final map = res.body as Map;
       final data = map['data'];
       if (data is Map && data['invoice'] is Map) {
+        final adaptedInv = _adaptInvoiceMap(Map<String, dynamic>.from(data['invoice'] as Map));
         return Response(
           statusCode: res.statusCode,
           statusText: res.statusText,
@@ -544,8 +709,8 @@ class MerchantBusinessApiAdapter extends GetxService {
             'replayed': map['replayed'] ?? false,
             'data': data,
             'meta': {
-              'sale': data['invoice'],
-              'invoice': data['invoice'],
+              'sale': adaptedInv,
+              'invoice': adaptedInv,
               'currency': data['currency'],
               'replayed': map['replayed'] ?? false,
             },

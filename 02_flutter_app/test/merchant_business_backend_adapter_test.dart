@@ -152,16 +152,85 @@ void main() {
                 'id': 77,
                 'ulid': invoiceUlid,
                 'number': 'INV-000077',
+                'status': 'paid',
+                'payment_method': 'cash',
                 'total': '6000.0000',
+                'amount_tendered': '6000.0000',
                 'returned_total': '0.0000',
+                'issued_at': '2026-11-20T12:00:00Z',
+                'customer': {'id': 12, 'name': 'بقالة الأمل', 'phone': '+96777000012'},
                 'lines': [
-                  {'id': 501, 'product_id': 9, 'description': 'سمك ديرك', 'quantity': '2.0000', 'unit_price': '3000.0000'},
+                  {
+                    'id': 501,
+                    'product_id': 9,
+                    'name': 'سمك ديرك',
+                    'description': 'سمك ديرك',
+                    'quantity': '2.0000',
+                    'returned_quantity': '0.0000',
+                    'refundable_quantity': '2.0000',
+                    'unit_price': '3000.0000',
+                    'line_total': '6000.0000',
+                  },
                 ],
                 'refundable': {
                   'refunded_so_far': '0.0000',
                   'remaining': '6000.0000',
+                  'fully_refunded': false,
                   'available_methods': ['cash'],
                 },
+              },
+            },
+          }, 200);
+        }
+        if (req.url.path == '/api/v1/mobile/pos/sales/$invoiceUlid/wallet-status' && req.method == 'GET') {
+          return _jsonResponse({
+            'ok': true,
+            'code': 'OK',
+            'data': {
+              'currency': 'YER',
+              'invoice': {
+                'id': 77,
+                'ulid': invoiceUlid,
+                'number': 'INV-000077',
+                'status': 'paid',
+                'payment_method': 'wallet',
+                'total': '6000.0000',
+                'lines': [],
+              },
+            },
+          }, 200);
+        }
+        if (req.url.path == '/api/v1/mobile/pos/sales/$invoiceUlid/wallet-cancel' && req.method == 'POST') {
+          return _jsonResponse({
+            'ok': true,
+            'code': 'OK',
+            'data': {
+              'currency': 'YER',
+              'invoice': {
+                'id': 77,
+                'ulid': invoiceUlid,
+                'number': 'INV-000077',
+                'status': 'cancelled',
+                'payment_method': 'wallet',
+                'total': '6000.0000',
+                'lines': [],
+              },
+            },
+          }, 200);
+        }
+        if (req.url.path == '/api/v1/mobile/pos/held-carts/15/reopen' && req.method == 'POST') {
+          return _jsonResponse({
+            'ok': true,
+            'code': 'OK',
+            'data': {
+              'currency': 'YER',
+              'held_cart': {
+                'id': 15,
+                'reference': 'HLD-000015',
+                'status': 'held',
+                'total_snapshot': '6000.0000',
+                'items_count': 1,
+                'items': [{'product_id': 9, 'name': 'سمك ديرك', 'quantity': '2', 'unit_price': '3000.0000'}],
               },
             },
           }, 200);
@@ -243,59 +312,214 @@ void main() {
     final refundCtrl = CashierRefundController(repo: refundRepo);
     final creditCtrl = CustomerCreditController(repo: creditRepo);
 
-    // 1) CashierController: مسح باركود ميزان + بيع نقدي عبر amount_received.
+    // 1) CashierController: مسح باركود ميزان (1.250 كجم محفوظة بدقة دون تقريب لقطعة واحدة) + بيع نقدي عبر amount_received.
     expect(await cashierCtrl.lookupAndAddByBarcode('2100123012507'), 'added');
-    final cashSale = await cashierCtrl.recordSale(total: 6000, method: 'cash', amountReceived: 6000);
+    expect(cashierCtrl.cart.first.exactQuantity, '1.250');
+    expect(cashierCtrl.cart.first.lineTotal, closeTo(3750.0, 0.01));
+    final cashSale = await cashierCtrl.recordSale(total: 3750, method: 'cash', amountReceived: 6000);
     expect(cashSale, isNotNull);
     expect(cashSale!['ulid'], invoiceUlid);
+    expect(cashSale['sale_ulid'], invoiceUlid);
+    expect(cashSale['total_amount'], '6000.0000');
     final cashReq = requests.firstWhere((r) => r.url.path == '/api/v1/mobile/pos/sales' && r.method == 'POST');
     final cashBody = jsonDecode(cashReq.body) as Map<String, dynamic>;
     expect(cashBody['method'], 'cash');
     expect(cashBody['tendered'], '6000.00');
+    expect((cashBody['items'] as List).first['quantity'], '1.250');
     expect(cashReq.headers['Idempotency-Key'], isNotEmpty);
 
-    // 2) CashierController: بيع محفظة (amial_pay -> wallet) يعيد wallet_intent QR!
+    // 2) CashierController: بيع محفظة (amial_pay -> wallet) يعيد wallet_intent QR + walletStatus + cancelWallet!
     cashierCtrl.addToCart('سمك ديرك', 3000, productId: 9, quantity: 2);
     final walletSale = await cashierCtrl.recordSale(total: 6000, method: 'amial_pay');
     expect(walletSale, isNotNull);
     expect(walletSale!['payment_method'], 'wallet');
     expect((walletSale['wallet_intent'] as Map)['short_code'], 'PAY-88');
 
-    // 3) CashierController: تفاصيل الفاتورة عبر ULID + استئناف تذكرة معلّقة.
+    final statusRes = await adapter.walletStatus(invoiceUlid);
+    expect(statusRes.statusCode, 200);
+    expect((statusRes.body['meta']['sale'] as Map)['status'], 'paid');
+    final cancelRes = await adapter.cancelWallet(invoiceUlid);
+    expect(cancelRes.statusCode, 200);
+    expect((cancelRes.body['meta']['sale'] as Map)['status'], 'cancelled');
+
+    // 3) CashierController: تفاصيل الفاتورة عبر ULID (بجميع حقول الشاشات) + استئناف وإعادة تعليق تذكرة معلّقة.
     await cashierCtrl.loadSaleDetail(invoiceUlid);
     expect(cashierCtrl.saleDetail.value, isNotNull);
-    expect((cashierCtrl.saleDetail.value!['sale'] as Map)['number'], 'INV-000077');
+    final detailSale = cashierCtrl.saleDetail.value!['sale'] as Map;
+    expect(detailSale['number'], 'INV-000077');
+    expect(detailSale['sale_ulid'], invoiceUlid);
+    expect(detailSale['total_amount'], '6000.0000');
+    expect(detailSale['customer_name'], 'بقالة الأمل');
+    expect(cashierCtrl.saleDetail.value!['fully_refunded'], isFalse);
 
     await cashierCtrl.loadHeldTickets();
     expect(cashierCtrl.heldTickets.length, 1);
+    expect(cashierCtrl.heldTickets.first['total'], isNotNull);
     expect(await cashierCtrl.resumeHeld('15'), isTrue);
     expect(cashierCtrl.cart.first.qty, 2);
+    expect(await cashierCtrl.reopenHeld('15'), isTrue);
 
-    // 4) CashierRefundController: loadRefundable وcreate عبر ULID!
+    // 4) CashierRefundController: loadRefundable (بدون RangeError على sale_ulid) وcreate عبر sale_item_id كما ترسل الشاشة!
     await refundCtrl.loadRefundable(invoiceUlid);
     expect(refundCtrl.refundableInfo.value, isNotNull);
     expect(refundCtrl.refundableInfo.value!['remaining'], '6000.0000');
+    final refSale = refundCtrl.refundableInfo.value!['sale'] as Map;
+    expect(refSale['sale_ulid'], invoiceUlid);
+    final refLines = refundCtrl.refundableInfo.value!['lines'] as List;
+    expect((refLines.first as Map)['name'], 'سمك ديرك');
+    expect((refLines.first as Map)['refundable_quantity'], '2.0000');
 
     final refundOk = await refundCtrl.create(
       saleUlid: invoiceUlid,
       amount: '3000.00',
       refundMethod: 'cash',
-      items: [{'line_id': 501, 'qty': '1'}],
+      items: [{'sale_item_id': 501, 'quantity': 1, 'condition': 'good', 'restock': true}],
       reason: 'مرتجع اختباري',
     );
     expect(refundOk, isTrue);
     expect(refundCtrl.lastRefund.value!['number'], 'SR-000001');
+    final refundReq = requests.firstWhere((r) => r.url.path == '/api/v1/mobile/pos/sales/$invoiceUlid/returns');
+    final refundReqBody = jsonDecode(refundReq.body) as Map<String, dynamic>;
+    expect(refundReqBody['quantities'], {'501': '1'});
 
-    // 5) CustomerCreditController: loadCustomers وcollectCash عبر غلاف meta/success!
+    // 5) CustomerCreditController: loadCustomers (بحقول customer_name وcurrent_balance للشاشة) وcollectCash
+    //    وحماية منع استدعاء مسارات Anjaz القديمة بمعرّفات أميال أعمال (F-03)!
     await creditCtrl.loadCustomers();
     expect(creditCtrl.customers.length, 1);
     expect(creditCtrl.customers.first['name'], 'بقالة الأمل');
+    expect(creditCtrl.customers.first['customer_name'], 'بقالة الأمل');
+    expect(creditCtrl.customers.first['customer_phone'], '+96777000012');
+    expect(creditCtrl.customers.first['current_balance'], '1500.0000');
+
+    final unsupportedStatement = await creditRepo.statement(12);
+    expect(unsupportedStatement.statusCode, 501);
+    expect(unsupportedStatement.body['code'], 'NOT_SUPPORTED_IN_BUSINESS_MODE');
 
     final collected = await creditCtrl.collectCash(12, '1000.00', 'col-key-12');
     expect(collected, isNotNull);
     expect(collected!['remaining_receivable'], '500.0000');
 
     verifyZeroInteractions(legacyApi);
+  });
+
+  test('F-01: ضوابط المحوّل ترفض الميزات غير المدعومة والتحصيل المسبق للمحفظة والآجل بلا customer_id قبل الشبكة', () async {
+    await config.enableForMerchant(
+      merchantId: 'tenant-guard-1',
+      bearerToken: 'abm_guard_tok',
+      baseUrl: 'https://merchant.example.test',
+    );
+
+    int networkCalls = 0;
+    final adapter = MerchantBusinessApiAdapter(
+      config: config,
+      httpClient: MockClient((req) async {
+        networkCalls++;
+        return _jsonResponse({'ok': true}, 200);
+      }),
+    );
+
+    final preCollectedWallet = await adapter.recordSale({
+      'payment_method': 'amial_pay',
+      'paid_transaction_id': 'LEGACY-TX-99',
+      'items': [{'product_id': 1, 'quantity': '1'}],
+    });
+    expect(preCollectedWallet.statusCode, 422);
+    expect(preCollectedWallet.body['code'], 'LEGACY_WALLET_PRECOLLECTION_NOT_ALLOWED');
+
+    final creditWithoutId = await adapter.recordSale({
+      'payment_method': 'credit',
+      'customer': {'name': 'أحمد', 'phone': '771234567'},
+      'items': [{'product_id': 1, 'quantity': '1'}],
+    });
+    expect(creditWithoutId.statusCode, 422);
+    expect(creditWithoutId.body['code'], 'CUSTOMER_ID_REQUIRED_IN_BUSINESS_MODE');
+
+    final withDiscount = await adapter.recordSale({
+      'payment_method': 'cash',
+      'tendered': '800',
+      'discount_amount': '200.00',
+      'items': [{'product_id': 1, 'quantity': '1'}],
+    });
+    expect(withDiscount.statusCode, 422);
+    expect(withDiscount.body['code'], 'DISCOUNT_NOT_SUPPORTED_IN_BUSINESS_MODE');
+
+    final withMixed = await adapter.recordSale({
+      'payment_method': 'mixed',
+      'items': [{'product_id': 1, 'quantity': '1'}],
+    });
+    expect(withMixed.statusCode, 422);
+    expect(withMixed.body['code'], 'PAYMENT_METHOD_NOT_SUPPORTED_IN_BUSINESS_MODE');
+
+    final freeAmount = await adapter.recordSale({
+      'payment_method': 'cash',
+      'total': '500',
+      'items': const [],
+    });
+    expect(freeAmount.statusCode, 422);
+    expect(freeAmount.body['code'], 'FREE_AMOUNT_NOT_SUPPORTED_IN_BUSINESS_MODE');
+
+    final foreignCurrency = await adapter.recordSale({
+      'payment_method': 'cash',
+      'currency': 'USD',
+      'items': [{'product_id': 1, 'quantity': '1'}],
+    });
+    expect(foreignCurrency.statusCode, 422);
+    expect(foreignCurrency.body['code'], 'MULTI_CURRENCY_NOT_SUPPORTED_IN_BUSINESS_MODE');
+
+    expect(networkCalls, 0);
+  });
+
+  test('F-04: عزل طابور الأوفلاين حسب التاجر على الأجهزة المشتركة + تنظيف الجلسة والرمز عند الخروج', () async {
+    await config.enableForMerchant(
+      merchantId: 'merchant-A',
+      bearerToken: 'abm_tok_A',
+      baseUrl: 'https://merchant.example.test',
+    );
+
+    final sentAuthHeaders = <String>[];
+    bool remoteLogoutCalled = false;
+    final adapter = MerchantBusinessApiAdapter(
+      config: config,
+      httpClient: MockClient((req) async {
+        if (req.url.path == '/api/v1/mobile/auth/logout') {
+          remoteLogoutCalled = true;
+          return _jsonResponse({'ok': true, 'data': {'revoked': true}}, 200);
+        }
+        sentAuthHeaders.add(req.headers['Authorization'] ?? '');
+        return _jsonResponse({'ok': true, 'replayed': false, 'data': {'invoice': {'id': 1, 'ulid': '01J1'}}}, 201);
+      }),
+    );
+
+    final queue = OfflineSaleQueue(apiClient: legacyApi, businessAdapter: adapter);
+    await queue.enqueue({
+      'client_uuid': 'sale-merchant-A-1',
+      'method': 'cash',
+      'tendered': '500',
+      'items': [{'product_id': 1, 'quantity': '1'}],
+    });
+
+    // تبديل الجهاز إلى تاجر B مفعّل أيضاً: يجب ألا تُرسل عملية تاجر A برمز تاجر B أبداً!
+    await config.enableForMerchant(
+      merchantId: 'merchant-B',
+      bearerToken: 'abm_tok_B',
+      baseUrl: 'https://merchant.example.test',
+    );
+    expect(await queue.sync(), 0);
+    expect(sentAuthHeaders, isEmpty);
+
+    // عند العودة لتاجر A، تتزامن عمليته بأمان وبرمزه هو فقط.
+    await config.setActiveMerchant('merchant-A');
+    expect(await queue.sync(), 1);
+    expect(sentAuthHeaders, ['Bearer abm_tok_A']);
+
+    // تسجيل الخروج يُبطل التوكن عن بُعد ويمسحه من المخزن المشفّر والذاكرة.
+    await config.clearActiveSession(revokeRemote: () async {
+      await adapter.logout();
+    });
+    expect(remoteLogoutCalled, isTrue);
+    expect(config.activeMerchantId, isNull);
+    expect(config.businessTokenFor('merchant-A'), isNull);
+    expect(await secureStore.read('amial_merchant_biz_token_v1_merchant-A'), isNull);
   });
 
   test('OfflineSaleQueue: إعادة المحاولة على 503، فشل نهائي على 409 conflict، والتراجع الآمن', () async {

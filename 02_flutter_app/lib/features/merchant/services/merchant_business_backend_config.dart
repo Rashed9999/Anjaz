@@ -197,6 +197,30 @@ class MerchantBusinessBackendConfig extends GetxService {
     }
   }
 
+  /// تنظيف جلسة أميال أعمال عند تسجيل الخروج أو تبديل الحساب على جهاز مشترك (F-04):
+  /// يستدعي إبطال الرمز عن بُعد (بأفضل جهد)، ثم يحذف التوكن المشفّر والذاكرة المؤقتة وهوية التاجر النشط.
+  Future<void> clearActiveSession({
+    Future<void> Function()? revokeRemote,
+  }) async {
+    final id = activeMerchantId;
+    if (revokeRemote != null && isReadyForActiveMerchant) {
+      try {
+        await revokeRemote();
+      } catch (_) {
+        // انقطاع الشبكة لا يمنع مسح الرمز محلياً أبداً.
+      }
+    }
+    if (id != null && id.isNotEmpty) {
+      _cachedTokens.remove(id);
+      try {
+        await tokenStore.delete('$_tokenPrefix$id');
+      } catch (_) {}
+      await sharedPreferences.remove('$_tokenPrefix$id');
+    }
+    _cachedTokens.clear();
+    await sharedPreferences.remove(_activeMerchantKey);
+  }
+
   String _stripTrailingSlash(String url) =>
       url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 }
