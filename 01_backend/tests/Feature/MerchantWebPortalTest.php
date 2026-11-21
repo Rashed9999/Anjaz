@@ -39,46 +39,15 @@ class MerchantWebPortalTest extends TestCase
         return $u->fresh();
     }
 
-    public function test_merchant_can_sign_in_with_merchant_number_and_open_owner_dashboard(): void
+    public function test_retired_portal_never_creates_a_local_session(): void
     {
-        $this->owner();
+        $owner = $this->owner();
         $this->post('/merchant/login', [
             'identifier' => 'WEB-101', 'password' => 'Merchant!2026',
-        ])->assertRedirect(route('merchant.web.dashboard'));
-
-        $this->get('/merchant')->assertOk()->assertSee('متجر التجربة');
-        $this->getJson('/merchant/data/overview')->assertOk()
-            ->assertJsonPath('meta.merchant.business_name', 'متجر التجربة');
-    }
-
-    public function test_merchant_dashboard_mobile_navigation_is_accessible_and_tables_scroll(): void
-    {
-        $owner = $this->owner();
-        $this->actingAs($owner, 'merchant_web')
-            ->get('/merchant')
-            ->assertOk()
-            ->assertSee('id="menu-toggle"', false)
-            ->assertSee('aria-controls="merchant-side"', false)
-            ->assertSee('id="nav-backdrop"', false)
-            ->assertSee('@media(max-width:1199px)', false)
-            ->assertSee("e.key==='Escape'", false)
-            ->assertSee('جدول قابل للتمرير أفقياً', false);
-    }
-
-    /** نقطة البيع معالجٌ فوق الفرع والموظف والجهاز في النسخة المنشورة فعلياً. */
-    public function test_owner_portal_exposes_guided_pos_setup_in_deployed_view(): void
-    {
-        $owner = $this->owner();
-
-        $this->actingAs($owner, 'merchant_web')
-            ->get('/merchant')
-            ->assertOk()
-            ->assertSee('إعداد نقطة بيع')
-            ->assertSee('async function posSetup()', false)
-            ->assertSee("json.data&&typeof json.data==='object'", false)
-            ->assertSee('branch_id', false)
-            ->assertSee("const selectedBranch=normaliseBranch(branchSelect.value)", false)
-            ->assertSee("staffSelect.disabled=!rows.length", false);
+        ])->assertStatus(303)->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
+        $this->assertGuest('merchant_web');
+        $this->actingAs($owner, 'merchant_web')->getJson('/merchant/data/overview')
+            ->assertOk()->assertJsonPath('meta.merchant.business_name', 'متجر التجربة');
     }
 
     /** إنشاء موظف الويب يجب أن يكتب حساباً فعلياً لا أن يكتفي بنموذج واجهة. */
@@ -148,13 +117,7 @@ class MerchantWebPortalTest extends TestCase
     {
         $owner = $this->owner();
         $this->actingAs($owner, 'merchant_web')
-            ->get('/merchant')
-            ->assertOk()
-            ->assertSee('id="portal-nav"', false)
-            ->assertSee('walletVerification')
-            ->assertSee('walletOrigins')
-            ->assertSee('debtInvoices')
-            ->assertSee('debtStatementPdf');
+            ->get('/merchant')->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
 
         $this->getJson('/merchant/data/wallet-verification')
             ->assertOk()->assertJsonStructure(['meta' => ['verification' => [
@@ -298,12 +261,7 @@ class MerchantWebPortalTest extends TestCase
             ->assertJsonPath('meta.sector', A::BIZ_RETAIL)
             ->assertJsonPath('meta.result.customers.0.customer_name', 'عميل نقدي وآجل');
 
-        $this->get('/merchant')
-            ->assertOk()
-            ->assertSee('async function customers(', false)
-            ->assertSee('قاعدة بيانات العملاء')
-            ->assertSee('staffPerformance')
-            ->assertSee('إنشاء دور مخصص');
+        $this->get('/merchant')->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
     }
 
     public function test_owner_portal_exposes_documents_printing_and_server_product_directory(): void
@@ -311,14 +269,7 @@ class MerchantWebPortalTest extends TestCase
         $owner = $this->owner();
 
         $this->actingAs($owner, 'merchant_web')
-            ->get('/merchant')
-            ->assertOk()
-            ->assertSee('المستندات والطباعة')
-            ->assertSee('async function documents()', false)
-            ->assertSee('معاينة / طباعة')
-            ->assertSee('productsV2')
-            ->assertSee('الدفعات والصلاحية')
-            ->assertSee('الوحدات والتشغيلات');
+            ->get('/merchant')->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
 
         $this->getJson('/merchant/data/products-v2')
             ->assertOk()
@@ -347,11 +298,7 @@ class MerchantWebPortalTest extends TestCase
             'قائمة المفاتيح لا يجوز أن تعيد السر الكامل بعد الإنشاء');
         $this->assertStringNotContainsString($secret, json_encode($index->json(), JSON_UNESCAPED_UNICODE));
 
-        $this->get('/merchant')->assertOk()
-            ->assertSee('التكاملات والتطبيقات')
-            ->assertSee('Webhooks للتاجر')
-            ->assertSee('غير متاح حالياً')
-            ->assertSee('GET /api/v1/amial/partner/sales', false);
+        $this->get('/merchant')->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
     }
 
     public function test_owner_wallet_and_staff_data_remain_scoped_to_own_account(): void
@@ -395,9 +342,7 @@ class MerchantWebPortalTest extends TestCase
         ]);
 
         $this->actingAs($owner, 'merchant_web')
-            ->get('/merchant')
-            ->assertOk()
-            ->assertSee('id="portal-nav"', false);
+            ->get('/merchant')->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
 
         // منتجات الوقود مدفوعة؛ بوابة الويب لا يجوز أن تتجاوز الحارس
         // بمجرد استدعائها المباشر لمحرك القطاع.
@@ -415,12 +360,7 @@ class MerchantWebPortalTest extends TestCase
         $owner = $this->owner();
 
         $this->actingAs($owner, 'merchant_web')
-            ->get('/merchant')
-            ->assertOk()
-            ->assertSee('الموردون والمشتريات')
-            ->assertSee('المصروفات')
-            ->assertSee('async function suppliers()', false)
-            ->assertSee('async function expenses()', false);
+            ->get('/merchant')->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
 
         $supplier = $this->withHeader('Idempotency-Key', 'guard-mw-supplier-1-2026')
             ->postJson('/merchant/data/suppliers', [
