@@ -92,18 +92,9 @@ class LegacyMerchantLoginRegressionTest extends TestCase
     public function test_legacy_verified_merchant_with_6cash_zero_role_can_login_and_verify_owner(): void
     {
         config(['amial_business.redirect_merchant_login' => false]);
-        $owner = $this->createLegacyVerifiedMerchant(['raw_role' => '0']);
+        $this->createLegacyVerifiedMerchant(['raw_role' => '0']);
+        $this->signedVerifyOwner('am-groc-001', 'Pass@2026')->assertOk();
 
-        // 1) الدخول عبر بوابة التاجر القديمة في أميال باي
-        $this->post('/merchant/login', [
-            'identifier' => 'am-groc-001', // أحرف صغيرة مقابل AM-GROC-001
-            'password' => 'Pass@2026',
-        ])->assertRedirect(route('merchant.web.dashboard'));
-
-        $this->assertAuthenticatedAs($owner, 'merchant_web');
-        $this->get('/merchant')->assertOk();
-
-        // 2) التحقق الموقّع عبر verify-owner من أميال أعمال
         $res = $this->signedVerifyOwner('legacy.owner@amial.test', 'Pass@2026');
         $res->assertOk()
             ->assertJsonPath('success', true)
@@ -119,12 +110,6 @@ class LegacyMerchantLoginRegressionTest extends TestCase
             'raw_phone' => '+967 777 200 001',
             'raw_role' => 'user',
         ]);
-
-        // الدخول بالصيغة المحلية أو الدولية المختلطة
-        $this->post('/merchant/login', [
-            'identifier' => '0777200001',
-            'password' => 'Pass@2026',
-        ])->assertRedirect(route('merchant.web.dashboard'));
 
         $res = $this->signedVerifyOwner('777200001', 'Pass@2026');
         $res->assertOk()->assertJsonPath('meta.merchant_number', 'AM-GROC-001');
@@ -156,26 +141,20 @@ class LegacyMerchantLoginRegressionTest extends TestCase
         );
     }
 
-    public function test_legacy_query_flag_is_preserved_in_login_form_so_sso_redirect_does_not_trap_legacy_login(): void
+    public function test_old_dashboard_and_saved_forms_redirect_without_forwarding_credentials(): void
     {
-        $this->createLegacyVerifiedMerchant(['business_type' => 'retail']);
-        config([
-            'amial_business.portal_url' => 'https://merchant.amialpay.com',
-            'amial_business.webhook_secret' => 'test-webhook-secret-32chars-0000',
-            'amial_business.redirect_merchant_login' => true,
-        ]);
+        config(['amial_business.redirect_merchant_login' => false]);
+        $target = 'https://merchant.amialpay.com/login';
 
-        // فتح /merchant/login?legacy=1 يجب أن يتضمن حقلاً مخفياً legacy=1 داخل النموذج
-        $this->get('/merchant/login?legacy=1')
-            ->assertOk()
-            ->assertSee('name="legacy"', false);
+        foreach (['/merchant', '/merchant/login', '/merchant/login?legacy=1'] as $path) {
+            $this->get($path)->assertStatus(303)->assertRedirect($target);
+        }
 
-        // إرسال النموذج مع legacy=1 يجب أن يفتح لوحة أميال باي القديمة مباشرة دون تحويل SSO
-        $this->post('/merchant/login', [
-            'identifier' => 'AM-GROC-001',
-            'password' => 'Pass@2026',
-            'legacy' => '1',
-        ])->assertRedirect(route('merchant.web.dashboard'));
+        $this->post('/merchant/login?legacy=1', [
+            'identifier' => 'old-owner',
+            'password' => 'test-password',
+        ])->assertStatus(303)->assertRedirect($target);
+        $this->assertGuest('merchant_web');
     }
 
     public function test_unverified_and_non_merchant_accounts_remain_strictly_blocked(): void

@@ -247,14 +247,7 @@ class UnifiedLoginController extends Controller
                     }
                 }
 
-                // عند تعطيل التحويل مؤقتاً (مثل AMIAL_BUSINESS_REDIRECT_MERCHANT_LOGIN=false) نُدخل المالك المعتمد للوحة أميال باي دون قفله.
-                Auth::guard('user')->logout();
-                Auth::guard('agent_staff')->logout();
-                Auth::guard('merchant_web')->login($user, $request->boolean('remember'));
-                $request->session()->regenerate();
-                RateLimiter::clear($throttleKey);
-
-                return redirect()->route('merchant.web.dashboard');
+                return redirect()->away(PortalHost::merchantLoginUrl(), 303);
             }
         }
 

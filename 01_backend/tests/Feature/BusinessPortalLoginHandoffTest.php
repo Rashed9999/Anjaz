@@ -66,7 +66,7 @@ class BusinessPortalLoginHandoffTest extends TestCase
         $this->assertSame('https://merchant.amialpay.com/login', PortalHost::merchantLoginUrl());
 
         $this->get('/merchant/login')->assertRedirect('https://merchant.amialpay.com/login');
-        $this->get('/merchant/login?legacy=1')->assertOk();
+        $this->get('/merchant/login?legacy=1')->assertRedirect(PortalHost::merchantLoginUrl());
 
         // الاشتقاق التلقائي من webhook_url + inbound_secret عند عدم ضبط portal_url صراحةً.
         config([
@@ -77,7 +77,7 @@ class BusinessPortalLoginHandoffTest extends TestCase
         $this->assertSame('https://merchant.amialpay.com/login', PortalHost::merchantLoginUrl());
     }
 
-    public function test_legacy_merchant_submit_issues_signed_sso_handoff_to_amial_business(): void
+    public function test_unified_merchant_submit_issues_signed_sso_handoff_to_amial_business(): void
     {
         $this->createVerifiedMerchant();
         $secret = 'test-webhook-secret-32chars-0000';
@@ -87,8 +87,8 @@ class BusinessPortalLoginHandoffTest extends TestCase
             'amial_business.redirect_merchant_login' => true,
         ]);
 
-        $res = $this->post('/merchant/login', [
-            'identifier' => 'M-90001',
+        $res = $this->post('/login', [
+            'username' => '771234567',
             'password' => 'MerchantPass123',
         ]);
 

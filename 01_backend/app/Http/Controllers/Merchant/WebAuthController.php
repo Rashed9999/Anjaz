@@ -3,10 +3,7 @@
 namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Controller;
-use App\Models\Merchant;
-use App\Models\MerchantProfile;
 use App\Models\User;
-use App\Services\Merchant\MerchantOwnerLookup;
 use App\Support\Access\AccessConstants as A;
 use App\Support\Phone;
 use App\Domain\Verticals\VerticalRegistry as VR;
@@ -16,23 +13,16 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Contracts\View\View;
 
 /** بوابة المالك: حساب تاجر فقط، جلسة مستقلة، ومنع محاولات التخمين. */
 class WebAuthController extends Controller
 {
-    public function login(Request $request): View|RedirectResponse
+    public function login(): RedirectResponse
     {
-        if (! $request->boolean('legacy')) {
-            $portal = \App\Support\PortalHost::businessPortalUrl();
-            if ($portal !== null) {
-                return redirect()->away($portal . '/login');
-            }
-        }
-
-        return view('merchant-web.login');
+        // A stale form may POST credentials. Always start a fresh GET at Business.
+        return redirect()->away(\App\Support\PortalHost::merchantLoginUrl(), 303);
     }
 
     /** إنشاء التاجر صار من بوابة الأعمال نفسها، لا من معالج Flutter القديم. */
@@ -121,117 +111,11 @@ class WebAuthController extends Controller
         return view('merchant-web.opening');
     }
 
-    public function submit(Request $request): RedirectResponse
-    {
-        $input = $request->validate([
-            'identifier' => ['required', 'string', 'max:160'],
-            'password' => ['required', 'string', 'max:200'],
-            'remember' => ['sometimes', 'boolean'],
-        ]);
-        $identifier = trim((string) $input['identifier']);
-        $key = 'amial:merchant-web:' . hash('sha256',
-            mb_strtolower($identifier) . '|' . (string) $request->ip());
-
-        if (RateLimiter::tooManyAttempts($key, 5)) {
-            return back()->withInput($request->only('identifier'))
-                ->withErrors(['identifier' => 'محاولات كثيرة؛ أعد المحاولة لاحقاً.']);
-        }
-
-        $owner = MerchantOwnerLookup::findByIdentifier($identifier);
-
-        $profile = $owner
-            ? MerchantProfile::where('user_id', $owner->id)->first()
-            : null;
-
-        if (!$owner || !Hash::check((string) $input['password'], (string) $owner->password)
-            || (int) $owner->is_active !== 1
-            || (int) ($owner->is_temp_blocked ?? 0) === 1
-            || !$profile) {
-            RateLimiter::hit($key, 900);
-            Log::warning('amial_pay.merchant_web_login_rejected', [
-                'reason' => !$owner
-                    ? 'OWNER_NOT_FOUND'
-                    : (!Hash::check((string) $input['password'], (string) $owner->password)
-                        ? 'INVALID_PASSWORD'
-                        : ((int) $owner->is_active !== 1 || (int) ($owner->is_temp_blocked ?? 0) === 1
-                            ? 'ACCOUNT_INACTIVE_OR_BLOCKED'
-                            : 'MERCHANT_PROFILE_MISSING')),
-                'merchant_user_id' => $owner?->id,
-            ]);
-            return back()->withInput($request->only('identifier'))->withErrors([
-                'identifier' => 'تعذر الدخول؛ تحقق من البيانات أو حالة حساب المنشأة.',
-            ]);
-        }
-
-        if ((string) $profile->verification_status !== 'verified') {
-            RateLimiter::clear($key);
-            $state = (string) $profile->verification_status;
-            Log::info('amial_pay.merchant_web_login_kyc_required', [
-                'merchant_user_id' => $owner->id,
-                'verification_status' => $state,
-            ]);
-            $message = match ($state) {
-                'rejected' => 'تم رفض ملف المنشأة. راجع سبب الرفض أو تواصل مع الدعم قبل تسجيل الدخول.',
-                'resubmission_required' => 'ملف المنشأة يحتاج استكمال مستندات قبل تفعيل لوحة الأعمال.',
-                'verification_suspended' => 'توثيق المنشأة موقوف مؤقتاً. تواصل مع الدعم.',
-                default => 'حساب المنشأة قيد المراجعة. سنفعّل لوحة الأعمال بعد اعتماد الملف.',
-            };
-
-            return back()->withInput($request->only('identifier'))
-                ->withErrors(['identifier' => $message]);
-        }
-
-        RateLimiter::clear($key);
-
-        if (! $request->boolean('legacy')) {
-            $portal = \App\Support\PortalHost::businessPortalUrl();
-            $webhookSecret = trim((string) config('amial_business.webhook_secret', ''));
-            if ($portal !== null && $webhookSecret !== '') {
-                $links = app(\App\Services\BusinessGateway\BusinessLinkService::class);
-                $link = $links->link($owner);
-                if ($link->isActive()) {
-                    $ts = time();
-                    $payloadArr = $links->summary($link) + [
-                        'ts' => $ts,
-                        'nonce' => \Illuminate\Support\Str::random(32),
-                        'owner' => [
-                            'name' => trim(($owner->f_name ?? '') . ' ' . ($owner->l_name ?? '')),
-                            'email' => $owner->email,
-                            'phone' => $owner->phone,
-                        ],
-                    ];
-                    $json = json_encode($payloadArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                    $payloadB64 = rtrim(strtr(base64_encode((string) $json), '+/', '-_'), '=');
-                    $sig = \App\Services\BusinessGateway\BusinessGatewaySignature::outbound(
-                        (string) $ts,
-                        (string) $json,
-                        $webhookSecret,
-                    );
-
-                    Log::info('amial_pay.merchant_web_sso_handoff', [
-                        'merchant_user_id' => $owner->id,
-                        'link_id' => $link->link_ulid,
-                        'business_type' => $profile->business_type,
-                    ]);
-
-                    return redirect()->away(
-                        $portal . '/auth/amial-pay-sso?payload=' . rawurlencode($payloadB64) . '&sig=' . rawurlencode($sig)
-                    );
-                }
-            }
-        }
-
-        Auth::guard('merchant_web')->login($owner, $request->boolean('remember'));
-        $request->session()->regenerate();
-
-        return redirect()->route('merchant.web.dashboard');
-    }
-
     public function logout(Request $request): RedirectResponse
     {
         Auth::guard('merchant_web')->logout();
         $request->session()->regenerateToken();
 
-        return redirect()->route('merchant.web.login');
+        return redirect()->away(\App\Support\PortalHost::merchantLoginUrl(), 303);
     }
 }
