@@ -11,12 +11,37 @@ class CartLine {
   int qty;
   // AMIAL-CASHIER-BARCODE-001 — معرّف المنتج (إن وُجد) ليُخصم المخزون عند البيع.
   final int? productId;
-  CartLine({required this.name, required this.price, this.qty = 1, this.productId});
+  // F-03: حفظ الكمية العشرية الدقيقة أو المبلغ لباركود الميزان دون تقريب لعدد صحيح.
+  final String? exactQuantity;
+  final String? exactAmount;
+  CartLine({
+    required this.name,
+    required this.price,
+    this.qty = 1,
+    this.productId,
+    this.exactQuantity,
+    this.exactAmount,
+  });
 
-  double get lineTotal => price * qty;
+  double get lineTotal {
+    if (exactAmount != null && exactAmount!.trim().isNotEmpty) {
+      final parsedAmount = double.tryParse(exactAmount!);
+      if (parsedAmount != null && parsedAmount > 0) return parsedAmount;
+    }
+    if (exactQuantity != null && exactQuantity!.trim().isNotEmpty) {
+      final parsedQty = double.tryParse(exactQuantity!);
+      if (parsedQty != null && parsedQty > 0) return price * parsedQty;
+    }
+    return price * qty;
+  }
+
   Map<String, dynamic> toJson() => {
         'name': name,
         'qty': qty,
+        if (exactQuantity != null && exactQuantity!.trim().isNotEmpty)
+          'quantity': exactQuantity,
+        if (exactAmount != null && exactAmount!.trim().isNotEmpty)
+          'amount': exactAmount,
         'price': price.toString(),
         if (productId != null) 'product_id': productId,
       };
@@ -233,6 +258,28 @@ class CashierController extends GetxController implements GetxService {
       if (_ok(r)) {
         final meta = Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
         final p = Map<String, dynamic>.from((meta['product'] ?? {}) as Map);
+        final scannedQty = p['scanned_quantity']?.toString().trim();
+        final scannedAmount = p['scanned_amount']?.toString().trim();
+        // F-03: باركود الميزان يحمل وزناً عشرياً أو مبلغاً صريحاً من الخادم فلا يُقرّب لقطعة واحدة.
+        if ((scannedQty != null && scannedQty.isNotEmpty) ||
+            (scannedAmount != null && scannedAmount.isNotEmpty)) {
+          final price = double.tryParse(
+                  (p['offer_price'] ?? p['price'] ?? '0').toString()) ??
+              0;
+          final productId = p['id'] is int
+              ? p['id'] as int
+              : int.tryParse('${p['id']}');
+          lastScannedQuantity = 1;
+          cart.add(CartLine(
+            name: (p['name'] ?? '').toString(),
+            price: price,
+            qty: 1,
+            productId: productId,
+            exactQuantity: (scannedQty != null && scannedQty.isNotEmpty) ? scannedQty : null,
+            exactAmount: (scannedAmount != null && scannedAmount.isNotEmpty) ? scannedAmount : null,
+          ));
+          return 'added';
+        }
         final pack = double.tryParse('${meta['pack_size'] ?? '1'}');
         // Cart and cashier stock engine currently operate in whole pieces.
         // Do not round fractional packs and silently deduct the wrong stock.
@@ -289,6 +336,7 @@ class CashierController extends GetxController implements GetxService {
   Future<Map<String, dynamic>?> recordSale({
     required double total,
     required String method,
+    int? customerId, // F-01: معرّف العميل الموحّد في أميال أعمال
     Map<String, String>? customer,
     String? paidTransactionId,
     String? creditDueDate, // AMIAL-CUSTOMER-CREDIT-001 — تاريخ استحقاق بيع الأجل
@@ -315,6 +363,7 @@ class CashierController extends GetxController implements GetxService {
       final data = <String, dynamic>{
         'total': total.toString(),
         'payment_method': method,
+        if (customerId != null) 'customer_id': customerId,
         if (cart.isNotEmpty) 'items': cart.map((l) => l.toJson()).toList(),
         'customer': ?customer,
         'paid_transaction_id': ?paidTransactionId,
@@ -523,11 +572,18 @@ class CashierController extends GetxController implements GetxService {
 
         cart.assignAll(((t['items'] ?? []) as List).map((e) {
           final m = Map<String, dynamic>.from(e as Map);
+          final rawQtyStr = '${m['quantity'] ?? m['qty'] ?? 1}';
+          final parsedQty = double.tryParse(rawQtyStr) ?? 1;
+          final isFractional = parsedQty != parsedQty.truncateToDouble();
           return CartLine(
             name: '${m['name'] ?? 'صنف'}',
-            price: double.tryParse('${m['price'] ?? 0}') ?? 0,
-            qty: (double.tryParse('${m['qty'] ?? 1}') ?? 1).round(),
+            price: double.tryParse('${m['price'] ?? m['unit_price'] ?? 0}') ?? 0,
+            qty: isFractional ? 1 : parsedQty.round(),
             productId: m['product_id'] == null ? null : (m['product_id'] as num).toInt(),
+            exactQuantity: isFractional ? rawQtyStr : null,
+            exactAmount: m['amount'] != null && '${m['amount']}'.trim().isNotEmpty
+                ? '${m['amount']}'
+                : null,
           );
         }));
 

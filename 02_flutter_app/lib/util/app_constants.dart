@@ -28,15 +28,13 @@ class AppConstants {
   // خطواتُ التحوّل بالترتيب في: docs/التحوّل-إلى-النطاق.md
   static const String productionDomain = 'https://amialpay.com';
 
-  // بوابة مالك المنشأة مستقلة عن تطبيق العميل ونقطة البيع، وتبقى في ثابتٍ واحد.
-  //
-  // AMIAL-PORTAL-404-001 (2026-11-10): `merchant.amialpay.com` صار يخدم منصة
-  // «أميال أعمال» المستقلة (Coolify)، فصار `/merchant/login` عليه يرجع 404 لكل
-  // مالكٍ يضغط زر البوابة. بوابة تاجر أميال باي الحيّة هي ما يربطه الموقع العام
-  // نفسه (`PortalHost::merchantLoginUrl()` بلا مضيفٍ مخصّص): النطاق العام.
-  // التوجيه إلى «أميال أعمال» للتجار المُرحَّلين قرارٌ لاحق (ADR 0014)، لا تبديلُ رابط.
-  static const String merchantPortalDomain = productionDomain;
-  static const String merchantPortalUrl = '$merchantPortalDomain/merchant/login';
+  // بوابة مالك المنشأة المستقلة («أميال أعمال» على merchant.amialpay.com/login).
+  // يدعم Amial-Merchant الآن /login و/merchant/login (تحويل 302) ودخول ملاك أميال باي مباشرة.
+  static const String merchantPortalDomain = String.fromEnvironment(
+    'MERCHANT_PORTAL_URL',
+    defaultValue: 'https://merchant.amialpay.com',
+  );
+  static const String merchantPortalUrl = '$merchantPortalDomain/login';
 
   static const String baseUrl =
       String.fromEnvironment('BASE_URL', defaultValue: productionDomain);

@@ -3,20 +3,40 @@ import 'dart:convert';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/merchant/services/merchant_business_api_adapter.dart';
 
 /// AMIAL-OFFLINE-POS-001 — طابور مبيعات دون اتصال.
 ///
 /// عند فشل الاتصال أثناء تسجيل بيع، تُحفظ الحمولة محلياً (بمفتاح client_uuid)
 /// وتُزامَن لاحقاً عند عودة الشبكة. الخادم يمنع الازدواج عبر نفس المفتاح
 /// (idempotency)، فإعادة الإرسال آمنة تماماً.
+///
+/// AMIAL-BUSINESS-UNIFY-U2: يحفظ مع كل عملية مصدرها (`_offline_backend`:
+/// `business` أو `legacy`) لكي تبقى العمليات غير المتصلة متوافقة عند التحويل
+/// أو التراجع عنه بلا ازدواج ولا فقدان.
 class OfflineSaleQueue extends GetxService {
   static const _key = 'amial_offline_sales_v1';
   static const _endpoint = '/api/v1/amial/merchant/cashier/sales';
+
+  final ApiClient? _injectedApiClient;
+  final MerchantBusinessApiAdapter? _injectedBusinessAdapter;
+
+  OfflineSaleQueue({
+    ApiClient? apiClient,
+    MerchantBusinessApiAdapter? businessAdapter,
+  })  : _injectedApiClient = apiClient,
+        _injectedBusinessAdapter = businessAdapter;
 
   /// عدد المبيعات المعلّقة (يتفاعل معه الواجهة).
   final RxInt pending = 0.obs;
 
   Future<SharedPreferences> get _sp => SharedPreferences.getInstance();
+
+  MerchantBusinessApiAdapter? get _businessAdapter =>
+      _injectedBusinessAdapter ??
+      (Get.isRegistered<MerchantBusinessApiAdapter>()
+          ? Get.find<MerchantBusinessApiAdapter>()
+          : null);
 
   List<Map<String, dynamic>> _read(SharedPreferences sp) {
     final raw = sp.getString(_key);
@@ -24,9 +44,10 @@ class OfflineSaleQueue extends GetxService {
     try {
       return (jsonDecode(raw) as List).map((e) {
         final item = Map<String, dynamic>.from(e as Map);
-        // توافق مع المبيعات التي حُفظت قبل إضافة حالة المزامنة.
+        // توافق مع المبيعات التي حُفظت قبل إضافة حالة المزامنة أو وسم الخادم.
         item.putIfAbsent('_offline_state', () => 'pending');
         item.putIfAbsent('_offline_attempts', () => 0);
+        item.putIfAbsent('_offline_backend', () => 'legacy');
         return item;
       }).toList();
     } catch (_) {
@@ -42,11 +63,19 @@ class OfflineSaleQueue extends GetxService {
   /// أضِف بيعاً للطابور (يجب أن تحتوي الحمولة client_uuid).
   Future<void> enqueue(Map<String, dynamic> payload) async {
     final sp = await _sp;
+    final adapter = _businessAdapter;
+    final targetBackend = (adapter != null && adapter.isEnabledForActiveMerchant)
+        ? 'business'
+        : 'legacy';
+    final merchantId = adapter?.config.activeMerchantId;
     final list = _read(sp)
       ..add({
         ...payload,
         '_offline_state': 'pending',
         '_offline_attempts': 0,
+        '_offline_backend': payload['_offline_backend'] ?? targetBackend,
+        if (targetBackend == 'business' && merchantId != null && merchantId.isNotEmpty)
+          '_offline_merchant_id': payload['_offline_merchant_id'] ?? merchantId,
         '_offline_queued_at': DateTime.now().toIso8601String(),
       });
     await _write(sp, list);
@@ -64,14 +93,15 @@ class OfflineSaleQueue extends GetxService {
 
   /// يزامن المعلّق القابل للإعادة فقط.
   ///
-  /// أخطاء الشبكة و5xx و429 تبقى للمحاولة؛ أمّا 4xx النهائية (بيانات، صلاحية،
-  /// حد باقة...) فتُعلَّم «failed» وتُعرض للكاشير ولا تُعاد بلا تغيير.
+  /// أخطاء الشبكة و5xx و429 تبقى للمحاولة؛ أمّا 4xx النهائية (بما فيها
+  /// 409 IDEMPOTENCY_CONFLICT أو بيانات أو صلاحية...) فتُعلَّم «failed»
+  /// وتُعرض للكاشير ولا تُعاد بلا تغيير.
   Future<int> sync() async {
     final sp = await _sp;
     final list = _read(sp);
     if (list.isEmpty) { pending.value = 0; return 0; }
 
-    final api = Get.find<ApiClient>();
+    final adapter = _businessAdapter;
     final remaining = <Map<String, dynamic>>[];
     int done = 0;
 
@@ -81,7 +111,29 @@ class OfflineSaleQueue extends GetxService {
         continue;
       }
       try {
-        final r = await api.postData(_endpoint, payload);
+        final isBusinessItem = payload['_offline_backend'] == 'business';
+        final queuedMerchant = '${payload['_offline_merchant_id'] ?? ''}'.trim();
+        final activeMerchant = adapter?.config.activeMerchantId?.trim() ?? '';
+        final merchantMatches = queuedMerchant.isNotEmpty && queuedMerchant == activeMerchant;
+        final useBusiness = isBusinessItem &&
+            adapter != null &&
+            adapter.isEnabledForActiveMerchant &&
+            merchantMatches;
+        final Response r;
+        if (useBusiness) {
+          r = await adapter.recordSale(payload);
+        } else if (isBusinessItem) {
+          // حماية عزل المنشآت على الأجهزة المشتركة (F-04): لا تُرسل عملية business
+          // إلى خادم أميال باي القديم ولا إلى منشأة تاجر آخر أبداً.
+          final waitReason = (adapter != null && adapter.isEnabledForActiveMerchant && !merchantMatches)
+              ? 'بانتظار تسجيل دخول التاجر صاحب هذه العملية لمزامنتها بأمان'
+              : 'بانتظار تفعيل خادم أميال أعمال لمزامنة هذه العملية';
+          remaining.add(_markRetry(payload, waitReason));
+          continue;
+        } else {
+          final api = _injectedApiClient ?? Get.find<ApiClient>();
+          r = await api.postData(_endpoint, payload);
+        }
         if (r.statusCode == 200 || r.statusCode == 201) {
           done++; // نجح (أو أعاده الخادم كما هو — idempotent)
         } else if (_isRetryable(r.statusCode)) {

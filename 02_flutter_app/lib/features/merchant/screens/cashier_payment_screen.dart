@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_receipt_screen.dart';
+import 'package:amial_pay/features/merchant/services/merchant_business_api_adapter.dart';
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
+import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/helper/payment_feedback.dart';
@@ -35,6 +38,12 @@ class CashierPaymentScreen extends StatefulWidget {
 
 class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   CashierController get c => Get.find<CashierController>();
+  MerchantBusinessApiAdapter? get _businessAdapter =>
+      Get.isRegistered<MerchantBusinessApiAdapter>()
+          ? Get.find<MerchantBusinessApiAdapter>()
+          : null;
+  bool get _isBusinessBackend =>
+      _businessAdapter?.isEnabledForActiveMerchant ?? false;
   String _method = 'amial_pay';
   bool _busy = false;
 
@@ -90,7 +99,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCurrencies();
+    if (!_isBusinessBackend) {
+      _loadCurrencies();
+    }
   }
 
   Future<void> _loadCurrencies() async {
@@ -168,8 +179,12 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   /// كاذبة، وهو العطلُ الذي كلّف هذا المشروعَ من قبل في تسعيرة الباقات.
   static const _baseOnlyMethods = {'amial_pay', 'mixed', 'corporate'};
 
-  bool _methodAllowedInCurrency(String method) =>
-      _isBaseCurrency || !_baseOnlyMethods.contains(method);
+  bool _methodAllowedInCurrency(String method) {
+    if (_isBusinessBackend && (method == 'mixed' || method == 'corporate')) {
+      return false;
+    }
+    return _isBaseCurrency || !_baseOnlyMethods.contains(method);
+  }
 
   /// قيمةُ النقاط المصروفة بالريال — يحسبها الخادمُ أيضاً، وهذه للعرض.
   double get _loyaltyDiscount =>
@@ -330,6 +345,10 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   void _clearDiscount() => setState(() { _discount = 0; _promotionId = null; _promoLabel = null; });
 
   Future<void> _confirm() async {
+    if (_isBusinessBackend && widget.freeAmount) {
+      _snack('البيع بمبلغ حرّ غير مدعوم في وضع أميال أعمال؛ أضف صنفاً للسلة أولاً.');
+      return;
+    }
     switch (_method) {
       case 'cash':
         await _recordAndShowReceipt('cash', amountReceived: _received);
@@ -338,8 +357,16 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       case 'credit':
         await _credit();
       case 'corporate':
+        if (_isBusinessBackend) {
+          _snack('حسابات الشركات غير مدعومة بعد في وضع أميال أعمال المحمول.');
+          return;
+        }
         await _corporate();
       case 'mixed':
+        if (_isBusinessBackend) {
+          _snack('الدفع المختلط غير مدعوم بعد في وضع أميال أعمال المحمول.');
+          return;
+        }
         await _mixed();
     }
   }
@@ -677,7 +704,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   }
 
   Future<void> _recordAndShowReceipt(String method,
-      {Map<String, String>? customer, String? creditDueDate,
+      {int? customerId, Map<String, String>? customer, String? creditDueDate,
       double? amountReceived}) async {
     final conflict = _loyaltyCustomerConflict(customer);
     if (conflict != null) { _snack(conflict); return; }
@@ -700,13 +727,14 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       // العملةُ هي الأساس، فمسارُ الريال لم يتغيّر بحرف.)
       total: _amountToSend,
       method: method,
+      customerId: customerId,
       customer: customer,
       creditDueDate: creditDueDate,
-      discountAmount: _discountToSend,
-      promotionId: _promotionId,
-      currency: _currencyToSend,
+      discountAmount: _isBusinessBackend ? null : _discountToSend,
+      promotionId: _isBusinessBackend ? null : _promotionId,
+      currency: _isBusinessBackend ? null : _currencyToSend,
       // AMIAL-LOYALTY-AT-PAYMENT-001 — تُستبدَل في معاملة البيعة نفسِها.
-      redeemPoints: _redeemPoints > 0 ? _redeemPoints : null,
+      redeemPoints: (!_isBusinessBackend && _redeemPoints > 0) ? _redeemPoints : null,
       amountReceived: amountReceived,
     );
     if (!mounted) return;
@@ -733,9 +761,14 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         ));
   }
 
-  /// أميال باي: يعرض QR بمبلغ ثابت يمسحه العميل ويدفع من محفظته، ثم يُسجَّل
-  /// البيع مربوطاً بمرجع الدفع وتُفتح الفاتورة تلقائياً (استقبال حقيقي).
+  /// أميال باي: في وضع أميال أعمال (F-01) تُنشأ الفاتورة ونيّة الدفع في أميال أعمال
+  /// أولاً ثم يُعرض QR وتُستعلم الحالة حتى التأكيد الفعلي (لا تحصيل مزدوج عبر المسار القديم).
+  /// للتجار غير المرحّلين يستمر المسار القديم عبر AmialQrCollectScreen دون تغيير.
   Future<void> _amialPay() async {
+    if (_isBusinessBackend) {
+      await _amialPayBusiness();
+      return;
+    }
     Get.to(() => AmialQrCollectScreen(
           amount: _net,
           note: widget.freeAmount ? 'بيع سريع' : 'دفع مشتريات',
@@ -759,8 +792,65 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         ));
   }
 
-  /// آجل: بيانات العميل (اسم + رقم) وتاريخ استحقاق اختياري.
+  /// F-01: تدفّق الدفع بالمحفظة الموحّد مع أميال أعمال (إنشاء فاتورة awaiting_payment + نية QR + استعلام + إلغاء آمن).
+  Future<void> _amialPayBusiness() async {
+    final adapter = _businessAdapter;
+    if (adapter == null) return;
+
+    setState(() => _busy = true);
+    final sale = await c.recordSale(
+      total: _net,
+      method: 'amial_pay',
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    if (sale == null) {
+      PaymentFeedback.failure();
+      if (c.lastError.value.isNotEmpty) _snack(c.lastError.value);
+      return;
+    }
+
+    final intent = sale['wallet_intent'] is Map
+        ? Map<String, dynamic>.from(sale['wallet_intent'] as Map)
+        : <String, dynamic>{};
+    final invoiceUlid = '${sale['sale_ulid'] ?? sale['ulid'] ?? sale['id'] ?? ''}';
+    final qrPayload = '${intent['qr_payload'] ?? ''}';
+    final shortCode = '${intent['short_code'] ?? ''}';
+
+    if (invoiceUlid.isEmpty || qrPayload.isEmpty) {
+      _snack('لم تصل بيانات رمز الدفع من أميال أعمال.');
+      return;
+    }
+
+    final paidSale = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _BusinessWalletIntentDialog(
+        adapter: adapter,
+        invoiceUlid: invoiceUlid,
+        amount: double.tryParse('${sale['total'] ?? _net}') ?? _net,
+        qrPayload: qrPayload,
+        shortCode: shortCode,
+      ),
+    );
+
+    if (!mounted || paidSale == null) return;
+    PaymentFeedback.success();
+    Get.off(() => CashierReceiptScreen(
+          sale: paidSale,
+          total: double.tryParse('${paidSale['total'] ?? _net}') ?? _net,
+          method: 'amial_pay',
+        ));
+  }
+
+  /// آجل: في وضع أميال أعمال (F-01) يُختار العميل من جهات الاتصال المسجّلة (`customer_id`)،
+  /// وللتجار غير المرحّلين يستمر الإدخال اليدوي بالاسم والهاتف.
   Future<void> _credit() async {
+    if (_isBusinessBackend) {
+      await _creditBusiness();
+      return;
+    }
     final name = TextEditingController();
     final phone = TextEditingController();
     DateTime? due;
@@ -858,6 +948,70 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     );
   }
 
+  /// F-01: اختيار عميل مسجّل في أميال أعمال للبيع الآجل بـ customer_id الحقيقي.
+  Future<void> _creditBusiness() async {
+    final adapter = _businessAdapter;
+    if (adapter == null) return;
+    setState(() => _busy = true);
+    Map<String, dynamic>? picked;
+    try {
+      final r = await adapter.listContacts();
+      if (!mounted) return;
+      if (r.statusCode != 200 || r.body is! Map || r.body['success'] != true) {
+        _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر جلب قائمة العملاء');
+        return;
+      }
+      final contacts = (((r.body['meta'] ?? {})['customers'] ?? []) as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (contacts.isEmpty) {
+        _snack('لا يوجد عملاء مسجّلون في أميال أعمال؛ أضِف العميل من بوابة أميال أعمال أولاً.');
+        return;
+      }
+      picked = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(14),
+                child: Text('اختر العميل للبيع الآجل',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              ),
+              ...contacts.map((cust) => ListTile(
+                    leading: const Icon(Icons.person_outline, color: AmialColors.primary),
+                    title: Text('${cust['customer_name'] ?? cust['name'] ?? ''}'),
+                    subtitle: Text(
+                        '${cust['customer_phone'] ?? cust['phone'] ?? ''} · الرصيد: ${cust['current_balance'] ?? cust['receivable'] ?? '0'} ر.ي'),
+                    onTap: () => Navigator.pop(ctx, cust),
+                  )),
+            ],
+          ),
+        ),
+      );
+    } catch (_) {
+      _snack('خطأ في الشبكة');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (picked == null || !mounted) return;
+    final contactId = picked['id'] is int ? picked['id'] as int : int.tryParse('${picked['id']}');
+    if (contactId == null) {
+      _snack('معرّف العميل غير صالح');
+      return;
+    }
+    await _recordAndShowReceipt(
+      'credit',
+      customerId: contactId,
+      customer: {
+        'name': '${picked['customer_name'] ?? picked['name'] ?? ''}',
+        'phone': '${picked['customer_phone'] ?? picked['phone'] ?? ''}',
+      },
+    );
+  }
+
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red),
       );
@@ -926,11 +1080,11 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           ),
           const SizedBox(height: 12),
 
-          // ====== عملة القبض (تظهر لمن فعّل أكثر من عملة) ======
-          if (_acceptedCurrencies.length > 1) _currencyPicker(),
+          // ====== عملة القبض (تظهر لمن فعّل أكثر من عملة في الوضع القديم فقط) ======
+          if (!_isBusinessBackend && _acceptedCurrencies.length > 1) _currencyPicker(),
 
-          // ====== خصم / كوبون (باقة ستارتر فأعلى) ======
-          if (!widget.freeAmount) AccessGate(feature: 'promotions', child: Align(
+          // ====== خصم / كوبون (باقة ستارتر فأعلى — غير متاح بعد في وضع أميال أعمال المحمول) ======
+          if (!_isBusinessBackend && !widget.freeAmount) AccessGate(feature: 'promotions', child: Align(
             alignment: Alignment.centerRight,
             child: _discount > 0
                 ? TextButton.icon(
@@ -949,8 +1103,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           )),
           const SizedBox(height: 10),
 
-          // ====== نقاط الولاء (باقة الأعمال فأعلى) ======
-          if (!widget.freeAmount) AccessGate(feature: 'loyalty', child: _loyaltyCard()),
+          // ====== نقاط الولاء (باقة الأعمال فأعلى — غير متاح بعد في وضع أميال أعمال المحمول) ======
+          if (!_isBusinessBackend && !widget.freeAmount) AccessGate(feature: 'loyalty', child: _loyaltyCard()),
 
           // ====== المبلغ المستلم والباقي (نقداً فقط) ======
           //
@@ -1128,6 +1282,142 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                       : AmialColors.primary),
             ),
           ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// F-01: نافذة عرض QR نية دفع أميال أعمال واستعلام حالتها حتى التأكيد الفعلي أو الإلغاء الآمن.
+class _BusinessWalletIntentDialog extends StatefulWidget {
+  const _BusinessWalletIntentDialog({
+    required this.adapter,
+    required this.invoiceUlid,
+    required this.amount,
+    required this.qrPayload,
+    required this.shortCode,
+  });
+
+  final MerchantBusinessApiAdapter adapter;
+  final String invoiceUlid;
+  final double amount;
+  final String qrPayload;
+  final String shortCode;
+
+  @override
+  State<_BusinessWalletIntentDialog> createState() => _BusinessWalletIntentDialogState();
+}
+
+class _BusinessWalletIntentDialogState extends State<_BusinessWalletIntentDialog> {
+  Timer? _poll;
+  bool _cancelling = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _poll = Timer.periodic(const Duration(seconds: 3), (_) => _checkStatus());
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkStatus() async {
+    if (!mounted || _cancelling) return;
+    final res = await widget.adapter.walletStatus(widget.invoiceUlid);
+    if (!mounted) return;
+    if (res.statusCode == 200 && res.body is Map && res.body['success'] == true) {
+      final sale = (res.body['meta']?['sale'] is Map)
+          ? Map<String, dynamic>.from(res.body['meta']['sale'] as Map)
+          : <String, dynamic>{};
+      final status = '${sale['status'] ?? ''}';
+      if (status == 'paid') {
+        _poll?.cancel();
+        Navigator.of(context).pop(sale);
+      } else if (status == 'cancelled' || status == 'expired') {
+        _poll?.cancel();
+        setState(() => _error = 'انتهت أو أُلغيت نية الدفع.');
+      }
+    }
+  }
+
+  Future<void> _cancel() async {
+    setState(() {
+      _cancelling = true;
+      _error = null;
+    });
+    _poll?.cancel();
+    final res = await widget.adapter.cancelWallet(widget.invoiceUlid);
+    if (!mounted) return;
+    if (res.statusCode == 200 && res.body is Map && res.body['success'] == true) {
+      Navigator.of(context).pop(null);
+      return;
+    }
+    setState(() {
+      _cancelling = false;
+      _error = (res.body is Map ? res.body['message']?.toString() : null) ??
+          'تعذّر إلغاء نية الدفع؛ تحقق من الحالة قبل المحاولة مجدداً.';
+    });
+    _poll = Timer.periodic(const Duration(seconds: 3), (_) => _checkStatus());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: SizedBox(
+          width: 300,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'الدفع عبر محفظة أميال باي',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Text(AmialMoney.yer(widget.amount),
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary)),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: 240,
+                  child: QrDisplayWidget(
+                    data: widget.qrPayload,
+                    size: 200,
+                    caption: widget.shortCode.isNotEmpty ? 'رمز الدفع: ${widget.shortCode}' : null,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (_error != null)
+                  Text(_error!, style: const TextStyle(color: AmialColors.red, fontSize: 12), textAlign: TextAlign.center)
+                else
+                  const Text('بانتظار تأكيد دفع العميل في أميال باي…',
+                      style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
+                const SizedBox(height: 16),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  children: [
+                    TextButton(
+                      onPressed: _cancelling ? null : _checkStatus,
+                      child: const Text('تحديث الحالة'),
+                    ),
+                    TextButton(
+                      onPressed: _cancelling ? null : _cancel,
+                      child: Text(_cancelling ? 'جارٍ الإلغاء…' : 'إلغاء الطلب',
+                          style: const TextStyle(color: AmialColors.red)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

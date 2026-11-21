@@ -166,7 +166,7 @@ class _SaleCard extends StatelessWidget {
 
   String _method(String raw) => switch (raw) {
     'cash' => 'payment_cash'.tr,
-    'amial_pay' => 'payment_amial_pay'.tr,
+    'amial_pay' || 'wallet' => 'payment_amial_pay'.tr,
     'credit' => 'payment_credit'.tr,
     'mixed' => 'payment_mixed'.tr,
     'corporate' => 'payment_corporate'.tr,

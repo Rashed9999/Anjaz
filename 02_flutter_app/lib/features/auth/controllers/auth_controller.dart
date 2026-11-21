@@ -19,6 +19,8 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/common/models/response_model.dart';
 import 'package:amial_pay/features/auth/domain/models/user_short_data_model.dart';
 import 'package:amial_pay/features/auth/domain/quick_receive_preferences.dart';
+import 'package:amial_pay/features/merchant/services/merchant_business_api_adapter.dart';
+import 'package:amial_pay/features/merchant/services/merchant_business_backend_config.dart';
 import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/helper/notification_helper.dart';
@@ -366,6 +368,18 @@ class AuthController extends GetxController implements GetxService {
       // AMIAL-CRASH-005: أعطال من يستعمل الجهاز بعده لا تُنسب إلى حسابه.
       await AmialCrashReporter.forgetIdentity();
       try { Get.find<AppResumeState>().clear(); } catch (_) {}
+      // F-04: إبطال وحذف توكن أميال أعمال المشفّر وهوية التاجر النشط عند الخروج.
+      try {
+        if (Get.isRegistered<MerchantBusinessBackendConfig>()) {
+          final bizCfg = Get.find<MerchantBusinessBackendConfig>();
+          final bizAdapter = Get.isRegistered<MerchantBusinessApiAdapter>()
+              ? Get.find<MerchantBusinessApiAdapter>()
+              : null;
+          await bizCfg.clearActiveSession(
+            revokeRemote: bizAdapter != null ? () async { await bizAdapter.logout(); } : null,
+          );
+        }
+      } catch (_) {}
 
       Get.offAllNamed(RouteHelper.getSplashRoute());
       _isLoading = false;
