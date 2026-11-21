@@ -3,7 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\MerchantProfile;
-use App\Support\Access\AccessConstants as A;
+use App\Services\Merchant\MerchantOwnerLookup;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -28,7 +28,7 @@ class MerchantWebMiddleware
         }
 
         if ((int) $user->type !== MERCHANT_TYPE
-            || (string) $user->role !== A::ROLE_MERCHANT
+            || !MerchantOwnerLookup::isEligibleOwnerRole($user->role)
             || (int) $user->is_active !== 1
             || (int) ($user->is_temp_blocked ?? 0) === 1
             || !MerchantProfile::where('user_id', $user->id)->exists()) {

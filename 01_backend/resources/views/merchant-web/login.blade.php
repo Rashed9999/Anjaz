@@ -28,6 +28,9 @@
         @endif
         <form method="post" action="{{ route('merchant.web.login.submit') }}" autocomplete="on">
             @csrf
+            @if(request()->boolean('legacy'))
+                <input type="hidden" name="legacy" value="1">
+            @endif
             <label for="identifier">رقم التاجر أو الهاتف أو البريد الإلكتروني</label>
             <input id="identifier" name="identifier" value="{{ old('identifier') }}" required autofocus maxlength="160" autocomplete="username">
             <label for="password">كلمة المرور</label>

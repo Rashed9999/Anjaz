@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
 use App\Models\User;
+use App\Services\Merchant\MerchantOwnerLookup;
 use App\Support\Access\AccessConstants as A;
 use App\Support\Phone;
 use App\Domain\Verticals\VerticalRegistry as VR;
@@ -15,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Contracts\View\View;
 
@@ -135,18 +137,7 @@ class WebAuthController extends Controller
                 ->withErrors(['identifier' => 'محاولات كثيرة؛ أعد المحاولة لاحقاً.']);
         }
 
-        $merchantId = Merchant::where('merchant_number', $identifier)->value('user_id');
-        $phones = preg_match('/^[+0-9\s-]+$/', $identifier) === 1
-            ? Phone::variants($identifier) : [];
-
-        $owner = User::query()
-            ->where('type', MERCHANT_TYPE)
-            ->where('role', A::ROLE_MERCHANT)
-            ->where(function ($query) use ($identifier, $merchantId, $phones) {
-                $query->where('email', $identifier);
-                if ($phones !== []) $query->orWhereIn('phone', $phones);
-                if ($merchantId) $query->orWhere('id', $merchantId);
-            })->first();
+        $owner = MerchantOwnerLookup::findByIdentifier($identifier);
 
         $profile = $owner
             ? MerchantProfile::where('user_id', $owner->id)->first()
@@ -157,6 +148,16 @@ class WebAuthController extends Controller
             || (int) ($owner->is_temp_blocked ?? 0) === 1
             || !$profile) {
             RateLimiter::hit($key, 900);
+            Log::warning('amial_pay.merchant_web_login_rejected', [
+                'reason' => !$owner
+                    ? 'OWNER_NOT_FOUND'
+                    : (!Hash::check((string) $input['password'], (string) $owner->password)
+                        ? 'INVALID_PASSWORD'
+                        : ((int) $owner->is_active !== 1 || (int) ($owner->is_temp_blocked ?? 0) === 1
+                            ? 'ACCOUNT_INACTIVE_OR_BLOCKED'
+                            : 'MERCHANT_PROFILE_MISSING')),
+                'merchant_user_id' => $owner?->id,
+            ]);
             return back()->withInput($request->only('identifier'))->withErrors([
                 'identifier' => 'تعذر الدخول؛ تحقق من البيانات أو حالة حساب المنشأة.',
             ]);
@@ -165,6 +166,10 @@ class WebAuthController extends Controller
         if ((string) $profile->verification_status !== 'verified') {
             RateLimiter::clear($key);
             $state = (string) $profile->verification_status;
+            Log::info('amial_pay.merchant_web_login_kyc_required', [
+                'merchant_user_id' => $owner->id,
+                'verification_status' => $state,
+            ]);
             $message = match ($state) {
                 'rejected' => 'تم رفض ملف المنشأة. راجع سبب الرفض أو تواصل مع الدعم قبل تسجيل الدخول.',
                 'resubmission_required' => 'ملف المنشأة يحتاج استكمال مستندات قبل تفعيل لوحة الأعمال.',
@@ -202,6 +207,12 @@ class WebAuthController extends Controller
                         (string) $json,
                         $webhookSecret,
                     );
+
+                    Log::info('amial_pay.merchant_web_sso_handoff', [
+                        'merchant_user_id' => $owner->id,
+                        'link_id' => $link->link_ulid,
+                        'business_type' => $profile->business_type,
+                    ]);
 
                     return redirect()->away(
                         $portal . '/auth/amial-pay-sso?payload=' . rawurlencode($payloadB64) . '&sig=' . rawurlencode($sig)

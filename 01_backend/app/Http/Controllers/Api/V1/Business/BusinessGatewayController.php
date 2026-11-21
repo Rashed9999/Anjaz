@@ -336,22 +336,7 @@ class BusinessGatewayController extends Controller
             return $this->error('TOO_MANY_ATTEMPTS', 'محاولات كثيرة؛ أعد المحاولة لاحقاً.', 429);
         }
 
-        $merchantId = \App\Models\Merchant::where('merchant_number', $identifier)->value('user_id');
-        $phones = preg_match('/^[+0-9\s\-()]+$/', $identifier) === 1
-            ? \App\Support\Phone::variants($identifier) : [];
-
-        $owner = \App\Models\User::query()
-            ->where('type', MERCHANT_TYPE)
-            ->where('role', \App\Support\Access\AccessConstants::ROLE_MERCHANT)
-            ->where(function ($query) use ($identifier, $merchantId, $phones) {
-                $query->whereRaw('LOWER(TRIM(email)) = ?', [mb_strtolower($identifier)]);
-                if ($phones !== []) {
-                    $query->orWhereIn('phone', $phones);
-                }
-                if ($merchantId) {
-                    $query->orWhere('id', $merchantId);
-                }
-            })->first();
+        $owner = \App\Services\Merchant\MerchantOwnerLookup::findByIdentifier($identifier);
 
         $profile = $owner
             ? \App\Models\MerchantProfile::where('user_id', $owner->id)->first()
@@ -363,21 +348,50 @@ class BusinessGatewayController extends Controller
             || (int) ($owner->is_temp_blocked ?? 0) === 1
             || !$profile) {
             RateLimiter::hit($rateKey, 900);
+            \Illuminate\Support\Facades\Log::warning('amial_pay.business_verify_owner_rejected', [
+                'code' => 'INVALID_CREDENTIALS',
+                'reason' => !$owner
+                    ? 'OWNER_NOT_FOUND'
+                    : (!\Illuminate\Support\Facades\Hash::check($password, (string) $owner->password)
+                        ? 'INVALID_PASSWORD'
+                        : ((int) $owner->is_active !== 1 || (int) ($owner->is_temp_blocked ?? 0) === 1
+                            ? 'ACCOUNT_INACTIVE_OR_BLOCKED'
+                            : 'MERCHANT_PROFILE_MISSING')),
+                'merchant_user_id' => $owner?->id,
+            ]);
 
             return $this->error('INVALID_CREDENTIALS', 'تعذر الدخول؛ تحقق من البيانات أو حالة حساب المنشأة.', 401);
         }
 
         if ((string) $profile->verification_status !== 'verified') {
+            \Illuminate\Support\Facades\Log::info('amial_pay.business_verify_owner_rejected', [
+                'code' => 'KYC_REQUIRED',
+                'merchant_user_id' => $owner->id,
+                'verification_status' => (string) $profile->verification_status,
+            ]);
+
             return $this->error('KYC_REQUIRED', 'حساب المنشأة قيد المراجعة ولم يُعتمد بعد.', 403);
         }
 
         RateLimiter::clear($rateKey);
 
-        return $this->guard(function () use ($owner) {
+        return $this->guard(function () use ($owner, $profile) {
             $link = $this->links->link($owner);
             if (!$link->isActive()) {
+                \Illuminate\Support\Facades\Log::warning('amial_pay.business_verify_owner_rejected', [
+                    'code' => 'BUSINESS_LINK_INACTIVE',
+                    'merchant_user_id' => $owner->id,
+                    'link_id' => $link->link_ulid,
+                ]);
+
                 return $this->error('BUSINESS_LINK_INACTIVE', 'ربط المنشأة بأميال أعمال موقوف.', 403);
             }
+
+            \Illuminate\Support\Facades\Log::info('amial_pay.business_verify_owner_ok', [
+                'merchant_user_id' => $owner->id,
+                'link_id' => $link->link_ulid,
+                'business_type' => $profile->business_type,
+            ]);
 
             return $this->ok($this->links->summary($link) + [
                 'owner' => [
