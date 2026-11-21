@@ -81,7 +81,7 @@ class MerchantWebRegistrationJourneyTest extends TestCase
         $this->get('/merchant/opening')->assertOk()
             ->assertSee('استكمال توثيق المنشأة');
 
-        $this->get('/merchant/login')->assertOk();
+        $this->get('/merchant/login')->assertStatus(303)->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
     }
 
     #[Test]
@@ -139,7 +139,7 @@ class MerchantWebRegistrationJourneyTest extends TestCase
         $this->post('/merchant/login', [
             'identifier' => 'pending-merchant@example.test',
             'password' => '6392',
-        ])->assertSessionHasErrors('identifier');
+        ])->assertStatus(303)->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
 
         $this->assertGuest('merchant_web');
     }
@@ -181,7 +181,8 @@ class MerchantWebRegistrationJourneyTest extends TestCase
 
         $this->post('/merchant/login', [
             'identifier' => $email, 'password' => 'MerchantSecurePass9!',
-        ])->assertSessionHasErrors('identifier');
+        ])->assertStatus(303)->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
+        $this->assertGuest('merchant_web');
     }
 
     #[Test]
