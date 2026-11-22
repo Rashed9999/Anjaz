@@ -80,8 +80,9 @@ final class ControlCenterService
                 // This is the effective INTAKE state, not the ledger settlement state.
                 $f['mode'] = $safePolicyMode;
                 $f['enabled'] = $f['enabled'] && $safePolicyMode === 'RUNNING';
-                // Pausing new intake does not strand a funded payment.
-                $f['can_disable'] = $connected && $safePolicyMode === 'RUNNING';
+                // PAUSE_NEW is permitted with held funds, but this must
+                // never be confused with permission for a full shutdown.
+                $f['can_pause_new'] = $connected && $safePolicyMode === 'RUNNING';
             }
             return $f;
         }, $this->features->overview());
