@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\FeatureHasFundsException;
+use App\Exceptions\FeatureBalanceUnknownException;
 use App\Models\FeatureFlag;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -165,7 +166,10 @@ final class ControlCenterService
     {
         $out = $this->features->outstandingBalance($key);
         // Unknown balance is NOT zero. A broken DB query must stop the switch.
-        if ((int) $out['count'] < 0 || bccomp((string) $out['amount'], '0', 4) !== 0) {
+        if ((int) $out['count'] < 0) {
+            throw new FeatureBalanceUnknownException($key);
+        }
+        if (bccomp((string) $out['amount'], '0', 4) !== 0) {
             throw new FeatureHasFundsException($key, (string) $out['amount'], (int) $out['count']);
         }
     }
