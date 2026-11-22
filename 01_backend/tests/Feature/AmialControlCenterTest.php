@@ -260,6 +260,56 @@ class AmialControlCenterTest extends TestCase
         $this->assertDatabaseHas('control_center_requests', ['id' => $id, 'status' => 'pending']);
     }
 
+    public function test_stale_policy_revision_blocks_second_approval_even_if_mode_looks_unchanged(): void
+    {
+        $maker = $this->operator();
+        $checker = $this->operator();
+        $id = $this->actingAs($maker, 'user')->postJson(
+            '/admin/amial/control-center/features/safe_payment',
+            ['enabled' => false, 'reason' => $this->reason()]
+        )->assertStatus(202)->json('request_id');
+
+        $this->assertDatabaseHas('control_center_requests', [
+            'id' => $id, 'expected_revision' => 1,
+        ]);
+        // Simulate a separate reviewed change that advanced the policy
+        // revision and returned to the same mode.
+        DB::table('control_center_policies')->where('feature_key', 'safe_payment')
+            ->update(['revision' => 2, 'mode' => 'RUNNING']);
+        $this->actingAs($checker, 'user')->postJson(
+            '/admin/amial/control-center/approvals/'.$id,
+            ['decision' => 'approve', 'reason' => $this->reason()]
+        )->assertStatus(409)->assertJsonPath('code', 'STALE_POLICY_REVISION');
+
+        $this->assertDatabaseHas('control_center_policies', [
+            'feature_key' => 'safe_payment', 'mode' => 'RUNNING', 'revision' => 2,
+        ]);
+    }
+
+    public function test_pre_upgrade_request_cannot_be_approved_under_new_pause_mode(): void
+    {
+        $maker = $this->operator();
+        $checker = $this->operator();
+        $id = $this->actingAs($maker, 'user')->postJson(
+            '/admin/amial/control-center/features/safe_payment',
+            ['enabled' => false, 'reason' => $this->reason()]
+        )->assertStatus(202)->json('request_id');
+
+        DB::table('control_center_requests')->where('id', $id)
+            ->update(['expected_revision' => null]);
+
+        $this->actingAs($checker, 'user')->postJson(
+            '/admin/amial/control-center/approvals/'.$id,
+            ['decision' => 'approve', 'reason' => $this->reason()]
+        )->assertStatus(409)->assertJsonPath('code', 'STALE_POLICY_REVISION');
+
+        // The stale request may be rejected to clean up the queue.
+        $this->actingAs($checker, 'user')->postJson(
+            '/admin/amial/control-center/approvals/'.$id,
+            ['decision' => 'reject', 'reason' => $this->reason()]
+        )->assertOk()->assertJsonPath('code', 'REJECTED');
+    }
+
     public function test_missing_or_invalid_reason_does_not_create_request(): void
     {
         $admin = $this->operator();
