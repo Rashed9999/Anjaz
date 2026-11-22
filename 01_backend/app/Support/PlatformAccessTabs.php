@@ -134,6 +134,7 @@ final class PlatformAccessTabs
                     'saher.scan.run' => 'تشغيل جولة فحصٍ يدويّة',
                     'saher.findings.suppress' => 'كتمُ اكتشافٍ أو الحكمُ عليه',
                     'saher.autofix.quarantine' => 'احتواءُ مسار كتابةٍ خطير وإلغاء احتوائه',
+                    'saher.autofix.plan' => 'فتحُ طلب معالجةٍ موثّق لاكتشاف ساهر',
                 ]],
 
             'platform_services' => ['label' => 'خدمات المنصّة والنزاعات', 'icon' => '🧩',
