@@ -119,7 +119,7 @@
                                 <button class="acc-btn {{ $f['enabled'] ? 'danger' : 'green' }} sm js-change"
                                         data-key="{{ $f['key'] }}" data-name="{{ $f['name_ar'] }}"
                                         data-enabled="{{ $f['enabled'] ? '0' : '1' }}"
-                                        @if($f['enabled'] && !$f['can_disable']) disabled title="توجد أموال محتجزة أو تعذر التحقق" @endif>
+                                        @if($f['enabled'] && !($f['key'] === 'safe_payment' ? ($f['can_pause_new'] ?? false) : $f['can_disable'])) disabled title="تعذر تنفيذ هذا القرار" @endif>
                                     {{ $f['key'] === 'safe_payment' ? ($f['enabled'] ? 'وقف استقبال الجديد' : 'استئناف استقبال الجديد') : ($f['enabled'] ? 'إيقاف' : 'تشغيل') }}
                                 </button>
                             @else
@@ -177,7 +177,7 @@
                                         <button class="acc-btn sm {{ $f['enabled'] ? 'danger' : 'green' }} js-change"
                                             data-key="{{ $f['key'] }}" data-name="{{ $f['name_ar'] }}"
                                             data-enabled="{{ $f['enabled'] ? '0' : '1' }}"
-                                            @if($f['enabled'] && !$f['can_disable']) disabled title="لا يمكن التحقق من سلامة الإيقاف" @endif>
+                                            @if($f['enabled'] && !($f['key'] === 'safe_payment' ? ($f['can_pause_new'] ?? false) : $f['can_disable'])) disabled title="لا يمكن التحقق من سلامة القرار" @endif>
                                             {{ $f['key'] === 'safe_payment' ? ($f['enabled'] ? 'وقف استقبال الجديد' : 'استئناف استقبال الجديد') : ($f['enabled'] ? 'إيقاف' : 'تشغيل') }}
                                         </button>
                                     @else
@@ -219,7 +219,7 @@
                         <div class="mb-2"><span class="acc-tag {{ $f['connected'] ? ($f['enabled'] ? 'ok' : 'bad') : 'muted' }}">{{ $f['connected'] ? ($f['enabled'] ? 'تشغيل' : 'متوقف') : 'غير مرتبط' }}</span></div>
                         @if($f['connected'] && $ready && $canRequest)
                             <button class="acc-btn danger sm js-change" data-key="{{ $key }}" data-name="{{ $f['name_ar'] }}" data-enabled="{{ $f['enabled'] ? '0' : '1' }}"
-                                @if($f['enabled'] && !$f['can_disable']) disabled @endif>
+                                @if($f['enabled'] && !($f['key'] === 'safe_payment' ? ($f['can_pause_new'] ?? false) : $f['can_disable'])) disabled @endif>
                                 {{ $f['key'] === 'safe_payment' ? ($f['enabled'] ? 'طلب وقف استقبال الجديد' : 'طلب استئناف الاستقبال') : ($f['enabled'] ? 'طلب الإيقاف' : 'طلب التشغيل') }}
                             </button>
                         @else
