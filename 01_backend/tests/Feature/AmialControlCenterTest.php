@@ -125,7 +125,8 @@ class AmialControlCenterTest extends TestCase
 
         $info = collect(app(ControlCenterService::class)->overview())
             ->firstWhere('key', 'safe_payment');
-        $this->assertTrue($info['can_disable']); // pause new, NOT full disable
+        $this->assertTrue($info['can_pause_new']); // safe even with held funds
+        $this->assertFalse($info['can_disable']); // full shutdown would trap funds
 
         $id = $this->actingAs($maker, 'user')->postJson(
             '/admin/amial/control-center/features/safe_payment',
