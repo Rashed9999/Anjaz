@@ -141,6 +141,33 @@ class SaherRemediationWorkflowTest extends TestCase
         $this->assertStringContainsString('صلاحيات', implode(' ', $plan['steps']));
     }
 
+    public function test_successful_rescan_marks_case_not_detected_without_claiming_code_merge(): void
+    {
+        $id = $this->finding();
+        $admin = $this->actor('platform_admin');
+
+        $this->actingAs($admin, 'user')->post($this->endpoint($id), [
+            'confirm' => 'OPEN_REMEDIATION_CASE',
+            'reason' => 'يلزم فحص إصلاح صلاحية الكتابة بعد النشر والتحقق من المسار',
+        ])->assertRedirect();
+
+        $store = app(\App\Saher\Findings\FindingStore::class);
+        $run = $store->beginRun('guards', 'test', $admin->id);
+        $store->commitRun($run, 'guards', [], 1);
+
+        $this->assertDatabaseHas('saher_findings', [
+            'id' => $id,
+            'status' => 'RESOLVED',
+        ]);
+        $this->assertDatabaseHas('saher_remediation_cases', [
+            'finding_id' => $id,
+            'status' => 'SCAN_NOT_DETECTED',
+        ]);
+
+        // No human approval, PR, deployment or source patch was performed here.
+        $this->assertDatabaseCount('saher_remediation_cases', 1);
+    }
+
     public function test_route_is_guarded_and_ui_is_connected(): void
     {
         $route = Route::getRoutes()->getByName('admin.amial.saher.remediation.open');
