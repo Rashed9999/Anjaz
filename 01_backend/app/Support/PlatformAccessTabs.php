@@ -133,6 +133,7 @@ final class PlatformAccessTabs
                     'platform.aml.decide' => 'حسمُ بلاغ غسل الأموال',
                     'saher.scan.run' => 'تشغيل جولة فحصٍ يدويّة',
                     'saher.findings.suppress' => 'كتمُ اكتشافٍ أو الحكمُ عليه',
+                    'saher.autofix.quarantine' => 'احتواءُ مسار كتابةٍ خطير وإلغاء احتوائه',
                 ]],
 
             'platform_services' => ['label' => 'خدمات المنصّة والنزاعات', 'icon' => '🧩',
