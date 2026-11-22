@@ -24,13 +24,6 @@ final class SaherRouteQuarantineService
         return DB::transaction(function () use ($finding, $actorId, $reason, $plan): bool {
             $now = now();
             $name = $plan['route_name'];
-            $existing = DB::table('saher_route_quarantines')
-                ->where('route_name', $name)->lockForUpdate()->first();
-
-            if ($existing?->status === 'ACTIVE') {
-                return false; // Idempotent repeat, no duplicate audit event.
-            }
-
             $values = [
                 'finding_id' => $finding->id,
                 'finding_fingerprint' => $finding->fingerprint,
@@ -44,11 +37,20 @@ final class SaherRouteQuarantineService
                 'updated_at' => $now,
             ];
 
-            if ($existing) {
+            // Unique route_name + insertOrIgnore handles two simultaneous first clicks.
+            $inserted = DB::table('saher_route_quarantines')
+                ->insertOrIgnore($values + ['created_at' => $now]);
+
+            if ($inserted === 0) {
+                $existing = DB::table('saher_route_quarantines')
+                    ->where('route_name', $name)->lockForUpdate()->first();
+
+                if ($existing?->status === 'ACTIVE') {
+                    return false; // Idempotent repeat, no duplicate audit event.
+                }
+
                 DB::table('saher_route_quarantines')->where('id', $existing->id)
                     ->update($values);
-            } else {
-                DB::table('saher_route_quarantines')->insert($values + ['created_at' => $now]);
             }
 
             $this->event($finding->id, 'AUTOFIX_QUARANTINED', $reason, $actorId, $now);
