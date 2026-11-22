@@ -27,6 +27,14 @@ class RequireFeatureEnabled
         $write = in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true);
 
         if ($write) {
+            // Disabling new Safe Payment intake MUST NOT trap funded payments.
+            // These pre-existing lifecycle routes keep their own normal auth,
+            // zone, idempotency and ledger checks. This is not an auth bypass.
+            $name = (string) $request->route()?->getName();
+            if ($featureKey === 'safe_payment' && $this->isSafePaymentLifecycle($name)) {
+                return $next($request);
+            }
+
             try {
                 if (! $this->features->isEnabledFreshStrict($featureKey)) {
                     return $this->unavailable($featureKey);
@@ -56,6 +64,20 @@ class RequireFeatureEnabled
         }
 
         return $next($request);
+    }
+
+    private function isSafePaymentLifecycle(string $name): bool
+    {
+        foreach ([
+            'evidence.upload', 'verify-delivery', 'seller-accept',
+            'seller-reject', 'seller-in-delivery', 'seller-delivered',
+            'buyer-confirm', 'buyer-cancel', 'buyer-dispute',
+        ] as $suffix) {
+            if (str_ends_with($name, 'amial.safe-pay.'.$suffix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function unavailable(string $key, string $code = 'FEATURE_UNDER_MAINTENANCE'): JsonResponse
