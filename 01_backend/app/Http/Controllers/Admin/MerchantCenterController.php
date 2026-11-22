@@ -132,6 +132,7 @@ class MerchantCenterController extends Controller
                     'freeze' => $admin->hasPlatformPermission('platform.customers.freeze'),
                     'plan' => $admin->hasPlatformPermission('platform.settings.manage'),
                     'ticket' => $admin->hasPlatformPermission('platform.tickets.manage'),
+                    'note' => $admin->hasPlatformPermission('platform.customers.notes.create'),
                     'investigate' => $admin->hasPlatformPermission('platform.merchants.investigate'),
                 ],
                 'profile' => $this->center->profile($m),

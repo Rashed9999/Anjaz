@@ -342,7 +342,9 @@ Route::prefix('merchant-center')->name('merchant-center.')->group(function () {
         Route::get('/{id}/staff', [$mc, 'staff'])->where('id', '[0-9]+')->name('staff');
         Route::get('/{id}/support', [$mc, 'support'])->where('id', '[0-9]+')->name('support');
         Route::get('/{id}/subscription', [$mc, 'subscription'])->where('id', '[0-9]+')->name('subscription');
-        Route::post('/{id}/note', [$mc, 'addNote'])->where('id', '[0-9]+')->name('note');
+        Route::post('/{id}/note', [$mc, 'addNote'])
+            ->middleware('platform:platform.customers.notes.create')
+            ->where('id', '[0-9]+')->name('note');
     });
 
     // ── المال: لفريق المالية ومدير النظام وحدهما ──
