@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\AdminSafePaymentController;
 use App\Http\Controllers\Admin\AuditDecisionsController;
 use App\Http\Controllers\Admin\LegalTermsController;
 use App\Http\Controllers\Admin\SaherController;
+use App\Http\Controllers\Admin\ControlCenterController;
 use App\Http\Controllers\Admin\ProfileChangeRequestController;
 use App\Http\Controllers\Admin\MerchantVerificationAdminController;
 use App\Http\Controllers\Admin\OperatorRolesController;
@@ -55,6 +56,24 @@ Route::post('/locale', function (\Illuminate\Http\Request $request) {
 
     return back();
 })->name('locale');
+
+// ============ AMIAL CONTROL CENTER — centralized operational control ============
+// Pages are read-only; only explicit actions can change a connected feature.
+Route::prefix('control-center')->name('control-center.')->group(function () {
+    $control = ControlCenterController::class;
+    Route::get('/', [$control, 'home'])
+        ->middleware('platform:platform.settings.manage')->name('home');
+    Route::get('/services', [$control, 'services'])
+        ->middleware('platform:platform.settings.manage')->name('services');
+    Route::get('/emergency', [$control, 'emergency'])
+        ->middleware('platform:platform.settings.manage')->name('emergency');
+    Route::post('/features/{key}', [$control, 'change'])
+        ->where('key', '[a-z0-9_]+')
+        ->middleware(['platform:platform.settings.update', 'throttle:12,1'])->name('features.change');
+    Route::post('/approvals/{id}', [$control, 'decide'])
+        ->where('id', '[0-9]+')
+        ->middleware(['platform:platform.control.approve', 'throttle:12,1'])->name('approvals.decide');
+});
 
 // ============ Operator Workspace ============
 // الصفحة الأم لكل موظف منصة. الصلاحيات الدقيقة لا تُمنح هنا؛
