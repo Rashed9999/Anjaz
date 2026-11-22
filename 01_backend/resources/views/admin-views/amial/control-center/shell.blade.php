@@ -167,7 +167,7 @@
                         <thead><tr><th>الخاصية / الخدمة</th><th>الفئة</th><th>الحالة</th><th>المخاطر</th><th>التحكم</th></tr></thead>
                         <tbody>
                         @foreach($features as $f)
-                            <tr data-feature-row data-text="{{ mb_strtolower($f['name_ar'].' '.$f['key']) }}" data-category="{{ $f['category'] }}" data-connection="{{ $f['connected'] ? 'connected' : 'unconnected' }}">
+                            <tr data-feature-row tabindex="0" data-key="{{ $f['key'] }}" data-text="{{ mb_strtolower($f['name_ar'].' '.$f['key']) }}" data-category="{{ $f['category'] }}" data-connection="{{ $f['connected'] ? 'connected' : 'unconnected' }}">
                                 <td><strong>{{ $f['name_ar'] }}</strong><div class="acc-mute">{{ $f['description_ar'] }}</div></td>
                                 <td>{{ ['financial'=>'مالية','merchant'=>'تجارية','general'=>'عامة','channel'=>'قنوات'][$f['category']] ?? $f['category'] }}</td>
                                 <td><span class="acc-tag {{ $f['connected'] ? ($f['enabled'] ? 'ok' : 'bad') : 'muted' }}">{{ $f['connected'] ? ($f['enabled'] ? 'تشغيل' : 'إيقاف') : 'غير مربوط' }}</span></td>
@@ -190,12 +190,14 @@
                     </table>
                 </div>
                 <aside class="acc-details">
-                    <h4 style="font-size:15px;font-weight:800">تفاصيل الخدمة</h4>
-                    <p class="acc-sub">اختر خدمة من الجدول لمراجعة خصائصها.</p>
-                    <div class="acc-detail-line"><strong>السياسة</strong><span>موافقة قبل التنفيذ للعمليات الحساسة</span></div>
-                    <div class="acc-detail-line"><strong>المراقبة</strong><span>الأزرار المتصلة فقط قابلة للتنفيذ</span></div>
-                    <div class="acc-detail-line"><strong>إيقاف العمليات الجديدة</strong><span class="acc-tag muted">يحتاج ربطًا مخصصًا</span></div>
-                    <div class="acc-detail-line"><strong>الإطلاق التدريجي</strong><span class="acc-tag muted">لم يُفعّل بعد</span></div>
+                    <h4 id="acc-selected-name" style="font-size:15px;font-weight:800">تفاصيل الخدمة</h4>
+                    <p class="acc-sub" id="acc-selected-desc">اختر خدمة من الجدول لمراجعة خصائصها.</p>
+                    <div class="acc-detail-line"><strong>الوضع الحالي</strong><span id="acc-selected-state" class="acc-tag muted">غير محدد</span></div>
+                    <div class="acc-detail-line"><strong>الربط الفعلي</strong><span id="acc-selected-link">—</span></div>
+                    <div class="acc-detail-line"><strong>السياسة</strong><span id="acc-selected-policy">—</span></div>
+                    <div class="acc-detail-line"><strong>التحقق المالي</strong><span id="acc-selected-balance">—</span></div>
+                    <div class="acc-detail-line"><strong>آخر ملاحظة</strong><span id="acc-selected-note">—</span></div>
+                    <div class="acc-detail-line"><strong>المراقبة/الإطلاق التدريجي</strong><span class="acc-tag muted">يحتاج حارسًا مخصصًا</span></div>
                     <div class="acc-notice mt-3">
                         <strong>لماذا ليس زرًا فقط؟</strong>
                         <div>الخدمات المالية قد تحتاج إلى منع عمليات جديدة مع الاستمرار في تسوية العمليات القائمة؛ لا يظهر هذا الوضع قبل بناء حارس API مستقل واختبار أثره.</div>
@@ -316,6 +318,7 @@
     const submit = document.getElementById('acc-confirm');
     const base = @json(url('admin/amial/control-center'));
     const token = @json(csrf_token());
+    const features = @json($features);
     let action = null;
 
     function openDialog(next) {
@@ -378,6 +381,34 @@
             submit.disabled = false;
         }
     });
+
+    const featureByKey = new Map(features.map(f => [f.key, f]));
+    const selectedName = document.getElementById('acc-selected-name');
+    function showDetails(key) {
+        const f = featureByKey.get(key);
+        if (!f || !selectedName) return;
+        document.getElementById('acc-selected-name').textContent = f.name_ar;
+        document.getElementById('acc-selected-desc').textContent = f.description_ar || 'بدون وصف';
+        const state = document.getElementById('acc-selected-state');
+        state.textContent = f.connected ? (f.enabled ? 'تشغيل' : 'إيقاف') : 'غير مرتبط';
+        state.className = 'acc-tag ' + (f.connected ? (f.enabled ? 'ok' : 'bad') : 'muted');
+        document.getElementById('acc-selected-link').textContent = f.connected ? 'حارس API متصل' : 'بحاجة إلى عقد تكامل واختبارات';
+        document.getElementById('acc-selected-policy').textContent = f.approval_required ? 'موافقة مزدوجة' : 'تغيير مباشر بصلاحية الإدارة';
+        document.getElementById('acc-selected-balance').textContent = f.balance_verified
+            ? 'القيمة المحتجزة: ' + f.outstanding_amount : 'غير مؤكد — يمنع الإيقاف';
+        document.getElementById('acc-selected-note').textContent = f.last_note || 'لا توجد';
+        document.querySelectorAll('[data-feature-row]').forEach(row =>
+            row.classList.toggle('acc-selected', row.dataset.key === key));
+    }
+    document.querySelectorAll('[data-feature-row]').forEach(row => {
+        row.addEventListener('click', () => showDetails(row.dataset.key));
+        row.addEventListener('keydown', event => {
+            if (event.key === 'Enter') showDetails(row.dataset.key);
+        });
+    });
+    if (document.querySelector('[data-feature-row]')) {
+        showDetails(document.querySelector('[data-feature-row]').dataset.key);
+    }
 
     const q = document.getElementById('acc-search');
     const category = document.getElementById('acc-category');
