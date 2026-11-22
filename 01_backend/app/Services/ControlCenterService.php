@@ -66,13 +66,23 @@ final class ControlCenterService
     public function overview(): array
     {
         $guarded = array_fill_keys($this->guardedFeatures(), true);
+        $safePolicyMode = \Illuminate\Support\Facades\Schema::hasTable('control_center_policies')
+            ? DB::table('control_center_policies')->where('feature_key', 'safe_payment')->value('mode')
+            : null;
 
-        return array_map(function (array $f) use ($guarded): array {
+        return array_map(function (array $f) use ($guarded, $safePolicyMode): array {
             $connected = isset($guarded[$f['key']]);
             $f['connected'] = $connected;
             $f['approval_required'] = (bool) $f['is_core']
                 || in_array((string) $f['category'], ['financial', 'merchant'], true);
             $f['can_control'] = $connected;
+            if ($f['key'] === 'safe_payment') {
+                // This is the effective INTAKE state, not the ledger settlement state.
+                $f['mode'] = $safePolicyMode;
+                $f['enabled'] = $f['enabled'] && $safePolicyMode === 'RUNNING';
+                // Pausing new intake does not strand a funded payment.
+                $f['can_disable'] = $connected && $safePolicyMode === 'RUNNING';
+            }
             return $f;
         }, $this->features->overview());
     }
@@ -90,12 +100,26 @@ final class ControlCenterService
             $flag = FeatureFlag::where('key', $key)->lockForUpdate()->firstOrFail();
             $this->assertConnected($key);
 
-            if ((bool) $flag->enabled === $enable) {
+            // Safe Payment is a narrowly scoped PAUSE_NEW operation. Existing
+            // payments, refunds and disputes remain active; funds need not
+            // reach zero before pausing new intake.
+            $currentEnabled = (bool) $flag->enabled;
+            if ($key === 'safe_payment') {
+                $policy = DB::table('control_center_policies')->where('feature_key', $key)
+                    ->lockForUpdate()->first();
+                if (! $policy || ! in_array($policy->mode, ['RUNNING', 'PAUSE_NEW'], true)) {
+                    throw new \DomainException('CONTROL_POLICY_NOT_READY');
+                }
+                $currentEnabled = $currentEnabled && $policy->mode === 'RUNNING';
+            }
+
+            if ($currentEnabled === $enable) {
                 return ['state' => 'unchanged', 'request_id' => null];
             }
 
-            // Always evaluate the live financial guard even before a pending request.
-            if (! $enable) {
+            // Full disable (other features) still requires zero verified funds.
+            // Safe Payment PAUSE_NEW does not touch existing funded payments.
+            if (! $enable && $key !== 'safe_payment') {
                 $this->assertSafeToDisable($key);
             }
 
@@ -115,7 +139,7 @@ final class ControlCenterService
 
                 $id = DB::table('control_center_requests')->insertGetId([
                     'feature_key' => $key,
-                    'expected_enabled' => (bool) $flag->enabled,
+                    'expected_enabled' => $currentEnabled,
                     'desired_enabled' => $enable,
                     'status' => 'pending',
                     'requested_by' => $actor->id,
@@ -159,15 +183,43 @@ final class ControlCenterService
             }
             $this->assertConnected($flag->key);
 
-            if ($approve && (bool) $flag->enabled !== (bool) $request->expected_enabled) {
+            $currentEnabled = (bool) $flag->enabled;
+            $policy = null;
+            if ($flag->key === 'safe_payment') {
+                $policy = DB::table('control_center_policies')
+                    ->where('feature_key', $flag->key)->lockForUpdate()->first();
+                if (! $policy || ! in_array($policy->mode, ['RUNNING', 'PAUSE_NEW'], true)) {
+                    throw new \DomainException('CONTROL_POLICY_NOT_READY');
+                }
+                $currentEnabled = $currentEnabled && $policy->mode === 'RUNNING';
+            }
+
+            if ($approve && $currentEnabled !== (bool) $request->expected_enabled) {
                 throw new \DomainException('STALE_STATE');
             }
 
             if ($approve) {
-                if (! $request->desired_enabled) {
-                    $this->assertSafeToDisable($flag->key);
+                if ($flag->key === 'safe_payment') {
+                    $mode = $request->desired_enabled ? 'RUNNING' : 'PAUSE_NEW';
+                    DB::table('control_center_policies')
+                        ->where('feature_key', $flag->key)
+                        ->where('revision', $policy->revision)
+                        ->update([
+                            'mode' => $mode, 'revision' => $policy->revision + 1,
+                            'changed_by' => $checker->id, 'reason' => $request->reason,
+                            'updated_at' => now(),
+                        ]);
+                    // A previously disabled legacy flag must explicitly
+                    // be re-enabled only via the second approver.
+                    if ($request->desired_enabled && ! $flag->enabled) {
+                        $this->features->enable($checker, $flag->key, $request->reason);
+                    }
+                } else {
+                    if (! $request->desired_enabled) {
+                        $this->assertSafeToDisable($flag->key);
+                    }
+                    $this->apply($checker, $flag->key, (bool) $request->desired_enabled, $request->reason);
                 }
-                $this->apply($checker, $flag->key, (bool) $request->desired_enabled, $request->reason);
             }
 
             $status = $approve ? 'approved' : 'rejected';
