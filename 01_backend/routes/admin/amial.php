@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\AdminSafePaymentController;
 use App\Http\Controllers\Admin\AuditDecisionsController;
 use App\Http\Controllers\Admin\LegalTermsController;
 use App\Http\Controllers\Admin\SaherController;
+use App\Http\Controllers\Admin\SaherAutoFixController;
 use App\Http\Controllers\Admin\ProfileChangeRequestController;
 use App\Http\Controllers\Admin\MerchantVerificationAdminController;
 use App\Http\Controllers\Admin\OperatorRolesController;
@@ -1040,6 +1041,13 @@ Route::prefix('saher')->name('saher.')->group(function () {
     Route::post('/findings/{id}/rule', [SaherController::class, 'rule'])
         ->where('id', '[0-9]+')
         ->middleware('platform:saher.findings.suppress')->name('rule');
+    // Emergency containment is separate from source-code remediation.
+    Route::post('/findings/{id}/quarantine', [SaherAutoFixController::class, 'quarantine'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:saher.autofix.quarantine')->name('quarantine');
+    Route::post('/findings/{id}/quarantine/release', [SaherAutoFixController::class, 'release'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:saher.autofix.quarantine')->name('quarantine.release');
 });
 
 // ============ AMIAL-SUPERVISION-001 — لوحة الإشراف ============
