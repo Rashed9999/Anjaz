@@ -82,6 +82,34 @@ class SafePaymentLifecycleTest extends TestCase
         $this->assertTrue($payment->seller_response_deadline->isFuture());
     }
 
+    public function test_pause_new_policy_is_enforced_inside_funding_service_before_any_debit(): void
+    {
+        \Illuminate\Support\Facades\DB::table('control_center_policies')
+            ->where('feature_key', 'safe_payment')->update([
+                'mode' => 'PAUSE_NEW',
+                'revision' => 2,
+            ]);
+
+        try {
+            $this->service->createAndFund(
+                buyer: $this->buyer,
+                seller: $this->seller,
+                title: 'Should not be funded',
+                description: 'New request after an approved intake pause',
+                amount: '100.0000',
+            );
+            $this->fail('Intake pause must stop funding even if the caller bypasses an HTTP feature middleware');
+        } catch (\DomainException $e) {
+            $this->assertSame('FEATURE_INTAKE_PAUSED', $e->getMessage());
+        }
+
+        $this->assertSame(0, SafePayment::count());
+        $this->assertSame(
+            '1000.0000',
+            (string) EMoney::where('user_id', $this->buyer->id)->value('current_balance')
+        );
+    }
+
     /** @test */
     public function full_happy_path_create_to_release()
     {
