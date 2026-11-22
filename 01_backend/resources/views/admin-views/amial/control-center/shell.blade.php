@@ -146,7 +146,7 @@
                 <div class="acc-detail-line"><strong>الموافقة الثانية</strong><span class="acc-tag ok">مطلوبة للتغييرات الحساسة</span></div>
                 <div class="acc-detail-line"><strong>الواجهات غير المربوطة</strong><span class="acc-tag muted">لا يُسمح بتغييرها</span></div>
                 <div class="acc-detail-line"><strong>أثر التحكم</strong><span class="acc-tag ok">سجل تغيير ومراجعة</span></div>
-                <div class="acc-notice mt-3">لا يساوي لون الزر حالة النظام؛ لا يُعلن النجاح إلا بعد قبول الخادم للقرار وتسجيله.</div>
+                <div class="acc-notice mt-3">مفتاح الدفع الآمن هنا يتحكم في استقبال طلبات جديدة فقط؛ لا يوقف التسويات القائمة. لا يساوي لون الزر حالة النظام؛ لا يُعلن النجاح إلا بعد قبول الخادم للقرار وتسجيله.</div>
             </section>
         </div>
     @elseif($section === 'services')
@@ -239,7 +239,9 @@
                     @forelse($requests as $req)
                         <tr>
                             <td>#{{ $req->id }}<div class="acc-mute">{{ $req->created_at }}</div></td>
-                            <td><strong>{{ $byKey->get($req->feature_key)['name_ar'] ?? $req->feature_key }}</strong><div class="acc-mute">{{ $req->desired_enabled ? 'تشغيل' : 'إيقاف' }}</div></td>
+                            <td><strong>{{ $byKey->get($req->feature_key)['name_ar'] ?? $req->feature_key }}</strong><div class="acc-mute">{{ $req->feature_key === 'safe_payment'
+    ? ($req->desired_enabled ? 'استئناف استقبال الدفعات الجديدة' : 'تعليق استقبال الدفعات الجديدة')
+    : ($req->desired_enabled ? 'تشغيل' : 'إيقاف') }}</div></td>
                             <td>الموظف #{{ $req->requested_by }}<div class="acc-mute">{{ \Illuminate\Support\Str::limit($req->reason, 65) }}</div></td>
                             <td><span class="acc-tag {{ $req->status === 'pending' ? 'warn' : ($req->status === 'approved' ? 'ok' : 'bad') }}">{{ $req->status }}</span></td>
                             <td>{{ $req->reviewed_by ? 'الموظف #'.$req->reviewed_by : '—' }}</td>
@@ -281,9 +283,9 @@
         <a href="{{ route('admin.amial.saher.index') }}" class="acc-nav-link">♢ ساهر</a>
     @endif
     @if(auth('user')->user()?->hasPlatformPermission('platform.ops.view'))
-        <a href="{{ route('admin.amial.ops.index') }}" class="acc-nav-link">◉ العمليات والراصد</a>
+        <a href="{{ route('admin.amial.ops.index') }}" class="acc-nav-link">◉ مراقبة العمليات</a>
     @endif
-    <a href="{{ route('admin.maintenance.index') }}" class="acc-nav-link">⚙ الإعدادات القديمة</a>
+    <a href="{{ route('admin.maintenance.index') }}" class="acc-nav-link">⚙ الصيانة والإعدادات القديمة</a>
     <div class="acc-notice acc-warning" style="margin-top:22px;font-size:11px">
         <strong>مصدر الحقيقة:</strong> حالة Feature Flags في أميال باي. بقية المنصات تُعرض كتكامل غير مكتمل حتى تُربط ويُختبر التحكم فيها.
     </div>
