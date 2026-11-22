@@ -72,6 +72,21 @@ class SaherFoundationTest extends TestCase
     }
 
     /** @test */
+    public function an_excluded_permission_does_not_count_as_an_active_guard(): void
+    {
+        $guard = 'platform:platform.money.move';
+        Route::middleware($guard)->group(function () use ($guard) {
+            Route::post('admin/saher-probe/guarded', fn () => 'ok')->name('admin.saher.guarded');
+            Route::post('admin/saher-probe/excluded', fn () => 'ok')
+                ->withoutMiddleware($guard)->name('admin.saher.excluded');
+        });
+
+        $keys = collect(app(GuardCoverageCollector::class)->collect()['findings'])->pluck('assetKey');
+        $this->assertTrue($keys->contains('admin.saher.excluded'));
+        $this->assertFalse($keys->contains('admin.saher.guarded'));
+    }
+
+    /** @test */
     public function a_money_route_without_a_guard_is_critical_not_merely_high(): void
     {
         // **ودرجةُ الخطر تفرّق.** مسارٌ يُنشئ رصيداً بلا حارسٍ ليس كمسارٍ
