@@ -26,6 +26,10 @@ final class ControlCenterService
     {
         $keys = [];
         foreach (Route::getRoutes() as $route) {
+            // A control is real only if a write route is protected by this flag.
+            if (array_intersect($route->methods(), ['POST', 'PUT', 'PATCH', 'DELETE']) === []) {
+                continue;
+            }
             foreach ($route->gatherMiddleware() as $middleware) {
                 if (! is_string($middleware) || ! str_starts_with($middleware, 'feature:')) {
                     continue;
@@ -89,6 +93,9 @@ final class ControlCenterService
                     ->lockForUpdate()->first();
 
                 if ($existing) {
+                    if ((bool) $existing->desired_enabled !== $enable) {
+                        throw new \DomainException('PENDING_CONFLICT');
+                    }
                     return ['state' => 'pending', 'request_id' => (int) $existing->id];
                 }
 
