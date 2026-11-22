@@ -196,8 +196,8 @@ final class ControlCenterService
                 $currentEnabled = $currentEnabled && $policy->mode === 'RUNNING';
                 // Old v1 approval requests cannot silently change semantics to
                 // an intake policy. Any revision change invalidates the request.
-                if ($request->expected_revision === null
-                    || (int) $request->expected_revision !== (int) $policy->revision) {
+                if ($approve && ($request->expected_revision === null
+                    || (int) $request->expected_revision !== (int) $policy->revision)) {
                     throw new \DomainException('STALE_POLICY_REVISION');
                 }
             }
