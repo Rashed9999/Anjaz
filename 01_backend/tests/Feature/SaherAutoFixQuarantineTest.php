@@ -74,6 +74,11 @@ class SaherAutoFixQuarantineTest extends TestCase
         $findingId = $this->finding();
         $actor = $this->actor('platform_admin');
 
+        $this->assertTrue($actor->hasPlatformPermission('saher.autofix.quarantine'),
+            'platform_admin missing quarantine permission');
+        $plan = app(QuarantineAdvisor::class)->assess(DB::table('saher_findings')->find($findingId));
+        $this->assertTrue($plan['eligible'], $plan['reason']);
+
         $this->actingAs($actor, 'user')
             ->postJson('/admin/saher-autofix-probe/write')->assertOk()
             ->assertJsonPath('executed', true);
@@ -81,7 +86,7 @@ class SaherAutoFixQuarantineTest extends TestCase
         $this->actingAs($actor, 'user')->post($this->actionUrl($findingId), [
             'confirm' => 'QUARANTINE',
             'reason' => 'عزل مسار الكتابة حتى إصلاح صلاحياته في الشيفرة',
-        ])->assertRedirect();
+        ])->assertRedirect('/')->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('saher_route_quarantines', [
             'route_name' => $this->routeName,
@@ -102,10 +107,10 @@ class SaherAutoFixQuarantineTest extends TestCase
         ]);
 
         $this->actingAs($actor, 'user')
-            ->post($this->actionUrl($findingId).'/release', [
+            ->post($this->actionUrl($findingId).'/unblock', [
                 'confirm' => 'RELEASE',
                 'reason' => 'مراجعة التغيير واعتماد رفع الحظر على هذا المسار',
-            ])->assertRedirect();
+            ])->assertRedirect('/')->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('saher_route_quarantines', [
             'route_name' => $this->routeName,
@@ -126,8 +131,10 @@ class SaherAutoFixQuarantineTest extends TestCase
             'reason' => 'تم تحديد مسار كتابة خطير ويجب إيقافه حتى الإصلاح',
         ];
 
-        $this->actingAs($actor, 'user')->post($this->actionUrl($id), $data)->assertRedirect();
-        $this->actingAs($actor, 'user')->post($this->actionUrl($id), $data)->assertRedirect();
+        $this->actingAs($actor, 'user')->post($this->actionUrl($id), $data)
+            ->assertRedirect('/')->assertSessionHasNoErrors();
+        $this->actingAs($actor, 'user')->post($this->actionUrl($id), $data)
+            ->assertRedirect('/')->assertSessionHasNoErrors();
 
         $this->assertSame(1, DB::table('saher_route_quarantines')->count());
         $this->assertSame(1, DB::table('saher_finding_events')
