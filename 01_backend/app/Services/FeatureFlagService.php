@@ -36,6 +36,17 @@ class FeatureFlagService
         });
     }
 
+    /**
+     * Security-sensitive write guard: never read a cached decision.
+     * Missing key or failed DB read must block new writes; pending
+     * settlements/reversals need distinct routes and should not be trapped.
+     */
+    public function isEnabledFreshStrict(string $key): bool
+    {
+        $value = FeatureFlag::where('key', $key)->value('enabled');
+        return $value !== null && (bool) $value;
+    }
+
     /** تشغيل ميزة — مسموح دائماً. */
     public function enable(User $admin, string $key, ?string $note = null): FeatureFlag
     {
