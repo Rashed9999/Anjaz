@@ -347,6 +347,26 @@ class AmialControlCenterTest extends TestCase
             ->assertOk()->assertJsonPath('settled', true);
     }
 
+    public function test_every_registered_safe_payment_creation_route_is_under_the_intake_guard(): void
+    {
+        $count = 0;
+        foreach (Route::getRoutes() as $route) {
+            if (! in_array('POST', $route->methods(), true)) {
+                continue;
+            }
+            if (! str_contains((string) $route->getActionName(), 'SafePaymentController@create')) {
+                continue;
+            }
+            $count++;
+            $this->assertContains(
+                'feature:safe_payment', $route->gatherMiddleware(),
+                'Every new Safe Payment creation endpoint must respect PAUSE_NEW.'
+            );
+            $this->assertStringEndsWith('amial.safe-pay.create', (string) $route->getName());
+        }
+        $this->assertSame(1, $count, 'Unexpected Safe Payment creation entrypoint inventory change.');
+    }
+
     public function test_undefined_feature_is_fail_closed_on_write_even_for_admin(): void
     {
         $admin = $this->operator();
