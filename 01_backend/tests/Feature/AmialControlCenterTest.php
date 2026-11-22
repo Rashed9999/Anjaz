@@ -156,6 +156,49 @@ class AmialControlCenterTest extends TestCase
         $this->assertDatabaseCount('control_center_requests', 0);
     }
 
+    public function test_disabled_feature_blocks_admin_write_at_http_boundary(): void
+    {
+        $admin = $this->operator();
+        \Illuminate\Support\Facades\Route::middleware('feature:safe_payment')
+            ->post('/api/control-center-test/write', fn () => response()->json(['executed' => true]));
+
+        FeatureFlag::where('key', 'safe_payment')->update(['enabled' => false]);
+        $this->actingAs($admin, 'user')
+            ->postJson('/api/control-center-test/write')->assertStatus(503)
+            ->assertJsonPath('code', 'FEATURE_UNDER_MAINTENANCE');
+    }
+
+    public function test_undefined_feature_is_fail_closed_on_write_even_for_admin(): void
+    {
+        $admin = $this->operator();
+        \Illuminate\Support\Facades\Route::middleware('feature:feature_missing_from_catalog')
+            ->post('/api/control-center-test/unknown', fn () => response()->json(['executed' => true]));
+
+        $this->actingAs($admin, 'user')
+            ->postJson('/api/control-center-test/unknown')->assertStatus(503);
+    }
+
+    public function test_declined_approval_does_not_disable_service_or_create_money_action(): void
+    {
+        $maker = $this->operator();
+        $checker = $this->operator();
+
+        $requestId = $this->actingAs($maker, 'user')->postJson(
+            '/admin/amial/control-center/features/safe_payment',
+            ['enabled' => false, 'reason' => $this->reason()]
+        )->assertStatus(202)->json('request_id');
+
+        $this->actingAs($checker, 'user')->postJson(
+            '/admin/amial/control-center/approvals/'.$requestId,
+            ['decision' => 'reject', 'reason' => $this->reason()]
+        )->assertOk();
+
+        $this->assertTrue((bool) FeatureFlag::where('key', 'safe_payment')->value('enabled'));
+        $this->assertDatabaseHas('control_center_requests', [
+            'id' => $requestId, 'status' => 'rejected',
+        ]);
+    }
+
     public function test_writes_require_distinct_route_permissions(): void
     {
         $change = Route::getRoutes()->getByName('admin.amial.control-center.features.change');
