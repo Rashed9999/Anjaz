@@ -130,6 +130,71 @@
         </div>
     </div>
 
+    {{-- SAHER-AUTOFIX-001: immediate containment, not a code fix or a resolved finding. --}}
+    <div class="card mb-4" data-testid="saher-autofix-panel">
+        <div class="card-header">
+            <h4 class="card-header-title">مركز الإصلاح الذكي — احتواء أمني مؤقت</h4>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-light border">
+                <strong>التقييم:</strong> {{ $fixPlan['reason'] }}
+                @if($fixPlan['eligible'])
+                    <div class="mt-2 small">
+                        المسار: <code dir="ltr">{{ $fixPlan['route_name'] }}</code>
+                        · الطريقة: <code>{{ $fixPlan['method'] }}</code>
+                    </div>
+                @endif
+            </div>
+
+            <p class="small text-muted">
+                الاحتواء يوقف مسار الكتابة فوراً للجميع، ولا يغير الكود أو بيانات التجار.
+                لا تُغلق الثغرة حتى يُعالج السبب في Pull Request، ويُختبر ويُنشر ثم يُعاد فحص ساهر.
+            </p>
+
+            @if(! auth('user')->user()?->hasPlatformPermission('saher.autofix.quarantine'))
+                <div class="alert alert-warning mb-0" data-testid="saher-autofix-denied">
+                    هذا الإجراء يتطلب صلاحية <code>saher.autofix.quarantine</code>.
+                    المشاهدة وحدها لا تمنح حق تعطيل مسار.
+                </div>
+            @elseif($activeQuarantine)
+                <div class="alert alert-danger" data-testid="saher-autofix-active">
+                    المسار محظور حالياً منذ {{ $activeQuarantine->created_at }}.
+                    السبب: {{ $activeQuarantine->reason }}.
+                </div>
+                <form method="POST" action="{{ route('admin.amial.saher.quarantine.release', $finding->id) }}">
+                    @csrf
+                    <input type="hidden" name="confirm" value="RELEASE">
+                    <label class="small" for="autofix-release-reason">سبب رفع الاحتواء (بعد مراجعة الإصلاح)</label>
+                    <textarea name="reason" id="autofix-release-reason" class="form-control mb-2"
+                              required minlength="20" maxlength="1000" rows="2"></textarea>
+                    <button type="submit" class="btn btn-outline-danger btn-sm" data-testid="saher-autofix-release">
+                        رفع الحظر المؤقت
+                    </button>
+                </form>
+            @elseif($fixPlan['eligible'])
+                <form method="POST" action="{{ route('admin.amial.saher.quarantine', $finding->id) }}">
+                    @csrf
+                    <input type="hidden" name="confirm" value="QUARANTINE">
+                    <label class="small" for="autofix-reason">سبب الاحتواء (20 حرفاً على الأقل)</label>
+                    <textarea name="reason" id="autofix-reason" class="form-control mb-2"
+                              required minlength="20" maxlength="1000" rows="2"
+                              placeholder="مثال: مسار كتابة بلا تفويض مناسب؛ إيقاف مؤقت لحين مراجعة إصلاح الكود"></textarea>
+                    <label class="small d-block mb-2">
+                        <input type="checkbox" required>
+                        أفهم أن هذا الإجراء سيوقف المسار لجميع الموظفين، وقد يعطل وظيفة مرتبطة به.
+                    </label>
+                    <button type="submit" class="btn btn-danger btn-sm" data-testid="saher-autofix-quarantine">
+                        <i class="tio-shield"></i> احتواء فوري — تعطيل مسار الكتابة
+                    </button>
+                </form>
+            @else
+                <p class="mb-0 text-muted" data-testid="saher-autofix-not-eligible">
+                    لا يوجد إصلاح آلي آمن لهذا الاكتشاف بعد؛ يحتاج معالجة برمجية ومراجعة.
+                </p>
+            @endif
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-header"><h4 class="card-header-title">تاريخُ الاكتشاف</h4></div>
         <div class="card-body p-0">
