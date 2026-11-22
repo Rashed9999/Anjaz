@@ -39,6 +39,8 @@ class MaintenanceController extends Controller
         try {
             $this->denyLegacyHighRisk($key);
             $flag = $this->features->enable($request->user(), $key, $request->input('note'));
+        } catch (\DomainException $e) {
+            return $this->error($e->getMessage(), 'يستلزم هذا الإجراء موافقة مستقلة من مركز التحكم.', 409);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
             return $this->error('FEATURE_NOT_FOUND', 'الميزة غير موجودة', 404);
         }
@@ -100,6 +102,7 @@ class MaintenanceController extends Controller
         $user = $request->user();
         $isAdmin = $user && ((int) ($user->type ?? -1) === 0
             || in_array($user->role ?? null, ['admin', 'super_admin'], true));
+        $isAdmin = $isAdmin && $user->hasPlatformPermission('platform.settings.update');
 
         return $isAdmin ? null : $this->error('FORBIDDEN', 'صلاحية إدارية مطلوبة', 403);
     }
