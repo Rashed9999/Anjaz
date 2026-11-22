@@ -1044,10 +1044,12 @@ Route::prefix('saher')->name('saher.')->group(function () {
     // Emergency containment is separate from source-code remediation.
     Route::post('/findings/{id}/quarantine', [SaherAutoFixController::class, 'quarantine'])
         ->where('id', '[0-9]+')
-        ->middleware('platform:saher.autofix.quarantine')->name('quarantine');
+        ->middleware(['platform:saher.findings.view', 'platform:saher.autofix.quarantine'])
+        ->name('quarantine');
     Route::post('/findings/{id}/quarantine/release', [SaherAutoFixController::class, 'release'])
         ->where('id', '[0-9]+')
-        ->middleware('platform:saher.autofix.quarantine')->name('quarantine.release');
+        ->middleware(['platform:saher.findings.view', 'platform:saher.autofix.quarantine'])
+        ->name('quarantine.release');
 });
 
 // ============ AMIAL-SUPERVISION-001 — لوحة الإشراف ============
