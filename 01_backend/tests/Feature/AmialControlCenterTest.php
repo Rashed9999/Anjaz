@@ -160,12 +160,25 @@ class AmialControlCenterTest extends TestCase
     {
         $admin = $this->operator();
         \Illuminate\Support\Facades\Route::middleware('feature:safe_payment')
-            ->post('/api/control-center-test/write', fn () => response()->json(['executed' => true]));
+            ->post('/api/control-center-test/write', fn () => response()->json(['executed' => true]))
+            ->name('test.amial.safe-pay.create');
 
         FeatureFlag::where('key', 'safe_payment')->update(['enabled' => false]);
         $this->actingAs($admin, 'user')
             ->postJson('/api/control-center-test/write')->assertStatus(503)
             ->assertJsonPath('code', 'FEATURE_UNDER_MAINTENANCE');
+    }
+
+    public function test_existing_safe_payment_lifecycle_continues_when_new_intake_is_disabled(): void
+    {
+        $admin = $this->operator();
+        \Illuminate\Support\Facades\Route::middleware('feature:safe_payment')
+            ->post('/api/control-center-test/settle', fn () => response()->json(['settled' => true]))
+            ->name('test.amial.safe-pay.buyer-confirm');
+
+        FeatureFlag::where('key', 'safe_payment')->update(['enabled' => false]);
+        $this->actingAs($admin, 'user')->postJson('/api/control-center-test/settle')
+            ->assertOk()->assertJsonPath('settled', true);
     }
 
     public function test_undefined_feature_is_fail_closed_on_write_even_for_admin(): void
