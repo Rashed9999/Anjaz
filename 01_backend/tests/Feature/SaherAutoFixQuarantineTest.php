@@ -183,6 +183,28 @@ class SaherAutoFixQuarantineTest extends TestCase
         $this->assertNull($result['route_name']);
     }
 
+    public function test_active_containments_are_visible_in_saher_dashboard(): void
+    {
+        $id = $this->finding();
+        $admin = $this->actor('platform_admin');
+        $this->actingAs($admin, 'user')->post($this->actionUrl($id), [
+            'confirm' => 'QUARANTINE',
+            'reason' => 'تقييد وظيفة خطرة حتى التحقق من صلاحية الكتابة في المسار',
+        ])->assertRedirect();
+
+        $this->actingAs($admin, 'user')->get('/admin/amial/saher')
+            ->assertOk()
+            ->assertSee('saher-active-quarantines', false)
+            ->assertSee($this->routeName);
+
+        // Auditors can see the count, but not quarantine-specific reason details.
+        $auditor = $this->actor('platform_auditor');
+        $this->actingAs($auditor, 'user')->get('/admin/amial/saher')
+            ->assertOk()
+            ->assertSee('هناك 1 احتواء نشط')
+            ->assertDontSee('تقييد وظيفة خطرة حتى التحقق من صلاحية الكتابة في المسار');
+    }
+
     public function test_route_and_ui_are_connected_and_guarded(): void
     {
         $route = Route::getRoutes()->getByName('admin.amial.saher.quarantine');
