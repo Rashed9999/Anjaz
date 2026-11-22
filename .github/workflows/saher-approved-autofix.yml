@@ -89,6 +89,11 @@ jobs:
           fetch-depth: 1
       - name: Revalidate recipe before applying it
         run: python3 -m unittest discover -s .github/saher/tests -v
+      - name: Prepare PHP lint for the generated change
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
       - name: Apply approved recipe to disposable checkout only
         id: patch
         run: |
