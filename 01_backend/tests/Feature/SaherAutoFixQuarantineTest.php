@@ -24,6 +24,11 @@ class SaherAutoFixQuarantineTest extends TestCase
         Route::post('admin/saher-autofix-probe/write', fn () => response()->json(['executed' => true]))
             ->middleware(['web', 'admin', 'platform:platform.customers.view'])
             ->name($this->routeName);
+
+        // Laravel's name lookup is built during route bootstrapping; the test
+        // registers this route after boot, so refresh the index explicitly.
+        // Do not loosen the production advisor's live-route existence check.
+        Route::getRoutes()->refreshNameLookups();
     }
 
     private function actor(string $role): User
