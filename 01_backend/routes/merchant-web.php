@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\Merchant\WebAuthController as Login;
-use App\Http\Controllers\Merchant\WebPortalController as Portal;
 use App\Http\Controllers\Merchant\WebDashboardController as Dashboard;
 use App\Http\Controllers\Merchant\WebSalesController as SalesDirectory;
 use App\Http\Controllers\Merchant\WebProductsController as ProductsDirectory;
@@ -26,14 +25,15 @@ use App\Http\Controllers\Api\V1\Amial\ExpenseController as Expenses;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [Login::class, 'login'])->name('login');
-Route::post('/login', [Login::class, 'submit'])->middleware('throttle:10,1')->name('login.submit');
+Route::post('/login', [Login::class, 'login'])->middleware('throttle:10,1')->name('login.submit');
 Route::get('/register', [Login::class, 'register'])->middleware('throttle:30,1')->name('register');
 Route::get('/opening', [Login::class, 'opening'])->middleware('throttle:30,1')->name('opening');
 Route::post('/opening/resume', [Login::class, 'resumeOpening'])->middleware('throttle:10,1')->name('opening.resume');
 Route::get('/recover', [Login::class, 'recover'])->middleware('throttle:30,1')->name('recover');
 
+Route::get('/', [Login::class, 'login'])->name('dashboard');
+
 Route::middleware('merchant.web')->group(function () {
-    Route::get('/', [Portal::class, 'index'])->name('dashboard');
     Route::post('/logout', [Login::class, 'logout'])->name('logout');
 
     // نفس وحدات API المستخدمة في التطبيق، دون نسخ منطق التجارة أو الدفتر.

@@ -84,23 +84,10 @@ class PortalHost
         return null;
     }
 
-    /**
-     * Direct HTTPS merchant sign-in for navigation only.
-     * Prefer the standalone Amial Business portal (/login) when configured;
-     * otherwise keep legacy host/route fallback.
-     */
+    /** Public destination shared by saved Pay links and the merchant app. */
     public static function merchantLoginUrl(): string
     {
-        $businessPortal = self::businessPortalUrl();
-        if ($businessPortal !== null) {
-            return $businessPortal . '/login';
-        }
-
-        $host = self::merchant();
-
-        return $host !== null
-            ? 'https://' . $host . '/merchant/login'
-            : route('merchant.web.login');
+        return (self::businessPortalUrl() ?? 'https://merchant.amialpay.com') . '/login';
     }
 
     /** أفُعِّل الفصل أصلاً؟ */
