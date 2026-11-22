@@ -1047,10 +1047,10 @@ Route::prefix('saher')->name('saher.')->group(function () {
         ->where('id', '[0-9]+')
         ->middleware(['platform:saher.findings.view', 'platform:saher.autofix.quarantine'])
         ->name('quarantine');
-    Route::post('/findings/{id}/quarantine/release', [SaherAutoFixController::class, 'release'])
+    Route::post('/findings/{id}/quarantine/unblock', [SaherAutoFixController::class, 'release'])
         ->where('id', '[0-9]+')
         ->middleware(['platform:saher.findings.view', 'platform:saher.autofix.quarantine'])
-        ->name('quarantine.release');
+        ->name('quarantine.unblock');
     Route::post('/findings/{id}/remediation', [SaherRemediationController::class, 'open'])
         ->where('id', '[0-9]+')
         ->middleware(['platform:saher.findings.view', 'platform:saher.autofix.plan', 'throttle:5,1'])
