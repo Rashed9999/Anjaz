@@ -53,31 +53,26 @@ class DatabaseBackupCommand extends Command
         }
 
         // 3) ملف الـ output
-        $stamp = now()->format('Y-m-d_H-i-s');
+        $stamp = now()->format('Y-m-d_H-i-s') . '-' . bin2hex(random_bytes(4));
         $outFile = "{$backupDir}/db-{$stamp}.sql.gz";
 
         // 4) build mysqldump command
         // ملاحظة: --single-transaction آمن للـ InnoDB ولا يقفل الجداول
-        $cmd = sprintf(
-            'mysqldump --host=%s --port=%s --user=%s --password=%s '
-            . '--single-transaction --quick --skip-lock-tables '
-            . '--default-character-set=utf8mb4 %s 2>/dev/null | gzip > %s',
-            escapeshellarg($host),
-            escapeshellarg((string)$port),
-            escapeshellarg($user),
-            escapeshellarg($pass),
-            escapeshellarg($db),
-            escapeshellarg($outFile),
+        $pipeline = 'mysqldump --host="$1" --port="$2" --user="$3" '
+            . '--single-transaction --quick --skip-lock-tables --comments --dump-date '
+            . '--no-tablespaces --default-character-set=utf8mb4 "$4" | gzip > "$5"';
+        $partial = $outFile . '.partial';
+        $dump = new \Symfony\Component\Process\Process(
+            ['bash', '-o', 'pipefail', '-c', $pipeline, 'backup', $host, (string) $port, $user, $db, $partial],
+            null, ['MYSQL_PWD' => (string) $pass], null, null
         );
+        $exitCode = $dump->run();
 
-        // 5) Execute
-        exec($cmd, $output, $exitCode);
-
-        if ($exitCode !== 0 || !file_exists($outFile) || filesize($outFile) === 0) {
+        if ($exitCode !== 0 || !file_exists($partial) || filesize($partial) === 0) {
+            @unlink($partial);
             $this->error('❌ فشلت عملية mysqldump (exit: ' . $exitCode . ')');
             \Log::error('[Backup] mysqldump failed', [
                 'exit_code' => $exitCode,
-                'output' => $output,
             ]);
 
             $this->alarm('backup.failed', 'فشلت النسخةُ الاحتياطيّة',
@@ -102,11 +97,11 @@ class DatabaseBackupCommand extends Command
         // **وبصمةٌ تُكتب بجانب النسخة** — كما يفعل `scripts/backup.sh` —
         // فـ`scripts/restore.sh` يرفض النسخةَ المفسودة ولا يُدخلها.
         // ══════════════════════════════════════════════════════════════
-        $verdict = $this->verifyArchive($outFile);
+        $verdict = $this->verifyArchive($partial);
 
         if ($verdict !== null) {
             $this->error("❌ النسخةُ غيرُ صالحة: {$verdict}");
-            @unlink($outFile);
+            @unlink($partial);
 
             $this->alarm('backup.corrupt', 'النسخةُ الاحتياطيّةُ غيرُ صالحة',
                 "⛔ أميال باي — أُنتجت نسخةٌ ثمّ رُفضت: {$verdict}\n"
@@ -115,8 +110,14 @@ class DatabaseBackupCommand extends Command
             return 1;
         }
 
-        @file_put_contents($outFile . '.sha256',
-            hash_file('sha256', $outFile) . '  ' . basename($outFile) . "\n");
+        $checksum = hash_file('sha256', $partial);
+        if ($checksum === false || file_put_contents($outFile . '.sha256', $checksum . '  ' . basename($outFile) . "\n") === false
+            || !rename($partial, $outFile)) {
+            @unlink($partial);
+            @unlink($outFile . '.sha256');
+            $this->alarm('backup.failed', 'فشل حفظ النسخة الاحتياطية', 'تعذر حفظ الأرشيف مع بصمته.');
+            return 1;
+        }
 
         $sizeMb = round(filesize($outFile) / 1024 / 1024, 2);
         $duration = round(microtime(true) - $startedAt, 1);
