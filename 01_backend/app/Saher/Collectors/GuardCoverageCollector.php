@@ -2,6 +2,8 @@
 
 namespace App\Saher\Collectors;
 
+use App\Http\Middleware\PlatformPermissionMiddleware;
+use App\Http\Middleware\VerifyBusinessGatewaySignature;
 use App\Saher\Findings\Evidence;
 use App\Saher\Findings\Finding;
 use Illuminate\Routing\Route;
@@ -123,7 +125,7 @@ class GuardCoverageCollector
             // تصديرَ بيانات التاجر أو مرآةَ ديونه لكلّ من يعرف العنوان.
             if (str_starts_with($route->uri(), 'api/v1/business/')) {
                 $seen++;
-                if (! in_array(self::BUSINESS_SIGNATURE, $route->gatherMiddleware(), true)) {
+                if (! in_array(VerifyBusinessGatewaySignature::class, app('router')->gatherRouteMiddleware($route), true)) {
                     $findings[] = $this->unsignedBusinessRoute($route);
                 }
 
@@ -182,9 +184,10 @@ class GuardCoverageCollector
     {
         $out = [];
 
-        foreach ($route->gatherMiddleware() as $mw) {
-            if (is_string($mw) && str_starts_with($mw, 'platform:')) {
-                $out[] = substr($mw, strlen('platform:'));
+        $prefix = PlatformPermissionMiddleware::class . ':';
+        foreach (app('router')->gatherRouteMiddleware($route) as $mw) {
+            if (is_string($mw) && str_starts_with($mw, $prefix)) {
+                $out[] = substr($mw, strlen($prefix));
             }
         }
 
@@ -246,7 +249,7 @@ class GuardCoverageCollector
                 'ROUTE_MIDDLEWARE',
                 'الوسائطُ المحمولةُ على المسار فعلاً',
                 $method . ' ' . $route->uri() . "\n"
-                    . implode("\n", array_map(fn ($m) => '  · ' . (is_string($m) ? $m : gettype($m)), $route->gatherMiddleware())),
+                    . implode("\n", array_map(fn ($m) => '  · ' . (is_string($m) ? $m : gettype($m)), app('router')->gatherRouteMiddleware($route))),
                 'GuardCoverageCollector::collect',
             ),
         );
@@ -289,13 +292,13 @@ class GuardCoverageCollector
                 $method . ' ' . $route->uri() . "\n"
                     . implode("\n", array_map(
                         fn ($m) => '  · ' . (is_string($m) ? $m : gettype($m)),
-                        $route->gatherMiddleware(),
+                        app('router')->gatherRouteMiddleware($route),
                     )),
                 'GuardCoverageCollector::platformPermissions',
             ),
             Evidence::absence(
                 'ما بُحث عنه ولم يوجد',
-                'وسيطةٌ تبدأ بـ`platform:` ضمن `gatherMiddleware()` — '
+                'وسيطةٌ تبدأ بـ`platform:` ضمن الوسائط الفعلية بعد تطبيق الاستثناءات — '
                     . 'وهي المجموعةُ والمسارُ معاً، لا أحدُهما',
                 'GuardCoverageCollector',
             ),

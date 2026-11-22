@@ -97,6 +97,21 @@ class BusinessGatewayObservabilityTest extends TestCase
     }
 
     #[Test]
+    public function saher_checks_the_effective_signature_after_route_exclusions(): void
+    {
+        Route::middleware('amial.business.signature')->group(function () {
+            Route::get('api/v1/business/saher-signed', fn () => 'ok')->name('saher.signed');
+            Route::get('api/v1/business/saher-excluded', fn () => 'ok')
+                ->withoutMiddleware('amial.business.signature')->name('saher.excluded');
+        });
+
+        $keys = collect(app(GuardCoverageCollector::class)->collect()['findings'])
+            ->where('ruleId', 'SAHER.GUARD.BUSINESS_GATEWAY_UNSIGNED')->pluck('assetKey');
+        $this->assertTrue($keys->contains('saher.excluded'));
+        $this->assertFalse($keys->contains('saher.signed'));
+    }
+
+    #[Test]
     public function saher_catches_an_unsigned_business_route(): void
     {
         $clean = collect(app(GuardCoverageCollector::class)->collect()['findings'])
