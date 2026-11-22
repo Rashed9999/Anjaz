@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "recipes": [
+    {
+      "id": "merchant-note-rbac-0033",
+      "rule_id": "SAHER.GUARD.WRITE_BEHIND_READ_PERMISSION",
+      "file": "01_backend/routes/admin/amial.php",
+      "before": "Route::post('/{id}/note', [$mc, 'addNote'])->where('id', '[0-9]+')->name('note');",
+      "after": "Route::post('/{id}/note', [$mc, 'addNote'])\n            ->middleware('platform:platform.customers.notes.create')\n            ->where('id', '[0-9]+')->name('note');",
+      "security_tests": [
+        "01_backend/tests/Feature/MerchantNoteAuthorizationTest.php"
+      ],
+      "notes": "Reviewed recipe retained for regression/provenance. Already applied in PR #59; runner must report NO_CHANGE, never create a misleading PR."
+    }
+  ]
+}
