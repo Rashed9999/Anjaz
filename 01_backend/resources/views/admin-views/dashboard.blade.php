@@ -143,7 +143,6 @@
     <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
         <div>
             <h4 class="fw-bold mb-1" style="color:var(--blue)">{{ translate('لوحة تحكم أميال باي') }}</h4>
-            <span class="a-chip" style="background:#e7f6ec;color:#12694E">● {{ translate('جميع الأنظمة تعمل') }}</span>
             <small class="text-muted ms-2">{{ now()->format('Y-m-d — H:i') }}</small>
         </div>
         <div class="d-flex gap-2">
@@ -176,6 +175,8 @@
             <div class="d-flex flex-wrap gap-2">
                 @if ($canTransactions)<a href="{{ route('admin.transaction.index') }}">↗ كشف العمليات</a>@endif
                 @if ($canCustomers)<a href="{{ route('admin.amial.customer.page') }}">👤 مركز العملاء</a>@endif
+                @if ($viewer?->hasPlatformPermission('saher.view'))<a href="{{ route('admin.amial.saher.index') }}">ساهر · نتائج فحوص الجودة والأمان</a>@endif
+                @if ($canAudit)<a href="{{ route('admin.amial.system.health') }}">الرصد التشغيلي · صحة النظام والأعطال</a>@endif
                 @if ($canTickets)<a href="{{ route('admin.support-center.index') }}">🎧 مركز الدعم</a>@endif
                 @if ($canAudit)<a href="{{ route('admin.amial.ledger.page') }}">📚 ميزان المراجعة</a>@endif
             </div>
