@@ -40,7 +40,21 @@ final class ControlCenterService
                 }
             }
         }
-        return array_keys($keys);
+        // Approved production scope: the Safe Payment create endpoint only.
+        // Other flags are visible in the catalog but NOT actionable until
+        // their new-operation routes and lifecycle exceptions are reviewed.
+        $approved = [];
+        foreach (Route::getRoutes() as $route) {
+            $name = (string) $route->getName();
+            if (! str_ends_with($name, 'amial.safe-pay.create')) {
+                continue;
+            }
+            if (isset($keys['safe_payment']) && in_array('POST', $route->methods(), true)
+                && in_array('feature:safe_payment', $route->gatherMiddleware(), true)) {
+                $approved[] = 'safe_payment';
+            }
+        }
+        return $approved;
     }
 
     public function needsApproval(FeatureFlag $flag): bool
