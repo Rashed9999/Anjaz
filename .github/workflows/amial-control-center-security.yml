@@ -13,7 +13,8 @@ on:
       - '01_backend/routes/admin/amial.php'
       - '01_backend/resources/views/admin-views/amial/control-center/**'
       - '01_backend/tests/Feature/AmialControlCenterTest.php'
-      - '01_backend/tests/Feature/SafePaymentLifecycleTest.php'
+      - '01_backend/tests/Feature/SafePayment*Test.php'
+      - '01_backend/tests/Concerns/StartsWithSafePaymentIntakeOpen.php'
       - '.github/workflows/amial-control-center-security.yml'
   push:
     branches:
@@ -84,4 +85,10 @@ jobs:
             tests/Feature/AmialControlCenterTest.php \
             tests/Feature/FeatureFlagMaintenanceTest.php \
             tests/Feature/SafePaymentLifecycleTest.php \
+            tests/Feature/SafePaymentRefundsTest.php \
+            tests/Feature/SafePaymentDisputeTest.php \
+            tests/Feature/SafePaymentAppendOnlyEventsTest.php \
+            tests/Feature/SafePaymentFeeEngineTest.php \
+            tests/Feature/SafePaymentEvidenceTest.php \
+            tests/Feature/SafePaymentAdminAuditTest.php \
             tests/Feature/AppMoneyIdempotencyTest.php
