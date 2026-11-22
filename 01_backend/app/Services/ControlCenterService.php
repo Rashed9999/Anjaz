@@ -104,6 +104,7 @@ final class ControlCenterService
             // payments, refunds and disputes remain active; funds need not
             // reach zero before pausing new intake.
             $currentEnabled = (bool) $flag->enabled;
+            $policy = null;
             if ($key === 'safe_payment') {
                 $policy = DB::table('control_center_policies')->where('feature_key', $key)
                     ->lockForUpdate()->first();
@@ -140,6 +141,7 @@ final class ControlCenterService
                 $id = DB::table('control_center_requests')->insertGetId([
                     'feature_key' => $key,
                     'expected_enabled' => $currentEnabled,
+                    'expected_revision' => $policy?->revision,
                     'desired_enabled' => $enable,
                     'status' => 'pending',
                     'requested_by' => $actor->id,
@@ -192,6 +194,12 @@ final class ControlCenterService
                     throw new \DomainException('CONTROL_POLICY_NOT_READY');
                 }
                 $currentEnabled = $currentEnabled && $policy->mode === 'RUNNING';
+                // Old v1 approval requests cannot silently change semantics to
+                // an intake policy. Any revision change invalidates the request.
+                if ($request->expected_revision === null
+                    || (int) $request->expected_revision !== (int) $policy->revision) {
+                    throw new \DomainException('STALE_POLICY_REVISION');
+                }
             }
 
             if ($approve && $currentEnabled !== (bool) $request->expected_enabled) {
