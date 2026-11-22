@@ -161,7 +161,7 @@
                     المسار محظور حالياً منذ {{ $activeQuarantine->created_at }}.
                     السبب: {{ $activeQuarantine->reason }}.
                 </div>
-                <form method="POST" action="{{ route('admin.amial.saher.quarantine.release', $finding->id) }}">
+                <form method="POST" action="{{ route('admin.amial.saher.quarantine.unblock', $finding->id) }}">
                     @csrf
                     <input type="hidden" name="confirm" value="RELEASE">
                     <label class="small" for="autofix-release-reason">سبب رفع الاحتواء (بعد مراجعة الإصلاح)</label>
