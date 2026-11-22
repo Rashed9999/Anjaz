@@ -26,6 +26,12 @@ class RequireFeatureEnabled
     {
         $write = in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true);
 
+        // Customers must still inspect existing funded Safe Payments, see
+        // evidence and follow resolution while new payments are suspended.
+        if ($featureKey === 'safe_payment' && ! $write) {
+            return $next($request);
+        }
+
         if ($write) {
             // Disabling new Safe Payment intake MUST NOT trap funded payments.
             // These pre-existing lifecycle routes keep their own normal auth,
