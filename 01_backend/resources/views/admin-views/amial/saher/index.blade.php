@@ -140,6 +140,44 @@
         </div>
     </div>
 
+    <div class="card mb-4" data-testid="saher-remediation-queue">
+        <div class="card-header">
+            <h4 class="card-header-title">طلبات الإصلاح الجذري
+                @if($remediationReady)
+                    <span class="badge badge-soft-{{ $remediationOpenCount ? 'warning' : 'secondary' }} ms-2">{{ $remediationOpenCount }}</span>
+                @endif
+            </h4>
+        </div>
+        <div class="card-body">
+            @if(! $remediationReady)
+                <div class="text-warning">طلبات الإصلاح لم تُفعّل بعد — يلزم ترحيل قاعدة البيانات.</div>
+            @elseif($remediationOpenCount === 0)
+                <p class="text-muted mb-0">لا توجد طلبات إصلاح مفتوحة مسجلة بعد.</p>
+            @elseif(! $canPlanRemediation)
+                <p class="text-warning mb-0">هناك {{ $remediationOpenCount }} طلب معالجة مفتوح؛ التفاصيل للمخوّلين فقط.</p>
+            @else
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>الطلب</th><th>الاستراتيجية</th><th>العمر</th><th>المعالجة</th></tr></thead>
+                        <tbody>
+                            @foreach($openRemediations as $case)
+                                <tr>
+                                    <td><strong>#{{ $case->id }}</strong></td>
+                                    <td><code>{{ $case->strategy }}</code></td>
+                                    <td>{{ \Carbon\Carbon::parse($case->created_at)->diffForHumans() }}</td>
+                                    <td><a class="btn btn-sm btn-outline-primary" href="{{ route('admin.amial.saher.show', $case->finding_id) }}">عرض الخطة والأدلة</a></td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @if($remediationOpenCount > 100)
+                    <div class="text-warning small">توجد طلبات إضافية غير معروضة في هذه القائمة المختصرة.</div>
+                @endif
+            @endif
+        </div>
+    </div>
+
     {{-- ══════════════════════════════════════════════════════════════
          **أهمُّ ما يحتاج تدخّلاً الآن** — قبل الأرقام لا بعدها.
 
