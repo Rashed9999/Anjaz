@@ -16,6 +16,7 @@ on:
   push:
     branches:
       - 'feature/anjaz/amial-control-center-*'
+      - 'feature/anjaz/control-center-*'
 
 permissions:
   contents: read
