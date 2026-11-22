@@ -171,6 +171,24 @@ class AmialControlCenterTest extends TestCase
             ->assertOk()->assertJsonPath('viewable', true);
     }
 
+    public function test_pause_new_does_not_block_future_settlement_endpoint_with_normal_auth(): void
+    {
+        // Regression: a new lifecycle operation must not require a change
+        // to the intake toggle just to settle money already held.
+        $admin = $this->operator();
+        Route::middleware('feature:safe_payment')
+            ->post('/api/control-center-test/future-settlement', fn () => response()->json(['settled' => true]))
+            ->name('test.amial.safe-pay.new-seller-refund');
+
+        DB::table('control_center_policies')->where('feature_key', 'safe_payment')
+            ->update(['mode' => 'PAUSE_NEW']);
+
+        $this->actingAs($admin, 'user')
+            ->postJson('/api/control-center-test/future-settlement')
+            ->assertOk()
+            ->assertJsonPath('settled', true);
+    }
+
     public function test_resume_intake_needs_new_maker_checker_approval_and_increments_policy_revision(): void
     {
         $maker = $this->operator();
