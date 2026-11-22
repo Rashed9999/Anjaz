@@ -34,8 +34,7 @@ final class ControlCenterController extends Controller
     private function page(Request $request, string $section): View
     {
         $flags = $this->controls->overview();
-        $ready = Schema::hasTable('control_center_requests')
-            && Schema::hasTable('control_center_events');
+        $ready = $this->ready();
 
         $requests = $ready
             ? DB::table('control_center_requests')
@@ -133,7 +132,8 @@ final class ControlCenterController extends Controller
     private function ready(): bool
     {
         return Schema::hasTable('control_center_requests')
-            && Schema::hasTable('control_center_events');
+            && Schema::hasTable('control_center_events')
+            && Schema::hasTable('control_center_policies');
     }
 
     private function error(string $code, string $message, int $status): JsonResponse
