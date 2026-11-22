@@ -7,6 +7,8 @@ use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -44,6 +46,15 @@ class RequireFeatureEnabled
             try {
                 if (! $this->features->isEnabledFreshStrict($featureKey)) {
                     return $this->unavailable($featureKey);
+                }
+                if ($featureKey === 'safe_payment' && Schema::hasTable('control_center_policies')) {
+                    // Explicit intake mode is scoped to new writes. Existing
+                    // payment lifecycle actions are exempted above.
+                    $mode = DB::table('control_center_policies')
+                        ->where('feature_key', 'safe_payment')->value('mode');
+                    if ($mode !== 'RUNNING') {
+                        return $this->unavailable($featureKey, 'FEATURE_INTAKE_PAUSED');
+                    }
                 }
             } catch (\Throwable $e) {
                 Log::error('Feature guard DB check failed for write route', [
