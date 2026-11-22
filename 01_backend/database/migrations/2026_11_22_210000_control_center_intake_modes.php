@@ -9,6 +9,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Existing pending v1 requests have no revision. They must NOT be
+        // executable as v2 PAUSE_NEW decisions without a fresh review.
+        Schema::table('control_center_requests', function (Blueprint $table) {
+            $table->unsignedInteger('expected_revision')->nullable()->after('expected_enabled');
+        });
+
         Schema::create('control_center_policies', function (Blueprint $table) {
             $table->string('feature_key', 50)->primary();
             $table->string('mode', 20);
@@ -38,5 +44,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('control_center_policies');
+        Schema::table('control_center_requests', function (Blueprint $table) {
+            $table->dropColumn('expected_revision');
+        });
     }
 };
