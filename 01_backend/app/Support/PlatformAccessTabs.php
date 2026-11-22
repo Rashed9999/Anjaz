@@ -154,6 +154,7 @@ final class PlatformAccessTabs
                     'platform.ops.retry' => 'إعادة تشغيل مهمّةٍ متعثّرة',
                     'platform.settings.manage' => 'إدارة الإعدادات',
                     'platform.settings.update' => 'تعديل الإعدادات',
+                    'platform.control.approve' => 'اعتماد تغيير تشغيلي حساس من موظف ثانٍ',
                     'platform.zones.assign' => 'إسناد منطقةٍ لحساب',
                     'platform.zones.override' => 'تجاوز المنطقة يدويّاً',
                     'platform.zones.policy.update' => 'تعديل سياسة المناطق',
