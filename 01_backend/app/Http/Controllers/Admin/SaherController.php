@@ -100,6 +100,11 @@ class SaherController extends Controller
 
         return view('admin-views.amial.saher.show', [
             'finding' => $finding,
+            'fixPlan' => app(\App\Saher\Remediation\QuarantineAdvisor::class)->assess($finding),
+            'activeQuarantine' => \Illuminate\Support\Facades\Schema::hasTable('saher_route_quarantines')
+                ? DB::table('saher_route_quarantines')
+                    ->where('finding_id', $id)->where('status', 'ACTIVE')->first()
+                : null,
             'canSeeEvidence' => $canSeeEvidence,
             'evidence' => $canSeeEvidence
                 ? DB::table('saher_finding_evidence')->where('finding_id', $id)->get()
