@@ -74,12 +74,28 @@ class SaherController extends Controller
         $runs = DB::table('saher_scan_runs')
             ->orderByDesc('started_at')->limit(10)->get();
 
+        // Quarantines are service interruptions: never hide them behind a green scan.
+        $quarantineReady = \Illuminate\Support\Facades\Schema::hasTable('saher_route_quarantines');
+        $quarantineCount = $quarantineReady
+            ? DB::table('saher_route_quarantines')->where('status', 'ACTIVE')->count()
+            : null;
+        $canManageQuarantine = (bool) $request->user()
+            ?->hasPlatformPermission('saher.autofix.quarantine');
+        $activeQuarantines = $quarantineReady && $canManageQuarantine
+            ? DB::table('saher_route_quarantines')->where('status', 'ACTIVE')
+                ->orderBy('created_at')->limit(100)->get()
+            : collect();
+
         return view('admin-views.amial.saher.index', [
             'sources' => $sources,
             'findings' => $findings,
             'severityCounts' => $byseverity,
             'reopened' => $reopened,
             'runs' => $runs,
+            'quarantineReady' => $quarantineReady,
+            'quarantineCount' => $quarantineCount,
+            'activeQuarantines' => $activeQuarantines,
+            'canManageQuarantine' => $canManageQuarantine,
             'canSeeEvidence' => (bool) $request->user()
                 ?->hasPlatformPermission('saher.evidence.view'),
             'filters' => $request->only(['severity', 'category', 'status']),
