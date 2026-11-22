@@ -1,0 +1,83 @@
+name: Amial Control Center — security and approval gates
+
+on:
+  pull_request:
+    paths:
+      - '01_backend/app/Services/ControlCenterService.php'
+      - '01_backend/app/Services/FeatureFlagService.php'
+      - '01_backend/app/Exceptions/FeatureBalanceUnknownException.php'
+      - '01_backend/app/Http/Controllers/Admin/ControlCenterController.php'
+      - '01_backend/app/Http/Controllers/Api/V1/Amial/MaintenanceController.php'
+      - '01_backend/database/migrations/*control_center*'
+      - '01_backend/routes/admin/amial.php'
+      - '01_backend/resources/views/admin-views/amial/control-center/**'
+      - '01_backend/tests/Feature/AmialControlCenterTest.php'
+      - '.github/workflows/amial-control-center-security.yml'
+  push:
+    branches:
+      - 'feature/anjaz/amial-control-center-*'
+
+permissions:
+  contents: read
+
+jobs:
+  control-center:
+    name: RBAC, funds guard, maker-checker and interface (MySQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: amial_pay_testing
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping" --health-interval=10s
+          --health-timeout=5s --health-retries=10
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: amial_pay_testing
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: array
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, gd, zip, bcmath, intl, exif, pcntl
+          coverage: none
+      - name: Install Composer
+        working-directory: 01_backend
+        run: composer install --prefer-dist --no-progress --no-interaction
+      - name: Prepare isolated application
+        working-directory: 01_backend
+        run: |
+          cp .env.example .env
+          mkdir -p storage/framework/{cache/data,sessions,views} storage/logs storage/app/public bootstrap/cache
+          php artisan key:generate
+          php artisan passport:keys --force
+          echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
+          echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
+      - name: PHP lint and Blade view compilation
+        working-directory: 01_backend
+        run: |
+          php -l app/Services/ControlCenterService.php
+          php -l app/Http/Controllers/Admin/ControlCenterController.php
+          php -l app/Services/FeatureFlagService.php
+          php -l app/Http/Controllers/Api/V1/Amial/MaintenanceController.php
+          php -l database/migrations/2026_11_22_200000_control_center_governance.php
+          php artisan view:cache
+      - name: Test actual control decisions and legacy protections
+        working-directory: 01_backend
+        run: |
+          php artisan test --compact \
+            tests/Feature/AmialControlCenterTest.php \
+            tests/Feature/FeatureFlagMaintenanceTest.php \
+            tests/Feature/AppMoneyIdempotencyTest.php
