@@ -805,6 +805,9 @@ Route::prefix('fees')->name('fees.')->group(function () {
 Route::get('/system/health', [\App\Http\Controllers\Admin\SystemHealthController::class, 'index'])
     ->middleware('platform:platform.audit.view')->name('system.health');
 
+Route::post('/system/errors/{id}/retry-backup', [\App\Http\Controllers\Admin\SystemHealthController::class, 'retryBackup'])
+    ->whereNumber('id')->middleware(['platform:platform.ops.retry', 'throttle:3,10'])->name('system.errors.retry-backup');
+
 Route::post('/system/errors/{id}', [\App\Http\Controllers\Admin\SystemHealthController::class, 'updateError'])
     ->where('id', '[0-9]+')
     ->middleware('platform:platform.ops.retry')->name('system.errors.update');
