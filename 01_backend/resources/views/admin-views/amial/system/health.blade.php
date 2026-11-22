@@ -185,13 +185,13 @@
                                     <option value="acknowledged" @selected($e->status_flag === 'acknowledged')>مُقَرٌّ به</option>
                                     <option value="resolved" @selected($e->status_flag === 'resolved')>حُلّ</option>
                                 </select>
-                                @if (in_array($e->exception, ['backup.failed', 'backup.corrupt'], true))
+                                @if (in_array($e->exception, ['backup.failed', 'backup.corrupt'], true) && auth('user')->user()?->hasPlatformPermission('platform.ops.retry'))
                                     <form method="post" action="{{ route('admin.amial.system.errors.retry-backup', $e->id) }}">
                                         @csrf
                                         <button class="btn btn-sm btn-primary mt-1">إعادة النسخ والتحقق</button>
                                     </form>
                                 @elseif ($e->exception === 'recon.nightly_diverged')
-                                    <a class="btn btn-sm btn-outline-primary mt-1" href="{{ route('admin.amial.ledger.reconciliation-cases') }}">مراجعة فروق المحافظ</a>
+                                    <a class="btn btn-sm btn-outline-primary mt-1" href="{{ route('admin.amial.ledger.page', ['tab' => 'reconciliation']) }}">مراجعة فروق المحافظ</a>
                                 @endif
                             </td>
                         </tr>
