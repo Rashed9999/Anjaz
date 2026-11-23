@@ -575,6 +575,25 @@ class SaherFoundationTest extends TestCase
     }
 
     /** @test */
+    public function the_board_distinguishes_failed_stale_and_filtered_results(): void
+    {
+        $this->actingAs($this->admin(), 'user');
+        $url = route('admin.amial.saher.index');
+        $store = app(FindingStore::class);
+        $store->failRun($store->beginRun('guards'), 'guards', 'تعذر إكمال الفحص');
+        $this->get($url)->assertOk()->assertSee('تغطية الفحص غير مكتملة')
+            ->assertViewHas('sources', fn ($sources) => $sources->firstWhere('code', 'guards')->display_health === 'UNAVAILABLE');
+
+        $store->commitRun($store->beginRun('guards'), 'guards', [], 5);
+        DB::table('saher_sources')->where('code', 'guards')->update([
+            'last_success_at' => now()->subHours(2), 'stale_after_minutes' => 60,
+        ]);
+        $this->get($url)->assertOk()->assertSee('تغطية الفحص غير مكتملة')
+            ->assertViewHas('sources', fn ($sources) => $sources->firstWhere('code', 'guards')->display_health === 'STALE');
+        $this->get($url.'?severity=HIGH')->assertOk()->assertSee('لا اكتشافات تطابق خيارات البحث');
+    }
+
+    /** @test */
     public function the_evidence_is_withheld_from_a_role_that_may_only_look(): void
     {
         $store = app(FindingStore::class);
