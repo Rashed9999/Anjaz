@@ -743,7 +743,7 @@ class TransactionController extends Controller
             }
         }
 
-        $amount = $request->amount;
+        $amount = \App\Services\MoneyService::normalize($request->amount);
 
         // AMIAL-FEE-TRUTH-001 — **السحبُ إلى وسيلةٍ خارجيّة عمليّةٌ مسعَّرة.**
         //
@@ -752,45 +752,49 @@ class TransactionController extends Controller
         // العميل ولا يستطيع الأدمنُ رؤيتَه ولا تغييرَه من مركزه.
         // فأُضيف الرمزُ `WITHDRAW` إلى السجلّ وصار مسعَّراً كغيره.
         $breakdown = app(\App\Services\FeeService::class)
-            ->calculate('WITHDRAW', (string) $amount, ['applies_to' => 'customer']);
+            ->calculate('WITHDRAW', $amount, ['applies_to' => 'customer']);
 
-        $charge = $breakdown['fee'];
+        $charge = \App\Services\MoneyService::normalize($breakdown['fee']);
         $totalAmount = \App\Services\MoneyService::add($amount, $charge);
 
-        $withdrawRequest = $this->withdrawRequest;
-        $withdrawRequest->user_id = $request->user()->id;
-        $withdrawRequest->amount = $amount;
-        $withdrawRequest->admin_charge = $charge;
-        $withdrawRequest->request_status = 'pending';
-        $withdrawRequest->is_paid = 0;
-        $withdrawRequest->sender_note = $request->sender_note;
-        $withdrawRequest->withdrawal_method_id = $request->withdrawal_method_id;
-        $withdrawRequest->withdrawal_method_fields = $values;
+        $insufficientBalance = false;
+        DB::transaction(function () use ($request, $amount, $charge, $totalAmount, $values, &$insufficientBalance) {
+            $userEmoney = $this->eMoney
+                ->where('user_id', $request->user()->id)
+                ->lockForUpdate()
+                ->first();
 
+            if (! $userEmoney || ! \App\Services\MoneyService::gte((string) $userEmoney->current_balance, $totalAmount)) {
+                $insufficientBalance = true;
+                return;
+            }
 
-        $userEmoney = $this->eMoney->where('user_id', $request->user()->id)->first();
-        if ($userEmoney->current_balance < $totalAmount) {
-            return response()->json(['message' => translate('رصيدك غير كافٍ')], 403);
-        }
-
-        $userEmoney->current_balance -= $totalAmount;
-        $userEmoney->pending_balance += $totalAmount;
-
-        DB::transaction(function () use ($withdrawRequest, $userEmoney, $totalAmount) {
+            $withdrawRequest = new \App\Models\WithdrawRequest();
+            $withdrawRequest->user_id = $request->user()->id;
+            $withdrawRequest->amount = $amount;
+            $withdrawRequest->admin_charge = $charge;
+            $withdrawRequest->request_status = 'pending';
+            $withdrawRequest->is_paid = 0;
+            $withdrawRequest->sender_note = $request->sender_note;
+            $withdrawRequest->withdrawal_method_id = $request->withdrawal_method_id;
+            $withdrawRequest->withdrawal_method_fields = $values;
             $withdrawRequest->save();
+
+            $userEmoney->current_balance = \App\Services\MoneyService::sub((string) $userEmoney->current_balance, $totalAmount);
+            $userEmoney->pending_balance = \App\Services\MoneyService::add((string) $userEmoney->pending_balance, $totalAmount);
             $userEmoney->save();
 
-            // AMIAL-LEDGER-WITHDRAW-001: حجز المبلغ في الدفتر.
-            //
-            // كان هذا المسار بلا ترحيل إطلاقاً: يخرج المال من الرصيد المتاح
-            // إلى المعلّق ولا يقول الدفتر شيئاً — فيبدو رصيد العميل متاحاً
-            // وهو محجوز، ودفترٌ يقول ذلك يُبنى عليه قرارٌ خاطئ.
+            // AMIAL-LEDGER-WITHDRAW-001: حجز المبلغ في الدفتر داخل المعاملة القافلة نفسها.
             $this->ledgerWithdrawRequested(
-                userId: $userEmoney->user_id,
-                total: (string) $totalAmount,
+                userId: (int) $userEmoney->user_id,
+                total: $totalAmount,
                 sourceId: (string) $withdrawRequest->id,
             );
         });
+
+        if ($insufficientBalance) {
+            return response()->json(['message' => translate('رصيدك غير كافٍ')], 403);
+        }
 
         /** Update Transaction limits data  */
         if(isset($withdrawRequestLimit) && $withdrawRequestLimit['status'] == 1){

@@ -190,16 +190,18 @@ class CustomerWithdrawService
             // بدل الرمي عند النقص — الحجز قد يكون حُرّر من مسار آخر (كنس
             // انتهاء الصلاحية مثلاً) بينما الطلب ما زال pending، فكان الإلغاء
             // يفشل بـ«لا يوجد محجوز كافٍ لفكّه» ويعلق المستخدم في الشاشة.
-            $this->guard()->releaseHoldUpTo($customer->id, (string)$req->total_debit, 'withdraw_cancel');
+            $released = $this->guard()->releaseHoldUpTo($customer->id, (string)$req->total_debit, 'withdraw_cancel');
             $expired = $req->expires_at->isPast();
             $req->update(['status' => $expired ? 'expired' : 'cancelled']);
 
-            $this->ledgerCashOutReleased(
-                customerUserId: $customer->id,
-                totalDebit: (string) $req->total_debit,
-                sourceId: (string) $req->id,
-                why: $expired ? 'expired' : 'cancelled',
-            );
+            if (MoneyService::isPositive($released)) {
+                $this->ledgerCashOutReleased(
+                    customerUserId: $customer->id,
+                    totalDebit: $released,
+                    sourceId: (string) $req->id,
+                    why: $expired ? 'expired' : 'cancelled',
+                );
+            }
 
             return $req;
         });
@@ -446,18 +448,20 @@ class CustomerWithdrawService
                 DB::transaction(function () use ($req) {
                     $locked = WithdrawalRequest::where('id', $req->id)->lockForUpdate()->first();
                     if ($locked && $locked->status === 'pending') {
-                        $this->guard()->releaseHoldUpTo($locked->customer_user_id, (string)$locked->total_debit, 'withdraw_expired');
+                        $released = $this->guard()->releaseHoldUpTo($locked->customer_user_id, (string)$locked->total_debit, 'withdraw_expired');
                         $locked->update(['status' => 'expired']);
 
                         // **المخرجُ الرابع** — الكنسُ المجدول. وهو الذي
                         // يُنهي أكثرَ الطلبات فعلاً: من طلب ولم يذهب إلى
                         // وكيلٍ لا يُلغي بنفسه غالباً.
-                        $this->ledgerCashOutReleased(
-                            customerUserId: (int) $locked->customer_user_id,
-                            totalDebit: (string) $locked->total_debit,
-                            sourceId: (string) $locked->id,
-                            why: 'expired',
-                        );
+                        if (MoneyService::isPositive($released)) {
+                            $this->ledgerCashOutReleased(
+                                customerUserId: (int) $locked->customer_user_id,
+                                totalDebit: $released,
+                                sourceId: (string) $locked->id,
+                                why: 'expired',
+                            );
+                        }
                     }
                 });
                 $count++;
@@ -483,19 +487,21 @@ class CustomerWithdrawService
                 return;
             }
 
-            $this->guard()->releaseHoldUpTo(
+            $released = $this->guard()->releaseHoldUpTo(
                 $req->customer_user_id, (string) $req->total_debit, 'withdraw_expired');
             $req->update(['status' => 'expired']);
 
             // **المخرجُ الثالث من الحجز** — يكتشفه الوكيلُ لا العميل. وبلا
             // قيدٍ هنا يبقى الحجزُ معلّقاً في الدفتر أبداً بينما رجع المالُ
             // إلى المحفظة فعلاً: انحرافٌ دائمٌ بمقداره.
-            $this->ledgerCashOutReleased(
-                customerUserId: (int) $req->customer_user_id,
-                totalDebit: (string) $req->total_debit,
-                sourceId: (string) $req->id,
-                why: 'expired',
-            );
+            if (MoneyService::isPositive($released)) {
+                $this->ledgerCashOutReleased(
+                    customerUserId: (int) $req->customer_user_id,
+                    totalDebit: $released,
+                    sourceId: (string) $req->id,
+                    why: 'expired',
+                );
+            }
         });
     }
 

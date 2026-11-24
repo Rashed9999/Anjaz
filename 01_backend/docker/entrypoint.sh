@@ -252,6 +252,14 @@ if [ -n "$DB_HOST" ] && [ "${RESET_DB_FORCE:-false}" != "true" ] && [ "${RESET_D
         sleep 4
     done
     echo "✓ بنية قاعدة البيانات جاهزة قبل استقبال الطلبات."
+
+    # AMIAL-LEDGER-OPENING-002 (تكافؤ مع entrypoint.prod.sh): إدخال المحافظ
+    # القائمة التي بلا تاريخ دفتري في دفتر الأستاذ قبل استقبال أي حركة مالية.
+    # آمن للتكرار (idempotent) ولا يمسّ محافظ ذات تاريخ دفتري قائم.
+    echo "📒 إدخال المحافظ القائمة في دفتر الأستاذ..."
+    php artisan amial:ledger-backfill 2>&1 || {
+        echo "⚠️  فشل ترحيل الدفتر — راجع السجلّ أو شغّل يدوياً: php artisan amial:ledger-backfill"
+    }
 fi
 
 # ── تهيئة قاعدة البيانات في الخلفية (لا تُؤخّر بدء nginx) ──────────

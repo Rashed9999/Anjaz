@@ -54,7 +54,9 @@ class AmialLedgerBackfill extends Command
         $failed = 0;
         $totalOpened = '0';
 
-        EMoney::anyCurrency()->orderBy('user_id')->orderBy('currency')->chunkById($chunk, function ($wallets) use (
+        // لا نضع orderBy غير id قبل chunkById لأن chunkById يعتمد id > lastId،
+        // وترتيب مختلف قبله يجعل الصفحات تتجاوز صفوفاً ذات id أصغر.
+        EMoney::anyCurrency()->chunkById($chunk, function ($wallets) use (
             $ledger, $dry, $approvedCases, &$opened, &$already, &$empty, &$failed, &$totalOpened
         ) {
             foreach ($wallets as $wallet) {
@@ -64,7 +66,7 @@ class AmialLedgerBackfill extends Command
                 );
                 $balance = (string) ($wallet->current_balance ?? '0');
 
-                if (bccomp($balance, '0', 4) <= 0) {
+                if (! $approvedCases && bccomp($balance, '0', 4) <= 0) {
                     $empty++;
                     continue;
                 }
@@ -78,8 +80,62 @@ class AmialLedgerBackfill extends Command
                 // ما دخل الدفتر فعلاً — لا يُعاد. والمقارنة بالقيود لا
                 // بالعمود المخزَّن: العمود قد ينحرف هو الآخر.
                 $inLedger = $ledger->computeBalanceFromLines($account->id);
-                if (bccomp($inLedger, '0', 4) !== 0) {
+
+                if ($approvedCases) {
+                    if (bccomp($balance, $inLedger, 4) === 0) {
+                        $already++;
+                        continue;
+                    }
+
+                    $case = ReconciliationCase::query()
+                        ->where('case_type', 'wallet')
+                        ->where('subject_user_id', $userId)
+                        ->where('currency', $currency)
+                        ->where('status', 'pending_approval')
+                        ->whereNotNull('maker_admin_id')
+                        ->whereNotNull('checker_admin_id')
+                        ->orderByDesc('last_detected_at')
+                        ->first();
+
+                    if (! $case || trim((string) $case->action_taken) === '') {
+                        $this->warn("  تخطّي مستخدم {$userId} ({$currency}): لا توجد قضية معتمدة بأربع عيون.");
+                        continue;
+                    }
+
+                    $delta = bcsub($balance, $inLedger, 4);
+                    if ($dry) {
+                        $this->line("  سيُصحَّح: مستخدم {$userId} ({$currency}) بفرق {$delta} عبر قضية {$case->case_ulid}");
+                        $opened++;
+                        if (\App\Support\Money\Currencies::isBase($currency)) {
+                            $totalOpened = bcadd($totalOpened, $delta, 4);
+                        }
+                        continue;
+                    }
+
+                    try {
+                        $ledger->reconcileWalletBalance($userId, 'تصحيحٌ معتمَدٌ لانحراف محفظة', [
+                            'case_ulid' => $case->case_ulid,
+                            'currency' => $currency,
+                            'maker_admin_id' => (int) $case->maker_admin_id,
+                            'checker_admin_id' => (int) $case->checker_admin_id,
+                            'approval_note' => (string) $case->action_taken,
+                        ]);
+                        $opened++;
+                        if (\App\Support\Money\Currencies::isBase($currency)) {
+                            $totalOpened = bcadd($totalOpened, $delta, 4);
+                        }
+                    } catch (\Throwable $e) {
+                        $failed++;
+                        $this->error("  فشل مستخدم {$userId} ({$currency}): {$e->getMessage()}");
+                    }
+                    continue;
+                }
+
+                if ($ledger->walletHasLedgerHistory($userId, $currency)) {
                     $already++;
+                    if (bccomp($balance, $inLedger, 4) !== 0) {
+                        $this->warn("  تخطّي مستخدم {$userId} ({$currency}): له تاريخ دفتري وانحراف قائم (يُعالج عبر قضية مصالحة بأربع عيون).");
+                    }
                     continue;
                 }
 
@@ -93,33 +149,9 @@ class AmialLedgerBackfill extends Command
                 }
 
                 try {
-                    if ($approvedCases) {
-                        $case = ReconciliationCase::query()
-                            ->where('case_type', 'wallet')
-                            ->where('subject_user_id', $userId)
-                            ->where('currency', $currency)
-                            ->where('status', 'pending_approval')
-                            ->whereNotNull('maker_admin_id')
-                            ->whereNotNull('checker_admin_id')
-                            ->orderByDesc('last_detected_at')
-                            ->first();
-
-                        if (!$case || trim((string) $case->action_taken) === '') {
-                            throw new \RuntimeException('لا توجد قضية محفظة معتمدة بملاحظة مراجع مستقلة.');
-                        }
-
-                        $ledger->reconcileWalletBalance($userId, 'تصحيحٌ معتمَدٌ لانحراف محفظة', [
-                            'case_ulid' => $case->case_ulid,
-                            'currency' => $currency,
-                            'maker_admin_id' => (int) $case->maker_admin_id,
-                            'checker_admin_id' => (int) $case->checker_admin_id,
-                            'approval_note' => (string) $case->action_taken,
-                        ]);
-                    } else {
-                        // رصيدُ الدفتر صفرٌ هنا قطعاً (‏فُحص أعلاه)، والخدمةُ
-                        // تُعيد فحصَه تحت القفل: لا شيءَ يُناقَض فلا تصحيح.
-                        $ledger->openWalletBalance($userId, 'ترحيل أوّليّ للمحافظ القائمة عند النشر', $currency);
-                    }
+                    // رصيدُ الدفتر بلا تاريخٍ هنا قطعاً (‏فُحص أعلاه)، والخدمةُ
+                    // تُعيد فحصَه تحت القفل: لا شيءَ يُناقَض فلا تصحيح.
+                    $ledger->openWalletBalance($userId, 'ترحيل أوّليّ للمحافظ القائمة عند النشر', $currency);
 
                     $opened++;
                     if (\App\Support\Money\Currencies::isBase($currency)) {

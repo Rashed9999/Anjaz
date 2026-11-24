@@ -105,7 +105,10 @@ class WithdrawController extends Controller
         }
 
         if ($request->request_status == 'deny'){
-            $total = (string) ($withdrawRequest['amount'] + $withdrawRequest['admin_charge']);
+            $total = \App\Services\MoneyService::add(
+                (string) $withdrawRequest['amount'],
+                (string) $withdrawRequest['admin_charge'],
+            );
 
             // AMIAL-LEDGER-WITHDRAW-001 + سلامة الذرّية.
             //
@@ -132,8 +135,8 @@ class WithdrawController extends Controller
 
                 $account = $this->eMoney->where(['user_id' => $withdrawRequest->user->id])
                     ->lockForUpdate()->first();
-                $account->pending_balance -= $total;
-                $account->current_balance += $total;
+                $account->pending_balance = \App\Services\MoneyService::sub((string) $account->pending_balance, $total);
+                $account->current_balance = \App\Services\MoneyService::add((string) $account->current_balance, $total);
                 $account->save();
 
                 $withdrawRequest->request_status = 'denied';
