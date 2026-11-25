@@ -5,22 +5,33 @@ namespace Tests\Feature;
 use App\Models\EMoney;
 use App\Models\User;
 use App\Services\LegalTermsService;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class CustomerTransferConcurrencyTest extends TestCase
 {
-    // Separate connections must see committed fixtures.
-    use DatabaseMigrations;
-
-    public function test_parallel_http_retries_and_distinct_transfers_preserve_the_daily_limit(): void
+    protected function setUp(): void
     {
+        parent::setUp();
         if (DB::getDriverName() !== 'mysql' || !function_exists('pcntl_fork')) {
             $this->markTestSkipped('Requires MySQL and pcntl.');
         }
+        $this->assertTrue(app()->environment('testing'));
+        $this->assertMatchesRegularExpression('/(?:^|_)test(?:ing)?$/', DB::getDatabaseName());
 
+        // The workers must see committed fixtures. Rebuild the disposable schema
+        // in the forward direction since historical pricing migrations cannot roll back.
+        $this->artisan('migrate:fresh', ['--force' => true])->assertSuccessful();
+        $this->beforeApplicationDestroyed(function () {
+            $this->artisan('migrate:fresh', ['--force' => true])->assertSuccessful();
+            RefreshDatabaseState::$migrated = true;
+        });
+    }
+
+    public function test_parallel_http_retries_and_distinct_transfers_preserve_the_daily_limit(): void
+    {
         $sender = User::factory()->create(['transaction_pin' => Hash::make('1234')]);
         $recipient = User::factory()->create();
         foreach ([[$sender, '50000'], [$recipient, '0']] as [$user, $balance]) {
