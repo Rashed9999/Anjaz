@@ -219,6 +219,13 @@ class AgentDailySettlementTest extends TestCase
             ->submit($this->company, $this->teller, now()->toDateString(), $this->inWindow());
     }
 
+    public function test_a_teller_cannot_open_a_new_shift_after_daily_close(): void
+    {
+        app(AgentDailySettlementService::class)->submit($this->company, $this->hq, now()->toDateString(), $this->inWindow());
+        $this->expectExceptionMessage('أُقفلت تسوية اليوم');
+        app(AgentShiftService::class)->open($this->teller, '0');
+    }
+
     /** @test */
     public function a_day_cannot_be_filed_twice(): void
     {
