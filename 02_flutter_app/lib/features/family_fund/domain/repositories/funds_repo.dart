@@ -47,12 +47,13 @@ class FundsRepo extends GetxService {
   Future<Response> contribute({
     required String fundUlid,
     required String amount,
+    required String idempotencyKey,
     String? note,
   }) async {
     return apiClient.postData(
       '${AppConstants.amialFundContribute}$fundUlid/contribute',
       {'amount': amount, 'note': ?note},
-      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('fund_contribute'),
+      idempotencyKey: idempotencyKey,
     );
   }
 
@@ -60,6 +61,7 @@ class FundsRepo extends GetxService {
     required String fundUlid,
     required int beneficiaryUserId,
     required String amount,
+    required String idempotencyKey,
     String? note,
   }) async {
     return apiClient.postData(
@@ -69,7 +71,7 @@ class FundsRepo extends GetxService {
         'amount': amount,
         'note': ?note,
       },
-      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('fund_disburse'),
+      idempotencyKey: idempotencyKey,
     );
   }
 

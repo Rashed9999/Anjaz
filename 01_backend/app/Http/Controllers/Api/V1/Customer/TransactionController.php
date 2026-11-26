@@ -326,66 +326,72 @@ class TransactionController extends Controller
         if (!$sendMoneyStatus)
             return response()->json(['message' => translate('خدمة تحويل المال غير مفعّلة حالياً')], 403);
 
-        $requestMoney = $this->requestMoney->find($request->id);
+        return DB::transaction(function () use ($request, $slug) {
+            $requestMoney = $this->requestMoney->lockForUpdate()->find($request->id);
 
-        if (!isset($requestMoney))
-            return response()->json(['message' => translate('الطلب غير موجود')], 404);
+            if (!isset($requestMoney))
+                return response()->json(['message' => translate('الطلب غير موجود')], 404);
 
-        if($requestMoney->to_user_id != $request->user()->id)
-            return response()->json(['message' => translate('طلب غير مصرّح به')], 403);
+            if($requestMoney->to_user_id != $request->user()->id)
+                return response()->json(['message' => translate('طلب غير مصرّح به')], 403);
 
-        if (!Helpers::pin_check($request->user()->id, $request->pin))
-            return response()->json(['message' => translate('رمز PIN غير صحيح')], 403);
+            if ($requestMoney->type !== 'pending') {
+                return response()->json(['message' => translate('تم اتخاذ قرار على هذا الطلب مسبقاً')], 409);
+            }
 
-        if (strtolower($slug) == 'deny') {
-            $requestMoney->type = 'denied';
+            if (!Helpers::pin_check($request->user()->id, $request->pin))
+                return response()->json(['message' => translate('رمز PIN غير صحيح')], 403);
+
+            if (strtolower($slug) == 'deny') {
+                $requestMoney->type = 'denied';
+                $requestMoney->note = $request->note;
+                $requestMoney->save();
+
+                DB::afterCommit(fn () => Helpers::send_transaction_notification($requestMoney->from_user_id, $requestMoney->amount, 'denied_money'));
+
+                return response()->json(['message' => 'success'], 200);
+            }
+
+            $requester = $this->user->find($requestMoney->from_user_id);
+            if (!$requester) {
+                return response()->json(['message' => translate('صاحب الطلب غير موجود')], 404);
+            }
+
+            try {
+                $tiers = app(\App\Services\KycTierService::class);
+                $tiers->assertIndividualTransactionAllowed(
+                    $request->user(), (string) $requestMoney->amount, 'send_money',
+                );
+                $tiers->assertIndividualCanReceive($requester, (string) $requestMoney->amount);
+            } catch (\RuntimeException $e) {
+                return response()->json(['message' => translate($e->getMessage())], 403);
+            }
+
+            // AMIAL-FEE-TRUTH-001 — **قبولُ طلب المال تحويلٌ، فيُسعَّر تسعيرَه.**
+            //
+            // وكان يقرأ `business_settings` كأخوَيه، **فبابٌ ثالثٌ للرسم نفسِه**
+            // — ويُنسى عادةً لأنّه لا يُسمّى «تحويلاً» في الشاشة.
+            $receiverPhone = $requester->phone;
+
+            $breakdown = app(\App\Services\FeeService::class)
+                ->calculate('SEND_MONEY', (string) $requestMoney->amount, ['applies_to' => 'customer']);
+
+            $discounted = app(\App\Services\FeeDiscountPolicy::class)->applyFavouriteNumber(
+                $request->user(), $receiverPhone, $breakdown['fee'], 'SEND_MONEY');
+
+            $charge = $discounted['fee'];
+
+            $customerTransaction = $this->customer_request_money_transaction($requestMoney->to_user_id, $requestMoney->from_user_id, $requestMoney->amount, $charge);
+
+            if (is_null($customerTransaction)) return response()->json(['message' => translate('رصيدك غير كافٍ')], 501);
+
+
+            $requestMoney->type = 'approved';
             $requestMoney->note = $request->note;
             $requestMoney->save();
 
-            Helpers::send_transaction_notification($requestMoney->from_user_id, $requestMoney->amount, 'denied_money');
-
-            return response()->json(['message' => 'success'], 200);
-        }
-
-        $requester = $this->user->find($requestMoney->from_user_id);
-        if (!$requester) {
-            return response()->json(['message' => translate('صاحب الطلب غير موجود')], 404);
-        }
-
-        try {
-            $tiers = app(\App\Services\KycTierService::class);
-            $tiers->assertIndividualTransactionAllowed(
-                $request->user(), (string) $requestMoney->amount, 'send_money',
-            );
-            $tiers->assertIndividualCanReceive($requester, (string) $requestMoney->amount);
-        } catch (\RuntimeException $e) {
-            return response()->json(['message' => translate($e->getMessage())], 403);
-        }
-
-        // AMIAL-FEE-TRUTH-001 — **قبولُ طلب المال تحويلٌ، فيُسعَّر تسعيرَه.**
-        //
-        // وكان يقرأ `business_settings` كأخوَيه، **فبابٌ ثالثٌ للرسم نفسِه**
-        // — ويُنسى عادةً لأنّه لا يُسمّى «تحويلاً» في الشاشة.
-        $receiverPhone = $requester->phone;
-
-        $breakdown = app(\App\Services\FeeService::class)
-            ->calculate('SEND_MONEY', (string) $requestMoney->amount, ['applies_to' => 'customer']);
-
-        $discounted = app(\App\Services\FeeDiscountPolicy::class)->applyFavouriteNumber(
-            $request->user(), $receiverPhone, $breakdown['fee'], 'SEND_MONEY');
-
-        $charge = $discounted['fee'];
-
-        $customerTransaction = $this->customer_request_money_transaction($requestMoney->to_user_id, $requestMoney->from_user_id, $requestMoney->amount, $charge);
-
-        if (is_null($customerTransaction)) return response()->json(['message' => translate('رصيدك غير كافٍ')], 501);
-
-
-        $requestMoney->type = 'approved';
-        $requestMoney->note = $request->note;
-        $requestMoney->save();
-
-        return response()->json(['message' => 'success', 'transaction_id' => $customerTransaction, 'transaction_no' => Transaction::where('transaction_id', $customerTransaction)->value('transaction_no')], 200);
+            return response()->json(['message' => 'success', 'transaction_id' => $customerTransaction, 'transaction_no' => Transaction::where('transaction_id', $customerTransaction)->value('transaction_no')], 200);
+        });
     }
 
     public function addMoney(Request $request): JsonResponse
