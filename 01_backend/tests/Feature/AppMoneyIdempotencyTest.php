@@ -94,6 +94,29 @@ class AppMoneyIdempotencyTest extends TestCase
         return (string) EMoney::where('user_id', $userId)->value('current_balance');
     }
 
+    public function test_closed_money_request_stays_closed_across_both_customer_controllers(): void
+    {
+        $this->enable('send_money_status');
+        $payer = $this->user(2, '967770010051', '1000.0000');
+        $recipient = $this->user(2, '967770010052', '0.0000');
+        $id = DB::table('request_money')->insertGetId([
+            'from_user_id' => $recipient->id, 'to_user_id' => $payer->id,
+            'amount' => '10.00', 'type' => 'approved',
+        ]);
+        $request = \Illuminate\Http\Request::create('/', 'POST', ['id' => $id, 'pin' => self::PIN]);
+        $request->setUserResolver(fn () => $payer);
+        foreach ([
+            \App\Http\Controllers\Api\V1\Customer\TransactionController::class,
+            \App\Http\Controllers\Api\V1\Amial\ProgressiveCustomerMoneyController::class,
+        ] as $controller) {
+            $this->assertSame(409, app($controller)->requestMoneyStatus($request, 'approve')->getStatusCode());
+            $this->assertSame(409, app($controller)->requestMoneyStatus($request, 'deny')->getStatusCode());
+        }
+        $this->assertDatabaseHas('request_money', ['id' => $id, 'type' => 'approved']);
+        $this->assertSame('1000.0000', $this->bal($payer->id));
+        $this->assertSame('0.0000', $this->bal($recipient->id));
+    }
+
     public function test_transfer_requires_a_key_before_moving_money(): void
     {
         $sender = $this->user(2, '967770010021', '50000.0000');
