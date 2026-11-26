@@ -534,4 +534,20 @@ class SiteAndUnifiedLoginTest extends TestCase
         $this->assertStringNotContainsString('الصرّاف يدخل برمزه', $html,
             'السطر ما زال يبدأ بالصرّاف — فيظنّ غيرُه أنّها ليست له');
     }
+
+    public function test_agent_door_shows_credentials_even_with_an_existing_staff_session(): void
+    {
+        $company = $this->makeCompany();
+        app(AgentStaffService::class)->ensureHeadOfficeAccount($company, 'hq123456');
+        $staff = AgentStaff::where('agent_user_id', $company->id)->firstOrFail();
+        $this->actingAs($staff, 'agent_staff');
+
+        $this->get(route('agent.login'))->assertOk()->assertViewIs('agent-views.login');
+    }
+
+    public function test_guest_cannot_open_the_agent_dashboard(): void
+    {
+        $this->get(route('agent.dashboard'))->assertRedirect(route('agent.login'));
+        $this->assertGuest('agent_staff');
+    }
 }
