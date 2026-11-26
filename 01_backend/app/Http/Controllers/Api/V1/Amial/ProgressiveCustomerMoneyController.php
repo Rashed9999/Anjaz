@@ -77,10 +77,6 @@ class ProgressiveCustomerMoneyController extends Controller
             return $this->policyDenied($e);
         }
 
-        if ($error = $this->legacyLimitError($sender, $amount, 'send_money', 'customer_send_money_limit')) {
-            return $error;
-        }
-
         $breakdown = $this->fees->calculate('SEND_MONEY', $amount, ['applies_to' => 'customer']);
         $discounted = $this->discounts->applyFavouriteNumber(
             $sender,
@@ -94,6 +90,7 @@ class ProgressiveCustomerMoneyController extends Controller
             to_user_id: $receiver->id,
             amount: $amount,
             charge: $discounted['fee'],
+            idempotencyKey: $request->attributes->get('amial.idempotency_key'),
             feeMeta: [
                 'scheme_id' => $breakdown['scheme_id'],
                 'scheme_version' => $breakdown['scheme_version'],
@@ -107,7 +104,6 @@ class ProgressiveCustomerMoneyController extends Controller
             return response()->json(['message' => translate('فشلت العملية')], 422);
         }
 
-        $this->recordLegacyLimit($sender, $amount, 'send_money', 'customer_send_money_limit');
 
         return response()->json([
             'message' => 'success',
@@ -307,10 +303,6 @@ class ProgressiveCustomerMoneyController extends Controller
             return $this->policyDenied($e);
         }
 
-        if ($error = $this->legacyLimitError($payer, $amount, 'send_money', 'customer_send_money_limit')) {
-            return $error;
-        }
-
         $breakdown = $this->fees->calculate('SEND_MONEY', $amount, ['applies_to' => 'customer']);
         $discounted = $this->discounts->applyFavouriteNumber(
             $payer,
@@ -332,7 +324,6 @@ class ProgressiveCustomerMoneyController extends Controller
         $moneyRequest->type = 'approved';
         $moneyRequest->note = $request->note;
         $moneyRequest->save();
-        $this->recordLegacyLimit($payer, $amount, 'send_money', 'customer_send_money_limit');
 
         return response()->json([
             'message' => 'success',

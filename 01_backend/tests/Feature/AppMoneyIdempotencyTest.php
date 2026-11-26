@@ -65,6 +65,11 @@ class AppMoneyIdempotencyTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        $terms = app(\App\Services\LegalTermsService::class);
+        if ($term = $terms->currentTerm('ar')) {
+            $terms->accept($u, $term);
+        }
+
         return $u->fresh();
     }
 
@@ -87,6 +92,63 @@ class AppMoneyIdempotencyTest extends TestCase
     private function bal(int $userId): string
     {
         return (string) EMoney::where('user_id', $userId)->value('current_balance');
+    }
+
+    public function test_transfer_requires_a_key_before_moving_money(): void
+    {
+        $sender = $this->user(2, '967770010021', '50000.0000');
+        $receiver = $this->user(2, '967770010022', '0.0000');
+        $this->enable('send_money_status');
+        $this->actingAs($sender, 'api')->withHeader('device-id', 'IDEM-DEV-' . $sender->id)
+            ->postJson('/api/v1/customer/send-money', [
+                'phone' => $receiver->phone, 'amount' => '1000', 'pin' => self::PIN,
+            ])->assertStatus(400)->assertJsonPath('code', 'IDEMPOTENCY_KEY_REQUIRED');
+        $this->assertSame('50000.0000', $this->bal($sender->id));
+        $this->assertSame('0.0000', $this->bal($receiver->id));
+    }
+
+    public function test_failure_to_save_replay_response_rolls_back_the_transfer(): void
+    {
+        $this->enable('send_money_status');
+        $sender = $this->user(2, '967770010041', '50000.0000');
+        $receiver = $this->user(2, '967770010042', '0.0000');
+        $mock = \Mockery::mock(\App\Services\IdempotencyService::class,
+            [app(\App\Services\AuditService::class)])->makePartial();
+        $mock->shouldReceive('complete')->once()->andThrow(new \RuntimeException('write failed'));
+        $this->app->instance(\App\Services\IdempotencyService::class, $mock);
+        $this->as($sender, 'replay-storage-failure')->postJson('/api/v1/customer/send-money', [
+            'phone' => $receiver->phone, 'amount' => '1000', 'pin' => self::PIN,
+        ])->assertStatus(500);
+        $this->assertDatabaseMissing('idempotency_keys', ['key' => 'replay-storage-failure']);
+        $this->assertDatabaseMissing('transactions', ['idempotency_key' => 'replay-storage-failure']);
+        $this->assertSame('50000.0000', $this->bal($sender->id));
+        $this->assertSame('0.0000', $this->bal($receiver->id));
+    }
+
+    public function test_first_transfer_obeys_the_daily_ceiling_and_replay_consumes_it_once(): void
+    {
+        $sender = $this->user(2, '967770010031', '50000.0000');
+        $receiver = $this->user(2, '967770010032', '0.0000');
+        $this->enable('send_money_status');
+        DB::table('business_settings')->updateOrInsert(['key' => 'customer_send_money_limit'], [
+            'value' => json_encode(['status' => 1, 'total_transaction_amount_per_day' => 1000]),
+        ]);
+        $url = '/api/v1/customer/send-money';
+        $body = ['phone' => $receiver->phone, 'amount' => '1001', 'pin' => self::PIN];
+        $this->as($sender, 'first-transfer-over-limit')->postJson($url, $body)->assertStatus(400);
+        $this->assertSame('0.0000', $this->bal($receiver->id));
+        $this->assertDatabaseMissing('transaction_limits', ['user_id' => $sender->id, 'type' => 'send_money']);
+
+        $body['amount'] = '1000';
+        $this->as($sender, 'first-transfer-at-limit')->postJson($url, $body)->assertOk();
+        $this->as($sender, 'first-transfer-at-limit')->postJson($url, $body)
+            ->assertOk()->assertHeader('X-Idempotent-Replay', '1');
+        $this->assertDatabaseHas('transaction_limits', [
+            'user_id' => $sender->id, 'type' => 'send_money', 'todays_count' => 1, 'todays_amount' => 1000,
+        ]);
+        $body['amount'] = '1';
+        $this->as($sender, 'first-transfer-at-limit')->postJson($url, $body)->assertStatus(409);
+        $this->assertSame('1000.0000', $this->bal($receiver->id));
     }
 
     /**
@@ -115,14 +177,17 @@ class AppMoneyIdempotencyTest extends TestCase
 
         $first = $this->as($s, $key)->postJson('/api/v1/customer/send-money', $body);
 
-        if ($first->status() !== 200) {
-            $this->markTestSkipped('التحويلُ الأوّل ردّ ' . $first->status() . ': ' . $first->json('message'));
-        }
+        $first->assertOk();
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $s->id, 'transaction_id' => $first->json('transaction_id'), 'idempotency_key' => $key,
+        ]);
 
         $afterFirst = ['s' => $this->bal($s->id), 'r' => $this->bal($r->id)];
         $movesFirst = Transaction::count();
 
-        $this->as($s, $key)->postJson('/api/v1/customer/send-money', $body);
+        $this->as($s, $key)->postJson('/api/v1/customer/send-money', $body)
+            ->assertOk()->assertHeader('X-Idempotent-Replay', '1')
+            ->assertJsonPath('transaction_id', $first->json('transaction_id'));
 
         $this->assertSame($afterFirst['s'], $this->bal($s->id),
             'خُصم من المرسِل مرّتين بمفتاحٍ واحد');
@@ -153,9 +218,7 @@ class AppMoneyIdempotencyTest extends TestCase
 
         $first = $this->as($s, 'IDEM-KEY-AAAAAAAAAA')->postJson('/api/v1/customer/send-money', $body);
 
-        if ($first->status() !== 200) {
-            $this->markTestSkipped('التحويلُ الأوّل ردّ ' . $first->status());
-        }
+        $first->assertOk();
 
         $afterFirst = $this->bal($r->id);
 

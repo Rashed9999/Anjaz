@@ -81,15 +81,6 @@ class TransactionController extends Controller
         if (!Helpers::pin_check($request->user()->id, $request->pin))
             return response()->json(['message' => translate('رمز PIN غير صحيح')], 403); //PIN Check
 
-        $sendMoneyLimit = Helpers::get_business_settings('customer_send_money_limit');
-
-        if(isset($sendMoneyLimit) && $sendMoneyLimit['status'] == 1){
-            $check = Helpers::check_customer_transaction_limit($request->user(), $request['amount'], 'send_money', $sendMoneyLimit);
-            if (!$check['status']){
-                return response()->json(['message' => translate($check['message'])], 400);
-            }
-        }
-
         // ══════════════════════════════════════════════════════════════
         // AMIAL-FEE-TRUTH-001 — **الرسمُ من المحرّك الواحد، لا من
         // `business_settings`.**
@@ -120,6 +111,7 @@ class TransactionController extends Controller
             to_user_id: Helpers::get_user_id($receiverPhone),
             amount: $request['amount'],
             charge: $charge,
+            idempotencyKey: $request->attributes->get('amial.idempotency_key'),
             feeMeta: [
                 'scheme_id' => $breakdown['scheme_id'],
                 'scheme_version' => $breakdown['scheme_version'],
@@ -132,18 +124,6 @@ class TransactionController extends Controller
             return response()->json(['message' => translate('فشلت العملية')], 501);
         }
 
-        /** Update Transaction limits data  */
-        if(isset($sendMoneyLimit) && $sendMoneyLimit['status'] == 1){
-            $transactionLimit = TransactionLimit::where(['user_id' => $request->user()->id, 'type' => 'send_money'])->first();
-            $transactionLimit->user_id = $request->user()->id;
-            $transactionLimit->todays_count += 1;
-            $transactionLimit->todays_amount += $request['amount'];
-            $transactionLimit->this_months_count += 1;
-            $transactionLimit->this_months_amount += $request['amount'];
-            $transactionLimit->type = 'send_money';
-            $transactionLimit->updated_at = now();
-            $transactionLimit->update();
-        }
 
         return response()->json(['message' => 'success', 'transaction_id' => $customerTransaction, 'transaction_no' => Transaction::where('transaction_id', $customerTransaction)->value('transaction_no')], 200);
     }
@@ -382,15 +362,6 @@ class TransactionController extends Controller
             return response()->json(['message' => translate($e->getMessage())], 403);
         }
 
-        $sendMoneyLimit = Helpers::get_business_settings('customer_send_money_limit');
-
-        if(isset($sendMoneyLimit) && $sendMoneyLimit['status'] == 1){
-            $check = Helpers::check_customer_transaction_limit($request->user(), $requestMoney->amount, 'send_money', $sendMoneyLimit);
-            if (!$check['status']){
-                return response()->json(['message' => translate($check['message'])], 400);
-            }
-        }
-
         // AMIAL-FEE-TRUTH-001 — **قبولُ طلب المال تحويلٌ، فيُسعَّر تسعيرَه.**
         //
         // وكان يقرأ `business_settings` كأخوَيه، **فبابٌ ثالثٌ للرسم نفسِه**
@@ -409,18 +380,6 @@ class TransactionController extends Controller
 
         if (is_null($customerTransaction)) return response()->json(['message' => translate('رصيدك غير كافٍ')], 501);
 
-        /** Update Transaction limits data  */
-        if(isset($sendMoneyLimit) && $sendMoneyLimit['status'] == 1){
-            $transactionLimit = TransactionLimit::where(['user_id' => $request->user()->id, 'type' => 'send_money'])->first();
-            $transactionLimit->user_id = $request->user()->id;
-            $transactionLimit->todays_count += 1;
-            $transactionLimit->todays_amount += $requestMoney->amount;
-            $transactionLimit->this_months_count += 1;
-            $transactionLimit->this_months_amount += $requestMoney->amount;
-            $transactionLimit->type = 'send_money';
-            $transactionLimit->updated_at = now();
-            $transactionLimit->update();
-        }
 
         $requestMoney->type = 'approved';
         $requestMoney->note = $request->note;
