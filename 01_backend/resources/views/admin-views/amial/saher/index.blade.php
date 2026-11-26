@@ -197,20 +197,16 @@
         <div class="card-body p-0">
             @if($findings->isEmpty())
                 <div class="p-4 text-center text-muted" data-testid="saher-empty">
-                    @php $ran = $sources->firstWhere('last_success_at', '!=', null); @endphp
-                    @if($ran === null)
-                        {{-- **ولا تُقال «سليم»** — لم يُفحَص شيءٌ بعد. --}}
+                    @if(array_filter($filters))
+                        <strong>لا اكتشافات تطابق خيارات البحث.</strong>
+                        <a href="{{ route('admin.amial.saher.index') }}">عرض جميع النتائج</a>
+                    @elseif($runs->isEmpty() && !$sources->contains(fn ($source) => $source->last_success_at !== null))
                         <strong class="text-warning">لم تُشغَّل جولةُ فحصٍ بعد.</strong>
-                        <div class="small mt-1">
-                            لا اكتشافات <em>لأنّه لم يُفحص شيء</em> — وذاك ليس سلامة.
-                        </div>
+                    @elseif($sources->isEmpty() || $sources->contains(fn ($source) => $source->display_health !== 'HEALTHY'))
+                        <strong class="text-warning">تغطية الفحص غير مكتملة.</strong>
+                        <div class="small mt-1">راجع حالة كل مصدر وآخر جولة فحص قبل اعتماد النتيجة.</div>
                     @else
                         <strong class="text-success">لا اكتشافاتٍ مفتوحة.</strong>
-                        <div class="small mt-1">
-                            آخرُ جولةٍ ناجحة فحصت
-                            {{ number_format($runs->firstWhere('status', 'COMPLETED')?->assets_seen ?? 0) }}
-                            أصلاً ولم تجد شيئاً.
-                        </div>
                     @endif
                 </div>
             @else

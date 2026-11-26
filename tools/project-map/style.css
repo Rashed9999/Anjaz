@@ -1,0 +1,8 @@
+@import "tailwindcss" source(none);
+@source "./card.tsx";
+@source "./overview.tsx";
+@theme {
+  --color-card: white;
+  --color-card-foreground: #172c48;
+  --color-muted-foreground: #415369;
+}

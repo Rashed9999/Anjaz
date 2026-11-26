@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/data/api/idempotency_key_generator.dart';
 
 /// AMIAL-IDEMPOTENCY-002 — **نيّةُ المستخدم مفتاحٌ واحد، مهما أُعيدت.**
@@ -38,25 +39,9 @@ mixin IdempotentIntent {
     return _keys[id] ??= IdempotencyKeyGenerator.forFinancialAction(action);
   }
 
-  /// **يُتلَف متى أجاب الخادم — لا عند النجاح وحده.**
-  ///
-  /// وهذا تصحيحٌ لصيغةٍ أولى في هذا المشروع كانت تُبقي المفتاحَ على كلّ
-  /// فشل، **فتكسر التطبيق**: `EnforceIdempotency` يُسجّل المفتاحَ
-  /// `failed` عند أيّ ٤xx ثمّ يردّ على إعادته
-  /// `409 IDEMPOTENCY_FAILED_PREVIOUSLY`. فمن أخطأ رمزَه السرّيّ مرّةً لا
-  /// يستطيع إعادةَ المحاولة أبداً.
-  ///
-  /// فالتمييزُ ليس بين نجاحٍ وفشل، بل بين **جوابٍ وصمت**:
-  ///   · أجاب الخادمُ ولو بالرفض ⇒ النيّةُ حُسمت، والمفتاحُ يُتلَف.
-  ///   · لم يصل جوابٌ (`statusCode` ٠ أو ١ أو −١) ⇒ **لا نعلم أوصل الطلبُ
-  ///     أم لا**، فيبقى المفتاح لتكون الإعادةُ إعادةً لا عمليّةً ثانية.
-  ///
-  /// و«لا نعلم» ليست صفراً (القاعدة السابعة): الجهلُ يُحتاط له، ولا يُقرأ
-  /// نجاحاً ولا فشلاً.
+  /// نحفظ المفتاح عند تعذّر تأكيد النتيجة، بما في ذلك انقطاع الشبكة أو استمرار الطلب.
   void settleKey(String action, Response response, {String? scope}) {
-    final int code = response.statusCode ?? 0;
-
-    if (code > 1) {
+    if (ApiClient.hasDefinitiveOutcome(response)) {
       _keys.remove(scope == null ? action : '$action:$scope');
     }
   }

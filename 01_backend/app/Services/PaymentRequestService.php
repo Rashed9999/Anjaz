@@ -721,9 +721,7 @@ class PaymentRequestService
 
     private function assertAndRecordPaymentLimit(User $user, string $amount): void
     {
-        $this->assertAndRecordLegacyLimit(
-            $user, $amount, 'send_money', 'customer_send_money_limit',
-        );
+        TransactionLimit::consumeCustomerTransfer($user->id, $amount);
     }
 
     /**
