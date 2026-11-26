@@ -5,6 +5,7 @@ namespace App\Services\Muwathaq;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\Otp\EmailOtpService;
+use App\Services\Messaging\ProviderRegistry;
 use RuntimeException;
 use Illuminate\Support\Facades\DB;
 
@@ -27,7 +28,18 @@ class MuwathaqWelcomeEmailService
         if ($email === '') {
             throw new RuntimeException('WELCOME_EMAIL_NO_ADDRESS');
         }
-        $meta = app(EmailOtpService::class)->issue(
+        $otp = app(EmailOtpService::class);
+        $channels = $otp->channelsFor(EmailOtpService::PURPOSE_ACCOUNT_ACTIVATION) ?: ['email'];
+        if (in_array('email', $channels, true) && (string) config('amial_otp.resend.api_key', '') === '') {
+            $phoneChannels = array_diff($channels, ['email']);
+            $registry = app(ProviderRegistry::class);
+            $canSendToPhone = trim((string) $user->phone) !== ''
+                && array_filter($phoneChannels, fn (string $channel) => $registry->enabledFor($channel) !== []);
+            if (!$canSendToPhone) {
+                throw new RuntimeException('RESEND_API_KEY_MISSING');
+            }
+        }
+        $meta = $otp->issue(
             email: $email,
             purpose: EmailOtpService::PURPOSE_ACCOUNT_ACTIVATION,
             userId: (int) $user->id,

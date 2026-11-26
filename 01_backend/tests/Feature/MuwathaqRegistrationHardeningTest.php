@@ -140,8 +140,6 @@ class MuwathaqRegistrationHardeningTest extends TestCase
         }
         $this->assertTrue($threw, 'فشل المزوّد يرمي ليُعاد');
 
-        $this->travelTo(\Illuminate\Support\Carbon::parse(DB::table('otp_challenges')
-            ->where('user_id', $u->id)->max('resend_available_at'))->addSecond());
         config(['amial_otp.resend.api_key' => '']);
         (new SendMuwathaqWelcomeEmailJob($u->id, 'customer', (string) Str::ulid()))->handle(app(MuwathaqWelcomeEmailService::class));
         $this->assertSame(1, DB::table('audit_decisions')->where('action', 'MUWATHAQ_WELCOME_EMAIL_FAILED')->where('subject_id', (string) $u->id)->count());
