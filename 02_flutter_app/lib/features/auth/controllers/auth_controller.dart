@@ -176,7 +176,7 @@ class AuthController extends GetxController implements GetxService {
         }
 
       }
-      else if(response.statusCode == 403 && response.body['user_type'] == 'customer'){
+      else if(response.statusCode == 403 && (response.body['user_type'] == 'customer' || response.body['message'] == 'This phone is already registered')){
 
         PhoneNumber phoneNumber = PhoneNumber.parse(phone);
         String numberWithCountryCode = phoneNumber.international;

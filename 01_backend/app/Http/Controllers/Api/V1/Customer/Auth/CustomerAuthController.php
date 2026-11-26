@@ -57,19 +57,10 @@ class CustomerAuthController extends Controller
 
         $customer = $this->user->whereIn('phone', \App\Support\Phone::variants((string) $request['phone']))->first();
 
-        if (isset($customer) && $customer->type == 2){
+        if (isset($customer)) {
+            // AMIAL-BANK-GRADE-DLP-003: منع تسريب الاسم الكامل ونوع الحساب (عميل/وكيل) عبر مسار عام غير مصادَق
             return response()->json([
-                'message' => 'This phone is already taken',
-                'user_type' => 'customer',
-                'user_name' => $customer->f_name. ' '. $customer->l_name
-            ], 403);
-        }
-
-        if (isset($customer) && $customer->type != 2 ){
-            return response()->json([
-                'message' => 'This phone is already register as agent',
-                'user_type' => 'agent',
-                'user_name' => $customer->f_name. ' '. $customer->l_name
+                'message' => 'This phone is already registered',
             ], 403);
         }
 

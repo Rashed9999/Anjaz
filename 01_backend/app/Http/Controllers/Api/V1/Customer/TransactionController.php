@@ -665,14 +665,14 @@ class TransactionController extends Controller
     public function withdraw(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'pin' => 'required|min:4|max:4',
-            'amount' => 'required|min:0|not_in:0',
+            'pin' => 'required|string|min:4|max:6',
+            'amount' => 'required|numeric|gt:0',
             'note' => 'max:255',
             'withdrawal_method_id' => 'required',
             'withdrawal_method_fields' => 'required',
         ],
             [
-                'amount.not_in' => translate('المبلغ يجب أن يكون أكبر من صفر'),
+                'amount.gt' => translate('المبلغ يجب أن يكون أكبر من صفر'),
             ]);
 
         if ($validator->fails()) {
@@ -688,10 +688,25 @@ class TransactionController extends Controller
             return response()->json(['message' => translate('حسابك غير موثّق — أكمل توثيق حسابك أولاً')], 403);
         }
 
+        // AMIAL-BANK-GRADE-ANTITHEFT-001: فرض التجميد الأمني ونطاق التغطية والتحقق الإلزامي من رمز العمليات
+        try {
+            $this->assertFinancialEligibility($request->user()->id, 'withdraw');
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => translate($e->getMessage())], 403);
+        }
+
+        if (!Helpers::pin_check($request->user()->id, (string) $request->pin)) {
+            return response()->json(['message' => translate('رمز PIN غير صحيح')], 403);
+        }
+
         $withdrawalMethod = $this->withdrawalMethod->find($request->withdrawal_method_id);
+        if (!$withdrawalMethod) {
+            return response()->json(['message' => translate('وسيلة السحب غير موجودة')], 404);
+        }
         $fields = array_column($withdrawalMethod->method_fields, 'input_name');
 
-        $values = (array)json_decode($request->withdrawal_method_fields)[0];
+        $decodedFields = json_decode((string) $request->withdrawal_method_fields);
+        $values = is_array($decodedFields) && isset($decodedFields[0]) ? (array) $decodedFields[0] : [];
 
         foreach ($fields as $field) {
             if(!key_exists($field, $values)) {
@@ -708,54 +723,52 @@ class TransactionController extends Controller
             }
         }
 
-        $amount = $request->amount;
+        $amount = \App\Services\MoneyService::normalize((string) $request->amount);
 
         // AMIAL-FEE-TRUTH-001 — **السحبُ إلى وسيلةٍ خارجيّة عمليّةٌ مسعَّرة.**
-        //
-        // وكان يقرأ `withdraw_charge_percent` من `business_settings` —
-        // **ولا حقلَ له في «إدارة الرسوم» أصلاً**، فهو رسمٌ يُخصَم من
-        // العميل ولا يستطيع الأدمنُ رؤيتَه ولا تغييرَه من مركزه.
-        // فأُضيف الرمزُ `WITHDRAW` إلى السجلّ وصار مسعَّراً كغيره.
         $breakdown = app(\App\Services\FeeService::class)
-            ->calculate('WITHDRAW', (string) $amount, ['applies_to' => 'customer']);
+            ->calculate('WITHDRAW', $amount, ['applies_to' => 'customer']);
 
         $charge = $breakdown['fee'];
         $totalAmount = \App\Services\MoneyService::add($amount, $charge);
 
-        $withdrawRequest = $this->withdrawRequest;
-        $withdrawRequest->user_id = $request->user()->id;
-        $withdrawRequest->amount = $amount;
-        $withdrawRequest->admin_charge = $charge;
-        $withdrawRequest->request_status = 'pending';
-        $withdrawRequest->is_paid = 0;
-        $withdrawRequest->sender_note = $request->sender_note;
-        $withdrawRequest->withdrawal_method_id = $request->withdrawal_method_id;
-        $withdrawRequest->withdrawal_method_fields = $values;
+        // قفل المحفظة داخل المعاملة الذرية + حساب عشري صارم يمنع سباق السحب المزدوج وتلوث float
+        try {
+            DB::transaction(function () use ($request, $amount, $charge, $totalAmount, $values) {
+                $userEmoney = $this->eMoney->where('user_id', $request->user()->id)->lockForUpdate()->first();
+                if (!$userEmoney || !\App\Services\MoneyService::gte((string) $userEmoney->current_balance, $totalAmount)) {
+                    throw new \App\Exceptions\InsufficientBalanceException(
+                        userId: $request->user()->id,
+                        required: $totalAmount,
+                        available: (string) ($userEmoney?->current_balance ?? '0.0000'),
+                    );
+                }
 
+                $userEmoney->current_balance = \App\Services\MoneyService::sub((string) $userEmoney->current_balance, $totalAmount);
+                $userEmoney->pending_balance = \App\Services\MoneyService::add((string) $userEmoney->pending_balance, $totalAmount);
+                $userEmoney->save();
 
-        $userEmoney = $this->eMoney->where('user_id', $request->user()->id)->first();
-        if ($userEmoney->current_balance < $totalAmount) {
+                $withdrawRequest = new WithdrawRequest();
+                $withdrawRequest->user_id = $request->user()->id;
+                $withdrawRequest->amount = $amount;
+                $withdrawRequest->admin_charge = $charge;
+                $withdrawRequest->request_status = 'pending';
+                $withdrawRequest->is_paid = 0;
+                $withdrawRequest->sender_note = $request->sender_note;
+                $withdrawRequest->withdrawal_method_id = $request->withdrawal_method_id;
+                $withdrawRequest->withdrawal_method_fields = $values;
+                $withdrawRequest->save();
+
+                // AMIAL-LEDGER-WITHDRAW-001: حجز المبلغ في الدفتر.
+                $this->ledgerWithdrawRequested(
+                    userId: $userEmoney->user_id,
+                    total: $totalAmount,
+                    sourceId: (string) $withdrawRequest->id,
+                );
+            }, 3);
+        } catch (\App\Exceptions\InsufficientBalanceException) {
             return response()->json(['message' => translate('رصيدك غير كافٍ')], 403);
         }
-
-        $userEmoney->current_balance -= $totalAmount;
-        $userEmoney->pending_balance += $totalAmount;
-
-        DB::transaction(function () use ($withdrawRequest, $userEmoney, $totalAmount) {
-            $withdrawRequest->save();
-            $userEmoney->save();
-
-            // AMIAL-LEDGER-WITHDRAW-001: حجز المبلغ في الدفتر.
-            //
-            // كان هذا المسار بلا ترحيل إطلاقاً: يخرج المال من الرصيد المتاح
-            // إلى المعلّق ولا يقول الدفتر شيئاً — فيبدو رصيد العميل متاحاً
-            // وهو محجوز، ودفترٌ يقول ذلك يُبنى عليه قرارٌ خاطئ.
-            $this->ledgerWithdrawRequested(
-                userId: $userEmoney->user_id,
-                total: (string) $totalAmount,
-                sourceId: (string) $withdrawRequest->id,
-            );
-        });
 
         /** Update Transaction limits data  */
         if(isset($withdrawRequestLimit) && $withdrawRequestLimit['status'] == 1){

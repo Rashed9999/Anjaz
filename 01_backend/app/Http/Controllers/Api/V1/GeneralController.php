@@ -115,7 +115,6 @@ class GeneralController extends Controller
         return response()->json([
             'message' => 'Customer is available',
             'data' => ['name' => $user->f_name . ' ' . $user->l_name, 'image' => $user->image, 'is_favourite' => $isFavouriteExist],
-            'user_info' => $user,
         ], 200);
     }
 
