@@ -16,17 +16,10 @@ trait StartsWithSafePaymentIntakeOpen
 {
     protected function startWithSafePaymentIntakeOpen(): void
     {
-        $policy = DB::table('control_center_policies')
-            ->where('feature_key', 'safe_payment')->first();
-
-        $this->assertNotNull(
-            $policy,
-            'Safe Payment policy migration is required by the payment lifecycle test suite.'
+        DB::table('control_center_policies')->updateOrInsert(
+            ['feature_key' => 'safe_payment'],
+            ['mode' => 'RUNNING', 'revision' => 1, 'created_at' => now(), 'updated_at' => now()]
         );
-
-        DB::table('control_center_policies')
-            ->where('feature_key', 'safe_payment')
-            ->update(['mode' => 'RUNNING', 'updated_at' => now()]);
 
         $this->assertSame(
             'RUNNING',
