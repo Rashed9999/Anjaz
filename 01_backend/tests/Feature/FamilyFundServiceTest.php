@@ -164,6 +164,25 @@ class FamilyFundServiceTest extends TestCase
     }
 
     /** @test */
+    public function contribution_uses_latest_daily_limit_and_preserves_wallet_on_rejection(): void
+    {
+        $fund = $this->service->create($this->owner, 'Daily limit');
+        $staleFund = $fund->fresh();
+        $fund->forceFill(['max_member_contribution_per_day' => '50.0000'])->save();
+        $this->service->contribute($staleFund, $this->owner, '50.0000');
+        $balance = EMoney::where('user_id', $this->owner->id)->value('current_balance');
+
+        try {
+            $this->service->contribute($staleFund, $this->owner, '1.0000');
+            $this->fail('Expected daily limit rejection');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Daily contribution limit exceeded', $e->getMessage());
+        }
+        $this->assertEquals($balance, EMoney::where('user_id', $this->owner->id)->value('current_balance'));
+        $this->assertEquals('50.0000', $fund->fresh()->balance);
+    }
+
+    /** @test */
     public function contribute_rejects_non_active_member()
     {
         $fund = $this->service->create($this->owner, 'Test Fund');
@@ -226,10 +245,14 @@ class FamilyFundServiceTest extends TestCase
             $fund, $this->memberUser, $this->memberUser, '50.0000',
         );
 
+        $pendingApproval = $tx->fresh();
+        $pendingRejection = $tx->fresh();
         // owner يوافق
         $result = $this->service->approveDisbursement($tx, $this->owner);
 
         $this->assertTrue($result);
+        $this->assertFalse($this->service->approveDisbursement($pendingApproval, $this->owner));
+        $this->assertFalse($this->service->rejectDisbursement($pendingRejection, $this->owner, 'Already approved'));
 
         $tx->refresh();
         $this->assertEquals('completed', $tx->status);
