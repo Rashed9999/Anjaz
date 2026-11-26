@@ -104,7 +104,7 @@ class DonationsService
             }
 
             // 1) خصم من المحفظة
-            $walletTxId = (string) Str::ulid();
+            $donationUlid = (string) Str::ulid();
             $this->guard->debit(
                 userId: $donor->id,
                 amount: $amountNormalized,
@@ -113,7 +113,7 @@ class DonationsService
 
             // 2) إنشاء donation record
             $donation = Donation::create([
-                'donation_ulid' => (string) Str::ulid(),
+                'donation_ulid' => $donationUlid,
                 'campaign_id' => $lockedCampaign->id,
                 'org_id' => $org->id,
                 'donor_user_id' => $lockedDonor->id,
@@ -121,7 +121,7 @@ class DonationsService
                 'amount' => $amountNormalized,
                 'platform_fee' => $platformFee,
                 'net_to_charity' => $netToCharity,
-                'wallet_transaction_id' => $walletTxId,
+                'wallet_transaction_id' => $donationUlid,
                 'donor_message' => $message ? mb_substr($message, 0, 500) : null,
                 'status' => 'completed',
                 'donated_at' => now(),
@@ -165,6 +165,7 @@ class DonationsService
 
             $isUniqueDonor = !Donation::where('campaign_id', $lockedCampaign->id)
                 ->where('donor_user_id', $lockedDonor->id)
+                ->whereIn('status', ['completed', 'settled'])
                 ->where('id', '<>', $donation->id)
                 ->exists();
 
@@ -186,7 +187,8 @@ class DonationsService
             $org->total_collected = MoneyService::add((string) $org->total_collected, $netToCharity);
             if ($isUniqueDonor) {
                 $globalUniqueDonor = !Donation::where('org_id', $org->id)
-                ->where('donor_user_id', $lockedDonor->id)
+                    ->where('donor_user_id', $lockedDonor->id)
+                    ->whereIn('status', ['completed', 'settled'])
                     ->where('id', '<>', $donation->id)
                     ->exists();
                 if ($globalUniqueDonor) {
