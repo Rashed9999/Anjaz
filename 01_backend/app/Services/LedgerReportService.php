@@ -621,7 +621,7 @@ class LedgerReportService
      * ومصدر الحقيقة للرصيد هو `e_money` (هي المحمية بالأقفال والمُختبَرة)،
      * فالانحراف يعني **قيداً ناقصاً في الدفتر** لا خطأً في رصيد العميل.
      */
-    public function walletReconciliation(int $limit = 200): array
+    public function walletReconciliation(?int $limit = 200): array
     {
         // الرصيد الدفتريّ يُشتقّ من السطور لا من `current_balance`: المطابقةُ
         // بين رقمين مخزَّنين تُثبت أنّ أحدهما نُسخ عن الآخر، لا أنّ الحركة
@@ -636,19 +636,29 @@ class LedgerReportService
         // مصالحةٍ تُفتَح، وإنذارٌ يُرسَل ٠٢:٠٠.
         //
         // وهو نمطُ «حارسٍ يكذب»: يُطمئن حتّى يصدق، ثمّ يُعوَّد القارئُ أن
-        // يتجاهله يومَ يصدق. فالمفتاحُ صار `{user}|{currency}`.
+        // يتجاهله يومَ يصدق. فالمفتاحُ صار `{user}|{currency}` مع تطبيع
+        // العملة (UPPER/TRIM/COALESCE) كي لا يُحدث اختلاف حالة الأحرف أو NULL
+        // فرقاً كاذباً.
         // ══════════════════════════════════════════════════════════════
-        $ledger = DB::table('ledger_accounts as a')
+        $baseCurrency = \App\Support\Money\Currencies::BASE;
+        $ledgerRows = DB::table('ledger_accounts as a')
             ->leftJoin('ledger_entry_lines as l', 'l.account_id', '=', 'a.id')
             ->whereNotNull('a.owner_user_id')
             ->where('a.account_code', 'like', 'USER_WALLET_%')
             ->groupBy('a.owner_user_id', 'a.currency')
-            ->selectRaw("CONCAT(a.owner_user_id, '|', a.currency) as k,
-                a.owner_user_id,
+            ->selectRaw("a.owner_user_id,
                 a.currency,
-                SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END)
-              - SUM(CASE WHEN l.direction = 'debit'  THEN l.amount ELSE 0 END) as bal")
-            ->pluck('bal', 'k');
+                COALESCE(SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END), 0)
+              - COALESCE(SUM(CASE WHEN l.direction = 'debit'  THEN l.amount ELSE 0 END), 0) as bal")
+            ->get();
+
+        $ledger = [];
+        foreach ($ledgerRows as $lr) {
+            $rawCur = trim((string) ($lr->currency ?? ''));
+            $cur = $rawCur === '' ? $baseCurrency : strtoupper($rawCur);
+            $k = ((int) $lr->owner_user_id).'|'.$cur;
+            $ledger[$k] = bcadd((string) ($ledger[$k] ?? '0'), (string) ($lr->bal ?? '0'), 4);
+        }
 
         $rows = [];
         $divergent = 0;
@@ -657,10 +667,16 @@ class LedgerReportService
 
         // **وكلُّ العملات تُفحَص** — محفظةٌ لا تُفحَص ليست مطابَقةً، وغيابُها
         // عن التقرير يُقرأ «صفرُ فرق» وهو «لم يُنظَر». (القاعدة السابعة.)
-        EMoney::anyCurrency()->with('user:id,f_name,l_name,phone')
-            ->orderBy('user_id')->orderBy('currency')->limit($limit)->get()
-            ->each(function (EMoney $w) use (&$rows, &$divergent, &$totalGap, &$walletUserIds, $ledger) {
-                $cur = (string) ($w->currency ?: \App\Support\Money\Currencies::BASE);
+        $query = EMoney::anyCurrency()->with('user:id,f_name,l_name,phone')
+            ->orderBy('user_id')->orderBy('currency');
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        $query->get()
+            ->each(function (EMoney $w) use (&$rows, &$divergent, &$totalGap, &$walletUserIds, $ledger, $baseCurrency) {
+                $rawCur = trim((string) ($w->currency ?? ''));
+                $cur = $rawCur === '' ? $baseCurrency : strtoupper($rawCur);
                 $key = $w->user_id.'|'.$cur;
                 $walletUserIds[$key] = true;
                 $wallet = (string) ($w->current_balance ?? '0');

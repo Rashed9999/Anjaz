@@ -59,6 +59,11 @@ class UniversalSettlementService
         $this->validateAmount($amount);
 
         $account = LedgerAccount::findOrFail($sourceAccountId);
+        if ($account->owner_user_id !== null || str_starts_with((string) $account->account_code, 'USER_WALLET_')) {
+            throw new \InvalidArgumentException(
+                'لا يجوز تسوية محفظة مستخدم عبر محرك تسويات الشركاء مباشرةً دون مسار المحفظة الموحد'
+            );
+        }
         $partner = SettlementPartner::where('id', $partnerId)
             ->where('is_active', true)->first();
 
@@ -261,6 +266,12 @@ class UniversalSettlementService
             $settlement = $this->lockForTransition($settlement, Settlement::STATUS_PROCESSING);
             $account = LedgerAccount::lockForUpdate()
                 ->findOrFail($settlement->source_ledger_account_id);
+
+            if ($account->owner_user_id !== null || str_starts_with((string) $account->account_code, 'USER_WALLET_')) {
+                throw new \InvalidArgumentException(
+                    'لا يجوز خصم محفظة مستخدم من الدفتر عبر محرك تسويات الشركاء دون خصم e_money'
+                );
+            }
 
             $balanceBefore = (string) $account->current_balance;
 
