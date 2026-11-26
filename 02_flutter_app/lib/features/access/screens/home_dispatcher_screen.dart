@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
-import 'package:amial_pay/features/merchant/screens/pos_employee_home_screen.dart';
 
 /// CRITICAL-001 — Home Dispatcher.
 ///
@@ -53,39 +52,7 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
         return widget.userHomeFallback;
       }
 
-      // ══════════════════════════════════════════════════════════════
-      // 3) موظف POS لا يرث لوحة المالك ولا شاشات العميل.
-      //
-      // **واستُعيدت وجهتُه بعد أن استُبدلت.** بناها `a3e14e1` في ٢٩
-      // أغسطس ووصلها هنا، فاستبدلها `797638b` («fix: separate customer
-      // and merchant surfaces») في ١ سبتمبر بشاشةٍ من ستّةٍ وعشرين سطراً
-      // **تُمرّر إلى شاشة البيع مباشرةً** — فبقيت الأولى (٤٤٣ سطراً)
-      // مبنيّةً بلا مُنادٍ واحدٍ في المشروع كلِّه.
-      //
-      // **وما فقده الكاشيرُ مقيسٌ لا مقدَّر** — ثمانيةُ أبوابٍ لا يبلغها
-      // من شاشة البيع: **إقفالُ الورديّة** (`CashierShiftScreen`)
-      // وتقريرُها والمرتجعاتُ والإيصالاتُ والأصنافُ وعملاءُ الآجل
-      // والإشعاراتُ وملفُّه. **وأثقلُها الأوّل: كاشيرٌ لا يستطيع إقفال
-      // ورديّته** — وذاك آخرُ ما يفعله في يومه.
-      //
-      // ولا يقول ذلك مُصرِّفٌ ولا محلِّل: الشاشتان تُصرَّفان، والمهجورةُ
-      // تكتب في توثيقها «يُوصل إليه من `HomeDispatcherScreen`» وهي غيرُ
-      // موصولة. (القاعدة الثانية عشرة: صفحةٌ لا يُوصل إليها ليست مبنيّة.)
-      //
-      // **ويُسأل `isPosStaff`** — يقرأ `actor` المصرَّحَ به من الخادم،
-      // لا `role.value == 'pos'` وهو دورٌ ليس في `ALL_ROLES` أصلاً.
-      // ══════════════════════════════════════════════════════════════
-      if (_access.isPosStaff) {
-        return const PosEmployeeHomeScreen();
-      }
-
-      // 4) المالك لا يرث نقاط البيع ولا تبقى له نقطة دخول تشغيلية ثانية
-      // داخل التطبيق. النقل إلى البوابة يتم على مراحل، ولذلك قد تبقى
-      // شاشات مالك قديمة في المصدر إلى أن يُراجع بديلها على الويب؛ لكنها
-      // ليست مساراً عاماً ولا يجوز إحياؤها من هذا الموزّع. يبقى التطبيق
-      // للعميل ولموظف نقطة البيع فقط؛ وفحص POS أعلاه يسبق هذا الفرع حتى
-      // لا يُحال الكاشير إلى بوابة مالكه بسبب نوع نشاط المنشأة.
-      if (_access.isMerchant) {
+      if (_access.isPosStaff || _access.isMerchant) {
         return const WebPortalNoticeScreen(role: 'merchant');
       }
 

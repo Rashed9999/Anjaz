@@ -138,25 +138,6 @@ class CustomerSystemsCenterService
                 ],
             ),
             $this->system(
-                'merchant_payments',
-                'دفع العملاء للتجار',
-                Schema::hasTable('transactions') && $this->hasRoute('admin.transaction.index'),
-                'دفعات QR/POS/التاجر ظاهرة من كشف المعاملات، ويمكن تتبع مرجعها إلى التاجر والرسوم والدفتر.',
-                [
-                    ['label' => 'دفعات اليوم', 'value' => $this->customerTransactionTypeCountToday([
-                        'merchant_payment', 'pay_merchant', 'pos_payment', 'qr_payment',
-                    ])],
-                    ['label' => 'دفعات آخر 7 أيام', 'value' => $this->customerTransactionTypeCountSince([
-                        'merchant_payment', 'pay_merchant', 'pos_payment', 'qr_payment',
-                    ], now()->subDays(7))],
-                ],
-                [
-                    $this->action('كشف المعاملات', 'admin.transaction.index', ['trx_type' => 'merchant_payment']),
-                    $this->action('فواتير التجار', 'admin.amial.invoices.page'),
-                    $this->action('مركز التجار', 'admin.amial.hub.merchants'),
-                ],
-            ),
-            $this->system(
                 'safe_payment',
                 'الدفع الآمن',
                 Schema::hasTable('safe_payments') && $this->hasRoute('admin.amial.safe-payments.index'),
@@ -233,49 +214,6 @@ class CustomerSystemsCenterService
                 ],
                 'complete',
                 null,
-            ),
-            $this->system(
-                'installments',
-                'أقساط العميل',
-                Schema::hasTable('installment_contracts') && Schema::hasTable('installment_schedules'),
-                'عقود التقسيط وأقساطها المستحقة تُراقَب من المنصة، لكن إنشاء العقد وشروطه ملك للتاجر والسداد ملك للعميل.',
-                [
-                    ['label' => 'عقود نشطة', 'value' => $this->count('installment_contracts', fn ($q) => $q->where('status', 'active'))],
-                    ['label' => 'أقساط متأخرة', 'value' => $this->count('installment_schedules', fn ($q) => $q->where('status', 'overdue'))],
-                ],
-                [
-                    $this->action('كشف المعاملات', 'admin.transaction.index'),
-                    $this->action('مركز التجار', 'admin.amial.hub.merchants'),
-                    $this->action('ملف العميل', 'admin.amial.customer.page'),
-                ],
-            ),
-            $this->system(
-                'gift_cards',
-                'بطاقات الهدايا',
-                Schema::hasTable('gift_cards') && Schema::hasTable('gift_card_transactions'),
-                'رصيد البطاقات وحركات الإصدار/الشحن/الاستبدال/الإلغاء قابلة للمراقبة؛ إصدار البطاقة وإدارتها من التاجر.',
-                [
-                    ['label' => 'بطاقات نشطة', 'value' => $this->count('gift_cards', fn ($q) => $q->where('status', 'active'))],
-                    ['label' => 'رصيد بطاقات نشط', 'value' => $this->sum('gift_cards', 'balance', fn ($q) => $q->where('status', 'active')), 'money' => true],
-                ],
-                [
-                    $this->action('مركز التجار', 'admin.amial.hub.merchants'),
-                    $this->action('كشف المعاملات', 'admin.transaction.index'),
-                ],
-            ),
-            $this->system(
-                'split_bills',
-                'تقسيم الفاتورة وحصص العملاء',
-                Schema::hasTable('split_bills') && Schema::hasTable('split_bill_participants'),
-                'الفاتورة المقسمة وحصة كل عميل وحالة السداد مرئية؛ دفع الحصة يمر من مسار دفع التاجر الموثق.',
-                [
-                    ['label' => 'فواتير مفتوحة/جزئية', 'value' => $this->count('split_bills', fn ($q) => $q->whereIn('status', ['open', 'partially_paid']))],
-                    ['label' => 'حصص تنتظر الدفع', 'value' => $this->count('split_bill_participants', fn ($q) => $q->where('status', 'pending'))],
-                ],
-                [
-                    $this->action('كشف المعاملات', 'admin.transaction.index'),
-                    $this->action('فواتير التجار', 'admin.amial.invoices.page'),
-                ],
             ),
             $this->system(
                 'credits',

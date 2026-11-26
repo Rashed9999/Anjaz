@@ -345,10 +345,6 @@
                         'ic' => '🏪', 'bg' => '#fdeef0', 'fg' => '#C0392B',
                         'href' => route('admin.amial.hub.agents')];
 
-                    $kpis[] = ['k' => 'merchants', 'lbl' => 'التجار',
-                        'val' => number_format($data['counts']['merchants'] ?? 0),
-                        'ic' => '🛒', 'bg' => '#e8f7f6', 'fg' => '#0E7C7B',
-                        'href' => route('admin.amial.hub.merchants')];
                 }
             @endphp
             <div class="row g-3 h-100">

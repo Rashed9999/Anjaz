@@ -29,7 +29,7 @@
                 <div class="col-sm-3"><input class="form-control" name="q" placeholder="بحث: اسم · هاتف · بريد" autocomplete="off"></div>
                 <div class="col-sm-2">
                     <select class="form-select" name="kind">
-                        <option value="">كل الأنواع</option><option value="customer">عميل</option><option value="merchant">تاجر</option><option value="agent">وكيل</option>
+                        <option value="">كل الأنواع</option><option value="customer">عميل</option><option value="agent">وكيل</option>
                     </select>
                 </div>
                 <div class="col-sm-2">

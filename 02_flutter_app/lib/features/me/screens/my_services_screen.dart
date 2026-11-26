@@ -3,12 +3,9 @@ import 'package:get/get.dart';
 import 'package:amial_pay/common/widgets/amial_form.dart';
 import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
-import 'package:amial_pay/features/access/widgets/access_gate.dart';
-import 'package:amial_pay/features/credit/screens/my_credits_screen.dart';
 import 'package:amial_pay/features/me/domain/me_repo.dart';
 import 'package:amial_pay/features/me/screens/my_account_number_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
-import 'package:amial_pay/features/merchant/screens/pos_employee_home_screen.dart';
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
@@ -59,7 +56,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
   Widget build(BuildContext context) {
     final access = Get.find<AccessController>();
     if (access.isPos) {
-      return const PosEmployeeHomeScreen();
+      return const WebPortalNoticeScreen(role: 'merchant');
     }
     if (_merchantAtEntry || access.isMerchantSession) {
       return const WebPortalNoticeScreen(role: 'merchant');
@@ -259,12 +256,6 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
         onTap: () => Get.to(() => const AmialAccountStatementScreen()),
       ),
       _serviceCard(
-        icon: Icons.receipt_long_outlined,
-        label: 'فواتيري الآجلة',
-        subtitle: 'ما عليك من دين',
-        onTap: () => Get.to(() => const MyCreditsScreen()),
-      ),
-      _serviceCard(
         icon: Icons.support_agent_outlined,
         label: 'الدعم والمساعدة',
         subtitle: 'تواصل معنا',
@@ -274,35 +265,6 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
 
     return Column(
       children: [
-        if (access.needsBusinessTypeSelection)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: InkWell(
-              onTap: () => Get.to(() => const BusinessTypeSelectionScreen()),
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AmialColors.warningSurface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AmialColors.yellow),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.business_rounded, color: AmialColors.yellowDark),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'اختر نوع نشاطك لرؤية إعدادات نشاطك.',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    Icon(Icons.chevron_left_rounded),
-                  ],
-                ),
-              ),
-            ),
-          ),
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,

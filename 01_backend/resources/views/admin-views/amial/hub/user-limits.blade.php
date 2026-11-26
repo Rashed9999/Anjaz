@@ -11,7 +11,6 @@
     </div>
     <div class="row g-3 mb-4">
         <div class="col-md-3 col-6"><div class="card p-3 h-100"><small>العملاء</small><strong class="fs-3" id="stat-customers">…</strong><span class="small text-muted" id="stat-overrides"></span></div></div>
-        <div class="col-md-3 col-6"><div class="card p-3 h-100"><small>التجار</small><strong class="fs-3" id="stat-merchants">…</strong><span class="small text-muted" id="stat-verified"></span></div></div>
         <div class="col-md-3 col-6"><div class="card p-3 h-100"><small>الوكلاء</small><strong class="fs-3" id="stat-agents">…</strong><span class="small text-muted" id="stat-active"></span></div></div>
         <div class="col-md-3 col-6"><div class="card p-3 h-100"><small>سقف شحن التسوية للطلب</small><strong class="fs-5" id="stat-settlement">…</strong><span class="small text-muted">يخضع للاعتماد والرصيد</span></div></div>
     </div>
@@ -43,7 +42,6 @@
         <div class="card-header d-flex gap-2 flex-wrap align-items-center">
             <div class="btn-group" role="group">
                 <button class="btn btn-primary kind-btn" data-kind="customer">العملاء</button>
-                <button class="btn btn-outline-primary kind-btn" data-kind="merchant">التجار</button>
                 <button class="btn btn-outline-primary kind-btn" data-kind="agent">الوكلاء</button>
             </div>
             <input id="search" class="form-control ms-auto" style="max-width:280px" placeholder="بحث بالاسم أو الهاتف">
@@ -98,8 +96,6 @@
    const r=await fetch(`${base}/overview.json`), j=await r.json();
    document.getElementById('stat-customers').textContent=j.customers.total;
    document.getElementById('stat-overrides').textContent=`${j.customers.overrides} استثناءات فردية`;
-   document.getElementById('stat-merchants').textContent=j.merchants.total;
-   document.getElementById('stat-verified').textContent=`${j.merchants.verified} موثّق`;
    document.getElementById('stat-agents').textContent=j.agents.total;
    document.getElementById('stat-active').textContent=`${j.agents.active} نشط`;
    document.getElementById('stat-settlement').textContent=money(j.settlement.max_topup_per_request);

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/common/models/contact_model.dart';
 import 'package:amial_pay/features/auth/screens/unified_login_screen.dart';
@@ -25,18 +24,6 @@ import 'package:amial_pay/features/splash/screens/welcome_screen.dart';
 import 'package:amial_pay/features/language/screens/change_language_screen.dart';
 import 'package:amial_pay/features/onboarding/screens/on_boarding_sceen.dart';
 import 'package:amial_pay/features/verification/screens/varification_screen.dart';
-import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
-// AMIAL-ENTITLEMENTS-ROUTES-001 — this list is the client half of the
-// capability manifest served by the backend. Owner-only capabilities keep a
-// named route for the cross-project contract, but that route now opens the
-// web-portal handoff instead of compiling a second owner workspace in mobile.
-import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
-import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
-import 'package:amial_pay/features/merchant/screens/pos_credit_lookup_screen.dart';
-import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
-import 'package:amial_pay/features/merchant/screens/cashier_shift_screen.dart';
-import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
 import 'package:amial_pay/features/reports/screens/amial_reports_screen.dart';
 
 class RouteHelper {
@@ -256,66 +243,6 @@ class RouteHelper {
     GetPage(name: qrCodeDownloadOrShare, page: () => QrCodeDownloadOrShareScreen(qrCode:  utf8.decode(base64Url.decode(Get.parameters['qr-code']!.replaceAll(' ', '+'))),
         phoneNumber: utf8.decode(base64Url.decode(Get.parameters['phone-number']!.replaceAll(' ', '+'))),)),
 
-    // The named entries below are deliberately explicit.  The backend returns
-    // these paths in its capability manifest, so an available card can always
-    // open a concrete workflow rather than a generic placeholder or a dead end.
-    GetPage(name: quickSale, page: () => const CashierPosScreen()),
-    GetPage(name: cashier, page: () => const CashierPosScreen()),
-    GetPage(name: offlineSales, page: () => const OfflineSalesScreen()),
-    GetPage(name: posDevices, page: _merchantPortal),
-    GetPage(name: operationsCenter, page: _merchantPortal),
-    GetPage(name: refunds, page: () => const MerchantRefundScreen()),
-    GetPage(name: retailReturns, page: () => const MerchantRefundScreen()),
-    GetPage(name: credit, page: () => const PosCreditLookupScreen()),
-    GetPage(name: products, page: () => const CashierProductsScreen()),
-    GetPage(name: retailCatalog, page: _merchantPortal),
-    // Variants are edited from the product catalogue, never from an orphaned
-    // empty editor that has no selected product.
-    GetPage(name: retailVariants, page: () => const CashierProductsScreen()),
-    GetPage(name: retailPrices, page: _merchantPortal),
-    GetPage(name: promotions, page: _merchantPortal),
-    GetPage(name: loyalty, page: _merchantPortal),
-    GetPage(name: retail, page: _merchantPortal),
-    GetPage(name: retailLocations, page: _merchantPortal),
-    GetPage(name: retailTransfers, page: _merchantPortal),
-    GetPage(name: retailCounts, page: _merchantPortal),
-    GetPage(name: retailWastes, page: _merchantPortal),
-    // Suppliers contains both supplier and purchase-order tabs; using one
-    // operational hub avoids a misleading, duplicate purchase-order screen.
-    GetPage(name: suppliers, page: _merchantPortal),
-    GetPage(name: purchaseOrders, page: _merchantPortal),
-    GetPage(name: customers, page: _merchantPortal),
-    GetPage(name: staff, page: _merchantPortal),
-    // Staff is the current operational role-assignment surface.  It includes
-    // role controls per employee, so permissions do not lead to a faux screen.
-    GetPage(name: retailRoles, page: _merchantPortal),
-    GetPage(name: shifts, page: () => const CashierShiftScreen()),
-    GetPage(name: reportsDaily, page: () => const CashierReportScreen()),
-    GetPage(name: reportsProfit, page: _merchantPortal),
     GetPage(name: reports, page: () => const AmialReportsScreen()),
-    GetPage(name: export, page: _merchantPortal),
-    GetPage(name: expenses, page: _merchantPortal),
-    GetPage(name: auditLog, page: _merchantPortal),
-    GetPage(name: backup, page: _merchantPortal),
-    GetPage(name: branches, page: _merchantPortal),
-    GetPage(name: currencies, page: _merchantPortal),
-    GetPage(name: installments, page: _merchantPortal),
-    GetPage(name: fuel, page: _merchantPortal),
-    GetPage(name: fuelTanks, page: _merchantPortal),
-    GetPage(name: fuelVariances, page: _merchantPortal),
-    GetPage(name: pharmacy, page: _merchantPortal),
-    GetPage(name: pharmacyAlerts, page: _merchantPortal),
-    GetPage(name: pharmacyCustomers, page: _merchantPortal),
-    GetPage(name: wholesale, page: _merchantPortal),
-    GetPage(name: wholesalePricing, page: _merchantPortal),
-    GetPage(name: restaurant, page: _merchantPortal),
-    GetPage(name: apiKeys, page: _merchantPortal),
-    GetPage(name: corporate, page: _merchantPortal),
-
-    ];
-
-  /// يبقى اسم المسار لعقد القدرات مع الخادم، لكن سطح مالك المنشأة لا
-  /// يعود إلى التطبيق. هذه إحالة ظاهرة وآمنة، لا شاشة قديمة مخفية.
-  static Widget _merchantPortal() =>
-      const WebPortalNoticeScreen(role: 'merchant');
+  ];
 }

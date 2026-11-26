@@ -28,9 +28,6 @@
             ['مركز العملاء', route('admin.amial.customer.page'), 'platform.customers.view'],
             ['استعادة الحسابات', route('admin.amial.recovery.index'), 'platform.recovery.view'],
         ]],
-        ['id'=>'merchants','title'=>'التجّار','icon'=>'🏪','desc'=>'إدارة التجار، العقود، نقاط البيع، والتسويات. قرار التوثيق يُتخذ من المركز الموحد.','items'=>[
-            ['مركز التجّار', route('admin.amial.hub.merchants'), 'platform.customers.view'], ['الاشتراكات والباقات', route('admin.amial.hub.subscriptions'), 'platform.settings.manage'], ['القدرات والاستحقاقات', route('admin.amial.entitlements.page'), 'platform.settings.manage'], ['فواتير التجار', route('admin.amial.invoices.page'), 'platform.money.view'], ['كتالوج المنتجات', route('admin.amial.catalog.page'), 'platform.settings.update'], ['موظفو التجّار ونقاط البيع', route('admin.amial.hub.staff'), 'platform.staff.view'], ['رقابة محطات الوقود', route('admin.amial.fuel.page'), 'platform.audit.view'], ['رقابة التجزئة', route('admin.amial.retail.page'), 'platform.audit.view'],
-        ]],
         ['id'=>'agents','title'=>'الوكلاء','icon'=>'🤝','desc'=>'إدارة الوكلاء والهيكل التنظيمي والعمولات.','items'=>[
             ['مركز الوكلاء', route('admin.amial.hub.agents'), 'platform.customers.view'], ['تسويات الوكلاء', route('admin.amial.hub.settlements'), 'platform.money.view'], ['بوابة الوكيل', route('agent.login'), null, '_blank'],
         ]],

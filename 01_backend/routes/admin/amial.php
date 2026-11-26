@@ -854,9 +854,9 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
 
     // JSON قوائم
     Route::get('/{slug}/users.json', [$hc, 'usersJson'])
-        ->where('slug', 'customers|agents|merchants')->name('users.json');
+        ->where('slug', 'customers|agents')->name('users.json');
     Route::get('/{slug}/kyc.json', [$hc, 'kycJson'])
-        ->where('slug', 'customers|agents|merchants')->name('kyc.json');
+        ->where('slug', 'customers|agents')->name('kyc.json');
     Route::get('/users/{id}/transactions.json', [$hc, 'userTransactionsJson'])
         ->where('id', '[0-9]+')->name('users.transactions');
 
@@ -889,7 +889,7 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
 
     // إجراءات
     Route::post('/{slug}/users', [AccountOpeningBoundaryController::class, 'operator'])
-        ->where('slug', 'customers|agents|merchants')->middleware('platform:platform.customers.lifecycle.manage')->name('users.store');
+        ->where('slug', 'customers|agents')->middleware('platform:platform.customers.lifecycle.manage')->name('users.store');
     Route::post('/users/{id}/toggle-active', [$hc, 'toggleActive'])
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('users.toggle-active');
     Route::post('/users/{id}/kyc', [$hc, 'kycStatus'])

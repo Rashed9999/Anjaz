@@ -45,7 +45,7 @@ class UnifiedVerificationCenterController extends Controller
         $reviewer = $request->user();
         $canRestricted = $reviewer->hasPlatformPermission('platform.customers.kyc.restricted.view');
         $canViewStaffSecurity = $reviewer->hasPlatformPermission('platform.staff.security.view');
-        $visibleTypes = [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE];
+        $visibleTypes = [CUSTOMER_TYPE, AGENT_TYPE];
         if ($canViewStaffSecurity) $visibleTypes[] = ADMIN_TYPE;
         $q = trim((string) ($input['q'] ?? ''));
 
@@ -68,7 +68,7 @@ class UnifiedVerificationCenterController extends Controller
             : [];
 
         $newAccountIds = User::query()
-            ->whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE])
+            ->whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE])
             ->where(fn ($builder) => $builder->whereNull('is_kyc_verified')
                 ->orWhere('is_kyc_verified', 0))
             ->orderByDesc('id')->limit(150)->pluck('id')->all();
@@ -268,7 +268,7 @@ class UnifiedVerificationCenterController extends Controller
         VerificationCaseService $workflow,
     ): JsonResponse {
         $reviewer = $request->user();
-        $visibleTypes = [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE];
+        $visibleTypes = [CUSTOMER_TYPE, AGENT_TYPE];
         if ($reviewer->hasPlatformPermission('platform.staff.security.view')) $visibleTypes[] = ADMIN_TYPE;
         $user = User::query()->whereIn('type', $visibleTypes)->findOrFail($id);
 
@@ -503,7 +503,7 @@ class UnifiedVerificationCenterController extends Controller
             'governorate' => ['nullable', 'string', 'max:100'],
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
-        $account = User::query()->whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE])
+        $account = User::query()->whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE])
             ->findOrFail($id);
         // Legacy identity decisions must not bypass an open Muwathaq case.
         if (\App\Models\MuwathaqAccountOpeningApplication::query()
