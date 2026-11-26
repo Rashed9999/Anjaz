@@ -403,7 +403,7 @@ class EntitlementsGuardTest extends TestCase
     //  ⑧ يُوصَل إليه — القاعدة ١٢
     // ══════════════════════════════════════════════════════════════════
 
-    public function test_the_admin_entitlements_centre_is_registered_and_linked(): void
+    public function test_the_admin_entitlements_centre_is_registered_and_hidden(): void
     {
         foreach ([
             'admin.amial.entitlements.page',
@@ -418,8 +418,7 @@ class EntitlementsGuardTest extends TestCase
         $sidebar = file_get_contents(
             resource_path('views/admin-views/amial/partials/_sidebar.blade.php'));
 
-        $this->assertStringContainsString('admin.amial.entitlements.page', $sidebar,
-            'مركزُ الباقات بلا رابطٍ في القائمة — مبنيٌّ ولا يُوصَل إليه');
+        $this->assertStringNotContainsString('admin.amial.entitlements.page', $sidebar);
     }
 
     /**

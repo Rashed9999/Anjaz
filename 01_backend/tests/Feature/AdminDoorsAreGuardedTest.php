@@ -306,9 +306,10 @@ class AdminDoorsAreGuardedTest extends TestCase
     {
         // **وحارسٌ لا يجد ما يفحص ليس حارساً.** لو تغيّرت صيغةُ القائمة
         // لخرج الفحصان أخضرين على صفر.
-        $this->assertGreaterThanOrEqual(50, count($this->sidebarLinks()),
-            'لم تُقرأ روابطُ القائمة — تغيّرت صيغتُها ولم يعد المرشِّحُ يراها، '
-            . 'فالفحصُ يمرّ على لا شيء.');
+        $routes = array_column($this->sidebarLinks(), 1);
+        foreach (['admin.amial.customer.page', 'admin.amial.hub.agents', 'admin.amial.ledger.page', 'admin.amial.audit.index'] as $route) {
+            $this->assertContains($route, $routes);
+        }
     }
 
     /** @test */

@@ -95,14 +95,26 @@ class MerchantHubSearchAndRowClickGuardTest extends TestCase
         return $u;
     }
 
+    /** @test */
+    public function merchant_search_is_closed_and_never_exposes_a_preserved_account(): void
+    {
+        $merchant = $this->station();
+        $admin = $this->admin();
+        foreach (['محطة الشرق', $merchant->phone, (string) $merchant->id] as $term) {
+            $this->actingAs($admin, 'user')->getJson('/admin/amial/hub/merchants/users.json?search='.urlencode($term))
+                ->assertNotFound();
+        }
+        $this->assertDatabaseHas('merchants', ['user_id' => $merchant->id, 'store_name' => 'محطة الشرق']);
+    }
+
     private function search(User $admin, string $term): int
     {
-        $r = $this->actingAs($admin, 'user')
-            ->get('/admin/amial/hub/merchants/users.json?search='.urlencode($term));
+        $this->actingAs($admin, 'user');
+        $request = \Illuminate\Http\Request::create('/', 'GET', ['search' => $term]);
+        $response = app(\App\Http\Controllers\Admin\AdminHubController::class)->usersJson($request, 'merchants');
+        $this->assertSame(200, $response->getStatusCode());
 
-        $r->assertOk();
-
-        return count($r->json('data') ?? []);
+        return count($response->getData(true)['data']);
     }
 
     // ═════════════════════════════════════════════════════════════════

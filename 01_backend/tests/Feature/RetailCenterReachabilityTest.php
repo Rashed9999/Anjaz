@@ -48,13 +48,12 @@ class RetailCenterReachabilityTest extends TestCase
      * **الرابطُ في القائمة الجانبيّة** — ولولاه لكانت الصفحةُ موجودةً
      * ولا يعرف بها أحد. (القاعدة ١٢: المسارُ المسجَّل ليس ظهوراً.)
      */
-    public function test_the_sidebar_links_to_the_retail_centre(): void
+    public function test_the_sidebar_hides_the_retail_centre(): void
     {
         $sidebar = file_get_contents(
             resource_path('views/admin-views/amial/partials/_sidebar.blade.php'));
 
-        $this->assertStringContainsString("admin.amial.retail.page", $sidebar,
-            'مركزُ التجزئة بلا رابطٍ في القائمة — مبنيٌّ ولا يُوصَل إليه');
+        $this->assertStringNotContainsString("admin.amial.retail.page", $sidebar);
     }
 
     /**

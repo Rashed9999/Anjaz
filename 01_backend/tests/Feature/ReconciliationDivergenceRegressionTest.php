@@ -41,6 +41,7 @@ use Tests\TestCase;
 class ReconciliationDivergenceRegressionTest extends TestCase
 {
     use RefreshDatabase;
+    use \Tests\Concerns\StartsWithSafePaymentIntakeOpen;
     use TransactionTrait;
 
     protected function setUp(): void
@@ -287,6 +288,7 @@ class ReconciliationDivergenceRegressionTest extends TestCase
      */
     public function test_safe_payment_release_uses_held_amount_not_original_amount(): void
     {
+        $this->startWithSafePaymentIntakeOpen();
         FeeScheme::where('code', 'SAFE_PAYMENT')->update(['is_active' => false]);
         FeeScheme::create([
             'code' => 'SAFE_PAYMENT',

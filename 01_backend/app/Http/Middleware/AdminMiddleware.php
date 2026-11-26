@@ -32,15 +32,6 @@ class AdminMiddleware
                     ->withErrors(['انتهت جلستك بعد فترة خمول. سجّل الدخول من جديد.']);
             }
 
-            abort_if($request->routeIs(
-                'admin.amial.merchant-center.*', 'admin.amial.merchants.*',
-                'admin.amial.merchant-payouts.*', 'admin.amial.hub.merchants',
-                'admin.amial.hub.staff*', 'admin.amial.hub.subscriptions*', 'admin.amial.hub.plans*',
-                'admin.amial.retail.*', 'admin.amial.fuel.*', 'admin.amial.catalog.*',
-                'admin.amial.invoices.*', 'admin.amial.verticals.*', 'admin.amial.entitlements.*',
-                'admin.amial.kyc.center.merchant-decision', 'admin.amial.kyc.center.merchant-document'
-            ), 404);
-
             $request->session()->put('admin_last_activity', time());
 
             // SAHER-AUTOFIX-001: enforce emergency route quarantine on every admin write.

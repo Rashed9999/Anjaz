@@ -113,6 +113,15 @@ class MerchantVerificationAdminGuardTest extends TestCase
         $this->actingAs($admin, 'user')
             ->getJson(route('admin.amial.kyc.center.account', $merchant->id))->assertNotFound();
 
+        foreach (['hub.merchants', 'hub.staff', 'hub.subscriptions', 'entitlements.page', 'verticals.page',
+                  'retail.page', 'fuel.page', 'catalog.page', 'invoices.page'] as $name) {
+            $this->get(route('admin.amial.'.$name))->assertNotFound();
+        }
+        $this->postJson(route('admin.amial.merchant-center.freeze', $merchant->id), [
+            'reason' => 'اختبار تجميد واجهات التجار',
+        ])->assertNotFound();
+        $this->assertSame((int) $merchant->is_active, (int) $merchant->fresh()->is_active);
+
         foreach ([$admin, $this->stranger()] as $actor) {
             $this->actingAs($actor, 'user');
             $this->getJson(route('admin.amial.merchants.verification.list'))->assertNotFound();

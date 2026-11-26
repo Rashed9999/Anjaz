@@ -29,6 +29,7 @@ use Tests\TestCase;
  */
 class MerchantCenterRoleMatrixTest extends TestCase
 {
+    use \Tests\Concerns\ExercisesArchivedMerchantAdmin;
     use RefreshDatabase;
 
     private User $merchant;

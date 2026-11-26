@@ -244,24 +244,11 @@ class AdminCommandCenterGuardTest extends TestCase
         $this->assertNotEmpty($ops['label']);
     }
 
-    /** **والملفُّ يصل الشاشةَ فعلاً** — لا خدمةً بلا قارئ. */
-    public function test_the_account_screen_receives_the_360_payload(): void
+    public function test_the_shared_account_screen_hides_merchant_financial_details(): void
     {
-        $m = $this->merchant(A::BIZ_RETAIL);
-
-        $json = $this->actingAs($this->operator(), 'user')
-            ->getJson("/admin/amial/hub/users/{$m->id}/detail.json")
-            ->assertOk()->json();
-
-        $this->assertArrayHasKey('merchant360', $json,
-            'الخدمةُ مبنيّةٌ ولا تصل الشاشة (القاعدة ١٢)');
-
-        $view = (string) file_get_contents(
-            __DIR__ . '/../../resources/views/admin-views/amial/hub/account.blade.php');
-
-        $this->assertStringContainsString('merchant360', $view);
-        $this->assertStringContainsString('الأداء المالي', $view);
-        $this->assertStringContainsString('تفاصيل العمل', $view);
+        $merchant = $this->merchant(A::BIZ_RETAIL);
+        $this->actingAs($this->operator(), 'user')
+            ->getJson("/admin/amial/hub/users/{$merchant->id}/detail.json")->assertNotFound();
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -276,25 +263,18 @@ class AdminCommandCenterGuardTest extends TestCase
         'admin.amial.2fa.page',
         'admin.amial.aml.page',
         'admin.amial.audit.index',
-        'admin.amial.catalog.page',
         'admin.amial.charity.page',
         'admin.amial.customer.page',
-        'admin.amial.entitlements.page',
         'admin.amial.executive.index',
         'admin.amial.fees.index',
-        'admin.amial.fuel.page',
         'admin.amial.hub.agents',
         'admin.amial.hub.customers',
         'admin.amial.hub.disputes',
         'admin.amial.hub.finance',
-        'admin.amial.hub.merchants',
         'admin.amial.hub.settings',
         'admin.amial.hub.settlements',
-        'admin.amial.hub.staff',
-        'admin.amial.hub.subscriptions',
         'admin.amial.hub.verification',
         'admin.amial.hub.zones.index',
-        'admin.amial.invoices.page',
         'admin.amial.kyc.page',
         'admin.amial.kyc.changes.page',
         'admin.amial.registration-dossiers.page',
@@ -305,7 +285,6 @@ class AdminCommandCenterGuardTest extends TestCase
         'admin.amial.otp.page',
         'admin.amial.partner-settlements.page',
         'admin.amial.recovery.index',
-        'admin.amial.retail.page',
         'admin.amial.security-events.index',
         'admin.amial.sentinel.index',
         'admin.amial.supervision.index',
@@ -326,6 +305,17 @@ class AdminCommandCenterGuardTest extends TestCase
         'admin.transaction.index',
         'admin.withdraw.index',
         'agent.login',
+    ];
+
+    private const FROZEN_NAV_DESTINATIONS = [
+        'admin.amial.catalog.page',
+        'admin.amial.entitlements.page',
+        'admin.amial.fuel.page',
+        'admin.amial.hub.merchants',
+        'admin.amial.hub.staff',
+        'admin.amial.hub.subscriptions',
+        'admin.amial.invoices.page',
+        'admin.amial.retail.page',
     ];
 
     /** @return list<string> */
@@ -349,6 +339,7 @@ class AdminCommandCenterGuardTest extends TestCase
     public function test_no_admin_destination_was_lost_when_customer_navigation_was_unified(): void
     {
         $present = $this->navigationDestinations();
+        $this->assertSame([], array_values(array_intersect(self::FROZEN_NAV_DESTINATIONS, $present)));
         $missing = array_values(array_diff(self::EXPECTED_NAV_DESTINATIONS, $present));
 
         $this->assertSame([], $missing,
