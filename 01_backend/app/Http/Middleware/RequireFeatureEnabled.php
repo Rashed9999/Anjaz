@@ -7,6 +7,8 @@ use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -33,17 +35,28 @@ class RequireFeatureEnabled
         }
 
         if ($write) {
-            // Disabling new Safe Payment intake MUST NOT trap funded payments.
-            // These pre-existing lifecycle routes keep their own normal auth,
-            // zone, idempotency and ledger checks. This is not an auth bypass.
+            // This control governs NEW Safe Payment intake ONLY, not the
+            // transaction lifecycle. Positive-match the create route rather
+            // than keeping a fragile list of settlement/refund route names:
+            // future lifecycle actions must not become trapped by PAUSE_NEW.
+            // They still pass all other auth, idempotency, zone and ledger guards.
             $name = (string) $request->route()?->getName();
-            if ($featureKey === 'safe_payment' && $this->isSafePaymentLifecycle($name)) {
+            if ($featureKey === 'safe_payment' && ! $this->isSafePaymentIntakeRoute($name)) {
                 return $next($request);
             }
 
             try {
                 if (! $this->features->isEnabledFreshStrict($featureKey)) {
                     return $this->unavailable($featureKey);
+                }
+                if ($featureKey === 'safe_payment' && Schema::hasTable('control_center_policies')) {
+                    // Explicit intake mode is scoped to new writes. Existing
+                    // payment lifecycle actions are exempted above.
+                    $mode = DB::table('control_center_policies')
+                        ->where('feature_key', 'safe_payment')->value('mode');
+                    if ($mode !== 'RUNNING') {
+                        return $this->unavailable($featureKey, 'FEATURE_INTAKE_PAUSED');
+                    }
                 }
             } catch (\Throwable $e) {
                 Log::error('Feature guard DB check failed for write route', [
@@ -72,18 +85,9 @@ class RequireFeatureEnabled
         return $next($request);
     }
 
-    private function isSafePaymentLifecycle(string $name): bool
+    private function isSafePaymentIntakeRoute(string $name): bool
     {
-        foreach ([
-            'evidence.upload', 'verify-delivery', 'seller-accept',
-            'seller-reject', 'seller-in-delivery', 'seller-delivered',
-            'buyer-confirm', 'buyer-cancel', 'buyer-dispute',
-        ] as $suffix) {
-            if (str_ends_with($name, 'amial.safe-pay.'.$suffix)) {
-                return true;
-            }
-        }
-        return false;
+        return str_ends_with($name, 'amial.safe-pay.create');
     }
 
     private function unavailable(string $key, string $code = 'FEATURE_UNDER_MAINTENANCE'): JsonResponse

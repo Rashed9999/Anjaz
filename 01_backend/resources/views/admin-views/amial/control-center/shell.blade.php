@@ -114,13 +114,13 @@
                     @php $f = $byKey->get($key); @endphp
                     @if($f)
                         <div class="acc-switch-card" data-testid="control-{{ $key }}">
-                            <div><strong>{{ $f['name_ar'] }}</strong><small>{{ $f['connected'] ? ($f['enabled'] ? 'يعمل ضمن النطاق المحروس' : 'متوقف بالنطاق المحروس') : 'غير مربوط بحارس API فعّال' }}</small></div>
+                            <div><strong>{{ $f['name_ar'] }}</strong><small>{{ $f['connected'] ? ($f['key'] === 'safe_payment' ? ($f['enabled'] ? 'استقبال دفعات جديدة مسموح' : 'استقبال جديد موقوف — الدفعات القائمة مستمرة') : ($f['enabled'] ? 'يعمل ضمن النطاق المحروس' : 'متوقف بالنطاق المحروس')) : 'غير مربوط بحارس API فعّال' }}</small></div>
                             @if($f['connected'] && $ready && $canRequest)
                                 <button class="acc-btn {{ $f['enabled'] ? 'danger' : 'green' }} sm js-change"
                                         data-key="{{ $f['key'] }}" data-name="{{ $f['name_ar'] }}"
                                         data-enabled="{{ $f['enabled'] ? '0' : '1' }}"
-                                        @if($f['enabled'] && !$f['can_disable']) disabled title="توجد أموال محتجزة أو تعذر التحقق" @endif>
-                                    {{ $f['enabled'] ? 'إيقاف' : 'تشغيل' }}
+                                        @if($f['enabled'] && !($f['key'] === 'safe_payment' ? ($f['can_pause_new'] ?? false) : $f['can_disable'])) disabled title="تعذر تنفيذ هذا القرار" @endif>
+                                    {{ $f['key'] === 'safe_payment' ? ($f['enabled'] ? 'وقف استقبال الجديد' : 'استئناف استقبال الجديد') : ($f['enabled'] ? 'إيقاف' : 'تشغيل') }}
                                 </button>
                             @else
                                 <span class="acc-tag muted">{{ $f['connected'] ? 'عرض فقط' : 'غير متصل' }}</span>
@@ -146,7 +146,7 @@
                 <div class="acc-detail-line"><strong>الموافقة الثانية</strong><span class="acc-tag ok">مطلوبة للتغييرات الحساسة</span></div>
                 <div class="acc-detail-line"><strong>الواجهات غير المربوطة</strong><span class="acc-tag muted">لا يُسمح بتغييرها</span></div>
                 <div class="acc-detail-line"><strong>أثر التحكم</strong><span class="acc-tag ok">سجل تغيير ومراجعة</span></div>
-                <div class="acc-notice mt-3">لا يساوي لون الزر حالة النظام؛ لا يُعلن النجاح إلا بعد قبول الخادم للقرار وتسجيله.</div>
+                <div class="acc-notice mt-3">مفتاح الدفع الآمن هنا يتحكم في استقبال طلبات جديدة فقط؛ لا يوقف التسويات القائمة. لا يساوي لون الزر حالة النظام؛ لا يُعلن النجاح إلا بعد قبول الخادم للقرار وتسجيله.</div>
             </section>
         </div>
     @elseif($section === 'services')
@@ -170,15 +170,15 @@
                             <tr data-feature-row tabindex="0" data-key="{{ $f['key'] }}" data-text="{{ mb_strtolower($f['name_ar'].' '.$f['key']) }}" data-category="{{ $f['category'] }}" data-connection="{{ $f['connected'] ? 'connected' : 'unconnected' }}">
                                 <td><strong>{{ $f['name_ar'] }}</strong><div class="acc-mute">{{ $f['description_ar'] }}</div></td>
                                 <td>{{ ['financial'=>'مالية','merchant'=>'تجارية','general'=>'عامة','channel'=>'قنوات'][$f['category']] ?? $f['category'] }}</td>
-                                <td><span class="acc-tag {{ $f['connected'] ? ($f['enabled'] ? 'ok' : 'bad') : 'muted' }}">{{ $f['connected'] ? ($f['enabled'] ? 'تشغيل' : 'إيقاف') : 'غير مربوط' }}</span></td>
+                                <td><span class="acc-tag {{ $f['connected'] ? ($f['enabled'] ? 'ok' : 'bad') : 'muted' }}">{{ $f['connected'] ? ($f['key'] === 'safe_payment' ? ($f['enabled'] ? 'استقبال جديد متاح' : 'استقبال الجديد موقوف') : ($f['enabled'] ? 'تشغيل' : 'إيقاف')) : 'غير مربوط' }}</span></td>
                                 <td><span class="acc-tag {{ $f['approval_required'] ? 'warn' : 'ok' }}">{{ $f['approval_required'] ? 'موافقة مزدوجة' : 'منخفض' }}</span></td>
                                 <td>
                                     @if($f['connected'] && $canRequest && $ready)
                                         <button class="acc-btn sm {{ $f['enabled'] ? 'danger' : 'green' }} js-change"
                                             data-key="{{ $f['key'] }}" data-name="{{ $f['name_ar'] }}"
                                             data-enabled="{{ $f['enabled'] ? '0' : '1' }}"
-                                            @if($f['enabled'] && !$f['can_disable']) disabled title="لا يمكن التحقق من سلامة الإيقاف" @endif>
-                                            {{ $f['enabled'] ? 'إيقاف' : 'تشغيل' }}
+                                            @if($f['enabled'] && !($f['key'] === 'safe_payment' ? ($f['can_pause_new'] ?? false) : $f['can_disable'])) disabled title="لا يمكن التحقق من سلامة القرار" @endif>
+                                            {{ $f['key'] === 'safe_payment' ? ($f['enabled'] ? 'وقف استقبال الجديد' : 'استئناف استقبال الجديد') : ($f['enabled'] ? 'إيقاف' : 'تشغيل') }}
                                         </button>
                                     @else
                                         <span class="acc-tag muted">غير متاح</span>
@@ -219,8 +219,8 @@
                         <div class="mb-2"><span class="acc-tag {{ $f['connected'] ? ($f['enabled'] ? 'ok' : 'bad') : 'muted' }}">{{ $f['connected'] ? ($f['enabled'] ? 'تشغيل' : 'متوقف') : 'غير مرتبط' }}</span></div>
                         @if($f['connected'] && $ready && $canRequest)
                             <button class="acc-btn danger sm js-change" data-key="{{ $key }}" data-name="{{ $f['name_ar'] }}" data-enabled="{{ $f['enabled'] ? '0' : '1' }}"
-                                @if($f['enabled'] && !$f['can_disable']) disabled @endif>
-                                {{ $f['enabled'] ? 'طلب الإيقاف' : 'طلب التشغيل' }}
+                                @if($f['enabled'] && !($f['key'] === 'safe_payment' ? ($f['can_pause_new'] ?? false) : $f['can_disable'])) disabled @endif>
+                                {{ $f['key'] === 'safe_payment' ? ($f['enabled'] ? 'طلب وقف استقبال الجديد' : 'طلب استئناف الاستقبال') : ($f['enabled'] ? 'طلب الإيقاف' : 'طلب التشغيل') }}
                             </button>
                         @else
                             <span class="acc-mute">لا يمكن التحكم إلى حين ربط API</span>
@@ -239,7 +239,9 @@
                     @forelse($requests as $req)
                         <tr>
                             <td>#{{ $req->id }}<div class="acc-mute">{{ $req->created_at }}</div></td>
-                            <td><strong>{{ $byKey->get($req->feature_key)['name_ar'] ?? $req->feature_key }}</strong><div class="acc-mute">{{ $req->desired_enabled ? 'تشغيل' : 'إيقاف' }}</div></td>
+                            <td><strong>{{ $byKey->get($req->feature_key)['name_ar'] ?? $req->feature_key }}</strong><div class="acc-mute">{{ $req->feature_key === 'safe_payment'
+    ? ($req->desired_enabled ? 'استئناف استقبال الدفعات الجديدة' : 'تعليق استقبال الدفعات الجديدة')
+    : ($req->desired_enabled ? 'تشغيل' : 'إيقاف') }}</div></td>
                             <td>الموظف #{{ $req->requested_by }}<div class="acc-mute">{{ \Illuminate\Support\Str::limit($req->reason, 65) }}</div></td>
                             <td><span class="acc-tag {{ $req->status === 'pending' ? 'warn' : ($req->status === 'approved' ? 'ok' : 'bad') }}">{{ $req->status }}</span></td>
                             <td>{{ $req->reviewed_by ? 'الموظف #'.$req->reviewed_by : '—' }}</td>
@@ -281,9 +283,9 @@
         <a href="{{ route('admin.amial.saher.index') }}" class="acc-nav-link">♢ ساهر</a>
     @endif
     @if(auth('user')->user()?->hasPlatformPermission('platform.ops.view'))
-        <a href="{{ route('admin.amial.ops.index') }}" class="acc-nav-link">◉ العمليات والراصد</a>
+        <a href="{{ route('admin.amial.ops.index') }}" class="acc-nav-link">◉ مراقبة العمليات</a>
     @endif
-    <a href="{{ route('admin.maintenance.index') }}" class="acc-nav-link">⚙ الإعدادات القديمة</a>
+    <a href="{{ route('admin.maintenance.index') }}" class="acc-nav-link">⚙ الصيانة والإعدادات القديمة</a>
     <div class="acc-notice acc-warning" style="margin-top:22px;font-size:11px">
         <strong>مصدر الحقيقة:</strong> حالة Feature Flags في أميال باي. بقية المنصات تُعرض كتكامل غير مكتمل حتى تُربط ويُختبر التحكم فيها.
     </div>
@@ -328,10 +330,14 @@
         result.textContent = '';
         label.textContent = next.type === 'approve'
             ? (next.decision === 'approve' ? 'اعتماد طلب رقم ' : 'رفض طلب رقم ') + next.id
-            : (next.enabled ? 'طلب تشغيل: ' : 'طلب إيقاف: ') + next.name;
+            : (next.key === 'safe_payment'
+                ? (next.enabled ? 'طلب استئناف دفعات جديدة: ' : 'طلب تعليق دفعات جديدة: ') + next.name
+                : (next.enabled ? 'طلب تشغيل: ' : 'طلب إيقاف: ') + next.name);
         desc.textContent = next.type === 'approve'
             ? 'الموافق الثاني يجب أن يكون مختلفًا عن طالب التغيير.'
-            : 'سيُتحقق من الربط والأرصدة والصلاحيات، ثم يطبّق القرار أو يُسجل للموافقة.';
+            : (next.key === 'safe_payment'
+                ? 'هذا القرار يخص استقبال دفعات آمنة جديدة فقط؛ لا يوقف التسويات والإلغاءات والنزاعات القائمة.'
+                : 'سيُتحقق من الربط والأرصدة والصلاحيات، ثم يطبّق القرار أو يُسجل للموافقة.');
         submit.disabled = false;
         modal.showModal();
         reason.focus();
@@ -390,7 +396,10 @@
         document.getElementById('acc-selected-name').textContent = f.name_ar;
         document.getElementById('acc-selected-desc').textContent = f.description_ar || 'بدون وصف';
         const state = document.getElementById('acc-selected-state');
-        state.textContent = f.connected ? (f.enabled ? 'تشغيل' : 'إيقاف') : 'غير مرتبط';
+        state.textContent = f.connected
+            ? (f.key === 'safe_payment' ? (f.enabled ? 'استقبال جديد متاح' : 'استقبال الجديد موقوف')
+                : (f.enabled ? 'تشغيل' : 'إيقاف'))
+            : 'غير مرتبط';
         state.className = 'acc-tag ' + (f.connected ? (f.enabled ? 'ok' : 'bad') : 'muted');
         document.getElementById('acc-selected-link').textContent = f.connected ? 'حارس API متصل' : 'بحاجة إلى عقد تكامل واختبارات';
         document.getElementById('acc-selected-policy').textContent = f.approval_required ? 'موافقة مزدوجة' : 'تغيير مباشر بصلاحية الإدارة';
