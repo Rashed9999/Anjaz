@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\DuplicateTransactionException;
 use App\Models\IdempotencyKey;
-use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -51,30 +51,27 @@ class IdempotencyService
 
         // محاولة insert atomic — لو فشل بسبب unique constraint، نعرف أن السجل موجود
         try {
-            $row = IdempotencyKey::create([
+            $row = DB::transaction(fn () => IdempotencyKey::create([
                 'key' => $key,
                 'user_id' => $userId,
                 'endpoint' => $endpoint,
                 'request_hash' => $hash,
                 'status' => 'processing',
                 'expires_at' => now()->addSeconds(self::TTL_SECONDS),
-            ]);
+            ]));
 
             return ['status' => 'new', 'row_id' => $row->id];
 
-        } catch (QueryException $e) {
-            // SQLSTATE 23000 = integrity constraint violation (duplicate)
-            if (!str_contains($e->getMessage(), 'Duplicate') && !str_contains((string)$e->getCode(), '23')) {
-                throw $e;
-            }
+        } catch (UniqueConstraintViolationException) {
+            // The conflicting insert was rolled back to its savepoint.
         }
 
-        // السجل موجود — نقرأه (بدون lock، نريد قراءة سريعة)
+        // Read the committed winner even inside a repeatable-read transaction.
         $existing = IdempotencyKey::where([
             'key' => $key,
             'user_id' => $userId,
             'endpoint' => $endpoint,
-        ])->first();
+        ])->lockForUpdate()->first();
 
         if (!$existing) {
             // race rare: السجل اختفى بعد فشل الـ insert (cleanup؟). نعيد المحاولة بـ recurse واحد.

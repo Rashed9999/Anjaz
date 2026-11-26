@@ -1,11 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:amial_pay/data/api/idempotent_intent.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/family_fund/domain/models/fund_models.dart';
 import 'package:amial_pay/features/family_fund/domain/repositories/funds_repo.dart';
 import 'package:amial_pay/helper/amial_errors.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
-class FundsController extends GetxController implements GetxService {
+class FundsController extends GetxController with IdempotentIntent implements GetxService {
   final FundsRepo repo;
   FundsController({required this.repo});
 
@@ -127,9 +130,17 @@ class FundsController extends GetxController implements GetxService {
     required String amount,
     String? note,
   }) async {
+    if (isSubmitting.value) return false;
+    final scope = jsonEncode([fundUlid, amount, note]);
     try {
       isSubmitting.value = true;
-      final r = await repo.contribute(fundUlid: fundUlid, amount: amount, note: note);
+      final r = await repo.contribute(
+        fundUlid: fundUlid,
+        amount: amount,
+        note: note,
+        idempotencyKey: keyFor('fund_contribute', scope: scope),
+      );
+      settleKey('fund_contribute', r, scope: scope);
       if ((r.statusCode == 200 || r.statusCode == 201) && r.body is Map && r.body['success'] == true) {
         await loadFundDetails(fundUlid);
         await loadMyFunds();
@@ -151,6 +162,8 @@ class FundsController extends GetxController implements GetxService {
     required String amount,
     String? note,
   }) async {
+    if (isSubmitting.value) return false;
+    final scope = jsonEncode([fundUlid, beneficiaryUserId, amount, note]);
     try {
       isSubmitting.value = true;
       final r = await repo.proposeDisbursement(
@@ -158,7 +171,9 @@ class FundsController extends GetxController implements GetxService {
         beneficiaryUserId: beneficiaryUserId,
         amount: amount,
         note: note,
+        idempotencyKey: keyFor('fund_disburse', scope: scope),
       );
+      settleKey('fund_disburse', r, scope: scope);
       if ((r.statusCode == 200 || r.statusCode == 201) && r.body is Map && r.body['success'] == true) {
         await loadFundDetails(fundUlid);
         return true;

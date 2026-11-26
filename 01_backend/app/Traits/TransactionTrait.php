@@ -380,6 +380,17 @@ trait TransactionTrait
 
         $txId = DB::transaction(function () use ($from_user_id, $to_user_id, $amount, $charge, $total, $note, $idempotencyKey, $feeMeta) {
             // AMIAL-SCALE-DEADLOCK-001 — قفل بترتيب ثابت قبل أي خصم/إضافة
+            if ($idempotencyKey !== null) {
+                User::whereKey($from_user_id)->lockForUpdate()->firstOrFail();
+                $prior = Transaction::where('user_id', $from_user_id)->where('transaction_type', SEND_MONEY)
+                    ->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
+                if ($prior) {
+                    throw new \App\Exceptions\DuplicateTransactionException(
+                        $idempotencyKey, 'already_posted', (string) $prior->transaction_id
+                    );
+                }
+            }
+            \App\Models\TransactionLimit::consumeCustomerTransfer($from_user_id, $amount);
             $this->guard()->lockWalletsOrdered([$from_user_id, $to_user_id]);
 
             // ══════════════════════════════════════════════════════════
