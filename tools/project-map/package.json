@@ -1,0 +1,17 @@
+{
+  "name": "amial-project-map",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "bash build.sh"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "@tailwindcss/cli": "4.3.5",
+    "cn": "0.5.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tailwindcss": "4.3.5",
+    "tsx": "4.23.15"
+  },
+  "private": true
+}

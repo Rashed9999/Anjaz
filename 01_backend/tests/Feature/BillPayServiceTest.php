@@ -326,6 +326,20 @@ class BillPayServiceTest extends TestCase
     }
 
     /** @test */
+    public function inactive_product_is_rejected_before_wallet_hold(): void
+    {
+        $this->product->update(['is_active' => false]);
+        try {
+            $this->service->createAndExecute($this->user, $this->provider, $this->service_, $this->product, '+967700000123', '100');
+            $this->fail('Expected inactive product rejection');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('منتج الفاتورة غير متاح', $e->getMessage());
+        }
+        $this->assertSame(0, BillPaymentOrder::count());
+        $this->assertEquals('1000.0000', EMoney::where('user_id', $this->user->id)->value('current_balance'));
+    }
+
+    /** @test */
     public function repeated_idempotency_key_does_not_create_or_submit_a_second_order()
     {
         $service = $this->mockProvider('pending');
@@ -340,6 +354,13 @@ class BillPayServiceTest extends TestCase
             '+967700000123', '100.0000', [], $key,
         );
 
+        try {
+            $service->createAndExecute($this->user, $this->provider, $this->service_, $this->product,
+                '+967700000124', '100.0000', [], $key);
+            $this->fail('Expected conflicting bill intent rejection');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('استُخدم مفتاح السداد لطلب مختلف', $e->getMessage());
+        }
         $this->assertSame($first->order_ulid, $second->order_ulid);
         $this->assertSame(1, BillPaymentOrder::where('user_id', $this->user->id)->count());
         $this->assertSame(1, BillProviderRequest::where('order_id', $first->id)->where('request_type', 'pay')->count());

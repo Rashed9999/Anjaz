@@ -1,0 +1,100 @@
+{
+  "project": {
+    "name": "أميال باي",
+    "summary": "خريطة مستودع Anjaz ومسؤوليات أجزائه."
+  },
+  "audience": "developers",
+  "nodes": [
+    {
+      "id": "pay",
+      "label": "أميال باي",
+      "kind": "service",
+      "paths": [
+        "01_backend/**"
+      ],
+      "summary": "يعالج الطلبات ويطبّق قواعد الحسابات والدفع."
+    },
+    {
+      "id": "mobile",
+      "label": "تطبيق الجوال",
+      "kind": "ui",
+      "paths": [
+        "02_flutter_app/**"
+      ],
+      "summary": "واجهات تطبيق Flutter واتصاله بخدمات أميال."
+    },
+    {
+      "id": "database",
+      "label": "قاعدة البيانات",
+      "kind": "data",
+      "paths": [
+        "00_database/**",
+        "01_backend/database/**"
+      ],
+      "summary": "تعريف الجداول وترحيلات قاعدة البيانات.",
+      "parent": "pay"
+    },
+    {
+      "id": "admin",
+      "label": "لوحة الإدارة",
+      "kind": "ui",
+      "paths": [
+        "01_backend/resources/views/admin-views/**",
+        "01_backend/app/Http/Controllers/Admin/**"
+      ],
+      "summary": "صفحات الإدارة وإجراءات الموظفين.",
+      "parent": "pay"
+    },
+    {
+      "id": "saher",
+      "label": "ساهر",
+      "kind": "feature",
+      "paths": [
+        "01_backend/app/Saher/**",
+        "01_backend/resources/views/admin-views/amial/saher/**"
+      ],
+      "summary": "يجمع نتائج فحص الشيفرة والحراس ويعرضها للمراجعة.",
+      "parent": "admin"
+    },
+    {
+      "id": "merchants",
+      "label": "ربط التجار",
+      "kind": "feature",
+      "paths": [
+        "01_backend/app/Services/BusinessGateway/**",
+        "01_backend/app/Services/Muwathaq/**"
+      ],
+      "summary": "يعالج اعتماد موثّق وربط حساب التاجر بأميال أعمال.",
+      "parent": "pay"
+    },
+    {
+      "id": "tests",
+      "label": "اختبارات الخادم",
+      "kind": "test",
+      "paths": [
+        "01_backend/tests/**",
+        "tests/**"
+      ],
+      "summary": "تتحقق من سلوك الخدمات والصلاحيات.",
+      "parent": "pay"
+    },
+    {
+      "id": "support",
+      "label": "ملفات المشروع المشتركة",
+      "kind": "library",
+      "paths": [
+        "app/**",
+        "resources/**",
+        "design-system/**",
+        "tools/**"
+      ],
+      "summary": "موارد وأدوات تطوير مشتركة."
+    }
+  ],
+  "ignore": [
+    "01_backend/public/assets/**",
+    "**/node_modules/**",
+    "floorplan/**",
+    ".agents/**"
+  ]
+}

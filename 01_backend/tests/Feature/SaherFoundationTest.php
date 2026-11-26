@@ -72,6 +72,21 @@ class SaherFoundationTest extends TestCase
     }
 
     /** @test */
+    public function an_excluded_permission_does_not_count_as_an_active_guard(): void
+    {
+        $guard = 'platform:platform.money.move';
+        Route::middleware($guard)->group(function () use ($guard) {
+            Route::post('admin/saher-probe/guarded', fn () => 'ok')->name('admin.saher.guarded');
+            Route::post('admin/saher-probe/excluded', fn () => 'ok')
+                ->withoutMiddleware($guard)->name('admin.saher.excluded');
+        });
+
+        $keys = collect(app(GuardCoverageCollector::class)->collect()['findings'])->pluck('assetKey');
+        $this->assertTrue($keys->contains('admin.saher.excluded'));
+        $this->assertFalse($keys->contains('admin.saher.guarded'));
+    }
+
+    /** @test */
     public function a_money_route_without_a_guard_is_critical_not_merely_high(): void
     {
         // **ودرجةُ الخطر تفرّق.** مسارٌ يُنشئ رصيداً بلا حارسٍ ليس كمسارٍ
@@ -557,6 +572,25 @@ class SaherFoundationTest extends TestCase
         $this->assertStringContainsString('لم تُشغَّل جولةُ فحصٍ بعد', $html);
         $this->assertStringNotContainsString('لا اكتشافاتٍ مفتوحة', $html,
             'الصفحةُ تقول «لا اكتشافات» ولم يُفحص شيء — وذاك اختراعُ صحّة');
+    }
+
+    /** @test */
+    public function the_board_distinguishes_failed_stale_and_filtered_results(): void
+    {
+        $this->actingAs($this->admin(), 'user');
+        $url = route('admin.amial.saher.index');
+        $store = app(FindingStore::class);
+        $store->failRun($store->beginRun('guards'), 'guards', 'تعذر إكمال الفحص');
+        $this->get($url)->assertOk()->assertSee('تغطية الفحص غير مكتملة')
+            ->assertViewHas('sources', fn ($sources) => $sources->firstWhere('code', 'guards')->display_health === 'UNAVAILABLE');
+
+        $store->commitRun($store->beginRun('guards'), 'guards', [], 5);
+        DB::table('saher_sources')->where('code', 'guards')->update([
+            'last_success_at' => now()->subHours(2), 'stale_after_minutes' => 60,
+        ]);
+        $this->get($url)->assertOk()->assertSee('تغطية الفحص غير مكتملة')
+            ->assertViewHas('sources', fn ($sources) => $sources->firstWhere('code', 'guards')->display_health === 'STALE');
+        $this->get($url.'?severity=HIGH')->assertOk()->assertSee('لا اكتشافات تطابق خيارات البحث');
     }
 
     /** @test */
