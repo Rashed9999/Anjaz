@@ -97,13 +97,12 @@ class MerchantWebPlansSectorTest extends TestCase
         $this->getJson('/merchant/data/sector')->assertUnauthorized();
     }
 
-    public function test_all_built_in_sectors_get_their_own_portal_header(): void
+    public function test_all_built_in_sectors_use_the_same_business_portal(): void
     {
         foreach (A::ALL_BUSINESS_TYPES as $i => $type) {
             $owner = $this->owner($type, $i + 10);
             $this->actingAs($owner, 'merchant_web')
-                ->get('/merchant')->assertOk()
-                ->assertSee(A::BUSINESS_TYPE_LABELS[$type]);
+                ->get('/merchant')->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
         }
     }
 

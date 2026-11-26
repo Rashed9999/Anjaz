@@ -3,10 +3,13 @@
 namespace App\Http\Middleware;
 
 use App\Exceptions\DuplicateTransactionException;
+use App\Models\Agent\AgentStaff;
 use App\Services\IdempotencyService;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -59,6 +62,11 @@ class EnforceIdempotency
             $key = (is_string($body) && $body !== '') ? $body : null;
         }
 
+        $sendMoney = $request->is('api/v1/customer/send-money');
+        if ($sendMoney && empty($key)) {
+            return $this->errorResponse('IDEMPOTENCY_KEY_REQUIRED', 'مفتاح التحويل مطلوب', 400);
+        }
+
         if (empty($key)) {
             // ولا يُرفض الطلبُ بـ٤٠٠ حين يغيب المفتاحُ من الاثنين: ذاك
             // يكسر عملاءَ قدامى. يُولَّد مفتاحٌ — والحمايةُ حينها منعدمةٌ
@@ -67,9 +75,33 @@ class EnforceIdempotency
         }
         $request->attributes->set('amial.idempotency_key', $key);
 
-        $userId = $request->user()?->id;
-        $endpoint = $request->method() . ' ' . $request->path();
+        $actor = $request->user() ?? $request->attributes->get('agent_staff');
+        $isAgentStaff = $actor instanceof AgentStaff
+            || ($request->attributes->get('agent_staff') instanceof AgentStaff);
+        $userId = $actor?->id;
+        // عزل نطاق agent_staff عن users لمنع تصادم المعرّفات في idempotency_keys.
+        $endpoint = ($isAgentStaff ? 'agent_staff:' : '') . $request->method() . ' ' . $request->path();
 
+        if ($sendMoney || $request->routeIs('agent.counter.deposit')) {
+            // Commit the response, financial movement and key together.
+            try {
+                return DB::transaction(function () use ($request, $next, $key, $userId, $endpoint) {
+                    $response = $this->process($request, $next, $key, $userId, $endpoint);
+                    if ($response->getStatusCode() >= 500) {
+                        throw new HttpResponseException($response);
+                    }
+                    return $response;
+                });
+            } catch (HttpResponseException $error) {
+                return $error->getResponse();
+            }
+        }
+
+        return $this->process($request, $next, $key, $userId, $endpoint);
+    }
+
+    private function process(Request $request, Closure $next, string $key, ?int $userId, string $endpoint): Response
+    {
         try {
             $check = $this->idempotency->begin(
                 key: $key,
@@ -123,6 +155,8 @@ class EnforceIdempotency
             // نجاح — نخزن للـ replay
             $transactionId = $responseBody['data']['transaction_id']
                 ?? $responseBody['data']['order']['order_ulid']
+                ?? $responseBody['result']['transaction_id']
+                ?? $responseBody['result']['reference']
                 ?? $responseBody['transaction_id']
                 ?? null;
             $this->idempotency->complete(
@@ -132,6 +166,10 @@ class EnforceIdempotency
                 httpStatus: $status,
                 responseBody: $responseBody,
                 transactionId: $transactionId,
+            );
+        } elseif ($status === 409 && ($responseBody['meta']['reason'] ?? null) === 'already_posted') {
+            $this->idempotency->complete(
+                $key, $userId, $endpoint, $status, $responseBody, $responseBody['meta']['original_transaction_id']
             );
         } else {
             // فشل (4xx/5xx) — نسجل failed، نطلب key جديد للمحاولة التالية

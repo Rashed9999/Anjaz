@@ -102,7 +102,7 @@ class MessagingContractTest extends TestCase
         $keys = array_map(fn (MessageProvider $p) => $p->channel() . ':' . $p->key(),
             $this->registry()->all());
 
-        foreach (['sms:twilio', 'sms:nexmo', 'sms:2factor', 'sms:msg91', 'sms:smsgate',
+        foreach (['sms:sms_gate', 'sms:smsgate', 'sms:twilio', 'sms:nexmo', 'sms:2factor', 'sms:msg91',
                   'whatsapp:meta_cloud', 'whatsapp:twilio', 'whatsapp:360dialog',
                   'whatsapp:wati', 'whatsapp:ultramsg',
                   // AMIAL-MESSAGING-002 — غيرُ مقيَّدٍ بنافذة ٢٤ ساعة،
@@ -111,7 +111,7 @@ class MessagingContractTest extends TestCase
             $this->assertContains($expected, $keys, "مزوّدٌ لم يُكتشف: {$expected}");
         }
 
-        $this->assertCount(11, $keys, 'عددُ المزوّدين تغيّر — راجع الاكتشاف');
+        $this->assertCount(12, $keys, 'عددُ المزوّدين تغيّر — راجع الاكتشاف');
     }
 
     /**

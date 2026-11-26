@@ -300,14 +300,12 @@ class AgentWhatsappService
         }
 
         $branch = AgentBranch::find($shift->branch_id);
-        $safe = (string) (AgentCashTill::where('branch_id', $shift->branch_id)->value('cash_on_hand') ?? '0');
 
         return "🪟 *درجك — {$branch?->name}*\n\n"
             . '💵 النقد في درجك: *' . $this->m($shift->cash_on_hand) . "* ر.ي\n"
             . '📥 إيداعات: ' . $this->m($shift->deposits_total) . " ({$shift->deposits_count})\n"
             . '📤 سحوبات: ' . $this->m($shift->withdrawals_total) . " ({$shift->withdrawals_count})\n"
             . '🎒 العهدة الافتتاحيّة: ' . $this->m($shift->opening_float) . " ر.ي\n\n"
-            . '🏦 خزنة الفرع: ' . $this->m($safe) . " ر.ي\n"
             . '⏰ فُتحت: ' . ($shift->opened_at?->format('H:i') ?? '—');
     }
 

@@ -168,6 +168,17 @@ class AgentAlertTest extends TestCase
             'password' => Hash::make('secret123'), 'is_active' => 1,
         ])->save();
 
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
+        $admin->refresh();
+
+        config()->set('amial.daily_settlement.four_eyes', [
+            'threshold' => '500000',
+            'currency' => 'YER',
+            'first_approver_permission' => 'platform.settlements.decide',
+            'second_approver_permission' => 'platform.settlements.decide',
+        ]);
+
         return $admin;
     }
 

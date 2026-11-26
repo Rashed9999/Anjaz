@@ -66,7 +66,8 @@ class LedgerService
         if ($idempotencyKey) {
             $existing = LedgerJournalEntry::where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
-                return $existing; // تم تسجيله مسبقاً
+                $this->assertSamePosting($existing, $sourceType, $sourceId, $lines);
+                return $existing;
             }
         }
 
@@ -95,7 +96,7 @@ class LedgerService
 
             // إنشاء الرأس
             $totalDebit = $this->sumByDirection($lines, 'debit');
-            $entry = LedgerJournalEntry::create([
+            $attributes = [
                 'currency' => $entryCurrency,
                 'entry_ulid' => (string) Str::ulid(),
                 'source_type' => $sourceType,
@@ -111,7 +112,21 @@ class LedgerService
                 'metadata' => $metadata,
                 'posted_at' => now(),
                 'created_at' => now(),
-            ]);
+            ];
+            if ($idempotencyKey === null) {
+                $entry = LedgerJournalEntry::create($attributes);
+            } else {
+                try {
+                    $entry = DB::transaction(fn () => LedgerJournalEntry::create($attributes));
+                } catch (\Illuminate\Database\UniqueConstraintViolationException $error) {
+                    $winner = LedgerJournalEntry::where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
+                    if (!$winner) {
+                        throw $error;
+                    }
+                    $this->assertSamePosting($winner, $sourceType, $sourceId, $lines);
+                    return $winner;
+                }
+            }
 
             // تسجيل كل سطر مع قفل الحساب
             foreach ($lines as $line) {
@@ -336,17 +351,24 @@ class LedgerService
      *
      * @return LedgerJournalEntry|null  و`null` تعني: لا شيءَ يُفتَح
      */
-    public function openWalletBalance(int $userId, string $reason): ?LedgerJournalEntry
-    {
+    public function openWalletBalance(
+        int $userId,
+        string $reason,
+        string $currency = \App\Support\Money\Currencies::BASE,
+    ): ?LedgerJournalEntry {
         if (trim($reason) === '') {
             throw new RuntimeException('Opening a wallet balance requires a stated reason.');
         }
 
-        return DB::transaction(function () use ($userId, $reason): ?LedgerJournalEntry {
-            $account = $this->getOrCreateUserWallet($userId);
+        $cur = \App\Support\Money\Currencies::normalize($currency);
+        $isBase = \App\Support\Money\Currencies::isBase($cur);
 
-            $wallet = \App\Models\EMoney::where('user_id', $userId)->value('current_balance');
-            $wallet = $wallet === null ? '0' : (string) $wallet;
+        return DB::transaction(function () use ($userId, $reason, $cur, $isBase): ?LedgerJournalEntry {
+            $walletRow = \App\Models\EMoney::inCurrency($cur)->where('user_id', $userId)->first();
+            $zone = (string) ($walletRow?->zone_code ?: 'SOUTH');
+            $account = $this->getOrCreateUserWallet($userId, $zone, $cur);
+
+            $wallet = $walletRow ? (string) ($walletRow->current_balance ?? '0') : '0';
 
             $inLedger = $this->computeBalanceFromLines($account->id);
 
@@ -366,8 +388,11 @@ class LedgerService
             }
 
             $opening = $this->getOrCreateSystemAccount(
-                'OPENING_BALANCE_SUSPENSE', 'asset',
-                'حساب معلّق لأرصدة افتتاحيّة مرحَّلة عند النشر', 'debit'
+                $isBase ? 'OPENING_BALANCE_SUSPENSE' : "OPENING_BALANCE_SUSPENSE_{$cur}",
+                'asset',
+                'حساب معلّق لأرصدة افتتاحيّة مرحَّلة عند النشر' . ($isBase ? '' : " ({$cur})"),
+                'debit',
+                $cur,
             );
 
             return $this->post(
@@ -379,9 +404,12 @@ class LedgerService
                     ['account' => $account->account_code, 'direction' => 'credit', 'amount' => $wallet],
                 ],
                 // مفتاحٌ واحدٌ لكلّ محفظة — فإعادةُ تشغيل أمر النشر لا تضاعف.
-                idempotencyKey: "wallet-opening-balance:{$userId}",
+                idempotencyKey: $isBase
+                    ? "wallet-opening-balance:{$userId}"
+                    : "wallet-opening-balance:{$userId}:{$cur}",
                 metadata: [
                     'reason' => $reason,
+                    'currency' => $cur,
                     'wallet' => $wallet,
                     'ledger_before' => $inLedger,
                 ],
@@ -442,9 +470,14 @@ class LedgerService
                 throw new RuntimeException('Case maker/checker do not match the supplied approval.');
             }
 
-            $account = $this->getOrCreateUserWallet($userId);
-            $wallet = \App\Models\EMoney::where('user_id', $userId)->value('current_balance');
-            $wallet = $wallet === null ? '0' : (string) $wallet;
+            $cur = \App\Support\Money\Currencies::normalize(
+                (string) ($control['currency'] ?? $case->currency ?? \App\Support\Money\Currencies::BASE)
+            );
+            $isBase = \App\Support\Money\Currencies::isBase($cur);
+            $walletRow = \App\Models\EMoney::inCurrency($cur)->where('user_id', $userId)->first();
+            $zone = (string) ($walletRow?->zone_code ?: 'SOUTH');
+            $account = $this->getOrCreateUserWallet($userId, $zone, $cur);
+            $wallet = $walletRow ? (string) ($walletRow->current_balance ?? '0') : '0';
             $inLedger = $this->computeBalanceFromLines($account->id);
             $delta = bcsub($wallet, $inLedger, 4);
 
@@ -455,7 +488,11 @@ class LedgerService
             // This is a suspense account, not permanent equity. Every entry
             // remains traceable to a case until finance reclassifies its origin.
             $adjust = $this->getOrCreateSystemAccount(
-                'EXTERNAL_ADJUSTMENT_SUSPENSE', 'asset', 'حساب معلّق لتسويات خارجية قيد التحقيق', 'debit'
+                $isBase ? 'EXTERNAL_ADJUSTMENT_SUSPENSE' : "EXTERNAL_ADJUSTMENT_SUSPENSE_{$cur}",
+                'asset',
+                'حساب معلّق لتسويات خارجية قيد التحقيق' . ($isBase ? '' : " ({$cur})"),
+                'debit',
+                $cur,
             );
             $positive = bccomp($delta, '0', 4) > 0;
             $magnitude = $positive ? $delta : bcmul($delta, '-1', 4);
@@ -557,11 +594,30 @@ class LedgerService
      * هل دخلت المحفظة الدفتر فعلاً؟ إنشاء الحساب وحده لا يعد تاريخاً.
      * يُستعمل قبل الافتتاح فقط؛ مطابقة الرصيد تظل مسؤولية مسار المال.
      */
-    public function walletHasLedgerHistory(int $userId): bool
-    {
-        $account = $this->getOrCreateUserWallet($userId);
+    public function walletHasLedgerHistory(
+        int $userId,
+        string $currency = \App\Support\Money\Currencies::BASE,
+    ): bool {
+        $account = $this->getOrCreateUserWallet($userId, 'SOUTH', $currency);
 
         return LedgerEntryLine::where('account_id', $account->id)->exists();
+    }
+
+    private function assertSamePosting(LedgerJournalEntry $entry, string $sourceType, ?string $sourceId, array $lines): void
+    {
+        $posted = $entry->lines()->join('ledger_accounts', 'ledger_accounts.id', '=', 'ledger_entry_lines.account_id')
+            ->select('ledger_accounts.account_code', 'ledger_entry_lines.direction', 'ledger_entry_lines.amount')
+            ->lockForUpdate()->get()->map(static fn ($line) => [
+                $line->account_code, $line->direction, (string) $line->amount,
+            ])->all();
+        $requested = array_map(static fn ($line) => [
+            $line['account'], $line['direction'], bcadd((string) $line['amount'], '0', 4),
+        ], $lines);
+        sort($posted);
+        sort($requested);
+        if ($entry->source_type !== $sourceType || $entry->source_id !== $sourceId || $posted !== $requested) {
+            throw new RuntimeException('Ledger idempotency key conflicts with the posted entry');
+        }
     }
 
     /**

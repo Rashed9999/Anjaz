@@ -104,6 +104,7 @@ class PendingTransferService
 
             // خصم المرسل (المال محجوز الآن، لا يملكه أحد)
             $this->guard->debit($sender->id, $total, "pending_transfer_hold:{$transferUlid}");
+            $this->ledgerPendingTransferHold($sender->id, $total, $transferUlid);
 
             $pending = PendingTransfer::create([
                 'transfer_ulid' => $transferUlid,
@@ -188,6 +189,7 @@ class PendingTransferService
             // استرداد المبلغ الكامل للمرسل
             $this->guard->credit($locked->sender_user_id, (string)$locked->total_debited,
                 "pending_transfer_refund:{$locked->transfer_ulid}");
+            $this->ledgerPendingTransferReleased($locked->sender_user_id, (string)$locked->total_debited, $locked->transfer_ulid, 'cancelled');
 
             $locked->update([
                 'status' => 'cancelled',
@@ -248,6 +250,7 @@ class PendingTransferService
                 // المستلم لم يعد مؤهلاً → استرداد للمرسل
                 $this->guard->credit($locked->sender_user_id, (string)$locked->total_debited,
                     "pending_transfer_failed:{$locked->transfer_ulid}");
+                $this->ledgerPendingTransferReleased($locked->sender_user_id, (string)$locked->total_debited, $locked->transfer_ulid, 'failed');
                 $locked->update([
                     'status' => 'failed',
                     'cancellation_reason' => 'المستلم لم يعد مؤهلاً لاستقبال التحويل',
@@ -330,14 +333,13 @@ class PendingTransferService
             ]);
 
             // AMIAL-LEDGER-BLOCKING-003: القيد داخل المعاملة لا بعدها.
-            $this->ledgerTransferWithFee(
-                fromUserId: $locked->sender_user_id,
-                toUserId: $locked->recipient_user_id,
+            $this->ledgerPendingTransferCompleted(
+                senderUserId: $locked->sender_user_id,
+                recipientUserId: $locked->recipient_user_id,
                 grossAmount: (string)$locked->total_debited,
                 feeAmount: (string)$locked->fee,
-                sourceType: 'send_money',
-                sourceId: $locked->transfer_ulid,
-                description: 'تحويل (بعد نافذة الإلغاء)',
+                transferUlid: $locked->transfer_ulid,
+                transactionId: $releaseTxId,
             );
 
             return ['transfer' => $locked->fresh(), 'delivered' => true];

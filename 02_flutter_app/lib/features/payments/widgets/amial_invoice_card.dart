@@ -115,8 +115,15 @@ class AmialInvoiceCard extends StatelessWidget {
         _dashed(),
 
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('$total $cur',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text('$total $cur',
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
+            ),
+          ),
+          const SizedBox(width: 8),
           const Text('الإجمالي',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black)),
         ]),

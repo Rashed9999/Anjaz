@@ -181,6 +181,15 @@ class UnifiedLoginController extends Controller
         // هو المقصود بـ«حسب الصلاحيّة»: الوجهة تُحدَّد من الحساب نفسه.
         $phone = preg_replace('/\D+/', '', $identifier);
         $user  = $phone !== '' ? User::where('phone', $phone)->first() : null;
+        if (! $user && $phone !== '') {
+            $variants = \App\Support\Phone::variants($identifier);
+            if ($variants !== []) {
+                $user = User::whereIn('phone', $variants)->first();
+            }
+        }
+        if (! $user) {
+            $user = \App\Services\Merchant\MerchantOwnerLookup::findByIdentifier($identifier);
+        }
 
         if (! $user || ! Hash::check($password, (string) $user->password)) {
             return $this->failed($request, $identifier);
@@ -202,7 +211,47 @@ class UnifiedLoginController extends Controller
             return $this->enterAgentCompany($request, $user, $throttleKey);
         }
 
-        // ── ٣) عميلٌ أو تاجر: لا لوحةَ له على المتصفّح ───────────────
+        if ((int) $user->type === MERCHANT_TYPE
+            && \App\Services\Merchant\MerchantOwnerLookup::isEligibleOwnerRole($user->role)
+            && (int) $user->is_active === 1) {
+            $profile = \App\Models\MerchantProfile::where('user_id', $user->id)->first();
+            $portal = PortalHost::businessPortalUrl();
+            $webhookSecret = trim((string) config('amial_business.webhook_secret', ''));
+            if ($profile && (string) $profile->verification_status === 'verified') {
+                if ($portal !== null && $webhookSecret !== '') {
+                    $links = app(\App\Services\BusinessGateway\BusinessLinkService::class);
+                    $link = $links->link($user);
+                    if ($link->isActive()) {
+                        RateLimiter::clear($throttleKey);
+                        $ts = time();
+                        $payloadArr = $links->summary($link) + [
+                            'ts' => $ts,
+                            'nonce' => \Illuminate\Support\Str::random(32),
+                            'owner' => [
+                                'name' => trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? '')),
+                                'email' => $user->email,
+                                'phone' => $user->phone,
+                            ],
+                        ];
+                        $json = json_encode($payloadArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                        $payloadB64 = rtrim(strtr(base64_encode((string) $json), '+/', '-_'), '=');
+                        $sig = \App\Services\BusinessGateway\BusinessGatewaySignature::outbound(
+                            (string) $ts,
+                            (string) $json,
+                            $webhookSecret,
+                        );
+
+                        return redirect()->away(
+                            $portal . '/auth/amial-pay-sso?payload=' . rawurlencode($payloadB64) . '&sig=' . rawurlencode($sig)
+                        );
+                    }
+                }
+
+                return redirect()->away(PortalHost::merchantLoginUrl(), 303);
+            }
+        }
+
+        // ── ٣) عميلٌ أو تاجر غير مفعّل لبوابة الأعمال: لا لوحةَ له هنا ─────
         //
         // ولا يُقال له «بيانات خاطئة» — بياناتُه صحيحة. الصمتُ هنا يجعله
         // يُعيد كتابة كلمةٍ صحيحةٍ عشر مرّات ثمّ يظنّ حسابه ضاع.

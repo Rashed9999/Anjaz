@@ -128,6 +128,18 @@ class PendingTransferServiceTest extends TestCase
             (string)EMoney::where('user_id', $sender->id)->value('current_balance'));
     }
 
+    public function test_release_with_a_stale_model_cannot_deliver_a_cancelled_transfer(): void
+    {
+        $sender = $this->makeUser('10000', '1234');
+        $recipient = $this->makeUser('0');
+        $pending = $this->service->initiate($sender, $recipient, '1000', '1234', fee: '10');
+        $stale = $pending->fresh();
+        $this->service->cancel($pending, $sender);
+        $this->assertSame('cancelled', $this->service->release($stale)->status);
+        $this->assertEquals('10000.0000', (string) EMoney::where('user_id', $sender->id)->value('current_balance'));
+        $this->assertEquals('0.0000', (string) EMoney::where('user_id', $recipient->id)->value('current_balance'));
+    }
+
     /** @test */
     public function only_sender_can_cancel()
     {

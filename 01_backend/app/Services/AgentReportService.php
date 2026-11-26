@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\Agent\AgentLedgerSources;
 use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentCashMovement;
 use App\Models\EMoney;
@@ -41,7 +42,7 @@ class AgentReportService
         $to ??= now()->toDateString();
 
         $rows = DB::table('ledger_journal_entries')
-            ->whereIn('source_type', ['agent_deposit', 'agent_withdraw'])
+            ->whereIn('source_type', AgentLedgerSources::ALL)
             ->whereBetween('posted_at', [$from . ' 00:00:00', $to . ' 23:59:59'])
             ->get(['source_type', 'total_amount', 'metadata', 'posted_at']);
 
@@ -64,7 +65,7 @@ class AgentReportService
             $byDay[$day] ??= ['date' => $day, 'deposits' => 0, 'withdrawals' => 0,
                 'volume' => '0', 'fee' => '0', 'commission' => '0'];
 
-            $isDeposit = $r->source_type === 'agent_deposit';
+            $isDeposit = !AgentLedgerSources::isWithdraw($r->source_type);
             $byDay[$day][$isDeposit ? 'deposits' : 'withdrawals']++;
             $byDay[$day]['volume'] = bcadd($byDay[$day]['volume'], (string) $r->total_amount, 4);
             $byDay[$day]['fee'] = bcadd($byDay[$day]['fee'], $fee, 4);
@@ -208,23 +209,36 @@ class AgentReportService
 
         foreach ($days as $d) {
             $row = $hours[$d] ?? null;
-            if (!is_array($row) || empty($row['open']) || empty($row['close'])) {
+            if ($row === null || $row === []) {
                 $clean[$d] = null;   // مغلق
                 continue;
             }
 
+            if (!is_array($row)) throw new DomainException("جدول غير صالح في {$d}");
+
             foreach (['open', 'close'] as $k) {
-                if (!preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', (string) $row[$k])) {
+                if (!preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', (string) ($row[$k] ?? ''))) {
                     throw new DomainException("صيغة وقت غير صحيحة في {$d} — استعمل HH:MM");
                 }
             }
 
             // فتحٌ بعد إغلاق يمرّ في الحفظ ويُغلق الفرع طول اليوم في التنفيذ.
-            if ($row['open'] >= $row['close']) {
+            $overnight = ($row['overnight'] ?? false) === true;
+            if ($row['open'] === $row['close'] || ($row['open'] > $row['close']) !== $overnight) {
                 throw new DomainException("وقت الفتح في {$d} ليس قبل الإغلاق");
             }
 
             $clean[$d] = ['open' => $row['open'], 'close' => $row['close']];
+            if ($overnight) $clean[$d]['overnight'] = true;
+        }
+
+        // الاحتفاظ بالمنطقة الزمنية المعتمدة للفرع إن وُجدت دون افتراض قيمة عند غيابها.
+        $tz = $hours['timezone'] ?? ($branch->working_hours['timezone'] ?? null);
+        if (is_string($tz) && $tz !== '') {
+            if (!in_array($tz, timezone_identifiers_list(), true)) {
+                throw new DomainException('المنطقة الزمنية غير صالحة');
+            }
+            $clean['timezone'] = $tz;
         }
 
         $branch->working_hours = $clean;

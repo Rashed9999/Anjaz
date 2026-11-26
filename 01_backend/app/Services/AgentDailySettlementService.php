@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\Agent\AgentLedgerSources;
 use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentCashMovement;
 use App\Models\Agent\AgentDailySettlement;
@@ -58,6 +59,8 @@ class AgentDailySettlementService
          */
         private readonly \App\Services\Agent\ShiftVarianceCalculator $variance =
             new \App\Services\Agent\ShiftVarianceCalculator(),
+
+        private readonly FourEyesService $fourEyes = new FourEyesService(),
     ) {
     }
 
@@ -435,8 +438,8 @@ class AgentDailySettlementService
         }
 
         $entries = DB::table('ledger_journal_entries')
-            ->whereIn('source_id', $references)
-            ->whereIn('source_type', ['agent_deposit', 'agent_withdraw'])
+            ->whereIn('source_id', AgentLedgerSources::expandReferences($references))
+            ->whereIn('source_type', AgentLedgerSources::ALL)
             ->pluck('metadata');
 
         $fees = '0.0000';
@@ -455,46 +458,60 @@ class AgentDailySettlementService
     // الرفع
     // ══════════════════════════════════════════════════════════════════
 
-    public function submit(User $agent, AgentStaff $by, string $date, ?Carbon $now = null): AgentDailySettlement
-    {
+    public function submit(
+        User $agent,
+        AgentStaff $by,
+        string $date,
+        ?Carbon $now = null,
+        ?User $submittedByUser = null,
+    ): AgentDailySettlement {
         $now ??= now();
 
         if (!$by->isHeadOffice()) {
             throw new DomainException('رفعُ تسوية اليوم من صلاحية الإدارة العامّة للشركة');
         }
 
-        $existing = AgentDailySettlement::where('agent_user_id', $agent->id)
-            ->whereDate('settlement_date', $date)->first();
+        return DB::transaction(function () use ($agent, $by, $date, $now, $submittedByUser) {
+            User::whereKey($agent->id)->lockForUpdate()->firstOrFail();
+            $existing = AgentDailySettlement::where('agent_user_id', $agent->id)
+                ->whereDate('settlement_date', $date)->lockForUpdate()->first();
 
-        if ($existing && in_array($existing->status, [
-            AgentDailySettlement::STATUS_SUBMITTED, AgentDailySettlement::STATUS_ACCEPTED,
-        ], true)) {
-            throw new DomainException('تسوية هذا اليوم مرفوعةٌ بالفعل');
-        }
+            if ($existing && in_array($existing->status, [
+                AgentDailySettlement::STATUS_SUBMITTED,
+                AgentDailySettlement::STATUS_PENDING_SECOND_APPROVAL,
+                AgentDailySettlement::STATUS_ACCEPTED,
+            ], true)) {
+                throw new DomainException('تسوية هذا اليوم مرفوعةٌ بالفعل');
+            }
 
-        $window = $this->windowState($date, $now);
-        $unlocked = $existing && $existing->unlocked_at !== null;
+            $window = $this->windowState($date, $now);
+            $unlocked = $existing && $existing->unlocked_at !== null;
 
-        // الفكُّ من إدارة أميال يفتح الباب مرّةً واحدة، ولا يُلغي أنّه تأخّر.
-        if (!$window['open'] && !$unlocked) {
-            throw new DomainException($window['message']);
-        }
+            // الفكُّ من إدارة أميال يفتح الباب مرّةً واحدة، ولا يُلغي أنّه تأخّر.
+            if (!$window['open'] && !$unlocked) {
+                throw new DomainException($window['message']);
+            }
 
-        $day = $this->computeDay($agent, $date);
+            $day = $this->computeDay($agent, $date);
 
-        // الإقفال لا يُحوّل العجز أو الوردية المفتوحة إلى ملاحظة داخل
-        // تسويةٍ «مرفوعة». يجب أن تُغلق الورديات وتُراجع الفروق أولاً؛
-        // الاستثناء لاحقاً يحتاج مسار override مستقل وصلاحية وسجلّاً، لا
-        // زر الرفع العادي.
-        if ((int) $day['unclosed_shifts'] > 0) {
-            throw new DomainException('لا يمكن إقفال اليوم وفيه ورديات مفتوحة');
-        }
-        if ((int) $day['pending_review'] > 0) {
-            throw new DomainException('لا يمكن إقفال اليوم قبل مراجعة فروق الورديات');
-        }
+            // الإقفال لا يُحوّل العجز أو الوردية المفتوحة إلى ملاحظة داخل
+            // تسويةٍ «مرفوعة». يجب أن تُغلق الورديات وتُراجع الفروق أولاً؛
+            // الاستثناء لاحقاً يحتاج مسار override مستقل وصلاحية وسجلّاً، لا
+            // زر الرفع العادي.
+            if ((int) $day['unclosed_shifts'] > 0) {
+                throw new DomainException('لا يمكن إقفال اليوم وفيه ورديات مفتوحة');
+            }
+            if ((int) $day['pending_review'] > 0) {
+                throw new DomainException('لا يمكن إقفال اليوم قبل مراجعة فروق الورديات');
+            }
 
-        return DB::transaction(function () use ($agent, $by, $date, $day, $window, $unlocked, $existing, $now) {
-            $row = $existing ?: new AgentDailySettlement([
+            $approvedCurrency = config('amial.daily_settlement.four_eyes.currency');
+            $currencyValue = is_string($approvedCurrency) && trim($approvedCurrency) !== ''
+                ? strtoupper(trim($approvedCurrency))
+                : null;
+            $submitterUserId = $submittedByUser?->id ?? auth('web')->id() ?? auth('api')->id();
+
+            $row = $existing ?? new AgentDailySettlement([
                 'settlement_ulid' => (string) Str::ulid(),
                 'agent_user_id' => $agent->id,
                 'settlement_date' => $date,
@@ -517,10 +534,17 @@ class AgentDailySettlementService
                 'net_float' => $day['net_float'],
                 'conversion' => $day['conversion'],
                 'conversion_amount' => $day['conversion_amount'],
+                'currency' => $currencyValue,
                 'status' => AgentDailySettlement::STATUS_SUBMITTED,
+                'approvals_required' => 1,
+                'first_approved_by_user_id' => null,
+                'first_approved_at' => null,
+                'second_approved_by_user_id' => null,
+                'second_approved_at' => null,
                 'window_state' => $unlocked ? 'unlocked' : $window['state'],
                 'submitted_at' => $now,
                 'submitted_by_staff_id' => $by->id,
+                'submitted_by_user_id' => $submitterUserId ? (int) $submitterUserId : null,
                 'detail' => $day,
             ]);
 
@@ -554,38 +578,212 @@ class AgentDailySettlementService
      * هنا مقصود: التحويل أوّلاً، والحالة بعده — ولو انعكس لبقيت تسويةٌ
      * «مقبولة» بلا ريالٍ تحرّك، وهو ما وقع في هذا المشروع من قبل.
      */
+    /**
+     * التحقّق من اعتماد إعدادات حوكمة Four-Eyes للتسوية اليوميّة دون أي قيم افتراضيّة.
+     *
+     * @return array{threshold: string, currency: string, first_perm: string, second_perm: string}
+     */
+    private function approvedFourEyesConfig(): array
+    {
+        $cfg = (array) config('amial.daily_settlement.four_eyes', []);
+        $threshold = $cfg['threshold'] ?? null;
+        $currency = $cfg['currency'] ?? null;
+        $firstPerm = $cfg['first_approver_permission'] ?? null;
+        $secondPerm = $cfg['second_approver_permission'] ?? null;
+
+        $missing = [];
+
+        if ($threshold === null || $threshold === '' || !is_numeric($threshold) || bccomp((string) $threshold, '0', 4) < 0) {
+            $missing[] = 'threshold';
+        }
+        if (!is_string($currency) || trim($currency) === '') {
+            $missing[] = 'currency';
+        }
+        if (!is_string($firstPerm) || trim($firstPerm) === '') {
+            $missing[] = 'first_approver_permission';
+        }
+        if (!is_string($secondPerm) || trim($secondPerm) === '') {
+            $missing[] = 'second_approver_permission';
+        }
+
+        if ($missing !== []) {
+            throw new DomainException(
+                'إعدادات حوكمة Four-Eyes للتسوية اليوميّة غير معتمدة (' . implode('، ', $missing)
+                . ') — تبقى التسوية معلّقة بأمان حتى اعتمادها رسميّاً',
+            );
+        }
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('permissions')) {
+            foreach ([$firstPerm, $secondPerm] as $permCode) {
+                if (!DB::table('permissions')->where('code', $permCode)->exists()) {
+                    throw new DomainException(
+                        "صلاحيّة الاعتماد ({$permCode}) غير مسجّلة ومعتمدة في النظام — تبقى التسوية معلّقة بأمان",
+                    );
+                }
+            }
+        }
+
+        return [
+            'threshold' => bcadd((string) $threshold, '0', 4),
+            'currency' => strtoupper(trim($currency)),
+            'first_perm' => trim($firstPerm),
+            'second_perm' => trim($secondPerm),
+        ];
+    }
+
     public function accept(AgentDailySettlement $row, User $admin, string $note = ''): AgentDailySettlement
     {
-        if ($row->status !== AgentDailySettlement::STATUS_SUBMITTED) {
+        if (!in_array($row->status, [
+            AgentDailySettlement::STATUS_SUBMITTED,
+            AgentDailySettlement::STATUS_PENDING_SECOND_APPROVAL,
+        ], true)) {
             throw new DomainException('هذه التسوية ليست بانتظار القرار');
         }
 
-        $agent = User::findOrFail($row->agent_user_id);
-        $amount = (string) $row->conversion_amount;
+        try {
+            $governance = $this->approvedFourEyesConfig();
+        } catch (DomainException $e) {
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $admin->id,
+                'action' => 'agent.daily_settlement.accept_blocked_missing_config',
+                'decision_code' => 'MISSING_GOVERNANCE_CONFIG',
+                'severity' => 'high',
+                'subject_type' => 'agent_daily_settlement',
+                'subject_id' => $row->settlement_ulid,
+                'metadata' => ['reason' => $e->getMessage()],
+            ]);
+            throw $e;
+        }
 
-        $decided = DB::transaction(function () use ($row, $agent, $admin, $amount, $note) {
+        $agent = User::findOrFail($row->agent_user_id);
+
+        $decided = DB::transaction(function () use ($row, $agent, $admin, $note, $governance) {
+            // AGT-GAP-004 + AGT-GAP-018: قفلُ الصفّ وإعادةُ فحص الحالة، العملة، الصلاحيات،
+            // وفصل المهام (Four-Eyes) داخل المعاملة قبل تحريك أي ريال.
+            $locked = AgentDailySettlement::whereKey($row->getKey())->lockForUpdate()->firstOrFail();
+
+            if (!in_array($locked->status, [
+                AgentDailySettlement::STATUS_SUBMITTED,
+                AgentDailySettlement::STATUS_PENDING_SECOND_APPROVAL,
+            ], true)) {
+                throw new DomainException('هذه التسوية ليست بانتظار القرار');
+            }
+
+            if ($locked->currency !== null && strtoupper((string) $locked->currency) !== $governance['currency']) {
+                throw new DomainException(
+                    "عملة التسوية ({$locked->currency}) لا تطابق العملة المعتمدة ({$governance['currency']})",
+                );
+            }
+
+            // منع مقدم/رافع الطلب (الوكيل أو حساب المستخدم الرافع) من اعتماد عمليته.
+            $requesterIds = array_values(array_filter([
+                (int) $locked->agent_user_id,
+                $locked->submitted_by_user_id ? (int) $locked->submitted_by_user_id : null,
+            ]));
+            $this->fourEyes->assertNotAmongPreviousActors($requesterIds, $admin);
+            $this->fourEyes->assertNotPreviousActor(
+                'agent_daily_settlement',
+                $locked->settlement_ulid,
+                $admin,
+                ['agent.daily_settlement.submit'],
+            );
+
+            $amount = bcadd((string) $locked->conversion_amount, '0', 4);
+            $requiresTwo = bccomp($governance['threshold'], '0', 4) === 0
+                ? bccomp($amount, '0', 4) > 0
+                : bccomp($amount, $governance['threshold'], 4) >= 0;
+            $required = $requiresTwo ? 2 : 1;
+
+            if ($locked->status === AgentDailySettlement::STATUS_SUBMITTED) {
+                if (!$admin->hasPlatformPermission($governance['first_perm'])) {
+                    throw new DomainException('لا تملك صلاحيّة الموافقة الأولى المعتمدة على التسوية اليوميّة');
+                }
+
+                if ($required >= 2) {
+                    $locked->fill([
+                        'currency' => $locked->currency ?? $governance['currency'],
+                        'approvals_required' => 2,
+                        'status' => AgentDailySettlement::STATUS_PENDING_SECOND_APPROVAL,
+                        'first_approved_by_user_id' => $admin->id,
+                        'first_approved_at' => now(),
+                        'decision_note' => $note ?: null,
+                    ])->save();
+
+                    $this->audit->record([
+                        'actor_type' => 'admin',
+                        'actor_user_id' => $admin->id,
+                        'action' => 'agent.daily_settlement.first_approve',
+                        'decision_code' => 'FIRST_APPROVED',
+                        'severity' => 'critical',
+                        'subject_type' => 'agent_daily_settlement',
+                        'subject_id' => $locked->settlement_ulid,
+                        'metadata' => [
+                            'agent_user_id' => $agent->id,
+                            'conversion' => $locked->conversion,
+                            'amount' => $amount,
+                            'currency' => $governance['currency'],
+                            'threshold' => $governance['threshold'],
+                        ],
+                    ]);
+
+                    return $locked->fresh();
+                }
+
+                // تحت الحد المعتمد: موافقة واحدة معتمدة تكفي.
+                $locked->approvals_required = 1;
+                $locked->first_approved_by_user_id = $admin->id;
+                $locked->first_approved_at = now();
+            } else {
+                // المرحلة الثانية من Four-Eyes.
+                if (!$admin->hasPlatformPermission($governance['second_perm'])) {
+                    throw new DomainException('لا تملك صلاحيّة الموافقة الثانية المعتمدة على التسوية اليوميّة');
+                }
+
+                if ($locked->first_approved_by_user_id === null) {
+                    throw new DomainException('بيانات الموافقة الأولى مفقودة — لا يكتمل الاعتماد');
+                }
+
+                $this->fourEyes->assertNotAmongPreviousActors([(int) $locked->first_approved_by_user_id], $admin);
+                $this->fourEyes->assertNotPreviousActor(
+                    'agent_daily_settlement',
+                    $locked->settlement_ulid,
+                    $admin,
+                    ['agent.daily_settlement.first_approve'],
+                );
+
+                $locked->approvals_required = 2;
+                $locked->second_approved_by_user_id = $admin->id;
+                $locked->second_approved_at = now();
+            }
+
+            if ($locked->linked_settlement_ulid !== null) {
+                throw new DomainException('التسوية الماليّة المرتبطة نُفّذت مسبقاً — منع القيد المزدوج');
+            }
+
             $linked = null;
 
-            if ($row->conversion === 'topup' && bccomp($amount, '0', 4) > 0) {
+            if ($locked->conversion === 'topup' && bccomp($amount, '0', 4) > 0) {
                 // سلّم ورقاً ⇒ يستلم رصيداً.
                 $s = $this->network->adminCreditAgent(
-                    $agent, $amount, $admin, 'تسوية يوم ' . $row->settlement_date->toDateString(),
+                    $agent, $amount, $admin, 'تسوية يوم ' . $locked->settlement_date->toDateString(),
                 );
                 $linked = $s->settlement_ulid;
-            } elseif ($row->conversion === 'payout' && bccomp($amount, '0', 4) > 0) {
+            } elseif ($locked->conversion === 'payout' && bccomp($amount, '0', 4) > 0) {
                 // امتلأ رصيدُه ⇒ يعيده ويستلم ورقاً.
                 $s = $this->network->requestPayout(
-                    $agent, $amount, 'cash', 'تسوية يوم ' . $row->settlement_date->toDateString(),
+                    $agent, $amount, 'cash', 'تسوية يوم ' . $locked->settlement_date->toDateString(),
                 );
                 $s = $this->network->approveSettlement($s, $admin);
                 $linked = $s->settlement_ulid;
             }
 
-            $row->fill([
+            $locked->fill([
+                'currency' => $locked->currency ?? $governance['currency'],
                 'status' => AgentDailySettlement::STATUS_ACCEPTED,
                 'decided_by_user_id' => $admin->id,
                 'decided_at' => now(),
-                'decision_note' => $note ?: null,
+                'decision_note' => $note ?: $locked->decision_note,
                 'linked_settlement_ulid' => $linked,
             ])->save();
 
@@ -593,33 +791,39 @@ class AgentDailySettlementService
                 'actor_type' => 'admin',
                 'actor_user_id' => $admin->id,
                 'action' => 'agent.daily_settlement.accept',
-                // **رمزُ القرار يُمرَّر ولا يُترَك لـ`UNKNOWN`.**
-                // فعمودُ «القرار» في شاشة التدقيق كان فارغَ المعنى على
-                // كلّ صفٍّ من جانب الوكيل، وهذا قرارُ اعتمادِ تسويةٍ لا
-                // حدثٌ مرصود.
                 'decision_code' => 'ACCEPTED',
                 'severity' => 'critical',
                 'subject_type' => 'agent_daily_settlement',
-                'subject_id' => $row->settlement_ulid,
+                'subject_id' => $locked->settlement_ulid,
                 'metadata' => [
                     'agent_user_id' => $agent->id,
-                    'conversion' => $row->conversion, 'amount' => $amount,
+                    'conversion' => $locked->conversion,
+                    'amount' => $amount,
+                    'currency' => $governance['currency'],
+                    'approvals_required' => $locked->approvals_required,
+                    'first_approved_by' => $locked->first_approved_by_user_id,
+                    'second_approved_by' => $locked->second_approved_by_user_id,
                     'linked_settlement' => $linked,
                 ],
             ]);
 
-            return $row->fresh();
+            return $locked->fresh();
         });
 
-        // القرار يصل صاحبه — لا ينتظر أن يفتح البوّابة صباحاً.
-        $this->alerts->settlementDecided($decided);
+        // القرار يصل صاحبه فقط بعد اكتمال القبول النهائي.
+        if ($decided->status === AgentDailySettlement::STATUS_ACCEPTED) {
+            $this->alerts->settlementDecided($decided);
+        }
 
         return $decided;
     }
 
     public function reject(AgentDailySettlement $row, User $admin, string $note): AgentDailySettlement
     {
-        if ($row->status !== AgentDailySettlement::STATUS_SUBMITTED) {
+        if (!in_array($row->status, [
+            AgentDailySettlement::STATUS_SUBMITTED,
+            AgentDailySettlement::STATUS_PENDING_SECOND_APPROVAL,
+        ], true)) {
             throw new DomainException('هذه التسوية ليست بانتظار القرار');
         }
 
@@ -627,25 +831,43 @@ class AgentDailySettlementService
             throw new DomainException('سببُ الرفض إلزاميّ — عشرة أحرف فأكثر');
         }
 
-        $row->fill([
-            'status' => AgentDailySettlement::STATUS_REJECTED,
-            'decided_by_user_id' => $admin->id,
-            'decided_at' => now(),
-            'decision_note' => $note,
-        ])->save();
+        $fresh = DB::transaction(function () use ($row, $admin, $note) {
+            // AGT-GAP-004: قفلٌ وإعادةُ فحصٍ داخل المعاملة، فلا يُقبل ويُرفض الصفُّ نفسُه معاً.
+            $locked = AgentDailySettlement::whereKey($row->getKey())->lockForUpdate()->firstOrFail();
 
-        $this->audit->record([
-            'actor_type' => 'admin',
-            'actor_user_id' => $admin->id,
-            'action' => 'agent.daily_settlement.reject',
-            'decision_code' => 'REJECTED',
-            'severity' => 'critical',
-            'subject_type' => 'agent_daily_settlement',
-            'subject_id' => $row->settlement_ulid,
-            'metadata' => ['reason' => $note],
-        ]);
+            if (!in_array($locked->status, [
+                AgentDailySettlement::STATUS_SUBMITTED,
+                AgentDailySettlement::STATUS_PENDING_SECOND_APPROVAL,
+            ], true)) {
+                throw new DomainException('هذه التسوية ليست بانتظار القرار');
+            }
 
-        $fresh = $row->fresh();
+            $requesterIds = array_values(array_filter([
+                (int) $locked->agent_user_id,
+                $locked->submitted_by_user_id ? (int) $locked->submitted_by_user_id : null,
+            ]));
+            $this->fourEyes->assertNotAmongPreviousActors($requesterIds, $admin);
+
+            $locked->fill([
+                'status' => AgentDailySettlement::STATUS_REJECTED,
+                'decided_by_user_id' => $admin->id,
+                'decided_at' => now(),
+                'decision_note' => $note,
+            ])->save();
+
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $admin->id,
+                'action' => 'agent.daily_settlement.reject',
+                'decision_code' => 'REJECTED',
+                'severity' => 'critical',
+                'subject_type' => 'agent_daily_settlement',
+                'subject_id' => $locked->settlement_ulid,
+                'metadata' => ['reason' => $note],
+            ]);
+
+            return $locked->fresh();
+        });
 
         $this->alerts->settlementDecided($fresh);
 
@@ -663,33 +885,38 @@ class AgentDailySettlementService
             throw new DomainException('سببُ الفكّ إلزاميّ — عشرة أحرف فأكثر');
         }
 
-        $row = AgentDailySettlement::firstOrNew([
-            'agent_user_id' => $agent->id,
-            'settlement_date' => $date,
-        ]);
+        return DB::transaction(function () use ($agent, $date, $admin, $reason) {
+            User::whereKey($agent->id)->lockForUpdate()->firstOrFail();
+            $row = AgentDailySettlement::where([
+                'agent_user_id' => $agent->id,
+                'settlement_date' => $date,
+            ])->lockForUpdate()->first() ?? new AgentDailySettlement([
+                'agent_user_id' => $agent->id, 'settlement_date' => $date,
+            ]);
 
-        if ($row->status === AgentDailySettlement::STATUS_ACCEPTED) {
-            throw new DomainException('تسوية هذا اليوم مقبولةٌ بالفعل');
-        }
+            if ($row->status === AgentDailySettlement::STATUS_ACCEPTED) {
+                throw new DomainException('تسوية هذا اليوم مقبولةٌ بالفعل');
+            }
 
-        $row->settlement_ulid = $row->settlement_ulid ?: (string) Str::ulid();
-        $row->status = $row->status ?: AgentDailySettlement::STATUS_DRAFT;
-        $row->unlocked_by_user_id = $admin->id;
-        $row->unlocked_at = now();
-        $row->unlock_reason = $reason;
-        $row->save();
+            $row->settlement_ulid = $row->settlement_ulid ?: (string) Str::ulid();
+            $row->status = $row->status ?: AgentDailySettlement::STATUS_DRAFT;
+            $row->unlocked_by_user_id = $admin->id;
+            $row->unlocked_at = now();
+            $row->unlock_reason = $reason;
+            $row->save();
 
-        $this->audit->record([
-            'actor_type' => 'admin',
-            'actor_user_id' => $admin->id,
-            'action' => 'agent.daily_settlement.unlock',
-            'severity' => 'critical',
-            'subject_type' => 'agent_daily_settlement',
-            'subject_id' => $row->settlement_ulid,
-            'metadata' => ['agent_user_id' => $agent->id, 'date' => $date, 'reason' => $reason],
-        ]);
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $admin->id,
+                'action' => 'agent.daily_settlement.unlock',
+                'severity' => 'critical',
+                'subject_type' => 'agent_daily_settlement',
+                'subject_id' => $row->settlement_ulid,
+                'metadata' => ['agent_user_id' => $agent->id, 'date' => $date, 'reason' => $reason],
+            ]);
 
-        return $row->fresh();
+            return $row->fresh();
+        });
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -748,7 +975,7 @@ class AgentDailySettlementService
         // من لم يرفع أوّلاً، ثمّ المرفوع بانتظار القرار، ثمّ المحسوم.
         $rank = fn (array $r) => match ($r['status']) {
             'not_submitted' => 0,
-            AgentDailySettlement::STATUS_SUBMITTED => 1,
+            AgentDailySettlement::STATUS_SUBMITTED, AgentDailySettlement::STATUS_PENDING_SECOND_APPROVAL => 1,
             AgentDailySettlement::STATUS_REJECTED => 2,
             default => 3,
         };
@@ -757,7 +984,10 @@ class AgentDailySettlementService
         $totals = [
             'agents' => count($out),
             'not_submitted' => count(array_filter($out, fn ($r) => $r['status'] === 'not_submitted')),
-            'awaiting' => count(array_filter($out, fn ($r) => $r['status'] === AgentDailySettlement::STATUS_SUBMITTED)),
+            'awaiting' => count(array_filter($out, fn ($r) => in_array($r['status'], [
+                AgentDailySettlement::STATUS_SUBMITTED,
+                AgentDailySettlement::STATUS_PENDING_SECOND_APPROVAL,
+            ], true))),
             'accepted' => count(array_filter($out, fn ($r) => $r['status'] === AgentDailySettlement::STATUS_ACCEPTED)),
             'late' => count(array_filter($out, fn ($r) => in_array($r['window_state'], ['late', 'unlocked'], true))),
             'suspicious' => array_sum(array_column($out, 'suspicious_count')),

@@ -107,7 +107,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
   String get _methodLabel => switch (widget.method) {
         'cash' => 'نقداً',
         'credit' => 'بيع آجل',
-        'amial_pay' => 'أميال باي',
+        'amial_pay' || 'wallet' => 'أميال باي',
         'mixed' => 'مختلط (نقد + محفظة)',
         'corporate' => 'حساب شركة',
         _ => widget.method,

@@ -30,6 +30,11 @@ class AgentTellerRequest extends Model
         'used_at' => 'datetime',
     ];
 
+    public const KIND_OVER_LIMIT = 'over_limit';
+    public const KIND_RESTRICTED_OP = 'restricted_op';
+    public const KIND_OVERTIME = 'overtime';
+    public const KIND_AFTER_HOURS_WITHDRAWAL = 'after_hours_withdrawal';
+
     public const STATUS_PENDING = 'pending';
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
@@ -48,6 +53,7 @@ class AgentTellerRequest extends Model
         'over_limit' => 'تجاوز الحدّ',
         'restricted_op' => 'عمليّة خارج الصلاحية',
         'overtime' => 'وقتٌ إضافيّ',
+        'after_hours_withdrawal' => 'استثناء سحب خارج ساعات العمل',
     ];
 
     /**

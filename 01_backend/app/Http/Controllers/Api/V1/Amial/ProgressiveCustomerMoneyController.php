@@ -14,6 +14,7 @@ use App\Services\KycTierService;
 use App\Traits\TransactionTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use RuntimeException;
 
@@ -77,10 +78,6 @@ class ProgressiveCustomerMoneyController extends Controller
             return $this->policyDenied($e);
         }
 
-        if ($error = $this->legacyLimitError($sender, $amount, 'send_money', 'customer_send_money_limit')) {
-            return $error;
-        }
-
         $breakdown = $this->fees->calculate('SEND_MONEY', $amount, ['applies_to' => 'customer']);
         $discounted = $this->discounts->applyFavouriteNumber(
             $sender,
@@ -94,6 +91,7 @@ class ProgressiveCustomerMoneyController extends Controller
             to_user_id: $receiver->id,
             amount: $amount,
             charge: $discounted['fee'],
+            idempotencyKey: $request->attributes->get('amial.idempotency_key'),
             feeMeta: [
                 'scheme_id' => $breakdown['scheme_id'],
                 'scheme_version' => $breakdown['scheme_version'],
@@ -107,7 +105,6 @@ class ProgressiveCustomerMoneyController extends Controller
             return response()->json(['message' => translate('فشلت العملية')], 422);
         }
 
-        $this->recordLegacyLimit($sender, $amount, 'send_money', 'customer_send_money_limit');
 
         return response()->json([
             'message' => 'success',
@@ -268,77 +265,74 @@ class ProgressiveCustomerMoneyController extends Controller
         }
 
         $payer = $request->user();
-        $moneyRequest = RequestMoney::query()->find($request->id);
-        if (!$moneyRequest) {
-            return response()->json(['message' => translate('الطلب غير موجود')], 404);
-        }
-        if ((int) $moneyRequest->to_user_id !== (int) $payer->id) {
-            return response()->json(['message' => translate('طلب غير مصرّح به')], 403);
-        }
-        if ((string) $moneyRequest->type !== 'pending') {
-            return response()->json(['message' => translate('تم اتخاذ قرار على هذا الطلب مسبقاً')], 409);
-        }
-        if (!Helpers::pin_check($payer->id, (string) $request->pin)) {
-            return response()->json(['message' => translate('رمز PIN غير صحيح')], 403);
-        }
+        return DB::transaction(function () use ($request, $payer, $decision) {
+            $moneyRequest = RequestMoney::query()->lockForUpdate()->find($request->id);
+            if (!$moneyRequest) {
+                return response()->json(['message' => translate('الطلب غير موجود')], 404);
+            }
+            if ((int) $moneyRequest->to_user_id !== (int) $payer->id) {
+                return response()->json(['message' => translate('طلب غير مصرّح به')], 403);
+            }
+            if ((string) $moneyRequest->type !== 'pending') {
+                return response()->json(['message' => translate('تم اتخاذ قرار على هذا الطلب مسبقاً')], 409);
+            }
+            if (!Helpers::pin_check($payer->id, (string) $request->pin)) {
+                return response()->json(['message' => translate('رمز PIN غير صحيح')], 403);
+            }
 
-        if ($decision === 'deny') {
-            $moneyRequest->type = 'denied';
+            if ($decision === 'deny') {
+                $moneyRequest->type = 'denied';
+                $moneyRequest->note = $request->note;
+                $moneyRequest->save();
+                DB::afterCommit(fn () => Helpers::send_transaction_notification($moneyRequest->from_user_id, $moneyRequest->amount, 'denied_money'));
+                return response()->json(['message' => 'success']);
+            }
+
+            if (!Helpers::get_business_settings('send_money_status')) {
+                return response()->json(['message' => translate('خدمة تحويل المال غير مفعّلة حالياً')], 403);
+            }
+
+            $requester = User::query()->find($moneyRequest->from_user_id);
+            if (!$requester) {
+                return response()->json(['message' => translate('صاحب الطلب غير موجود')], 404);
+            }
+
+            $amount = (string) $moneyRequest->amount;
+            try {
+                $this->kyc->assertTransactionAllowed($payer, $amount, 'send_money');
+                $this->kyc->assertCanReceive($requester, $amount);
+            } catch (RuntimeException $e) {
+                return $this->policyDenied($e);
+            }
+
+            $breakdown = $this->fees->calculate('SEND_MONEY', $amount, ['applies_to' => 'customer']);
+            $discounted = $this->discounts->applyFavouriteNumber(
+                $payer,
+                (string) $requester->phone,
+                $breakdown['fee'],
+                'SEND_MONEY',
+            );
+
+            $transactionId = $this->customer_request_money_transaction(
+                $moneyRequest->to_user_id,
+                $moneyRequest->from_user_id,
+                $amount,
+                $discounted['fee'],
+            );
+            if ($transactionId === null) {
+                return response()->json(['message' => translate('رصيدك غير كافٍ')], 422);
+            }
+
+            $moneyRequest->type = 'approved';
             $moneyRequest->note = $request->note;
             $moneyRequest->save();
-            Helpers::send_transaction_notification($moneyRequest->from_user_id, $moneyRequest->amount, 'denied_money');
-            return response()->json(['message' => 'success']);
-        }
 
-        if (!Helpers::get_business_settings('send_money_status')) {
-            return response()->json(['message' => translate('خدمة تحويل المال غير مفعّلة حالياً')], 403);
-        }
-
-        $requester = User::query()->find($moneyRequest->from_user_id);
-        if (!$requester) {
-            return response()->json(['message' => translate('صاحب الطلب غير موجود')], 404);
-        }
-
-        $amount = (string) $moneyRequest->amount;
-        try {
-            $this->kyc->assertTransactionAllowed($payer, $amount, 'send_money');
-            $this->kyc->assertCanReceive($requester, $amount);
-        } catch (RuntimeException $e) {
-            return $this->policyDenied($e);
-        }
-
-        if ($error = $this->legacyLimitError($payer, $amount, 'send_money', 'customer_send_money_limit')) {
-            return $error;
-        }
-
-        $breakdown = $this->fees->calculate('SEND_MONEY', $amount, ['applies_to' => 'customer']);
-        $discounted = $this->discounts->applyFavouriteNumber(
-            $payer,
-            (string) $requester->phone,
-            $breakdown['fee'],
-            'SEND_MONEY',
-        );
-
-        $transactionId = $this->customer_request_money_transaction(
-            $moneyRequest->to_user_id,
-            $moneyRequest->from_user_id,
-            $amount,
-            $discounted['fee'],
-        );
-        if ($transactionId === null) {
-            return response()->json(['message' => translate('رصيدك غير كافٍ')], 422);
-        }
-
-        $moneyRequest->type = 'approved';
-        $moneyRequest->note = $request->note;
-        $moneyRequest->save();
-        $this->recordLegacyLimit($payer, $amount, 'send_money', 'customer_send_money_limit');
-
-        return response()->json([
-            'message' => 'success',
-            'transaction_id' => $transactionId,
-            'transaction_no' => Transaction::where('transaction_id', $transactionId)->value('transaction_no'),
-        ]);
+            return response()->json([
+                'message' => 'success',
+                'transaction_id' => $transactionId,
+                'transaction_no' => Transaction::where('transaction_id', $transactionId)->value('transaction_no'),
+            ]);
+        });
     }
 
     private function policyDenied(RuntimeException $e): JsonResponse

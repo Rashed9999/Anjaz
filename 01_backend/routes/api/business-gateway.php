@@ -13,6 +13,11 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['amial.business.signature', 'throttle:120,1'])
     ->name('amial.business.')
     ->group(function () {
+        // التحقق الموقّع من هوية مالك المنشأة لأميال أعمال دون اشتراط link مسبق (يربط التاجر المعتمد تلقائياً).
+        Route::post('/auth/verify-owner', [BusinessGatewayController::class, 'verifyOwner'])
+            ->middleware('throttle:60,1')
+            ->name('auth.verify-owner');
+
         Route::get('/link', [BusinessGatewayController::class, 'link'])->name('link');
         Route::get('/wallet', [BusinessGatewayController::class, 'wallet'])->name('wallet');
         Route::get('/fees/quote', [BusinessGatewayController::class, 'feeQuote'])->name('fees.quote');

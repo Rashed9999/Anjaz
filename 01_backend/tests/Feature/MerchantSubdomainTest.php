@@ -24,7 +24,7 @@ class MerchantSubdomainTest extends TestCase
             ->assertRedirect('http://' . self::HOST . '/merchant/login');
         $this->get('http://' . self::HOST . '/?plan=business')
             ->assertRedirect('http://' . self::HOST . '/merchant?plan=business');
-        $this->get('http://' . self::HOST . '/merchant/login')->assertOk();
+        $this->get('http://' . self::HOST . '/merchant/login')->assertStatus(303)->assertRedirect(PortalHost::merchantLoginUrl());
     }
 
     public function test_existing_links_redirect_but_post_credentials_never_cross_hosts(): void
@@ -44,7 +44,7 @@ class MerchantSubdomainTest extends TestCase
         config(['session.cookie' => 'amial_platform_session',
             'session.domain' => '.amialpay.com']);
 
-        $response = $this->get('http://' . self::HOST . '/merchant/login')->assertOk();
+        $response = $this->get('http://' . self::HOST . '/merchant/login')->assertStatus(303)->assertRedirect(PortalHost::merchantLoginUrl());
         $cookie = collect($response->headers->getCookies())->first(
             fn ($c) => $c->getName() === 'amial_merchant_session'
         );
@@ -65,12 +65,12 @@ class MerchantSubdomainTest extends TestCase
     public function test_public_login_links_directly_to_the_merchant_host(): void
     {
         $this->get('http://amialpay.com/login')->assertOk()
-            ->assertSee('https://' . self::HOST . '/merchant/login', false);
+            ->assertSee('https://' . self::HOST . '/login', false);
     }
 
     public function test_primary_website_links_to_merchant_host_from_header_footer_home_and_business(): void
     {
-        $url = 'https://' . self::HOST . '/merchant/login';
+        $url = 'https://' . self::HOST . '/login';
         $this->assertSame($url, PortalHost::merchantLoginUrl());
 
         foreach (['http://amialpay.com/', 'http://amialpay.com/business'] as $page) {
@@ -85,13 +85,12 @@ class MerchantSubdomainTest extends TestCase
         $this->assertStringContainsString('href="' . $url . '"', $header[0]);
         $this->assertStringContainsString(route('admin.auth.login'), $header[0]);
         $this->assertStringContainsString(route('login'), $header[0]);
-        $this->get($url)->assertOk();
     }
 
-    public function test_merchant_link_falls_back_to_legacy_route_before_host_setup(): void
+    public function test_merchant_link_uses_business_portal_before_host_setup(): void
     {
         config(['amial.hosts.merchant' => '']);
-        $url = route('merchant.web.login');
+        $url = 'https://merchant.amialpay.com/login';
         $this->assertSame($url, PortalHost::merchantLoginUrl());
         $this->get('/')->assertOk()->assertSee('href="' . $url . '"', false);
         $this->get('/business')->assertOk()->assertSee('href="' . $url . '"', false);
@@ -101,6 +100,6 @@ class MerchantSubdomainTest extends TestCase
     {
         config(['amial.hosts.merchant' => '']);
         $this->assertNull(PortalHost::merchant());
-        $this->get('http://amialpay.com/merchant/login')->assertOk();
+        $this->get('http://amialpay.com/merchant/login')->assertRedirect(PortalHost::merchantLoginUrl());
     }
 }

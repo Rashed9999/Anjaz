@@ -38,7 +38,7 @@
 
 ## ما جهزناه في هذا الفرع
 
-- `SmsGateProvider.php`: مزود SMS ذو أولوية، معطل افتراضيًا، يتصل حصريًا بخادم HTTPS خاص.
+- `PrivateSmsGateProvider.php`: مزود SMS ذو أولوية، معطل افتراضيًا، يتصل حصريًا بخادم HTTPS خاص.
 - يرسل `POST /api/3rdparty/v1/messages`، ويحافظ على تطبيع `App\Support\Phone::canonical`، ويحدد SIM اختياريًا ويضبط TTL.
 - لا يعتبر `202 Pending` إرسالًا ناجحًا؛ يستعلم عن `GET /api/3rdparty/v1/messages/{id}` ويقبل `Sent/Delivered` فقط. هذه حالة **إرسال عبر الهاتف/الشبكة** وليست ضمان قراءة العميل أو وصوله في كل ظروف شركات الاتصال.
 - التكوين من `config/services.php` ومتغيرات بيئة Coolify، وليس من قاعدة بيانات الأسرار.
@@ -87,7 +87,7 @@ AMIAL_ALLOW_DEMO_OTP=false
 
 ## التحقق والإرجاع
 
-- تشغيل الاختبارات الجديدة: `php artisan test --filter=SmsGateProviderTest`.
+- تشغيل الاختبارات الجديدة: `php artisan test --filter=PrivateSmsGateProviderTest`.
 - تشغيل اختبارات العقد: `php artisan test --filter=MessagingContractTest`.
 - فحص شامل: `bash scripts/verify.sh` وفق `CLAUDE.md`.
 - الرجوع الفوري: `AMIAL_SMSGATE_ENABLED=false` على Coolify مع إعادة نشر/تحديث الإعدادات ثم إعادة قناة سابقة مثبتة؛ **لا تُعد فتح OTP التجريبي ولا تكشف الرمز لإنقاذ التسجيل**.

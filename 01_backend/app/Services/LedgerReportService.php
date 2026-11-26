@@ -46,9 +46,11 @@ class LedgerReportService
      *
      * @return array{state:string,operational_balance:?string,ledger_balance:?string,gap:?string,account_id:?int,account_code:?string,first_entry_at:?string,last_entry_at:?string,last_entry_ulid:?string,reason:?string}
      */
-    public function walletTruth(int $userId): array
+    public function walletTruth(int $userId, string $currency = \App\Support\Money\Currencies::BASE): array
     {
-        $wallet = EMoney::where('user_id', $userId)->first();
+        $cur = \App\Support\Money\Currencies::normalize($currency);
+        $isBase = \App\Support\Money\Currencies::isBase($cur);
+        $wallet = EMoney::inCurrency($cur)->where('user_id', $userId)->first();
         // AMIAL-MONEY-SHAPE-001 — الأرقامُ الثلاثةُ في بطاقةٍ واحدةٍ تُقرأ
         // بصيغةٍ واحدة. `ledger_balance` و`gap` يخرجان من `bcsub(...,4)`،
         // فتركُ التشغيليّ خاماً يُخرج «١٤٠٠٠٠» بجوار «١٥٠٠٠٠٫٠٠٠٠» —
@@ -63,19 +65,21 @@ class LedgerReportService
             return $this->walletTruthUnavailable($operational, 'جداول الدفتر غير متاحة للتحقق');
         }
 
+        $accountCode = $isBase ? "USER_WALLET_{$userId}" : "USER_WALLET_{$userId}_{$cur}";
         $account = LedgerAccount::query()
             ->where('owner_user_id', $userId)
-            ->where('account_code', 'USER_WALLET_' . $userId)
+            ->where('account_code', $accountCode)
             ->first();
 
         if (!$account) {
             return $this->walletTruthUnavailable($operational, 'لا يوجد حساب دفتر للمحفظة');
         }
 
+        // لا يُستبعد `status = 'reversed'` لأنّ عكس القيد ينشئ قيداً عكسيّاً
+        // بحالة `posted` ويسم الأصليّ `reversed`؛ فاستبعادُ الأصليّ مع إبقاء العكس يضاعف الخصم.
         $totals = DB::table('ledger_entry_lines as l')
             ->join('ledger_journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
             ->where('l.account_id', $account->id)
-            ->where('e.status', 'posted')
             ->selectRaw("COALESCE(SUM(CASE WHEN l.direction = 'debit' THEN l.amount ELSE 0 END), 0) AS debit_total")
             ->selectRaw("COALESCE(SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END), 0) AS credit_total")
             ->selectRaw('MIN(e.posted_at) AS first_entry_at, MAX(e.posted_at) AS last_entry_at')
@@ -88,7 +92,7 @@ class LedgerReportService
             : bcsub($credit, $debit, 4);
         $last = DB::table('ledger_entry_lines as l')
             ->join('ledger_journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
-            ->where('l.account_id', $account->id)->where('e.status', 'posted')
+            ->where('l.account_id', $account->id)
             ->orderByDesc('e.posted_at')->orderByDesc('l.id')
             ->first(['e.entry_ulid']);
 
@@ -99,6 +103,7 @@ class LedgerReportService
 
         return [
             'state' => $state,
+            'currency' => $cur,
             'operational_balance' => $operational,
             'ledger_balance' => $ledger,
             'gap' => $gap,
@@ -120,9 +125,9 @@ class LedgerReportService
      * debt settlement, or another customer-approved payment. Cash receipts
      * and unpaid credit invoices are deliberately absent from wallet flows.
      */
-    public function walletOrigins(int $userId): array
+    public function walletOrigins(int $userId, string $currency = \App\Support\Money\Currencies::BASE): array
     {
-        $truth = $this->walletTruth($userId);
+        $truth = $this->walletTruth($userId, $currency);
         if ($truth['account_id'] === null) {
             return [
                 'available' => false,
@@ -142,13 +147,13 @@ class LedgerReportService
             'payment_request' => 'طلبات دفع (قد تشمل المبيعات وسداد الآجل)',
             'refund_merchant' => 'مرتجعات مدفوعات التجار',
             'reconcile_wallet' => 'تسوية رصيد موثّقة',
+            'reversal' => 'قيد عكسي',
             'unclassified' => 'قيد غير مصنّف — راجع المرجع',
         ];
 
         $rows = DB::table('ledger_entry_lines as l')
             ->join('ledger_journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
             ->where('l.account_id', $truth['account_id'])
-            ->where('e.status', 'posted')
             ->groupBy('e.source_type')
             ->selectRaw("COALESCE(NULLIF(e.source_type, ''), 'unclassified') as source_type")
             ->selectRaw("SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END) as received")
@@ -551,8 +556,8 @@ class LedgerReportService
                     COALESCE(SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END), 0) AS c")
                 ->first();
 
-            $d = number_format((float) ($before->d ?? 0), 4, '.', '');
-            $c = number_format((float) ($before->c ?? 0), 4, '.', '');
+            $d = bcadd((string) ($before->d ?? '0'), '0', 4);
+            $c = bcadd((string) ($before->c ?? '0'), '0', 4);
             $opening = $account->normal_balance === 'debit'
                 ? bcsub($d, $c, 4) : bcsub($c, $d, 4);
         }
@@ -700,21 +705,24 @@ class LedgerReportService
             [$userId, $cur] = array_pad(explode('|', (string) $key, 2), 2, \App\Support\Money\Currencies::BASE);
             $userId = (int) $userId;
 
-            $book = (string) $book;
+            $book = bcadd((string) ($book ?? '0'), '0', 4);
             $gap = bcsub('0', $book, 4);
-            $divergent++;
-            if (\App\Support\Money\Currencies::isBase($cur)) {
-                $totalGap = bcadd($totalGap, $gap, 4);
+            $off = bccomp($gap, '0', 4) !== 0;
+            if ($off) {
+                $divergent++;
+                if (\App\Support\Money\Currencies::isBase($cur)) {
+                    $totalGap = bcadd($totalGap, $gap, 4);
+                }
             }
             $rows[] = [
                 'user_id' => $userId,
                 'currency' => $cur,
                 'name' => 'محفظة دفترية بلا صف E-Money',
                 'phone' => '—',
-                'wallet_balance' => '0',
+                'wallet_balance' => '0.0000',
                 'ledger_balance' => $book,
                 'gap' => $gap,
-                'diverged' => true,
+                'diverged' => $off,
                 'missing_wallet' => true,
             ];
         }

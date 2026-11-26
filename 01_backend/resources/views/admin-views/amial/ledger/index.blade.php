@@ -681,7 +681,9 @@
 
     // وإن جاء الزائرُ من تقرير الأرباح إلى قيدٍ بعينه، يُفتح تبويبُ القيود
     // — لا يُترك على الميزان فيظنّ أنّ الرابطَ لم يفعل شيئاً.
-    if (lgPinnedKey) {
+    if (new URLSearchParams(location.search).get('tab') === 'reconciliation') {
+        document.querySelector('[data-bs-target="#lg-recon"]').click();
+    } else if (lgPinnedKey) {
         const tab = document.querySelector('[data-bs-target="#lg-entries"]');
         if (tab && window.bootstrap) new bootstrap.Tab(tab).show();
     }

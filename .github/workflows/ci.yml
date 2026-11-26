@@ -156,6 +156,13 @@ jobs:
           echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
           echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
 
+      - name: Verify teller retry after an interrupted response
+        run: node --test 01_backend/tests/browser/agent-retry.test.cjs
+
+      - name: Verify MySQL driver in PHPUnit and both fee uniqueness indexes
+        working-directory: 01_backend
+        run: php artisan test --compact --filter=test_ci_mysql_fee_indexes tests/Feature/FeeCentreScreensGuardTest.php
+
       - name: تحقق شاشتي الرسوم وسجل التدقيق ضد 500
         working-directory: 01_backend
         run: php artisan test --compact tests/Feature/FeeCentreScreensGuardTest.php tests/Feature/AuditScreenArabicAndFiltersTest.php

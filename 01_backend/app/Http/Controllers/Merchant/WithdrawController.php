@@ -8,6 +8,8 @@ use App\Models\EMoney;
 use App\Models\User;
 use App\Models\WithdrawalMethod;
 use App\Models\WithdrawRequest;
+use App\Services\MoneyService;
+use App\Traits\PostsToLedger;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +21,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class WithdrawController extends Controller
 {
+    use PostsToLedger;
+
     public function __construct(
         private WithdrawRequest $withdrawRequest,
         private WithdrawalMethod $withdrawalMethod,
@@ -93,12 +97,23 @@ class WithdrawController extends Controller
             }
         }
 
-        $amount = $request->amount;
-        $charge = 0;
-        $totalAmount = $amount + $charge;
+        $amount = MoneyService::normalize($request->amount);
+        $charge = MoneyService::normalize(0);
+        $totalAmount = MoneyService::add($amount, $charge);
 
         try {
             DB::beginTransaction();
+
+            $merchantEmoney = $this->eMoney
+                ->where('user_id', auth()->user()->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$merchantEmoney || !MoneyService::gte((string) $merchantEmoney->current_balance, $totalAmount)) {
+                DB::rollBack();
+                Toastr::warning(translate('Your account do not have enough balance.'));
+                return back();
+            }
 
             $withdrawRequest = $this->withdrawRequest;
             $withdrawRequest->user_id = auth()->user()->id;
@@ -111,26 +126,23 @@ class WithdrawController extends Controller
             $withdrawRequest->withdrawal_method_fields = $data;
             $withdrawRequest->save();
 
-            $merchantEmoney = $this->eMoney->where('user_id', auth()->user()->id)->first();
-
-            if ($merchantEmoney->current_balance < $totalAmount) {
-                Toastr::warning(translate('Your account do not have enough balance.'));
-                return back();
-            }
-
-            $merchantEmoney->current_balance -= $totalAmount;
-            $merchantEmoney->pending_balance += $totalAmount;
+            $merchantEmoney->current_balance = MoneyService::sub((string) $merchantEmoney->current_balance, $totalAmount);
+            $merchantEmoney->pending_balance = MoneyService::add((string) $merchantEmoney->pending_balance, $totalAmount);
             $merchantEmoney->save();
 
-            DB::commit();
+            $this->ledgerWithdrawRequested((int) $merchantEmoney->user_id, $totalAmount, (string) $withdrawRequest->id);
 
-            Toastr::success(translate('Withdraw request send !'));
-            return redirect()->route('merchant.withdraw.list');
-        } catch (\Exception $e) {
-            DB::rollback();
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
             Toastr::warning(translate('Withdraw request send failed!'));
             return back();
         }
+
+        Toastr::success(translate('Withdraw request send !'));
+        return \Illuminate\Support\Facades\Route::has('merchant.withdraw.list')
+            ? redirect()->route('merchant.withdraw.list')
+            : back();
     }
 
     public function withdrawMethod(Request $request): JsonResponse

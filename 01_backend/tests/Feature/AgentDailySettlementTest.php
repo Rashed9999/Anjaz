@@ -78,10 +78,19 @@ class AgentDailySettlementTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        config()->set('amial.branch_working_hours.timezone', 'Asia/Riyadh');
+        config()->set('amial.daily_settlement.four_eyes', [
+            'threshold' => '500000',
+            'currency' => 'YER',
+            'first_approver_permission' => 'platform.settlements.decide',
+            'second_approver_permission' => 'platform.settlements.decide',
+        ]);
+
         $this->branch = AgentBranch::create([
             'agent_user_id' => $this->company->id, 'branch_user_id' => $bu->id,
             'name' => 'فرع المكلا', 'code' => 'MKL', 'city' => 'حضرموت',
             'phone' => $bu->phone, 'is_active' => true,
+            'working_hours' => array_fill_keys(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], ['open' => '00:00', 'close' => '23:59']),
         ]);
         $this->branch->till()->create([
             'cash_on_hand' => '3000000', 'max_cash_on_hand' => '9000000', 'min_cash_alert' => '100000',
@@ -94,10 +103,10 @@ class AgentDailySettlementTest extends TestCase
         ]);
     }
 
-    private function customer(): User
+    private function customer(?string $phone = null): User
     {
         $c = User::factory()->create([
-            'type' => CUSTOMER_TYPE, 'phone' => '96777280' . random_int(1000, 9999),
+            'type' => CUSTOMER_TYPE, 'phone' => $phone ?? ('96777280' . random_int(1000, 9999)),
             // مستوى ٣: مبالغُ هذه الاختبارات (حتى ٣٠٠ ألف ورصيدٌ ٥٠٠ ألف) فوق حدود المستوى ٢ (٢٥٠ ألفاً)
             // التي صار الشبّاك يفرضها (AMIAL-COUNTER-TIER-LIMITS-001)، والتسوية لا تتعلق بمستوى العميل.
             'is_active' => 1, 'is_kyc_verified' => 1, 'kyc_tier' => 3,
@@ -128,6 +137,46 @@ class AgentDailySettlementTest extends TestCase
 
         $s = $shift->fresh();
         app(AgentShiftService::class)->close($this->teller, $s, $s->expectedCash());
+    }
+
+    public function test_counter_deposit_customer_transfer_and_code_withdrawal_reconcile_on_close(): void
+    {
+        $sender = $this->customer('967772801101');
+        $recipient = $this->customer('967772801102');
+        $shifts = app(AgentShiftService::class);
+        $shift = $shifts->open($this->teller, '500000');
+        $this->actingAs($this->teller, 'agent_staff');
+        $deposit = $this->postJson(route('agent.counter.deposit'), [
+            'customer_id' => $sender->id, 'amount' => '10000',
+        ], ['Idempotency-Key' => 'journey-counter-deposit-001'])->assertOk()->json('result');
+        $this->assertNotEmpty($deposit['receipt_number']);
+
+        $payments = new class {
+            use \App\Traits\TransactionTrait;
+        };
+        $transfer = $payments->customer_send_money_transaction($sender->id, $recipient->id, '3000', '2');
+        $this->assertNotNull($transfer);
+        $withdrawal = app(\App\Services\CustomerWithdrawService::class)->request($recipient, '2000');
+        $cashOut = $this->postJson(route('agent.counter.withdrawal.execute'), [
+            'op_code' => $withdrawal->op_code,
+        ], ['Idempotency-Key' => 'journey-counter-withdraw-001'])->assertOk()->json('result');
+        $this->assertNotEmpty($cashOut['receipt_number']);
+
+        $this->assertSame(bcsub(bcadd('500000', $deposit['net'], 4), '3002', 4),
+            (string) EMoney::where('user_id', $sender->id)->value('current_balance'));
+        $this->assertSame(bcsub('503000', (string) $withdrawal->total_debit, 4),
+            (string) EMoney::where('user_id', $recipient->id)->value('current_balance'));
+        $this->assertSame('508000.0000', (string) $shift->fresh()->expectedCash());
+        $shifts->close($this->teller, $shift->fresh(), '508000');
+
+        $settlements = app(AgentDailySettlementService::class);
+        $row = $settlements->submit($this->company, $this->hq, now()->toDateString(), $this->inWindow());
+        $this->assertEquals(1, $row->deposits_count);
+        $this->assertEquals(1, $row->withdrawals_count);
+        $this->assertEquals('8000.0000', $row->conversion_amount);
+        $settlements->accept($row, $this->admin, 'مطابقة النقد المعدود');
+        $this->assertSame(AgentDailySettlement::STATUS_ACCEPTED, $row->fresh()->status);
+        $this->assertNotNull($row->fresh()->linked_settlement_ulid);
     }
 
     private function inWindow(): Carbon
@@ -208,6 +257,13 @@ class AgentDailySettlementTest extends TestCase
         $this->expectExceptionMessage('الإدارة العامّة');
         app(AgentDailySettlementService::class)
             ->submit($this->company, $this->teller, now()->toDateString(), $this->inWindow());
+    }
+
+    public function test_a_teller_cannot_open_a_new_shift_after_daily_close(): void
+    {
+        app(AgentDailySettlementService::class)->submit($this->company, $this->hq, now()->toDateString(), $this->inWindow());
+        $this->expectExceptionMessage('أُقفلت تسوية اليوم');
+        app(AgentShiftService::class)->open($this->teller, '0');
     }
 
     /** @test */
@@ -470,5 +526,43 @@ class AgentDailySettlementTest extends TestCase
 
         $this->assertSame('0.0000', bcsub($after, $before, 4));
         $this->assertSame(AgentDailySettlement::STATUS_REJECTED, $row->fresh()->status);
+    }
+
+    /**
+     * @test
+     *
+     * AGT-GAP-004 — نسخةٌ قديمةٌ من الصفّ (قرأها طلبٌ متزامنٌ قبل القبول الأوّل) لا تقبل
+     * التسويةَ ثانيةً ولا تحرّك المالَ مرّتين: القفلُ وفحصُ الحالة داخل المعاملة.
+     */
+    public function a_stale_row_cannot_accept_or_reject_a_settlement_twice(): void
+    {
+        $this->workDay('300000', '100000');
+
+        $row = app(AgentDailySettlementService::class)
+            ->submit($this->company, $this->hq, now()->toDateString(), $this->inWindow());
+
+        $stale = clone $row;
+        $before = (string) EMoney::where('user_id', $this->company->id)->value('current_balance');
+
+        app(AgentDailySettlementService::class)->accept($row, $this->admin, 'استُلم النقد');
+        $afterFirst = (string) EMoney::where('user_id', $this->company->id)->value('current_balance');
+
+        try {
+            app(AgentDailySettlementService::class)->accept($stale, $this->admin, 'نقرةٌ ثانية');
+            $this->fail('القبول الثاني مرّ');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('ليست بانتظار القرار', $e->getMessage());
+        }
+
+        try {
+            app(AgentDailySettlementService::class)->reject(clone $stale, $this->admin, 'رفضٌ متأخّرٌ بعد القبول');
+            $this->fail('الرفض بعد القبول مرّ');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('ليست بانتظار القرار', $e->getMessage());
+        }
+
+        $this->assertSame('200000.0000', bcsub($afterFirst, $before, 4));
+        $this->assertSame($afterFirst, (string) EMoney::where('user_id', $this->company->id)->value('current_balance'));
+        $this->assertSame(AgentDailySettlement::STATUS_ACCEPTED, $row->fresh()->status);
     }
 }

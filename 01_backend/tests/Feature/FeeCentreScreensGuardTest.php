@@ -42,6 +42,18 @@ class FeeCentreScreensGuardTest extends TestCase
         $this->viewer = $this->viewOnlyOperator('967770009902');
     }
 
+    public function test_ci_mysql_fee_indexes(): void
+    {
+        if (getenv('GITHUB_ACTIONS') !== 'true' && config('database.default') !== 'mysql') {
+            $this->markTestSkipped('MySQL schema inspection runs in CI.');
+        }
+        $db = \Illuminate\Support\Facades\DB::connection();
+        $this->assertSame('mysql', $db->getDriverName());
+        $indexes = collect($db->select('SHOW INDEX FROM fee_schemes'))->where('Non_unique', 0)->pluck('Key_name');
+        $this->assertContains('fee_one_active', $indexes);
+        $this->assertContains('fee_one_version', $indexes);
+    }
+
     private function operatorWithRole(string $phone, string $roleCode): \App\Models\User
     {
         $u = \App\Models\User::factory()->create([
@@ -931,3 +943,4 @@ class FeeCentreScreensGuardTest extends TestCase
         }
     }
 }
+

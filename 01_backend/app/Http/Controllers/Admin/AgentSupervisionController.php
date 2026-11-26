@@ -131,10 +131,18 @@ class AgentSupervisionController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        if ($out->status === AgentDailySettlement::STATUS_PENDING_SECOND_APPROVAL) {
+            return response()->json([
+                'message' => 'تمّت الموافقة الأولى — التسوية بانتظار المعتمد الثاني قبل تنفيذ التحويل',
+                'status' => $out->status,
+            ]);
+        }
+
         return response()->json([
             'message' => $out->conversion === 'none'
                 ? 'قُبلت التسوية — اليوم متعادل ولا تحويل'
                 : 'قُبلت التسوية ونُفّذ التحويل: ' . $out->conversion_amount,
+            'status' => $out->status,
         ]);
     }
 
