@@ -108,6 +108,28 @@ class SystemHealthController extends Controller
             'lastBeat', 'hasAlertChannel'));
     }
 
+    public function retryBackup(Request $request, int $id)
+    {
+        $incident = DB::table('system_errors')->where('id', $id)
+            ->whereIn('exception', ['backup.failed', 'backup.corrupt'])->first();
+        abort_unless($incident, 404);
+        $lock = \Illuminate\Support\Facades\Cache::lock('ops:retry-backup', 3600);
+        if (! $lock->get()) {
+            return back()->with('backup_result', 'توجد محاولة نسخ قيد التنفيذ.');
+        }
+        try {
+            $success = \Illuminate\Support\Facades\Artisan::call('amial:backup', ['--no-cleanup' => true]) === 0;
+            if ($success) {
+                DB::table('system_errors')->where('id', $id)->where('occurrences', $incident->occurrences)
+                    ->update(['status_flag' => 'resolved', 'resolved_by_user_id' => $request->user()->id,
+                        'resolved_at' => now(), 'updated_at' => now()]);
+            }
+            return back()->with('backup_result', $success ? 'اكتمل النسخ وفحص الأرشيف.' : 'فشلت المحاولة. راجع أحدث تنبيه.');
+        } finally {
+            $lock->release();
+        }
+    }
+
     /** يُغيّر حالةَ خطأ: أُقرَّ به · حُلّ · أُعيد فتحُه. */
     public function updateError(Request $request, int $id): JsonResponse
     {

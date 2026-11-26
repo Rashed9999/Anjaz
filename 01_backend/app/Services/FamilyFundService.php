@@ -210,13 +210,6 @@ class FamilyFundService
         ?string $idempotencyKey = null,
     ): FamilyFundTransaction {
         app(ZonePolicyService::class)->assertAllowed($user, 'family_fund_contribute');
-        if (!$fund->canContribute($user->id)) {
-            throw new \RuntimeException('User is not allowed to contribute to this fund');
-        }
-        if ($fund->status !== 'active') {
-            throw new \RuntimeException('Fund is not active');
-        }
-
         $amountNormalized = MoneyService::normalize($amount);
 
         if (bccomp($amountNormalized, '0', 4) <= 0) {
@@ -225,21 +218,29 @@ class FamilyFundService
 
         $this->kyc->assertIndividualTransactionAllowed($user, $amountNormalized, 'family_fund');
 
-        // فحص حد المساهمة اليومي إن وُجد
-        if ($fund->max_member_contribution_per_day) {
-            $todayTotal = FamilyFundTransaction::where('fund_id', $fund->id)
-                ->where('user_id', $user->id)
-                ->where('tx_type', 'contribute')
-                ->where('created_at', '>=', now()->startOfDay())
-                ->sum('amount');
-
-            $newTotal = MoneyService::add((string)$todayTotal, $amountNormalized);
-            if (bccomp($newTotal, (string)$fund->max_member_contribution_per_day, 4) > 0) {
-                throw new \RuntimeException('Daily contribution limit exceeded');
-            }
-        }
-
         return DB::transaction(function () use ($fund, $user, $amountNormalized, $note) {
+            $lockedFund = FamilyFund::whereKey($fund->id)->lockForUpdate()->firstOrFail();
+            if (!$lockedFund->canContribute($user->id)) {
+                throw new \RuntimeException('User is not allowed to contribute to this fund');
+            }
+            if ($lockedFund->status !== 'active') {
+                throw new \RuntimeException('Fund is not active');
+            }
+
+            // فحص حد المساهمة اليومي إن وُجد
+            if ($lockedFund->max_member_contribution_per_day) {
+                $todayTotal = FamilyFundTransaction::where('fund_id', $lockedFund->id)
+                    ->where('user_id', $user->id)
+                    ->where('tx_type', 'contribute')
+                    ->where('created_at', '>=', now()->startOfDay())
+                    ->sum('amount');
+
+                $newTotal = MoneyService::add((string)$todayTotal, $amountNormalized);
+                if (bccomp($newTotal, (string)$lockedFund->max_member_contribution_per_day, 4) > 0) {
+                    throw new \RuntimeException('Daily contribution limit exceeded');
+                }
+            }
+
             // 1) خصم من محفظة المستخدم
             $this->guard->debit(
                 userId: $user->id,
@@ -247,8 +248,6 @@ class FamilyFundService
                 reason: 'family_fund_contribute',
             );
 
-            // 2) قفل الصندوق وإضافة الرصيد
-            $lockedFund = FamilyFund::where('id', $fund->id)->lockForUpdate()->first();
             $balanceBefore = (string)$lockedFund->balance;
             $balanceAfter = MoneyService::add($balanceBefore, $amountNormalized);
             $lockedFund->update(['balance' => $balanceAfter]);
@@ -330,28 +329,32 @@ class FamilyFundService
         float|string $amount,
         ?string $note = null,
     ): FamilyFundTransaction {
-        $fund->refresh(); // MERGE-FIX: تفادي رصيد قديم في الكائن المُمرَّر
-        if (!$fund->canDisburse($proposer->id)) {
-            throw new \RuntimeException('User cannot propose disbursement');
-        }
-        if (!$fund->isMember($beneficiary->id)) {
-            throw new \RuntimeException('Beneficiary must be an active member');
-        }
+        return DB::transaction(function () use ($fund, $proposer, $beneficiary, $amount, $note) {
+            $fund = FamilyFund::whereKey($fund->id)->lockForUpdate()->firstOrFail();
+            if (!$fund->canDisburse($proposer->id)) {
+                throw new \RuntimeException('User cannot propose disbursement');
+            }
+            if (!$fund->isMember($beneficiary->id)) {
+                throw new \RuntimeException('Beneficiary must be an active member');
+            }
 
-        $amountNormalized = MoneyService::normalize($amount);
+            $amountNormalized = MoneyService::normalize($amount);
 
-        $this->kyc->assertIndividualFeatureAllowed($proposer, 'family_fund');
-        $this->kyc->assertIndividualFeatureAllowed($beneficiary, 'family_fund');
-        $this->kyc->assertIndividualCanReceive($beneficiary, $amountNormalized);
+            if (!MoneyService::isPositive($amountNormalized)) {
+                throw new \RuntimeException('Amount must be positive');
+            }
 
-        if (bccomp($amountNormalized, (string)$fund->balance, 4) > 0) {
-            throw new \RuntimeException('Insufficient fund balance');
-        }
+            $this->kyc->assertIndividualFeatureAllowed($proposer, 'family_fund');
+            $this->kyc->assertIndividualFeatureAllowed($beneficiary, 'family_fund');
+            $this->kyc->assertIndividualCanReceive($beneficiary, $amountNormalized);
 
-        $needsApproval = $fund->require_owner_approval_for_disbursement
-            && $fund->memberRole($proposer->id) !== 'owner';
+            if (bccomp($amountNormalized, (string)$fund->balance, 4) > 0) {
+                throw new \RuntimeException('Insufficient fund balance');
+            }
 
-        return DB::transaction(function () use ($fund, $proposer, $beneficiary, $amountNormalized, $note, $needsApproval) {
+            $needsApproval = $fund->require_owner_approval_for_disbursement
+                && $fund->memberRole($proposer->id) !== 'owner';
+
             if (!$needsApproval) {
                 // تنفيذ مباشر
                 return $this->executeDisbursement($fund, $proposer, $beneficiary, $amountNormalized, $note, $proposer);
@@ -395,38 +398,32 @@ class FamilyFundService
      */
     public function approveDisbursement(FamilyFundTransaction $tx, User $approver): bool
     {
-        if ($tx->status !== 'pending_approval') {
-            return false;
-        }
+        return DB::transaction(function () use ($tx, $approver) {
+            $tx = FamilyFundTransaction::whereKey($tx->id)->lockForUpdate()->firstOrFail();
+            if ($tx->status !== 'pending_approval') {
+                return false;
+            }
 
-        $fund = $tx->fund;
-        if (!$fund->canApproveDisbursement($approver->id)) {
-            throw new \RuntimeException('Only owner can approve disbursement');
-        }
+            $fund = FamilyFund::whereKey($tx->fund_id)->lockForUpdate()->firstOrFail();
+            if (!$fund->canApproveDisbursement($approver->id)) {
+                throw new \RuntimeException('Only owner can approve disbursement');
+            }
 
-        $beneficiary = $tx->beneficiary;
-        if (!$beneficiary) {
-            throw new \RuntimeException('Beneficiary no longer exists');
-        }
+            $beneficiary = $tx->beneficiary;
+            if (!$beneficiary) {
+                throw new \RuntimeException('Beneficiary no longer exists');
+            }
 
-        $this->kyc->assertIndividualFeatureAllowed($approver, 'family_fund');
-        $this->kyc->assertIndividualFeatureAllowed($beneficiary, 'family_fund');
-        $this->kyc->assertIndividualCanReceive($beneficiary, (string) $tx->amount);
+            $this->kyc->assertIndividualFeatureAllowed($approver, 'family_fund');
+            $this->kyc->assertIndividualFeatureAllowed($beneficiary, 'family_fund');
+            $this->kyc->assertIndividualCanReceive($beneficiary, (string) $tx->amount);
 
-        return DB::transaction(function () use ($tx, $fund, $approver, $beneficiary) {
-            // إعادة فحص الرصيد (قد تغير منذ المقترح)
-            $lockedFund = FamilyFund::where('id', $fund->id)->lockForUpdate()->first();
-            if (bccomp((string)$tx->amount, (string)$lockedFund->balance, 4) > 0) {
-                $tx->update([
-                    'status' => 'rejected',
-                    'approved_by_user_id' => $approver->id,
-                    'approved_at' => now(),
-                ]);
+            if (bccomp((string)$tx->amount, (string)$fund->balance, 4) > 0) {
                 throw new \RuntimeException('Fund balance insufficient at approval time');
             }
 
             // تنفيذ
-            $this->executeDisbursementCore($lockedFund, $beneficiary, (string)$tx->amount, $tx);
+            $this->executeDisbursementCore($fund, $beneficiary, (string)$tx->amount, $tx);
 
             $tx->update([
                 'status' => 'completed',
@@ -440,33 +437,36 @@ class FamilyFundService
 
     public function rejectDisbursement(FamilyFundTransaction $tx, User $approver, string $reason): bool
     {
-        if ($tx->status !== 'pending_approval') {
-            return false;
-        }
-        $fund = $tx->fund;
-        if (!$fund->canApproveDisbursement($approver->id)) {
-            throw new \RuntimeException('Only owner can reject');
-        }
+        return DB::transaction(function () use ($tx, $approver, $reason) {
+            $tx = FamilyFundTransaction::whereKey($tx->id)->lockForUpdate()->firstOrFail();
+            if ($tx->status !== 'pending_approval') {
+                return false;
+            }
+            $fund = $tx->fund;
+            if (!$fund->canApproveDisbursement($approver->id)) {
+                throw new \RuntimeException('Only owner can reject');
+            }
 
-        $tx->update([
-            'status' => 'rejected',
-            'approved_by_user_id' => $approver->id,
-            'approved_at' => now(),
-            // note عمداً غير قابلة للتعديل لكن نسجل الـ reason في audit
-        ]);
+            $tx->update([
+                'status' => 'rejected',
+                'approved_by_user_id' => $approver->id,
+                'approved_at' => now(),
+                // note عمداً غير قابلة للتعديل لكن نسجل الـ reason في audit
+            ]);
 
-        $this->audit->record([
-            'actor_type' => 'user',
-            'actor_user_id' => $approver->id,
-            'subject_type' => 'family_fund_transaction',
-            'subject_id' => (string)$tx->id,
-            'action' => 'FAMILY_FUND_DISBURSEMENT_REJECTED',
-            'decision_code' => 'DISBURSEMENT_REJECTED',
-            'reason' => mb_substr($reason, 0, 255),
-            'severity' => 'notice',
-        ]);
+            $this->audit->record([
+                'actor_type' => 'user',
+                'actor_user_id' => $approver->id,
+                'subject_type' => 'family_fund_transaction',
+                'subject_id' => (string)$tx->id,
+                'action' => 'FAMILY_FUND_DISBURSEMENT_REJECTED',
+                'decision_code' => 'DISBURSEMENT_REJECTED',
+                'reason' => mb_substr($reason, 0, 255),
+                'severity' => 'notice',
+            ]);
 
-        return true;
+            return true;
+        });
     }
 
     /**

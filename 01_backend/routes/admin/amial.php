@@ -342,7 +342,9 @@ Route::prefix('merchant-center')->name('merchant-center.')->group(function () {
         Route::get('/{id}/staff', [$mc, 'staff'])->where('id', '[0-9]+')->name('staff');
         Route::get('/{id}/support', [$mc, 'support'])->where('id', '[0-9]+')->name('support');
         Route::get('/{id}/subscription', [$mc, 'subscription'])->where('id', '[0-9]+')->name('subscription');
-        Route::post('/{id}/note', [$mc, 'addNote'])->where('id', '[0-9]+')->name('note');
+        Route::post('/{id}/note', [$mc, 'addNote'])
+            ->middleware('platform:platform.customers.notes.create')
+            ->where('id', '[0-9]+')->name('note');
     });
 
     // ── المال: لفريق المالية ومدير النظام وحدهما ──
@@ -804,6 +806,9 @@ Route::prefix('fees')->name('fees.')->group(function () {
 // ============ AMIAL-OBSERVABILITY-001 — صحّة النظام ومركز الأخطاء ============
 Route::get('/system/health', [\App\Http\Controllers\Admin\SystemHealthController::class, 'index'])
     ->middleware('platform:platform.audit.view')->name('system.health');
+
+Route::post('/system/errors/{id}/retry-backup', [\App\Http\Controllers\Admin\SystemHealthController::class, 'retryBackup'])
+    ->whereNumber('id')->middleware(['platform:platform.ops.retry', 'throttle:3,10'])->name('system.errors.retry-backup');
 
 Route::post('/system/errors/{id}', [\App\Http\Controllers\Admin\SystemHealthController::class, 'updateError'])
     ->where('id', '[0-9]+')

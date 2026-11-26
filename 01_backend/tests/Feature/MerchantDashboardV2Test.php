@@ -200,20 +200,14 @@ class MerchantDashboardV2Test extends TestCase
     }
 
     /** @test */
-    public function merchant_portal_renders_v2_shell_and_starts_on_the_home_dashboard(): void
+    public function old_dashboard_link_goes_to_business_and_navigation_still_defaults_to_overview(): void
     {
         $owner = $this->owner();
 
         $this->actingAs($owner, 'merchant_web')
             ->get('/merchant')
-            ->assertOk()
-            ->assertSee('AMIAL MERCHANT PORTAL V2', false)
-            ->assertSee('التشغيل والمبيعات')
-            ->assertSee('الفريق ونقاط البيع')
-            ->assertSee('المالية والتقارير')
-            ->assertSee("api('dashboardV2'", false)
-            ->assertSee('اتجاه المبيعات')
-            ->assertSee('طرق الدفع');
+            ->assertStatus(303)
+            ->assertRedirect(\App\Support\PortalHost::merchantLoginUrl());
 
         $navigation = app(\App\Services\Merchant\MerchantPortalNavigationService::class)
             ->forOwner(

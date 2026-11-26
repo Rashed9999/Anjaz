@@ -46,7 +46,7 @@ RUN apk add --no-cache \
     bash \
     nginx \
     supervisor \
-    mysql-client \
+    mariadb-connector-c mysql-client \
     curl \
     # AMIAL-BACKUP-OFFSITE-001 — أداةُ شحن النسخة خارج الخادم.
     # انظر `Dockerfile`: بلاها يسقط الشحنُ أوّلَ ما تُضبَط الوجهة،

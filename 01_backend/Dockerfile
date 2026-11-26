@@ -6,7 +6,7 @@ RUN apk add --no-cache \
     bash \
     nginx \
     supervisor \
-    mysql-client \
+    mariadb-connector-c mysql-client \
     git \
     unzip \
     curl \

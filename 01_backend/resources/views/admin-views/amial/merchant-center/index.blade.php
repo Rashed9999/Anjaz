@@ -181,8 +181,8 @@
                 + 'إنهاء كل الجلسات</button>'] : [])
             .concat(can.ticket ? ['<button class="btn btn-sm btn-outline-primary" data-act="ticket" data-testid="mc-ticket">'
                 + 'فتح تذكرة</button>'] : [])
-            .concat(['<button class="btn btn-sm btn-outline-secondary" data-act="note" data-testid="mc-note">'
-                + 'ملاحظة</button>']);
+            .concat(can.note ? ['<button class="btn btn-sm btn-outline-secondary" data-act="note" data-testid="mc-note">'
+                + 'ملاحظة</button>'] : []);
 
         document.getElementById('mc-head').innerHTML =
             '<div class="card"><div class="card-body">'

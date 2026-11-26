@@ -36,13 +36,15 @@ class SaherController extends Controller
     {
         $sources = DB::table('saher_sources')->orderBy('code')->get()
             ->map(function ($s) {
-                // **«غير معروف» ليس صفراً** — والبياتُ يُحسب لا يُفترَض.
-                $s->is_stale = $s->last_success_at !== null
-                    && now()->diffInMinutes($s->last_success_at) > $s->stale_after_minutes;
-
-                $s->display_health = $s->last_success_at === null
-                    ? 'NOT_CONFIGURED'
-                    : ($s->is_stale ? 'STALE' : $s->health);
+                $s->display_health = $s->health;
+                if ($s->health === 'HEALTHY') {
+                    if ($s->last_success_at === null) {
+                        $s->display_health = 'NOT_CONFIGURED';
+                    } elseif (\Illuminate\Support\Carbon::parse($s->last_success_at)
+                        ->addMinutes((int) $s->stale_after_minutes)->isPast()) {
+                        $s->display_health = 'STALE';
+                    }
+                }
 
                 return $s;
             });

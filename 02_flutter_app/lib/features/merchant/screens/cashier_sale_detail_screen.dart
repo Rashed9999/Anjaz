@@ -45,7 +45,7 @@ class _CashierSaleDetailScreenState extends State<CashierSaleDetailScreen> {
   String _methodLabel(String? m) => switch (m) {
         'cash' => 'نقد',
         'credit' => 'أجل',
-        'amial_pay' => 'أميال باي',
+        'amial_pay' || 'wallet' => 'أميال باي',
         'corporate' => 'حساب شركة',
         'mixed' => 'مختلط',
         _ => m ?? '—',

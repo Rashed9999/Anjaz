@@ -93,10 +93,8 @@ void main() {
       const agent = WebPortalNoticeScreen(role: 'agent');
       const admin = WebPortalNoticeScreen(role: 'admin');
 
-      // merchant.amialpay.com يخدم «أميال أعمال» و/merchant/login عليه 404؛
-      // بوابة تاجر أميال باي الحيّة على النطاق العام (AMIAL-PORTAL-404-001).
-      expect(merchant.portalUrl, equals('https://amialpay.com/merchant/login'));
-      expect(merchant.portalUrl, isNot(startsWith('https://merchant.amialpay.com')));
+      // بوابة مالك المنشأة تفتح منصة «أميال أعمال» الجديدة على merchant.amialpay.com/login.
+      expect(merchant.portalUrl, equals('https://merchant.amialpay.com/login'));
       expect(agent.portalUrl, equals('https://amialpay.com/agent/login'));
       expect(admin.portalUrl, equals('https://amialpay.com/admin/auth/login'));
 

@@ -314,6 +314,95 @@ class BusinessGatewayController extends Controller
         return $this->ok(app(\App\Services\BusinessGateway\BusinessEntitlementService::class)->for($this->resolveLink($request)));
     }
 
+    /**
+     * التحقق الخادمي الموقّع من دخول مالك المنشأة القادم من بوابة أميال أعمال.
+     * يتحقق من التاجر المعتمد والنشط، يضمن وجود BusinessLink له، ويعيد هويته دون كلمة مرور أو أرصدة.
+     */
+    public function verifyOwner(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'identifier' => ['required', 'string', 'max:191'],
+            'password' => ['required', 'string', 'max:200'],
+        ]);
+        if ($v->fails()) {
+            return $this->validationError($v);
+        }
+
+        $identifier = trim((string) $request->input('identifier'));
+        $password = (string) $request->input('password');
+        $rateKey = 'business-gateway:verify-owner:'.hash('sha256', mb_strtolower($identifier));
+
+        if (RateLimiter::tooManyAttempts($rateKey, 10)) {
+            return $this->error('TOO_MANY_ATTEMPTS', 'محاولات كثيرة؛ أعد المحاولة لاحقاً.', 429);
+        }
+
+        $owner = \App\Services\Merchant\MerchantOwnerLookup::findByIdentifier($identifier);
+
+        $profile = $owner
+            ? \App\Models\MerchantProfile::where('user_id', $owner->id)->first()
+            : null;
+
+        if (!$owner
+            || !\Illuminate\Support\Facades\Hash::check($password, (string) $owner->password)
+            || (int) $owner->is_active !== 1
+            || (int) ($owner->is_temp_blocked ?? 0) === 1
+            || !$profile) {
+            RateLimiter::hit($rateKey, 900);
+            \Illuminate\Support\Facades\Log::warning('amial_pay.business_verify_owner_rejected', [
+                'code' => 'INVALID_CREDENTIALS',
+                'reason' => !$owner
+                    ? 'OWNER_NOT_FOUND'
+                    : (!\Illuminate\Support\Facades\Hash::check($password, (string) $owner->password)
+                        ? 'INVALID_PASSWORD'
+                        : ((int) $owner->is_active !== 1 || (int) ($owner->is_temp_blocked ?? 0) === 1
+                            ? 'ACCOUNT_INACTIVE_OR_BLOCKED'
+                            : 'MERCHANT_PROFILE_MISSING')),
+                'merchant_user_id' => $owner?->id,
+            ]);
+
+            return $this->error('INVALID_CREDENTIALS', 'تعذر الدخول؛ تحقق من البيانات أو حالة حساب المنشأة.', 401);
+        }
+
+        if ((string) $profile->verification_status !== 'verified') {
+            \Illuminate\Support\Facades\Log::info('amial_pay.business_verify_owner_rejected', [
+                'code' => 'KYC_REQUIRED',
+                'merchant_user_id' => $owner->id,
+                'verification_status' => (string) $profile->verification_status,
+            ]);
+
+            return $this->error('KYC_REQUIRED', 'حساب المنشأة قيد المراجعة ولم يُعتمد بعد.', 403);
+        }
+
+        RateLimiter::clear($rateKey);
+
+        return $this->guard(function () use ($owner, $profile) {
+            $link = $this->links->link($owner);
+            if (!$link->isActive()) {
+                \Illuminate\Support\Facades\Log::warning('amial_pay.business_verify_owner_rejected', [
+                    'code' => 'BUSINESS_LINK_INACTIVE',
+                    'merchant_user_id' => $owner->id,
+                    'link_id' => $link->link_ulid,
+                ]);
+
+                return $this->error('BUSINESS_LINK_INACTIVE', 'ربط المنشأة بأميال أعمال موقوف.', 403);
+            }
+
+            \Illuminate\Support\Facades\Log::info('amial_pay.business_verify_owner_ok', [
+                'merchant_user_id' => $owner->id,
+                'link_id' => $link->link_ulid,
+                'business_type' => $profile->business_type,
+            ]);
+
+            return $this->ok($this->links->summary($link) + [
+                'owner' => [
+                    'name' => trim(($owner->f_name ?? '').' '.($owner->l_name ?? '')),
+                    'email' => $owner->email,
+                    'phone' => $owner->phone,
+                ],
+            ]);
+        });
+    }
+
     private function resolveLink(Request $request): BusinessLink
     {
         return $request->attributes->get('business_link');
