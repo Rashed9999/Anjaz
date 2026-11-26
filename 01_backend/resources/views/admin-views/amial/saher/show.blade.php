@@ -130,6 +130,59 @@
         </div>
     </div>
 
+    {{-- SAHER-AUTOFIX-002 — remediation case is a tracked work item, not an assertion of a fix. --}}
+    <div class="card mb-4" data-testid="saher-remediation-plan">
+        <div class="card-header">
+            <h4 class="card-header-title">خطة إصلاح السبب الجذري</h4>
+        </div>
+        <div class="card-body">
+            <h5>{{ $remediationPlan['title'] }}</h5>
+            <div class="small text-muted mb-2">استراتيجية المعالجة: <code>{{ $remediationPlan['strategy'] }}</code></div>
+            <ol class="mb-3">
+                @foreach($remediationPlan['steps'] as $step)
+                    <li>{{ $step }}</li>
+                @endforeach
+            </ol>
+            <h6>شروط التحقق قبل إعلان الإصلاح</h6>
+            <ul>
+                @foreach($remediationPlan['verification'] as $check)
+                    <li>{{ $check }}</li>
+                @endforeach
+            </ul>
+
+            @if($remediationCase)
+                <div class="alert alert-info mb-0" data-testid="saher-remediation-existing">
+                    <strong>طلب معالجة مسجل #{{ $remediationCase->id }}</strong>
+                    <div>الحالة: {{ $remediationCase->status }} · افتُتح: {{ $remediationCase->created_at }}</div>
+                    <div>سبب الطلب: {{ $remediationCase->reason }}</div>
+                    <small>هذا الطلب لا يغلق الاكتشاف؛ الحسم بعد إصلاح معتمد وإعادة فحص ساهر.</small>
+                </div>
+            @elseif(! in_array($finding->status, ['OPEN', 'REOPENED'], true))
+                <p class="text-muted mb-0">الاكتشاف ليس مفتوحاً؛ لا يمكن فتح طلب إصلاح جديد الآن.</p>
+            @elseif(! auth('user')->user()?->hasPlatformPermission('saher.autofix.plan'))
+                <p class="text-warning mb-0" data-testid="saher-remediation-denied">
+                    يتطلب فتح طلب الإصلاح صلاحية <code>saher.autofix.plan</code>.
+                </p>
+            @else
+                <form method="POST" action="{{ route('admin.amial.saher.remediation.open', $finding->id) }}">
+                    @csrf
+                    <input type="hidden" name="confirm" value="OPEN_REMEDIATION_CASE">
+                    <label class="small" for="saher-remediation-reason">سبب طلب المعالجة (20 حرفاً على الأقل)</label>
+                    <textarea name="reason" id="saher-remediation-reason" required minlength="20"
+                              maxlength="1000" class="form-control mb-2" rows="2"
+                              placeholder="سجّل سبب فتح طلب الإصلاح والوظيفة المتأثرة"></textarea>
+                    <p class="text-muted small">
+                        لن يتم تنفيذ أوامر خادم أو تعديل كود الإنتاج أو فتح PR من هذا الإجراء.
+                        سيتم إنشاء طلب إصلاح موثق ليتبعه إصلاح برمجي ومراجعة واختبارات.
+                    </p>
+                    <button type="submit" class="btn btn-primary btn-sm" data-testid="saher-remediation-open">
+                        إنشاء طلب إصلاح دائم
+                    </button>
+                </form>
+            @endif
+        </div>
+    </div>
+
     {{-- SAHER-AUTOFIX-001: immediate containment, not a code fix or a resolved finding. --}}
     <div class="card mb-4" data-testid="saher-autofix-panel">
         <div class="card-header">

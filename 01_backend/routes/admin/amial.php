@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\AuditDecisionsController;
 use App\Http\Controllers\Admin\LegalTermsController;
 use App\Http\Controllers\Admin\SaherController;
 use App\Http\Controllers\Admin\SaherAutoFixController;
+use App\Http\Controllers\Admin\SaherRemediationController;
 use App\Http\Controllers\Admin\ProfileChangeRequestController;
 use App\Http\Controllers\Admin\MerchantVerificationAdminController;
 use App\Http\Controllers\Admin\OperatorRolesController;
@@ -1050,6 +1051,10 @@ Route::prefix('saher')->name('saher.')->group(function () {
         ->where('id', '[0-9]+')
         ->middleware(['platform:saher.findings.view', 'platform:saher.autofix.quarantine'])
         ->name('quarantine.unblock');
+    Route::post('/findings/{id}/remediation', [SaherRemediationController::class, 'open'])
+        ->where('id', '[0-9]+')
+        ->middleware(['platform:saher.findings.view', 'platform:saher.autofix.plan', 'throttle:5,1'])
+        ->name('remediation.open');
 });
 
 // ============ AMIAL-SUPERVISION-001 — لوحة الإشراف ============
