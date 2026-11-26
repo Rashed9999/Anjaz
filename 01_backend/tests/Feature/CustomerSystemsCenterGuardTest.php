@@ -69,20 +69,20 @@ class CustomerSystemsCenterGuardTest extends TestCase
         $snapshot = app(CustomerSystemsCenterService::class)->snapshot();
         $keys = collect($snapshot['systems'])->pluck('key')->all();
 
+        foreach (['merchant_payments', 'installments', 'gift_cards', 'split_bills'] as $frozen) {
+            $this->assertNotContains($frozen, $keys, "ظهرت خدمة تجارية مجمّدة في مركز أنظمة العميل: {$frozen}");
+        }
+
         foreach ([
             'kyc',
             'limits',
             'guards',
             'wallet_transfers',
-            'merchant_payments',
             'safe_payment',
             'donations',
             'family_funds',
             'withdrawals',
             'idempotency',
-            'installments',
-            'gift_cards',
-            'split_bills',
             'credits',
             'payment_requests',
             'bill_pay',
