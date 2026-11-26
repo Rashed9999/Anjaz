@@ -273,6 +273,19 @@ class DonationsServiceTest extends TestCase
     }
 
     /** @test */
+    public function returning_donor_counts_again_after_full_refund(): void
+    {
+        $first = $this->service->donate($this->donor, $this->campaign, '50.0000');
+        $this->service->refundDonation($first, User::factory()->create(), 'Requested refund');
+        $second = $this->service->donate($this->donor, $this->campaign, '20.0000');
+
+        $this->assertSame($second->donation_ulid, $second->wallet_transaction_id);
+        $this->assertEquals(1, $this->campaign->fresh()->donor_count);
+        $this->assertEquals(1, $this->org->fresh()->total_donors);
+        $this->assertEquals('19.8000', $this->campaign->fresh()->current_amount);
+    }
+
+    /** @test */
     public function cannot_refund_settled_donation()
     {
         $admin = User::factory()->create();
