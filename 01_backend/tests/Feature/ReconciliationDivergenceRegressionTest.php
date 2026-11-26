@@ -236,9 +236,9 @@ class ReconciliationDivergenceRegressionTest extends TestCase
     }
 
     /**
-     * 4. إلغاء أو انتهاء طلب سحب نقدي مع releaseHoldUpTo جزئي لا يقيّد في الدفتر أكثر ممّا فُكّ فعلاً.
+     * 4. نقص الحجز يمنع الإلغاء والانتهاء ويحفظ الرصيد والقيد حتى المطابقة.
      */
-    public function test_customer_withdraw_cancel_and_expire_only_post_actually_released_amount(): void
+    public function test_customer_withdraw_cancel_and_expire_preserve_short_hold_for_reconciliation(): void
     {
         $customer = $this->createFundedUser('50000.0000', CUSTOMER_TYPE);
         FeeScheme::where('code', 'CASH_OUT')->update(['is_active' => false]);
@@ -266,29 +266,20 @@ class ReconciliationDivergenceRegressionTest extends TestCase
         $walletBefore = (string) EMoney::where('user_id', $customer->id)->value('current_balance');
         $ledgerBefore = $this->ledgerBalanceOf($customer->id);
 
-        $svc->cancel($customer, $req1->id);
+        try {
+            $svc->cancel($customer, $req1->id);
+            $this->fail('A short hold must block cancellation.');
+        } catch (\App\Exceptions\WithdrawalHoldMismatch $exception) {
+            $this->assertSame('pending', $req1->fresh()->status);
+        }
 
-        $walletDelta = bcsub((string) EMoney::where('user_id', $customer->id)->value('current_balance'), $walletBefore, 4);
-        $ledgerDelta = bcsub($this->ledgerBalanceOf($customer->id), $ledgerBefore, 4);
-
-        $this->assertSame('4000.0000', $walletDelta);
-        $this->assertSame('4000.0000', $ledgerDelta, 'cancel() قيّد total_debit كاملاً بدل المبلغ المفكوك فعلاً');
-
-        // اختبار المسار الثاني: expireStale()
-        $req2 = $svc->request($customer, '8000.0000');
-        DB::table('withdrawal_requests')->where('id', $req2->id)->update(['expires_at' => now()->subMinutes(10)]);
-        DB::table('e_money')->where('user_id', $customer->id)->update(['held_balance' => '3000.0000']);
-
-        $walletBefore2 = (string) EMoney::where('user_id', $customer->id)->value('current_balance');
-        $ledgerBefore2 = $this->ledgerBalanceOf($customer->id);
-
-        $svc->expireStale();
-
-        $walletDelta2 = bcsub((string) EMoney::where('user_id', $customer->id)->value('current_balance'), $walletBefore2, 4);
-        $ledgerDelta2 = bcsub($this->ledgerBalanceOf($customer->id), $ledgerBefore2, 4);
-
-        $this->assertSame('3000.0000', $walletDelta2);
-        $this->assertSame('3000.0000', $ledgerDelta2, 'expireStale() قيّد total_debit كاملاً بدل المبلغ المفكوك فعلاً');
+        DB::table('withdrawal_requests')->where('id', $req1->id)->update(['expires_at' => now()->subMinutes(10)]);
+        $this->assertSame(0, $svc->expireStale());
+        $this->assertSame('pending', $req1->fresh()->status);
+        $wallet = EMoney::where('user_id', $customer->id)->firstOrFail();
+        $this->assertSame('4000.0000', (string) $wallet->held_balance);
+        $this->assertSame($walletBefore, (string) $wallet->current_balance);
+        $this->assertSame($ledgerBefore, $this->ledgerBalanceOf($customer->id));
     }
 
     /**
