@@ -129,6 +129,23 @@ class BillPayService
 
         $this->assertInputsAreConsistent($user, $provider, $service, $product);
         $this->assertSubscriberAccount($service, $subscriberAccount);
+        if (!MoneyService::isPositive($amountNormalized)) {
+            throw new \RuntimeException('يجب أن يكون مبلغ السداد موجباً');
+        }
+        if ($product) {
+            if (!$product->is_active) {
+                throw new \RuntimeException('منتج الفاتورة غير متاح');
+            }
+            if ($product->amount_type === 'fixed' && MoneyService::compare($amountNormalized, (string) $product->fixed_amount) !== 0) {
+                throw new \RuntimeException('المبلغ لا يطابق سعر الخدمة الثابت');
+            }
+            if ($product->amount_type === 'variable' && (
+                ($product->min_amount !== null && MoneyService::compare($amountNormalized, (string) $product->min_amount) < 0)
+                || ($product->max_amount !== null && MoneyService::compare($amountNormalized, (string) $product->max_amount) > 0)
+            )) {
+                throw new \RuntimeException('المبلغ خارج حدود منتج الفاتورة');
+            }
+        }
 
         $quote = $this->quote($user, $amountNormalized);
         $fee = (string) $quote['fee'];
@@ -152,6 +169,14 @@ class BillPayService
         // An HTTP retry, WhatsApp PIN replay, or competing request gets the
         // existing business order and must never call the external provider again.
         if (!$created) {
+            if ((int) $order->provider_id !== (int) $provider->id
+                || (int) $order->service_id !== (int) $service->id
+                || (string) $order->product_id !== (string) $product?->id
+                || $order->subscriber_account !== $subscriberAccount
+                || MoneyService::compare((string) $order->amount, $amountNormalized) !== 0
+                || $this->orderedExtra($order->subscriber_extra ?? []) !== $this->orderedExtra($this->safeSubscriberExtra($subscriberExtra))) {
+                throw new \RuntimeException('استُخدم مفتاح السداد لطلب مختلف');
+            }
             return $order->fresh();
         }
 
@@ -795,6 +820,17 @@ class BillPayService
     }
 
     /** @return array<string, mixed> */
+    private function orderedExtra(array $extra): array
+    {
+        ksort($extra);
+        foreach ($extra as $key => $value) {
+            if (is_array($value)) {
+                $extra[$key] = $this->orderedExtra($value);
+            }
+        }
+        return $extra;
+    }
+
     private function providerExtra(BillService $service, array $subscriberExtra): array
     {
         $rules = is_array($service->account_validation_rules) ? $service->account_validation_rules : [];

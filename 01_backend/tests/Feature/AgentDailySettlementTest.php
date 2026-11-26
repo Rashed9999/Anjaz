@@ -103,10 +103,10 @@ class AgentDailySettlementTest extends TestCase
         ]);
     }
 
-    private function customer(): User
+    private function customer(?string $phone = null): User
     {
         $c = User::factory()->create([
-            'type' => CUSTOMER_TYPE, 'phone' => '96777280' . random_int(1000, 9999),
+            'type' => CUSTOMER_TYPE, 'phone' => $phone ?? ('96777280' . random_int(1000, 9999)),
             // مستوى ٣: مبالغُ هذه الاختبارات (حتى ٣٠٠ ألف ورصيدٌ ٥٠٠ ألف) فوق حدود المستوى ٢ (٢٥٠ ألفاً)
             // التي صار الشبّاك يفرضها (AMIAL-COUNTER-TIER-LIMITS-001)، والتسوية لا تتعلق بمستوى العميل.
             'is_active' => 1, 'is_kyc_verified' => 1, 'kyc_tier' => 3,
@@ -137,6 +137,46 @@ class AgentDailySettlementTest extends TestCase
 
         $s = $shift->fresh();
         app(AgentShiftService::class)->close($this->teller, $s, $s->expectedCash());
+    }
+
+    public function test_counter_deposit_customer_transfer_and_code_withdrawal_reconcile_on_close(): void
+    {
+        $sender = $this->customer('967772801101');
+        $recipient = $this->customer('967772801102');
+        $shifts = app(AgentShiftService::class);
+        $shift = $shifts->open($this->teller, '500000');
+        $this->actingAs($this->teller, 'agent_staff');
+        $deposit = $this->postJson(route('agent.counter.deposit'), [
+            'customer_id' => $sender->id, 'amount' => '10000',
+        ], ['Idempotency-Key' => 'journey-counter-deposit-001'])->assertOk()->json('result');
+        $this->assertNotEmpty($deposit['receipt_number']);
+
+        $payments = new class {
+            use \App\Traits\TransactionTrait;
+        };
+        $transfer = $payments->customer_send_money_transaction($sender->id, $recipient->id, '3000', '2');
+        $this->assertNotNull($transfer);
+        $withdrawal = app(\App\Services\CustomerWithdrawService::class)->request($recipient, '2000');
+        $cashOut = $this->postJson(route('agent.counter.withdrawal.execute'), [
+            'op_code' => $withdrawal->op_code,
+        ], ['Idempotency-Key' => 'journey-counter-withdraw-001'])->assertOk()->json('result');
+        $this->assertNotEmpty($cashOut['receipt_number']);
+
+        $this->assertSame(bcsub(bcadd('500000', $deposit['net'], 4), '3002', 4),
+            (string) EMoney::where('user_id', $sender->id)->value('current_balance'));
+        $this->assertSame(bcsub('503000', (string) $withdrawal->total_debit, 4),
+            (string) EMoney::where('user_id', $recipient->id)->value('current_balance'));
+        $this->assertSame('508000.0000', (string) $shift->fresh()->expectedCash());
+        $shifts->close($this->teller, $shift->fresh(), '508000');
+
+        $settlements = app(AgentDailySettlementService::class);
+        $row = $settlements->submit($this->company, $this->hq, now()->toDateString(), $this->inWindow());
+        $this->assertEquals(1, $row->deposits_count);
+        $this->assertEquals(1, $row->withdrawals_count);
+        $this->assertEquals('8000.0000', $row->conversion_amount);
+        $settlements->accept($row, $this->admin, 'مطابقة النقد المعدود');
+        $this->assertSame(AgentDailySettlement::STATUS_ACCEPTED, $row->fresh()->status);
+        $this->assertNotNull($row->fresh()->linked_settlement_ulid);
     }
 
     private function inWindow(): Carbon
@@ -217,6 +257,13 @@ class AgentDailySettlementTest extends TestCase
         $this->expectExceptionMessage('الإدارة العامّة');
         app(AgentDailySettlementService::class)
             ->submit($this->company, $this->teller, now()->toDateString(), $this->inWindow());
+    }
+
+    public function test_a_teller_cannot_open_a_new_shift_after_daily_close(): void
+    {
+        app(AgentDailySettlementService::class)->submit($this->company, $this->hq, now()->toDateString(), $this->inWindow());
+        $this->expectExceptionMessage('أُقفلت تسوية اليوم');
+        app(AgentShiftService::class)->open($this->teller, '0');
     }
 
     /** @test */

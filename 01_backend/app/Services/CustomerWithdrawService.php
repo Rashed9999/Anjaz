@@ -186,22 +186,7 @@ class CustomerWithdrawService
                 throw new RuntimeException('لا يمكن إلغاء عملية غير معلّقة');
             }
 
-            // AMIAL-FIX(WITHDRAW-CANCEL): نفكّ ما هو محجوز فعلاً حتى سقف المبلغ
-            // بدل الرمي عند النقص — الحجز قد يكون حُرّر من مسار آخر (كنس
-            // انتهاء الصلاحية مثلاً) بينما الطلب ما زال pending، فكان الإلغاء
-            // يفشل بـ«لا يوجد محجوز كافٍ لفكّه» ويعلق المستخدم في الشاشة.
-            $released = $this->guard()->releaseHoldUpTo($customer->id, (string)$req->total_debit, 'withdraw_cancel');
-            $expired = $req->expires_at->isPast();
-            $req->update(['status' => $expired ? 'expired' : 'cancelled']);
-
-            if (MoneyService::isPositive($released)) {
-                $this->ledgerCashOutReleased(
-                    customerUserId: $customer->id,
-                    totalDebit: $released,
-                    sourceId: (string) $req->id,
-                    why: $expired ? 'expired' : 'cancelled',
-                );
-            }
+            $this->releaseRequest($req, $req->expires_at->isPast() ? 'expired' : 'cancelled');
 
             return $req;
         });
@@ -221,20 +206,7 @@ class CustomerWithdrawService
      */
     public function execute(User $agent, string $opCode, string $identifier, array $context = []): array
     {
-        // AMIAL-WITHDRAW-EXPIRE-001 — **فكُّ حجزٍ كان يُردَّ مع الاستثناء.**
-        //
-        // كان فكُّ الحجز ووسمُ الطلب «منتهياً» يقعان **داخل** معاملةِ
-        // التنفيذ، ثمّ يُرمى `RuntimeException` في السطر التالي — فتُردّ
-        // المعاملةُ كلُّها ويعود الطلبُ `pending` والحجزُ قائماً. أي أنّ
-        // هذا الفرعَ لم يُنجز شيئاً قطّ منذ كُتب: يقرأ الوكيلُ «انتهت
-        // الصلاحيّة» ولا يتغيّر شيء، ويبقى مالُ العميل محجوزاً حتّى يمرّ
-        // كنسُ `expireStale` المجدول.
-        //
-        // **ولا يكشفه اختبارٌ يتحقّق من الرسالة وحدَها** — الرسالةُ صحيحة.
-        // فصار الانتهاءُ يقع في معاملةٍ مستقلّةٍ **تُثبَّت** قبل أن يُرمى.
-        $this->expireIfPast($opCode);
-
-        return DB::transaction(function () use ($agent, $opCode, $identifier, $context) {
+        $result = DB::transaction(function () use ($agent, $opCode, $identifier, $context) {
             $req = WithdrawalRequest::where('op_code', $opCode)->lockForUpdate()->first();
             if (!$req) {
                 throw new RuntimeException('رقم العملية غير صحيح');
@@ -244,6 +216,11 @@ class CustomerWithdrawService
             }
             if ($req->status !== 'pending') {
                 throw new RuntimeException('العملية ملغاة أو منتهية');
+            }
+
+            if ($req->expires_at->isPast()) {
+                $this->releaseRequest($req, 'expired');
+                return null;
             }
 
             // AMIAL-WITHDRAW-FIX: رقم العملية (op_code) هو المُصرّح الفعلي. تأكيد
@@ -285,6 +262,7 @@ class CustomerWithdrawService
             $req->update(['transaction_id' => $txId]);
 
             // 1) صرف المحجوز من العميل (المال غادر)
+            $this->assertHoldsCovered($req);
             $this->guard()->captureHold($req->customer_user_id, (string)$req->total_debit, 'withdraw_execute');
             // 2) إضافة للوكيل: المبلغ (تعويض النقد) + العمولة
             $this->guard()->credit($agent->id, $agentCredit, 'withdraw_agent_credit');
@@ -434,75 +412,87 @@ class CustomerWithdrawService
                 'request' => $req->fresh(),
             ];
         });
+        if ($result === null) {
+            throw new \App\Exceptions\WithdrawalExpired('العملية ملغاة أو منتهية');
+        }
+        return $result;
     }
 
-    /** يفكّ حجز العمليات المعلّقة المنتهية (يُستدعى من أمر مجدول). */
     public function expireStale(int $limit = 200): int
     {
+        if ($limit < 1) {
+            return 0;
+        }
+        $rows = WithdrawalRequest::where('status', 'pending')->where('expires_at', '<', now())
+            ->select('id')->lazyById(min($limit, 200));
         $count = 0;
-        WithdrawalRequest::where('status', 'pending')
-            ->where('expires_at', '<', now())
-            ->limit($limit)
-            ->get()
-            ->each(function ($req) use (&$count) {
-                DB::transaction(function () use ($req) {
-                    $locked = WithdrawalRequest::where('id', $req->id)->lockForUpdate()->first();
-                    if ($locked && $locked->status === 'pending') {
-                        $released = $this->guard()->releaseHoldUpTo($locked->customer_user_id, (string)$locked->total_debit, 'withdraw_expired');
-                        $locked->update(['status' => 'expired']);
-
-                        // **المخرجُ الرابع** — الكنسُ المجدول. وهو الذي
-                        // يُنهي أكثرَ الطلبات فعلاً: من طلب ولم يذهب إلى
-                        // وكيلٍ لا يُلغي بنفسه غالباً.
-                        if (MoneyService::isPositive($released)) {
-                            $this->ledgerCashOutReleased(
-                                customerUserId: (int) $locked->customer_user_id,
-                                totalDebit: $released,
-                                sourceId: (string) $locked->id,
-                                why: 'expired',
-                            );
-                        }
-                    }
-                });
-                $count++;
-            });
+        foreach ($rows as $row) {
+            try {
+                $count += (int) $this->expirePending($row->id);
+            } catch (\App\Exceptions\WithdrawalHoldMismatch $error) {
+                logger()->warning($error->getMessage(), ['withdrawal_id' => $row->id]);
+            }
+            if ($count >= $limit) {
+                break;
+            }
+        }
         return $count;
     }
 
-    // ---- helpers ----
-
-    /**
-     * ينهي طلباً انتهت صلاحيّتُه **في معاملةٍ مستقلّةٍ تُثبَّت**.
-     *
-     * ولا يرمي: من نادى هذه يريد أن يقع الفكُّ، ثمّ يقرّر هو ما يقوله
-     * للوكيل. ورميٌ من هنا يُعيد العطلَ الذي أُصلح — استثناءٌ يمرّ عبر
-     * معاملةِ المنادي فيردّ فكَّه.
-     */
-    private function expireIfPast(string $opCode): void
+    public function expirePending(int $id): bool
     {
-        DB::transaction(function () use ($opCode) {
-            $req = WithdrawalRequest::where('op_code', $opCode)->lockForUpdate()->first();
-
-            if (! $req || $req->status !== 'pending' || ! $req->expires_at->isPast()) {
-                return;
+        return DB::transaction(function () use ($id) {
+            $row = WithdrawalRequest::whereKey($id)->lockForUpdate()->first();
+            if (!$row || $row->status !== 'pending' || !$row->expires_at->isPast()) {
+                return false;
             }
-
-            $released = $this->guard()->releaseHoldUpTo(
-                $req->customer_user_id, (string) $req->total_debit, 'withdraw_expired');
-            $req->update(['status' => 'expired']);
-
-            // **المخرجُ الثالث من الحجز** — يكتشفه الوكيلُ لا العميل. وبلا
-            // قيدٍ هنا يبقى الحجزُ معلّقاً في الدفتر أبداً بينما رجع المالُ
-            // إلى المحفظة فعلاً: انحرافٌ دائمٌ بمقداره.
-            if (MoneyService::isPositive($released)) {
-                $this->ledgerCashOutReleased(
-                    customerUserId: (int) $req->customer_user_id,
-                    totalDebit: $released,
-                    sourceId: (string) $req->id,
-                    why: 'expired',
-                );
-            }
+            $this->releaseRequest($row, 'expired');
+            return true;
         });
+    }
+
+    private function releaseRequest(WithdrawalRequest $req, string $status): void
+    {
+        $wallet = $this->guard()->lockWallet($req->customer_user_id);
+        $amount = (string) $req->total_debit;
+        // Legacy repair: only finish a wallet-only release when the ledger
+        // shows the exact missing credit and no other withdrawal is pending.
+        $alreadyReleased = MoneyService::compare((string) $wallet->held_balance, '0') === 0
+            && !WithdrawalRequest::where('customer_user_id', $req->customer_user_id)
+                ->where('status', 'pending')->where('id', '!=', $req->id)->lockForUpdate()->first(['id'])
+            && \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', 'cash_out_req_' . $req->id)->exists()
+            && MoneyService::compare((string) $wallet->current_balance, MoneyService::add(
+                (string) $this->ledgerService()->getOrCreateUserWallet($req->customer_user_id)->current_balance, $amount
+            )) === 0;
+        if (!$alreadyReleased) {
+            $this->assertHoldsCovered($req);
+            $this->guard()->releaseHold($req->customer_user_id, $amount, 'withdraw_' . $status);
+        }
+        $this->ledgerCashOutReleased($req->customer_user_id, $amount, (string) $req->id, $status);
+        $req->update(['status' => $status]);
+    }
+
+    private function assertHoldsCovered(WithdrawalRequest $req): void
+    {
+        $id = $req->customer_user_id;
+        $wallet = $this->guard()->lockWallet($id);
+        // Current locking reads also work inside a longer caller transaction.
+        $reservations = [
+            WithdrawalRequest::where('customer_user_id', $id)->where('status', 'pending')->lockForUpdate()->sum('total_debit'),
+            \App\Models\BillPaymentOrder::where('user_id', $id)->where('funds_state', 'held')->lockForUpdate()->sum('total_debited'),
+            \App\Models\WrongTransferClaim::where('recipient_user_id', $id)->lockForUpdate()->sum('held_amount'),
+            \App\Models\MerchantPayoutRequest::where('merchant_user_id', $id)
+                ->whereIn('status', ['pending', 'approved'])->lockForUpdate()->sum('amount'),
+            \App\Models\AgentSettlement::where('agent_user_id', $id)
+                ->where('settlement_type', 'payout')->where('status', 'pending')->lockForUpdate()->sum('amount'),
+        ];
+        $required = '0';
+        foreach ($reservations as $reserved) {
+            $required = MoneyService::add($required, (string) $reserved);
+        }
+        if (MoneyService::compare((string) $wallet->held_balance, $required) < 0) {
+            throw new \App\Exceptions\WithdrawalHoldMismatch('تحتاج حجوزات المحفظة إلى مطابقة قبل إتمام السحب');
+        }
     }
 
     private function generateOpCode(): string

@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'package:uuid/uuid.dart';
 import 'package:get/get.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:amial_pay/common/models/contact_model.dart';
 import 'package:amial_pay/data/api/api_checker.dart';
@@ -51,23 +54,8 @@ class TransactionMoneyController extends GetxController implements GetxService {
   String _keyFor(String action) =>
       _operationKeys[action] ??= IdempotencyKeyGenerator.forFinancialAction(action);
 
-  /// **ويُتلَف متى أجاب الخادم — لا عند النجاح وحده.**
-  ///
-  /// وهذا تصحيحٌ لصيغةٍ أولى كتبتُها تُبقي المفتاحَ على كلّ فشل. وكانت
-  /// **تكسر التطبيق**: `EnforceIdempotency` يُسجّل المفتاحَ `failed` عند
-  /// أيّ ٤xx ثمّ يردّ على إعادته `409 IDEMPOTENCY_FAILED_PREVIOUSLY`. فمن
-  /// أخطأ رمزَه السرّيّ مرّةً لا يستطيع إعادةَ المحاولة أبداً بمفتاحه.
-  ///
-  /// فالتمييزُ ليس بين نجاحٍ وفشل، بل بين **جوابٍ وصمت**:
-  ///   · أجاب الخادمُ ولو بالرفض ⇒ النيّةُ حُسمت، والمفتاحُ يُتلَف.
-  ///   · لم يصل جوابٌ (`statusCode` ٠ أو ١ أو −١) ⇒ **لا نعلم أوصل الطلبُ
-  ///     أم لا**، فيبقى المفتاح لتكون الإعادةُ إعادةً لا تحويلاً ثانياً.
-  ///
-  /// و«لا نعلم» هنا ليست صفراً (القاعدة السابعة): الجهلُ يُحتاط له، ولا
-  /// يُقرأ نجاحاً ولا فشلاً.
   void _settleKey(String action, Response response) {
-    final int code = response.statusCode ?? 0;
-    if (code > 1) {
+    if (ApiClient.hasDefinitiveOutcome(response)) {
       _operationKeys.remove(action);
     }
   }
@@ -117,8 +105,39 @@ class TransactionMoneyController extends GetxController implements GetxService {
     _isLoading = true;
     _isNextBottomSheet = false;
     update();
-   Response response = await transactionRepo.sendMoneyApi(phoneNumber: contactModel.phoneNumber, amount: amount, purpose: purpose, pin: pinCode, idempotencyKey: _keyFor('send_money'));
-   _settleKey('send_money', response);
+    String? owner = authRepo.getUserToken();
+    try {
+      final profile = jsonDecode(authRepo.getUserData());
+      if (profile is Map && profile['phone'] is String) {
+        owner = profile['phone'] as String;
+      }
+    } on FormatException {
+      // A session without a cached profile is scoped to its token.
+    }
+    final identity = jsonEncode([owner, contactModel.phoneNumber, amount, purpose]);
+    const urlNamespace = '6ba7b811-9dad-11d1-80b4-00c04fd430c8';
+    final intent = 'pending_transfer_${const Uuid().v5(urlNamespace, identity)}';
+    final prefs = transactionRepo.sharedPreferences;
+    final key = _operationKeys.putIfAbsent(intent, () =>
+        prefs.getString(intent) ?? IdempotencyKeyGenerator.forFinancialAction('send_money'));
+    Response response;
+    try {
+      if (!await prefs.setString(intent, key)) {
+        throw StateError('Unable to persist transfer intent');
+      }
+      response = await transactionRepo.sendMoneyApi(
+        phoneNumber: contactModel.phoneNumber, amount: amount, purpose: purpose,
+        pin: pinCode, idempotencyKey: key,
+      );
+    } catch (_) {
+      response = const Response(statusCode: 1, statusText: 'تعذّر تأكيد التحويل. أعد المحاولة بنفس البيانات.');
+    }
+    if (_operationKeys[intent] == key && ApiClient.hasDefinitiveOutcome(response)) {
+      _operationKeys.remove(intent);
+      if (prefs.getString(intent) == key) {
+        await prefs.remove(intent);
+      }
+    }
    if(response.statusCode == 200){
      _isLoading = false;
      _isNextBottomSheet = true;

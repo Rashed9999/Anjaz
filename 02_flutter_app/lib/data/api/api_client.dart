@@ -252,6 +252,18 @@ class ApiClient extends GetxService {
     return '$uri|$payload';
   }
 
+  static bool hasDefinitiveOutcome(Response response) {
+    final status = response.statusCode ?? 0;
+    if (status <= 1 || status >= 500 || status == 408 || status == 429) {
+      return false;
+    }
+    if (status == 409) {
+      final body = response.body;
+      return body is Map && body['code'] == 'IDEMPOTENCY_FAILED_PREVIOUSLY';
+    }
+    return true;
+  }
+
   Future<Response> postData(
       String uri, dynamic body, {
       Map<String, String>? headers,
@@ -309,10 +321,9 @@ class ApiClient extends GetxService {
         ).timeout(Duration(seconds: timeoutInSeconds));
         Response response = handleResponse(response0, uri);
 
-        // **أجاب الخادمُ ولو بالرفض ⇒ النيّةُ حُسمت، والمفتاحُ يُتلَف.**
-        // ولولا ذلك لعلق المستعملُ: الوسيطُ يُسجّل المفتاح `failed` عند
-        // أيّ ٤xx ثمّ يردّ ٤٠٩ على إعادته، فمن أخطأ رمزَه لا يُعيد أبداً.
-        _inFlightKeys.remove(autoAction);
+        if (_inFlightKeys[autoAction] == effectiveKey && hasDefinitiveOutcome(response)) {
+          _inFlightKeys.remove(autoAction);
+        }
         return response;
 
       } catch (e) {
