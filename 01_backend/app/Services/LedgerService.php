@@ -66,7 +66,8 @@ class LedgerService
         if ($idempotencyKey) {
             $existing = LedgerJournalEntry::where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
-                return $existing; // تم تسجيله مسبقاً
+                $this->assertSamePosting($existing, $sourceType, $sourceId, $lines);
+                return $existing;
             }
         }
 
@@ -95,7 +96,7 @@ class LedgerService
 
             // إنشاء الرأس
             $totalDebit = $this->sumByDirection($lines, 'debit');
-            $entry = LedgerJournalEntry::create([
+            $attributes = [
                 'currency' => $entryCurrency,
                 'entry_ulid' => (string) Str::ulid(),
                 'source_type' => $sourceType,
@@ -111,7 +112,21 @@ class LedgerService
                 'metadata' => $metadata,
                 'posted_at' => now(),
                 'created_at' => now(),
-            ]);
+            ];
+            if ($idempotencyKey === null) {
+                $entry = LedgerJournalEntry::create($attributes);
+            } else {
+                try {
+                    $entry = DB::transaction(fn () => LedgerJournalEntry::create($attributes));
+                } catch (\Illuminate\Database\UniqueConstraintViolationException $error) {
+                    $winner = LedgerJournalEntry::where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
+                    if (!$winner) {
+                        throw $error;
+                    }
+                    $this->assertSamePosting($winner, $sourceType, $sourceId, $lines);
+                    return $winner;
+                }
+            }
 
             // تسجيل كل سطر مع قفل الحساب
             foreach ($lines as $line) {
@@ -586,6 +601,23 @@ class LedgerService
         $account = $this->getOrCreateUserWallet($userId, 'SOUTH', $currency);
 
         return LedgerEntryLine::where('account_id', $account->id)->exists();
+    }
+
+    private function assertSamePosting(LedgerJournalEntry $entry, string $sourceType, ?string $sourceId, array $lines): void
+    {
+        $posted = $entry->lines()->join('ledger_accounts', 'ledger_accounts.id', '=', 'ledger_entry_lines.account_id')
+            ->select('ledger_accounts.account_code', 'ledger_entry_lines.direction', 'ledger_entry_lines.amount')
+            ->lockForUpdate()->get()->map(static fn ($line) => [
+                $line->account_code, $line->direction, (string) $line->amount,
+            ])->all();
+        $requested = array_map(static fn ($line) => [
+            $line['account'], $line['direction'], bcadd((string) $line['amount'], '0', 4),
+        ], $lines);
+        sort($posted);
+        sort($requested);
+        if ($entry->source_type !== $sourceType || $entry->source_id !== $sourceId || $posted !== $requested) {
+            throw new RuntimeException('Ledger idempotency key conflicts with the posted entry');
+        }
     }
 
     /**

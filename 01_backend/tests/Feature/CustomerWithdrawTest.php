@@ -181,4 +181,21 @@ class CustomerWithdrawTest extends TestCase
         $this->assertSame('100000.0000',
             (string) EMoney::where('user_id', $this->customer->id)->value('current_balance'));
     }
+    public function test_cancellation_cannot_consume_another_pending_withdrawal_hold(): void
+    {
+        $first = $this->svc->request($this->customer, '1000');
+        $second = $this->svc->request($this->customer, '2000');
+        EMoney::where('user_id', $this->customer->id)->update(['held_balance' => $second->total_debit]);
+        try {
+            $this->svc->cancel($this->customer, $first->id);
+            $this->fail('Expected a hold reconciliation error');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('مطابقة', $error->getMessage());
+        }
+        $this->assertSame('pending', $first->fresh()->status);
+        $this->assertSame('pending', $second->fresh()->status);
+        $this->assertDatabaseMissing('ledger_journal_entries', ['idempotency_key' => 'cash_out_rel_' . $first->id]);
+        $this->assertSame((string) $second->total_debit,
+            (string) EMoney::where('user_id', $this->customer->id)->value('held_balance'));
+    }
 }

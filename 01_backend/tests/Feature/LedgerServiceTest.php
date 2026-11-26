@@ -151,6 +151,18 @@ class LedgerServiceTest extends TestCase
             (string) LedgerAccount::where('account_code', 'USER_WALLET_1')->value('current_balance'));
     }
 
+    public function test_same_key_with_a_different_amount_conflicts(): void
+    {
+        $lines = [
+            ['account' => 'USER_WALLET_1', 'direction' => 'debit', 'amount' => '50'],
+            ['account' => 'USER_WALLET_2', 'direction' => 'credit', 'amount' => '50'],
+        ];
+        $this->ledger->post('send_money', 'T1', 'تحويل', $lines, 'same-key');
+        $lines[0]['amount'] = $lines[1]['amount'] = '75';
+        $this->expectExceptionMessage('conflicts');
+        $this->ledger->post('send_money', 'T1', 'تحويل', $lines, 'same-key');
+    }
+
     /** @test */
     public function it_records_balance_snapshots()
     {

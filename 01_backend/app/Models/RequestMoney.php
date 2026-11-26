@@ -7,11 +7,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class RequestMoney extends Model
 {
+    protected $table = 'request_money';
+
     protected $casts = [
         'from_user_id' => 'integer',
         'to_user_id' => 'integer',
         'type' => 'string',
-        'amount' => 'float:4',
+        'amount' => 'decimal:4',
         //'note' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
