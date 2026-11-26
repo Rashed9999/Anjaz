@@ -131,23 +131,10 @@ class AppIdempotencyIntentGuardTest extends TestCase
         }
     }
 
-    /**
-     * @test
-     *
-     * **والمُعينُ يُتلف عند الجواب لا عند النجاح.**
-     *
-     * صيغةٌ أولى في هذا المشروع أبقت المفتاحَ على كلّ فشل، **فكسرت
-     * التطبيق**: من أخطأ رمزَه السرّيّ مرّةً لا يستطيع إعادةَ المحاولة —
-     * يردّ الخادمُ `409 IDEMPOTENCY_FAILED_PREVIOUSLY`.
-     *
-     * فالتمييزُ بين **جوابٍ وصمت** لا بين نجاحٍ وفشل.
-     */
-    public function the_helper_settles_on_any_answer_not_only_success(): void
+    /** @test */
+    public function financial_intents_use_the_shared_outcome_policy(): void
     {
         $src = $this->code('lib/data/api/idempotent_intent.dart');
-
-        $this->assertMatchesRegularExpression('~code\s*>\s*1~', $src,
-            'المُعينُ لا يميّز الجوابَ من الصمت — إمّا يكسر إعادةَ المحاولة '
-            . 'بعد رفضٍ سليم، وإمّا يُنتج عمليّتين عند انقطاع');
+        $this->assertStringContainsString('ApiClient.hasDefinitiveOutcome(response)', $src);
     }
 }

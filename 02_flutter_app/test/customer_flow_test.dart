@@ -5,6 +5,7 @@
 // هذا يتحقّق من تكامل التدفّق الكامل (تسلسل النداءات + عقد الـ API + فكّ الترميز +
 // مؤشّرات النجاح) دون خادم حيّ ولا إضافات native — حتمي ويعمل في CI.
 
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,6 +22,9 @@ import 'package:amial_pay/features/receipts/domain/repositories/receipts_repo.da
 /// ApiClient مزيّف: يُرجع استجابة ناجحة معلّبة حسب مسار الطلب.
 class _FakeApiClient implements ApiClient {
   final List<String> calls = [];
+  final transferKeys = <String?>[];
+  Completer<Response>? pendingResponse;
+  final transferStarted = Completer<void>();
 
   @override
   Future<Response> postData(String uri, dynamic body,
@@ -33,6 +37,9 @@ class _FakeApiClient implements ApiClient {
       });
     }
     if (uri.contains('send-money')) {
+      transferKeys.add(idempotencyKey);
+      if (!transferStarted.isCompleted) transferStarted.complete();
+      if (pendingResponse != null) return pendingResponse!.future;
       return Response(statusCode: 200, body: {
         'success': true,
         'message': 'تم التحويل بنجاح',
@@ -71,6 +78,43 @@ class _FakeApiClient implements ApiClient {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('financial retry keeps the key until the outcome is definitive', () {
+    for (final status in [-1, 0, 1, 408, 429, 500, 502, 503, 504]) {
+      expect(ApiClient.hasDefinitiveOutcome(Response(statusCode: status)), isFalse);
+    }
+    expect(ApiClient.hasDefinitiveOutcome(const Response(
+      statusCode: 409, body: {'code': 'IDEMPOTENCY_IN_PROGRESS'},
+    )), isFalse);
+    expect(ApiClient.hasDefinitiveOutcome(const Response(statusCode: 200)), isTrue);
+    expect(ApiClient.hasDefinitiveOutcome(const Response(statusCode: 403)), isTrue);
+  });
+
+  test('a recreated controller reuses an unconfirmed transfer key', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final prefs = await SharedPreferences.getInstance();
+    final first = _FakeApiClient()..pendingResponse = Completer<Response>();
+    final retry = _FakeApiClient();
+    Future<Response> send(_FakeApiClient api) {
+      final controller = TransactionMoneyController(
+        transactionRepo: TransactionRepo(apiClient: api, sharedPreferences: prefs),
+        authRepo: AuthRepo(apiClient: api, sharedPreferences: prefs),
+      );
+      return controller.sendMoney(
+        contactModel: ContactModel(phoneNumber: '0509998888'), amount: 100,
+        purpose: 'هدية', pinCode: '1234', onSuggest: () {},
+      );
+    }
+    final outstanding = send(first);
+    await first.transferStarted.future;
+    await send(retry);
+    expect(retry.transferKeys.single, first.transferKeys.single);
+    expect(retry.transferKeys.single, isNotEmpty);
+    first.pendingResponse!.complete(const Response(statusCode: 200));
+    await outstanding;
+    await send(retry);
+    expect(retry.transferKeys.last, isNot(retry.transferKeys.first));
+  });
+
   test('تدفّق العميل الكامل: دخول → تحويل → إيصال', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final sp = await SharedPreferences.getInstance();
@@ -104,6 +148,8 @@ void main() {
       pinCode: '1234',
       onSuggest: () => suggested = true,
     );
+    expect(api.transferKeys.single, isNotEmpty);
+    expect(sp.getKeys().where((key) => key.startsWith('pending_transfer_')), isEmpty);
     expect(transfer.statusCode, 200, reason: 'يجب أن ينجح التحويل');
     expect(suggested, isTrue, reason: 'callback النجاح يجب أن يُستدعى');
 

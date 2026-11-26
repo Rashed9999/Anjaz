@@ -88,6 +88,10 @@ class AgentShiftService
         $branch = AgentBranch::findOrFail($teller->branch_id);
 
         $shift = DB::transaction(function () use ($teller, $branch, $openingFloat) {
+            $this->assertDayOpen($branch);
+            if ($teller->openShift()) {
+                throw new DomainException('لديك ورديّة مفتوحة بالفعل');
+            }
             $shift = AgentShift::create([
                 'branch_id' => $branch->id,
                 'staff_id' => $teller->id,
@@ -295,7 +299,10 @@ class AgentShiftService
 
             $locked->save();
 
-            $branch = AgentBranch::find($locked->branch_id);
+            $branch = AgentBranch::findOrFail($locked->branch_id);
+            if (in_array($reason, ['customer_deposit', 'customer_withdraw'], true)) {
+                $this->assertDayOpen($branch);
+            }
 
             return AgentCashMovement::create([
                 'branch_id' => $locked->branch_id,
@@ -458,5 +465,14 @@ class AgentShiftService
             'note' => $note,
             'created_at' => now(),
         ]);
+    }
+    private function assertDayOpen(AgentBranch $branch): void
+    {
+        \App\Models\User::whereKey($branch->agent_user_id)->lockForUpdate()->firstOrFail();
+        $day = \App\Models\Agent\AgentDailySettlement::where('agent_user_id', $branch->agent_user_id)
+            ->whereDate('settlement_date', now()->toDateString())->lockForUpdate()->first();
+        if ($day && in_array($day->status, ['submitted', 'pending_second_approval', 'accepted'], true)) {
+            throw new DomainException('أُقفلت تسوية اليوم لهذه الشركة');
+        }
     }
 }

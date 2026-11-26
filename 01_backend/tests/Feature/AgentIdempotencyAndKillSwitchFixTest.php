@@ -123,6 +123,10 @@ class AgentIdempotencyAndKillSwitchFixTest extends TestCase
         $this->assertSame('10000.0000', bcadd((string) EMoney::where('user_id', $customer->id)->value('current_balance'), '0', 4));
         $this->assertSame('4990000.0000', bcadd((string) EMoney::where('user_id', $this->branch->branch_user_id)->value('current_balance'), '0', 4));
 
+        $this->assertDatabaseHas('ledger_journal_entries', [
+            'idempotency_key' => 'agent_deposit_idem_' . substr(hash('sha256', $this->teller->id . ':' . $key), 0, 56),
+        ]);
+
         // استخدام المفتاح نفسه بمبلغ مختلف يردّ 409 Conflict.
         $this->postJson(route('agent.counter.deposit'), [
             'customer_id' => $customer->id,

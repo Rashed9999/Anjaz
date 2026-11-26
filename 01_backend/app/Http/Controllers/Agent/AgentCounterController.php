@@ -240,7 +240,8 @@ class AgentCounterController extends Controller
                 }
 
                 return $this->counter->deposit(
-                    $branch, $customer, $amount, $branch->account, $request->input('note'), $lockedShift
+                    $branch, $customer, $amount, $branch->account, $request->input('note'), $lockedShift,
+                    substr(hash('sha256', $staff->id . ':' . $request->attributes->get('amial.idempotency_key')), 0, 56)
                 );
             });
         } catch (DomainException $e) {
@@ -532,6 +533,10 @@ class AgentCounterController extends Controller
 
                 return $out;
             });
+        } catch (\App\Exceptions\WithdrawalExpired $e) {
+            // The drawer transaction rolled back its approvals and nested expiry.
+            app(CustomerWithdrawService::class)->expirePending($req->id);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         } catch (DomainException | \RuntimeException | \InvalidArgumentException $e) {
             if ($e->getMessage() === '__NEEDS_APPROVAL__') {
                 return response()->json([
