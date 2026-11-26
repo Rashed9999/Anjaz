@@ -7,6 +7,7 @@ use App\Models\CharityCategory;
 use App\Models\CharityOrganization;
 use App\Models\Donation;
 use App\Models\EMoney;
+use App\Models\Ledger\LedgerJournalEntry;
 use App\Models\User;
 use App\Services\DonationsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -75,6 +76,40 @@ class DonationsServiceTest extends TestCase
             'deadline_at' => now()->addMonth(),
             'zone_code' => 'SOUTH',
         ]);
+    }
+
+    public function test_ledger_interruption_rolls_back_donation_and_allows_one_clean_retry(): void
+    {
+        $interruptNextPosting = true;
+        LedgerJournalEntry::created(function (LedgerJournalEntry $entry) use (&$interruptNextPosting): void {
+            if ($entry->source_type === 'donation' && $interruptNextPosting) {
+                $interruptNextPosting = false;
+                throw new \RuntimeException('Simulated journal interruption');
+            }
+        });
+
+        try {
+            $this->service->donate($this->donor, $this->campaign, '100.0000');
+            $this->fail('Expected the journal interruption');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Simulated journal interruption', $e->getMessage());
+        }
+
+        $wallet = EMoney::where('user_id', $this->donor->id)->firstOrFail();
+        $this->assertEquals('5000.0000', $wallet->current_balance);
+        $this->assertEquals('0.0000', $this->campaign->fresh()->current_amount);
+        $this->assertEquals('0.0000', $this->org->fresh()->total_collected);
+        $this->assertDatabaseMissing('donations', ['donor_user_id' => $this->donor->id]);
+        $this->assertDatabaseMissing('ledger_journal_entries', ['source_type' => 'donation']);
+        $this->assertDatabaseMissing('receipts', ['user_id' => $this->donor->id, 'receipt_type' => 'donation']);
+
+        $donation = $this->service->donate($this->donor, $this->campaign, '100.0000');
+        $this->assertEquals('4900.0000', $wallet->fresh()->current_balance);
+        $this->assertEquals('99.0000', $this->campaign->fresh()->current_amount);
+        $this->assertEquals('1.0000', $this->campaign->fresh()->platform_fee_collected);
+        $this->assertSame(1, Donation::where('donor_user_id', $this->donor->id)->count());
+        $this->assertSame(1, LedgerJournalEntry::where('source_type', 'donation')->where('source_id', $donation->donation_ulid)->count());
+        $this->assertNotNull($donation->fresh()->receipt_id);
     }
 
     /** @test */
