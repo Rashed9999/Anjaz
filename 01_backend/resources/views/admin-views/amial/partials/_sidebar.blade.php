@@ -129,10 +129,11 @@
         [
             'title' => 'الإعدادات والتشغيل',
             'icon' => '⚙️',
-            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*', 'admin/amial/hub/limits*', 'admin/amial/2fa*', 'admin/amial/system/*', 'admin/withdraw*'],
+            'match' => ['admin/amial/control-center*', 'admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*', 'admin/amial/hub/limits*', 'admin/amial/2fa*', 'admin/amial/system/*', 'admin/withdraw*'],
             'links' => [
                 ['🏢 إعدادات الأعمال (عام/رسوم/حدود)', route('admin.business-settings.business-setup'), null],
-                ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), 'platform.settings.manage'],
+                ['🎛️ مركز التحكم في أميال', route('admin.amial.control-center.home'), 'platform.settings.manage'],
+                ['⚙️ مفاتيح سريعة (الإعدادات القديمة)', route('admin.amial.hub.settings'), 'platform.settings.manage'],
                 ['📏 مركز الحدود المالية', route('admin.amial.hub.limits.index'), 'platform.customers.view'],
                 ['💬 حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.settings.update'],
                 // لوحتا المناطق: كلتاهما تُعيد تعيين المنطقة. تُجمعان هنا

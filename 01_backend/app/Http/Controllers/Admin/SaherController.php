@@ -76,12 +76,46 @@ class SaherController extends Controller
         $runs = DB::table('saher_scan_runs')
             ->orderByDesc('started_at')->limit(10)->get();
 
+        // Quarantines are service interruptions: never hide them behind a green scan.
+        $quarantineReady = \Illuminate\Support\Facades\Schema::hasTable('saher_route_quarantines');
+        $quarantineCount = $quarantineReady
+            ? DB::table('saher_route_quarantines')->where('status', 'ACTIVE')->count()
+            : null;
+        $canManageQuarantine = (bool) $request->user()
+            ?->hasPlatformPermission('saher.autofix.quarantine');
+        $activeQuarantines = $quarantineReady && $canManageQuarantine
+            ? DB::table('saher_route_quarantines')->where('status', 'ACTIVE')
+                ->orderBy('created_at')->limit(100)->get()
+            : collect();
+
+        // Repair cases are work items, never proof of a corrected vulnerability.
+        $remediationReady = \Illuminate\Support\Facades\Schema::hasTable('saher_remediation_cases');
+        $canPlanRemediation = (bool) $request->user()
+            ?->hasPlatformPermission('saher.autofix.plan');
+        $remediationOpenCount = $remediationReady
+            ? DB::table('saher_remediation_cases')
+                ->whereIn('status', ['OPEN', 'REOPENED'])->count()
+            : null;
+        $openRemediations = $remediationReady && $canPlanRemediation
+            ? DB::table('saher_remediation_cases')
+                ->whereIn('status', ['OPEN', 'REOPENED'])
+                ->orderBy('created_at')->limit(100)->get()
+            : collect();
+
         return view('admin-views.amial.saher.index', [
+            'remediationReady' => $remediationReady,
+            'canPlanRemediation' => $canPlanRemediation,
+            'remediationOpenCount' => $remediationOpenCount,
+            'openRemediations' => $openRemediations,
             'sources' => $sources,
             'findings' => $findings,
             'severityCounts' => $byseverity,
             'reopened' => $reopened,
             'runs' => $runs,
+            'quarantineReady' => $quarantineReady,
+            'quarantineCount' => $quarantineCount,
+            'activeQuarantines' => $activeQuarantines,
+            'canManageQuarantine' => $canManageQuarantine,
             'canSeeEvidence' => (bool) $request->user()
                 ?->hasPlatformPermission('saher.evidence.view'),
             'filters' => $request->only(['severity', 'category', 'status']),
@@ -102,6 +136,15 @@ class SaherController extends Controller
 
         return view('admin-views.amial.saher.show', [
             'finding' => $finding,
+            'fixPlan' => app(\App\Saher\Remediation\QuarantineAdvisor::class)->assess($finding),
+            'remediationPlan' => app(\App\Saher\Remediation\RemediationPlanner::class)->forFinding($finding),
+            'remediationCase' => \Illuminate\Support\Facades\Schema::hasTable('saher_remediation_cases')
+                ? DB::table('saher_remediation_cases')->where('finding_id', $id)->first()
+                : null,
+            'activeQuarantine' => \Illuminate\Support\Facades\Schema::hasTable('saher_route_quarantines')
+                ? DB::table('saher_route_quarantines')
+                    ->where('finding_id', $id)->where('status', 'ACTIVE')->first()
+                : null,
             'canSeeEvidence' => $canSeeEvidence,
             'evidence' => $canSeeEvidence
                 ? DB::table('saher_finding_evidence')->where('finding_id', $id)->get()

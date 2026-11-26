@@ -7,6 +7,7 @@ use App\Services\Otp\OtpPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -91,6 +92,9 @@ class MessagingSwitchGuardTest extends TestCase
             ['key' => 'phone_verification'],
             ['value' => '1', 'created_at' => now(), 'updated_at' => now()]);
 
+        Http::preventStrayRequests();
+        Http::fake(['graph.facebook.com/*/123456/messages' => Http::response(['messages' => [['id' => 'test-otp']]])]);
+
         $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => '967771500007'])
             ->assertStatus(503);
 
@@ -99,6 +103,7 @@ class MessagingSwitchGuardTest extends TestCase
 
         $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => '967771500008'])
             ->assertOk();
+        Http::assertSentCount(1);
     }
 
     // ══════════════════════════════════════════════════════════════════

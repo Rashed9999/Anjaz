@@ -117,6 +117,14 @@ class CustomerCreditSettleService
 
             // كل محافظ العملية تُقفل بترتيب ثابت قبل الخصم والإضافة.
             $this->guard()->lockWalletsOrdered([(int) $customer->id, $merchantId]);
+
+            // منع تكرار نفس Idempotency-Key قبل تحريك e_money: وإلا فالمحفظتان
+            // تتحركان مرّتين بينما LedgerService::post يُعيد القيد الأول بصمت.
+            if ($idempotencyKey !== null
+                && \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', $idempotencyKey)->lockForUpdate()->exists()) {
+                throw new RuntimeException('تم تنفيذ عملية سداد الدين بهذا المفتاح مسبقاً — منع تكرار القيد');
+            }
+
             app(MerchantRiskService::class)->assertReceiveAllowed($merchantId, $amount);
 
             $customerWallet = $this->guard()->debit(

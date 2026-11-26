@@ -103,7 +103,7 @@ class FxConversionService
         $ref = $idempotencyKey ?: (string) Str::ulid();
 
         return DB::transaction(function () use (
-            $userId, $from, $to, $amount, $converted, $rate, $rateSource, $rateAt, $rateId, $ref
+            $userId, $from, $to, $amount, $converted, $rate, $rateSource, $rateAt, $rateId, $ref, $idempotencyKey
         ) {
             // **القفلُ بترتيبٍ ثابت** — محفظتان للمستخدم نفسِه، والترتيبُ
             // بالعملة أبجديّاً يمنع الجمودَ (deadlock) بين صرفين متعاكسين
@@ -112,6 +112,27 @@ class FxConversionService
             sort($order, SORT_STRING);
             foreach ($order as $c) {
                 $this->guard->lockWallet($userId, $c);
+            }
+
+            // فحص تكرار مفتاح idempotency تحت القفل قبل تحريك e_money؛
+            // وإلّا فإعادة المحاولة تحرّك المحفظتين مرّتين بينما يكتفي الدفتر بالقيد الأوّل.
+            if ($idempotencyKey !== null && trim($idempotencyKey) !== '') {
+                $existingOut = \App\Models\Ledger\LedgerJournalEntry::where('idempotency_key', "fx_out:{$ref}")
+                    ->lockForUpdate()
+                    ->first();
+                if ($existingOut) {
+                    $meta = (array) ($existingOut->metadata ?? []);
+
+                    return [
+                        'from' => $this->guard->lockWallet($userId, $from),
+                        'to' => $this->guard->lockWallet($userId, $to),
+                        'rate' => (string) ($meta['rate_to'] ?? $rate),
+                        'converted' => (string) ($meta['to_amount'] ?? $converted),
+                        'rate_source' => (string) ($meta['rate_source'] ?? $rateSource),
+                        'rate_at' => $meta['rate_at'] ?? $rateAt,
+                        'ref' => $ref,
+                    ];
+                }
             }
 
             $src = $this->guard->debit($userId, $amount, 'fx_convert_out', $from);

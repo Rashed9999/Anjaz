@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\SafePaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Tests\Concerns\StartsWithSafePaymentIntakeOpen;
 use Tests\TestCase;
 
 /**
@@ -22,6 +23,7 @@ use Tests\TestCase;
 class SafePaymentDisputeTest extends TestCase
 {
     use RefreshDatabase;
+    use StartsWithSafePaymentIntakeOpen;
 
     private SafePaymentService $service;
     private User $buyer;
@@ -31,6 +33,7 @@ class SafePaymentDisputeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->startWithSafePaymentIntakeOpen();
         Queue::fake();
         $this->service = app(SafePaymentService::class);
         config()->set('amial.safe_payment.fee_percent', '1.0');

@@ -25,6 +25,9 @@ class FeatureFlagMaintenanceTest extends TestCase
     {
         parent::setUp();
         $this->admin = User::factory()->create(['type' => 0, 'phone' => '967770009001']);
+        // Real maintenance requests must have explicit settings.update permission.
+        app(\App\Services\PlatformRoleService::class)->assign($this->admin, 'platform_admin');
+        $this->admin = $this->admin->fresh();
         $this->seed(\Database\Seeders\FeatureFlagsSeeder::class);
     }
 

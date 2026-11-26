@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\SafePaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Tests\Concerns\StartsWithSafePaymentIntakeOpen;
 use Tests\TestCase;
 
 /**
@@ -17,6 +18,7 @@ use Tests\TestCase;
 class SafePaymentFeeEngineTest extends TestCase
 {
     use RefreshDatabase;
+    use StartsWithSafePaymentIntakeOpen;
 
     private SafePaymentService $service;
     private User $buyer;
@@ -25,6 +27,7 @@ class SafePaymentFeeEngineTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->startWithSafePaymentIntakeOpen();
         Queue::fake();
         $this->service = app(SafePaymentService::class);
 

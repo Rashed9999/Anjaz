@@ -133,6 +133,8 @@ final class PlatformAccessTabs
                     'platform.aml.decide' => 'حسمُ بلاغ غسل الأموال',
                     'saher.scan.run' => 'تشغيل جولة فحصٍ يدويّة',
                     'saher.findings.suppress' => 'كتمُ اكتشافٍ أو الحكمُ عليه',
+                    'saher.autofix.quarantine' => 'احتواءُ مسار كتابةٍ خطير وإلغاء احتوائه',
+                    'saher.autofix.plan' => 'فتحُ طلب معالجةٍ موثّق لاكتشاف ساهر',
                 ]],
 
             'platform_services' => ['label' => 'خدمات المنصّة والنزاعات', 'icon' => '🧩',
@@ -154,6 +156,7 @@ final class PlatformAccessTabs
                     'platform.ops.retry' => 'إعادة تشغيل مهمّةٍ متعثّرة',
                     'platform.settings.manage' => 'إدارة الإعدادات',
                     'platform.settings.update' => 'تعديل الإعدادات',
+                    'platform.control.approve' => 'اعتماد تغيير تشغيلي حساس من موظف ثانٍ',
                     'platform.zones.assign' => 'إسناد منطقةٍ لحساب',
                     'platform.zones.override' => 'تجاوز المنطقة يدويّاً',
                     'platform.zones.policy.update' => 'تعديل سياسة المناطق',

@@ -89,9 +89,7 @@ class ReconciliationService
      */
     public function wallets(): array
     {
-        $count = (int) DB::table('e_money')->count();
-
-        $r = $this->reports->walletReconciliation(max($count, 1));
+        $r = $this->reports->walletReconciliation(null);
         // الحالة تُفتح أو تتصعّد هنا، في التشغيل الليلي الذي اكتشف الفرق؛
         // لا في GET للوحة، ولا في زر «تحديث»، كي لا تكون القراءة فعلاً مالياً.
         $this->cases->recordWalletResults($r['rows'] ?? []);
