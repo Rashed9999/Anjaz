@@ -1,26 +1,26 @@
 import 'dart:io';
 
+import 'package:amial_pay/helper/route_helper.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 
 /// لا يكفي أن يهبط المالك في بوابة الويب بعد الدخول؛ الروابط القديمة
 /// والمسارات القادمة من سجل القدرات يجب أن تقوده إليها أيضاً.
 void main() {
-  final routes = File('lib/helper/route_helper.dart');
   final capabilities =
       File('lib/features/entitlements/capability_screens.dart');
 
-  test('كل مسار إدارة مالك في التطبيق يحيل إلى بوابة المنشأة', () {
-    final source = routes.readAsStringSync();
-
-    expect(source, contains("WebPortalNoticeScreen(role: 'merchant')"));
-    for (final route in const [
-      'posDevices', 'operationsCenter', 'staff', 'branches', 'expenses',
-      'auditLog', 'backup', 'fuel', 'pharmacy', 'wholesale', 'apiKeys',
-      'corporate',
+  test('روابط التاجر ونقطة البيع غير مسجلة في تطبيق العميل', () {
+    final names = RouteHelper.routes.map((route) => route.name).toSet();
+    for (final path in [
+      RouteHelper.cashier, RouteHelper.quickSale, RouteHelper.posDevices,
+      RouteHelper.operationsCenter, RouteHelper.staff, RouteHelper.refunds,
+      RouteHelper.retail, RouteHelper.fuel, RouteHelper.pharmacy,
+      RouteHelper.wholesale, RouteHelper.apiKeys, RouteHelper.corporate,
     ]) {
-      expect(source, contains('GetPage(name: $route, page: _merchantPortal)'),
-          reason: 'المسار $route ما زال يفتح شاشة مالك داخل التطبيق.');
+      expect(names, isNot(contains(path)), reason: path);
     }
+    expect(names, containsAll([RouteHelper.sendMoney, RouteHelper.support]));
   });
 
   test('خريطة القدرات تبقي POS محدوداً وتحيل قدرات المالك للويب', () {

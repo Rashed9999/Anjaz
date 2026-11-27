@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Exceptions\FeatureHasFundsException;
+use App\Exceptions\FeatureBalanceUnknownException;
+use App\Models\FeatureFlag;
+use App\Services\ControlCenterService;
 use App\Http\Controllers\Controller;
 use App\Services\FeatureFlagService;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +20,7 @@ class MaintenanceController extends Controller
 {
     public function __construct(
         private readonly FeatureFlagService $features,
+        private readonly ControlCenterService $controls,
     ) {}
 
     /** GET /admin/maintenance — كل الميزات + حالتها + تراكمها المالي الحيّ. */
@@ -33,7 +37,10 @@ class MaintenanceController extends Controller
         if ($resp = $this->requireAdmin($request)) return $resp;
 
         try {
+            $this->denyLegacyHighRisk($key);
             $flag = $this->features->enable($request->user(), $key, $request->input('note'));
+        } catch (\DomainException $e) {
+            return $this->error($e->getMessage(), 'يستلزم هذا الإجراء موافقة مستقلة من مركز التحكم.', 409);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
             return $this->error('FEATURE_NOT_FOUND', 'الميزة غير موجودة', 404);
         }
@@ -47,7 +54,17 @@ class MaintenanceController extends Controller
         if ($resp = $this->requireAdmin($request)) return $resp;
 
         try {
+            // Keep the historical funds error for existing API clients, even when
+            // the governance approval will be required after funds reach zero.
+            $out = $this->features->outstandingBalance($key);
+            if ($out['count'] < 0) throw new FeatureBalanceUnknownException($key);
+            if (bccomp($out['amount'], '0', 4) > 0) throw new FeatureHasFundsException($key, $out['amount'], $out['count']);
+            $this->denyLegacyHighRisk($key);
             $flag = $this->features->disable($request->user(), $key, $request->input('note'));
+        } catch (FeatureBalanceUnknownException $e) {
+            return $this->error('BALANCE_UNKNOWN', $e->getMessage(), 409);
+        } catch (\DomainException $e) {
+            return $this->error($e->getMessage(), 'يستلزم هذا الإجراء موافقة مستقلة من مركز التحكم.', 409);
         } catch (FeatureHasFundsException $e) {
             // الحارس المالي منع الإيقاف
             return new JsonResponse([
@@ -68,6 +85,16 @@ class MaintenanceController extends Controller
         return $this->ok(['feature' => $flag], 'OK', "تم إيقاف «{$flag->name_ar}» للصيانة");
     }
 
+    // Old web/API maintenance endpoints must not bypass maker-checker on
+    // financial, merchant or core features. Use Control Center for those.
+    private function denyLegacyHighRisk(string $key): void
+    {
+        $flag = FeatureFlag::where('key', $key)->firstOrFail();
+        if ($this->controls->needsApproval($flag)) {
+            throw new \DomainException('CONTROL_CENTER_APPROVAL_REQUIRED');
+        }
+    }
+
     // ================= Helpers =================
 
     private function requireAdmin(Request $request): ?JsonResponse
@@ -75,6 +102,7 @@ class MaintenanceController extends Controller
         $user = $request->user();
         $isAdmin = $user && ((int) ($user->type ?? -1) === 0
             || in_array($user->role ?? null, ['admin', 'super_admin'], true));
+        $isAdmin = $isAdmin && $user->hasPlatformPermission('platform.settings.update');
 
         return $isAdmin ? null : $this->error('FORBIDDEN', 'صلاحية إدارية مطلوبة', 403);
     }

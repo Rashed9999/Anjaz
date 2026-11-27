@@ -292,13 +292,12 @@ class AdminDefinedVerticalGuardTest extends TestCase
      * صفحةٌ لا يُوصل إليها ليست مبنيّة.
      */
     /** @test */
-    public function the_admin_page_is_reachable_from_the_sidebar(): void
+    public function the_admin_page_is_hidden_from_the_sidebar(): void
     {
         $sidebar = file_get_contents(
             resource_path('views/admin-views/amial/partials/_sidebar.blade.php'));
 
-        $this->assertStringContainsString("route('admin.amial.verticals.page')", $sidebar,
-            'مركزُ القطاعات مبنيٌّ ولا رابطَ إليه من أيّ مكان');
+        $this->assertStringNotContainsString("route('admin.amial.verticals.page')", $sidebar);
 
         $this->assertTrue(
             \Illuminate\Support\Facades\Route::has('admin.amial.verticals.page'),

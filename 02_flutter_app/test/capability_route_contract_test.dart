@@ -2,12 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// AMIAL-ENTITLEMENTS-ROUTES-001
-///
-/// The capability manifest is produced by Laravel, while navigation is owned
-/// by Flutter. Neither compiler can see the other project, so this source
-/// contract prevents the expensive failure where a merchant is told a service
-/// is available and only learns at tap-time that its screen has no route.
+/// Merchant records and capabilities survive the phase-one freeze.
+/// Only the shared reports route belongs in the customer app.
 void main() {
   final registry = File(
       '../01_backend/app/Support/Access/CapabilityRegistry.php');
@@ -27,7 +23,7 @@ void main() {
         m.group(1)!: m.group(2)!,
     };
 
-    return RegExp(r'GetPage\(name: (\w+)')
+    return RegExp(r'^\s*GetPage\(name: (\w+)', multiLine: true)
         .allMatches(src)
         .map((m) => constants[m.group(1)!])
         .whereType<String>()
@@ -41,18 +37,9 @@ void main() {
         reason: 'سجل مسارات التطبيق غير موجود: ${routeHelper.path}');
   });
 
-  test('كل خدمة معلنة ذات شاشة تسجل مساراً قابلاً للتنقل', () {
-    final backend = backendCapabilityScreens();
-    final mobile = registeredCapabilityRoutes();
-
-    expect(backend, isNotEmpty,
-        reason: 'لم يُستخرج أي مسار من CapabilityRegistry؛ تغيّرت الصياغة');
-
-    final missing = backend.difference(mobile).toList()..sort();
-    expect(missing, isEmpty,
-        reason: 'خدمات يعلنها الخادم بلا شاشة Flutter مسجلة:\n'
-            '${missing.join('\n')}\n\n'
-            'أضف GetPage حقيقياً أو أزل screen من القدرة حتى لا تعد الواجهة '
-            'بخدمة لا يستطيع العميل فتحها.');
+  test('merchant-only screens are absent from customer navigation', () {
+    final merchant = backendCapabilityScreens();
+    expect(merchant, containsAll(['/products', '/cashier']));
+    expect(merchant.intersection(registeredCapabilityRoutes()), {'/reports'});
   });
 }

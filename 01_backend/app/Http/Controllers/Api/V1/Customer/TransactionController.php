@@ -729,44 +729,45 @@ class TransactionController extends Controller
         $breakdown = app(\App\Services\FeeService::class)
             ->calculate('WITHDRAW', $amount, ['applies_to' => 'customer']);
 
-        $charge = $breakdown['fee'];
+        $charge = \App\Services\MoneyService::normalize($breakdown['fee']);
         $totalAmount = \App\Services\MoneyService::add($amount, $charge);
 
-        // قفل المحفظة داخل المعاملة الذرية + حساب عشري صارم يمنع سباق السحب المزدوج وتلوث float
-        try {
-            DB::transaction(function () use ($request, $amount, $charge, $totalAmount, $values) {
-                $userEmoney = $this->eMoney->where('user_id', $request->user()->id)->lockForUpdate()->first();
-                if (!$userEmoney || !\App\Services\MoneyService::gte((string) $userEmoney->current_balance, $totalAmount)) {
-                    throw new \App\Exceptions\InsufficientBalanceException(
-                        userId: $request->user()->id,
-                        required: $totalAmount,
-                        available: (string) ($userEmoney?->current_balance ?? '0.0000'),
-                    );
-                }
+        $insufficientBalance = false;
+        DB::transaction(function () use ($request, $amount, $charge, $totalAmount, $values, &$insufficientBalance) {
+            $userEmoney = $this->eMoney
+                ->where('user_id', $request->user()->id)
+                ->lockForUpdate()
+                ->first();
 
-                $userEmoney->current_balance = \App\Services\MoneyService::sub((string) $userEmoney->current_balance, $totalAmount);
-                $userEmoney->pending_balance = \App\Services\MoneyService::add((string) $userEmoney->pending_balance, $totalAmount);
-                $userEmoney->save();
+            if (! $userEmoney || ! \App\Services\MoneyService::gte((string) $userEmoney->current_balance, $totalAmount)) {
+                $insufficientBalance = true;
+                return;
+            }
 
-                $withdrawRequest = new WithdrawRequest();
-                $withdrawRequest->user_id = $request->user()->id;
-                $withdrawRequest->amount = $amount;
-                $withdrawRequest->admin_charge = $charge;
-                $withdrawRequest->request_status = 'pending';
-                $withdrawRequest->is_paid = 0;
-                $withdrawRequest->sender_note = $request->sender_note;
-                $withdrawRequest->withdrawal_method_id = $request->withdrawal_method_id;
-                $withdrawRequest->withdrawal_method_fields = $values;
-                $withdrawRequest->save();
+            $withdrawRequest = new \App\Models\WithdrawRequest();
+            $withdrawRequest->user_id = $request->user()->id;
+            $withdrawRequest->amount = $amount;
+            $withdrawRequest->admin_charge = $charge;
+            $withdrawRequest->request_status = 'pending';
+            $withdrawRequest->is_paid = 0;
+            $withdrawRequest->sender_note = $request->sender_note;
+            $withdrawRequest->withdrawal_method_id = $request->withdrawal_method_id;
+            $withdrawRequest->withdrawal_method_fields = $values;
+            $withdrawRequest->save();
 
-                // AMIAL-LEDGER-WITHDRAW-001: حجز المبلغ في الدفتر.
-                $this->ledgerWithdrawRequested(
-                    userId: $userEmoney->user_id,
-                    total: $totalAmount,
-                    sourceId: (string) $withdrawRequest->id,
-                );
-            }, 3);
-        } catch (\App\Exceptions\InsufficientBalanceException) {
+            $userEmoney->current_balance = \App\Services\MoneyService::sub((string) $userEmoney->current_balance, $totalAmount);
+            $userEmoney->pending_balance = \App\Services\MoneyService::add((string) $userEmoney->pending_balance, $totalAmount);
+            $userEmoney->save();
+
+            // AMIAL-LEDGER-WITHDRAW-001: حجز المبلغ في الدفتر داخل المعاملة القافلة نفسها.
+            $this->ledgerWithdrawRequested(
+                userId: (int) $userEmoney->user_id,
+                total: $totalAmount,
+                sourceId: (string) $withdrawRequest->id,
+            );
+        });
+
+        if ($insufficientBalance) {
             return response()->json(['message' => translate('رصيدك غير كافٍ')], 403);
         }
 

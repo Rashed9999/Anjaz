@@ -42,7 +42,7 @@ final class MuwathaqOperationsController extends Controller
                 $join->on('latest_opening.user_id', '=', 'user.id');
             })
             ->leftJoin('muwathaq_account_opening_applications as opening', 'opening.id', '=', 'latest_opening.id')
-            ->whereIn('user.type', [1, 2, 3])
+            ->whereIn('user.type', [1, 2])
             ->select([
                 'opening.application_ulid',
                 'opening.subject_kind',

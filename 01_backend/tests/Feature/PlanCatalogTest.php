@@ -19,6 +19,7 @@ use Tests\TestCase;
 /** AMIAL-PLAN-CATALOG-001 — الباقات تُدار من اللوحة: اسم · سعر · ميزات · حدود · مدد بخصم. */
 class PlanCatalogTest extends TestCase
 {
+    use \Tests\Concerns\ExercisesArchivedMerchantAdmin;
     use RefreshDatabase;
 
     private User $admin;

@@ -52,7 +52,6 @@
                 // شركة الصرافة تدخل من كمبيوترها بهاتف الحساب وكلمة سرّه، وهذا
                 // الرابط هو ما يُريه المدير العنوان ليمرّره لها.
                 ['🏦 بوّابة الوكيل (شركات الصرافة)', route('agent.login'), null, '_blank'],
-                ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), 'platform.customers.view'],
                 ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.view'],
             ],
         ],
@@ -64,24 +63,12 @@
                 ['📚 مركز الدفتر (ميزان المراجعة)', route('admin.amial.ledger.page'), 'platform.audit.view'],
                 // AMIAL-FUEL-VERTICAL-001 — القاعدة ١٢: المسار المسجّل ليس
                 // ظهوراً؛ لا بدّ من رابطٍ يمرّ به المستعمل.
-                                                ['🎚️ الباقات والقدرات (ماذا تفتح كل باقة)', route('admin.amial.entitlements.page'), 'platform.settings.manage'],
-                ['🏗️ قطاعات التجّار (تكوين بلا نشرة)', route('admin.amial.verticals.page'), 'platform.settings.manage'],
                 ['📊 كشف المعاملات (فلاتر + تصدير)', route('admin.transaction.index'), 'platform.transactions.view'],
                 ['🧾 تسويات الوكلاء', route('admin.amial.hub.settlements'), 'platform.money.view'],
                 ['🤝 تسويات الشركاء (الموافقة المزدوجة)', route('admin.amial.partner-settlements.page'), 'platform.money.view'],
                 ['🏦 رصيد المنصّة (إنشاء/شحن)', route('admin.emoney.index'), 'platform.money.move'],
                 ['💸 مصاريف المنصّة', route('admin.expense.index'), 'platform.money.view'],
                 ['📈 إدارة الرسوم', route('admin.amial.fees.index'), 'platform.fees.view'],
-            ],
-        ],
-        [
-            'title' => 'رقابة عمل التجّار',
-            'icon' => '🏪',
-            'match' => ['admin/amial/hub/staff*', 'admin/amial/fuel*', 'admin/amial/retail*'],
-            'links' => [
-                ['👔 موظفو التجّار ونقاط البيع', route('admin.amial.hub.staff'), 'platform.staff.view'],
-                ['⛽ رقابة محطات الوقود', route('admin.amial.fuel.page'), 'platform.audit.view'],
-                ['🏪 رقابة التجزئة', route('admin.amial.retail.page'), 'platform.audit.view'],
             ],
         ],
         [
@@ -120,10 +107,6 @@
             'match' => ['admin/support-center*', 'admin/amial/surface*', 'admin/amial/charity*', 'admin/amial/hub/subscriptions*', 'admin/amial/hub/plans*', 'admin/amial/hub/disputes*', 'admin/amial/hub/staff*', 'admin/amial/invoices*', 'admin/amial/catalog*'],
             'links' => [
                 ['🎧 مركز الدعم (بحث شامل + الأجهزة)', route('admin.support-center.index'), null],
-                ['🧾 فواتير التجّار ومدفوعاتها', route('admin.amial.invoices.page'), 'platform.money.view'],
-                ['📦 كتالوج المنتجات (الباركود)', route('admin.amial.catalog.page'), 'platform.settings.update'],
-                ['💎 لوحة الاشتراكات', route('admin.amial.hub.subscriptions'), 'platform.settings.manage'],
-                ['🧩 كتالوج الباقات والميزات', route('admin.amial.hub.plans'), 'platform.settings.manage'],
                 ['⚖️ لوحة النزاعات (دفع آمن)', route('admin.amial.hub.disputes'), 'platform.transactions.view'],
                 ['📝 بلاغات العملاء والنزاعات', route('admin.disputes.index'), 'platform.transactions.view'],
                 ['🎗️ لوحة التبرعات (الجمعيات)', route('admin.amial.charity.page'), null],
@@ -146,10 +129,11 @@
         [
             'title' => 'الإعدادات والتشغيل',
             'icon' => '⚙️',
-            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*', 'admin/amial/hub/limits*', 'admin/amial/2fa*', 'admin/amial/system/*', 'admin/withdraw*'],
+            'match' => ['admin/amial/control-center*', 'admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*', 'admin/amial/hub/limits*', 'admin/amial/2fa*', 'admin/amial/system/*', 'admin/withdraw*'],
             'links' => [
                 ['🏢 إعدادات الأعمال (عام/رسوم/حدود)', route('admin.business-settings.business-setup'), null],
-                ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), 'platform.settings.manage'],
+                ['🎛️ مركز التحكم في أميال', route('admin.amial.control-center.home'), 'platform.settings.manage'],
+                ['⚙️ مفاتيح سريعة (الإعدادات القديمة)', route('admin.amial.hub.settings'), 'platform.settings.manage'],
                 ['📏 مركز الحدود المالية', route('admin.amial.hub.limits.index'), 'platform.customers.view'],
                 ['💬 حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.settings.update'],
                 // لوحتا المناطق: كلتاهما تُعيد تعيين المنطقة. تُجمعان هنا

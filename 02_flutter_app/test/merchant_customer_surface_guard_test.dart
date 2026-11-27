@@ -69,9 +69,8 @@ void main() {
         reason: 'المُرسِلُ لا يفرّق موظّفَ نقطة البيع — فيسقط إلى '
             '`userHomeFallback`، وهي لوحةُ المالك.');
 
-    expect(dispatcher, contains('return const PosEmployeeHomeScreen();'),
-        reason: 'وجهةُ الكاشير ليست شاشتَه — وشاشةٌ تمرّر إلى البيع '
-            'مباشرةً تحرمه إقفالَ ورديّته.');
+    expect(dispatcher, isNot(contains('return const PosEmployeeHomeScreen();')));
+    expect(dispatcher, contains("return const WebPortalNoticeScreen(role: 'merchant');"));
 
     // وسيرُ البيع يتبع صنفَ نشاط صاحبه — والكاشيرُ يرثه.
     expect(pos, contains('FuelSaleScreen'));

@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\KycDocument;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
 use App\Models\MerchantVerificationRequest;
@@ -11,33 +10,12 @@ use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
-/**
- * AMIAL-MERCHANT-VERIFY-ADMIN-001 — **التاجرُ يقدّم، ولم يكن أحدٌ يعتمد.**
- *
- * ══════════════════════════════════════════════════════════════════════
- * **ما قِيس، ولم يُفترَض:**
- *
- *     MerchantVerificationController::adminApprove             ← مبنيّة
- *     MerchantVerificationController::adminReject              ← مبنيّة
- *     MerchantVerificationController::adminRequestResubmission ← مبنيّة
- *
- *     grep 'MerchantVerification' routes/ →  ثلاثةُ مساراتٍ للتاجر
- *                                            **وصفرٌ للإدارة**
- *
- * فالتاجرُ يرفع سجلَّه التجاريَّ وصورةَ متجره وحسابَه البنكيَّ، ويُقال
- * له «قيد المراجعة» — **ولا شاشةَ تعرض طلبَه ولا مسارَ يعتمده**. فيبقى
- * عالقاً بلا نهاية، ولا خطأ في أيّ سجلّ. (القاعدة الثانية عشرة: مبنيٌّ
- * ولا يُوصَل إليه — ووقع هنا على **ثلاث نقاطٍ دفعةً واحدة**.)
- *
- * وستُّ حالات، **وأخطرُها ⑤**: وثيقةٌ شخصيّةٌ تُخدَم بلا صلاحيّة.
- */
+/** The customer phase preserves merchant records while closing reviewer access. */
 class MerchantVerificationAdminGuardTest extends TestCase
 {
     use RefreshDatabase;
-    use EstablishesKycEvidence;
 
     private function admin(array $permissions): User
     {
@@ -126,157 +104,39 @@ class MerchantVerificationAdminGuardTest extends TestCase
     }
 
     /** @test */
-    public function the_queue_shows_the_request_with_its_documents(): void
+    public function frozen_merchant_files_are_hidden_even_from_platform_reviewers(): void
     {
         $merchant = $this->merchant();
-        $req = $this->request($merchant);
+        $request = $this->request($merchant);
 
-        $json = $this->actingAs($this->admin([]), 'user')
-            ->getJson(route('admin.amial.merchants.verification.list'))
-            ->assertOk()->json();
+        $admin = $this->admin([]);
+        $this->actingAs($admin, 'user')
+            ->getJson(route('admin.amial.kyc.center.account', $merchant->id))->assertNotFound();
 
-        $row = collect($json['data'])->firstWhere('id', $req->id);
+        foreach (['hub.merchants', 'hub.staff', 'hub.subscriptions', 'entitlements.page', 'verticals.page',
+                  'retail.page', 'fuel.page', 'catalog.page', 'invoices.page'] as $name) {
+            $this->get(route('admin.amial.'.$name))->assertNotFound();
+        }
+        $this->postJson(route('admin.amial.merchant-center.freeze', $merchant->id), [
+            'reason' => 'اختبار تجميد واجهات التجار',
+        ])->assertNotFound();
+        $this->assertSame((int) $merchant->is_active, (int) $merchant->fresh()->is_active);
 
-        $this->assertNotNull($row, 'الطلبُ لا يظهر في الطابور إطلاقاً');
-        $this->assertSame('متجر النور للتجزئة', $row['business_name']);
-        $this->assertSame('بانتظار المراجعة', $row['status_label']);
+        foreach ([$admin, $this->stranger()] as $actor) {
+            $this->actingAs($actor, 'user');
+            $this->getJson(route('admin.amial.merchants.verification.list'))->assertNotFound();
+            $this->get(route('admin.amial.merchants.verification.document', [
+                'id' => $request->id, 'type' => 'commercial_register',
+            ]))->assertNotFound();
+            foreach (['approve', 'reject', 'resubmit'] as $action) {
+                $this->postJson(route('admin.amial.merchants.verification.'.$action, $request->id), [
+                    'reason' => 'طلب مراجعة سجل تجاري',
+                ])->assertNotFound();
+            }
+        }
 
-        // **والمرفوعُ وغيرُ المرفوعِ يُقالان** — قائمةٌ تعرض المرفوعَ
-        // وحدَه تُقرأ «هذا كلُّ ما طُلب».
-        $this->assertCount(7, $row['documents']);
-        $this->assertContains(false, array_column($row['documents'], 'uploaded'),
-            'لا يُقال أيُّ الوثائق لم تُرفَع');
-    }
-
-    /** @test */
-    public function a_merchant_without_a_business_file_is_explicitly_marked_not_submitted(): void
-    {
-        $merchant = $this->merchant();
-
-        // التسجيل ينشئ حساب التاجر وملفه، لكنه لا يساوي «طلب توثيق
-        // منشأة». إخفاء البطاقة كلّها يجعل المراجع يبحث عن زر اعتماد لا
-        // يمكن أن يظهر، بينما المطلوب من التاجر هو إرسال الملف أولاً.
-        $body = $this->actingAs($this->admin([]), 'user')
-            ->getJson(route('admin.amial.kyc.center.account', $merchant->id))
-            ->assertOk()->json('data');
-
-        $this->assertSame('not_submitted', $body['merchant_verification']['status']);
-        $this->assertFalse($body['merchant_verification']['can_decide']);
-    }
-
-    /** @test */
-    public function the_screen_says_the_owner_identity_is_still_unverified(): void
-    {
-        $merchant = $this->merchant();
-        $req = $this->request($merchant);
-
-        $row = collect($this->actingAs($this->admin([]), 'user')
-            ->getJson(route('admin.amial.merchants.verification.list'))
-            ->assertOk()->json('data'))->firstWhere('id', $req->id);
-
-        $this->assertFalse($row['identity']['verified'],
-            'يُقال إنّ هويّة صاحب المتجر موثّقةٌ وهي ليست كذلك');
-        $this->assertNotEmpty($row['identity']['missing'],
-            'لا يُقال ما ينقص هويّةَ صاحب المتجر — فيعتمد المراجعُ ظانّاً '
-            .'أنّه فتح سقفَ المال، وهو لم يفتحه');
-    }
-
-    /** @test */
-    public function approving_the_business_says_the_money_lock_did_not_lift(): void
-    {
-        $merchant = $this->merchant();
-        $req = $this->request($merchant);
-
-        $body = $this->actingAs($this->admin([]), 'user')
-            ->postJson(route('admin.amial.merchants.verification.approve', $req->id))
-            ->assertOk()->json();
-
-        $this->assertSame('verified', $req->fresh()->status);
-
-        // **وتوثيقُ النشاط لا يوثّق الشخص** — والردُّ يقولها.
-        $this->assertFalse($body['identity']['verified'],
-            'قيل إنّ الهويّةَ وُثِّقت باعتماد النشاط — وسجلُّ المتجر لا '
-            .'يثبت هويّةَ صاحبه');
+        $this->assertSame('pending_review', $request->fresh()->status);
+        $this->assertSame('merchant_verifications/test/commercial-register.jpg', $request->fresh()->commercial_register_path);
         $this->assertSame(0, (int) $merchant->fresh()->is_kyc_verified);
-    }
-
-    /** @test */
-    public function an_incomplete_business_file_cannot_be_approved_even_if_it_was_created_outside_submission(): void
-    {
-        $merchant = $this->merchant();
-        $req = $this->request($merchant);
-        $req->update(['store_photo_path' => null]);
-
-        $this->actingAs($this->admin([]), 'user')
-            ->postJson(route('admin.amial.merchants.verification.approve', $req->id))
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'يلزم استكمال: صورة نقطة البيع');
-
-        $this->assertSame('pending_review', $req->fresh()->status);
-    }
-
-    /** @test */
-    public function a_complete_identity_does_not_let_legacy_business_approval_decide_personal_identity(): void
-    {
-        $merchant = $this->merchant();
-        $admin = $this->admin([]);
-
-        // «مكتمل» هنا يعني المستندات + إثبات أن صاحب الحساب هو صاحب الهوية،
-        // لا مجرد ثلاث صور معتمدة.
-        $this->establishKycEvidence($merchant, 2, $admin);
-        $req = $this->request($merchant);
-
-        $this->actingAs($admin, 'user')
-            ->postJson(route('admin.amial.merchants.verification.approve', $req->id))
-            ->assertOk();
-
-        $this->assertSame(0, (int) $merchant->fresh()->is_kyc_verified,
-            'اعتماد ملف المنشأة القديم لا يجوز أن يقرر هوية صاحبها؛ قرار الهوية يمر عبر موثّق.');
-    }
-
-    /** @test */
-    public function a_rejection_without_a_reason_is_refused(): void
-    {
-        $req = $this->request($this->merchant());
-        $admin = $this->admin([]);
-
-        // ③ «مرفوض» بلا سبب تُنتج تذكرةَ دعمٍ لا إجراءً، والتاجرُ يعيد
-        // الرفعَ نفسَه فيُرفض ثانية.
-        $this->actingAs($admin, 'user')
-            ->postJson(route('admin.amial.merchants.verification.reject', $req->id), ['reason' => 'لا'])
-            ->assertStatus(422);
-
-        $this->assertSame('pending_review', $req->fresh()->status,
-            'رُفض الطلبُ رغم رفض السبب');
-
-        $this->actingAs($admin, 'user')
-            ->postJson(route('admin.amial.merchants.verification.reject', $req->id),
-                ['reason' => 'السجلّ التجاريّ غير واضح في الصورة'])
-            ->assertOk();
-
-        $this->assertSame('rejected', $req->fresh()->status);
-    }
-
-    /** @test */
-    public function a_stranger_can_neither_read_the_queue_nor_open_a_document(): void
-    {
-        // ⑤ **وثيقةٌ شخصيّةٌ تُخدَم بلا صلاحيّة** — أخطرُ ما في الشاشة.
-        $req = $this->request($this->merchant());
-        $stranger = $this->stranger();
-
-        $this->actingAs($stranger, 'user')
-            ->get(route('admin.amial.merchants.verification.list'))
-            ->assertForbidden();
-
-        $this->actingAs($stranger, 'user')
-            ->get(route('admin.amial.merchants.verification.document',
-                ['id' => $req->id, 'type' => 'commercial_register']))
-            ->assertForbidden();
-
-        // **والقرارُ خلف صلاحيّةٍ أضيقَ من القراءة** — الفصلُ بينهما هو
-        // ما يمنع موظّفَ مراجعةٍ من أن يقرّر وحدَه.
-        $this->actingAs($stranger, 'user')
-            ->postJson(route('admin.amial.merchants.verification.approve', $req->id))
-            ->assertForbidden();
     }
 }

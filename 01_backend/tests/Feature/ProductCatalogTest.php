@@ -35,6 +35,7 @@ use Tests\TestCase;
  */
 class ProductCatalogTest extends TestCase
 {
+    use \Tests\Concerns\ExercisesArchivedMerchantAdmin;
     use RefreshDatabase;
 
     private function svc(): ProductCatalogService
@@ -332,13 +333,12 @@ class ProductCatalogTest extends TestCase
      *
      * **ويُوصل إليها من القائمة الجانبيّة.**
      */
-    public function the_admin_screen_is_reachable_from_the_sidebar(): void
+    public function the_admin_screen_is_hidden_from_the_sidebar(): void
     {
         $html = $this->actingAs($this->admin(), 'user')
             ->get(route('admin.amial.workspace.index'))->assertOk()->getContent();
 
-        $this->assertStringContainsString('/admin/amial/catalog', $html,
-            'لا رابطَ إلى مركز الكتالوج من أيّ صفحةٍ يمرّ بها المدير');
+        $this->assertStringNotContainsString('/admin/amial/catalog', $html);
     }
 
     /**

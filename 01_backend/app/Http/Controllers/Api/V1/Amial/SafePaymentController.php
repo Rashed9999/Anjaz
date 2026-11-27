@@ -147,6 +147,16 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
             );
         } catch (\App\Exceptions\InsufficientBalanceException $e) {
             return new JsonResponse($e->toApiArray(), 402);
+        } catch (\DomainException $e) {
+            // The policy can change after the HTTP guard and before funding.
+            if ($e->getMessage() === 'FEATURE_INTAKE_PAUSED') {
+                return $this->error(
+                    'FEATURE_INTAKE_PAUSED',
+                    'استقبال دفعات آمنة جديدة معلّق مؤقتًا؛ تستمر معالجة الدفعات القائمة.',
+                    503
+                );
+            }
+            throw $e;
         } catch (\RuntimeException $e) {
             return $this->error('CREATE_FAILED', $e->getMessage(), 422);
         }

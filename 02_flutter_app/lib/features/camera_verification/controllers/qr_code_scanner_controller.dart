@@ -75,7 +75,7 @@ class QrCodeScannerController extends GetxController implements GetxService{
         // ===== رمز لا نعرفه =====
         // باركود منتج، رمز موقع، رمز تطبيق آخر. كان يُهمَل بصمت فيظنّ
         // المستخدم أن الكاميرا لم تلتقطه بعدُ ويظلّ يوجّهها. القول أرحم.
-        if (payload.kind == AmialQrKind.unknown) {
+        if (payload.kind == AmialQrKind.unknown || payload.kind == AmialQrKind.merchant) {
           if (_isDetect) return;
           _isDetect = true;
           showCustomSnackBarHelper('هذا الرمز ليس رمز دفع في أميال باي');

@@ -171,6 +171,12 @@ class FindingStore
             $this->replaceEvidence((int) $existing->id, $finding, $now);
 
             if ($reopened) {
+                // Reappearance invalidates any previous "not detected" repair assessment.
+                if (\Illuminate\Support\Facades\Schema::hasTable('saher_remediation_cases')) {
+                    DB::table('saher_remediation_cases')->where('finding_id', $existing->id)
+                        ->where('status', 'SCAN_NOT_DETECTED')
+                        ->update(['status' => 'REOPENED', 'updated_at' => $now]);
+                }
                 $counts['reopened']++;
                 $this->event((int) $existing->id, 'REOPENED', $existing->status, 'REOPENED',
                     $rulingStale
@@ -196,6 +202,14 @@ class FindingStore
 
             $this->event((int) $row->id, 'RESOLVED_BY_SCAN', $row->status, 'RESOLVED',
                 "لم تعد جولةُ الفحص #{$runId} تجد السبب", $now);
+
+            // This is evidence of absence in a completed scan, NOT a human fix
+            // approval, PR merge, or proof of what is deployed.
+            if (\Illuminate\Support\Facades\Schema::hasTable('saher_remediation_cases')) {
+                DB::table('saher_remediation_cases')->where('finding_id', $row->id)
+                    ->whereIn('status', ['OPEN', 'REOPENED'])
+                    ->update(['status' => 'SCAN_NOT_DETECTED', 'updated_at' => $now]);
+            }
 
             $counts['resolved']++;
         }

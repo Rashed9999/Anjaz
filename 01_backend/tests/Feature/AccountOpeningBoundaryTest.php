@@ -49,7 +49,6 @@ class AccountOpeningBoundaryTest extends TestCase
 
         foreach ([
             ['customers', 'customer', '/open-account?type=customer'],
-            ['merchants', 'merchant', '/open-account?type=merchant'],
             ['agents', 'agent', '/accounts/new-agent'],
         ] as [$slug, $subject, $path]) {
             $this->actingAs($operator, 'user')
@@ -59,6 +58,7 @@ class AccountOpeningBoundaryTest extends TestCase
                 ->assertJsonPath('muwathaq_url', 'https://muwathaq.example.test'.$path);
         }
 
+        $this->actingAs($operator, 'user')->postJson('/admin/amial/hub/merchants/users')->assertNotFound();
         $this->assertSame(1, User::query()->count());
     }
 }

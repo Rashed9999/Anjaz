@@ -65,7 +65,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
                 ->group(base_path('routes/api/amial.php'));
 
             // AMIAL-ADMIN-001 (v0.8): Admin Blade views
-            \Illuminate\Support\Facades\Route::middleware(['web', 'admin', 'amial.force-pin-change'])
+            \Illuminate\Support\Facades\Route::middleware(['web', 'admin', \App\Http\Middleware\BlockFrozenMerchantAdminRoutes::class, 'amial.force-pin-change'])
                 ->prefix('admin/amial')
                 ->name('admin.amial.')
                 ->group(base_path('routes/admin/amial.php'));

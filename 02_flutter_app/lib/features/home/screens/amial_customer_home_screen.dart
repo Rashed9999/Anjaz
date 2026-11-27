@@ -20,7 +20,6 @@ import 'package:amial_pay/features/me/screens/my_services_screen.dart';
 import 'package:amial_pay/features/transaction_money/controllers/contact_controller.dart';
 import 'package:amial_pay/features/transaction_money/screens/amial_send_money_screen.dart';
 import 'package:amial_pay/features/reports/screens/amial_reports_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_pay_screen.dart';
 import 'package:amial_pay/common/widgets/amial_pattern_background.dart';
 
 /// AMIAL-CUSTOMER-HOME-002 — الرئيسية بتصميم «المحفظة».
@@ -872,8 +871,6 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       _Svc('استلام', Icons.qr_code_2_rounded, _openReceiveQr),
       _Svc('طلب المال', Icons.request_page_outlined,
           () => Get.to(() => const PaymentRequestCreateScreen())),
-      _Svc('ادفع لتاجر', Icons.storefront_outlined,
-          () => Get.to(() => const MerchantPayScreen())),
       _Svc('الخدمات', Icons.apps_rounded,
           () => Get.to(() => const CustomerServicesHubScreen())),
       _Svc('سحب نقدي', Icons.account_balance_outlined,

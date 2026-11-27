@@ -1180,7 +1180,7 @@ trait TransactionTrait
             $this->ledgerTransferWithFee(
                 fromUserId: $customer_user_id,
                 toUserId: $merchant_user_id,
-                grossAmount: $amount,
+                grossAmount: $customerDebit,
                 feeAmount: $fee,
                 sourceType: 'merchant_payment',
                 sourceId: $primaryId,
@@ -1198,11 +1198,8 @@ trait TransactionTrait
                 'receipt_type' => $receiptType,
                 'amount' => $amount,
                 'fee' => $fee,
-                // رسمُ دفع التاجر يُخصم من التاجر لا العميل. كان غياب هذا
-                // التصريح يجعل إيصال العميل يدّعي أنه دفع amount + fee،
-                // مع أن محفظته خُصمت amount فقط، ويجعل فاتورة البيع تخالف
-                // القيد. المستلم هنا هو التاجر، فهو حامل الرسم.
-                'fee_bearer' => 'receiver',
+                // المتحمّل يُقرأ من نسخة الرسوم نفسها كما حُسبت بها الحركة والقيد.
+                'fee_bearer' => (string) ($breakdown['bearer'] ?? 'receiver'),
                 'zone_code' => 'SOUTH',
             ]);
 

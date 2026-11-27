@@ -160,12 +160,14 @@ class OperatorWorkspaceGuardTest extends TestCase
         // الجانبيّ — فطيُّ خدمةٍ منها يقطع بابَها.
         foreach ([
             'admin.amial.ledger.page', 'admin.amial.aml.page',
-            'admin.amial.hub.merchants', 'admin.amial.hub.agents', 'admin.amial.audit.index',
+            'admin.amial.hub.agents', 'admin.amial.audit.index',
             'admin.amial.ops.roles.index', 'admin.amial.system.health',
         ] as $route) {
             $this->assertStringContainsString($route, $src,
                 "بابُ «{$route}» سقط من مساحة العمل");
         }
+
+        $this->assertStringNotContainsString('admin.amial.hub.merchants', $src);
 
         // KYC العميل انتقل عمداً إلى مركز العملاء حتى لا يبقى باباً مكرراً.
         $customerCenter = (string) file_get_contents(

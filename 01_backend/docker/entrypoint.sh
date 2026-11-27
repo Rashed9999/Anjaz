@@ -18,11 +18,9 @@ case "${APP_ENV:-production}" in
         ;;
     *)
         PILOT_CUSTOMER_PHONE_OTP_ENABLED="${AMIAL_PILOT_CUSTOMER_PHONE_OTP_ENABLED:-false}"
-        if { [ -n "${AMIAL_DEMO_OTP:-}" ] || [ "$PILOT_CUSTOMER_PHONE_OTP_ENABLED" = "true" ]; } \
-           && [ "${AMIAL_ALLOW_DEMO_OTP:-false}" != "true" ]; then
+        if [ -n "${AMIAL_DEMO_OTP:-}" ] || [ "$PILOT_CUSTOMER_PHONE_OTP_ENABLED" = "true" ]; then
             echo "❌ مانع إطلاق: OTP التجريبي مفعّل على خادم غير تجريبي."
-            echo "   لاختبار الحسابات التجريبية المصرح بها فقط اضبط:"
-            echo "   AMIAL_ALLOW_DEMO_OTP=true"
+            echo "   لا يوجد تجاوز للحارس في الإنتاج؛ ألغِ AMIAL_DEMO_OTP ووضع Pilot."
             echo "   وللإطلاق الحقيقي أفرغ AMIAL_DEMO_OTP وعطّل وضع Pilot."
             exit 1
         fi
@@ -252,6 +250,14 @@ if [ -n "$DB_HOST" ] && [ "${RESET_DB_FORCE:-false}" != "true" ] && [ "${RESET_D
         sleep 4
     done
     echo "✓ بنية قاعدة البيانات جاهزة قبل استقبال الطلبات."
+
+    # AMIAL-LEDGER-OPENING-002 (تكافؤ مع entrypoint.prod.sh): إدخال المحافظ
+    # القائمة التي بلا تاريخ دفتري في دفتر الأستاذ قبل استقبال أي حركة مالية.
+    # آمن للتكرار (idempotent) ولا يمسّ محافظ ذات تاريخ دفتري قائم.
+    echo "📒 إدخال المحافظ القائمة في دفتر الأستاذ..."
+    php artisan amial:ledger-backfill 2>&1 || {
+        echo "⚠️  فشل ترحيل الدفتر — راجع السجلّ أو شغّل يدوياً: php artisan amial:ledger-backfill"
+    }
 fi
 
 # ── تهيئة قاعدة البيانات في الخلفية (لا تُؤخّر بدء nginx) ──────────

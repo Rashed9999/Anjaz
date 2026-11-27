@@ -143,6 +143,19 @@ class CustomerAuthController extends Controller
                 $response = 'success';
             }
 
+            // Do not claim the OTP was sent when the modem/provider failed.
+            // Removing this stale challenge prevents a false resend cooldown.
+            if (!in_array($response, ['success', true, 1], true)) {
+                DB::table('phone_verifications')
+                    ->whereIn('phone', \App\Support\Phone::variants((string) $request['phone']))
+                    ->delete();
+                return response()->json([
+                    'code' => 'OTP_DELIVERY_FAILED',
+                    'message' => 'تعذّر إرسال رمز التحقق. حاول لاحقاً.',
+                    'otp' => 'inactive',
+                ], 502);
+            }
+
             // AMIAL-OTP-SPLIT-001: **الإفصاح لأرقام العرض وحدها.**
             //
             // كان يُفصح عن الرمز لأيّ رقم — فيُلغى التحقّق من أصله: يصير

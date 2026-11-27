@@ -22,6 +22,7 @@ class MuwathaqOpeningApprovalController extends Controller
     public function list(): JsonResponse
     {
         $rows = MuwathaqAccountOpeningApplication::query()
+            ->where('subject_kind', '!=', 'merchant')
             ->with(['user:id,f_name,l_name,phone,email,type', 'evidences:id,application_id,kind,state,submitted_at'])
             ->whereIn('status', [
                 MuwathaqAccountOpeningApplication::STATUS_SUBMITTED,
@@ -78,6 +79,7 @@ class MuwathaqOpeningApprovalController extends Controller
         $search = trim((string) $request->query('q', ''));
 
         $query = MuwathaqAccountOpeningApplication::query()
+            ->where('subject_kind', '!=', 'merchant')
             ->with(['user:id,f_name,l_name,phone,email,type,is_active,is_kyc_verified,kyc_tier,residence_governorate,zone_code', 'evidences:id,application_id,kind,state'])
             ->orderByDesc('submitted_at')->orderByDesc('id');
 

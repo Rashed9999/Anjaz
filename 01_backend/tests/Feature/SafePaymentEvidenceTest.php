@@ -10,6 +10,7 @@ use App\Services\SafePaymentEvidenceService;
 use App\Services\SafePaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Tests\Concerns\StartsWithSafePaymentIntakeOpen;
 use Tests\TestCase;
 
 /**
@@ -22,6 +23,13 @@ use Tests\TestCase;
 class SafePaymentEvidenceTest extends TestCase
 {
     use RefreshDatabase;
+    use StartsWithSafePaymentIntakeOpen;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->startWithSafePaymentIntakeOpen();
+    }
 
     private function party(string $balance = '100000.0000'): User
     {

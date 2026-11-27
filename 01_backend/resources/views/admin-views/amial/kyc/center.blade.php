@@ -46,7 +46,6 @@
                 <select id="vc-role" class="form-select">
                     <option value="all">جميع الأنواع</option>
                     <option value="عميل">عملاء</option>
-                    <option value="تاجر">تجّار</option>
                     <option value="وكيل">وكلاء</option>
                     <option value="موظف إدارة">موظفو الإدارة</option>
                 </select>

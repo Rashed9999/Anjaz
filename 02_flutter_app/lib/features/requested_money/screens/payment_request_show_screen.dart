@@ -289,7 +289,7 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
               child: QrDisplayWidget(
                 data: jsonEncode({'t': 'amial_pr', 'code': shortCode}),
                 size: 190,
-                caption: 'يمسحه الدافع من «دفع لتاجر»',
+                caption: 'يمسحه الدافع من تطبيق أميال باي',
               ),
             ),
             const SizedBox(height: 16),

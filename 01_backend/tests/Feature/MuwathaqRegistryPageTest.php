@@ -50,7 +50,7 @@ class MuwathaqRegistryPageTest extends TestCase
     }
 
     /** @test */
-    public function it_lists_every_kind_and_status_with_state_balance_and_reference(): void
+    public function it_lists_customer_and_agent_accounts_with_state_balance_and_reference(): void
     {
         config(['muwathaq.base_url' => 'https://muwathaq.example.test']);
         $admin = $this->admin();
@@ -60,8 +60,8 @@ class MuwathaqRegistryPageTest extends TestCase
 
         $json = $this->list($admin);
 
-        $this->assertSame(3, $json['meta']['total']);
-        $this->assertSame(3, count($json['data']));
+        $this->assertSame(2, $json['meta']['total']);
+        $this->assertEqualsCanonicalizing(['customer', 'agent'], array_column($json['data'], 'subject_kind'));
         $row = collect($json['data'])->firstWhere('application_ulid', $c->application_ulid);
         $this->assertSame('customer', $row['subject_kind']);
         $this->assertSame(2, $row['requested_tier']);
@@ -82,11 +82,11 @@ class MuwathaqRegistryPageTest extends TestCase
         $this->account('merchant', 'approved', '967781000113');
         $this->account('agent', 'rejected', '967781000114');
 
-        $this->assertSame(1, $this->list($admin, '?kind=merchant')['meta']['total']);
+        $this->assertSame(0, $this->list($admin, '?kind=merchant')['meta']['total']);
         $this->assertSame(1, $this->list($admin, '?status=rejected')['meta']['total']);
         $this->assertSame(1, $this->list($admin, '?kind=customer&tier=1')['meta']['total']);
         $this->assertSame(1, $this->list($admin, '?q=0112')['meta']['total'], 'البحث بذيل الهاتف');
-        $this->assertSame(4, $this->list($admin, '?kind=bogus&status=bogus&tier=9')['meta']['total'], 'قيمٌ مجهولة تُتجاهل ولا تُحقن');
+        $this->assertSame(3, $this->list($admin, '?kind=bogus&status=bogus&tier=9')['meta']['total'], 'قيمٌ مجهولة تُتجاهل ولا تُحقن');
     }
 
     /** @test */

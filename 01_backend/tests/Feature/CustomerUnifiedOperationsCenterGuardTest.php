@@ -102,9 +102,9 @@ class CustomerUnifiedOperationsCenterGuardTest extends TestCase
             app_path('Http/Controllers/Admin/UnifiedVerificationCenterController.php')
         );
         $this->assertStringContainsString(
-            '[CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE]',
+            '[CUSTOMER_TYPE, AGENT_TYPE]',
             $center,
-            'ملف التحقق الموحّد يجب أن يشمل العملاء والوكلاء والتجار'
+            'ملف التحقق الموحّد يجب أن يشمل العملاء والوكلاء'
         );
     }
 }

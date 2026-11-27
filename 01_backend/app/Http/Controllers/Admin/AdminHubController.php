@@ -258,8 +258,7 @@ class AdminHubController extends Controller
 
     public function account(int $id): View|\Illuminate\Http\RedirectResponse
     {
-        $user = User::find($id);
-        if (!$user) return redirect()->route('admin.amial.hub.customers');
+        $user = User::where('type', '!=', MERCHANT_TYPE)->findOrFail($id);
         return view('admin-views.amial.hub.account', [
             'accountId' => $id,
             'roleLabel' => match ((int) $user->type) {
@@ -278,8 +277,7 @@ class AdminHubController extends Controller
         Request $request,
         \App\Services\Admin\KycEvidenceService $evidence,
     ): JsonResponse {
-        $user = User::find($id);
-        if (!$user) return response()->json(['message' => 'الحساب غير موجود'], 404);
+        $user = User::where('type', '!=', MERCHANT_TYPE)->findOrFail($id);
 
         $type = (int) $user->type;
         $wallet = EMoney::where('user_id', $user->id)->first();
