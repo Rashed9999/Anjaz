@@ -25,6 +25,20 @@ import 'package:amial_pay/features/language/screens/change_language_screen.dart'
 import 'package:amial_pay/features/onboarding/screens/on_boarding_sceen.dart';
 import 'package:amial_pay/features/verification/screens/varification_screen.dart';
 import 'package:amial_pay/features/reports/screens/amial_reports_screen.dart';
+import 'package:amial_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
+import 'package:amial_pay/features/safe_payment/screens/create_safe_payment_screen.dart';
+import 'package:amial_pay/features/safe_payment/screens/safe_payment_detail_screen.dart';
+import 'package:amial_pay/features/donations/screens/donations_home_screen.dart';
+import 'package:amial_pay/features/donations/screens/campaigns_list_screen.dart';
+import 'package:amial_pay/features/donations/screens/campaign_detail_screen.dart';
+import 'package:amial_pay/features/donations/screens/my_donations_screen.dart';
+import 'package:amial_pay/features/family_fund/screens/my_funds_screen.dart';
+import 'package:amial_pay/features/family_fund/screens/create_fund_screen.dart';
+import 'package:amial_pay/features/family_fund/screens/fund_detail_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/payment_request_show_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 
 class RouteHelper {
   static const String splash = '/splash';
@@ -146,6 +160,22 @@ class RouteHelper {
   static const String apiKeys = '/api-keys';
   static const String corporate = '/corporate';
 
+  // Core Amial customer feature named routes (deep links & notifications)
+  static const String safePayments = '/safe-payments';
+  static const String safePaymentCreate = '/safe-payments/create';
+  static const String safePaymentDetail = '/safe-payments/detail';
+  static const String donations = '/donations';
+  static const String donationCampaigns = '/donations/campaigns';
+  static const String donationCampaignDetail = '/donations/campaign';
+  static const String myDonations = '/donations/my';
+  static const String familyFunds = '/family-funds';
+  static const String familyFundCreate = '/family-funds/create';
+  static const String familyFundDetail = '/family-funds/detail';
+  static const String paymentRequestCreate = '/payment-requests/create';
+  static const String paymentRequestShow = '/payment-requests/show';
+  static const String incomingRequests = '/payment-requests/incoming';
+  static const String outgoingRequests = '/payment-requests/outgoing';
+
   static String getSplashRoute() => splash;
   static String getHomeRoute(String name) => '$home?name=$name';
 
@@ -181,6 +211,14 @@ class RouteHelper {
   // static  getFVerificationRoute({required String phoneNumber}) => '$fVerificationScreen?phone-number=$phoneNumber';
 
   static String getSupportRoute() => support;
+  static String getSafePaymentsRoute() => safePayments;
+  static String getSafePaymentDetailRoute(String ulid) => '$safePaymentDetail?ulid=${Uri.encodeQueryComponent(ulid)}';
+  static String getDonationsRoute() => donations;
+  static String getDonationCampaignDetailRoute(String ulid) => '$donationCampaignDetail?ulid=${Uri.encodeQueryComponent(ulid)}';
+  static String getFamilyFundsRoute() => familyFunds;
+  static String getFamilyFundDetailRoute(String ulid) => '$familyFundDetail?ulid=${Uri.encodeQueryComponent(ulid)}';
+  static String getIncomingRequestsRoute() => incomingRequests;
+  static String getOutgoingRequestsRoute() => outgoingRequests;
   static String getCashOutConfirmationRoute({required String inputBalanceText}) => '$cashOutConfirmation?input-balance=$inputBalanceText';
   static String  getShareStatementRoute({ required String amount,  required String transactionType, required ContactModel contactModel}) {
     String data =  base64Url.encode(utf8.encode(jsonEncode(contactModel.toJson())));
@@ -244,5 +282,21 @@ class RouteHelper {
         phoneNumber: utf8.decode(base64Url.decode(Get.parameters['phone-number']!.replaceAll(' ', '+'))),)),
 
     GetPage(name: reports, page: () => const AmialReportsScreen()),
+
+    // Core Amial customer feature routes
+    GetPage(name: safePayments, page: () => const MySafePaymentsScreen()),
+    GetPage(name: safePaymentCreate, page: () => const CreateSafePaymentScreen()),
+    GetPage(name: safePaymentDetail, page: () => SafePaymentDetailScreen(ulid: Get.parameters['ulid'] ?? '')),
+    GetPage(name: donations, page: () => const DonationsHomeScreen()),
+    GetPage(name: donationCampaigns, page: () => CampaignsListScreen(categoryCode: Get.parameters['category'] ?? '')),
+    GetPage(name: donationCampaignDetail, page: () => CampaignDetailScreen(ulid: Get.parameters['ulid'] ?? '')),
+    GetPage(name: myDonations, page: () => const MyDonationsScreen()),
+    GetPage(name: familyFunds, page: () => const MyFundsScreen()),
+    GetPage(name: familyFundCreate, page: () => const CreateFundScreen()),
+    GetPage(name: familyFundDetail, page: () => FundDetailScreen(fundUlid: Get.parameters['ulid'] ?? '')),
+    GetPage(name: paymentRequestCreate, page: () => PaymentRequestCreateScreen(initialPhone: Get.parameters['phone'])),
+    GetPage(name: paymentRequestShow, page: () => const PaymentRequestShowScreen()),
+    GetPage(name: incomingRequests, page: () => const IncomingRequestsScreen()),
+    GetPage(name: outgoingRequests, page: () => const OutgoingRequestsScreen()),
   ];
 }

@@ -18,21 +18,40 @@ class MySafePaymentsScreen extends StatefulWidget {
 class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late ScrollController _scrollController;
   final List<String> _tabRoles = ['all', 'buyer', 'seller'];
+  String? _selectedStatus;
+
+  static const List<({String label, String? status})> _statusFilters = [
+    (label: 'الكل', status: null),
+    (label: 'نشطة', status: 'active'),
+    (label: 'متنازع عليها', status: 'disputed'),
+    (label: 'مكتملة', status: 'completed'),
+  ];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _scrollController = ScrollController()..addListener(_onScroll);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) _refresh();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 200) {
+      Get.find<SafePaymentController>().loadMore();
+    }
+  }
+
   Future<void> _refresh() async {
     final role = _tabRoles[_tabController.index];
-    await Get.find<SafePaymentController>().loadList(role: role);
+    await Get.find<SafePaymentController>()
+        .loadList(role: role, status: _selectedStatus);
   }
 
   @override
@@ -63,10 +82,47 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
         icon: const Icon(Icons.add_shopping_cart),
         label: const Text('طلب دفع آمن'),
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        color: AmialColors.primary,
-        child: Obx(() {
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final f in _statusFilters) ...[
+                    ChoiceChip(
+                      label: Text(f.label, style: const TextStyle(fontSize: 12)),
+                      selected: _selectedStatus == f.status,
+                      selectedColor: AmialColors.primary.withValues(alpha: 0.14),
+                      labelStyle: TextStyle(
+                        color: _selectedStatus == f.status
+                            ? AmialColors.primary
+                            : AmialColors.textSecondary,
+                        fontWeight: _selectedStatus == f.status
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                      onSelected: (_) {
+                        if (_selectedStatus == f.status) return;
+                        setState(() => _selectedStatus = f.status);
+                        _refresh();
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: AmialColors.border),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              color: AmialColors.primary,
+              child: Obx(() {
           final ctrl = Get.find<SafePaymentController>();
           if (ctrl.isLoading.value && ctrl.payments.isEmpty) {
             return const Center(
@@ -111,20 +167,47 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
               ],
             );
           }
+          final showFooter = ctrl.hasMore.value || ctrl.isLoadingMore.value;
           return ListView.separated(
+            controller: _scrollController,
             padding: const EdgeInsets.only(top: 8, bottom: 80),
-            itemCount: ctrl.payments.length,
-            separatorBuilder: (_, _) =>
-                const Divider(height: 1, color: AmialColors.border),
-            itemBuilder: (context, i) => _PaymentTile(payment: ctrl.payments[i]),
+            itemCount: ctrl.payments.length + (showFooter ? 1 : 0),
+            separatorBuilder: (_, i) => i < ctrl.payments.length - 1
+                ? const Divider(height: 1, color: AmialColors.border)
+                : const SizedBox.shrink(),
+            itemBuilder: (context, i) {
+              if (i >= ctrl.payments.length) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Center(
+                    child: ctrl.isLoadingMore.value
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AmialColors.primary),
+                          )
+                        : OutlinedButton(
+                            onPressed: ctrl.loadMore,
+                            child: const Text('تحميل المزيد'),
+                          ),
+                  ),
+                );
+              }
+              return _PaymentTile(payment: ctrl.payments[i]);
+            },
           );
         }),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _tabController.dispose();
     super.dispose();
   }

@@ -25,12 +25,14 @@ class EvidencePickerSheet extends StatefulWidget {
     required this.stage,
     required this.title,
     required this.hint,
+    this.existingCount = 0,
   });
 
   final String ulid;
   final String stage;
   final String title;
   final String hint;
+  final int existingCount;
 
   /// يفتح الورقة ويعيد `true` إن رُفع شيء.
   static Future<bool> open(
@@ -39,13 +41,18 @@ class EvidencePickerSheet extends StatefulWidget {
     required String stage,
     required String title,
     required String hint,
+    int existingCount = 0,
   }) async {
     final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => EvidencePickerSheet(
-        ulid: ulid, stage: stage, title: title, hint: hint,
+        ulid: ulid,
+        stage: stage,
+        title: title,
+        hint: hint,
+        existingCount: existingCount,
       ),
     );
 
@@ -59,6 +66,8 @@ class EvidencePickerSheet extends StatefulWidget {
 class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
   static const _max = 5;
 
+  int get _remainingMax => (_max - widget.existingCount).clamp(0, _max);
+
   final List<File> _files = [];
   final _note = TextEditingController();
   bool _busy = false;
@@ -71,7 +80,7 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
   }
 
   Future<void> _pick({required bool camera}) async {
-    if (_files.length >= _max) return;
+    if (_files.length >= _remainingMax) return;
 
     try {
       final picker = ImagePicker();
@@ -87,7 +96,7 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
 
       setState(() {
         for (final x in picked) {
-          if (_files.length < _max) _files.add(File(x.path));
+          if (_files.length < _remainingMax) _files.add(File(x.path));
         }
       });
     } catch (_) {
@@ -201,7 +210,7 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
               Row(children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _busy || _files.length >= _max
+                    onPressed: _busy || _files.length >= _remainingMax
                         ? null
                         : () => _pick(camera: true),
                     icon: const Icon(Icons.photo_camera_outlined, size: 19),
@@ -211,7 +220,7 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _busy || _files.length >= _max
+                    onPressed: _busy || _files.length >= _remainingMax
                         ? null
                         : () => _pick(camera: false),
                     icon: const Icon(Icons.photo_library_outlined, size: 19),
@@ -221,12 +230,17 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
               ]),
 
               const SizedBox(height: 10),
-              Text('${_files.length} من $_max',
+              Text(
+                  _remainingMax == 0
+                      ? 'بلغت الحدّ الأقصى ($_max ملفات) لهذه المرحلة'
+                      : widget.existingCount > 0
+                          ? '${_files.length} من $_remainingMax المتبقية (رفعت ${widget.existingCount} من $_max)'
+                          : '${_files.length} من $_remainingMax',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: _files.length >= _max
+                    color: _remainingMax == 0 || _files.length >= _remainingMax
                         ? AmialColors.yellowDark
                         : AmialColors.textSecondary,
                   )),
@@ -287,7 +301,7 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
               SizedBox(
                 height: 50,
                 child: ElevatedButton.icon(
-                  onPressed: _busy ? null : _submit,
+                  onPressed: _busy || _remainingMax == 0 ? null : _submit,
                   icon: _busy
                       ? const SizedBox(
                           width: 18, height: 18,

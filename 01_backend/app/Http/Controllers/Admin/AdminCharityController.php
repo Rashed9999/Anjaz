@@ -78,9 +78,14 @@ class AdminCharityController extends Controller
     public function verifyOrg(Request $request, string $ulid): JsonResponse
     {
         $org = CharityOrganization::where('org_ulid', $ulid)->first();
-        if (!$org) return $this->error('NOT_FOUND', 'Not found', 404);
+        if (!$org) return $this->error('NOT_FOUND', 'الجمعية غير موجودة', 404);
 
-        $org = $this->service->verifyOrganization($org, $request->user());
+        try {
+            $org = $this->service->verifyOrganization($org, $request->user());
+        } catch (\RuntimeException $e) {
+            return $this->error('VERIFY_FAILED', $e->getMessage() ?: 'تعذّر توثيق الجمعية', 422);
+        }
+
         return $this->ok(['organization' => $org], 'VERIFIED', 'تم التوثيق');
     }
 
@@ -194,6 +199,11 @@ class AdminCharityController extends Controller
         $org = CharityOrganization::where('org_ulid', $orgUlid)->first();
         if (!$org) return $this->error('ORG_NOT_FOUND', 'Org not found', 404);
 
+        $deadlineRules = ['sometimes', 'nullable', 'date', 'after:tomorrow'];
+        if ($request->filled('start_at')) {
+            $deadlineRules[] = 'after:start_at';
+        }
+
         $v = Validator::make($request->all(), [
             'category_id' => 'required|integer|exists:charity_categories,id',
             'title_ar' => 'required|string|max:200',
@@ -205,11 +215,12 @@ class AdminCharityController extends Controller
             'location_ar' => 'sometimes|nullable|string|max:200',
             'cover_image_url' => 'sometimes|nullable|url',
             'gallery_images' => 'sometimes|nullable|array|max:10',
+            'gallery_images.*' => 'url|max:500',
             // AMIAL-CHARITY-META-001 — **بدايةٌ ونهاية، لا نهايةٌ وحدها.**
             // كان النموذجُ يسأل عن تاريخ الانتهاء فقط، وحملةٌ بلا بدايةٍ
             // تُنشر ساعةَ اعتمادها — فلا تُجهَّز حملةُ رمضانَ في شعبان.
             'start_at' => 'sometimes|nullable|date',
-            'deadline_at' => 'sometimes|nullable|date|after:tomorrow|after:start_at',
+            'deadline_at' => $deadlineRules,
             'is_featured' => 'sometimes|boolean',
             // **«عاجل» حكمٌ إداريّ**: يرفع الحملةَ في ترتيب التطبيق ويضع
             // عليها علامةً حمراء — فلا يُترك للجمعيّة تُعلنه عن نفسها.
@@ -362,17 +373,44 @@ class AdminCharityController extends Controller
         ]);
     }
 
+    public function refundDonation(Request $request, string $ulid): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'reason' => 'required|string|min:5|max:500',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $donation = \App\Models\Donation::where('donation_ulid', $ulid)->first();
+        if (!$donation) {
+            return $this->error('NOT_FOUND', 'التبرع غير موجود', 404);
+        }
+
+        try {
+            $refunded = app(\App\Services\DonationsService::class)->refundDonation(
+                $donation,
+                $request->user(),
+                (string) $request->input('reason'),
+            );
+        } catch (\RuntimeException $e) {
+            return $this->error('REFUND_FAILED', $e->getMessage(), 422);
+        } catch (\Throwable $e) {
+            return $this->error('REFUND_FAILED', 'تعذّر استرداد التبرع حالياً', 422);
+        }
+
+        return $this->ok(['donation' => $refunded], 'REFUNDED', 'تم استرداد التبرع بنجاح');
+    }
+
     public function generateSettlement(Request $request): JsonResponse
     {
         $v = Validator::make($request->all(), [
             'org_ulid' => 'required|string|size:26',
             'period_start' => 'required|date',
-            'period_end' => 'required|date|after:period_start',
+            'period_end' => 'required|date|after_or_equal:period_start',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
         $org = CharityOrganization::where('org_ulid', $request->input('org_ulid'))->first();
-        if (!$org) return $this->error('ORG_NOT_FOUND', 'Org not found', 404);
+        if (!$org) return $this->error('ORG_NOT_FOUND', 'الجمعية غير موجودة', 404);
 
         try {
             $settlement = $this->service->generateSettlement(
@@ -381,6 +419,12 @@ class AdminCharityController extends Controller
                 Carbon::parse($request->input('period_end'))->endOfDay(),
                 $request->user(),
             );
+        } catch (\Illuminate\Database\QueryException $e) {
+            $sqlState = (string) ($e->errorInfo[0] ?? $e->getCode());
+            $msg = in_array($sqlState, ['23000', '23505'], true)
+                ? 'توجد تسوية مسجَّلة مسبقاً لهذه الجمعية في نفس الفترة المحددة'
+                : 'تعذّر إنشاء التسوية بسبب تعارض في قاعدة البيانات';
+            return $this->error('DUPLICATE_SETTLEMENT_PERIOD', $msg, 422);
         } catch (\RuntimeException $e) {
             return $this->error('GENERATE_FAILED', $e->getMessage(), 422);
         }

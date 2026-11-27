@@ -169,6 +169,9 @@ class AmialSafePaymentEvent {
       case 'seller_rejected': return 'رفض البائع';
       case 'in_delivery_marked': return 'بدء التسليم';
       case 'delivered_marked': return 'تأكيد التسليم';
+      case 'delivery_code_verified': return 'تأكيد التسليم برمز المشتري';
+      case 'delivery_code_failed': return 'محاولة خاطئة لرمز التسليم';
+      case 'evidence_added': return 'رفع دليل';
       case 'buyer_confirmed': return 'تأكيد المشتري';
       case 'released_to_seller': return 'إفراج المبلغ';
       case 'buyer_disputed': return 'فتح نزاع';
@@ -194,6 +197,7 @@ class AmialEvidenceItem {
   final int sizeBytes;
   final String? originalName;
   final String fingerprint;
+  final String? note;
   final DateTime? uploadedAt;
 
   AmialEvidenceItem({
@@ -204,6 +208,7 @@ class AmialEvidenceItem {
     required this.sizeBytes,
     this.originalName,
     required this.fingerprint,
+    this.note,
     this.uploadedAt,
   });
 
@@ -215,6 +220,7 @@ class AmialEvidenceItem {
         sizeBytes: int.tryParse('${j['size_bytes'] ?? 0}') ?? 0,
         originalName: j['original_name']?.toString(),
         fingerprint: j['fingerprint']?.toString() ?? '',
+        note: j['note']?.toString(),
         uploadedAt: j['uploaded_at'] != null
             ? DateTime.tryParse(j['uploaded_at'].toString())
             : null,

@@ -46,7 +46,11 @@ class DonationsController extends Controller
 
         if ($categoryCode = $request->query('category')) {
             $cat = CharityCategory::where('code', $categoryCode)->first();
-            if ($cat) $query->where('category_id', $cat->id);
+            if ($cat) {
+                $query->where('category_id', $cat->id);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
         }
 
         if ($request->boolean('featured')) {
@@ -83,7 +87,11 @@ class DonationsController extends Controller
             'organization' => fn($q) => $q->select('id', 'name_ar', 'description_ar',
                 'logo_url', 'cover_image_url', 'verification_status', 'total_collected', 'total_campaigns'),
             'category',
-        ])->where('campaign_ulid', $ulid)->first();
+        ])
+            ->where('campaign_ulid', $ulid)
+            ->whereIn('status', ['active', 'completed'])
+            ->whereHas('organization', fn($q) => $q->where('verification_status', 'verified'))
+            ->first();
 
         if (!$campaign) return $this->error('NOT_FOUND', 'الحملة غير موجودة', 404);
 
@@ -179,7 +187,7 @@ class DonationsController extends Controller
     {
         $orgs = CharityOrganization::verified()
             ->select('id', 'org_ulid', 'name_ar', 'description_ar',
-                'logo_url', 'cover_image_url',
+                'logo_url', 'cover_image_url', 'verification_status',
                 'total_collected', 'total_campaigns', 'total_donors')
             ->orderByDesc('total_collected')
             ->paginate(20);

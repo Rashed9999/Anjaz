@@ -130,13 +130,9 @@ class _EvidenceThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () {
-        if (item.isPdf) {
-          _openPdf(context, item);
-        } else {
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => EvidenceViewerScreen(items: all, initialIndex: index),
-          ));
-        }
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => EvidenceViewerScreen(items: all, initialIndex: index),
+        ));
       },
       borderRadius: BorderRadius.circular(10),
       child: SizedBox(
@@ -182,8 +178,18 @@ class _EvidenceThumb extends StatelessWidget {
                   ),
           ),
           const SizedBox(height: 3),
-          Text(item.roleLabel,
-              style: const TextStyle(fontSize: 9.5, color: AmialColors.textMuted)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(item.roleLabel,
+                  style: const TextStyle(fontSize: 9.5, color: AmialColors.textMuted)),
+              if (item.note != null && item.note!.trim().isNotEmpty) ...[
+                const SizedBox(width: 3),
+                const Icon(Icons.notes_rounded, size: 11, color: AmialColors.primary),
+              ],
+            ],
+          ),
         ]),
       ),
     );
@@ -251,19 +257,70 @@ class _EvidenceViewerScreenState extends State<EvidenceViewerScreen> {
             controller: _pages,
             itemCount: widget.items.length,
             onPageChanged: (i) => setState(() => _current = i),
-            itemBuilder: (_, i) => InteractiveViewer(
-              minScale: 1,
-              maxScale: 4,
-              child: Center(
-                child: Image.network(
-                  EvidenceGallery.fileUrl(widget.items[i].id),
-                  headers: EvidenceGallery.authHeaders(),
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined,
-                      size: 48, color: Colors.white38),
+            itemBuilder: (_, i) {
+              final currentItem = widget.items[i];
+              if (currentItem.isPdf) {
+                return Center(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 28),
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E1E),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.picture_as_pdf_outlined,
+                            size: 56, color: AmialColors.red),
+                        const SizedBox(height: 12),
+                        Text(
+                          currentItem.originalName?.isNotEmpty == true
+                              ? currentItem.originalName!
+                              : 'مستند PDF',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        if (currentItem.sizeBytes > 0) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            '${(currentItem.sizeBytes / 1024).toStringAsFixed(0)} KB',
+                            style: const TextStyle(color: Colors.white54, fontSize: 11.5),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: () => _EvidenceThumb._openPdf(context, currentItem),
+                          icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                          label: const Text('فتح ملف PDF'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AmialColors.primary,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: Center(
+                  child: Image.network(
+                    EvidenceGallery.fileUrl(currentItem.id),
+                    headers: EvidenceGallery.authHeaders(),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined,
+                        size: 48, color: Colors.white38),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
 
@@ -276,6 +333,11 @@ class _EvidenceViewerScreenState extends State<EvidenceViewerScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('رفعه: ${item.roleLabel} — ${AmialEvidenceItem.stageLabel(item.stage)}',
                 style: const TextStyle(color: Colors.white, fontSize: 12.5)),
+            if (item.note != null && item.note!.trim().isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text('ملاحظة: ${item.note!.trim()}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            ],
             const SizedBox(height: 3),
             if (item.uploadedAt != null)
               Text(_fmt(item.uploadedAt!),

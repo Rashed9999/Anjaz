@@ -68,8 +68,15 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
 
     public function create(Request $request): JsonResponse
     {
+        if ((int) (\App\CentralLogics\Helpers::get_business_settings(
+            'send_money_request_status') ?? 1) !== 1) {
+            return $this->error(
+                'REQUEST_MONEY_DISABLED', 'خدمة طلب المال غير مفعّلة حالياً', 403,
+            );
+        }
+
         $v = Validator::make($request->all(), [
-            'amount' => 'required|numeric|min:0.01',
+            'amount' => 'required|numeric|min:0.01|lt:100000000',
             'recipient_phone' => 'sometimes|nullable|string|max:32',
             'recipient_name' => 'sometimes|nullable|string|max:120',
             'note' => 'sometimes|nullable|string|max:255',
@@ -83,8 +90,11 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
             // موظف المنشأة أو موظف POS ينشئ رمز التحصيل نيابةً عن محفظة
             // المنشأة، لا عن محفظته الشخصية. وإلا ظهر QR صحيح وذهب المال
             // إلى الموظف بدلاً من التاجر.
+            $requester = $this->commerceRequester($request->user());
+            $this->service->assertRequesterEligible($requester);
+
             $req = $this->service->create(
-                requester: $this->commerceRequester($request->user()),
+                requester: $requester,
                 amount: (string)$request->input('amount'),
                 recipientPhone: $request->input('recipient_phone'),
                 recipientName: $request->input('recipient_name'),
@@ -95,6 +105,8 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID_REQUEST', $e->getMessage(), 422);
+        } catch (\RuntimeException $e) {
+            return $this->error('REQUEST_REJECTED', $e->getMessage(), 403);
         }
 
         return $this->ok([
@@ -240,8 +252,13 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
         $req = $this->service->findByCode($code);
         if (!$req) return $this->error('NOT_FOUND', 'الطلب غير موجود', 404);
 
-        // إن كان مستلم محدّد، تأكّد المستخدم هو المستلم
-        if ($req->recipient_user_id && $req->recipient_user_id !== $request->user()->id) {
+        $user = $request->user();
+
+        // إن كان مستلم محدّد، تأكّد المستخدم هو المستلم أو الطالب نفسه
+        if ($req->recipient_user_id
+            && $req->recipient_user_id !== $user->id
+            && $req->requester_user_id !== $user->id
+        ) {
             return $this->error('FORBIDDEN', 'هذا الطلب موجّه لشخص آخر', 403);
         }
 
@@ -251,12 +268,12 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
         return $this->ok([
             'request' => $req,
             'requester' => [
-                'is_customer' => (int) $requester->type === CUSTOMER_TYPE,
-                'name' => trim(($requester->f_name ?? '') . ' ' . ($requester->l_name ?? '')),
-                'phone' => $requester->phone,
+                'is_customer' => $requester !== null && (int) $requester->type === CUSTOMER_TYPE,
+                'name' => trim(($requester?->f_name ?? '') . ' ' . ($requester?->l_name ?? '')),
+                'phone' => $requester?->phone,
             ],
             'is_active' => $req->isActive(),
-            'is_self' => $request->user()->id === $req->requester_user_id,
+            'is_self' => $user->id === $req->requester_user_id,
         ]);
     }
 
@@ -334,11 +351,17 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
     public function pay(Request $request, string $code): JsonResponse
     {
         $v = Validator::make($request->all(), [
-            'pin' => 'required|string|min:4|max:4',
+            'pin' => ['required', 'string', 'regex:/^\d{4}$/'],
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        if (!\App\CentralLogics\Helpers::pin_check($request->user()->id, (string) $request->input('pin'))) {
+        if (!$this->pinService->verify($request->user(), (string) $request->input('pin'))) {
+            $lockedUntil = $request->user()->fresh()?->pin_locked_until;
+            if ($lockedUntil?->isFuture()) {
+                return $this->error(
+                    'PIN_LOCKED', 'تم إيقاف محاولات الرمز مؤقتاً — حاول لاحقاً', 423,
+                );
+            }
             return $this->error('PIN_INVALID', 'رمز الحماية غير صحيح', 403);
         }
 

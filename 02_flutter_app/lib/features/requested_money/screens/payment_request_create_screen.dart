@@ -63,6 +63,8 @@ class _PaymentRequestCreateScreenState
   }
 
   Future<void> _submit() async {
+    _lookupTimer?.cancel();
+
     final phone = _phone.text.trim();
     final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.length != 8 && digits.length < 9) {
@@ -78,6 +80,7 @@ class _PaymentRequestCreateScreenState
 
     var verified = c.recipientCheck.value;
     if (verified?['found'] != true) {
+      _lookupTimer?.cancel();
       final found = await c.checkRecipient(phone);
       if (!mounted) return;
       verified = c.recipientCheck.value;

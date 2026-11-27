@@ -29,9 +29,14 @@
                 <option value="partially_refunded">تسوية جزئية</option>
                 <option value="pending_seller_acceptance">بانتظار قبول البائع</option>
             </select>
-            <input id="search-filter" class="form-control" style="max-width:300px"
+            <input id="search-filter" class="form-control" style="max-width:260px"
                    placeholder="ابحث بالمرجع أو الاسم أو الجوال">
-            <button class="btn btn-outline-primary" id="search-button">بحث</button>
+            <input type="date" id="date-from" class="form-control" style="max-width:155px"
+                   title="من تاريخ" aria-label="من تاريخ">
+            <input type="date" id="date-to" class="form-control" style="max-width:155px"
+                   title="إلى تاريخ" aria-label="إلى تاريخ">
+            <button class="btn btn-outline-primary" id="search-button" type="button">بحث</button>
+            <button class="btn btn-outline-success" id="export-csv" type="button">تصدير CSV</button>
             <span class="text-muted small ms-auto" id="page-info"></span>
         </div>
         <div class="card-body border-bottom py-2 d-flex gap-3 flex-wrap small">
@@ -64,6 +69,7 @@
         <div class="modal-header"><h5 class="modal-title" id="d-title">تفاصيل النزاع</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body">
+            <div id="d-four-eyes" class="mb-3 d-none"></div>
             <div id="d-info" class="mb-3"></div>
 
             {{-- AMIAL-SAFEPAY-EVIDENCE-001: الأدلّة قبل القرار لا بعده --}}
@@ -91,15 +97,16 @@
                     <input class="form-control" id="d-reason" placeholder="مثال: البضاعة سُلّمت حسب الاتفاق والصور المرفقة…">
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
-                    <button class="btn btn-success" id="d-release">إفراج كامل للبائع</button>
-                    <button class="btn btn-danger" id="d-refund">إعادة كاملة للمشتري</button>
+                    <button class="btn btn-success" id="d-release" type="button">إفراج كامل للبائع</button>
+                    <button class="btn btn-danger" id="d-refund" type="button">إعادة كاملة للمشتري</button>
                     <div class="d-flex gap-1 align-items-center">
-                        <input type="number" min="0" class="form-control" id="d-partial-amount"
+                        <input type="number" min="0" step="0.01" class="form-control" id="d-partial-amount"
                                placeholder="مبلغ يُعاد للمشتري" dir="ltr" style="max-width:170px">
-                        <button class="btn btn-warning" id="d-partial">تسوية جزئية</button>
+                        <button class="btn btn-warning" id="d-partial" type="button">تسوية جزئية</button>
                     </div>
                 </div>
-                <div class="small text-muted mt-2">التسوية الجزئية: المبلغ المدخل يعود للمشتري والباقي يذهب للبائع.</div>
+                <div class="small text-muted mt-2">التسوية الجزئية: المبلغ المدخل يعود للمشتري والباقي يذهب للبائع (مع خصم رسم المنصّة من حصّة البائع).</div>
+                <div class="small mt-1 d-none" id="d-partial-preview"></div>
                 <div class="text-danger small mt-1" id="d-error"></div>
             </div>
         </div>
@@ -115,7 +122,7 @@
     const fmt = (n) => Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 2});
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-    let page = 1, lastPage = 1, status = 'disputed_open', currentUlid = null, currentPayment = null;
+    let page = 1, lastPage = 1, status = 'disputed_open', currentUlid = null, currentPayment = null, currentCanDecide = false;
 
     const badge = (st) => ({
         'funded': '<span class="badge bg-primary">مجمّد</span>',
@@ -131,12 +138,70 @@
         'partially_refunded': '<span class="badge bg-warning text-dark">تسوية جزئية</span>',
     }[st] || `<span class="badge bg-light text-dark">${esc(st)}</span>`);
 
+    const EVENT_LABEL = {
+        created: 'إنشاء الطلب',
+        seller_accepted: 'قبول البائع',
+        seller_rejected: 'رفض البائع',
+        in_delivery_marked: 'بدء التسليم',
+        delivered_marked: 'تأكيد التسليم',
+        delivery_code_verified: 'تأكيد التسليم برمز المشتري',
+        delivery_code_failed: 'محاولة خاطئة لرمز التسليم',
+        buyer_confirmed: 'تأكيد المشتري',
+        released_to_seller: 'إفراج المبلغ للبائع',
+        buyer_disputed: 'فتح نزاع',
+        buyer_cancelled: 'إلغاء من المشتري',
+        admin_resolved_release: 'الإدارة: إفراج للبائع',
+        admin_resolved_refund: 'الإدارة: استرداد للمشتري',
+        admin_resolved_partial: 'الإدارة: تسوية جزئية',
+        expired: 'انتهت الصلاحية',
+        evidence_added: 'رفع دليل',
+        attachment_added: 'إضافة مرفق',
+        note_added: 'إضافة ملاحظة',
+    };
+
     const name = (u) => u ? `${esc((u.f_name ?? '') + ' ' + (u.l_name ?? ''))} <span class="text-muted small" dir="ltr">${esc(u.phone ?? '')}</span>` : '—';
+
+    function renderTrust(t) {
+        if (!t) return '';
+        const badgeCls = t.badge === 'موثوق' ? 'bg-success'
+            : (t.badge === 'نزاعات متكرّرة' ? 'bg-danger' : 'bg-secondary');
+        return `<div class="small text-muted mt-1">
+            <span class="badge ${badgeCls}">${esc(t.badge ?? '—')}</span>
+            مكتملة: <b>${esc(t.completed_deals ?? 0)}</b> ·
+            نزاعات: <b>${esc(t.disputed_deals ?? 0)}</b> (${esc(t.dispute_rate ?? 0)}%)
+            ${t.member_since ? ` · عضو منذ <span dir="ltr">${esc(t.member_since)}</span>` : ''}
+        </div>`;
+    }
+
+    function generateIdempotencyKey() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+        }
+        return 'sp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 12);
+    }
+
+    function buildFilterParams(includePage) {
+        const params = new URLSearchParams();
+        params.set('status', status);
+        if (includePage) params.set('page', String(page));
+        const q = document.getElementById('search-filter').value.trim();
+        if (q) params.set('q', q);
+        const from = document.getElementById('date-from').value;
+        if (from) params.set('from', from);
+        const to = document.getElementById('date-to').value;
+        if (to) params.set('to', to);
+        return params;
+    }
 
     async function post(url, body) {
         const r = await fetch(url, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrf,
+                'Accept': 'application/json',
+                'Idempotency-Key': generateIdempotencyKey(),
+            },
             body: JSON.stringify(body || {}),
         });
         const j = await r.json().catch(() => ({}));
@@ -147,8 +212,8 @@
     async function load() {
         const tbody = document.getElementById('list-tbody');
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>';
-        const q = document.getElementById('search-filter').value.trim();
-        const r = await fetch(`${base}?status=${encodeURIComponent(status)}&page=${page}&q=${encodeURIComponent(q)}`, {headers: {'Accept': 'application/json'}});
+        const params = buildFilterParams(true);
+        const r = await fetch(`${base}?${params.toString()}`, {headers: {'Accept': 'application/json'}});
         const j = await r.json().catch(() => ({}));
         if (!r.ok || j.success === false) {
             tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">تعذّر تحميل النزاعات. حاول مجدداً.</td></tr>';
@@ -248,11 +313,56 @@
             : '<li class="list-group-item text-muted small">لا سجلّات بعد</li>';
     }
 
+    function updatePartialPreview() {
+        const previewEl = document.getElementById('d-partial-preview');
+        const raw = document.getElementById('d-partial-amount').value.trim();
+        if (!raw || !currentPayment) {
+            previewEl.classList.add('d-none');
+            previewEl.innerHTML = '';
+            return;
+        }
+        const held = Number(currentPayment.held_amount ?? currentPayment.amount ?? 0);
+        const buyerAmt = Number(raw);
+        previewEl.classList.remove('d-none');
+        if (!Number.isFinite(buyerAmt) || buyerAmt < 0 || buyerAmt > held) {
+            previewEl.className = 'small mt-1 text-danger';
+            previewEl.textContent = `المبلغ يجب أن يكون بين 0 و ${fmt(held)} ر.ي.`;
+            return;
+        }
+        const sellerGross = Math.max(0, held - buyerAmt);
+        previewEl.className = 'small mt-1 text-primary';
+        previewEl.innerHTML = `معاينة الأثر المالي: يستردّ المشتري <b>${fmt(buyerAmt)} ر.ي</b> · يُفرَج للبائع <b>${fmt(sellerGross)} ر.ي</b> (قبل رسم المنصّة).`;
+    }
+
+    function renderFourEyesWarning(meta) {
+        const el = document.getElementById('d-four-eyes');
+        const actors = Array.isArray(meta.previous_actors) ? meta.previous_actors : [];
+        const parts = [];
+        if (meta.four_eyes_blocked) {
+            parts.push('<div class="alert alert-danger py-2 small mb-2"><b>تنبيه قاعدة أربع عيون:</b> سبق لك تنفيذ إجراء تعديلي على هذه العملية — يلزم موظّف آخر لحسم النزاع.</div>');
+        }
+        if (actors.length) {
+            const list = actors.map(a => `${esc(a.name || '—')} (${esc(a.actions ?? 0)})`).join('، ');
+            parts.push(`<div class="alert alert-warning py-2 small mb-0"><b>تحذير أربع عيون (تفاعلات سابقة):</b> ${list}</div>`);
+        }
+        if (parts.length) {
+            el.innerHTML = parts.join('');
+            el.classList.remove('d-none');
+        } else {
+            el.innerHTML = '';
+            el.classList.add('d-none');
+        }
+    }
+
     async function openDispute(ulid) {
         currentUlid = ulid;
         currentPayment = null;
+        currentCanDecide = false;
         document.getElementById('d-error').textContent = '';
         document.getElementById('d-reason').value = '';
+        document.getElementById('d-partial-amount').value = '';
+        document.getElementById('d-partial-preview').classList.add('d-none');
+        document.getElementById('d-four-eyes').classList.add('d-none');
         document.getElementById('d-info').innerHTML = 'جارٍ التحميل…';
         document.getElementById('d-events').innerHTML = '';
         new bootstrap.Modal('#modal-dispute').show();
@@ -268,16 +378,23 @@
         const meta = j.meta || {};
         const p = meta.payment || {};
         currentPayment = p;
-        document.getElementById('d-title').textContent = `نزاع ${p.payment_ulid ?? ''}`;
+        currentCanDecide = meta.can_decide !== false;
+        const disputeReason = meta.dispute_reason || p.dispute_reason || null;
+        const trust = meta.trust_summary || {};
+
+        document.getElementById('d-title').textContent = `نزاع ${p.payment_ulid ?? ''}${p.title ? ' — ' + p.title : ''}`;
+        renderFourEyesWarning(meta);
         document.getElementById('d-info').innerHTML = `
             <div class="row g-2">
-                <div class="col-md-6"><div class="border rounded p-2">المشتري: ${name(p.buyer)}</div></div>
-                <div class="col-md-6"><div class="border rounded p-2">البائع: ${name(p.seller)}</div></div>
+                ${p.title ? `<div class="col-12"><div class="border rounded p-2 bg-light"><b>عنوان الصفقة:</b> ${esc(p.title)}</div></div>` : ''}
+                <div class="col-md-6"><div class="border rounded p-2">المشتري: ${name(p.buyer)}${renderTrust(trust.buyer)}</div></div>
+                <div class="col-md-6"><div class="border rounded p-2">البائع: ${name(p.seller)}${renderTrust(trust.seller)}</div></div>
                 <div class="col-md-4"><div class="border rounded p-2">المبلغ: <b>${fmt(p.amount)} ر.ي</b></div></div>
                 <div class="col-md-4"><div class="border rounded p-2">الحالة: ${badge(p.status)}</div></div>
                 <div class="col-md-4"><div class="border rounded p-2 small">الوصف: ${esc(p.description ?? '—')}</div></div>
+                ${p.delivery_terms ? `<div class="col-12"><div class="border rounded p-2 small"><b>شروط التسليم:</b> ${esc(p.delivery_terms)}</div></div>` : ''}
                 ${meta.dispute_reason_label ? `<div class="col-12"><div class="border rounded p-2 bg-warning-subtle"><b>تصنيف الشكوى:</b> ${esc(meta.dispute_reason_label)}</div></div>` : ''}
-                ${p.dispute_reason ? `<div class="col-12"><div class="border rounded p-2 bg-danger-subtle">سبب النزاع: ${esc(p.dispute_reason)}</div></div>` : ''}
+                ${disputeReason ? `<div class="col-12"><div class="border rounded p-2 bg-danger-subtle"><b>سبب النزاع:</b> ${esc(disputeReason)}</div></div>` : ''}
                 <div class="col-12"><div class="border rounded p-2 small">
                     ${meta.delivery_code_verified
                         ? '<span class="badge bg-success">التسليم مؤكَّد برمز المشتري</span> — إنكار الاستلام بعد ذلك يحتاج دليلاً قوياً.'
@@ -287,14 +404,18 @@
 
         renderEvidence(meta.evidence || {});
         renderAudit(meta.audit_trail || [], p.id);
-        const canResolve = p.status === 'disputed' && !p.admin_resolved_at;
+        const canResolve = p.status === 'disputed' && !p.admin_resolved_at && currentCanDecide;
         document.getElementById('d-resolution-card').classList.toggle('d-none', !canResolve);
-        document.getElementById('d-partial-amount').max = p.amount ?? '';
-        document.getElementById('d-events').innerHTML = (p.events || []).map(ev => `
-            <li class="list-group-item small d-flex justify-content-between">
-                <span>${esc(ev.event_type ?? ev.type ?? '')} — ${esc(ev.note ?? ev.description ?? '')}</span>
-                <span class="text-muted">${esc(ev.created_at ?? '')}</span>
-            </li>`).join('') || '<li class="list-group-item text-muted small">لا أحداث</li>';
+        document.getElementById('d-partial-amount').max = p.held_amount ?? p.amount ?? '';
+        document.getElementById('d-events').innerHTML = (p.events || []).map(ev => {
+            const evType = ev.event_type ?? ev.type ?? '';
+            const evLabel = EVENT_LABEL[evType] || evType;
+            const evNote = ev.note ?? ev.description ?? '';
+            return `<li class="list-group-item small d-flex justify-content-between">
+                <span><b>${esc(evLabel)}</b>${evNote ? ` — ${esc(evNote)}` : ''}</span>
+                <span class="text-muted text-nowrap ms-2" dir="ltr">${esc(ev.created_at ?? '')}</span>
+            </li>`;
+        }).join('') || '<li class="list-group-item text-muted small">لا أحداث</li>';
     }
 
     document.getElementById('list-tbody').addEventListener('click', (e) => {
@@ -304,11 +425,23 @@
 
     async function resolve(action, extra) {
         const errEl = document.getElementById('d-error'); errEl.textContent = '';
+        if (!currentCanDecide) {
+            errEl.textContent = 'لا تملك صلاحية حسم النزاعات.'; return;
+        }
         if (!currentPayment || currentPayment.status !== 'disputed' || currentPayment.admin_resolved_at) {
             errEl.textContent = 'هذه العملية ليست نزاعاً مفتوحاً للحسم.'; return;
         }
         const reason = document.getElementById('d-reason').value.trim();
         if (reason.length < 10) { errEl.textContent = 'سبب القرار مطلوب (10 أحرف فأكثر)'; return; }
+        if (action === 'partial') {
+            const rawAmt = String(extra?.buyer_refund_amount ?? '').trim();
+            const held = Number(currentPayment.held_amount ?? currentPayment.amount ?? 0);
+            const numAmt = Number(rawAmt);
+            if (!rawAmt || !Number.isFinite(numAmt) || numAmt < 0 || numAmt > held) {
+                errEl.textContent = `أدخل مبلغاً صحيحاً للمشتري بين 0 و ${fmt(held)} ر.ي.`;
+                return;
+            }
+        }
         const labels = {release: 'إفراج كامل للبائع', refund: 'إعادة كاملة للمشتري', partial: 'تسوية جزئية'};
         if (!window.confirm(`هل تؤكد ${labels[action]}؟ القرار المالي نهائي ويُسجّل باسمك.`)) return;
         const buttons = ['d-release', 'd-refund', 'd-partial'].map(id => document.getElementById(id));
@@ -325,11 +458,19 @@
     document.getElementById('d-refund').addEventListener('click', () => resolve('refund'));
     document.getElementById('d-partial').addEventListener('click', () =>
         resolve('partial', {buyer_refund_amount: document.getElementById('d-partial-amount').value}));
+    document.getElementById('d-partial-amount').addEventListener('input', updatePartialPreview);
 
     document.getElementById('status-filter').addEventListener('change', (e) => { status = e.target.value; page = 1; load(); });
+    document.getElementById('date-from').addEventListener('change', () => { page = 1; load(); });
+    document.getElementById('date-to').addEventListener('change', () => { page = 1; load(); });
     document.getElementById('search-button').addEventListener('click', () => { page = 1; load(); });
     document.getElementById('search-filter').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); page = 1; load(); }
+    });
+    document.getElementById('export-csv').addEventListener('click', () => {
+        const params = buildFilterParams(false);
+        params.set('export', 'csv');
+        window.location.href = `${base}?${params.toString()}`;
     });
     document.getElementById('prev-page').addEventListener('click', () => { if (page > 1) { page--; load(); } });
     document.getElementById('next-page').addEventListener('click', () => { if (page < lastPage) { page++; load(); } });

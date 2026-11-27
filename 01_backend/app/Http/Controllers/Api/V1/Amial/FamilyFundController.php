@@ -49,7 +49,10 @@ class FamilyFundController extends AmialApiController
                     'fund_ulid' => $m->fund->fund_ulid,
                     'name' => $m->fund->name,
                     'description' => $m->fund->description,
+                    'owner_user_id' => $m->fund->owner_user_id,
                     'balance' => $m->fund->balance,
+                    'target_amount' => $m->fund->target_amount,
+                    'require_owner_approval_for_disbursement' => $m->fund->require_owner_approval_for_disbursement,
                     'status' => $m->fund->status,
                 ] : null,
             ])->values()->toArray(),
@@ -89,7 +92,7 @@ class FamilyFundController extends AmialApiController
 
         $v = Validator::make($request->all(), [
             'name' => 'required|string|max:100',
-            'description' => 'sometimes|string|max:500',
+            'description' => 'sometimes|nullable|string|max:500',
             'require_owner_approval_for_disbursement' => 'sometimes|boolean',
             'target_amount' => 'sometimes|nullable|numeric|min:1',
         ]);
@@ -172,12 +175,14 @@ class FamilyFundController extends AmialApiController
 
     public function contribute(Request $request, string $ulid): JsonResponse
     {
+        if ($blocked = $this->requireFamilyFund($request)) return $blocked;
+
         $fund = FamilyFund::where('fund_ulid', $ulid)->first();
         if (!$fund) return $this->error('NOT_FOUND', 'الصندوق غير موجود', 404);
 
         $v = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:0.01',
-            'note' => 'sometimes|string|max:500',
+            'note' => 'sometimes|nullable|string|max:500',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -212,7 +217,7 @@ class FamilyFundController extends AmialApiController
         $v = Validator::make($request->all(), [
             'beneficiary_user_id' => 'required|integer|exists:users,id',
             'amount' => 'required|numeric|min:0.01',
-            'note' => 'sometimes|string|max:500',
+            'note' => 'sometimes|nullable|string|max:500',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -297,11 +302,12 @@ class FamilyFundController extends AmialApiController
 
         $fund = FamilyFund::where('fund_ulid', $ulid)->first();
         if (!$fund) return $this->error('NOT_FOUND', 'الصندوق غير موجود', 404);
-        if (!$fund->isMember($request->user()->id)) {
+        if (!$fund->isMember($request->user()->id) && $fund->owner_user_id !== $request->user()->id) {
             return $this->error('FORBIDDEN', 'لستَ عضواً في هذا الصندوق', 403);
         }
 
         $txs = FamilyFundTransaction::where('fund_id', $fund->id)
+            ->with(['user:id,f_name,l_name', 'beneficiary:id,f_name,l_name'])
             ->orderByDesc('id')
             ->paginate(50);
 

@@ -96,6 +96,16 @@ Route::get('/v/{code}', [\App\Http\Controllers\PublicVerificationController::cla
     ->middleware('throttle:20,1')
     ->name('receipt.verify.public-page');
 
+// رابط مشاركة طلب الدفع القصير — يعرض ملخص الطلب دون كشف بيانات حساسة
+Route::get('/req/{code}', function (string $code) {
+    $paymentRequest = \App\Models\PaymentRequest::select(['id', 'short_code', 'amount', 'status', 'expires_at'])
+        ->where('short_code', strtoupper($code))
+        ->first();
+    return view('site.payment-request-public', compact('paymentRequest'));
+})->where('code', '[A-Za-z0-9]{6,8}')
+  ->middleware('throttle:30,1')
+  ->name('payment-request.public');
+
 Route::get('authentication-failed', function () {
     $errors = [];
     array_push($errors, ['code' => 'auth-001', 'message' => 'Unauthorized.']);

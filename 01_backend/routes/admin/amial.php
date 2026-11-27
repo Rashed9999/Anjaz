@@ -156,7 +156,7 @@ Route::prefix('safe-payments')->name('safe-payments.')->middleware(['amial.idemp
 
 // ============ AMIAL-DONATIONS-001 (v1.2) ============
 // AMIAL-SURFACE-002 — لوحات الأنظمة اليتيمة الأربع
-Route::prefix('surface')->name('surface.')->group(function () {
+Route::prefix('surface')->name('surface.')->middleware('amial.idempotency')->group(function () {
     $sc = App\Http\Controllers\Admin\AdminSurfaceController::class;
     Route::get('/bill-providers', [$sc, 'billProviders'])
         ->middleware('platform:platform.audit.view')->name('bill-providers');
@@ -171,8 +171,12 @@ Route::prefix('surface')->name('surface.')->group(function () {
         ->middleware('platform:platform.settings.update')->name('bill-providers.services.save');
     Route::get('/funds', [$sc, 'funds'])->middleware('platform:platform.transactions.view')->name('funds');
     Route::get('/funds/{id}', [$sc, 'fundDetail'])->where('id', '[0-9]+')
-        ->middleware('platform:platform.audit.view')->name('funds.detail');
+        ->middleware('platform:platform.transactions.view')->name('funds.detail');
+    Route::post('/funds/{id}/status', [$sc, 'updateFundStatus'])->where('id', '[0-9]+')
+        ->middleware('platform:platform.money.move')->name('funds.status');
     Route::get('/payment-requests', [$sc, 'paymentRequests'])->middleware('platform:platform.transactions.view')->name('payment-requests');
+    Route::post('/payment-requests/{id}/cancel', [$sc, 'cancelPaymentRequest'])->where('id', '[0-9]+')
+        ->middleware('platform:platform.money.move')->name('payment-requests.cancel');
     Route::get('/rbac', [$sc, 'rbac'])->middleware('platform:platform.settings.update')->name('rbac');
 });
 
@@ -209,6 +213,9 @@ Route::prefix('charity')->name('charity.')
     Route::get('/campaigns/{ulid}/donors', [AdminCharityController::class, 'campaignDonors'])
         ->where('ulid', '[A-Z0-9]{26}')
         ->middleware('platform:platform.audit.view')->name('campaigns.donors');
+    Route::post('/donations/{ulid}/refund', [AdminCharityController::class, 'refundDonation'])
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.money.move')->name('donations.refund');
 
     Route::get('/settlements', [AdminCharityController::class, 'indexSettlements'])->name('settlements.index');
     Route::post('/settlements/generate', [AdminCharityController::class, 'generateSettlement'])

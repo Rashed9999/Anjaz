@@ -21,7 +21,12 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
 
   final RxBool isLoading = false.obs;
   final RxBool isSubmitting = false.obs;
+  final RxBool isLoadingMoreTx = false.obs;
+  final RxBool hasMoreTransactions = false.obs;
   final RxString lastError = ''.obs;
+  final RxString lastDisbursementStatus = ''.obs;
+
+  int _txLoadedPage = 0;
 
   Future<void> loadMyFunds() async {
     try {
@@ -59,6 +64,7 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
         targetAmount: targetAmount,
       );
       if ((r.statusCode == 200 || r.statusCode == 201) && r.body is Map && r.body['success'] == true) {
+        lastError.value = '';
         await loadMyFunds();
         return true;
       }
@@ -72,14 +78,15 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
     }
   }
 
-  /// AMIAL-FUND-003: دعوة عضو للصندوق برقم هاتفه.
+  /// AMIAL-FUND-003: دعوة عضو للصندوق برقم هاتفه مع دعم تحديد الدور.
   Future<bool> inviteMember({
     required String fundUlid,
     required String phone,
+    String role = 'member',
   }) async {
     try {
       isSubmitting.value = true;
-      final r = await repo.invite(fundUlid: fundUlid, phone: phone);
+      final r = await repo.invite(fundUlid: fundUlid, phone: phone, role: role);
       if ((r.statusCode == 200 || r.statusCode == 201) &&
           r.body is Map && r.body['success'] == true) {
         lastError.value = '';
@@ -88,7 +95,7 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
       lastError.value = _msg(r) ?? 'تعذّرت الدعوة';
       return false;
     } catch (e) {
-      lastError.value = 'خطأ في الشبكة';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
       return false;
     } finally {
       isSubmitting.value = false;
@@ -98,6 +105,17 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
   Future<bool> loadFundDetails(String ulid) async {
     try {
       isLoading.value = true;
+      lastError.value = '';
+      // تصفير بيانات الصندوق السابق عند فتح صندوق جديد حتى لا تظهر بيانات قديمة
+      if (selectedFund.value?.fundUlid != ulid) {
+        selectedFund.value = null;
+        selectedFundRole.value = '';
+        selectedFundMembers.clear();
+        selectedFundTransactions.clear();
+        _txLoadedPage = 0;
+        hasMoreTransactions.value = false;
+      }
+
       final r = await repo.show(ulid);
       if (r.statusCode == 200 && r.body is Map) {
         final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
@@ -112,16 +130,59 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
         selectedFundTransactions.value = txs
             .map((j) => AmialFundTransaction.fromJson(Map<String, dynamic>.from(j)))
             .toList();
+        _txLoadedPage = 0;
+        hasMoreTransactions.value = selectedFundTransactions.length >= 20;
         lastError.value = '';
         return true;
       }
-      lastError.value = _msg(r) ?? 'غير موجود';
+      lastError.value = _msg(r) ?? 'تعذّر تحميل تفاصيل الصندوق';
       return false;
     } catch (e) {
+      if (kDebugMode) debugPrint('loadFundDetails error: $e');
       lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
       return false;
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  /// تحميل المزيد من الحركات عبر نقطة transactions المرقّمة.
+  Future<void> loadMoreTransactions(String fundUlid) async {
+    if (isLoadingMoreTx.value || !hasMoreTransactions.value) return;
+    try {
+      isLoadingMoreTx.value = true;
+      final nextPage = _txLoadedPage + 1;
+      final r = await repo.transactions(fundUlid, page: nextPage);
+      if (r.statusCode == 200 && r.body is Map) {
+        final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
+        final items = (meta['items'] as List? ?? [])
+            .map((j) => AmialFundTransaction.fromJson(Map<String, dynamic>.from(j)))
+            .toList();
+        final pagination = meta['pagination'] is Map
+            ? Map<String, dynamic>.from(meta['pagination'])
+            : <String, dynamic>{};
+        final total = int.tryParse('${pagination['total'] ?? 0}') ?? 0;
+
+        if (nextPage == 1) {
+          selectedFundTransactions.value = items;
+        } else {
+          final existingUlids = selectedFundTransactions.map((t) => t.txUlid).toSet();
+          final fresh = items.where((t) => !existingUlids.contains(t.txUlid)).toList();
+          selectedFundTransactions.addAll(fresh);
+        }
+
+        _txLoadedPage = nextPage;
+        hasMoreTransactions.value =
+            items.isNotEmpty && selectedFundTransactions.length < total;
+        lastError.value = '';
+      } else {
+        lastError.value = _msg(r) ?? 'تعذّر تحميل المزيد من الحركات';
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('loadMoreTransactions error: $e');
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
+    } finally {
+      isLoadingMoreTx.value = false;
     }
   }
 
@@ -142,6 +203,7 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
       );
       settleKey('fund_contribute', r, scope: scope);
       if ((r.statusCode == 200 || r.statusCode == 201) && r.body is Map && r.body['success'] == true) {
+        lastError.value = '';
         await loadFundDetails(fundUlid);
         await loadMyFunds();
         return true;
@@ -156,16 +218,19 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
     }
   }
 
-  Future<bool> proposeDisbursement({
+  /// يُرجع 'completed' عند التنفيذ الفوري، أو 'pending_approval' عند انتظار موافقة المالك،
+  /// أو null عند الفشل (مع تعبئة lastError).
+  Future<String?> proposeDisbursement({
     required String fundUlid,
     required int beneficiaryUserId,
     required String amount,
     String? note,
   }) async {
-    if (isSubmitting.value) return false;
+    if (isSubmitting.value) return null;
     final scope = jsonEncode([fundUlid, beneficiaryUserId, amount, note]);
     try {
       isSubmitting.value = true;
+      lastDisbursementStatus.value = '';
       final r = await repo.proposeDisbursement(
         fundUlid: fundUlid,
         beneficiaryUserId: beneficiaryUserId,
@@ -175,10 +240,68 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
       );
       settleKey('fund_disburse', r, scope: scope);
       if ((r.statusCode == 200 || r.statusCode == 201) && r.body is Map && r.body['success'] == true) {
+        final meta = r.body['meta'] is Map ? Map<String, dynamic>.from(r.body['meta']) : {};
+        final txMap = meta['transaction'] is Map ? Map<String, dynamic>.from(meta['transaction']) : {};
+        final txStatus = txMap['status']?.toString() ??
+            (r.body['code'] == 'DISBURSEMENT_PENDING' ? 'pending_approval' : 'completed');
+        lastDisbursementStatus.value = txStatus;
+        lastError.value = '';
+        await loadFundDetails(fundUlid);
+        await loadMyFunds();
+        return txStatus;
+      }
+      lastError.value = _msg(r) ?? 'تعذّر إتمام العملية';
+      return null;
+    } catch (e) {
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
+      return null;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  Future<bool> approveDisbursement(String fundUlid, String txUlid, String pin) async {
+    if (isSubmitting.value) return false;
+    try {
+      isSubmitting.value = true;
+      final r = await repo.approveDisbursement(
+        txUlid,
+        pin: pin,
+        idempotencyKey: keyFor('fund_approve', scope: txUlid),
+      );
+      settleKey('fund_approve', r, scope: txUlid);
+      if ((r.statusCode == 200 || r.statusCode == 201) && r.body is Map && r.body['success'] == true) {
+        final meta = r.body['meta'];
+        if (meta is Map && meta['approved'] == false) {
+          lastError.value = 'تمت معالجة هذا الطلب مسبقاً';
+          await loadFundDetails(fundUlid);
+          return false;
+        }
+        lastError.value = '';
+        await loadFundDetails(fundUlid);
+        await loadMyFunds();
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذّر اعتماد طلب الصرف';
+      return false;
+    } catch (e) {
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  Future<bool> rejectDisbursement(String fundUlid, String txUlid, String reason) async {
+    try {
+      isSubmitting.value = true;
+      final r = await repo.rejectDisbursement(txUlid, reason);
+      if ((r.statusCode == 200 || r.statusCode == 201) && r.body is Map && r.body['success'] == true) {
+        lastError.value = '';
         await loadFundDetails(fundUlid);
         return true;
       }
-      lastError.value = _msg(r) ?? 'تعذّر إتمام العملية';
+      lastError.value = _msg(r) ?? 'تعذّر رفض طلب الصرف';
       return false;
     } catch (e) {
       lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
@@ -193,6 +316,7 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
       isSubmitting.value = true;
       final r = await repo.acceptInvitation(membershipId);
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        lastError.value = '';
         await loadMyFunds();
         return true;
       }

@@ -9,7 +9,9 @@ use App\Models\BillPaymentOrder;
 use App\Models\FamilyFund;
 use App\Models\PaymentRequest;
 use App\Models\PosUser;
+use App\Services\AuditService;
 use App\Services\BillProviderAdminService;
+use App\Services\FamilyFundService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -122,16 +124,78 @@ class AdminSurfaceController extends Controller
         }
     }
 
-    public function funds(): View
+    public function funds(Request $request): View
     {
-        $funds = FamilyFund::withCount('members')
-            ->orderByDesc('id')->paginate(25);
+        $q = FamilyFund::with('owner:id,f_name,l_name,phone')
+            ->withCount([
+                'members',
+                'members as active_members_count' => fn ($m) => $m->where('status', 'active'),
+            ]);
+
+        $status = trim((string) $request->query('status', ''));
+        if (in_array($status, ['active', 'frozen', 'archived'], true)) {
+            $q->where('status', $status);
+        }
+
+        $search = trim((string) $request->query('search', ''));
+        if ($search !== '') {
+            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $search);
+            $like = "%{$escaped}%";
+            $q->where(function (Builder $nested) use ($like): void {
+                $nested->where('name', 'like', $like)
+                    ->orWhere('fund_ulid', 'like', $like)
+                    ->orWhereHas('owner', function (Builder $u) use ($like): void {
+                        $u->where('phone', 'like', $like)
+                            ->orWhere('f_name', 'like', $like)
+                            ->orWhere('l_name', 'like', $like);
+                    });
+            });
+        }
+
+        $funds = $q->orderByDesc('id')->paginate(25)->withQueryString();
         return view('admin-views.amial.surface.funds', compact('funds'));
     }
 
-    public function fundDetail(int $id): View
+    public function fundDetail(Request $request, int $id): View|StreamedResponse
     {
-        $fund = FamilyFund::withCount('members')->findOrFail($id);
+        $fund = FamilyFund::with('owner:id,f_name,l_name,phone')
+            ->withCount([
+                'members',
+                'members as active_members_count' => fn ($m) => $m->where('status', 'active'),
+            ])->findOrFail($id);
+
+        if ($request->query('export') === 'csv') {
+            $exportQuery = DB::table('family_fund_transactions as t')
+                ->leftJoin('users as u', 'u.id', '=', 't.user_id')
+                ->leftJoin('users as b', 'b.id', '=', 't.beneficiary_user_id')
+                ->where('t.fund_id', $fund->id)
+                ->orderByDesc('t.id');
+
+            return response()->streamDownload(function () use ($exportQuery): void {
+                $out = fopen('php://output', 'wb');
+                fwrite($out, "\xEF\xBB\xBF");
+                fputcsv($out, ['رقم الحركة', 'النوع', 'المبلغ', 'الحالة', 'المنفّذ', 'المستفيد', 'الملاحظة', 'مرجع المحفظة', 'التاريخ']);
+                foreach ($exportQuery->get([
+                    't.tx_ulid', 't.tx_type', 't.amount', 't.status', 't.note', 't.wallet_transaction_id', 't.created_at',
+                    'u.f_name as actor_f', 'u.l_name as actor_l', 'b.f_name as ben_f', 'b.l_name as ben_l',
+                ]) as $t) {
+                    fputcsv($out, array_map([$this, 'safeCsvCell'], [
+                        $t->tx_ulid,
+                        $t->tx_type,
+                        $t->amount,
+                        $t->status,
+                        trim(($t->actor_f ?? '') . ' ' . ($t->actor_l ?? '')),
+                        trim(($t->ben_f ?? '') . ' ' . ($t->ben_l ?? '')),
+                        $t->note,
+                        $t->wallet_transaction_id,
+                        $t->created_at,
+                    ]));
+                }
+                fclose($out);
+            }, 'amial-fund-' . $fund->id . '-transactions-' . now()->format('Ymd-His') . '.csv', [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+            ]);
+        }
 
         $members = DB::table('family_fund_members as m')
             ->leftJoin('users as u', 'u.id', '=', 'm.user_id')
@@ -161,14 +225,13 @@ class AdminSurfaceController extends Controller
             ->where('status', 'completed')
             ->selectRaw("
                 SUM(CASE WHEN tx_type = 'contribute' THEN amount ELSE 0 END) as inflow,
-                SUM(CASE WHEN tx_type IN ('disburse_to_member','disburse_to_external')
-                    THEN amount ELSE 0 END) as outflow,
-                SUM(balance_after - balance_before) as net
+                SUM(CASE WHEN tx_type IN ('disburse_to_member','disburse_to_external','disbursement')
+                    THEN amount ELSE 0 END) as outflow
             ")->first();
 
         $inflow = (string) ($sums->inflow ?? '0');
         $outflow = (string) ($sums->outflow ?? '0');
-        $derived = (string) ($sums->net ?? '0');
+        $derived = bcsub($inflow, $outflow, 4);
         $stored = (string) ($fund->balance ?? '0');
 
         return view('admin-views.amial.surface.fund-detail', [
@@ -181,6 +244,27 @@ class AdminSurfaceController extends Controller
             'stored' => $stored,
             'gap' => bccomp($derived, $stored, 4) === 0 ? null : bcsub($stored, $derived, 4),
         ]);
+    }
+
+    public function updateFundStatus(Request $request, int $id, FamilyFundService $fundService): RedirectResponse
+    {
+        $data = $request->validate([
+            'action' => ['required', 'string', 'in:freeze,unfreeze'],
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        try {
+            $fund = FamilyFund::findOrFail($id);
+            $admin = auth('user')->user();
+            if ($data['action'] === 'freeze') {
+                $fundService->freezeFund($fund, $admin, $data['reason']);
+                return back()->with('success', 'تم تجميد الصندوق وتسجيل القرار في سجل التدقيق.');
+            }
+            $fundService->unfreezeFund($fund, $admin, $data['reason']);
+            return back()->with('success', 'تم فك تجميد الصندوق وإعادة تفعيله.');
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     public function paymentRequests(Request $request): View|StreamedResponse
@@ -210,8 +294,8 @@ class AdminSurfaceController extends Controller
                             trim(($r->requester?->f_name ?? '') . ' ' . ($r->requester?->l_name ?? '')),
                             $r->requester?->phone,
                             trim(($r->recipient?->f_name ?? '') . ' ' . ($r->recipient?->l_name ?? ''))
-                                ?: $r->recipient_name,
-                            $r->recipient?->phone ?? $r->recipient_phone,
+                                ?: ($r->recipient_name ?: trim(($r->paidBy?->f_name ?? '') . ' ' . ($r->paidBy?->l_name ?? ''))),
+                            $r->recipient?->phone ?? $r->recipient_phone ?? $r->paidBy?->phone,
                             $r->share_method,
                             $r->amount,
                             $r->status,
@@ -229,15 +313,67 @@ class AdminSurfaceController extends Controller
         }
 
         // مؤشرات حقيقية من جدول الميزة نفسه، وليست أرقاماً ثابتة في الواجهة.
-        $summary = PaymentRequest::query()->selectRaw('COUNT(*) AS total')
-            ->selectRaw("SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count")
+        $summary = $this->paymentRequestQuery($request)->selectRaw('COUNT(*) AS total')
+            ->selectRaw("SUM(CASE WHEN status = 'pending' AND (expires_at IS NULL OR expires_at > NOW()) THEN 1 ELSE 0 END) AS pending_count")
             ->selectRaw("SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) AS paid_count")
             ->selectRaw("SUM(CASE WHEN status = 'declined' THEN 1 ELSE 0 END) AS declined_count")
+            ->selectRaw("SUM(CASE WHEN status = 'expired' OR (status = 'pending' AND expires_at IS NOT NULL AND expires_at <= NOW()) THEN 1 ELSE 0 END) AS expired_count")
             ->selectRaw("SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS paid_amount")
             ->first();
 
         $requests = $q->orderByDesc('id')->paginate(25)->withQueryString();
         return view('admin-views.amial.surface.payment-requests', compact('requests', 'summary'));
+    }
+
+    public function cancelPaymentRequest(Request $request, int $id): RedirectResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        $admin = auth('user')->user();
+
+        try {
+            $cancelled = DB::transaction(function () use ($id, $data, $admin): bool {
+            $pr = PaymentRequest::where('id', $id)->lockForUpdate()->firstOrFail();
+            if ($pr->status !== 'pending') {
+                return false;
+            }
+
+            $pr->status = 'cancelled';
+            $pr->save();
+
+            $auditId = app(AuditService::class)->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $admin?->id,
+                'subject_type' => 'payment_request',
+                'subject_id' => (string) $pr->id,
+                'action' => 'ADMIN_PAYMENT_REQUEST_CANCELLED',
+                'decision_code' => 'ADMIN_CANCELLED',
+                'reason' => $data['reason'],
+                'severity' => 'warning',
+                'context' => [
+                    'request_ulid' => $pr->request_ulid,
+                    'short_code' => $pr->short_code,
+                    'amount' => (string) $pr->amount,
+                ],
+            ]);
+            if ($auditId === null) {
+                throw new \RuntimeException('PAYMENT_REQUEST_CANCELLATION_AUDIT_FAILED');
+            }
+
+            return true;
+            });
+        } catch (\Throwable $e) {
+            report($e);
+            return back()->with('error', 'تعذّر إلغاء الطلب بصورة آمنة؛ لم يُثبَّت تغيير الحالة.');
+        }
+
+        if (! $cancelled) {
+            return back()->with('error', 'لا يمكن إلغاء طلب ليس في حالة انتظار.');
+        }
+
+        return back()->with('success', 'تم إلغاء طلب الدفع وتسجيل الإجراء في سجل التدقيق.');
     }
 
     private function paymentRequestQuery(Request $request): Builder
@@ -262,18 +398,26 @@ class AdminSurfaceController extends Controller
 
         $search = trim((string) $request->query('search', ''));
         if ($search !== '') {
-            $q->where(function (Builder $nested) use ($search): void {
-                $like = "%{$search}%";
+            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $search);
+            $q->where(function (Builder $nested) use ($escaped): void {
+                $like = "%{$escaped}%";
                 $nested->where('request_ulid', 'like', $like)
                     ->orWhere('short_code', 'like', $like)
                     ->orWhere('paid_transaction_id', 'like', $like)
                     ->orWhere('recipient_phone', 'like', $like)
+                    ->orWhere('recipient_name', 'like', $like)
+                    ->orWhere('note', 'like', $like)
                     ->orWhereHas('requester', function (Builder $user) use ($like): void {
                         $user->where('phone', 'like', $like)
                             ->orWhere('f_name', 'like', $like)
                             ->orWhere('l_name', 'like', $like);
                     })
                     ->orWhereHas('recipient', function (Builder $user) use ($like): void {
+                        $user->where('phone', 'like', $like)
+                            ->orWhere('f_name', 'like', $like)
+                            ->orWhere('l_name', 'like', $like);
+                    })
+                    ->orWhereHas('paidBy', function (Builder $user) use ($like): void {
                         $user->where('phone', 'like', $like)
                             ->orWhere('f_name', 'like', $like)
                             ->orWhere('l_name', 'like', $like);

@@ -173,6 +173,10 @@ class CharityService
         if ($campaign->created_by_admin_id && (int) $campaign->created_by_admin_id === (int) $admin->id) {
             throw new \RuntimeException('لا يجوز لمن أنشأ الحملة اعتمادها بنفسه');
         }
+        $org = $campaign->organization;
+        if (!$org || !$org->isVerified()) {
+            throw new \RuntimeException('لا يمكن اعتماد حملة لجمعية غير موثّقة');
+        }
         if (!in_array($campaign->status, ['pending_approval', 'paused'], true)) {
             throw new \RuntimeException('Campaign is not in approvable state');
         }

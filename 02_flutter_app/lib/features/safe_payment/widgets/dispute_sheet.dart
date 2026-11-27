@@ -51,8 +51,11 @@ class _DisputeSheetState extends State<DisputeSheet> {
   }
 
   Future<void> _submit() async {
+    final ctrl = Get.find<SafePaymentController>();
+    final reasons = ctrl.disputeReasons;
+    final effectiveCode = reasons.isEmpty ? 'other' : _code;
     final text = _reason.text.trim();
-    if (_code == null) {
+    if (effectiveCode == null) {
       setState(() => _error = 'اختر سبب النزاع');
       return;
     }
@@ -66,8 +69,7 @@ class _DisputeSheetState extends State<DisputeSheet> {
       _error = null;
     });
 
-    final ctrl = Get.find<SafePaymentController>();
-    final ok = await ctrl.buyerDispute(widget.ulid, text, reasonCode: _code);
+    final ok = await ctrl.buyerDispute(widget.ulid, text, reasonCode: effectiveCode);
 
     if (!mounted) return;
     if (ok) {

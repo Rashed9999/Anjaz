@@ -30,158 +30,169 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
     bool isAnonymous = false;
     final quickAmounts = ['10', '50', '100', '200', '500'];
 
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) => Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              left: 16, right: 16, top: 16,
-            ),
-            child: SingleChildScrollView(
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.volunteer_activism,
-                            color: AmialColors.primary, size: 24),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'تبرع لـ "${campaign.titleAr}"',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Quick amounts
-                    const Text('مبالغ مقترحة:',
-                        style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      children: quickAmounts.map((amt) => InkWell(
-                        onTap: () {
-                          amountCtrl.text = amt;
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AmialColors.yellow.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AmialColors.yellow),
-                          ),
-                          child: Text('$amt ر.ي',
+    bool? ok;
+    try {
+      ok = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (ctx, setSheetState) => Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 16, right: 16, top: 16,
+              ),
+              child: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.volunteer_activism,
+                              color: AmialColors.primary, size: 24),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'تبرع لـ "${campaign.titleAr}"',
                               style: const TextStyle(
-                                  color: AmialColors.primary,
-                                  fontWeight: FontWeight.w600)),
-                        ),
-                      )).toList(),
-                    ),
-                    const SizedBox(height: 12),
-
-                    TextFormField(
-                      controller: amountCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'المبلغ (ر.ي) *',
-                        border: OutlineInputBorder(),
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                      validator: (v) {
-                        final n = double.tryParse(v ?? '');
-                        if (n == null || n < 1) return 'الحد الأدنى 1 ر.ي';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 16),
 
-                    TextFormField(
-                      controller: messageCtrl,
-                      maxLength: 500,
-                      decoration: const InputDecoration(
-                        labelText: 'رسالة دعاء/تعليق (اختياري)',
-                        border: OutlineInputBorder(),
+                      // Quick amounts
+                      const Text('مبالغ مقترحة:',
+                          style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: quickAmounts.map((amt) => InkWell(
+                          onTap: () {
+                            amountCtrl.text = amt;
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AmialColors.yellow.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AmialColors.yellow),
+                            ),
+                            child: Text('$amt ر.ي',
+                                style: const TextStyle(
+                                    color: AmialColors.primary,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        )).toList(),
                       ),
-                    ),
+                      const SizedBox(height: 12),
 
-                    CheckboxListTile(
-                      title: const Text('تبرع باسم مجهول'),
-                      subtitle: const Text(
-                          'لن يظهر اسمك في قائمة المتبرعين العامة',
-                          style: TextStyle(fontSize: 11)),
-                      value: isAnonymous,
-                      activeColor: AmialColors.primary,
-                      onChanged: (v) => setSheetState(() => isAnonymous = v ?? false),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      dense: true,
-                    ),
-                    const SizedBox(height: 8),
-
-                    Obx(() {
-                      final ctrl = Get.find<DonationsController>();
-                      return ElevatedButton.icon(
-                        onPressed: ctrl.isSubmitting.value
-                            ? null
-                            : () async {
-                                if (!formKey.currentState!.validate()) return;
-                                final pin = await askAmialPinInput(title: 'تأكيد التبرع');
-                                if (pin == null || pin.isEmpty) return;
-                                final success = await ctrl.donate(
-                                  campaignUlid: widget.ulid,
-                                  amount: amountCtrl.text.trim(),
-                                  pin: pin,
-                                  isAnonymous: isAnonymous,
-                                  message: messageCtrl.text.trim().isEmpty
-                                      ? null
-                                      : messageCtrl.text.trim(),
-                                );
-                                if (success) {
-                                  Navigator.pop(ctx, true);
-                                } else {
-                                  Get.snackbar('تعذّر التبرع', ctrl.lastError.value,
-                                      snackPosition: SnackPosition.BOTTOM);
-                                }
-                              },
-                        icon: ctrl.isSubmitting.value
-                            ? const SizedBox(
-                                width: 18, height: 18,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2))
-                            : const Icon(Icons.favorite),
-                        label: const Text('تأكيد التبرع',
-                            style: TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w600)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AmialColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                      TextFormField(
+                        controller: amountCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: 'المبلغ (ر.ي) *',
+                          border: OutlineInputBorder(),
                         ),
-                      );
-                    }),
-                    const SizedBox(height: 16),
-                  ],
+                        validator: (v) {
+                          final n = double.tryParse((v ?? '').trim());
+                          if (n == null || n < 1) return 'الحد الأدنى 1 ر.ي';
+                          if (n > 50000) return 'الحد الأقصى للتبرع 50000 ر.ي';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: messageCtrl,
+                        maxLength: 500,
+                        decoration: const InputDecoration(
+                          labelText: 'رسالة دعاء/تعليق (اختياري)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+
+                      CheckboxListTile(
+                        title: const Text('تبرع باسم مجهول'),
+                        subtitle: const Text(
+                            'لن يظهر اسمك في قائمة المتبرعين العامة',
+                            style: TextStyle(fontSize: 11)),
+                        value: isAnonymous,
+                        activeColor: AmialColors.primary,
+                        onChanged: (v) => setSheetState(() => isAnonymous = v ?? false),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        dense: true,
+                      ),
+                      const SizedBox(height: 8),
+
+                      Obx(() {
+                        final ctrl = Get.find<DonationsController>();
+                        return ElevatedButton.icon(
+                          onPressed: ctrl.isSubmitting.value
+                              ? null
+                              : () async {
+                                  if (!formKey.currentState!.validate()) return;
+                                  final parsedAmount = double.tryParse(amountCtrl.text.trim());
+                                  if (parsedAmount == null || parsedAmount < 1 || parsedAmount > 50000) {
+                                    return;
+                                  }
+                                  final pin = await askAmialPinInput(title: 'تأكيد التبرع');
+                                  if (pin == null || pin.isEmpty || !ctx.mounted) return;
+                                  final success = await ctrl.donate(
+                                    campaignUlid: widget.ulid,
+                                    amount: amountCtrl.text.trim(),
+                                    pin: pin,
+                                    isAnonymous: isAnonymous,
+                                    message: messageCtrl.text.trim().isEmpty
+                                        ? null
+                                        : messageCtrl.text.trim(),
+                                  );
+                                  if (success) {
+                                    if (ctx.mounted) Navigator.pop(ctx, true);
+                                  } else {
+                                    Get.snackbar('تعذّر التبرع', ctrl.lastError.value,
+                                        snackPosition: SnackPosition.BOTTOM);
+                                  }
+                                },
+                          icon: ctrl.isSubmitting.value
+                              ? const SizedBox(
+                                  width: 18, height: 18,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2))
+                              : const Icon(Icons.favorite),
+                          label: const Text('تأكيد التبرع',
+                              style: TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w600)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AmialColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
+    } finally {
+      amountCtrl.dispose();
+      messageCtrl.dispose();
+    }
 
     if (ok == true && mounted) {
       showDialog(
@@ -213,20 +224,22 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
       body: Obx(() {
         final ctrl = Get.find<DonationsController>();
         final campaign = ctrl.selectedCampaign.value;
-        if (ctrl.isLoading.value) {
+        if (ctrl.isDetailLoading.value) {
           return const Center(child: CircularProgressIndicator(color: AmialColors.primary));
         }
         if (campaign == null) {
           return Center(child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text(ctrl.lastError.value.isEmpty ? 'تعذّر تحميل الحملة' : ctrl.lastError.value,
+              Text(ctrl.detailError.value.isEmpty ? 'تعذّر تحميل الحملة' : ctrl.detailError.value,
                   textAlign: TextAlign.center),
               const SizedBox(height: 12),
               ElevatedButton(onPressed: () => ctrl.loadCampaign(widget.ulid), child: const Text('إعادة المحاولة')),
             ]),
           ));
         }
+
+        final remainingLabel = campaign.remainingTimeLabel;
 
         return Column(
           children: [
@@ -250,6 +263,51 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Urgent & category tags
+                        if (campaign.isUrgent || campaign.category != null) ...[
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              if (campaign.isUrgent)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFD32F2F)
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Text(
+                                    'عاجل',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFFD32F2F)),
+                                  ),
+                                ),
+                              if (campaign.category != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: AmialColors.primary
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    campaign.category!.nameAr,
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: AmialColors.primary),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+
                         // Title + verification badge
                         Row(
                           children: [
@@ -292,16 +350,20 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '${campaign.currentAmount} ر.ي',
+                                        '${campaign.formattedCurrentAmount} ر.ي',
                                         style: const TextStyle(
                                             fontSize: 20,
                                             fontWeight: FontWeight.bold,
                                             color: AmialColors.primary),
                                       ),
-                                      Text('من ${campaign.targetAmount} ر.ي',
+                                      Text('من ${campaign.formattedTargetAmount} ر.ي',
                                           style: const TextStyle(
                                               fontSize: 11,
                                               color: AmialColors.textMuted)),
+                                      Text('المتبقي: ${campaign.remainingAmount} ر.ي',
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AmialColors.textSecondary)),
                                     ],
                                   ),
                                   Column(
@@ -321,12 +383,12 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                               ),
                               const SizedBox(height: 8),
                               LinearProgressIndicator(
-                                value: campaign.progressPercentage / 100,
+                                value: (campaign.progressPercentage / 100).clamp(0.0, 1.0),
                                 backgroundColor: AmialColors.border,
                                 color: AmialColors.primary,
                                 minHeight: 8,
                               ),
-                              if (campaign.daysRemaining != null) ...[
+                              if (remainingLabel != null) ...[
                                 const SizedBox(height: 8),
                                 Row(
                                   children: [
@@ -334,9 +396,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                                         size: 14, color: AmialColors.textMuted),
                                     const SizedBox(width: 4),
                                     Text(
-                                      campaign.daysRemaining! > 0
-                                          ? 'متبقي ${campaign.daysRemaining} يوم'
-                                          : 'انتهت',
+                                      remainingLabel,
                                       style: const TextStyle(
                                           fontSize: 11, color: AmialColors.textMuted),
                                     ),
@@ -356,6 +416,66 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                         const SizedBox(height: 6),
                         Text(campaign.descriptionAr,
                             style: const TextStyle(fontSize: 13)),
+
+                        // ====== Story ======
+                        if (campaign.storyMd != null &&
+                            campaign.storyMd!.trim().isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          const Text('القصة الكاملة',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 14)),
+                          const SizedBox(height: 6),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AmialColors.border),
+                            ),
+                            child: Text(
+                              campaign.storyMd!.trim(),
+                              style: const TextStyle(fontSize: 13, height: 1.6),
+                            ),
+                          ),
+                        ],
+
+                        // ====== Gallery Images ======
+                        if (campaign.galleryImages != null &&
+                            campaign.galleryImages!.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          const Text('معرض الصور',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 14)),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            height: 110,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: campaign.galleryImages!.length,
+                              separatorBuilder: (_, _) => const SizedBox(width: 8),
+                              itemBuilder: (context, idx) {
+                                final url = campaign.galleryImages![idx];
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    url,
+                                    width: 140,
+                                    height: 110,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Container(
+                                      width: 140,
+                                      height: 110,
+                                      color: AmialColors.yellow.withValues(alpha: 0.2),
+                                      child: const Icon(Icons.broken_image,
+                                          color: AmialColors.textMuted),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
 
                         if (campaign.beneficiaryCount != null) ...[
                           const SizedBox(height: 12),
@@ -496,7 +616,7 @@ class _DonorTile extends StatelessWidget {
               ],
             ),
           ),
-          Text('${donation.amount} ر.ي',
+          Text('${donation.formattedAmount} ر.ي',
               style: const TextStyle(
                   fontSize: 12, color: AmialColors.primary, fontWeight: FontWeight.bold)),
         ],

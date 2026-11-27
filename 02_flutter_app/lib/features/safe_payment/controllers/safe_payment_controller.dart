@@ -16,6 +16,12 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
   final RxString yourRole = ''.obs; // buyer | seller
 
   final RxBool isLoading = false.obs;
+  final RxBool isLoadingMore = false.obs;
+  final RxBool hasMore = false.obs;
+  final RxString currentRole = 'all'.obs;
+  final RxnString currentStatus = RxnString(null);
+  int _currentPage = 1;
+
   final RxBool isSubmitting = false.obs;
   final RxString lastError = ''.obs;
   final RxBool isVerifyingSeller = false.obs;
@@ -38,23 +44,68 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
   final RxList<AmialDisputeReason> disputeReasons = <AmialDisputeReason>[].obs;
 
   Future<void> loadList({String role = 'all', String? status}) async {
+    currentRole.value = role;
+    currentStatus.value = status;
+    _currentPage = 1;
     try {
       isLoading.value = true;
-      final r = await repo.list(role: role, status: status);
+      final r = await repo.list(role: role, status: status, page: 1);
       if (r.statusCode == 200 && r.body is Map) {
-        final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
+        final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
+        final items = (meta['items'] as List? ?? []);
         payments.value = items
             .map((j) => AmialSafePayment.fromJson(Map<String, dynamic>.from(j)))
             .toList();
+        final pg = meta['pagination'] is Map
+            ? Map<String, dynamic>.from(meta['pagination'])
+            : const <String, dynamic>{};
+        final total = int.tryParse('${pg['total'] ?? payments.length}') ?? payments.length;
+        hasMore.value = payments.length < total;
         lastError.value = '';
       } else {
+        hasMore.value = false;
         lastError.value = _msg(r) ?? 'فشل التحميل';
       }
     } catch (e) {
       if (kDebugMode) debugPrint('loadList: $e');
+      hasMore.value = false;
       lastError.value = 'خطأ في الشبكة';
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  Future<void> reloadList() =>
+      loadList(role: currentRole.value, status: currentStatus.value);
+
+  Future<void> loadMore() async {
+    if (isLoading.value || isLoadingMore.value || !hasMore.value) return;
+    final nextPage = _currentPage + 1;
+    try {
+      isLoadingMore.value = true;
+      final r = await repo.list(
+        role: currentRole.value,
+        status: currentStatus.value,
+        page: nextPage,
+      );
+      if (r.statusCode == 200 && r.body is Map) {
+        final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
+        final items = (meta['items'] as List? ?? []);
+        final parsed = items
+            .map((j) => AmialSafePayment.fromJson(Map<String, dynamic>.from(j)))
+            .toList();
+        payments.addAll(parsed);
+        _currentPage = nextPage;
+        final pg = meta['pagination'] is Map
+            ? Map<String, dynamic>.from(meta['pagination'])
+            : const <String, dynamic>{};
+        final total = int.tryParse('${pg['total'] ?? payments.length}') ?? payments.length;
+        hasMore.value = parsed.isNotEmpty && payments.length < total;
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('loadMore: $e');
+    } finally {
+      isLoadingMore.value = false;
     }
   }
 
@@ -132,7 +183,7 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
       if ((r.statusCode == 200 || r.statusCode == 201) &&
           r.body is Map &&
           r.body['success'] == true) {
-        await loadList();
+        await reloadList();
         return true;
       }
       lastError.value = _msg(r) ?? 'فشل الإنشاء';
@@ -240,10 +291,15 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
     if (disputeReasons.isNotEmpty) return;
     try {
       final r = await repo.disputeReasons();
-      if (r.statusCode == 200 && r.body is Map && r.body['data'] is List) {
-        disputeReasons.value = (r.body['data'] as List)
-            .map((j) => AmialDisputeReason.fromJson(Map<String, dynamic>.from(j)))
-            .toList();
+      if (r.statusCode == 200 && r.body is Map) {
+        final rawList =
+            (r.body['meta'] is Map ? r.body['meta']['reasons'] : null) ??
+                r.body['data'];
+        if (rawList is List) {
+          disputeReasons.value = rawList
+              .map((j) => AmialDisputeReason.fromJson(Map<String, dynamic>.from(j)))
+              .toList();
+        }
       }
     } catch (_) {
       // القائمة تكميلية: النزاع يُفتح بنصّ حرّ حتى لو تعذّر جلبها.
@@ -254,7 +310,10 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
     try {
       final r = await repo.evidence(ulid);
       if (r.statusCode == 200 && r.body is Map) {
-        _absorbEvidence(r.body['data']);
+        final rawEvidence =
+            (r.body['meta'] is Map ? r.body['meta']['evidence'] : null) ??
+                r.body['data'];
+        _absorbEvidence(rawEvidence);
       }
     } catch (_) {
       // الصمت مقصود: فشل تحديث المعرض لا يُفسد الشاشة.
@@ -303,7 +362,7 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
           r.body is Map &&
           r.body['success'] == true) {
         await loadDetail(ulid);
-        await loadList();
+        await reloadList();
         return true;
       }
       lastError.value = _msg(r) ?? 'فشل التنفيذ';

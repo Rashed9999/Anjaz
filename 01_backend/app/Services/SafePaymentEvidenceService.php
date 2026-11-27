@@ -186,6 +186,7 @@ class SafePaymentEvidenceService
             'original_name' => $e->original_name,
             // البصمة تُعرض مختصرةً: تكفي للمقارنة ولا تُثقل الواجهة.
             'fingerprint' => substr($e->sha256, 0, 12),
+            'note' => $e->note,
             'uploaded_at' => optional($e->created_at)->toIso8601String(),
         ];
     }

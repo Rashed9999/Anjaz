@@ -25,7 +25,7 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
       final ctrl = Get.find<DonationsController>();
       ctrl.loadCategories();
       ctrl.loadFeatured();
-      ctrl.loadCampaigns();
+      ctrl.loadHomeCampaigns();
     });
   }
 
@@ -49,7 +49,7 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
           await Future.wait([
             ctrl.loadCategories(),
             ctrl.loadFeatured(),
-            ctrl.loadCampaigns(),
+            ctrl.loadHomeCampaigns(),
           ]);
         },
         color: AmialColors.primary,
@@ -128,7 +128,7 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
                   ),
                 ),
                 SizedBox(
-                  height: 220,
+                  height: 225,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -147,21 +147,56 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
                 child: Text('كل الحملات النشطة',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
               ),
-              if (ctrl.isLoading.value && ctrl.campaigns.isEmpty)
+              if (ctrl.isHomeLoading.value && ctrl.homeCampaigns.isEmpty)
                 const Center(
                     child: Padding(
                   padding: EdgeInsets.all(40),
                   child: CircularProgressIndicator(color: AmialColors.primary),
                 ))
-              else if (ctrl.campaigns.isEmpty)
+              else if (ctrl.homeError.value.isNotEmpty && ctrl.homeCampaigns.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(ctrl.homeError.value,
+                            style: const TextStyle(color: AmialColors.textMuted)),
+                        const SizedBox(height: 12),
+                        ElevatedButton(
+                          onPressed: () => ctrl.loadHomeCampaigns(),
+                          child: const Text('إعادة المحاولة'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (ctrl.homeCampaigns.isEmpty)
                 const Center(
                     child: Padding(
                   padding: EdgeInsets.all(40),
                   child: Text('لا توجد حملات نشطة حالياً',
                       style: TextStyle(color: AmialColors.textMuted)),
                 ))
-              else
-                ...ctrl.campaigns.map((c) => _CampaignListItem(campaign: c)),
+              else ...[
+                ...ctrl.homeCampaigns.map((c) => _CampaignListItem(campaign: c)),
+                if (ctrl.hasMoreHome.value)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: OutlinedButton(
+                      onPressed: ctrl.isHomeLoadingMore.value
+                          ? null
+                          : () => ctrl.loadHomeCampaigns(loadMore: true),
+                      child: ctrl.isHomeLoadingMore.value
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('تحميل المزيد'),
+                    ),
+                  ),
+              ],
 
               const SizedBox(height: 24),
             ],
@@ -238,24 +273,48 @@ class _FeaturedCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                height: 110,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                  image: campaign.coverImageUrl != null
-                      ? DecorationImage(
-                          image: NetworkImage(campaign.coverImageUrl!),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                  color: AmialColors.yellow.withValues(alpha: 0.25),
-                ),
-                child: campaign.coverImageUrl == null
-                    ? const Center(
-                        child: Icon(Icons.volunteer_activism,
-                            size: 40, color: AmialColors.primary))
-                    : null,
+              Stack(
+                children: [
+                  Container(
+                    height: 110,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                      image: campaign.coverImageUrl != null
+                          ? DecorationImage(
+                              image: NetworkImage(campaign.coverImageUrl!),
+                              fit: BoxFit.cover,
+                              onError: (_, __) {},
+                            )
+                          : null,
+                      color: AmialColors.yellow.withValues(alpha: 0.25),
+                    ),
+                    child: campaign.coverImageUrl == null
+                        ? const Center(
+                            child: Icon(Icons.volunteer_activism,
+                                size: 40, color: AmialColors.primary))
+                        : null,
+                  ),
+                  if (campaign.isUrgent)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD32F2F),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'عاجل',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               Padding(
                 padding: const EdgeInsets.all(10),
@@ -271,14 +330,14 @@ class _FeaturedCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     LinearProgressIndicator(
-                      value: campaign.progressPercentage / 100,
+                      value: (campaign.progressPercentage / 100).clamp(0.0, 1.0),
                       backgroundColor: AmialColors.border,
                       color: AmialColors.primary,
                       minHeight: 6,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${campaign.progressPercentage.toStringAsFixed(1)}% — ${campaign.currentAmount} / ${campaign.targetAmount} ر.ي',
+                      '${campaign.progressPercentage.toStringAsFixed(1)}% — ${campaign.formattedCurrentAmount} / ${campaign.formattedTargetAmount} ر.ي',
                       style: const TextStyle(fontSize: 10, color: AmialColors.textSecondary),
                     ),
                   ],
@@ -320,6 +379,24 @@ class _CampaignListItem extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (campaign.isUrgent)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD32F2F).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'عاجل',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFD32F2F)),
+                          ),
+                        ),
+                      ),
                     Text(campaign.titleAr,
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 14),
@@ -332,7 +409,7 @@ class _CampaignListItem extends StatelessWidget {
                               fontSize: 11, color: AmialColors.textSecondary)),
                     const SizedBox(height: 6),
                     LinearProgressIndicator(
-                      value: campaign.progressPercentage / 100,
+                      value: (campaign.progressPercentage / 100).clamp(0.0, 1.0),
                       backgroundColor: AmialColors.border,
                       color: AmialColors.primary,
                       minHeight: 4,
@@ -341,7 +418,7 @@ class _CampaignListItem extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('${campaign.currentAmount} ر.ي',
+                        Text('${campaign.formattedCurrentAmount} ر.ي',
                             style: const TextStyle(
                                 fontSize: 11, fontWeight: FontWeight.bold)),
                         Text(

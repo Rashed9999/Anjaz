@@ -109,7 +109,7 @@
                 ['🎧 مركز الدعم (بحث شامل + الأجهزة)', route('admin.support-center.index'), null],
                 ['⚖️ لوحة النزاعات (دفع آمن)', route('admin.amial.hub.disputes'), 'platform.transactions.view'],
                 ['📝 بلاغات العملاء والنزاعات', route('admin.disputes.index'), 'platform.transactions.view'],
-                ['🎗️ لوحة التبرعات (الجمعيات)', route('admin.amial.charity.page'), null],
+                ['🎗️ لوحة التبرعات (الجمعيات)', route('admin.amial.charity.page'), 'platform.transactions.view'],
                 ['⚡ مزوّدو الفواتير', route('admin.amial.surface.bill-providers'), 'platform.audit.view'],
                 ['👨‍👩‍👧 صناديق العائلة', route('admin.amial.surface.funds'), 'platform.transactions.view'],
                 ['📨 طلبات الأموال', route('admin.amial.surface.payment-requests'), 'platform.transactions.view'],

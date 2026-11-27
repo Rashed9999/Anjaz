@@ -1,5 +1,6 @@
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/safe_payment/controllers/safe_payment_controller.dart';
 import 'package:amial_pay/features/safe_payment/domain/models/safe_payment_models.dart';
@@ -37,46 +38,95 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
   }) async {
     final ctrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    bool? ok;
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: ctrl,
-            maxLines: 3,
-            maxLength: 500,
-            decoration: InputDecoration(
-              hintText: hint,
-              border: const OutlineInputBorder(),
+    try {
+      ok = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          bool submitting = false;
+          String? dialogError;
+          return StatefulBuilder(
+            builder: (ctx, setDialogState) => AlertDialog(
+              title: Text(title),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextFormField(
+                      controller: ctrl,
+                      enabled: !submitting,
+                      maxLines: 3,
+                      maxLength: 500,
+                      decoration: InputDecoration(
+                        hintText: hint,
+                        border: const OutlineInputBorder(),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().length < 5) {
+                          return 'السبب 5 أحرف على الأقل';
+                        }
+                        return null;
+                      },
+                    ),
+                    if (dialogError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        dialogError!,
+                        style: const TextStyle(color: AmialColors.red, fontSize: 12),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: submitting ? null : () => Navigator.pop(ctx, false),
+                  child: const Text('إلغاء'),
+                ),
+                ElevatedButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDialogState(() {
+                            submitting = true;
+                            dialogError = null;
+                          });
+                          final success = await onConfirm(ctrl.text.trim());
+                          if (!ctx.mounted) return;
+                          if (success) {
+                            Navigator.pop(ctx, true);
+                          } else {
+                            final err = Get.find<SafePaymentController>().lastError.value;
+                            setDialogState(() {
+                              submitting = false;
+                              dialogError = err.isNotEmpty ? err : 'تعذّر تنفيذ الإجراء';
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
+                  child: submitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('تأكيد'),
+                ),
+              ],
             ),
-            validator: (v) {
-              if (v == null || v.trim().length < 5) return 'السبب 5 أحرف على الأقل';
-              return null;
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              final success = await onConfirm(ctrl.text.trim());
-              if (success) {
-                Navigator.pop(ctx, true);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
-            child: const Text('تأكيد'),
-          ),
-        ],
-      ),
-    );
+          );
+        },
+      );
+    } finally {
+      ctrl.dispose();
+    }
 
     if (ok == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -87,7 +137,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
     }
   }
 
-  Future<void> _confirmAction(String label, String hint, Future<bool> Function() action) async {
+  Future<void> _confirmAction(String label, String hint, Future<bool?> Function() action) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -106,7 +156,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
     );
     if (confirmed != true) return;
     final success = await action();
-    if (!mounted) return;
+    if (success == null || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(success ? 'تم بنجاح' : Get.find<SafePaymentController>().lastError.value),
@@ -218,14 +268,95 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                     ],
                     if ((double.tryParse(payment.platformFee) ?? 0) > 0) ...[
                       const SizedBox(height: 4),
-                      Text('رسوم الخدمة: '+AmialMoney.yer(payment.platformFee),
+                      Text('رسوم الخدمة: ' + AmialMoney.yer(payment.platformFee),
                           style: const TextStyle(
                               fontSize: 10, color: AmialColors.textMuted)),
+                    ],
+                    const SizedBox(height: 10),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () async {
+                        await Clipboard.setData(ClipboardData(text: payment.paymentUlid));
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('تم نسخ رقم المرجع'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF6F7F9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.copy_rounded,
+                                size: 14, color: AmialColors.textSecondary),
+                            const SizedBox(width: 6),
+                            Text(
+                              payment.paymentUlid,
+                              textDirection: TextDirection.ltr,
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                  color: AmialColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (payment.status == 'pending_seller_acceptance' &&
+                        payment.sellerResponseDeadline != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AmialColors.warningSurface,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.schedule_rounded,
+                                size: 15, color: Color(0xFFCFA300)),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                _formatDeadline(payment.sellerResponseDeadline!),
+                                style: const TextStyle(
+                                    fontSize: 11.5, color: AmialColors.textPrimary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ],
                 ),
               ),
               const SizedBox(height: 16),
+              if (payment.isTerminal &&
+                  ((double.tryParse(payment.refundedToBuyerAmount) ?? 0) > 0 ||
+                      (double.tryParse(payment.releasedToSellerAmount) ?? 0) > 0)) ...[
+                _Section(
+                  title: 'ملخص التسوية النهائية',
+                  children: [
+                    if ((double.tryParse(payment.releasedToSellerAmount) ?? 0) > 0)
+                      _DetailRow(
+                          'مُفرَج للبائع', AmialMoney.yer(payment.releasedToSellerAmount)),
+                    if ((double.tryParse(payment.refundedToBuyerAmount) ?? 0) > 0)
+                      _DetailRow(
+                          'مُسترد للمشتري', AmialMoney.yer(payment.refundedToBuyerAmount)),
+                    if ((double.tryParse(payment.platformFee) ?? 0) > 0)
+                      _DetailRow('رسوم الخدمة', AmialMoney.yer(payment.platformFee)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ],
 
               // AMIAL-DESIGN: «مراحل الضمان» — دفع المبلغ → استلام السلعة → تحرير الأموال
               _StagesStrip(status: payment.status),
@@ -320,7 +451,9 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
   /// هناك خطوة باقية.
   List<Widget> _buildDeliveryCodeBlock(
       SafePaymentController ctrl, AmialSafePayment payment, bool isBuyer) {
-    if (payment.isTerminal || ctrl.deliveryCodeVerified.value) {
+    if (payment.isTerminal ||
+        payment.status == 'disputed' ||
+        ctrl.deliveryCodeVerified.value) {
       if (!ctrl.deliveryCodeVerified.value) return const [];
       return [
         Container(
@@ -450,12 +583,17 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
     required String title,
     required String hint,
   }) async {
+    final ctrl = Get.find<SafePaymentController>();
+    final existingCount = (ctrl.evidence[stage] ?? const <AmialEvidenceItem>[])
+        .where((e) => e.role == ctrl.yourRole.value)
+        .length;
     final uploaded = await EvidencePickerSheet.open(
       context,
       ulid: widget.ulid,
       stage: stage,
       title: title,
       hint: hint,
+      existingCount: existingCount,
     );
     if (!uploaded || !mounted) return;
 
@@ -510,7 +648,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
           'هل استلمت السلعة كما هي موصوفة؟ سيتم إفراج المبلغ للبائع.',
           () async {
             final pin = await askAmialPinInput(title: 'تأكيد الإفراج للبائع');
-            if (pin == null || pin.length < 4) return false;
+            if (pin == null || pin.length < 4) return null;
             return ctrl.buyerConfirm(ulid, pin);
           }),
       ));
@@ -538,6 +676,21 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
     }
 
     return widgets;
+  }
+
+  String _formatDeadline(DateTime deadline) {
+    final now = DateTime.now();
+    final diff = deadline.difference(now);
+    final formatted =
+        '${deadline.year}-${deadline.month.toString().padLeft(2, '0')}-${deadline.day.toString().padLeft(2, '0')} '
+        '${deadline.hour.toString().padLeft(2, '0')}:${deadline.minute.toString().padLeft(2, '0')}';
+    if (diff.isNegative) {
+      return 'انتهت مهلة قبول البائع ($formatted)';
+    }
+    if (diff.inHours >= 1) {
+      return 'مهلة قبول البائع: متبقٍ ${diff.inHours} ساعة (حتى $formatted)';
+    }
+    return 'مهلة قبول البائع: متبقٍ ${diff.inMinutes} دقيقة (حتى $formatted)';
   }
 
   Widget _actionButton(String label, IconData icon, Color color, VoidCallback onTap) {

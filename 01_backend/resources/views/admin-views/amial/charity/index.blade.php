@@ -81,6 +81,7 @@
                         <tbody><tr><td colspan="5" class="text-muted">جارٍ التحميل…</td></tr></tbody>
                     </table>
                 </div>
+                <div class="card-footer d-flex justify-content-between align-items-center" id="orgs-pagination"></div>
             </div>
         </div>
 
@@ -176,6 +177,7 @@
                         <tbody><tr><td colspan="6" class="text-muted">جارٍ التحميل…</td></tr></tbody>
                     </table>
                 </div>
+                <div class="card-footer d-flex justify-content-between align-items-center" id="camps-pagination"></div>
             </div>
         </div>
 
@@ -218,6 +220,7 @@
                         <tbody><tr><td colspan="7" class="text-muted">جارٍ التحميل…</td></tr></tbody>
                     </table>
                 </div>
+                <div class="card-footer d-flex justify-content-between align-items-center" id="settle-pagination"></div>
             </div>
         </div>
     </div>
@@ -302,6 +305,44 @@
     const fmt = (n) => Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 4});
 
     let orgs = [];
+    let orgsPage = 1;
+    let campsPage = 1;
+    let settlePage = 1;
+
+    function renderPagination(containerId, pag, onPage) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        const total = Number(pag?.total ?? 0);
+        const perPage = Number(pag?.per_page ?? 20) || 20;
+        const current = Number(pag?.current_page ?? 1) || 1;
+        const last = Math.max(1, Math.ceil(total / perPage));
+
+        el.innerHTML = `
+            <small class="text-muted">صفحة ${current} من ${last} (الإجمالي: ${fmt(total)})</small>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary" data-pg-prev ${current <= 1 ? 'disabled' : ''}>السابق</button>
+                <button type="button" class="btn btn-outline-secondary" data-pg-next ${current >= last ? 'disabled' : ''}>التالي</button>
+            </div>`;
+        el.querySelector('[data-pg-prev]')?.addEventListener('click', () => {
+            if (current > 1) onPage(current - 1);
+        });
+        el.querySelector('[data-pg-next]')?.addEventListener('click', () => {
+            if (current < last) onPage(current + 1);
+        });
+    }
+
+    async function loadVerifiedOrgsDropdown() {
+        try {
+            const j = await api(`${base}/organizations?status=verified`);
+            const list = pick(j, 'organizations', 'items', 'orgs')
+                .filter(o => o.verification_status === 'verified');
+            const opts = list.length
+                ? list.map(o => `<option value="${esc(o.org_ulid ?? o.ulid)}">${esc(o.name_ar ?? o.name)}</option>`).join('')
+                : '<option value="">— لا جمعيات موثّقة بعد —</option>';
+            document.getElementById('camp-org').innerHTML = opts;
+            document.getElementById('settle-org').innerHTML = opts;
+        } catch (_) {}
+    }
 
     async function api(url, opts = {}) {
         // مفتاح التفرّد تضيفه `amial-idempotency.js` المحمّل من قالب الإدارة
@@ -328,10 +369,11 @@
     };
 
     // ── الجمعيات ───────────────────────────────────────────────────
-    async function loadOrgs() {
+    async function loadOrgs(page = orgsPage) {
+        orgsPage = page;
         const tb = document.querySelector('#orgsTable tbody');
         try {
-            const j = await api(`${base}/organizations`);
+            const j = await api(`${base}/organizations?page=${page}`);
             orgs = pick(j, 'organizations', 'items', 'orgs');
 
             tb.innerHTML = orgs.length ? orgs.map(o => `
@@ -349,20 +391,19 @@
                 </tr>`).join('')
                 : '<tr><td colspan="5" class="text-muted">لا جمعيات بعد — أنشئ واحدة من الأعلى</td></tr>';
 
-            const opts = orgs.map(o =>
-                `<option value="${esc(o.org_ulid ?? o.ulid)}">${esc(o.name_ar ?? o.name)}</option>`).join('');
-            document.getElementById('camp-org').innerHTML = opts;
-            document.getElementById('settle-org').innerHTML = opts;
+            renderPagination('orgs-pagination', j.meta?.pagination ?? j.pagination, loadOrgs);
+            await loadVerifiedOrgsDropdown();
         } catch (e) {
             tb.innerHTML = `<tr><td colspan="5" class="text-danger">${esc(e.message)}</td></tr>`;
         }
     }
 
     // ── الحملات ────────────────────────────────────────────────────
-    async function loadCamps() {
+    async function loadCamps(page = campsPage) {
+        campsPage = page;
         const tb = document.querySelector('#campsTable tbody');
         try {
-            const j = await api(`${base}/campaigns`);
+            const j = await api(`${base}/campaigns?page=${page}`);
             const camps = pick(j, 'campaigns', 'items');
 
             tb.innerHTML = camps.length ? camps.map(c => {
@@ -415,6 +456,7 @@
                     </td>
                 </tr>`;
             }).join('') : '<tr><td colspan="6" class="text-muted">لا حملات بعد</td></tr>';
+            renderPagination('camps-pagination', j.meta?.pagination ?? j.pagination, loadCamps);
         } catch (e) {
             tb.innerHTML = `<tr><td colspan="6" class="text-danger">${esc(e.message)}</td></tr>`;
         }
@@ -439,10 +481,11 @@
         }
     }
 
-    async function loadSettlements() {
+    async function loadSettlements(page = settlePage) {
+        settlePage = page;
         const tb = document.querySelector('#settleTable tbody');
         try {
-            const j = await api(`${base}/settlements`);
+            const j = await api(`${base}/settlements?page=${page}`);
             const rows = pick(j, 'settlements', 'items');
             // **الاسمُ الحقيقيّ للعمود `payable_amount`.** كان السطر يقرأ
             // `net_amount ?? amount` — وكلاهما غيرُ موجود، فيُطبع «٠» على
@@ -465,8 +508,48 @@
                                    data-testid="settlement-payout">صرف المال</button>`}</td>
                 </tr>`; }).join('')
                 : '<tr><td colspan="7" class="text-muted">لا تسويات بعد</td></tr>';
+            renderPagination('settle-pagination', j.meta?.pagination ?? j.pagination, loadSettlements);
         } catch (e) {
             tb.innerHTML = `<tr><td colspan="7" class="text-danger">${esc(e.message)}</td></tr>`;
+        }
+    }
+
+    async function loadDonorsModal(campaignUlid, showModal = true) {
+        const body = document.getElementById('donors-body');
+        body.innerHTML = 'جارٍ التحميل…';
+        if (showModal) {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('donors-modal')).show();
+        }
+        try {
+            const j = await api(`${base}/campaigns/${campaignUlid}/donors`);
+            const d = j.meta ?? j.data ?? j;
+            const list = d.donors ?? [];
+
+            body.innerHTML = `
+                <div class="mb-3">
+                    <b>${esc(d.campaign?.title ?? '')}</b>
+                    <div class="small text-muted">${fmt(d.campaign?.current_amount)} من ${fmt(d.campaign?.target_amount)}
+                    ${d.campaign?.progress === null ? '' : `· ${d.campaign?.progress}%`}</div>
+                </div>
+                ${list.length ? `<div class="table-responsive"><table class="table table-sm align-middle">
+                    <thead><tr><th>المتبرّع</th><th>المبلغ</th><th>رسم المنصّة</th><th>صافي الجمعية</th><th>الحالة</th><th>الوقت</th><th>إجراءات</th></tr></thead>
+                    <tbody>${list.map(x => `<tr>
+                        <td>${x.is_anonymous
+                            ? '<span class="text-muted">متبرّع مجهول</span>'
+                            : `${esc(x.donor?.name ?? '—')}<small class="text-muted d-block text-monospace">${esc(x.donor?.phone ?? '')}</small>`}
+                            ${x.message ? `<small class="d-block fst-italic">${esc(x.message)}</small>` : ''}</td>
+                        <td class="fw-bold">${fmt(x.amount)}</td>
+                        <td>${fmt(x.platform_fee)}</td>
+                        <td class="text-success">${fmt(x.net_to_charity)}</td>
+                        <td><small>${esc(x.status)}</small></td>
+                        <td><small>${esc(x.donated_at)}</small></td>
+                        <td>${x.status === 'completed'
+                            ? `<button type="button" class="btn btn-sm btn-outline-danger" data-refund-donation="${esc(x.ulid)}" data-campaign-ulid="${esc(campaignUlid)}">استرداد</button>`
+                            : '<span class="text-muted small">—</span>'}</td>
+                    </tr>`).join('')}</tbody></table></div>`
+                : '<div class="text-muted">لا متبرّعين بعد</div>'}`;
+        } catch (err) {
+            body.innerHTML = `<div class="alert alert-danger mb-0">${esc(err.message)}</div>`;
         }
     }
 
@@ -508,36 +591,26 @@
         }
 
         if (donors) {
-            const body = document.getElementById('donors-body');
-            body.innerHTML = 'جارٍ التحميل…';
-            new bootstrap.Modal(document.getElementById('donors-modal')).show();
-            try {
-                const j = await api(`${base}/campaigns/${donors.dataset.donors}/donors`);
-                const d = j.meta ?? j.data ?? j;
-                const list = d.donors ?? [];
+            await loadDonorsModal(donors.dataset.donors, true);
+        }
 
-                body.innerHTML = `
-                    <div class="mb-3">
-                        <b>${esc(d.campaign?.title ?? '')}</b>
-                        <div class="small text-muted">${fmt(d.campaign?.current_amount)} من ${fmt(d.campaign?.target_amount)}
-                        ${d.campaign?.progress === null ? '' : `· ${d.campaign?.progress}%`}</div>
-                    </div>
-                    ${list.length ? `<div class="table-responsive"><table class="table table-sm">
-                        <thead><tr><th>المتبرّع</th><th>المبلغ</th><th>رسم المنصّة</th><th>صافي الجمعية</th><th>الحالة</th><th>الوقت</th></tr></thead>
-                        <tbody>${list.map(x => `<tr>
-                            <td>${x.is_anonymous
-                                ? '<span class="text-muted">متبرّع مجهول</span>'
-                                : `${esc(x.donor?.name ?? '—')}<small class="text-muted d-block text-monospace">${esc(x.donor?.phone ?? '')}</small>`}
-                                ${x.message ? `<small class="d-block fst-italic">${esc(x.message)}</small>` : ''}</td>
-                            <td class="fw-bold">${fmt(x.amount)}</td>
-                            <td>${fmt(x.platform_fee)}</td>
-                            <td class="text-success">${fmt(x.net_to_charity)}</td>
-                            <td><small>${esc(x.status)}</small></td>
-                            <td><small>${esc(x.donated_at)}</small></td>
-                        </tr>`).join('')}</tbody></table></div>`
-                    : '<div class="text-muted">لا متبرّعين بعد</div>'}`;
+        const refundBtn = e.target.closest('[data-refund-donation]');
+        if (refundBtn) {
+            const donationUlid = refundBtn.dataset.refundDonation;
+            const campaignUlid = refundBtn.dataset.campaignUlid;
+            if (!await amialDialog.ask('استرداد هذا التبرع وإعادة المبلغ إلى محفظة المتبرع؟', {okLabel: 'استرداد', danger: true})) return;
+            const reason = await amialDialog.request('اكتب سبب الاسترداد (5 أحرف على الأقل):', {title: 'استرداد التبرع', okLabel: 'تأكيد الاسترداد', danger: true});
+            if (!reason || reason.trim().length < 5) return;
+            try {
+                await api(`${base}/donations/${donationUlid}/refund`, {
+                    method: 'POST',
+                    body: JSON.stringify({reason: reason.trim()}),
+                });
+                await amialDialog.show('تم استرداد التبرع بنجاح');
+                await loadDonorsModal(campaignUlid, false);
+                loadCamps();
             } catch (err) {
-                body.innerHTML = `<div class="alert alert-danger mb-0">${esc(err.message)}</div>`;
+                await amialDialog.show(err.message);
             }
         }
 
@@ -549,7 +622,7 @@
             document.getElementById('payout-form').reset();
             document.getElementById('payout-ulid').value = pay.dataset.payout;
             syncRecipient();
-            new bootstrap.Modal(document.getElementById('payout-modal')).show();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('payout-modal')).show();
         }
     });
 
@@ -585,9 +658,11 @@
             await api(`${base}/organizations`, {method: 'POST', body: JSON.stringify(d)});
             await amialDialog.show('أُنشئت الجمعية — اعتمدها لتظهر في التطبيق');
             e.target.reset();
+            document.getElementById('org-logo-url').value = '';
+            document.getElementById('org-cover-url').value = '';
             ['org-logo-preview', 'org-cover-preview'].forEach(id =>
                 document.getElementById(id).innerHTML = '');
-            loadOrgs();
+            loadOrgs(1);
         } catch (err) { await amialDialog.show(err.message); }
     });
 
@@ -645,8 +720,14 @@
         const box = document.getElementById('camp-gallery-preview');
         if (!files.length) return;
 
+        const prevErr = box.querySelector('.gallery-limit-error');
+        if (prevErr) prevErr.remove();
+
         if (galleryUrls.length + files.length > 10) {
-            box.innerHTML = '<span class="text-danger small">عشرةٌ حدّاً أقصى.</span>';
+            const errEl = document.createElement('div');
+            errEl.className = 'gallery-limit-error w-100 text-danger small';
+            errEl.textContent = 'الحدّ الأقصى 10 صور للمعرض — لم تُضَف الصور الزائدة.';
+            box.prepend(errEl);
             e.target.value = '';
             return;
         }

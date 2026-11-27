@@ -16,35 +16,84 @@ class IncomingRequestsScreen extends StatefulWidget {
 
 class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
   PaymentRequestController get c => Get.find<PaymentRequestController>();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) => _reload());
   }
 
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 120) {
+      c.loadMoreIncoming();
+    }
+  }
+
   Future<void> _reload() => c.loadList('incoming', status: 'pending');
+
+  String _formatDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    final y = local.year.toString().padLeft(4, '0');
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    final h = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $h:$min';
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: AmialColors.background,
         appBar: AppBar(title: const Text('طلبات المال الواردة')),
         body: Obx(() {
-          if (c.isLoading.value && c.incoming.isEmpty) {
+          if (c.isLoadingIncoming.value && c.incoming.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (c.lastError.value.isNotEmpty && c.incoming.isEmpty) {
-            return _error(c.lastError.value);
+          if (c.lastErrorIncoming.value.isNotEmpty && c.incoming.isEmpty) {
+            return _error(c.lastErrorIncoming.value);
           }
-          if (c.incoming.isEmpty) return _empty();
+          if (c.incoming.isEmpty) {
+            return RefreshIndicator(
+              onRefresh: _reload,
+              child: _empty(),
+            );
+          }
 
+          final showLoadMore = c.hasMoreIncoming.value || c.isLoadingMoreIncoming.value;
           return RefreshIndicator(
             onRefresh: _reload,
             child: ListView.separated(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
-              itemCount: c.incoming.length,
+              itemCount: c.incoming.length + (showLoadMore ? 1 : 0),
               separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (_, i) => _card(c.incoming[i]),
+              itemBuilder: (_, i) {
+                if (i >= c.incoming.length) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: c.isLoadingMoreIncoming.value
+                          ? const CircularProgressIndicator()
+                          : TextButton(
+                              onPressed: c.loadMoreIncoming,
+                              child: const Text('تحميل المزيد'),
+                            ),
+                    ),
+                  );
+                }
+                return _card(c.incoming[i]);
+              },
             ),
           );
         }),
@@ -99,6 +148,10 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
     final recipientCredit = '${request['recipient_credit'] ?? amount}';
     final receiverPaysFee = request['fee_bearer'] == 'receiver';
     final hasFee = (double.tryParse(fee) ?? 0) > 0;
+    final expiresAt = DateTime.tryParse('${request['expires_at'] ?? ''}');
+    final isExpired = request['is_expired'] == true ||
+        request['status'] == 'expired' ||
+        (expiresAt != null && expiresAt.isBefore(DateTime.now()));
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -132,7 +185,7 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
           ),
         ]),
         const SizedBox(height: 12),
-        AmialLtrNumber('$amount ر.ي',
+        AmialLtrNumber(AmialMoney.yer(amount),
             style: const TextStyle(
                 fontSize: 25,
                 fontWeight: FontWeight.bold,
@@ -142,6 +195,31 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
           Text(note,
               textAlign: TextAlign.right,
               style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700)),
+        ],
+        if (expiresAt != null) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(
+                isExpired
+                    ? 'انتهت الصلاحية (${_formatDateTime(expiresAt)})'
+                    : 'ينتهي في ${_formatDateTime(expiresAt)}',
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: isExpired ? AmialColors.red : AmialColors.textSecondary,
+                  fontWeight: isExpired ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                isExpired ? Icons.timer_off_outlined : Icons.schedule_outlined,
+                size: 14,
+                color: isExpired ? AmialColors.red : AmialColors.textSecondary,
+              ),
+            ],
+          ),
         ],
         if (hasFee) ...[
           const SizedBox(height: 9),
@@ -158,7 +236,7 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
               textAlign: TextAlign.right,
               style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
         ],
-        if (!quoteAvailable) ...[
+        if (!quoteAvailable && !isExpired) ...[
           const SizedBox(height: 9),
           const Text('تعذّر احتساب الإجمالي — حدّث القائمة قبل الدفع',
               textAlign: TextAlign.right,
@@ -168,7 +246,7 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
         Row(children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: id == null || c.isSubmitting.value
+              onPressed: id == null || isExpired || c.isSubmitting.value
                   ? null
                   : () => _decline(id),
               icon: const Icon(Icons.close, size: 18),
@@ -183,7 +261,7 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: FilledButton.icon(
-              onPressed: id == null || !quoteAvailable || c.isSubmitting.value
+              onPressed: id == null || isExpired || !quoteAvailable || c.isSubmitting.value
                   ? null
                   : () => _pay(
                         id,

@@ -86,6 +86,13 @@ class RequestedMoneyController extends GetxController implements GetxService {
       Response response = await requestedMoneyRepo.getRequestedMoneyList();
       if(response.statusCode == 200){
         _requestedMoneyModel = RequestedMoneyModel.fromJson(response.body);
+        final int total = _requestedMoneyModel?.totalSize ??
+            _requestedMoneyModel?.requestedMoney?.length ??
+            0;
+        final int limit = (_requestedMoneyModel?.limit ?? 10) > 0
+            ? (_requestedMoneyModel?.limit ?? 10)
+            : 10;
+        _pageSize = (total / limit).ceil();
 
         _requestedMoneyList = [];
         _pendingRequestedMoneyList =[];
@@ -130,6 +137,13 @@ class RequestedMoneyController extends GetxController implements GetxService {
       if(response.statusCode == 200 && response.body['requested_money'] != null){
 
         _ownRequestMoneyModel = RequestedMoneyModel.fromJson(response.body);
+        final int total = _ownRequestMoneyModel?.totalSize ??
+            _ownRequestMoneyModel?.requestedMoney?.length ??
+            0;
+        final int limit = (_ownRequestMoneyModel?.limit ?? 10) > 0
+            ? (_ownRequestMoneyModel?.limit ?? 10)
+            : 10;
+        _pageSize = (total / limit).ceil();
 
         _ownRequestList =[];
         _ownPendingRequestedMoneyList = [];
@@ -167,7 +181,6 @@ class RequestedMoneyController extends GetxController implements GetxService {
 
     if(response.statusCode == 200) {
       await getRequestedMoneyList(true);
-      Get.back();
       Get.back();
       _isLoading = false;
     }else {

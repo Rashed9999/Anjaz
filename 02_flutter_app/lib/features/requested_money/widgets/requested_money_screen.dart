@@ -22,35 +22,38 @@ class RequestedMoneyScreen extends StatefulWidget {
 class _RequestedMoneyScreenState extends State<RequestedMoneyScreen> {
   int offset = 1;
 
+  void _onScroll() {
+    if (!mounted || widget.scrollController == null) return;
+    if(widget.requestType != RequestType.withdraw
+        && widget.scrollController!.position.maxScrollExtent == widget.scrollController!.position.pixels
+        && (widget.requestType == RequestType.sendRequest
+            ? Get.find<RequestedMoneyController>().ownRequestList.length
+            : Get.find<RequestedMoneyController>().requestedMoneyList.length) != 0
+        && !Get.find<RequestedMoneyController>().isLoading) {
+      final int? pageSize = Get.find<RequestedMoneyController>().pageSize;
+
+      if(pageSize != null && offset < pageSize) {
+        offset++;
+        Get.find<RequestedMoneyController>().showBottomLoader();
+        if(widget.requestType == RequestType.sendRequest) {
+          Get.find<RequestedMoneyController>().getOwnRequestedMoneyList(true);
+        }else {
+          Get.find<RequestedMoneyController>().getRequestedMoneyList(true);
+        }
+      }
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    widget.scrollController?.addListener(_onScroll);
+  }
 
-    widget.scrollController?.addListener(() {
-      if(widget.requestType != RequestType.withdraw
-          && widget.scrollController!.position.maxScrollExtent == widget.scrollController!.position.pixels
-          && (widget.requestType == RequestType.sendRequest
-              ? Get.find<RequestedMoneyController>().ownRequestList.length
-              :  Get.find<RequestedMoneyController>().requestedMoneyList.length) != 0
-          && !Get.find<RequestedMoneyController>().isLoading) {
-        int? pageSize;
-        pageSize = Get.find<RequestedMoneyController>().pageSize;
-
-        if(offset < pageSize!) {
-          offset++;
-          Get.find<RequestedMoneyController>().showBottomLoader();
-          if(widget.requestType == RequestType.sendRequest) {
-            Get.find<RequestedMoneyController>().getOwnRequestedMoneyList(true);
-          }else {
-            Get.find<RequestedMoneyController>().getRequestedMoneyList(true);
-          }
-
-        }
-      }
-
-    });
-
+  @override
+  void dispose() {
+    widget.scrollController?.removeListener(_onScroll);
+    super.dispose();
   }
 
   @override

@@ -60,7 +60,7 @@ class RequestedMoney {
     // receiver =
     // json['receiver'] != null ? new Receiver.fromJson(json['receiver']) : 'User Unavailable';
     type = json['type'];
-    amount = json['amount'].toDouble();
+    amount = double.tryParse(json['amount'].toString()) ?? 0.0;
     note = json['note'];
     createdAt = json['created_at'];
   }
@@ -71,8 +71,8 @@ class RequestedMoney {
     if (sender != null) {
       data['sender'] = sender!.toJson();
     }
-    if (sender != null) {
-      data['receiver'] = sender!.toJson();
+    if (receiver != null) {
+      data['receiver'] = receiver!.toJson();
     }
     data['type'] = type;
     data['amount'] = amount;

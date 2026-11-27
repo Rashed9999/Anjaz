@@ -10,19 +10,57 @@ class DonationsController extends GetxController with IdempotentIntent implement
   DonationsController({required this.repo});
 
   final RxList<AmialCharityCategory> categories = <AmialCharityCategory>[].obs;
-  final RxList<AmialCharityCampaign> campaigns = <AmialCharityCampaign>[].obs;
+  final RxList<AmialCharityCampaign> homeCampaigns = <AmialCharityCampaign>[].obs;
+  final RxList<AmialCharityCampaign> categoryCampaigns = <AmialCharityCampaign>[].obs;
   final RxList<AmialCharityCampaign> featuredCampaigns = <AmialCharityCampaign>[].obs;
   final Rx<AmialCharityCampaign?> selectedCampaign = Rx<AmialCharityCampaign?>(null);
   final RxList<AmialDonation> myDonations = <AmialDonation>[].obs;
   final RxString selectedCategoryCode = ''.obs;
 
+  /// توافق مع أي مستدعٍ قديم يقرأ `campaigns`.
+  RxList<AmialCharityCampaign> get campaigns => homeCampaigns;
+
+  // حالات تحميل مستقلة لكل شاشة
+  final RxBool isCategoriesLoading = false.obs;
+  final RxBool isHomeLoading = false.obs;
+  final RxBool isHomeLoadingMore = false.obs;
+  final RxBool isCategoryLoading = false.obs;
+  final RxBool isCategoryLoadingMore = false.obs;
+  final RxBool isDetailLoading = false.obs;
+  final RxBool isMyDonationsLoading = false.obs;
+  final RxBool isMyDonationsLoadingMore = false.obs;
   final RxBool isLoading = false.obs;
   final RxBool isSubmitting = false.obs;
+
+  // أخطاء مستقلة لكل شاشة
+  final RxString homeError = ''.obs;
+  final RxString categoryError = ''.obs;
+  final RxString detailError = ''.obs;
+  final RxString myDonationsError = ''.obs;
   final RxString lastError = ''.obs;
+
+  // حالة الترقيم (Pagination)
+  final RxBool hasMoreHome = false.obs;
+  final RxBool hasMoreCategory = false.obs;
+  final RxBool hasMoreMyDonations = false.obs;
+  int _homePage = 1;
+  int _categoryPage = 1;
+  int _myDonationsPage = 1;
+
+  bool _hasMoreFromMeta(Map<String, dynamic> meta) {
+    final pag = meta['pagination'];
+    if (pag is Map) {
+      final total = (pag['total'] as num?)?.toInt() ?? 0;
+      final perPage = (pag['per_page'] as num?)?.toInt() ?? 20;
+      final current = (pag['current_page'] as num?)?.toInt() ?? 1;
+      return current * perPage < total;
+    }
+    return false;
+  }
 
   Future<void> loadCategories() async {
     try {
-      isLoading.value = true;
+      isCategoriesLoading.value = true;
       final r = await repo.categories();
       if (r.statusCode == 200 && r.body is Map) {
         final items = ((r.body['meta'] ?? {})['categories'] as List? ?? []);
@@ -33,30 +71,89 @@ class DonationsController extends GetxController with IdempotentIntent implement
     } catch (e) {
       if (kDebugMode) debugPrint('loadCategories: $e');
     } finally {
-      isLoading.value = false;
+      isCategoriesLoading.value = false;
     }
   }
 
-  Future<void> loadCampaigns({String? categoryCode}) async {
+  Future<void> loadHomeCampaigns({bool loadMore = false}) async {
+    if (loadMore && (isHomeLoadingMore.value || !hasMoreHome.value)) return;
+    final nextPage = loadMore ? _homePage + 1 : 1;
     try {
-      isLoading.value = true;
-      selectedCategoryCode.value = categoryCode ?? '';
-      final r = await repo.campaigns(categoryCode: categoryCode);
+      if (loadMore) {
+        isHomeLoadingMore.value = true;
+      } else {
+        isHomeLoading.value = true;
+        homeError.value = '';
+      }
+      final r = await repo.campaigns(page: nextPage);
       if (r.statusCode == 200 && r.body is Map) {
-        final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
-        campaigns.value = items
+        final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
+        final items = (meta['items'] as List? ?? [])
             .map((j) => AmialCharityCampaign.fromJson(Map<String, dynamic>.from(j)))
             .toList();
-        lastError.value = '';
+        if (loadMore) {
+          homeCampaigns.addAll(items);
+        } else {
+          homeCampaigns.value = items;
+        }
+        _homePage = nextPage;
+        hasMoreHome.value = _hasMoreFromMeta(meta);
+        homeError.value = '';
       } else {
-        lastError.value = _msg(r) ?? 'فشل التحميل';
+        homeError.value = _msg(r) ?? 'فشل التحميل';
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('loadCampaigns: $e');
-      lastError.value = 'خطأ في الشبكة';
+      if (kDebugMode) debugPrint('loadHomeCampaigns: $e');
+      homeError.value = 'خطأ في الشبكة';
     } finally {
-      isLoading.value = false;
+      isHomeLoading.value = false;
+      isHomeLoadingMore.value = false;
     }
+  }
+
+  Future<void> loadCategoryCampaigns(String categoryCode, {bool loadMore = false}) async {
+    if (loadMore && (isCategoryLoadingMore.value || !hasMoreCategory.value)) return;
+    final nextPage = loadMore ? _categoryPage + 1 : 1;
+    try {
+      if (loadMore) {
+        isCategoryLoadingMore.value = true;
+      } else {
+        isCategoryLoading.value = true;
+        selectedCategoryCode.value = categoryCode;
+        categoryCampaigns.clear();
+        categoryError.value = '';
+      }
+      final r = await repo.campaigns(categoryCode: categoryCode, page: nextPage);
+      if (r.statusCode == 200 && r.body is Map) {
+        final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
+        final items = (meta['items'] as List? ?? [])
+            .map((j) => AmialCharityCampaign.fromJson(Map<String, dynamic>.from(j)))
+            .toList();
+        if (loadMore) {
+          categoryCampaigns.addAll(items);
+        } else {
+          categoryCampaigns.value = items;
+        }
+        _categoryPage = nextPage;
+        hasMoreCategory.value = _hasMoreFromMeta(meta);
+        categoryError.value = '';
+      } else {
+        categoryError.value = _msg(r) ?? 'فشل التحميل';
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('loadCategoryCampaigns: $e');
+      categoryError.value = 'خطأ في الشبكة';
+    } finally {
+      isCategoryLoading.value = false;
+      isCategoryLoadingMore.value = false;
+    }
+  }
+
+  Future<void> loadCampaigns({String? categoryCode, bool loadMore = false}) {
+    if (categoryCode != null && categoryCode.isNotEmpty) {
+      return loadCategoryCampaigns(categoryCode, loadMore: loadMore);
+    }
+    return loadHomeCampaigns(loadMore: loadMore);
   }
 
   Future<void> loadFeatured() async {
@@ -75,8 +172,10 @@ class DonationsController extends GetxController with IdempotentIntent implement
 
   Future<bool> loadCampaign(String ulid) async {
     try {
+      isDetailLoading.value = true;
       isLoading.value = true;
       selectedCampaign.value = null;
+      detailError.value = '';
       lastError.value = '';
       final r = await repo.campaignShow(ulid);
       if (r.statusCode == 200 && r.body is Map) {
@@ -85,12 +184,16 @@ class DonationsController extends GetxController with IdempotentIntent implement
             Map<String, dynamic>.from(meta['campaign'] ?? {}));
         return true;
       }
-      lastError.value = _msg(r) ?? 'لم يتم العثور على الحملة';
+      final err = _msg(r) ?? 'لم يتم العثور على الحملة';
+      detailError.value = err;
+      lastError.value = err;
       return false;
     } catch (e) {
+      detailError.value = 'خطأ في الشبكة';
       lastError.value = 'خطأ في الشبكة';
       return false;
     } finally {
+      isDetailLoading.value = false;
       isLoading.value = false;
     }
   }
@@ -133,24 +236,39 @@ class DonationsController extends GetxController with IdempotentIntent implement
     }
   }
 
-  Future<void> loadMyDonations() async {
+  Future<void> loadMyDonations({bool loadMore = false}) async {
+    if (loadMore && (isMyDonationsLoadingMore.value || !hasMoreMyDonations.value)) return;
+    final nextPage = loadMore ? _myDonationsPage + 1 : 1;
     try {
-      isLoading.value = true;
-      final r = await repo.myDonations();
+      if (loadMore) {
+        isMyDonationsLoadingMore.value = true;
+      } else {
+        isMyDonationsLoading.value = true;
+        myDonationsError.value = '';
+      }
+      final r = await repo.myDonations(page: nextPage);
       if (r.statusCode == 200 && r.body is Map) {
-        final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
-        myDonations.value = items
+        final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
+        final items = (meta['items'] as List? ?? [])
             .map((j) => AmialDonation.fromJson(Map<String, dynamic>.from(j)))
             .toList();
-        lastError.value = '';
+        if (loadMore) {
+          myDonations.addAll(items);
+        } else {
+          myDonations.value = items;
+        }
+        _myDonationsPage = nextPage;
+        hasMoreMyDonations.value = _hasMoreFromMeta(meta);
+        myDonationsError.value = '';
       } else {
-        lastError.value = _msg(r) ?? 'تعذّر تحميل التبرعات';
+        myDonationsError.value = _msg(r) ?? 'تعذّر تحميل التبرعات';
       }
     } catch (e) {
       if (kDebugMode) debugPrint('loadMyDonations: $e');
-      lastError.value = 'خطأ في الشبكة';
+      myDonationsError.value = 'خطأ في الشبكة';
     } finally {
-      isLoading.value = false;
+      isMyDonationsLoading.value = false;
+      isMyDonationsLoadingMore.value = false;
     }
   }
 

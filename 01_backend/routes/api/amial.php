@@ -380,7 +380,7 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             ->where('id', '[0-9]+')->name('decline');
         Route::post('/{id}/pay', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'payById'])
             ->where('id', '[0-9]+')
-            ->middleware('amial.rate-limit:payment_request_pay,30,1')->name('pay-by-id');
+            ->middleware(['amial.terms', 'amial.rate-limit:payment_request_pay,30,1'])->name('pay-by-id');
     });
 
     // -------- Legal Terms --------
@@ -473,7 +473,9 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             ->where('ulid', '[A-Z0-9]{26}')->name('transactions');
 
         Route::post('/disbursements/{ulid}/approve', [FamilyFundController::class, 'approveDisbursement'])
-            ->where('ulid', '[A-Z0-9]{26}')->name('approve-disbursement');
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware(['amial.terms', 'amial.zone:family_fund_disburse'])
+            ->name('approve-disbursement');
 
         Route::post('/disbursements/{ulid}/reject', [FamilyFundController::class, 'rejectDisbursement'])
             ->where('ulid', '[A-Z0-9]{26}')->name('reject-disbursement');
@@ -499,6 +501,11 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
     // AMIAL-MAINT-001: مثال حيّ — الدفع الآمن يُغلق من لوحة الصيانة (بحارس مالي)
     Route::prefix('safe-payments')->name('amial.safe-pay.')->middleware(['feature:safe_payment', 'amial.idempotency'])->group(function () {
         Route::get('/', [SafePaymentController::class, 'index'])->name('index');
+        // التحقق من البائع قبل الحجز — قراءةٌ لا حركة مالية فلا تخضع لمفتاح التفرّد
+        Route::post('/verify-seller', [SafePaymentController::class, 'verifySeller'])
+            ->withoutMiddleware('amial.idempotency')
+            ->middleware('amial.rate-limit:safe_pay_verify_seller,60,1')
+            ->name('verify-seller');
         // أسباب النزاع من الخادم — إضافة سبب لا تستحقّ إصدار تطبيق
         Route::get('/dispute-reasons', [SafePaymentController::class, 'disputeReasons'])
             ->name('dispute-reasons');
@@ -1406,7 +1413,7 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
     });
 
     // -------- AMIAL-DONATIONS-001 (v1.2) --------
-    Route::prefix('donations')->name('amial.donations.')->middleware('amial.idempotency')->group(function () {
+    Route::prefix('donations')->name('amial.donations.')->middleware(['feature:donations', 'amial.idempotency'])->group(function () {
         Route::get('/categories', [DonationsController::class, 'categories'])->name('categories');
         Route::get('/organizations', [DonationsController::class, 'organizations'])->name('orgs');
         Route::get('/campaigns', [DonationsController::class, 'campaigns'])->name('campaigns');

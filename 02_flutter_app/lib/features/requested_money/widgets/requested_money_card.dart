@@ -33,6 +33,11 @@ class RequestedMoneyCard extends StatefulWidget {
 class _RequestedMoneyCardState extends State<RequestedMoneyCard> {
   final TextEditingController reqPasswordController = TextEditingController();
 
+  @override
+  void dispose() {
+    reqPasswordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -166,8 +171,19 @@ class _RequestedMoneyCardState extends State<RequestedMoneyCard> {
                               passController: reqPasswordController,
                               description: '${'are_you_sure_want_to_denied'.tr} \n ${widget.requestedMoney!.sender!.name} \n ${widget.requestedMoney!.sender!.phone}',
                               onYesPressed: () {
-                                Get.find<RequestedMoneyController>().isLoading?
-                                Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor)):Get.find<RequestedMoneyController>().denyRequest(context, widget.requestedMoney!.id,  reqPasswordController.text.trim());
+                                final controller = Get.find<RequestedMoneyController>();
+                                if (controller.isLoading) {
+                                  return;
+                                }
+                                if (reqPasswordController.text.trim().length < 4) {
+                                  showCustomSnackBarHelper('enter_your_pin'.tr);
+                                } else {
+                                  controller.denyRequest(
+                                    context,
+                                    widget.requestedMoney!.id,
+                                    reqPasswordController.text.trim(),
+                                  );
+                                }
                               }
                           );});
                       },
