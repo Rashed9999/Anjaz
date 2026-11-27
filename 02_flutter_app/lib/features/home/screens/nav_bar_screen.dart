@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/common/widgets/custom_pop_scope_widget.dart';
@@ -8,6 +9,8 @@ import 'package:amial_pay/features/history/controllers/transaction_history_contr
 import 'package:amial_pay/features/home/controllers/menu_controller.dart';
 import 'package:amial_pay/features/home/domain/enums/nav_bar_page_enum.dart';
 import 'package:amial_pay/features/home/widgets/show_case/showcaseview.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
+import 'package:amial_pay/helper/notification_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/auth/controllers/session_guard.dart';
 
@@ -48,6 +51,22 @@ class _NavBarScreenState extends State<NavBarScreen> {
 
     Get.find<AuthController>().checkBiometricWithPin();
     Get.find<FavNumberController>().getList(isUpdate: false, isReload: true);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        if (Get.isRegistered<AuthController>()) {
+          unawaited(Get.find<AuthController>().updateToken());
+        }
+      } catch (_) {}
+      try {
+        if (Get.isRegistered<NotificationsCenterController>()) {
+          unawaited(Get.find<NotificationsCenterController>().refreshUnreadCount());
+        }
+      } catch (_) {}
+      try {
+        unawaited(NotificationHelper.consumePendingInitialNotification());
+      } catch (_) {}
+    });
 
   }
 
@@ -169,14 +188,56 @@ class _NavBarScreenState extends State<NavBarScreen> {
     final selected = c.currentTabIndex == index;
     const active = Color(0xFFFECA1E);
     final inactive = Colors.white.withValues(alpha: 0.55);
+
+    Widget iconWidget = Icon(selected ? selectedIcon : icon,
+        size: 22, color: selected ? active : inactive);
+
+    if (index == 2 && Get.isRegistered<NotificationsCenterController>()) {
+      final notifCtrl = Get.find<NotificationsCenterController>();
+      iconWidget = Obx(() {
+        final count = notifCtrl.unreadCount.value;
+        if (count <= 0) {
+          return Icon(selected ? selectedIcon : icon,
+              size: 22, color: selected ? active : inactive);
+        }
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(selected ? selectedIcon : icon,
+                size: 22, color: selected ? active : inactive),
+            Positioned(
+              right: -7,
+              top: -5,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+                decoration: BoxDecoration(
+                  color: AmialColors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      });
+    }
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(selected ? selectedIcon : icon,
-              size: 22, color: selected ? active : inactive),
+          iconWidget,
           const SizedBox(height: 3),
           Text(label,
               style: TextStyle(

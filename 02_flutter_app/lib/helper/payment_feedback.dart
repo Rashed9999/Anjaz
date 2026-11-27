@@ -1,63 +1,82 @@
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// AMIAL-PAY-SOUND-001 — **نتيجةُ الدفع تُسمَع وتُحَسّ، لا تُقرأ وحدَها.**
-///
-/// ══════════════════════════════════════════════════════════════════════
-/// **قاله صاحبُ المشروع:** «عند اتمام الدفع صوت تم الدفع او فشل الدفع..
-/// هذه لا تعمل لدي».
-///
-/// وقِيس فلم تكن قد وُجدت قطّ في هذا المستودع: **صفرُ مشغّلٍ للصوت** في
-/// التطبيق كلّه (لا `audioplayers` ولا `just_audio` ولا `SystemSound`)،
-/// وصفرُ ملفِّ صوتٍ في المشروع غير نغمة الإشعار. والموجودُ رسومٌ متحرّكةٌ
-/// للنجاح والفشل — **صامتة**.
-///
-/// ولا يُقال «أُعيدت»: لم تُحذَف، بل لم تُبنَ. (القاعدة السابعة: الغيابُ
-/// يُقال بسببه ولا يُلبَّس ثوبَ استعادة.)
-///
-/// ══════════════════════════════════════════════════════════════════════
-/// **ولمَ تُهمّ في شبّاكِ بيع:** الكاشيرُ لا ينظر إلى الشاشة وهو يناول
-/// الزبونَ ويعدّ النقد. فنتيجةٌ تُعرَض ولا تُسمَع تُقرأ **بعد** أن يكون
-/// قد تصرّف — وأكثرُ أخطاء الشبّاك من هذا الباب.
-///
-/// **والاهتزازُ يرافق الصوتَ ولا يستبدله**: الهاتفُ الصامتُ في جيب
-/// الموظّف حالةٌ طبيعيّةٌ لا استثناء.
-///
-/// ══════════════════════════════════════════════════════════════════════
-/// AMIAL-PAY-VOICE-001 — **ثمّ طلب النطقَ بالعربيّة**: «الا يمكنك جعل
-/// صوت يتكلم العربي: تم الدفع بنجاح.. فشل الدفع».
-///
-/// **ولا يُسجَّل ملفُّ صوتٍ بشريّ**: يحتاج صوتاً ورخصةً ومراجعة، ثمّ
-/// يتجمّد — فلا يُترجَم ولا تُغيَّر صياغتُه إلّا بتسجيلٍ جديد.
-/// **ومُركِّبُ الكلام في الجهاز نفسِه** ينطقها بصوت المستخدم المعتاد،
-/// بلا حزمةٍ ولا ميغابايت.
-///
-/// **والترتيب: جرسٌ ثمّ كلام** — كما في أجهزة نقاط البيع: النغمةُ تلفت
-/// النظرَ في نصف ثانية، والكلامُ يخبر بالنتيجة.
-///
-/// **ولا يُفترَض وجودُ الصوت العربيّ.** كثيرٌ من الأجهزة بلا صوتٍ منزَّل،
-/// فيُسأل النظامُ ولا يُخمَّن؛ وإن غاب بقيت النغمةُ والاهتزاز — فصمتٌ
-/// لأنّ صوتاً غيرُ منزَّلٍ أسوأ من جرس.
+/// AMIAL-PAY-SOUND-001 + AMIAL-PAY-VOICE-002 — **نتيجةُ العملية والإشعارات المالية تُسمَع وتُنطَق بالعربيّة.**
 class PaymentFeedback {
   PaymentFeedback._();
 
   static const MethodChannel _channel =
       MethodChannel('amial_pay/feedback_sound');
 
+  static const String voicePrefsKey = 'amial_voice_notifications_enabled';
+
   /// يُطفأ في الاختبارات ومن يريد شاشةً صامتة.
   static bool enabled = true;
 
-  /// **تمّ الدفع** — جرسٌ صاعد، ثمّ «تمّ الدفع بنجاح» بالعربيّة، واهتزاز.
-  static Future<void> success() => _fire('success', HapticFeedback.mediumImpact);
+  static DateTime? _lastActionFeedbackAt;
 
-  /// **فشل الدفع** — جرسٌ هابط، ثمّ «فشل الدفع» بالعربيّة، واهتزازٌ أطول.
-  static Future<void> failure() => _fire('failure', HapticFeedback.vibrate);
+  /// هل النطق الصوتي للإشعارات المالية الواردة مفعّل؟ (مفعّل افتراضياً).
+  static bool isVoiceNotificationsEnabled() {
+    try {
+      if (!Get.isRegistered<SharedPreferences>()) return true;
+      return Get.find<SharedPreferences>().getBool(voicePrefsKey) ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  static Future<void> setVoiceNotificationsEnabled(bool value) async {
+    try {
+      if (!Get.isRegistered<SharedPreferences>()) return;
+      await Get.find<SharedPreferences>().setBool(voicePrefsKey, value);
+    } catch (_) {}
+  }
+
+  /// **تمّت العملية** — جرسٌ صاعد، ثمّ نطقٌ عربيّ («تمّ الدفع بنجاح» أو نصّ مخصّص)، واهتزاز.
+  static Future<void> success({String? speech}) {
+    _lastActionFeedbackAt = DateTime.now();
+    return _fire(
+      'success',
+      HapticFeedback.mediumImpact,
+      speech: isVoiceNotificationsEnabled() ? speech : null,
+      allowDefaultSpeech: isVoiceNotificationsEnabled(),
+    );
+  }
+
+  /// **فشلت العملية** — جرسٌ هابط، ثمّ نطقٌ عربيّ («فشل الدفع» أو نصّ مخصّص)، واهتزازٌ أطول.
+  static Future<void> failure({String? speech}) {
+    _lastActionFeedbackAt = DateTime.now();
+    return _fire(
+      'failure',
+      HapticFeedback.vibrate,
+      speech: isVoiceNotificationsEnabled() ? speech : null,
+      allowDefaultSpeech: isVoiceNotificationsEnabled(),
+    );
+  }
+
+  /// **إشعار مالي وارد** — نغمة الإشعار + نطق عربي للحدث عند التفعيل، مع منع التداخل
+  /// إذا وقع بعد أقل من 4 ثوانٍ من نطق نتيجة عملية نفّذها المستخدم للتوّ على جهازه.
+  static Future<void> notify({String? speech}) async {
+    if (!enabled) return;
+    final last = _lastActionFeedbackAt;
+    if (last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 4)) {
+      return;
+    }
+
+    final cleanSpeech =
+        isVoiceNotificationsEnabled() ? speech?.trim() : null;
+    await _fire(
+      'notify',
+      HapticFeedback.lightImpact,
+      speech: (cleanSpeech != null && cleanSpeech.isNotEmpty)
+          ? cleanSpeech
+          : null,
+    );
+  }
 
   /// AMIAL-PAY-VOICE-001 — هل ينطق هذا الجهازُ العربيّة أصلاً؟
-  ///
-  /// كثيرٌ من الأجهزة بلا صوتٍ عربيٍّ منزَّل. فمن أراد أن يقول للمستخدم
-  /// «فعّل الصوتَ العربيّ من إعدادات الجهاز» يسأل ها هنا — **ولا يَعِد
-  /// بنطقٍ ثمّ يصمت**. وإجابةٌ فارغةٌ تُقرأ «لا»، لا «نعم». (القاعدة
-  /// السابعة.)
   static Future<bool> canSpeakArabic() async {
     try {
       return await _channel.invokeMethod<bool>('canSpeakArabic') ?? false;
@@ -66,18 +85,26 @@ class PaymentFeedback {
     }
   }
 
-  static Future<void> _fire(String method, Future<void> Function() haptic) async {
+  static Future<void> _fire(
+    String method,
+    Future<void> Function() haptic, {
+    String? speech,
+    bool allowDefaultSpeech = true,
+  }) async {
     if (!enabled) return;
 
     // ══════════════════════════════════════════════════════════════
     // **ولا تُسقِط عمليّةً ماليّةً من أجل نغمة.**
-    //
-    // القناةُ غيرُ مُنفَّذةٍ على iOS، وغيرُ موجودةٍ في بيئة الاختبار،
-    // وقد يفشل التشغيلُ لأسبابٍ لا علاقةَ لها بالدفع. **واستثناءٌ يخرج
-    // من هنا يُلوّن دفعةً ناجحةً بالفشل** — وهو ضررٌ أكبرُ من الصمت.
     // ══════════════════════════════════════════════════════════════
     try {
-      await _channel.invokeMethod<void>(method);
+      if (speech != null && speech.trim().isNotEmpty) {
+        await _channel.invokeMethod<void>(method, {'speech': speech.trim()});
+      } else if (!allowDefaultSpeech &&
+          (method == 'success' || method == 'failure')) {
+        await _channel.invokeMethod<void>('notify');
+      } else {
+        await _channel.invokeMethod<void>(method);
+      }
     } catch (_) {
       // مقصود: النغمةُ تحسينٌ لا شرطُ صحّة.
     }

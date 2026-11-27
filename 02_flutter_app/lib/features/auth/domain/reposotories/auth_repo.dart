@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
@@ -35,7 +36,28 @@ class AuthRepo extends GetxService{
    }
 
 
-   Future<Response> updateToken({bool? isLogOut}) async {
+   StreamSubscription<String>? _tokenRefreshSub;
+
+   void _ensureTokenRefreshListener() {
+     if (_tokenRefreshSub != null || GetPlatform.isWeb) return;
+     try {
+       _tokenRefreshSub = FirebaseMessaging.instance.onTokenRefresh.listen(
+         (String freshToken) async {
+           final trimmed = freshToken.trim();
+           if (trimmed.isEmpty || !isLoggedIn()) return;
+           try {
+             await apiClient.postData(
+               AppConstants.unifiedFcmTokenUri,
+               {'token': trimmed},
+             );
+           } catch (_) {}
+         },
+         onError: (_) {},
+       );
+     } catch (_) {}
+   }
+
+   Future<Response> updateToken({bool? isLogOut, bool requestPermission = true}) async {
      String? deviceToken;
 
      if(!(isLogOut ?? false)){
@@ -43,36 +65,44 @@ class AuthRepo extends GetxService{
        // splash ولا بعد انتهاء الجولة التعريفية. Android 13 لا يعرض مطالبة
        // موثوقة من Firebase وحده في كل الأجهزة، لذلك نطلب POST_NOTIFICATIONS
        // صراحةً من نظام Android ثم نتحقق من FCM في iOS.
-       bool granted;
-       if (GetPlatform.isAndroid) {
-         final status = await Permission.notification.request();
-         granted = status.isGranted || status.isLimited;
-       } else {
-         final settings = await FirebaseMessaging.instance.requestPermission(
-           alert: true, announcement: false, badge: true, carPlay: false,
-           criticalAlert: false, provisional: false, sound: true,
-         );
-         granted = settings.authorizationStatus == AuthorizationStatus.authorized
-             || settings.authorizationStatus == AuthorizationStatus.provisional;
+       if (requestPermission) {
+         try {
+           if (GetPlatform.isAndroid) {
+             await Permission.notification.request();
+           } else if (GetPlatform.isIOS) {
+             await FirebaseMessaging.instance.requestPermission(
+               alert: true, announcement: false, badge: true, carPlay: false,
+               criticalAlert: false, provisional: false, sound: true,
+             );
+           }
+         } catch (_) {}
        }
 
-       if(granted) {
-         deviceToken = await _saveDeviceToken();
-         if(deviceToken != null && !GetPlatform.isWeb) {
-           FirebaseMessaging.instance.subscribeToTopic(AppConstants.all);
-           FirebaseMessaging.instance.subscribeToTopic(AppConstants.users);
-         }
+       deviceToken = await _saveDeviceToken();
+       if(deviceToken != null && deviceToken.isNotEmpty && !GetPlatform.isWeb) {
+         unawaited(FirebaseMessaging.instance.subscribeToTopic(AppConstants.all).catchError((_) {}));
+         unawaited(FirebaseMessaging.instance.subscribeToTopic(AppConstants.users).catchError((_) {}));
+         _ensureTokenRefreshListener();
        }
 
        // AMIAL-FCM-001: إرسال token فارغ يمسح الرمز المحفوظ على الخادم فتتوقف
        // الإشعارات نهائياً. إن تعذّر الحصول عليه نُبقي القديم كما هو.
-       if(deviceToken == null) {
+       if(deviceToken == null || deviceToken.trim().isEmpty) {
          return Response(statusCode: 200, body: {'skipped': 'no_fcm_token'});
        }
+     } else if (!GetPlatform.isWeb) {
+       try {
+         unawaited(FirebaseMessaging.instance.unsubscribeFromTopic(AppConstants.all).catchError((_) {}));
+         unawaited(FirebaseMessaging.instance.unsubscribeFromTopic(AppConstants.users).catchError((_) {}));
+       } catch (_) {}
      }
 
-     // For Logout => Clear token using this API, That's why we are using isLogOut variable to identify if it's for logout or not.
-     return await apiClient.postData(AppConstants.tokenUri, {"_method": "put", "token": (isLogOut ?? false) ? '@' : deviceToken});
+     // AMIAL-FCM-UNIFIED-001: المسار الموحّد يقبل جميع الأدوار (عميل/تاجر/POS/وكيل/مدير)
+     // ويمسح الرمز إلى NULL عند الخروج بدل تخزين '@' نصّاً في قاعدة البيانات.
+     return await apiClient.postData(
+       AppConstants.unifiedFcmTokenUri,
+       {"token": (isLogOut ?? false) ? '@' : deviceToken},
+     );
    }
 
 

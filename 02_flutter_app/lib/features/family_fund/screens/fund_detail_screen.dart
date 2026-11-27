@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/family_fund/controllers/funds_controller.dart';
 import 'package:amial_pay/features/family_fund/domain/models/fund_models.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
+import 'package:amial_pay/helper/payment_feedback.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
@@ -165,6 +168,16 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       );
 
       if (ok == true && mounted) {
+        unawaited(
+          PaymentFeedback.success(speech: 'notif_spoken_fund_contribute_ok'.tr),
+        );
+        try {
+          if (Get.isRegistered<NotificationsCenterController>()) {
+            unawaited(
+              Get.find<NotificationsCenterController>().refreshUnreadCount(),
+            );
+          }
+        } catch (_) {}
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('تمت المساهمة بنجاح'),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/helper/amial_crash_reporter.dart';
@@ -332,6 +333,19 @@ class UnifiedAuthController extends GetxController implements GetxService {
       role: (meta['role'] ?? '').toString(),
       zone: user['zone_code']?.toString(),
     );
+
+    // AMIAL-FCM-UNIFIED-001: رفع رمز FCM مبكّراً إن كان الإذن ممنوحاً مسبقاً،
+    // ثمّ تطلب RoleRouter الإذن الظاهر فور استقرار الشاشة الرئيسية.
+    try {
+      if (Get.isRegistered<AuthController>()) {
+        unawaited(
+          Get.find<AuthController>()
+              .authRepo
+              .updateToken(requestPermission: false)
+              .catchError((_) => const Response()),
+        );
+      }
+    } catch (_) {}
   }
 
   // AMIAL-SEC-LOGIN-001: حفظ «آخر تسجيل دخول» محلياً — يعود من الخادم في الـ meta

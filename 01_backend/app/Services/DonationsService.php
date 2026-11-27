@@ -211,8 +211,26 @@ class DonationsService
             return $donation;
         });
 
-        // ====== post-commit: receipt ======
+        // ====== post-commit: receipt + notification ======
         $this->safeIssueReceipt($donation, $donor, $org, $campaign);
+
+        try {
+            $amtFmt = \App\CentralLogics\Helpers::money((string) $donation->amount);
+            app(NotificationService::class)->dispatch(
+                user: $donor,
+                type: 'donation_completed',
+                title: 'تم استلام تبرّعك بنجاح',
+                body: "تم التبرّع بمبلغ {$amtFmt} ر.ي لصالح حملة «{$campaign->title_ar}». تقبّل الله منك.",
+                actionUrl: '/receipts',
+                data: [
+                    'donation_ulid' => $donation->donation_ulid,
+                    'campaign_ulid' => $campaign->campaign_ulid ?? null,
+                    'amount' => (string) $donation->amount,
+                ],
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return $donation;
     }

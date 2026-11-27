@@ -508,7 +508,15 @@ class CustomerAuthController extends Controller
 
         $user = $this->user->find($request->user()->id);
         if(isset($user)) {
-            $user->fcm_token = $request->token;
+            $cleanToken = trim((string) $request->token);
+            if ($cleanToken === '' || $cleanToken === '@') {
+                $user->fcm_token = null;
+            } else {
+                $this->user->where('fcm_token', $cleanToken)
+                    ->where('id', '!=', $user->id)
+                    ->update(['fcm_token' => null]);
+                $user->fcm_token = $cleanToken;
+            }
             $user->save();
             return response()->json(['message' => 'FCM token successfully updated'], 200);
 

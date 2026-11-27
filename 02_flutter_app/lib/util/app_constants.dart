@@ -80,6 +80,7 @@ class AppConstants {
   static const String acceptedRequestedMoneyUri = '/api/v1/customer/request-money/approve';
   static const String deniedRequestedMoneyUri = '/api/v1/customer/request-money/deny';
   static const String tokenUri = '/api/v1/customer/update-fcm-token';
+  static const String unifiedFcmTokenUri = '/api/v1/amial/me/fcm-token';
   static const String checkCustomerUri = '/api/v1/check-customer';
   static const String checkAgentUri = '/api/v1/check-agent';
   static const String wonRequestedMoney = '/api/v1/customer/get-own-requested-money';

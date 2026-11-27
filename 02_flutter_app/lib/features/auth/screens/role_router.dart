@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/access/screens/home_dispatcher_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/features/home/screens/nav_bar_screen.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
+import 'package:amial_pay/helper/notification_helper.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.7)
 ///
@@ -35,6 +39,25 @@ class RoleRouter {
         // الشاشة الرئيسية للعميل الكاملة من Cash6 (تحويل/QR/رصيد/سجل…).
         Get.offAll(() => const NavBarScreen());
     }
+
+    // AMIAL-FCM-UNIFIED-001: بعد استقرار الشاشة الرئيسية لأي دور، نطلب إذن
+    // الإشعارات على Android 13+ / iOS ونرفع fcm_token ونحدّث عدّاد الإشعارات
+    // ونستهلك أي إشعار فتح التطبيق من الخلفية المغلقة.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        if (Get.isRegistered<AuthController>()) {
+          unawaited(Get.find<AuthController>().updateToken());
+        }
+      } catch (_) {}
+      try {
+        if (Get.isRegistered<NotificationsCenterController>()) {
+          unawaited(Get.find<NotificationsCenterController>().refreshUnreadCount());
+        }
+      } catch (_) {}
+      try {
+        unawaited(NotificationHelper.consumePendingInitialNotification());
+      } catch (_) {}
+    });
   }
 
   /// واجهة الشاشة الرئيسية حسب الدور (بدون navigation - للـ embedding).

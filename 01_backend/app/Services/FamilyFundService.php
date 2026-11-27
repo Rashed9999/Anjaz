@@ -183,6 +183,14 @@ class FamilyFundService
             'context' => ['fund_id' => $fund->id, 'role' => $role],
         ]);
 
+        $this->notifyFundUserSafe(
+            $invitee,
+            'family_fund_invited',
+            'دعوة للانضمام إلى صندوق عائلي',
+            "تمت دعوتك للانضمام إلى صندوق «{$fund->name}».",
+            $fund,
+        );
+
         return $member;
     }
 
@@ -342,6 +350,16 @@ class FamilyFundService
                     'balance_after' => $balanceAfter,
                 ],
             ]);
+
+            $amtFmt = \App\CentralLogics\Helpers::money($amountNormalized);
+            $this->notifyFundUserSafe(
+                $user,
+                'family_fund_contributed',
+                'تمت مساهمتك في صندوق العائلة',
+                "تمت إضافة مساهمتك بمبلغ {$amtFmt} ر.ي إلى صندوق «{$lockedFund->name}».",
+                $lockedFund,
+                ['tx_ulid' => $tx->tx_ulid, 'amount' => $amountNormalized],
+            );
 
             return $tx;
         });
@@ -687,6 +705,16 @@ class FamilyFundService
             'zone_code' => 'SOUTH',
         ]);
 
+        $amtFmt = \App\CentralLogics\Helpers::money($amount);
+        $this->notifyFundUserSafe(
+            $beneficiary,
+            'family_fund_disbursed',
+            'وصلك صرف من صندوق العائلة',
+            "تم صرف مبلغ {$amtFmt} ر.ي إلى محفظتك من صندوق «{$lockedFund->name}».",
+            $lockedFund,
+            ['tx_ulid' => $tx->tx_ulid, 'amount' => $amount],
+        );
+
         return $tx;
     }
 
@@ -751,5 +779,40 @@ class FamilyFundService
             'metadata' => ['fund_name' => $lockedFund->name],
             'zone_code' => 'SOUTH',
         ]);
+
+        $amtFmt = \App\CentralLogics\Helpers::money($amount);
+        $this->notifyFundUserSafe(
+            $beneficiary,
+            'family_fund_disbursed',
+            'تم اعتماد وصرف مبلغ من صندوق العائلة',
+            "تم اعتماد وصرف مبلغ {$amtFmt} ر.ي إلى محفظتك من صندوق «{$lockedFund->name}».",
+            $lockedFund,
+            ['tx_ulid' => $tx->tx_ulid, 'amount' => $amount],
+        );
+    }
+
+    private function notifyFundUserSafe(
+        User $user,
+        string $type,
+        string $title,
+        string $body,
+        FamilyFund $fund,
+        array $extra = [],
+    ): void {
+        try {
+            app(NotificationService::class)->dispatch(
+                user: $user,
+                type: $type,
+                title: $title,
+                body: $body,
+                actionUrl: '/family-funds/' . $fund->fund_ulid,
+                data: array_merge([
+                    'fund_ulid' => $fund->fund_ulid,
+                    'fund_name' => $fund->name,
+                ], $extra),
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }
