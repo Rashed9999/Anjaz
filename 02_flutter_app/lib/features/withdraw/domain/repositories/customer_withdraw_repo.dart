@@ -8,10 +8,21 @@ class CustomerWithdrawRepo extends GetxService {
 
   static const _base = '/api/v1/amial/withdraw';
 
-  /// إنشاء طلب سحب جديد.
+  /// إنشاء طلب سحب جديد مربوط برمز المعاملات ومفتاح عدم التكرار.
   /// يرجع: op_code، amount، fee، total_debit، status، expires_at، request_id.
-  Future<Response> request(String amount) =>
-      apiClient.postData('$_base/request', {'amount': amount});
+  Future<Response> request(
+    String amount, {
+    String? pin,
+    String? idempotencyKey,
+  }) =>
+      apiClient.postData(
+        '$_base/request',
+        {
+          'amount': amount,
+          if (pin != null && pin.isNotEmpty) 'pin': pin,
+        },
+        idempotencyKey: idempotencyKey,
+      );
 
   /// طلبات السحب المعلّقة للعميل الحالي.
   Future<Response> mine() => apiClient.getData('$_base/mine');

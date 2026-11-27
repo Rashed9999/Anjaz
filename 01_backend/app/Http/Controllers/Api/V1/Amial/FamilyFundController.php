@@ -7,6 +7,7 @@ use App\Models\FamilyFundMember;
 use App\Models\FamilyFundTransaction;
 use App\Services\FamilyFundService;
 use App\Services\KycTierService;
+use App\Services\TransactionPinService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -24,6 +25,7 @@ class FamilyFundController extends AmialApiController
     public function __construct(
         private readonly FamilyFundService $service,
         private readonly KycTierService $kyc,
+        private readonly TransactionPinService $pinService,
     ) {}
 
     /** GET /api/v1/amial/funds — قائمة صناديق المستخدم */
@@ -183,8 +185,11 @@ class FamilyFundController extends AmialApiController
         $v = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:0.01',
             'note' => 'sometimes|nullable|string|max:500',
+            'pin' => 'sometimes|nullable|string|digits_between:4,6',
         ]);
         if ($v->fails()) return $this->validationError($v);
+
+        if ($pinError = $this->verifyPinIfConfigured($request)) return $pinError;
 
         $amount = (string) $request->input('amount');
         try {
@@ -218,8 +223,11 @@ class FamilyFundController extends AmialApiController
             'beneficiary_user_id' => 'required|integer|exists:users,id',
             'amount' => 'required|numeric|min:0.01',
             'note' => 'sometimes|nullable|string|max:500',
+            'pin' => 'sometimes|nullable|string|digits_between:4,6',
         ]);
         if ($v->fails()) return $this->validationError($v);
+
+        if ($pinError = $this->verifyPinIfConfigured($request)) return $pinError;
 
         $beneficiary = \App\Models\User::find($request->input('beneficiary_user_id'));
         $amount = (string) $request->input('amount');
@@ -255,6 +263,13 @@ class FamilyFundController extends AmialApiController
 
         $tx = FamilyFundTransaction::where('tx_ulid', $ulid)->first();
         if (!$tx) return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
+
+        $v = Validator::make($request->all(), [
+            'pin' => 'sometimes|nullable|string|digits_between:4,6',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        if ($pinError = $this->verifyPinIfConfigured($request)) return $pinError;
 
         try {
             $beneficiary = $tx->beneficiary;
@@ -333,5 +348,43 @@ class FamilyFundController extends AmialApiController
         } catch (\RuntimeException $e) {
             return $this->error('KYC_TIER_REQUIRED', $e->getMessage(), 403);
         }
+    }
+
+    private function verifyPinIfConfigured(Request $request): ?JsonResponse
+    {
+        $user = $request->user();
+        if (empty($user->transaction_pin) && !$request->filled('pin')) {
+            return null;
+        }
+        if ($user->pin_locked_until !== null && $user->pin_locked_until->isFuture()) {
+            $mins = max(1, (int) ceil(now()->diffInMinutes($user->pin_locked_until, false)));
+            return new JsonResponse([
+                'success' => false,
+                'code' => 'PIN_LOCKED',
+                'message' => "رمز المعاملات مقفل مؤقتاً بعد محاولات خاطئة — حاول بعد {$mins} دقيقة",
+                'errors' => (object) [],
+                'meta' => ['retry_after_minutes' => $mins],
+            ], 429);
+        }
+        $pin = (string) $request->input('pin', '');
+        if ($pin === '') {
+            return $this->error('PIN_REQUIRED', 'أدخل رمز المعاملات (PIN) لتأكيد العملية', 422);
+        }
+        if (!$this->pinService->verify($user, $pin)) {
+            $fresh = $user->fresh();
+            if ($fresh && $fresh->pin_locked_until !== null && $fresh->pin_locked_until->isFuture()) {
+                $mins = max(1, (int) ceil(now()->diffInMinutes($fresh->pin_locked_until, false)));
+                return new JsonResponse([
+                    'success' => false,
+                    'code' => 'PIN_LOCKED',
+                    'message' => "تم قفل رمز المعاملات مؤقتاً لحماية حسابك — حاول بعد {$mins} دقيقة",
+                    'errors' => (object) [],
+                    'meta' => ['retry_after_minutes' => $mins],
+                ], 429);
+            }
+            return $this->error('PIN_INVALID', 'رمز PIN غير صحيح', 403);
+        }
+
+        return null;
     }
 }

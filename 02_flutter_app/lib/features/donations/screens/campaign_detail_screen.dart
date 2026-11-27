@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/donations/controllers/donations_controller.dart';
 import 'package:amial_pay/features/donations/domain/models/donation_models.dart';
+import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
 
@@ -100,6 +102,10 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                       TextFormField(
                         controller: amountCtrl,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          const ArabicDigitsNormalizingFormatter(),
+                          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                        ],
                         decoration: const InputDecoration(
                           labelText: 'المبلغ (ر.ي) *',
                           border: OutlineInputBorder(),

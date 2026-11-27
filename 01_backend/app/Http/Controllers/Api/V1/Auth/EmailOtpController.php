@@ -242,7 +242,9 @@ class EmailOtpController extends Controller
                 ]);
             });
         } catch (\InvalidArgumentException $e) {
-            $code = str_contains($e->getMessage(), 'يطابق') ? 'SECRET_SEPARATION_REQUIRED' : 'WEAK_PIN';
+            $isSecretCollision = str_contains($e->getMessage(), 'يطابق')
+                || str_contains($e->getMessage(), 'تطابق');
+            $code = $isSecretCollision ? 'SECRET_SEPARATION_REQUIRED' : 'WEAK_PIN';
             return $this->error($code, $e->getMessage(), 422);
         } catch (RuntimeException $e) {
             return $this->otpError($e);

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amial_pay/features/donations/domain/models/donation_models.dart';
 import 'package:amial_pay/data/api/idempotent_intent.dart';
 import 'package:amial_pay/features/donations/domain/repositories/donations_repo.dart';
+import 'package:amial_pay/helper/amial_errors.dart';
 
 /// AMIAL-DONATIONS-001 (v1.2)
 class DonationsController extends GetxController with IdempotentIntent implements GetxService {
@@ -274,7 +275,12 @@ class DonationsController extends GetxController with IdempotentIntent implement
 
   String? _msg(Response r) {
     try {
-      if (r.body is Map) return r.body['message'] as String?;
+      if (r.body is Map) {
+        return AmialErrors.arabize(
+          r.body['message']?.toString(),
+          code: r.body['code']?.toString(),
+        );
+      }
     } catch (_) {}
     return null;
   }

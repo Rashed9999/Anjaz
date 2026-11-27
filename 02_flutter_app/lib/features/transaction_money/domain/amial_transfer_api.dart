@@ -9,11 +9,15 @@ class AmialTransferApi {
 
   static const _base = '/api/v1/amial/transfer';
 
-  /// POST /verify-recipient → verification_token + masked_name + masked_phone.
-  static Future<Response> verifyRecipient(String phone) =>
-      Get.find<ApiClient>().postData('$_base/verify-recipient', {'phone': phone});
+  /// POST /verify-recipient → verification_token + masked_name + masked_phone + fee_quote.
+  static Future<Response> verifyRecipient(String phone, {String? amount}) =>
+      Get.find<ApiClient>().postData('$_base/verify-recipient', {
+        'phone': phone,
+        if (amount != null && amount.isNotEmpty) 'amount': amount,
+      });
 
-  /// POST /initiate → transfer_ulid + seconds_remaining (نافذة التراجع).
+  /// POST /initiate → transfer_ulid + fee + seconds_remaining (نافذة التراجع).
+  /// ملاحظة: الرسم يُحتسب حصراً في الخادم عبر FeeService ولا يُرسل من العميل.
   static Future<Response> initiate({
     required int recipientId,
     required String verificationToken,
@@ -29,7 +33,6 @@ class AmialTransferApi {
           'verification_token': verificationToken,
           'amount': amount,
           'pin': pin,
-          if (fee != null) 'fee': fee,
           if (note != null && note.isNotEmpty) 'note': note,
         },
         idempotencyKey:

@@ -61,13 +61,16 @@ class PendingTransferService
             ?? (int) config('app.amial_transfer_cooldown', self::DEFAULT_COOLDOWN_SECONDS);
         $cooldown = max(5, $cooldown);
 
-        // 1) فحوصات أساسية
+        // 1) فحوصات أساسية + حارس نوع الحساب (القاعدة الرابعة: المنع في المسارين معاً)
         if ($sender->id === $recipient->id) {
             throw new RuntimeException('لا يمكنك التحويل لنفسك');
         }
         if (bccomp($amount, '0', 4) <= 0) {
             throw new RuntimeException('المبلغ يجب أن يكون موجباً');
         }
+        $kindVerifier = app(RecipientVerificationService::class);
+        $kindVerifier->assertSendableKind($sender);
+        $kindVerifier->assertReceivableKind($recipient);
 
         // Tier 0 لا يفتح حجزاً مالياً، وTier 1 يستطيع التحويل الأساسي فقط.
         // الطرف المستلم الفردي يمر من حد الاستقبال نفسه قبل أي خصم.
@@ -307,7 +310,12 @@ class PendingTransferService
             ]);
             if (bccomp((string) $locked->fee, '0', 4) > 0) {
                 $adminId = \App\CentralLogics\Helpers::get_admin_id();
-                $adminWallet = $this->guard->creditAdminCharge($adminId, (string) $locked->fee);
+                $adminWallet = $this->guard->creditAdminCharge($adminId, (string) $locked->fee, [
+                    'source_type' => SEND_MONEY,
+                    'transaction_id' => $releaseTxId,
+                    'from_user_id' => $locked->sender_user_id,
+                    'zone_code' => $senderWallet->zone_code ?? 'SOUTH',
+                ]);
                 \App\Models\Transaction::create([
                     'user_id' => $adminId,
                     'transaction_id' => (string) Str::ulid(),
@@ -345,10 +353,9 @@ class PendingTransferService
             return ['transfer' => $locked->fresh(), 'delivered' => true];
         });
 
-        // post-commit: الإيصال وحده
+        // post-commit: الإيصال + الإشعارات
+        $t = $result['transfer'];
         if ($result['delivered']) {
-            $t = $result['transfer'];
-
             // AMIAL-FIX(RECEIPTS): إصدار إيصالَي التحويل (مدين للمرسل/دائن
             // للمستلم) — كانا مفقودين فلا يظهر التحويل في «الإيصالات» ولا PDF.
             try {
@@ -367,9 +374,67 @@ class PendingTransferService
                     'error' => mb_substr($e->getMessage(), 0, 200),
                 ]);
             }
+
+            try {
+                $senderUser = User::find($t->sender_user_id);
+                $recipientUser = User::find($t->recipient_user_id);
+                $formatted = \App\CentralLogics\Helpers::money((string) $t->amount);
+                $notif = app(NotificationService::class);
+                if ($recipientUser) {
+                    $senderName = trim(($senderUser->f_name ?? '') . ' ' . ($senderUser->l_name ?? '')) ?: 'عميل أميال';
+                    $notif->dispatch(
+                        $recipientUser,
+                        'money_received',
+                        'استلمت حوّالة مالية',
+                        "وصلك مبلغ {$formatted} ر.ي من {$senderName}.",
+                        data: [
+                            'transfer_ulid' => $t->transfer_ulid,
+                            'transaction_id' => $t->release_transaction_id,
+                            'amount' => (string) $t->amount,
+                        ],
+                    );
+                }
+                if ($senderUser) {
+                    $recipientName = trim(($recipientUser->f_name ?? '') . ' ' . ($recipientUser->l_name ?? '')) ?: 'المستلم';
+                    $notif->dispatch(
+                        $senderUser,
+                        'transfer_completed',
+                        'اكتمل التحويل المالي',
+                        "تم تسليم مبلغ {$formatted} ر.ي إلى {$recipientName}.",
+                        data: [
+                            'transfer_ulid' => $t->transfer_ulid,
+                            'transaction_id' => $t->release_transaction_id,
+                            'amount' => (string) $t->amount,
+                        ],
+                    );
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Pending transfer notification failed (non-fatal)', [
+                    'ulid' => $t->transfer_ulid,
+                    'error' => mb_substr($e->getMessage(), 0, 200),
+                ]);
+            }
+        } elseif ($t->status === 'failed') {
+            try {
+                $senderUser = User::find($t->sender_user_id);
+                if ($senderUser) {
+                    $refunded = \App\CentralLogics\Helpers::money((string) $t->total_debited);
+                    app(NotificationService::class)->dispatch(
+                        $senderUser,
+                        'transfer_refunded',
+                        'تعذّر تسليم التحويل واستُرد المبلغ',
+                        "تعذّر تسليم الحوالة واستُرد مبلغ {$refunded} ر.ي إلى محفظتك.",
+                        data: [
+                            'transfer_ulid' => $t->transfer_ulid,
+                            'refunded' => (string) $t->total_debited,
+                        ],
+                    );
+                }
+            } catch (\Throwable) {
+            }
         }
 
-        return $result['transfer'];
+        return $t;
     }
 
     /**

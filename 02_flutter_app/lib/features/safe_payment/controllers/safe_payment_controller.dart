@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amial_pay/features/safe_payment/domain/models/safe_payment_models.dart';
 import 'package:amial_pay/data/api/idempotent_intent.dart';
 import 'package:amial_pay/features/safe_payment/domain/repositories/safe_payment_repo.dart';
+import 'package:amial_pay/helper/amial_errors.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
 class SafePaymentController extends GetxController with IdempotentIntent implements GetxService {
@@ -377,7 +378,12 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
 
   String? _msg(Response r) {
     try {
-      if (r.body is Map) return r.body['message'] as String?;
+      if (r.body is Map) {
+        return AmialErrors.arabize(
+          r.body['message']?.toString(),
+          code: r.body['code']?.toString(),
+        );
+      }
     } catch (_) {}
     return null;
   }

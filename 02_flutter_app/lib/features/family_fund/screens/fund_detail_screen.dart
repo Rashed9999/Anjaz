@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/family_fund/controllers/funds_controller.dart';
 import 'package:amial_pay/features/family_fund/domain/models/fund_models.dart';
 import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
@@ -70,6 +72,10 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                 TextFormField(
                   controller: amountCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    const ArabicDigitsNormalizingFormatter(),
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                  ],
                   decoration: const InputDecoration(
                     labelText: 'المبلغ (ر.ي) *',
                     border: OutlineInputBorder(),
@@ -115,13 +121,15 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                             ? null
                             : () async {
                                 if (!formKey.currentState!.validate()) return;
-                                // AMIAL-PIN-GATE-001: رمز PIN قبل خصم المساهمة
-                                if (!await askAmialPin(title: 'تأكيد المساهمة')) {
+                                // AMIAL-FUND-PIN-BOUND-001: رمز PIN يُرسَل مع المساهمة للخادم
+                                final pin = await askAmialPinInput(title: 'تأكيد المساهمة');
+                                if (pin == null || pin.length < 4) {
                                   return;
                                 }
                                 final success = await ctrl.contribute(
                                   fundUlid: widget.fundUlid,
                                   amount: amountCtrl.text.trim(),
+                                  pin: pin,
                                   note: noteCtrl.text.trim().isNotEmpty
                                       ? noteCtrl.text.trim()
                                       : null,
@@ -190,6 +198,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                 TextField(
                   controller: phoneCtrl,
                   keyboardType: TextInputType.phone,
+                  inputFormatters: const [ArabicDigitsNormalizingFormatter()],
                   decoration: const InputDecoration(
                     labelText: 'رقم الجوال',
                     hintText: '777xxxxxx',
@@ -314,6 +323,10 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                 controller: amountCtrl,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  const ArabicDigitsNormalizingFormatter(),
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                ],
                 decoration: const InputDecoration(
                     labelText: 'المبلغ (ر.ي) *', border: OutlineInputBorder()),
                 validator: (v) {
@@ -349,12 +362,14 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
         ),
       );
       if (ok != true || beneficiaryId == null) return;
-      // AMIAL-PIN-GATE-001: رمز PIN قبل الصرف أو اقتراحه
-      if (!await askAmialPin(title: 'تأكيد الصرف من الصندوق')) return;
+      // AMIAL-FUND-PIN-BOUND-001: رمز PIN يُرسَل مع الصرف للخادم
+      final pin = await askAmialPinInput(title: 'تأكيد الصرف من الصندوق');
+      if (pin == null || pin.length < 4) return;
       final status = await ctrl.proposeDisbursement(
         fundUlid: widget.fundUlid,
         beneficiaryUserId: beneficiaryId!,
         amount: amountCtrl.text.trim(),
+        pin: pin,
         note: noteCtrl.text.trim().isNotEmpty ? noteCtrl.text.trim() : null,
       );
       if (!mounted) return;
@@ -382,9 +397,10 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
   }
 
   Future<void> _approvePending(AmialFundTransaction tx) async {
-    if (!await askAmialPin(title: 'تأكيد اعتماد الصرف')) return;
+    final pin = await askAmialPinInput(title: 'تأكيد اعتماد الصرف');
+    if (pin == null || pin.length < 4) return;
     final ctrl = Get.find<FundsController>();
-    final ok = await ctrl.approveDisbursement(widget.fundUlid, tx.txUlid, '');
+    final ok = await ctrl.approveDisbursement(widget.fundUlid, tx.txUlid, pin);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(ok

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:amial_pay/util/app_direction.dart';
 import 'package:amial_pay/util/secure_screen.dart';
 import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
+import 'package:amial_pay/features/auth/screens/amial_biometric_setup_screen.dart';
 import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 
@@ -237,21 +238,24 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
 
     final value = _pinMode ? _secret.text.trim() : _secret.text;
     final confirm = _pinMode ? _confirm.text.trim() : _confirm.text;
-    final formatOk = _pinMode
-        ? RegExp(r'^\d{4,6}$').hasMatch(value)
-        : value.length >= 4 && value.length <= 64;
-    if (!formatOk) {
-      _message(
-        _pinMode
-            ? 'email_otp_pin_format'.tr
-            : 'email_otp_password_format'.tr,
-        error: true,
-      );
-      return;
-    }
-    if (_pinMode && _weakPins.contains(value)) {
-      _message('auth_activate_pin_weak'.tr, error: true);
-      return;
+    if (_pinMode) {
+      if (!RegExp(r'^\d{4,6}$').hasMatch(value)) {
+        _message('email_otp_pin_format'.tr, error: true);
+        return;
+      }
+      if (_weakPins.contains(value)) {
+        _message('auth_activate_pin_weak'.tr, error: true);
+        return;
+      }
+    } else {
+      if (value.length < 8 || value.length > 64) {
+        _message('auth_activate_password_min'.tr, error: true);
+        return;
+      }
+      if (RegExp(r'^\d+$').hasMatch(value)) {
+        _message('auth_activate_password_non_numeric'.tr, error: true);
+        return;
+      }
     }
     if (value != confirm) {
       _message('email_otp_mismatch'.tr, error: true);
@@ -283,6 +287,9 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
         return;
       }
 
+      if (!_pinMode) {
+        await AmialBiometricSetupScreen.clearSavedCredentials();
+      }
       final repo = Get.find<AuthRepo>();
       await repo.removeUserToken();
       repo.removeUserData();
