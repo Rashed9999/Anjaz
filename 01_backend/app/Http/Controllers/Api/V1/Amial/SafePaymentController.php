@@ -40,7 +40,16 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
         } else {
             $query->forUser($user->id);
         }
-        if ($status) {
+        if ($status === 'active') {
+            $query->whereIn('status', [
+                'pending_seller_acceptance', 'funded', 'in_delivery', 'delivered', 'buyer_confirmed',
+            ]);
+        } elseif ($status === 'completed') {
+            $query->whereIn('status', [
+                'released_to_seller', 'refunded_to_buyer', 'partially_refunded',
+                'cancelled', 'seller_rejected', 'expired',
+            ]);
+        } elseif ($status) {
             $query->where('status', $status);
         }
 
@@ -112,8 +121,19 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
         ]);
         if ($v->fails()) return $this->validationError($v);
 
+        $identifier = trim((string) $request->input('seller_phone'));
+        $seller = null;
+
+        // AMIAL-ACCOUNT-NUMBER-001: دعم البحث برقم الحساب (8 أرقام) بنفس منطق RecipientVerificationService
+        if (preg_match('/^\d{8}$/', $identifier)) {
+            $seller = app(\App\Services\AccountNumberService::class)
+                ->resolveRecipient($identifier, allowPhone: false);
+        }
+
         // AMIAL-FIX: مطابقة صيغ الهاتف المكافئة (777… ↔ 967777…) كي يُقبل أي صيغة
-        $seller = User::whereIn('phone', \App\Support\Phone::variants($request->input('seller_phone')))->first();
+        if (!$seller) {
+            $seller = User::whereIn('phone', \App\Support\Phone::variants($identifier))->first();
+        }
         if (!$seller) return $this->error('SELLER_NOT_FOUND', 'البائع غير مسجل في النظام', 422);
 
         try {
@@ -278,7 +298,14 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
             $reasons[] = ['code' => $code, 'label' => $label];
         }
 
-        return new JsonResponse(['success' => true, 'data' => $reasons]);
+        return new JsonResponse([
+            'success' => true,
+            'code' => 'OK',
+            'message' => 'OK',
+            'errors' => (object) [],
+            'data' => $reasons,
+            'meta' => ['reasons' => $reasons],
+        ]);
     }
 
     /**
@@ -343,9 +370,15 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
 
         // الطرفان يريان أدلّة بعضهما: الشفافية تُنهي نزاعات كثيرة قبل
         // وصولها للإدارة، ومن يرى دليل خصمه يعرف موقفه فيتراجع أو يوضّح.
+        $timeline = app(\App\Services\SafePaymentEvidenceService::class)->timeline($payment);
+
         return new JsonResponse([
             'success' => true,
-            'data' => app(\App\Services\SafePaymentEvidenceService::class)->timeline($payment),
+            'code' => 'OK',
+            'message' => 'OK',
+            'errors' => (object) [],
+            'data' => $timeline,
+            'meta' => ['evidence' => $timeline],
         ]);
     }
 

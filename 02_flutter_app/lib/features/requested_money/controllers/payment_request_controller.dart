@@ -15,7 +15,24 @@ class PaymentRequestController extends GetxController implements GetxService {
 
   final RxBool isSubmitting = false.obs;
   final RxBool isLoading = false.obs;
+  final RxBool isLoadingIncoming = false.obs;
+  final RxBool isLoadingOutgoing = false.obs;
+  final RxBool isLoadingMoreIncoming = false.obs;
+  final RxBool isLoadingMoreOutgoing = false.obs;
+  final RxBool hasMoreIncoming = false.obs;
+  final RxBool hasMoreOutgoing = false.obs;
+
   final RxString lastError = ''.obs;
+  final RxString lastErrorIncoming = ''.obs;
+  final RxString lastErrorOutgoing = ''.obs;
+
+  int _incomingPage = 1;
+  int _incomingLastPage = 1;
+  String? _incomingStatus;
+
+  int _outgoingPage = 1;
+  int _outgoingLastPage = 1;
+  String? _outgoingStatus;
 
   /// AMIAL-REQUEST-DIRECT-002 — حالةُ الرقم المكتوب: مشترك أم لا.
   ///
@@ -140,25 +157,122 @@ class PaymentRequestController extends GetxController implements GetxService {
   }
 
   Future<void> loadList(String direction, {String? status}) async {
+    final isIncoming = direction == 'incoming';
+    final loadingRx = isIncoming ? isLoadingIncoming : isLoadingOutgoing;
+    final errorRx = isIncoming ? lastErrorIncoming : lastErrorOutgoing;
+
     try {
+      loadingRx.value = true;
       isLoading.value = true;
-      lastError.value = '';
-      final r = await repo.list(direction: direction, status: status);
+      errorRx.value = '';
+      if (isIncoming) {
+        _incomingStatus = status;
+      } else {
+        _outgoingStatus = status;
+      }
+
+      final r = await repo.list(direction: direction, status: status, page: 1);
       if (_ok(r)) {
-        final list = (r.body['meta']?['requests'] ?? []) as List;
+        final meta = (r.body['meta'] ?? {}) as Map;
+        final list = (meta['requests'] ?? []) as List;
         final mapped = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        if (direction == 'incoming') {
+        final pagination = meta['pagination'] is Map
+            ? Map<String, dynamic>.from(meta['pagination'] as Map)
+            : <String, dynamic>{};
+        final currentPage = int.tryParse('${pagination['current_page'] ?? 1}') ?? 1;
+        final lastPage = int.tryParse('${pagination['last_page'] ?? 1}') ?? 1;
+
+        if (isIncoming) {
           incoming.assignAll(mapped);
+          _incomingPage = currentPage;
+          _incomingLastPage = lastPage;
+          hasMoreIncoming.value = _incomingPage < _incomingLastPage;
         } else {
           outgoing.assignAll(mapped);
+          _outgoingPage = currentPage;
+          _outgoingLastPage = lastPage;
+          hasMoreOutgoing.value = _outgoingPage < _outgoingLastPage;
         }
       } else {
-        lastError.value = _msg(r) ?? 'تعذّر تحميل الطلبات';
+        errorRx.value = _msg(r) ?? 'تعذّر تحميل الطلبات';
       }
     } catch (_) {
-      lastError.value = 'تعذّر الاتصال لتحميل الطلبات';
+      errorRx.value = 'تعذّر الاتصال لتحميل الطلبات';
     } finally {
-      isLoading.value = false;
+      loadingRx.value = false;
+      isLoading.value = isLoadingIncoming.value || isLoadingOutgoing.value;
+    }
+  }
+
+  Future<void> loadMoreIncoming() async {
+    if (isLoadingIncoming.value ||
+        isLoadingMoreIncoming.value ||
+        _incomingPage >= _incomingLastPage) {
+      return;
+    }
+
+    try {
+      isLoadingMoreIncoming.value = true;
+      final nextPage = _incomingPage + 1;
+      final r = await repo.list(
+        direction: 'incoming',
+        status: _incomingStatus,
+        page: nextPage,
+      );
+      if (_ok(r)) {
+        final meta = (r.body['meta'] ?? {}) as Map;
+        final list = (meta['requests'] ?? []) as List;
+        final mapped = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        final existingIds = incoming.map((e) => e['id']).toSet();
+        incoming.addAll(mapped.where((e) => !existingIds.contains(e['id'])));
+
+        final pagination = meta['pagination'] is Map
+            ? Map<String, dynamic>.from(meta['pagination'] as Map)
+            : <String, dynamic>{};
+        _incomingPage = int.tryParse('${pagination['current_page'] ?? nextPage}') ?? nextPage;
+        _incomingLastPage = int.tryParse('${pagination['last_page'] ?? _incomingLastPage}') ?? _incomingLastPage;
+        hasMoreIncoming.value = _incomingPage < _incomingLastPage;
+      }
+    } catch (_) {
+      // نُبقي القائمة الحالية كما هي؛ يمكن للمستخدم المحاولة لاحقاً.
+    } finally {
+      isLoadingMoreIncoming.value = false;
+    }
+  }
+
+  Future<void> loadMoreOutgoing() async {
+    if (isLoadingOutgoing.value ||
+        isLoadingMoreOutgoing.value ||
+        _outgoingPage >= _outgoingLastPage) {
+      return;
+    }
+
+    try {
+      isLoadingMoreOutgoing.value = true;
+      final nextPage = _outgoingPage + 1;
+      final r = await repo.list(
+        direction: 'outgoing',
+        status: _outgoingStatus,
+        page: nextPage,
+      );
+      if (_ok(r)) {
+        final meta = (r.body['meta'] ?? {}) as Map;
+        final list = (meta['requests'] ?? []) as List;
+        final mapped = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        final existingIds = outgoing.map((e) => e['id']).toSet();
+        outgoing.addAll(mapped.where((e) => !existingIds.contains(e['id'])));
+
+        final pagination = meta['pagination'] is Map
+            ? Map<String, dynamic>.from(meta['pagination'] as Map)
+            : <String, dynamic>{};
+        _outgoingPage = int.tryParse('${pagination['current_page'] ?? nextPage}') ?? nextPage;
+        _outgoingLastPage = int.tryParse('${pagination['last_page'] ?? _outgoingLastPage}') ?? _outgoingLastPage;
+        hasMoreOutgoing.value = _outgoingPage < _outgoingLastPage;
+      }
+    } catch (_) {
+      // نُبقي القائمة الحالية كما هي؛ يمكن للمستخدم المحاولة لاحقاً.
+    } finally {
+      isLoadingMoreOutgoing.value = false;
     }
   }
 
@@ -261,6 +375,7 @@ class PaymentRequestController extends GetxController implements GetxService {
   Future<bool> cancel(int id) async {
     try {
       isSubmitting.value = true;
+      lastError.value = '';
       final r = await repo.cancel(id);
       if (_ok(r)) {
         outgoing.removeWhere((e) => e['id'] == id);
@@ -272,6 +387,7 @@ class PaymentRequestController extends GetxController implements GetxService {
       lastError.value = _msg(r) ?? 'فشل الإلغاء';
       return false;
     } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
       return false;
     } finally {
       isSubmitting.value = false;

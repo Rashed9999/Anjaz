@@ -4,6 +4,7 @@ import 'package:amial_pay/features/family_fund/controllers/funds_controller.dart
 import 'package:amial_pay/features/family_fund/domain/models/fund_models.dart';
 import 'package:amial_pay/features/family_fund/screens/create_fund_screen.dart';
 import 'package:amial_pay/features/family_fund/screens/fund_detail_screen.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
@@ -24,11 +25,16 @@ class _MyFundsScreenState extends State<MyFundsScreen> {
   }
 
   Future<void> _acceptInvite(AmialFundMembership m) async {
-    final ok = await Get.find<FundsController>().acceptInvitation(m.membershipId);
+    final ctrl = Get.find<FundsController>();
+    final ok = await ctrl.acceptInvitation(m.membershipId);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok ? 'تم قبول الدعوة' : 'فشل قبول الدعوة'),
+        content: Text(ok
+            ? 'تم قبول الدعوة'
+            : (ctrl.lastError.value.isNotEmpty
+                ? ctrl.lastError.value
+                : 'فشل قبول الدعوة')),
         backgroundColor: ok ? Colors.green.shade700 : AmialColors.red,
       ),
     );
@@ -45,10 +51,8 @@ class _MyFundsScreenState extends State<MyFundsScreen> {
         backgroundColor: AmialColors.primary,
         foregroundColor: Colors.white,
         onPressed: () async {
-          final created = await Get.to<bool>(() => const CreateFundScreen());
-          if (created == true && mounted) {
-            Get.find<FundsController>().loadMyFunds();
-          }
+          // createFund يحدّث القائمة تلقائياً، فلا حاجة لتكرار loadMyFunds() هنا.
+          await Get.to<bool>(() => const CreateFundScreen());
         },
         icon: const Icon(Icons.add),
         label: const Text('صندوق جديد'),
@@ -62,18 +66,55 @@ class _MyFundsScreenState extends State<MyFundsScreen> {
             return const Center(
                 child: CircularProgressIndicator(color: AmialColors.primary));
           }
-          if (ctrl.myMemberships.isEmpty) {
+          if (ctrl.myMemberships.isEmpty && ctrl.lastError.value.isNotEmpty) {
             return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(24),
               children: [
                 SizedBox(height: MediaQuery.of(context).size.height * 0.15),
-                Icon(Icons.diversity_3, size: 80, color: AmialColors.textMuted.withValues(alpha: 0.5)),
+                const Icon(Icons.error_outline,
+                    size: 64, color: AmialColors.red),
                 const SizedBox(height: 16),
-                const Center(child: Text('لا توجد صناديق بعد', style: TextStyle(fontSize: 14))),
+                Center(
+                  child: Text(
+                    ctrl.lastError.value,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: ElevatedButton.icon(
+                    onPressed: () => ctrl.loadMyFunds(),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('إعادة المحاولة'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AmialColors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+          if (ctrl.myMemberships.isEmpty) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                Icon(Icons.diversity_3,
+                    size: 80,
+                    color: AmialColors.textMuted.withValues(alpha: 0.5)),
+                const SizedBox(height: 16),
+                const Center(
+                    child: Text('لا توجد صناديق بعد',
+                        style: TextStyle(fontSize: 14))),
                 const SizedBox(height: 8),
                 const Center(
                   child: Text(
                     'أنشئ صندوقاً جديداً أو انتظر دعوة',
-                    style: TextStyle(color: AmialColors.textSecondary, fontSize: 12),
+                    style: TextStyle(
+                        color: AmialColors.textSecondary, fontSize: 12),
                   ),
                 ),
               ],
@@ -84,15 +125,19 @@ class _MyFundsScreenState extends State<MyFundsScreen> {
           final active = ctrl.myMemberships.where((m) => m.isActive).toList();
 
           return ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(12),
             children: [
               if (invited.isNotEmpty) ...[
-                const _SectionHeader(title: 'دعوات مُعلَّقة', icon: Icons.mail_outline),
-                ...invited.map((m) => _InviteCard(membership: m, onAccept: () => _acceptInvite(m))),
+                const _SectionHeader(
+                    title: 'دعوات مُعلَّقة', icon: Icons.mail_outline),
+                ...invited.map((m) =>
+                    _InviteCard(membership: m, onAccept: () => _acceptInvite(m))),
                 const SizedBox(height: 16),
               ],
               if (active.isNotEmpty) ...[
-                const _SectionHeader(title: 'صناديقك النشطة', icon: Icons.diversity_3),
+                const _SectionHeader(
+                    title: 'صناديقك النشطة', icon: Icons.diversity_3),
                 ...active.map((m) => _FundCard(membership: m)),
               ],
               const SizedBox(height: 80), // FAB spacing
@@ -101,6 +146,21 @@ class _MyFundsScreenState extends State<MyFundsScreen> {
         }),
       ),
     );
+  }
+}
+
+String _arabicRole(String role) {
+  switch (role) {
+    case 'owner':
+      return 'المالك';
+    case 'admin':
+      return 'مشرف';
+    case 'member':
+      return 'عضو';
+    case 'viewer':
+      return 'مشاهد';
+    default:
+      return role;
   }
 }
 
@@ -163,7 +223,7 @@ class _InviteCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    membership.role,
+                    _arabicRole(membership.role),
                     style: const TextStyle(color: Colors.white, fontSize: 10),
                   ),
                 ),
@@ -206,6 +266,11 @@ class _FundCard extends StatelessWidget {
     final fund = membership.fund;
     if (fund == null) return const SizedBox.shrink();
 
+    final targetVal = double.tryParse(fund.targetAmount ?? '') ?? 0;
+    final balanceVal = double.tryParse(fund.balance) ?? 0;
+    final hasTarget = targetVal > 0;
+    final progress = hasTarget ? (balanceVal / targetVal).clamp(0.0, 1.0) : 0.0;
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: InkWell(
@@ -219,7 +284,8 @@ class _FundCard extends StatelessWidget {
             children: [
               CircleAvatar(
                 backgroundColor: AmialColors.yellow.withValues(alpha: 0.25),
-                child: const Icon(Icons.diversity_3, color: AmialColors.primary),
+                child:
+                    const Icon(Icons.diversity_3, color: AmialColors.primary),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -230,13 +296,32 @@ class _FundCard extends StatelessWidget {
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 15)),
                     Text(
-                      'الرصيد: ${fund.balance} ر.ي',
+                      'الرصيد: ${AmialMoney.yer(fund.balance)}',
                       style: const TextStyle(
                           color: AmialColors.primary, fontSize: 13),
                     ),
+                    if (hasTarget) ...[
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          minHeight: 6,
+                          backgroundColor: const Color(0xFFF0EFEA),
+                          color: AmialColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'الهدف: ${AmialMoney.yer(fund.targetAmount!)} (${(progress * 100).toStringAsFixed(0)}%)',
+                        style: const TextStyle(
+                            fontSize: 11, color: AmialColors.textSecondary),
+                      ),
+                    ],
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -249,7 +334,7 @@ class _FundCard extends StatelessWidget {
                           : AmialColors.textSecondary,
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: Text(membership.role,
+                    child: Text(_arabicRole(membership.role),
                         style: const TextStyle(
                             color: Colors.white, fontSize: 10)),
                   ),

@@ -116,7 +116,8 @@ class SafePaymentService
             if (Schema::hasTable('control_center_policies')) {
                 $mode = DB::table('control_center_policies')
                     ->where('feature_key', 'safe_payment')
-                    ->lockForUpdate()->value('mode');
+                    ->lockForUpdate()
+                    ->value('mode');
                 if ($mode !== 'RUNNING') {
                     throw new \DomainException('FEATURE_INTAKE_PAUSED');
                 }
@@ -274,14 +275,19 @@ class SafePaymentService
             $expected = $this->plainDeliveryCode($locked);
             if ($expected === null || !hash_equals($expected, (string) $clean)) {
                 $attempts = (int) $locked->delivery_code_attempts + 1;
+                $remaining = max(0, 3 - $attempts);
                 $locked->update(['delivery_code_attempts' => $attempts]);
                 $this->recordEvent($locked, 'delivery_code_failed', $locked->status, $locked->status,
                     actorType: 'seller', actorUserId: $seller->id,
-                    context: ['attempts' => $attempts]);
+                    context: ['attempts' => $attempts, 'remaining_attempts' => $remaining]);
+
+                $errorMsg = $remaining > 0
+                    ? "رمز التسليم غير صحيح. المحاولات المتبقية: {$remaining}"
+                    : 'رمز التسليم غير صحيح. تجاوزت عدد المحاولات المسموح بها (3). تواصل مع الدعم أو أكمل بالأدلّة المرفوعة.';
 
                 // لا نرمِي داخل الـ transaction: نريد تثبيت المحاولة الخاطئة
                 // والسجل قبل إرجاع الرفض للعميل.
-                return ['payment' => null, 'error' => 'رمز التسليم غير صحيح'];
+                return ['payment' => null, 'error' => $errorMsg];
             }
 
             $from = $locked->status;
@@ -616,7 +622,7 @@ class SafePaymentService
                 throw new \RuntimeException('Not in disputed status');
             }
 
-            $this->releaseToSellerInternal($locked, actorType: 'admin', actorUserId: $admin->id);
+            $this->releaseToSellerInternal($locked, actorType: 'admin', actorUserId: $admin->id, recordEvent: false);
 
             $locked->update([
                 'admin_resolved_by' => $admin->id,
@@ -625,16 +631,29 @@ class SafePaymentService
             ]);
 
             $this->recordEvent($locked, 'admin_resolved_release', 'disputed', 'released_to_seller',
-                actorType: 'admin', actorUserId: $admin->id, note: $reason);
+                actorType: 'admin', actorUserId: $admin->id, note: $reason,
+                context: [
+                    'amount' => (string) $locked->released_to_seller_amount,
+                    'platform_fee' => (string) $locked->platform_fee,
+                ]);
         });
 
+        $resolved = $payment->fresh();
         $this->auditAdminResolution(
             $payment, $admin, 'SAFE_PAYMENT_ADMIN_RELEASE', 'RESOLVED_RELEASE', $reason,
-            ['to_seller' => (string) $payment->held_amount, 'to_buyer' => '0'],
+            [
+                'to_seller' => (string) $payment->held_amount,
+                'to_seller_net' => (string) $resolved->released_to_seller_amount,
+                'platform_fee' => (string) $resolved->platform_fee,
+                'to_buyer' => '0',
+            ],
         );
 
-        $payment = $payment->fresh();
-        $this->safeIssueReceipt($payment, 'credit', $payment->seller_user_id, $payment->buyer_user_id, 'safe_payment_released');
+        $payment = $resolved;
+        $this->safeIssueReceipt(
+            $payment, 'credit', $payment->seller_user_id, $payment->buyer_user_id, 'safe_payment_released',
+            customAmount: (string) $payment->released_to_seller_amount,
+        );
         return $payment;
     }
 
@@ -846,7 +865,7 @@ class SafePaymentService
      *
      * يحسب fees ويخصم منها، الباقي للبائع.
      */
-    private function releaseToSellerInternal(SafePayment $locked, string $actorType, ?int $actorUserId): void
+    private function releaseToSellerInternal(SafePayment $locked, string $actorType, ?int $actorUserId, bool $recordEvent = true): void
     {
         $grossAmount = MoneyService::normalize((string) $locked->held_amount);
         if (bccomp($grossAmount, '0', 4) <= 0) {
@@ -879,9 +898,11 @@ class SafePaymentService
             'held_amount' => '0',
         ]);
 
-        $this->recordEvent($locked, 'released_to_seller', 'buyer_confirmed', 'released_to_seller',
-            actorType: $actorType, actorUserId: $actorUserId,
-            context: ['amount' => $sellerCredit, 'platform_fee' => $platformFee]);
+        if ($recordEvent) {
+            $this->recordEvent($locked, 'released_to_seller', 'buyer_confirmed', 'released_to_seller',
+                actorType: $actorType, actorUserId: $actorUserId,
+                context: ['amount' => $sellerCredit, 'platform_fee' => $platformFee]);
+        }
 
         // القيد داخل معاملة الحالة والمحفظة. نمرّر $grossAmount (المحجوز فعلاً)
         // لا $locked->amount لتطابق حركة المحفظة حتى لو سبقها استرداد جزئي.
@@ -1029,10 +1050,27 @@ class SafePaymentService
      * والمصدر سجلّ التدقيق لا حقل `admin_resolved_by`: الحقل يُكتب فوقه عند
      * أوّل قرار ثانٍ فيضيع التاريخ، والسجلّ لا يُحذف ولا يُعدَّل.
      */
+    /**
+     * أفعال التعديل/القرار التي تُفعّل قاعدة أربع عيون على الدفع الآمن.
+     * لا تشمل أفعال القراءة (SAFE_PAYMENT_DISPUTE_VIEWED / SAFE_PAYMENT_EVIDENCE_VIEWED)
+     * حتى لا يُحظر الموظّف ذاتياً لمجرّد اطلاعه على ملف النزاع أو أدلّته قبل الحسم.
+     */
+    public const FOUR_EYES_BLOCKING_ACTIONS = [
+        'SAFE_PAYMENT_CREATED',
+        'SAFE_PAYMENT_DISPUTED',
+        'SAFE_PAYMENT_ADMIN_RELEASE',
+        'SAFE_PAYMENT_ADMIN_REFUND',
+        'SAFE_PAYMENT_ADMIN_PARTIAL',
+        'evidence_reviewed',
+    ];
+
     private function assertFourEyes(SafePayment $payment, User $admin): void
     {
         app(\App\Services\FourEyesService::class)->assertNotPreviousActor(
-            'safe_payment', $payment->id, $admin,
+            'safe_payment',
+            $payment->id,
+            $admin,
+            self::FOUR_EYES_BLOCKING_ACTIONS,
         );
     }
 }

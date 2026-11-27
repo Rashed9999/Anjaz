@@ -82,7 +82,7 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'سيتم تعيينك كـ owner، ويمكنك دعوة الأعضاء بأرقامهم.',
+                  'سيتم تعيينك كمالك للصندوق، ويمكنك دعوة الأعضاء بأرقامهم.',
                   style: TextStyle(color: AmialColors.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 24),
@@ -117,19 +117,25 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
                 ),
                 const SizedBox(height: 4),
 
-                // AMIAL-FUND-002: هدف الادّخار — شريط تقدّم في التفاصيل
+                // AMIAL-FUND-002: هدف الادّخار اختياري مع دعم الأرقام العشرية بما يطابق الباكند
                 TextFormField(
                   controller: _targetCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                  ],
                   decoration: const InputDecoration(
-                    labelText: 'المبلغ المستهدف (ر.ي) *',
-                    hintText: 'مثال: 500000',
+                    labelText: 'المبلغ المستهدف (ر.ي) — اختياري',
+                    hintText: 'مثال: 500000 أو 50000.50',
                     border: OutlineInputBorder(),
                   ),
                   validator: (v) {
-                    final n = double.tryParse((v ?? '').trim()) ?? 0;
-                    if (n < 1) return 'حدّد مبلغاً مستهدفاً للصندوق';
+                    final raw = (v ?? '').trim();
+                    if (raw.isEmpty) return null;
+                    final n = double.tryParse(raw);
+                    if (n == null || n < 1) {
+                      return 'أدخل مبلغاً صحيحاً لا يقل عن 1 ر.ي';
+                    }
                     return null;
                   },
                 ),

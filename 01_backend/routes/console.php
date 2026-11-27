@@ -99,6 +99,11 @@ Schedule::call(function () {
     app(\App\Services\CustomerWithdrawService::class)->expireStale();
 })->everyMinute()->name('amial-expire-withdrawals')->withoutOverlapping();
 
+// AMIAL-PAYMENT-REQUESTS: إنهاء صلاحية طلبات الدفع المنتهية كل دقيقة
+Schedule::call(function () {
+    app(\App\Services\PaymentRequestService::class)->expireStale();
+})->everyMinute()->name('amial-expire-payment-requests')->withoutOverlapping()->onOneServer();
+
 // ══════════════════════════════════════════════════════════════════════
 // AMIAL-WRONG-TRANSFER-001 — **الإفراجُ التلقائيُّ واقتطاعُ الذمم.**
 //

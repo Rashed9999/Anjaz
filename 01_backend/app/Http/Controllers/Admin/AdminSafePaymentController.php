@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\SafePaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -24,7 +25,7 @@ class AdminSafePaymentController extends Controller
     ) {}
 
     /** GET /admin/safe-payments?status=disputed&page=1 */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): JsonResponse|StreamedResponse
     {
         $query = SafePayment::query()->orderByDesc('disputed_at')->orderByDesc('id');
 
@@ -55,6 +56,43 @@ class AdminSafePaymentController extends Controller
         }
         if ($request->filled('to')) {
             $query->whereDate('created_at', '<=', $request->query('to'));
+        }
+
+        if ($request->query('export') === 'csv') {
+            $rows = $query->with(['buyer:id,f_name,l_name,phone', 'seller:id,f_name,l_name,phone'])
+                ->limit(5000)
+                ->get();
+            $filename = 'safe_payments_' . now()->format('Ymd_His') . '.csv';
+
+            return response()->streamDownload(function () use ($rows) {
+                $out = fopen('php://output', 'w');
+                // UTF-8 BOM لفتح العربية بشكل سليم في Excel
+                fwrite($out, "\xEF\xBB\xBF");
+                fputcsv($out, [
+                    'المرجع', 'العنوان', 'المشتري', 'جوال المشتري',
+                    'البائع', 'جوال البائع', 'المبلغ', 'المبلغ المحجوز',
+                    'الحالة', 'تاريخ الإنشاء', 'تاريخ النزاع', 'تاريخ الحسم',
+                ]);
+                foreach ($rows as $p) {
+                    $buyerName = $p->buyer ? trim(($p->buyer->f_name ?? '') . ' ' . ($p->buyer->l_name ?? '')) : '';
+                    $sellerName = $p->seller ? trim(($p->seller->f_name ?? '') . ' ' . ($p->seller->l_name ?? '')) : '';
+                    fputcsv($out, [
+                        $this->csvSafe((string) $p->payment_ulid),
+                        $this->csvSafe((string) ($p->title ?? '')),
+                        $this->csvSafe($buyerName),
+                        $this->csvSafe((string) ($p->buyer->phone ?? '')),
+                        $this->csvSafe($sellerName),
+                        $this->csvSafe((string) ($p->seller->phone ?? '')),
+                        (string) $p->amount,
+                        (string) $p->held_amount,
+                        (string) $p->status,
+                        optional($p->created_at)->format('Y-m-d H:i:s') ?? '',
+                        optional($p->disputed_at)->format('Y-m-d H:i:s') ?? '',
+                        optional($p->admin_resolved_at)->format('Y-m-d H:i:s') ?? '',
+                    ]);
+                }
+                fclose($out);
+            }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
         }
 
         $items = $query->with(['buyer:id,f_name,l_name,phone', 'seller:id,f_name,l_name,phone'])
@@ -103,15 +141,48 @@ class AdminSafePaymentController extends Controller
             ],
         ]);
 
+        $disputeEvent = $payment->events
+            ->where('event_type', 'buyer_disputed')
+            ->sortByDesc('id')
+            ->first();
+
+        $canDecide = (bool) $request->user()?->hasPlatformPermission('platform.disputes.decide');
+
+        $previousActors = [];
+        $fourEyesBlocked = false;
+        try {
+            $previousActors = app(\App\Services\FourEyesService::class)
+                ->actorsOn('safe_payment', $payment->id);
+            $currentAdminId = $request->user()?->id;
+            if ($currentAdminId !== null) {
+                $fourEyesBlocked = \App\Models\AuditDecision::query()
+                    ->where('subject_type', 'safe_payment')
+                    ->where('subject_id', (string) $payment->id)
+                    ->where('actor_user_id', $currentAdminId)
+                    ->whereIn('action', SafePaymentService::FOUR_EYES_BLOCKING_ACTIONS)
+                    ->exists();
+            }
+        } catch (\Throwable) {
+            $previousActors = [];
+        }
+
         return $this->ok([
             'payment' => $payment,
             // AMIAL-SAFEPAY-EVIDENCE-001: القرار المالي يُبنى على الأدلّة.
             // كانت الأدلّة تُرفع وتُخزَّن ولا تصل من يقرّر — فيحكم بين طرفين
             // بنصّ الشكوى وحده وهو أضعف ما في الملفّ.
             'evidence' => $this->evidenceForReview($payment),
+            'dispute_reason' => $disputeEvent?->note,
             'dispute_reason_label' => $payment->dispute_reason_code
                 ? (SafePaymentService::DISPUTE_REASONS[$payment->dispute_reason_code] ?? null)
                 : null,
+            'can_decide' => $canDecide,
+            'previous_actors' => $previousActors,
+            'four_eyes_blocked' => $fourEyesBlocked,
+            'trust_summary' => [
+                'buyer' => $this->trustSummary((int) $payment->buyer_user_id, 'buyer'),
+                'seller' => $this->trustSummary((int) $payment->seller_user_id, 'seller'),
+            ],
             'delivery_code_verified' => $payment->delivery_code_verified_at !== null,
             'delivery_code_attempts' => (int) $payment->delivery_code_attempts,
             'audit_trail' => $this->auditTrail($payment),
@@ -296,6 +367,40 @@ class AdminSafePaymentController extends Controller
         }
 
         return $this->ok(['payment' => $payment], 'RESOLVED_PARTIAL', 'تم الاسترداد الجزئي');
+    }
+
+    private function trustSummary(int $userId, string $role): array
+    {
+        $column = $role === 'buyer' ? 'buyer_user_id' : 'seller_user_id';
+        $base = SafePayment::where($column, $userId);
+
+        $completed = (clone $base)->where('status', 'released_to_seller')->count();
+        $disputed = (clone $base)->where('is_disputed', true)->count();
+        $total = (clone $base)->count();
+        $user = User::find($userId);
+
+        return [
+            'role' => $role,
+            'completed_deals' => $completed,
+            'disputed_deals' => $disputed,
+            'total_deals' => $total,
+            'dispute_rate' => $total > 0 ? round($disputed / $total * 100, 1) : 0.0,
+            'member_since' => optional($user?->created_at)->format('Y-m'),
+            'badge' => match (true) {
+                $total === 0 => 'جديد',
+                $disputed === 0 && $completed >= 10 => 'موثوق',
+                $total > 0 && ($disputed / $total) > 0.25 => 'نزاعات متكرّرة',
+                default => 'عادي',
+            },
+        ];
+    }
+
+    private function csvSafe(string $value): string
+    {
+        if ($value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+            return "'" . $value;
+        }
+        return $value;
     }
 
     // ============================================================

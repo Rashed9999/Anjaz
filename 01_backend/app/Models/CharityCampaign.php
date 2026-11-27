@@ -77,6 +77,7 @@ class CharityCampaign extends Model
     public function scopeAcceptingDonations(Builder $q): Builder
     {
         return $q->where('status', 'active')
+            ->whereHas('organization', fn ($q) => $q->where('verification_status', 'verified'))
             ->where(function ($q) {
                 $q->whereNull('start_at')
                   ->orWhere('start_at', '<=', now());

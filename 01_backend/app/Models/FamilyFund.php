@@ -34,6 +34,7 @@ class FamilyFund extends Model
         'held_balance' => 'decimal:4',
         'require_owner_approval_for_disbursement' => 'boolean',
         'max_member_contribution_per_day' => 'decimal:4',
+        'target_amount' => 'decimal:4',
     ];
 
     public function owner(): BelongsTo

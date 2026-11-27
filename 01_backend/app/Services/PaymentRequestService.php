@@ -44,6 +44,15 @@ class PaymentRequestService
     ) {}
 
     /**
+     * التحقق من الأهلية المالية والعقوبات للطالب قبل إنشاء أي طلب مال.
+     */
+    public function assertRequesterEligible(User $requester): void
+    {
+        $this->assertFinancialEligibility($requester->id, 'request_money');
+        $this->enforceSanction($requester);
+    }
+
+    /**
      * إنشاء «طلب مال من عميل» بعد أن عاين الطالب هوية المستلم.
      *
      * هذا عقد مختلف عمداً عن create(): ذاك يبقى لفواتير التجار وروابط QR،
@@ -60,8 +69,7 @@ class PaymentRequestService
             throw new RuntimeException('خدمة طلب المال غير مفعّلة حالياً');
         }
 
-        $this->assertFinancialEligibility($requester->id, 'request_money');
-        $this->enforceSanction($requester);
+        $this->assertRequesterEligible($requester);
 
         // رمز أحادي الاستخدام يربط الطالب بالمستلم الذي عاينه في الشاشة.
         // لا يكفي إرسال recipient_id من الهاتف: يمكن تعديله خارج التطبيق.
@@ -482,7 +490,13 @@ class PaymentRequestService
             $applySendMoneyFee,
         ) {
             $locked = PaymentRequest::whereKey($request->getKey())->lockForUpdate()->first();
-            if (!$locked || !$locked->isActive()) {
+            if (!$locked) {
+                throw new RuntimeException('الطلب غير موجود');
+            }
+            if ($locked->status === 'pending' && $locked->expires_at && $locked->expires_at->isPast()) {
+                throw new RuntimeException('انتهت صلاحية الطلب');
+            }
+            if (!$locked->isActive()) {
                 throw new RuntimeException('هذا الطلب مدفوع أو غير صالح');
             }
 
@@ -694,6 +708,10 @@ class PaymentRequestService
 
     private function assertPayableBy(User $payer, PaymentRequest $request): void
     {
+        if ($request->status === 'pending' && $request->expires_at && $request->expires_at->isPast()) {
+            throw new RuntimeException('انتهت صلاحية الطلب');
+        }
+
         if (!$request->isActive()) {
             throw new RuntimeException(match ($request->status) {
                 'paid' => 'هذا الطلب مدفوع سابقاً',
@@ -776,9 +794,9 @@ class PaymentRequestService
         $limit->refresh();
         $limit->update([
             'todays_count' => $limit->todays_count + 1,
-            'todays_amount' => (float) $limit->todays_amount + (float) $amount,
+            'todays_amount' => bcadd((string) ($limit->todays_amount ?? '0'), $amount, 4),
             'this_months_count' => $limit->this_months_count + 1,
-            'this_months_amount' => (float) $limit->this_months_amount + (float) $amount,
+            'this_months_amount' => bcadd((string) ($limit->this_months_amount ?? '0'), $amount, 4),
         ]);
     }
 
@@ -825,7 +843,24 @@ class PaymentRequestService
         } else {
             $q->where('requester_user_id', $user->id);
         }
-        if ($status) $q->where('status', $status);
+
+        if ($status === 'pending') {
+            $q->where('status', 'pending')
+                ->where(function (Builder $w): void {
+                    $w->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                });
+        } elseif ($status === 'expired') {
+            $q->where(function (Builder $w): void {
+                $w->where('status', 'expired')
+                    ->orWhere(function (Builder $p): void {
+                        $p->where('status', 'pending')
+                            ->whereNotNull('expires_at')
+                            ->where('expires_at', '<=', now());
+                    });
+            });
+        } elseif ($status) {
+            $q->where('status', $status);
+        }
 
         $paginated = $q->with(['requester:id,f_name,l_name,phone', 'recipient:id,f_name,l_name,phone'])
             ->orderByDesc('id')
@@ -843,6 +878,14 @@ class PaymentRequestService
         //  بابٍ آخر.**
         // ══════════════════════════════════════════════════════════════
         $paginated->getCollection()->transform(function (PaymentRequest $r) use ($user, $direction) {
+            $isEffectivelyExpired = $r->status === 'expired'
+                || ($r->status === 'pending' && $r->expires_at && $r->expires_at->isPast());
+
+            if ($isEffectivelyExpired && $r->status === 'pending') {
+                $r->setAttribute('status', 'expired');
+            }
+            $r->setAttribute('is_expired', $isEffectivelyExpired);
+
             $r->setAttribute('requester_label', $this->partyLabel(
                 $r->requester, null, null));
 
@@ -857,7 +900,7 @@ class PaymentRequestService
 
             $r->setAttribute('requester_phone', $r->requester?->phone);
 
-            if ($direction === 'incoming' && $r->isDirect() && $r->status === 'pending') {
+            if ($direction === 'incoming' && $r->isDirect() && $r->status === 'pending' && !$isEffectivelyExpired) {
                 try {
                     $quote = $this->directQuote($user, $r);
                     $r->setAttribute('fee', $quote['fee']);

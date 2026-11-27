@@ -18,18 +18,70 @@
 @section('content')
 <div class="content container-fluid" dir="rtl">
 
-    <div class="d-flex align-items-center gap-2 mb-3">
-        <a href="{{ route('admin.amial.surface.funds') }}" class="btn btn-sm btn-outline-secondary">→ رجوع</a>
-        <h4 class="mb-0 fw-bold" style="color:var(--amial-primary)">👨‍👩‍👧 {{ $fund->name }}</h4>
-        <span class="badge badge-soft-secondary text-monospace ms-2">{{ $fund->fund_ulid }}</span>
+    @php
+        $fundStatusLabels = ['active' => 'نشط', 'frozen' => 'مجمّد', 'archived' => 'مؤرشف'];
+        $fundStatusClasses = ['active' => 'success', 'frozen' => 'warning text-dark', 'archived' => 'secondary'];
+        $fundStatus = (string) ($fund->status ?? 'active');
+
+        $ownerName = trim(($fund->owner?->f_name ?? '') . ' ' . ($fund->owner?->l_name ?? ''));
+        $targetFloat = $fund->target_amount !== null ? (float) $fund->target_amount : 0.0;
+        $storedFloat = (float) $stored;
+        $targetPct = $targetFloat > 0 ? min(100, round(($storedFloat / $targetFloat) * 100, 1)) : null;
+
+        $txTypeLabels = [
+            'contribute' => 'مساهمة',
+            'disbursement' => 'صرف',
+            'disburse_to_member' => 'صرف لعضو',
+            'disburse_to_external' => 'صرف خارجي',
+            'adjustment' => 'تسوية',
+        ];
+        $txStatusLabels = [
+            'completed' => 'مكتمل',
+            'pending_approval' => 'بانتظار الموافقة',
+            'rejected' => 'مرفوض',
+        ];
+    @endphp
+
+    @if(session('success'))
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            {{ session('success') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
+    @if(session('error'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            {{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
+    @if($errors->any())
+        <div class="alert alert-danger" role="alert">
+            <ul class="mb-0">
+                @foreach($errors->all() as $err)
+                    <li>{{ $err }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <a href="{{ route('admin.amial.surface.funds') }}" class="btn btn-sm btn-outline-secondary">→ رجوع</a>
+            <h4 class="mb-0 fw-bold" style="color:var(--amial-primary)">👨‍👩‍👧 {{ $fund->name }}</h4>
+            <span class="badge bg-{{ $fundStatusClasses[$fundStatus] ?? 'secondary' }}">
+                {{ $fundStatusLabels[$fundStatus] ?? $fundStatus }}
+            </span>
+            <span class="badge badge-soft-secondary text-monospace ms-1">{{ $fund->fund_ulid }}</span>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ route('admin.amial.surface.funds.detail', [$fund->id, 'export' => 'csv']) }}"
+               class="btn btn-sm btn-success" data-testid="fund-export-csv">
+                تصدير CSV للحركات
+            </a>
+        </div>
     </div>
 
-    {{-- ═══ الميزان: المحسوب مقابل المخزَّن ═══
-
-         **الرقمُ يُحسب من مصدره** (القاعدة السادسة): مجموعُ الحركة، لا
-         عمودُ `balance`. فمقارنةُ العمود بنفسه تُثبت أنّه يساوي نفسه —
-         ولا تكشف شيئاً. والفجوةُ — إن وُجدت — هي بعينها ما يبحث عنه من
-         يسأل «أين اختفى المال». --}}
+    {{-- ═══ الميزان: المحسوب مقابل المخزَّن ═══ --}}
     <div class="row g-3 mb-3">
         <div class="col-md-3">
             <div class="card stat-card p-3 text-center">
@@ -53,16 +105,113 @@
             <div class="card stat-card p-3 text-center border-{{ $gap === null ? 'success' : 'danger' }}"
                  style="border-width:2px" data-testid="fund-balance-check">
                 <small class="text-muted">الرصيد المسجَّل</small>
-                <div class="fs-4 fw-bold">{{ number_format((float) $stored, 0) }}</div>
+                <div class="fs-4 fw-bold">{{ number_format($storedFloat, 0) }}</div>
                 @if($gap === null)
                     <span class="badge bg-success mt-1">✓ يطابق الحركة</span>
                 @else
-                    {{-- **الفجوةُ تُقال برقمها** — «لا يطابق» وحدها لا تُرشد. --}}
                     <span class="badge bg-danger mt-1">
                         ⚠ فرقٌ قدره {{ number_format((float) $gap, 2) }}
                     </span>
                 @endif
             </div>
+        </div>
+    </div>
+
+    {{-- ═══ حوكمة الصندوق والإجراءات الإدارية ═══ --}}
+    <div class="card mb-3 border-0 shadow-sm" style="border-radius:14px">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="card-header-title mb-0">حوكمة الصندوق</h5>
+            <span class="badge bg-{{ $fundStatusClasses[$fundStatus] ?? 'secondary' }}">
+                الحالة: {{ $fundStatusLabels[$fundStatus] ?? $fundStatus }}
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">المالك</small>
+                    @if($fund->owner_user_id)
+                        <a href="{{ route('admin.amial.hub.account', $fund->owner_user_id) }}" class="fw-semibold">
+                            {{ $ownerName !== '' ? $ownerName : ('#' . $fund->owner_user_id) }}
+                        </a>
+                        @if($fund->owner?->phone)
+                            <small class="text-muted d-block text-monospace" dir="ltr">{{ $fund->owner->phone }}</small>
+                        @endif
+                    @else
+                        <span class="text-muted">—</span>
+                    @endif
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">المبلغ المستهدف ونسبة الإنجاز</small>
+                    @if($targetFloat > 0)
+                        <div class="fw-semibold">{{ number_format($targetFloat, 0) }} ر.ي <span class="badge bg-primary ms-1">{{ $targetPct }}%</span></div>
+                        <div class="progress mt-1" style="height:6px">
+                            <div class="progress-bar bg-primary" role="progressbar" style="width: {{ $targetPct }}%" aria-valuenow="{{ $targetPct }}" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    @else
+                        <span class="text-muted">غير محدد</span>
+                    @endif
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">الحد اليومي للمساهمة</small>
+                    @if($fund->max_member_contribution_per_day && (float) $fund->max_member_contribution_per_day > 0)
+                        <span class="fw-semibold">{{ number_format((float) $fund->max_member_contribution_per_day, 0) }} ر.ي / يوم</span>
+                    @else
+                        <span class="text-muted">بلا حد يومي</span>
+                    @endif
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">موافقة المالك للصرف</small>
+                    @if($fund->require_owner_approval_for_disbursement)
+                        <span class="badge bg-info text-dark">مطلوبة قبل التنفيذ</span>
+                    @else
+                        <span class="badge bg-secondary">غير مطلوبة (صرف مباشر)</span>
+                    @endif
+                </div>
+            </div>
+
+            @if($fundStatus === 'active')
+                <form method="POST" action="{{ route('admin.amial.surface.funds.status', $fund->id) }}" class="border-top pt-3">
+                    @csrf
+                    <input type="hidden" name="action" value="freeze">
+                    <input type="hidden" name="status" value="frozen">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-12 col-md-8">
+                            <label class="form-label small fw-semibold">سبب تجميد الصندوق (إلزامي، 5 أحرف على الأقل)</label>
+                            <input type="text" name="reason" value="{{ old('reason') }}" class="form-control form-control-sm"
+                                   minlength="5" maxlength="500" required placeholder="اذكر سبب التجميد الإداري للتدقيق...">
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <button type="submit" class="btn btn-sm btn-danger w-100"
+                                    onclick="return confirm('هل أنت متأكد من تجميد هذا الصندوق؟ سيُمنع الإيداع والصرف والدعوات مؤقتاً.');">
+                                تجميد الصندوق
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            @elseif($fundStatus === 'frozen')
+                <form method="POST" action="{{ route('admin.amial.surface.funds.status', $fund->id) }}" class="border-top pt-3">
+                    @csrf
+                    <input type="hidden" name="action" value="unfreeze">
+                    <input type="hidden" name="status" value="active">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-12 col-md-8">
+                            <label class="form-label small fw-semibold">سبب فك التجميد (إلزامي، 5 أحرف على الأقل)</label>
+                            <input type="text" name="reason" value="{{ old('reason') }}" class="form-control form-control-sm"
+                                   minlength="5" maxlength="500" required placeholder="اذكر سبب إعادة تنشيط الصندوق للتدقيق...">
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <button type="submit" class="btn btn-sm btn-success w-100"
+                                    onclick="return confirm('هل أنت متأكد من فك تجميد هذا الصندوق وإعادته للحالة النشطة؟');">
+                                فك تجميد الصندوق
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            @else
+                <div class="border-top pt-2 text-muted small">
+                    هذا الصندوق مؤرشف ولا تتوفر إجراءات تجميد أو فك تجميد عليه.
+                </div>
+            @endif
         </div>
     </div>
 
@@ -102,14 +251,17 @@
         </div>
     </div>
 
-    {{-- ═══ الحركة: الجواب نفسه ═══
-
-         و`balance_before/after` هما ما يجعل الجواب قاطعاً: كلُّ سطرٍ يقول
-         الرصيدَ قبله وبعده، فالفجوةُ تُرى بالعين لا تُستنتج. --}}
+    {{-- ═══ الحركة: الجواب نفسه ═══ --}}
     <div class="card">
-        <div class="card-header">
-            <h5 class="card-header-title mb-0">حركة الصندوق</h5>
-            <span class="badge badge-soft-secondary text-dark">{{ $txs->total() }}</span>
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <h5 class="card-header-title mb-0">حركة الصندوق</h5>
+                <span class="badge badge-soft-secondary text-dark">{{ $txs->total() }}</span>
+            </div>
+            <a href="{{ route('admin.amial.surface.funds.detail', [$fund->id, 'export' => 'csv']) }}"
+               class="btn btn-sm btn-outline-success">
+                تصدير CSV
+            </a>
         </div>
         <div class="table-responsive">
             <table class="table table-sm mb-0" data-testid="fund-transactions">
@@ -124,17 +276,26 @@
                 <tbody>
                 @forelse($txs as $t)
                     @php
-                        // الاتّجاهُ من فرق الرصيدين لا من اسم النوع: قائمةُ
-                        // الأسماء تشيخ مع الـenum، والفرقُ لا يشيخ.
-                        $isOut = bccomp((string) $t->balance_after, (string) $t->balance_before, 4) < 0;
+                        $txType = (string) ($t->tx_type ?? '');
+                        // الصرف المعتمد قد يحتفظ بـ balance_before == balance_after من لحظة الاقتراح،
+                        // لذا نعتمد نوع الحركة (disbursement / disburse_*) أولاً بجانب فرق الرصيدين.
+                        $isDisbursement = $txType === 'disbursement'
+                            || str_starts_with($txType, 'disburse_')
+                            || in_array($txType, ['disburse_to_member', 'disburse_to_external'], true);
+                        $isAdjustment = $txType === 'adjustment';
+                        $isOut = $isDisbursement || bccomp((string) $t->balance_after, (string) $t->balance_before, 4) < 0;
+
+                        $badgeClass = $isAdjustment ? 'secondary' : ($isOut ? 'danger' : 'success');
+                        $amountClass = $isAdjustment ? 'text-secondary' : ($isOut ? 'text-danger' : 'text-success');
+                        $sign = $isAdjustment ? '' : ($isOut ? '−' : '+');
                     @endphp
                     <tr>
                         <td><small class="text-monospace">{{ $t->created_at }}</small></td>
                         <td>
-                            <span class="badge bg-{{ $isOut ? 'danger' : 'success' }}">{{ $t->tx_type }}</span>
+                            <span class="badge bg-{{ $badgeClass }}">{{ $txTypeLabels[$txType] ?? $txType }}</span>
                         </td>
-                        <td class="fw-bold text-{{ $isOut ? 'danger' : 'success' }}">
-                            {{ $isOut ? '−' : '+' }}{{ number_format((float) $t->amount, 0) }}
+                        <td class="fw-bold {{ $amountClass }}">
+                            {{ $sign }}{{ number_format((float) $t->amount, 0) }}
                         </td>
                         <td><small>{{ number_format((float) $t->balance_before, 0) }}</small></td>
                         <td><small class="fw-bold">{{ number_format((float) $t->balance_after, 0) }}</small></td>
@@ -164,7 +325,7 @@
                                 <small class="text-muted">بلا اعتماد</small>
                             @endif
                         </td>
-                        <td><small>{{ $t->status }}</small></td>
+                        <td><small>{{ $txStatusLabels[$t->status] ?? $t->status }}</small></td>
                         <td>
                             <small>{{ \Illuminate\Support\Str::limit($t->note, 40) ?: '—' }}</small>
                             @if($t->wallet_transaction_id)
@@ -179,8 +340,8 @@
                     <tr>
                         <td colspan="10" class="text-center text-muted py-4">
                             لا حركة على هذا الصندوق بعد — والرصيدُ المسجَّل
-                            {{ number_format((float) $stored, 0) }}.
-                            @if((float) $stored != 0.0)
+                            {{ number_format($storedFloat, 0) }}.
+                            @if($storedFloat != 0.0)
                                 <div class="text-danger mt-1">
                                     ⚠ رصيدٌ بلا حركةٍ تفسّره — يستحقّ تحقيقاً.
                                 </div>

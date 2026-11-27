@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/donations/controllers/donations_controller.dart';
+import 'package:amial_pay/features/donations/domain/models/donation_models.dart';
+import 'package:amial_pay/features/donations/screens/campaign_detail_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-DONATIONS-001 (v1.2)
@@ -20,6 +22,19 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
     });
   }
 
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'completed':
+        return AmialColors.primary;
+      case 'settled':
+        return const Color(0xFF2E7D32);
+      case 'refunded':
+        return const Color(0xFFD32F2F);
+      default:
+        return AmialColors.textSecondary;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -32,12 +47,12 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
         color: AmialColors.primary,
         child: Obx(() {
           final ctrl = Get.find<DonationsController>();
-          if (ctrl.isLoading.value && ctrl.myDonations.isEmpty) {
+          if (ctrl.isMyDonationsLoading.value && ctrl.myDonations.isEmpty) {
             return const Center(child: CircularProgressIndicator(color: AmialColors.primary));
           }
-          if (ctrl.lastError.value.isNotEmpty && ctrl.myDonations.isEmpty) {
+          if (ctrl.myDonationsError.value.isNotEmpty && ctrl.myDonations.isEmpty) {
             return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text(ctrl.lastError.value),
+              Text(ctrl.myDonationsError.value),
               const SizedBox(height: 12),
               ElevatedButton(onPressed: ctrl.loadMyDonations, child: const Text('إعادة المحاولة')),
             ]));
@@ -58,10 +73,14 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
             );
           }
 
-          // إحصاءات صغيرة في الأعلى
-          final totalAmount = ctrl.myDonations
+          // إحصاءات صغيرة في الأعلى مع استبعاد التبرعات المستردّة
+          final activeDonations = ctrl.myDonations
+              .where((d) => d.status != 'refunded')
+              .toList();
+          final totalAmount = activeDonations
               .fold<double>(0, (sum, d) => sum + (double.tryParse(d.amount) ?? 0));
-          final count = ctrl.myDonations.length;
+          final formattedTotal = formatDonationAmount(totalAmount.toStringAsFixed(2));
+          final count = activeDonations.length;
 
           return ListView(
             padding: const EdgeInsets.all(12),
@@ -80,11 +99,11 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${totalAmount.toStringAsFixed(2)} ر.ي',
+                          Text('$formattedTotal ر.ي',
                               style: const TextStyle(
                                   fontSize: 20, fontWeight: FontWeight.bold,
                                   color: AmialColors.primary)),
-                          Text('في $count تبرع معروض — جزاك الله خيراً',
+                          Text('في $count تبرع فعّال — جزاك الله خيراً',
                               style: const TextStyle(fontSize: 12)),
                         ],
                       ),
@@ -93,53 +112,106 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              ...ctrl.myDonations.map((d) => Card(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      const CircleAvatar(
-                        radius: 20,
-                        backgroundColor: AmialColors.background,
-                        child: Icon(Icons.favorite, color: AmialColors.primary),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(d.campaign?.titleAr ?? '-',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600, fontSize: 13)),
-                            if (d.organization != null)
-                              Text(d.organization!.nameAr,
-                                  style: const TextStyle(
-                                      fontSize: 11, color: AmialColors.textSecondary)),
-                            if (d.donatedAt != null)
-                              Text(
-                                  '${d.donatedAt!.year}-${d.donatedAt!.month.toString().padLeft(2, '0')}-${d.donatedAt!.day.toString().padLeft(2, '0')}',
-                                  style: const TextStyle(
-                                      fontSize: 10, color: AmialColors.textMuted)),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+              ...ctrl.myDonations.map((d) {
+                final campaignUlid = d.campaign?.campaignUlid;
+                final statusColor = _statusColor(d.status);
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: (campaignUlid != null && campaignUlid.isNotEmpty)
+                        ? () => Get.to(() => CampaignDetailScreen(ulid: campaignUlid))
+                        : null,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
                         children: [
-                          Text('${d.amount} ر.ي',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: AmialColors.primary)),
-                          if (d.isAnonymous)
-                            const Icon(Icons.visibility_off,
-                                size: 14, color: AmialColors.textMuted),
+                          const CircleAvatar(
+                            radius: 20,
+                            backgroundColor: AmialColors.background,
+                            child: Icon(Icons.favorite, color: AmialColors.primary),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(d.campaign?.titleAr ?? '-',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600, fontSize: 13)),
+                                if (d.organization != null)
+                                  Text(d.organization!.nameAr,
+                                      style: const TextStyle(
+                                          fontSize: 11, color: AmialColors.textSecondary)),
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 6,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        d.arabicStatusLabel,
+                                        style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: statusColor),
+                                      ),
+                                    ),
+                                    if (d.donatedAt != null)
+                                      Text(
+                                          '${d.donatedAt!.year}-${d.donatedAt!.month.toString().padLeft(2, '0')}-${d.donatedAt!.day.toString().padLeft(2, '0')}',
+                                          style: const TextStyle(
+                                              fontSize: 10, color: AmialColors.textMuted)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('${d.formattedAmount} ر.ي',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: d.status == 'refunded'
+                                          ? AmialColors.textMuted
+                                          : AmialColors.primary,
+                                      decoration: d.status == 'refunded'
+                                          ? TextDecoration.lineThrough
+                                          : null)),
+                              if (d.isAnonymous)
+                                const Icon(Icons.visibility_off,
+                                    size: 14, color: AmialColors.textMuted),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
+                    ),
+                  ),
+                );
+              }),
+              if (ctrl.hasMoreMyDonations.value)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: OutlinedButton(
+                    onPressed: ctrl.isMyDonationsLoadingMore.value
+                        ? null
+                        : () => ctrl.loadMyDonations(loadMore: true),
+                    child: ctrl.isMyDonationsLoadingMore.value
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('تحميل المزيد'),
                   ),
                 ),
-              )),
             ],
           );
         }),

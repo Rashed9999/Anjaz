@@ -1,6 +1,16 @@
 /// AMIAL-DONATIONS-001 (v1.2) — Flutter models
 library;
 
+/// ينسّق المبلغ بحذف الأصفار العشرية الزائدة (مثل `100.0000` -> `100` و`12.5000` -> `12.5`).
+String formatDonationAmount(String raw) {
+  final parsed = double.tryParse(raw.trim());
+  if (parsed == null) return raw;
+  if (parsed == parsed.truncateToDouble()) {
+    return parsed.toInt().toString();
+  }
+  return parsed.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+}
+
 class AmialCharityCategory {
   final int id;
   final String code;
@@ -65,6 +75,7 @@ class AmialCharityOrganization {
       );
 
   bool get isVerified => verificationStatus == 'verified';
+  String get formattedTotalCollected => formatDonationAmount(totalCollected);
 }
 
 class AmialCharityCampaign {
@@ -178,11 +189,32 @@ class AmialCharityCampaign {
     return diff > 0 ? diff : 0;
   }
 
+  /// نص دقيق للوقت المتبقي يعرض الساعات/الدقائق عندما يتبقى أقل من 24 ساعة
+  /// بدلاً من «انتهت» طالما الحملة لا تزال تستقبل التبرعات.
+  String? get remainingTimeLabel {
+    if (deadlineAt == null) return null;
+    final diff = deadlineAt!.difference(DateTime.now());
+    if (diff.isNegative || diff == Duration.zero) {
+      return isAcceptingNow ? 'تنتهي قريباً' : 'انتهت';
+    }
+    if (diff.inDays >= 1) {
+      return 'متبقي ${diff.inDays} يوم';
+    }
+    if (diff.inHours >= 1) {
+      return 'متبقي ${diff.inHours} ساعة';
+    }
+    final mins = diff.inMinutes;
+    return mins > 0 ? 'متبقي $mins دقيقة' : 'أقل من دقيقة';
+  }
+
+  String get formattedCurrentAmount => formatDonationAmount(currentAmount);
+  String get formattedTargetAmount => formatDonationAmount(targetAmount);
+
   String get remainingAmount {
     final target = double.tryParse(targetAmount) ?? 0;
     final current = double.tryParse(currentAmount) ?? 0;
     final remain = target - current;
-    return remain > 0 ? remain.toStringAsFixed(2) : '0.00';
+    return remain > 0 ? formatDonationAmount(remain.toStringAsFixed(2)) : '0';
   }
 }
 
@@ -205,6 +237,8 @@ class AmialRecentDonation {
     donorName: j['donor_name'] ?? 'متبرع',
     message: j['message'],
   );
+
+  String get formattedAmount => formatDonationAmount(amount);
 }
 
 class AmialDonation {
@@ -257,6 +291,8 @@ class AmialDonation {
         ? AmialCharityOrganization.fromJson(Map<String, dynamic>.from(j['organization']))
         : null,
   );
+
+  String get formattedAmount => formatDonationAmount(amount);
 
   String get arabicStatusLabel {
     switch (status) {

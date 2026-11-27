@@ -75,11 +75,17 @@ class FundsRepo extends GetxService {
     );
   }
 
-  Future<Response> approveDisbursement(String txUlid) async {
+  Future<Response> approveDisbursement(
+    String txUlid, {
+    required String idempotencyKey,
+    String? pin,
+  }) async {
     return apiClient.postData(
       '${AppConstants.amialFundApproveDisb}$txUlid/approve',
-      {},
-      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('fund_approve'),
+      {
+        if (pin != null && pin.isNotEmpty) 'pin': pin,
+      },
+      idempotencyKey: idempotencyKey,
     );
   }
 
@@ -87,6 +93,7 @@ class FundsRepo extends GetxService {
     return apiClient.postData(
       '${AppConstants.amialFundRejectDisb}$txUlid/reject',
       {'reason': reason},
+      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('fund_reject'),
     );
   }
 
@@ -94,10 +101,13 @@ class FundsRepo extends GetxService {
     return apiClient.postData(
       '${AppConstants.amialFundAcceptInvite}$membershipId/accept',
       {},
+      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('fund_accept_invite'),
     );
   }
 
-  Future<Response> transactions(String fundUlid) async {
-    return apiClient.getData('${AppConstants.amialFundTransactions}$fundUlid/transactions');
+  Future<Response> transactions(String fundUlid, {int page = 1}) async {
+    return apiClient.getData(
+      '${AppConstants.amialFundTransactions}$fundUlid/transactions?page=$page',
+    );
   }
 }

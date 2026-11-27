@@ -32,6 +32,28 @@ class NotificationHelper {
         'bill_payment_pending',
         'bill_payment_failed',
       }.contains(type?.toString());
+
+  static Future<void> _refreshPaymentRequestsIfRegistered(dynamic type) async {
+    if (!Get.isRegistered<PaymentRequestController>()) return;
+    final t = type?.toString() ?? '';
+    final controller = Get.find<PaymentRequestController>();
+    if (t == 'payment_request_received' || t == 'request_money') {
+      await controller.loadList('incoming', status: 'pending');
+    } else if (t == 'payment_request_declined' ||
+        t == 'payment_request_cancelled' ||
+        t == 'denied_money') {
+      await controller.loadList('outgoing');
+    } else if (t == 'payment_request_paid' ||
+        t == 'transfer_received' ||
+        t == 'transfer_sent' ||
+        t == 'received_money' ||
+        t == 'send_money') {
+      await Future.wait([
+        controller.loadList('incoming', status: 'pending'),
+        controller.loadList('outgoing'),
+      ]);
+    }
+  }
   /// هذا هو القناة الوحيدة لإشعارات أميال على Android. يطابق المعرّف
   /// المعلن في AndroidManifest وFCM، فلا يفقد إشعار الخلفية صوته بسبب
   /// إنشاء قناة باسم مختلف عن القناة التي يرسل إليها الخادم.
@@ -309,31 +331,33 @@ class NotificationHelper {
 
       Get.find<ProfileController>().getProfileData(reload: true);
       final transactionHistoryController = Get.find<TransactionHistoryController>();
+      final messageType = message.data['type'];
 
-      if(message.data['type'] == 'general'){
+      _refreshPaymentRequestsIfRegistered(messageType);
+
+      if(messageType == 'general'){
         Get.find<NotificationController>().getNotificationList(true);
 
-      }else if(_isBillPaymentType(message.data['type'])){
+      }else if(_isBillPaymentType(messageType)){
         Get.find<BillPayController>().loadOrders();
 
-      }else if(message.data['type'] == 'payment_request_received'){
-        // الطلب الجديد ينتمي إلى payment_requests لا صندوق 6cash القديم.
-        Get.find<PaymentRequestController>().loadList('incoming', status: 'pending');
+      }else if(messageType == 'payment_request_received' ||
+          messageType == 'payment_request_declined' ||
+          messageType == 'payment_request_cancelled' ||
+          messageType == 'payment_request_paid'){
+        // تم تحديث قوائم PaymentRequestController أعلاه إن كان مسجّلاً.
 
-      }else if(message.data['type'] == 'payment_request_declined'){
-        Get.find<PaymentRequestController>().loadList('outgoing');
-
-      }else if(message.data['type'] == 'send_request_money' || message.data['type'] == 'denied_money'){
+      }else if(messageType == 'send_request_money' || messageType == 'denied_money'){
         Get.find<RequestedMoneyController>().getOwnRequestedMoneyList(true);
 
-      }else if(message.data['type'] == 'withdraw_money_denied' || message.data['type'] == 'withdraw_money_approved'){
+      }else if(messageType == 'withdraw_money_denied' || messageType == 'withdraw_money_approved'){
         Get.find<RequestedMoneyController>().getWithdrawHistoryList(reload: true);
 
-      }else if(transactionHistoryController.transactionType.contains(message.data['type']) || message.data['type'] == 'add_money_bonus'){
+      }else if(transactionHistoryController.transactionType.contains(messageType) || messageType == 'add_money_bonus'){
         transactionHistoryController.getRecentTransactionList();
 
         if(Get.find<MenuItemController>().currentTabIndex == 1) {
-          transactionHistoryController.getTransactionData(1, transactionType: message.data['type'] == 'add_money_bonus' ? 'add_money' : message.data['type']);
+          transactionHistoryController.getTransactionData(1, transactionType: messageType == 'add_money_bonus' ? 'add_money' : messageType);
         }else {
           transactionHistoryController.onClearTransactionModel();
 
@@ -353,37 +377,40 @@ class NotificationHelper {
 
 
       final TransactionHistoryController transactionHistoryController = Get.find<TransactionHistoryController>();
+      final messageType = message.data['type'];
 
-      if(message.data['type'] == 'general'){
+      await _refreshPaymentRequestsIfRegistered(messageType);
+
+      if(messageType == 'general'){
         await Get.find<NotificationController>().getNotificationList(true);
 
-      }else if(_isBillPaymentType(message.data['type'])){
+      }else if(_isBillPaymentType(messageType)){
         await Get.find<BillPayController>().loadOrders();
 
-      }else if(message.data['type'] == 'payment_request_received'){
-        await Get.find<PaymentRequestController>().loadList('incoming', status: 'pending');
+      }else if(messageType == 'payment_request_received' ||
+          messageType == 'payment_request_declined' ||
+          messageType == 'payment_request_cancelled' ||
+          messageType == 'payment_request_paid'){
+        // تم تحديث قوائم PaymentRequestController أعلاه إن كان مسجّلاً.
 
-      }else if(message.data['type'] == 'payment_request_declined'){
-        await Get.find<PaymentRequestController>().loadList('outgoing');
-
-      }else if(message.data['type'] == 'send_request_money' || message.data['type'] == 'denied_money'){
+      }else if(messageType == 'send_request_money' || messageType == 'denied_money'){
         await Get.find<RequestedMoneyController>().getOwnRequestedMoneyList(true, isUpdate: false);
 
-      }else if(message.data['type'] == 'withdraw_money_denied' || message.data['type'] == 'withdraw_money_approved'){
+      }else if(messageType == 'withdraw_money_denied' || messageType == 'withdraw_money_approved'){
         await Get.find<RequestedMoneyController>().getWithdrawHistoryList(reload: true);
 
-      }else if(message.data['type'] == 'add_money_bonus'){
+      }else if(messageType == 'add_money_bonus'){
         transactionHistoryController.setIndex(transactionHistoryController.transactionType.indexOf('add_money'), reload: false);
 
         transactionHistoryController.onClearTransactionModel();
 
         transactionHistoryController.getRecentTransactionList();
 
-      }else if(transactionHistoryController.transactionType.contains(message.data['type'])){
-        transactionHistoryController.setIndex(transactionHistoryController.transactionType.indexOf(message.data['type']), reload: false);
+      }else if(transactionHistoryController.transactionType.contains(messageType)){
+        transactionHistoryController.setIndex(transactionHistoryController.transactionType.indexOf(messageType), reload: false);
         transactionHistoryController.onClearTransactionModel();
 
-        await transactionHistoryController.getTransactionData(1, reload: true, transactionType: message.data['type']);
+        await transactionHistoryController.getTransactionData(1, reload: true, transactionType: messageType);
         await transactionHistoryController.getRecentTransactionList();
 
       }else{

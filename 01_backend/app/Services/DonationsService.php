@@ -106,12 +106,36 @@ class DonationsService
             // 1) خصم من المحفظة
             $donationUlid = (string) Str::ulid();
             $this->guard->debit(
-                userId: $donor->id,
+                userId: $lockedDonor->id,
                 amount: $amountNormalized,
-                reason: "donation:campaign_{$campaign->id}",
+                reason: "donation:campaign_{$lockedCampaign->id}",
             );
 
-            // 2) إنشاء donation record
+            // 2) AMIAL-LEDGER-RECON-001: قيد مزدوج للتبرّع داخل نفس المعاملة —
+            // مدين محفظة المتبرّع = دائن عهدة التبرعات (الصافي) + رسوم المنصّة.
+            $ledger = app(\App\Services\LedgerService::class);
+            $donorAcc = $ledger->getOrCreateUserWallet($lockedDonor->id);
+            $escrowAcc = $ledger->getOrCreateSystemAccount(
+                'CHARITY_ESCROW', 'liability', 'عهدة التبرعات (قبل التسوية)', 'credit');
+            $feeAcc = $ledger->getOrCreateSystemAccount(
+                'PLATFORM_FEE', 'revenue', 'إيرادات رسوم المنصّة', 'credit');
+            $lines = [
+                ['account' => $donorAcc->account_code, 'direction' => 'debit', 'amount' => $amountNormalized],
+                ['account' => $escrowAcc->account_code, 'direction' => 'credit', 'amount' => $netToCharity],
+            ];
+            if (bccomp($platformFee, '0', 4) > 0) {
+                $lines[] = ['account' => $feeAcc->account_code, 'direction' => 'credit', 'amount' => $platformFee];
+            }
+            $ledger->post(
+                sourceType: 'donation',
+                sourceId: $donationUlid,
+                description: "تبرّع لحملة #{$lockedCampaign->id} — {$org->name_ar}",
+                lines: $lines,
+                idempotencyKey: 'donation:' . $donationUlid,
+                createdByUserId: $lockedDonor->id,
+            );
+
+            // 3) إنشاء donation record مع توحيد معرّف العملية وفق PR #71
             $donation = Donation::create([
                 'donation_ulid' => $donationUlid,
                 'campaign_id' => $lockedCampaign->id,
@@ -127,36 +151,6 @@ class DonationsService
                 'donated_at' => now(),
                 'zone_code' => $lockedDonor->zone_code,
             ]);
-
-            // AMIAL-LEDGER-RECON-001: قيد مزدوج للتبرّع داخل نفس المعاملة —
-            // مدين محفظة المتبرّع = دائن عهدة التبرعات (الصافي) + رسوم المنصّة.
-            // AMIAL-LEDGER-BLOCKING-003: صار مُعطِّلاً. كان الفشل يُبلع فيمرّ
-            // التبرّع بلا قيد — ومالُ خيرٍ بلا أثرٍ محاسبيّ أسوأ من غيره.
-            //
-            // ولا يُضاف قيدٌ ثانٍ بعد commit: جُرّب في محاولةٍ سابقة فخُصم
-            // المبلغ مرّتين وسقط الاختبار بـ«98 لا تكفي خصم 102». القيد
-            // موجودٌ هنا أصلاً — والقراءةُ وحدها لم تكشف التكرار، بل القياس.
-            $ledger = app(\App\Services\LedgerService::class);
-                $donorAcc = $ledger->getOrCreateUserWallet($lockedDonor->id);
-                $escrowAcc = $ledger->getOrCreateSystemAccount(
-                    'CHARITY_ESCROW', 'liability', 'عهدة التبرعات (قبل التسوية)', 'credit');
-                $feeAcc = $ledger->getOrCreateSystemAccount(
-                    'PLATFORM_FEE', 'revenue', 'إيرادات رسوم المنصّة', 'credit');
-                $lines = [
-                    ['account' => $donorAcc->account_code, 'direction' => 'debit', 'amount' => $amountNormalized],
-                    ['account' => $escrowAcc->account_code, 'direction' => 'credit', 'amount' => $netToCharity],
-                ];
-                if (bccomp($platformFee, '0', 4) > 0) {
-                    $lines[] = ['account' => $feeAcc->account_code, 'direction' => 'credit', 'amount' => $platformFee];
-                }
-                $ledger->post(
-                    sourceType: 'donation',
-                    sourceId: $donation->donation_ulid,
-                    description: "تبرّع لحملة #{$lockedCampaign->id} — {$org->name_ar}",
-                    lines: $lines,
-                    idempotencyKey: 'donation:' . $donation->donation_ulid,
-                    createdByUserId: $lockedDonor->id,
-                );
 
             // 3) تحديث campaign.current_amount + donor_count
             // نستخدم lockForUpdate لتجنب race conditions على العداد
@@ -284,7 +278,8 @@ class DonationsService
             ]);
             if (!Donation::where('campaign_id', $locked->campaign_id)
                 ->where('donor_user_id', $locked->donor_user_id)
-                ->whereIn('status', ['completed', 'settled'])->exists()) {
+                ->whereIn('status', ['completed', 'settled'])->exists()
+                && (int) $campaign->donor_count > 0) {
                 $campaign->decrement('donor_count');
             }
 

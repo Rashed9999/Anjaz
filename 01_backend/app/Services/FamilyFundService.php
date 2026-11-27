@@ -49,6 +49,16 @@ class FamilyFundService
 
         app(ZonePolicyService::class)->assertAllowed($owner, 'family_fund_contribute');
 
+        $maxFunds = (int) config('amial.family_fund.max_funds_per_user', 10);
+        if ($maxFunds > 0) {
+            $ownedCount = FamilyFund::where('owner_user_id', $owner->id)
+                ->whereIn('status', ['active', 'frozen'])
+                ->count();
+            if ($ownedCount >= $maxFunds) {
+                throw new \RuntimeException("Maximum number of family funds ({$maxFunds}) reached");
+            }
+        }
+
         return DB::transaction(function () use ($owner, $name, $description, $requireOwnerApproval, $targetAmount) {
             $fund = FamilyFund::create([
                 'fund_ulid' => (string) Str::ulid(),
@@ -98,6 +108,10 @@ class FamilyFundService
         string $inviteePhone,
         string $role = 'member',
     ): FamilyFundMember {
+        if ($fund->status !== 'active') {
+            throw new \RuntimeException('Fund is not active');
+        }
+
         if (!in_array($role, ['admin', 'member', 'viewer'], true)) {
             throw new \InvalidArgumentException('Invalid role for invitation');
         }
@@ -123,10 +137,21 @@ class FamilyFundService
         $existing = FamilyFundMember::where('fund_id', $fund->id)
             ->where('user_id', $invitee->id)
             ->first();
-        if ($existing) {
-            if ($existing->status === 'active') {
-                throw new \RuntimeException('User is already an active member');
+        if ($existing && $existing->status === 'active') {
+            throw new \RuntimeException('User is already an active member');
+        }
+
+        $maxMembers = (int) config('amial.family_fund.max_members', 50);
+        if ($maxMembers > 0) {
+            $currentCount = FamilyFundMember::where('fund_id', $fund->id)
+                ->whereIn('status', ['active', 'invited'])
+                ->count();
+            if ($currentCount >= $maxMembers && !($existing && $existing->status === 'invited')) {
+                throw new \RuntimeException("Maximum number of fund members ({$maxMembers}) reached");
             }
+        }
+
+        if ($existing) {
             // re-invite
             $existing->update([
                 'status' => 'invited',
@@ -171,6 +196,12 @@ class FamilyFundService
         if ($member->user_id !== $user->id) {
             throw new \RuntimeException('Cannot accept invitation for another user');
         }
+
+        $fund = $member->fund;
+        if (!$fund || $fund->status !== 'active') {
+            throw new \RuntimeException('Fund is not active');
+        }
+
         if ($member->status !== 'invited') {
             return false;
         }
@@ -219,6 +250,7 @@ class FamilyFundService
         $this->kyc->assertIndividualTransactionAllowed($user, $amountNormalized, 'family_fund');
 
         return DB::transaction(function () use ($fund, $user, $amountNormalized, $note) {
+            // PR #71: قفل الصندوق قبل فحص العضوية والحالة والحد اليومي.
             $lockedFund = FamilyFund::whereKey($fund->id)->lockForUpdate()->firstOrFail();
             if (!$lockedFund->canContribute($user->id)) {
                 throw new \RuntimeException('User is not allowed to contribute to this fund');
@@ -226,33 +258,31 @@ class FamilyFundService
             if ($lockedFund->status !== 'active') {
                 throw new \RuntimeException('Fund is not active');
             }
-
-            // فحص حد المساهمة اليومي إن وُجد
             if ($lockedFund->max_member_contribution_per_day) {
                 $todayTotal = FamilyFundTransaction::where('fund_id', $lockedFund->id)
                     ->where('user_id', $user->id)
                     ->where('tx_type', 'contribute')
                     ->where('created_at', '>=', now()->startOfDay())
                     ->sum('amount');
-
-                $newTotal = MoneyService::add((string)$todayTotal, $amountNormalized);
-                if (bccomp($newTotal, (string)$lockedFund->max_member_contribution_per_day, 4) > 0) {
+                $newTotal = MoneyService::add((string) $todayTotal, $amountNormalized);
+                if (bccomp($newTotal, (string) $lockedFund->max_member_contribution_per_day, 4) > 0) {
                     throw new \RuntimeException('Daily contribution limit exceeded');
                 }
             }
 
-            // 1) خصم من محفظة المستخدم
+            // 2) خصم من محفظة المستخدم (FinancialGuardService::debit يُعيد EMoney فقط بلا wallet_transaction_id)
             $this->guard->debit(
                 userId: $user->id,
                 amount: $amountNormalized,
                 reason: 'family_fund_contribute',
             );
 
+            // 3) إضافة الرصيد للصندوق
             $balanceBefore = (string)$lockedFund->balance;
             $balanceAfter = MoneyService::add($balanceBefore, $amountNormalized);
             $lockedFund->update(['balance' => $balanceAfter]);
 
-            // 3) سجل الـ transaction
+            // 4) سجل الـ transaction
             $tx = FamilyFundTransaction::create([
                 'tx_ulid' => (string) Str::ulid(),
                 'fund_id' => $fund->id,
@@ -266,7 +296,7 @@ class FamilyFundService
                 'created_at' => now(),
             ]);
 
-            // 4) تحديث إحصاءات العضو
+            // 5) تحديث إحصاءات العضو
             FamilyFundMember::where('fund_id', $fund->id)
                 ->where('user_id', $user->id)
                 ->increment('total_contributed', $amountNormalized);
@@ -281,7 +311,7 @@ class FamilyFundService
                 sourceId: (string) $tx->tx_ulid,
             );
 
-            // 5) إيصال (خارج الـ transaction سيُستدعى ReceiptService::issueDebit
+            // 6) إيصال (خارج الـ transaction سيُستدعى ReceiptService::issueDebit
             //    لكن نسجله هنا داخل الـ tx — الـ Job يدفع للـ queue)
             $this->receipts->issueDebit([
                 'user_id' => $user->id,
@@ -329,46 +359,49 @@ class FamilyFundService
         float|string $amount,
         ?string $note = null,
     ): FamilyFundTransaction {
-        return DB::transaction(function () use ($fund, $proposer, $beneficiary, $amount, $note) {
-            $fund = FamilyFund::whereKey($fund->id)->lockForUpdate()->firstOrFail();
-            if (!$fund->canDisburse($proposer->id)) {
+        app(ZonePolicyService::class)->assertAllowed($proposer, 'family_fund_disburse');
+
+        $amountNormalized = MoneyService::normalize($amount);
+        if (!MoneyService::isPositive($amountNormalized)) {
+            throw new \RuntimeException('Amount must be positive');
+        }
+
+        return DB::transaction(function () use ($fund, $proposer, $beneficiary, $amountNormalized, $note) {
+            // PR #71: قفل الصندوق قبل فحص الحالة والعضوية وسياسة الموافقة وكفاية الرصيد.
+            $lockedFund = FamilyFund::whereKey($fund->id)->lockForUpdate()->firstOrFail();
+            if ($lockedFund->status !== 'active') {
+                throw new \RuntimeException('Fund is not active');
+            }
+            if (!$lockedFund->canDisburse($proposer->id)) {
                 throw new \RuntimeException('User cannot propose disbursement');
             }
-            if (!$fund->isMember($beneficiary->id)) {
+            if (!$lockedFund->isMember($beneficiary->id)) {
                 throw new \RuntimeException('Beneficiary must be an active member');
-            }
-
-            $amountNormalized = MoneyService::normalize($amount);
-
-            if (!MoneyService::isPositive($amountNormalized)) {
-                throw new \RuntimeException('Amount must be positive');
             }
 
             $this->kyc->assertIndividualFeatureAllowed($proposer, 'family_fund');
             $this->kyc->assertIndividualFeatureAllowed($beneficiary, 'family_fund');
             $this->kyc->assertIndividualCanReceive($beneficiary, $amountNormalized);
 
-            if (bccomp($amountNormalized, (string)$fund->balance, 4) > 0) {
+            if (bccomp($amountNormalized, (string) $lockedFund->balance, 4) > 0) {
                 throw new \RuntimeException('Insufficient fund balance');
             }
 
-            $needsApproval = $fund->require_owner_approval_for_disbursement
-                && $fund->memberRole($proposer->id) !== 'owner';
-
+            $needsApproval = $lockedFund->require_owner_approval_for_disbursement
+                && $lockedFund->memberRole($proposer->id) !== 'owner';
             if (!$needsApproval) {
-                // تنفيذ مباشر
-                return $this->executeDisbursement($fund, $proposer, $beneficiary, $amountNormalized, $note, $proposer);
+                return $this->executeDisbursement($lockedFund, $proposer, $beneficiary, $amountNormalized, $note, $proposer);
             }
 
             // مقترَح فقط — لا تحريك مال بعد
             $tx = FamilyFundTransaction::create([
                 'tx_ulid' => (string) Str::ulid(),
-                'fund_id' => $fund->id,
+                'fund_id' => $lockedFund->id,
                 'user_id' => $proposer->id,
                 'tx_type' => 'disburse_to_member',
                 'amount' => $amountNormalized,
-                'balance_before' => (string)$fund->balance,
-                'balance_after' => (string)$fund->balance, // لم يتغير بعد
+                'balance_before' => (string)$lockedFund->balance,
+                'balance_after' => (string)$lockedFund->balance, // لم يتغير بعد
                 'beneficiary_user_id' => $beneficiary->id,
                 'note' => $note ? mb_substr($note, 0, 500) : null,
                 'status' => 'pending_approval',
@@ -379,7 +412,7 @@ class FamilyFundService
                 'actor_type' => 'user',
                 'actor_user_id' => $proposer->id,
                 'subject_type' => 'family_fund',
-                'subject_id' => (string)$fund->id,
+                'subject_id' => (string)$lockedFund->id,
                 'action' => 'FAMILY_FUND_DISBURSEMENT_PROPOSED',
                 'decision_code' => 'DISBURSEMENT_PENDING',
                 'severity' => 'notice',
@@ -398,41 +431,82 @@ class FamilyFundService
      */
     public function approveDisbursement(FamilyFundTransaction $tx, User $approver): bool
     {
-        return DB::transaction(function () use ($tx, $approver) {
-            $tx = FamilyFundTransaction::whereKey($tx->id)->lockForUpdate()->firstOrFail();
-            if ($tx->status !== 'pending_approval') {
-                return false;
+        app(ZonePolicyService::class)->assertAllowed($approver, 'family_fund_disburse');
+
+        // نُعيد نتيجة من المعاملة بدلاً من رمي الاستثناء داخلها عند نقص الرصيد،
+        // حتى تُحفظ حالة rejected فعلياً ولا يتراجع Laravel عنها.
+        $outcome = DB::transaction(function () use ($tx, $approver): string {
+            // قفل صف الحركة أولاً لمنع سباق الصرف المزدوج (Double-Spend)
+            $lockedTx = FamilyFundTransaction::whereKey($tx->id)->lockForUpdate()->first();
+            if (!$lockedTx || $lockedTx->status !== 'pending_approval') {
+                return 'already_handled';
             }
 
-            $fund = FamilyFund::whereKey($tx->fund_id)->lockForUpdate()->firstOrFail();
-            if (!$fund->canApproveDisbursement($approver->id)) {
+            // قفل الصندوق وإعادة فحص الحالة والصلاحية والرصيد
+            $lockedFund = FamilyFund::whereKey($lockedTx->fund_id)->lockForUpdate()->first();
+            if (!$lockedFund || $lockedFund->status !== 'active') {
+                throw new \RuntimeException('Fund is not active');
+            }
+            if (!$lockedFund->canApproveDisbursement($approver->id)) {
                 throw new \RuntimeException('Only owner can approve disbursement');
             }
 
-            $beneficiary = $tx->beneficiary;
+            $beneficiary = $lockedTx->beneficiary;
             if (!$beneficiary) {
                 throw new \RuntimeException('Beneficiary no longer exists');
             }
 
             $this->kyc->assertIndividualFeatureAllowed($approver, 'family_fund');
             $this->kyc->assertIndividualFeatureAllowed($beneficiary, 'family_fund');
-            $this->kyc->assertIndividualCanReceive($beneficiary, (string) $tx->amount);
+            $this->kyc->assertIndividualCanReceive($beneficiary, (string) $lockedTx->amount);
 
-            if (bccomp((string)$tx->amount, (string)$fund->balance, 4) > 0) {
-                throw new \RuntimeException('Fund balance insufficient at approval time');
+            if (bccomp((string)$lockedTx->amount, (string)$lockedFund->balance, 4) > 0) {
+                $lockedTx->update([
+                    'status' => 'rejected',
+                    'approved_by_user_id' => $approver->id,
+                    'approved_at' => now(),
+                ]);
+
+                $this->audit->record([
+                    'actor_type' => 'user',
+                    'actor_user_id' => $approver->id,
+                    'subject_type' => 'family_fund_transaction',
+                    'subject_id' => (string)$lockedTx->id,
+                    'action' => 'FAMILY_FUND_DISBURSEMENT_REJECTED',
+                    'decision_code' => 'INSUFFICIENT_BALANCE_AT_APPROVAL',
+                    'reason' => 'Fund balance insufficient at approval time',
+                    'severity' => 'warning',
+                    'context' => [
+                        'fund_id' => $lockedFund->id,
+                        'requested' => (string)$lockedTx->amount,
+                        'available' => (string)$lockedFund->balance,
+                    ],
+                ]);
+
+                return 'insufficient_balance';
             }
 
-            // تنفيذ
-            $this->executeDisbursementCore($fund, $beneficiary, (string)$tx->amount, $tx);
+            // تنفيذ الصرف
+            $this->executeDisbursementCore($lockedFund, $beneficiary, (string)$lockedTx->amount, $lockedTx);
 
-            $tx->update([
+            $lockedTx->update([
                 'status' => 'completed',
                 'approved_by_user_id' => $approver->id,
                 'approved_at' => now(),
             ]);
 
-            return true;
+            return 'completed';
         });
+
+        if ($outcome === 'already_handled') {
+            return false;
+        }
+
+        if ($outcome === 'insufficient_balance') {
+            throw new \RuntimeException('Fund balance insufficient at approval time');
+        }
+
+        return true;
     }
 
     public function rejectDisbursement(FamilyFundTransaction $tx, User $approver, string $reason): bool
@@ -470,7 +544,80 @@ class FamilyFundService
     }
 
     /**
-     * Helper: تنفيذ الـ disbursement (يفترض الفحوصات تمت).
+     * تجميد صندوق إدارياً (تستخدمه لوحة الإدارة مع التحقق من الحالة وتسجيل التدقيق).
+     */
+    public function freezeFund(FamilyFund $fund, ?User $admin = null, string $reason = ''): FamilyFund
+    {
+        $cleanReason = trim($reason);
+        if (mb_strlen($cleanReason) < 5) {
+            throw new \InvalidArgumentException('يجب ذكر سبب للتجميد لا يقل عن 5 أحرف');
+        }
+
+        return DB::transaction(function () use ($fund, $admin, $cleanReason): FamilyFund {
+            $lockedFund = FamilyFund::where('id', $fund->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedFund->status === 'frozen') {
+                throw new \RuntimeException('الصندوق مجمّد بالفعل');
+            }
+            if ($lockedFund->status !== 'active') {
+                throw new \RuntimeException('لا يمكن تجميد صندوق غير نشط');
+            }
+
+            $lockedFund->update(['status' => 'frozen']);
+
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $admin?->id,
+                'subject_type' => 'family_fund',
+                'subject_id' => (string) $lockedFund->id,
+                'action' => 'FAMILY_FUND_FROZEN',
+                'decision_code' => 'FUND_FROZEN',
+                'reason' => mb_substr($cleanReason, 0, 255),
+                'severity' => 'warning',
+                'context' => ['fund_ulid' => $lockedFund->fund_ulid],
+            ]);
+
+            return $lockedFund;
+        });
+    }
+
+    /**
+     * فك تجميد صندوق إدارياً (تستخدمه لوحة الإدارة مع التحقق من الحالة وتسجيل التدقيق).
+     */
+    public function unfreezeFund(FamilyFund $fund, ?User $admin = null, string $reason = ''): FamilyFund
+    {
+        $cleanReason = trim($reason);
+        if (mb_strlen($cleanReason) < 5) {
+            throw new \InvalidArgumentException('يجب ذكر سبب لفك التجميد لا يقل عن 5 أحرف');
+        }
+
+        return DB::transaction(function () use ($fund, $admin, $cleanReason): FamilyFund {
+            $lockedFund = FamilyFund::where('id', $fund->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedFund->status !== 'frozen') {
+                throw new \RuntimeException('الصندوق ليس مجمّداً حالياً');
+            }
+
+            $lockedFund->update(['status' => 'active']);
+
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $admin?->id,
+                'subject_type' => 'family_fund',
+                'subject_id' => (string) $lockedFund->id,
+                'action' => 'FAMILY_FUND_UNFROZEN',
+                'decision_code' => 'FUND_UNFROZEN',
+                'reason' => mb_substr($cleanReason, 0, 255),
+                'severity' => 'info',
+                'context' => ['fund_ulid' => $lockedFund->fund_ulid],
+            ]);
+
+            return $lockedFund;
+        });
+    }
+
+    /**
+     * Helper: تنفيذ الـ disbursement (يفترض الفحوصات تمت، ويُعيد فحص الحالة والرصيد داخل القفل).
      */
     private function executeDisbursement(
         FamilyFund $fund,
@@ -481,11 +628,19 @@ class FamilyFundService
         User $approver,
     ): FamilyFundTransaction {
         $lockedFund = FamilyFund::where('id', $fund->id)->lockForUpdate()->first();
+        if (!$lockedFund || $lockedFund->status !== 'active') {
+            throw new \RuntimeException('Fund is not active');
+        }
+
         $balanceBefore = (string)$lockedFund->balance;
+        if (bccomp($amount, $balanceBefore, 4) > 0) {
+            throw new \RuntimeException('Insufficient fund balance');
+        }
+
         $balanceAfter = MoneyService::sub($balanceBefore, $amount);
         $lockedFund->update(['balance' => $balanceAfter]);
 
-        // إضافة لمحفظة المستفيد
+        // إضافة لمحفظة المستفيد (FinancialGuardService::credit يُعيد EMoney فقط بلا wallet_transaction_id)
         $this->guard->credit(
             userId: $beneficiary->id,
             amount: $amount,
@@ -494,7 +649,7 @@ class FamilyFundService
 
         $tx = FamilyFundTransaction::create([
             'tx_ulid' => (string) Str::ulid(),
-            'fund_id' => $fund->id,
+            'fund_id' => $lockedFund->id,
             'user_id' => $proposer->id,
             'tx_type' => 'disburse_to_member',
             'amount' => $amount,
@@ -508,13 +663,13 @@ class FamilyFundService
             'created_at' => now(),
         ]);
 
-        FamilyFundMember::where('fund_id', $fund->id)
+        FamilyFundMember::where('fund_id', $lockedFund->id)
             ->where('user_id', $beneficiary->id)
             ->increment('total_disbursed', $amount);
 
         $this->ledgerFamilyFundDisbursement(
             beneficiaryUserId: (int) $beneficiary->id,
-            fundId: (int) $fund->id,
+            fundId: (int) $lockedFund->id,
             amount: $amount,
             sourceId: (string) $tx->tx_ulid,
         );
@@ -527,8 +682,8 @@ class FamilyFundService
             'amount' => $amount,
             'fee' => '0',
             'reference_type' => 'family_fund',
-            'reference_id' => $fund->id,
-            'metadata' => ['fund_name' => $fund->name, 'note' => $note],
+            'reference_id' => $lockedFund->id,
+            'metadata' => ['fund_name' => $lockedFund->name, 'note' => $note],
             'zone_code' => 'SOUTH',
         ]);
 
@@ -538,6 +693,10 @@ class FamilyFundService
     private function executeDisbursementCore(FamilyFund $lockedFund, User $beneficiary, string $amount, FamilyFundTransaction $tx): void
     {
         $balanceBefore = (string)$lockedFund->balance;
+        if (bccomp($amount, $balanceBefore, 4) > 0) {
+            throw new \RuntimeException('Insufficient fund balance');
+        }
+
         $balanceAfter = MoneyService::sub($balanceBefore, $amount);
         $lockedFund->update(['balance' => $balanceAfter]);
 
