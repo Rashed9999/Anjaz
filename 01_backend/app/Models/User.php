@@ -80,30 +80,32 @@ class User extends Authenticatable
         return $this->identification_number;
     }
 
-    // AMIAL-PIN-SECURITY-001: إضافة transaction_pin و fcm_token للـ hidden
+    // AMIAL-PIN-SECURITY-001 + AMIAL-BANK-GRADE-DLP-001: إخفاء جميع الأسرار والنصوص المشفرة والفهارس العمياء
     protected $hidden = [
         'password',
-        'transaction_pin',          // ← جديد: لا يجب أن يخرج من API
-        'fcm_token',                // ← جديد: token الجهاز خاص بالـ backend
+        'transaction_pin',          // ← لا يجب أن يخرج من API
+        'fcm_token',                // ← token الجهاز خاص بالـ backend
         'remember_token',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        'phone_encrypted',
+        'phone_blind_index',
+        'email_encrypted',
+        'email_blind_index',
+        'national_id_encrypted',
+        'national_id_blind_index',
+        'signature_encrypted_path',
     ];
 
     protected $fillable = [
         'last_active_at',
-        // AMIAL-PIN-SECURITY-001: إضافة الحقول الجديدة
+        // AMIAL-PIN-SECURITY-001: الحقول غير الصلاحياتية فقط (الأقفال والأدوار تُعدَّل صراحةً أو بـ forceFill)
         'transaction_pin',
         'transaction_pin_set_at',
-        'pin_failed_attempts',
-        'pin_locked_until',
         'requires_pin_setup',
-        // AMIAL-ZONE-001 + AMIAL-RECOVERY-001 (v0.7-A)
+        // AMIAL-ZONE-001
         'zone_code',
-        'security_hold_until',
-        'security_hold_reason',
-        // CRITICAL-001 — الأدوار + مستوى التوثيق
-        'role',
-        'verification_level',
-        // phone يدخل fillable للسماح بـ AccountRecoveryService::applyApprovedChange
+        // phone يدخل fillable للسماح بتحديثه عبر المسارات المصرّح بها
         'phone',
         'fcm_token',
         // AMIAL-ACCOUNT-NUMBER-001 — رقم الحساب العام (8 أرقام + Luhn)

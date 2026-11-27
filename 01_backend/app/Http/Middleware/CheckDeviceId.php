@@ -21,48 +21,51 @@ class CheckDeviceId
 {
     public function handle(Request $request, Closure $next): mixed
     {
-        if ($request->ip() == "::1") {
+        $deviceId = (string) $request->header('device-id', '');
+        $userId = $request->user()?->id;
+
+        // AMIAL-BANK-GRADE-SEC-001: الحظر الأمني للجهاز المسروق يسبق أي استثناء محلي،
+        // ولا نعتمد أبداً على $request->ip() في فحص ::1 لأن TrustProxies('*') يسمح بتزوير X-Forwarded-For: ::1.
+        if ($userId !== null && $deviceId !== '') {
+            $device = UserLogHistory::where('user_id', $userId)
+                ->where('device_id', $deviceId)
+                ->first();
+
+            if ($device && $device->is_blocked) {
+                Log::warning('Blocked device attempted access', [
+                    'user_id' => $userId,
+                    'device_id' => $deviceId,
+                    'ip' => $request->ip(),
+                    'reason' => $device->block_reason,
+                ]);
+
+                return $this->deny(
+                    'DEVICE_BLOCKED',
+                    'هذا الجهاز محظور لأسباب أمنية. استخدم جهازاً موثوقاً أو تواصل مع الدعم.',
+                    403,
+                );
+            }
+
+            if ($device && $device->is_active) {
+                $this->touchLastSeen($device);
+
+                return $next($request);
+            }
+        }
+
+        // استثناء المقبس المحلي الحقيقي للتطوير فقط (دون X-Forwarded-For ودون بيئة إنتاج)
+        if (! app()->isProduction()
+            && ! $request->headers->has('X-Forwarded-For')
+            && $request->server('REMOTE_ADDR') === '::1') {
             return $next($request);
         }
 
-        $deviceId = $request->header('device-id');
-        if ($deviceId == '') {
+        if ($deviceId === '') {
             return $this->deny(
                 'DEVICE_ID_REQUIRED',
                 'تعذّر التعرّف على هذا الجهاز. أعد فتح التطبيق ثم سجّل الدخول من جديد.',
                 400,
             );
-        }
-
-        $userId = $request->user()->id;
-
-        // يُجلب الجهاز بلا شرط `is_active` عمداً: الشرط القديم كان يُخفي
-        // الجهاز المحظور غير النشط فيسقط في الفرع العامّ بـ403 — وهو ردٌّ
-        // صحيح بالمصادفة. والمقصود أن يُعرف سببُ المنع لا أن يُوافق رقمه.
-        $device = UserLogHistory::where('user_id', $userId)
-            ->where('device_id', $deviceId)
-            ->first();
-
-        // الحظر يسبق النشاط: لولا ذلك لمرّ الجهاز المسروق ما دام النشط.
-        if ($device && $device->is_blocked) {
-            Log::warning('Blocked device attempted access', [
-                'user_id' => $userId,
-                'device_id' => $deviceId,
-                'ip' => $request->ip(),
-                'reason' => $device->block_reason,
-            ]);
-
-            return $this->deny(
-                'DEVICE_BLOCKED',
-                'هذا الجهاز محظور لأسباب أمنية. استخدم جهازاً موثوقاً أو تواصل مع الدعم.',
-                403,
-            );
-        }
-
-        if ($device && $device->is_active) {
-            $this->touchLastSeen($device);
-
-            return $next($request);
         }
 
         return $this->deny(

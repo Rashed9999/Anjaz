@@ -665,14 +665,14 @@ class TransactionController extends Controller
     public function withdraw(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'pin' => 'required|min:4|max:4',
-            'amount' => 'required|min:0|not_in:0',
+            'pin' => 'required|string|min:4|max:6',
+            'amount' => 'required|numeric|gt:0',
             'note' => 'max:255',
             'withdrawal_method_id' => 'required',
             'withdrawal_method_fields' => 'required',
         ],
             [
-                'amount.not_in' => translate('المبلغ يجب أن يكون أكبر من صفر'),
+                'amount.gt' => translate('المبلغ يجب أن يكون أكبر من صفر'),
             ]);
 
         if ($validator->fails()) {
@@ -688,10 +688,25 @@ class TransactionController extends Controller
             return response()->json(['message' => translate('حسابك غير موثّق — أكمل توثيق حسابك أولاً')], 403);
         }
 
+        // AMIAL-BANK-GRADE-ANTITHEFT-001: فرض التجميد الأمني ونطاق التغطية والتحقق الإلزامي من رمز العمليات
+        try {
+            $this->assertFinancialEligibility($request->user()->id, 'withdraw');
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => translate($e->getMessage())], 403);
+        }
+
+        if (!Helpers::pin_check($request->user()->id, (string) $request->pin)) {
+            return response()->json(['message' => translate('رمز PIN غير صحيح')], 403);
+        }
+
         $withdrawalMethod = $this->withdrawalMethod->find($request->withdrawal_method_id);
+        if (!$withdrawalMethod) {
+            return response()->json(['message' => translate('وسيلة السحب غير موجودة')], 404);
+        }
         $fields = array_column($withdrawalMethod->method_fields, 'input_name');
 
-        $values = (array)json_decode($request->withdrawal_method_fields)[0];
+        $decodedFields = json_decode((string) $request->withdrawal_method_fields);
+        $values = is_array($decodedFields) && isset($decodedFields[0]) ? (array) $decodedFields[0] : [];
 
         foreach ($fields as $field) {
             if(!key_exists($field, $values)) {
@@ -708,14 +723,9 @@ class TransactionController extends Controller
             }
         }
 
-        $amount = \App\Services\MoneyService::normalize($request->amount);
+        $amount = \App\Services\MoneyService::normalize((string) $request->amount);
 
         // AMIAL-FEE-TRUTH-001 — **السحبُ إلى وسيلةٍ خارجيّة عمليّةٌ مسعَّرة.**
-        //
-        // وكان يقرأ `withdraw_charge_percent` من `business_settings` —
-        // **ولا حقلَ له في «إدارة الرسوم» أصلاً**، فهو رسمٌ يُخصَم من
-        // العميل ولا يستطيع الأدمنُ رؤيتَه ولا تغييرَه من مركزه.
-        // فأُضيف الرمزُ `WITHDRAW` إلى السجلّ وصار مسعَّراً كغيره.
         $breakdown = app(\App\Services\FeeService::class)
             ->calculate('WITHDRAW', $amount, ['applies_to' => 'customer']);
 

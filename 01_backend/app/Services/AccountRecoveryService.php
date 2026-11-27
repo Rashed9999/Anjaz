@@ -254,10 +254,10 @@ class AccountRecoveryService
 
             // تطبيق security hold (تغيير phone يحدث بعد انتهائه)
             $holdUntil = now()->addHours(self::SELF_SERVICE_SECURITY_HOLD_HOURS);
-            $user->update([
+            $user->forceFill([
                 'security_hold_until' => $holdUntil,
                 'security_hold_reason' => 'phone_change_self',
-            ]);
+            ])->save();
 
             // إبطال كل tokens فوراً
             $user->tokens->each(fn($t) => $t->revoke());
@@ -321,10 +321,10 @@ class AccountRecoveryService
             $user = \App\Models\User::find($request->user_id);
             $holdUntil = now()->addHours(self::ADMIN_APPROVAL_SECURITY_HOLD_HOURS);
 
-            $user->update([
+            $user->forceFill([
                 'security_hold_until' => $holdUntil,
                 'security_hold_reason' => 'phone_change_admin_approved',
-            ]);
+            ])->save();
 
             $user->tokens->each(fn($t) => $t->revoke());
             DB::table('users')->where('id', $user->id)->update(['fcm_token' => null]);
@@ -417,11 +417,11 @@ class AccountRecoveryService
         return DB::transaction(function () use ($user, $request) {
             $newPhone = $this->canonicalAvailablePhone($user, (string) $request->new_phone);
             $oldPhone = $user->phone;
-            $user->update([
+            $user->forceFill([
                 'phone' => $newPhone,
                 'security_hold_until' => null,
                 'security_hold_reason' => null,
-            ]);
+            ])->save();
 
             AccountSecurityEvent::create([
                 'user_id' => $user->id,

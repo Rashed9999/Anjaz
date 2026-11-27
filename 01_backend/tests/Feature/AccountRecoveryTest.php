@@ -278,7 +278,7 @@ class AccountRecoveryTest extends TestCase
 
         // نضع hold في الماضي (يحاكي انتهاء الـ hold)
         $user->refresh();
-        $user->update(['security_hold_until' => now()->subMinute()]);
+        $user->forceFill(['security_hold_until' => now()->subMinute()])->save();
 
         $applied = $this->svc->applyApprovedChange($req);
         $this->assertTrue($applied);

@@ -593,23 +593,58 @@ class Helpers
             return false;
         }
 
-        // AMIAL-FIX(PIN): أميال باي يفصل كلمة سرّ الدخول عن رمز المعاملات (4 أرقام).
-        // نتحقّق أولاً من transaction_pin المخصّص (مُعمّى أو نصّاً)، ثم نُبقي
-        // توافق 6cash (الرمز = كلمة السرّ) كخيار احتياطي حتى لا نكسر حسابات قائمة.
-        if (!empty($user->transaction_pin)) {
-            try {
-                if (Hash::check($pin, $user->transaction_pin)) {
-                    return true;
-                }
-            } catch (\Throwable $e) {
-                // transaction_pin غير مُعمّى (نصّي) — نقارن نصّاً أدناه
-            }
-            if (hash_equals((string) $user->transaction_pin, (string) $pin)) {
-                return true;
-            }
+        // AMIAL-BANK-GRADE-SEC-002: احترام قفل رمز العمليات وعدّاد المحاولات على جميع المسارات المالية
+        if ($user->pin_locked_until !== null && $user->pin_locked_until->isFuture()) {
+            app(\App\Services\AuditService::class)->record([
+                'actor_type' => 'user',
+                'actor_user_id' => $user->id,
+                'subject_type' => 'pin',
+                'subject_id' => (string) $user->id,
+                'action' => 'PIN_VERIFY_BLOCKED',
+                'decision_code' => 'PIN_LOCKED',
+                'reason' => 'Account is in PIN lock',
+                'severity' => 'warning',
+            ]);
+
+            return false;
         }
 
-        return Hash::check($pin, $user->password);
+        if (!empty($user->transaction_pin)) {
+            $storedPin = (string) $user->transaction_pin;
+            $isBcrypt = str_starts_with($storedPin, '$2y$') || str_starts_with($storedPin, '$2a$') || str_starts_with($storedPin, '$2b$');
+
+            if ($isBcrypt) {
+                return app(\App\Services\TransactionPinService::class)->verify($user, $pin);
+            }
+
+            // توافق بيانات قديمة مخزنة كنص غير معمّى فقط (مع تطبيق نفس سياسة القفل وعدم الهبوط لكلمة السر)
+            if (hash_equals($storedPin, (string) $pin)) {
+                $user->forceFill(['pin_failed_attempts' => 0, 'pin_locked_until' => null])->saveQuietly();
+                return true;
+            }
+
+            $attempts = ((int) ($user->pin_failed_attempts ?? 0)) + 1;
+            $lockUntil = $attempts >= \App\Services\TransactionPinService::MAX_ATTEMPTS
+                ? now()->addMinutes(\App\Services\TransactionPinService::LOCK_MINUTES)
+                : null;
+            $user->forceFill(['pin_failed_attempts' => $attempts, 'pin_locked_until' => $lockUntil])->saveQuietly();
+            return false;
+        }
+
+        // توافق الحسابات التاريخية التي لم تعيّن transaction_pin بعد (مع فرض عدّاد القفل أيضاً)
+        $matchesLegacyPassword = !empty($user->password) && Hash::check($pin, $user->password);
+        if ($matchesLegacyPassword) {
+            $user->forceFill(['pin_failed_attempts' => 0, 'pin_locked_until' => null])->saveQuietly();
+            return true;
+        }
+
+        $attempts = ((int) ($user->pin_failed_attempts ?? 0)) + 1;
+        $lockUntil = $attempts >= \App\Services\TransactionPinService::MAX_ATTEMPTS
+            ? now()->addMinutes(\App\Services\TransactionPinService::LOCK_MINUTES)
+            : null;
+        $user->forceFill(['pin_failed_attempts' => $attempts, 'pin_locked_until' => $lockUntil])->saveQuietly();
+
+        return false;
     }
 
     public static function get_qrcode(array $data): string
