@@ -81,6 +81,7 @@ import 'package:amial_pay/features/transaction_money/domain/reposotories/contact
 import 'package:amial_pay/features/verification/controllers/verification_controller.dart';
 import 'package:amial_pay/features/home/controllers/websitelink_controller.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/secure_storage_helper.dart';
 import 'package:amial_pay/helper/app_resume_state.dart';
 import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
 import 'package:amial_pay/features/home/domain/reposotories/banner_repo.dart';
@@ -113,9 +114,13 @@ Future<Map<String, Map<String, String>>> init() async {
   // keystore) يجب ألّا يُسقط التطبيق كاملاً — نسقط لمعرّف فارغ بأمان.
   String uniqueId = '';
   try {
-    uniqueId = await UniqueIdentifier.serial ?? '';
+    uniqueId = (await UniqueIdentifier.serial ?? '').trim();
   } catch (e) {
     if (kDebugMode) debugPrint('[DI] unique_identifier unavailable: $e');
+  }
+  if (uniqueId.isEmpty) {
+    uniqueId = await SecureStorageHelper.instance
+        .getOrCreateInstallationDeviceId(sharedPreferences);
   }
 
   Get.lazyPut(() => uniqueId);

@@ -99,7 +99,31 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
     // وقبل العمليات المالية في التطبيق) --------
     Route::post('/verify-pin', function (\Illuminate\Http\Request $request) {
         $request->validate(['pin' => 'required|string|min:4|max:10']);
-        $ok = \App\CentralLogics\Helpers::pin_check($request->user()->id, (string) $request->pin);
+        $user = $request->user();
+        if ($user->pin_locked_until !== null && $user->pin_locked_until->isFuture()) {
+            $mins = max(1, (int) ceil(now()->diffInMinutes($user->pin_locked_until, false)));
+            return new \Illuminate\Http\JsonResponse([
+                'success' => false,
+                'code' => 'PIN_LOCKED',
+                'message' => "رمز المعاملات مقفل مؤقتاً بعد محاولات خاطئة — حاول بعد {$mins} دقيقة",
+                'errors' => (object) [],
+                'meta' => ['retry_after_minutes' => $mins],
+            ], 429);
+        }
+        $ok = \App\CentralLogics\Helpers::pin_check($user->id, (string) $request->pin);
+        if (! $ok) {
+            $fresh = $user->fresh();
+            if ($fresh && $fresh->pin_locked_until !== null && $fresh->pin_locked_until->isFuture()) {
+                $mins = max(1, (int) ceil(now()->diffInMinutes($fresh->pin_locked_until, false)));
+                return new \Illuminate\Http\JsonResponse([
+                    'success' => false,
+                    'code' => 'PIN_LOCKED',
+                    'message' => "تم قفل رمز المعاملات مؤقتاً لحماية حسابك — حاول بعد {$mins} دقيقة",
+                    'errors' => (object) [],
+                    'meta' => ['retry_after_minutes' => $mins],
+                ], 429);
+            }
+        }
         return new \Illuminate\Http\JsonResponse([
             'success' => $ok,
             'code' => $ok ? 'PIN_OK' : 'PIN_INVALID',

@@ -42,11 +42,11 @@ class ApiClient extends GetxService {
       'Authorization': 'Bearer $token',
     };
 
-    if(('${deiceInfo.data['isPhysicalDevice']}' == 'true') || AppConstants.demo) {
+    if(uniqueId.trim().isNotEmpty || ('${deiceInfo.data['isPhysicalDevice']}' == 'true') || AppConstants.demo) {
       _mainHeaders!.addAll({
         'device-id': uniqueId,
         'os': GetPlatform.isAndroid ? 'android' : 'ios',
-        'device-model': '${deiceInfo.data['brand']} ${deiceInfo.data['model']}'
+        'device-model': '${deiceInfo.data['brand'] ?? ''} ${deiceInfo.data['model'] ?? 'mobile'}'.trim()
       });
     }
 
@@ -64,13 +64,13 @@ class ApiClient extends GetxService {
        'Authorization': 'Bearer $token',
      };
 
-     if(('${deiceInfo.data['isPhysicalDevice']}' == 'true') || AppConstants.demo) {
+     if(uniqueId.trim().isNotEmpty || ('${deiceInfo.data['isPhysicalDevice']}' == 'true') || AppConstants.demo) {
        _mainHeaders!.addAll({
          'device-id': uniqueId,
          'os': GetPlatform.isAndroid ? 'android' : 'ios',
          'device-model': '${GetPlatform.isAndroid
-             ? '${deiceInfo.data['brand']} ${deiceInfo.data['device-model']}'
-             : ''} ${deiceInfo.data['model']}'.replaceAll(' null ', ' ')
+             ? '${deiceInfo.data['brand'] ?? ''} ${deiceInfo.data['device-model'] ?? ''}'
+             : ''} ${deiceInfo.data['model'] ?? 'mobile'}'.replaceAll(' null ', ' ').trim()
        });
      }
 

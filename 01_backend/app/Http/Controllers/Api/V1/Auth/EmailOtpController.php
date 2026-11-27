@@ -204,9 +204,17 @@ class EmailOtpController extends Controller
                     throw new RuntimeException('EMAIL_IDENTITY_CHANGED');
                 }
                 if ($pin) {
-                    $this->pins->setPin($user, (string) $request->input('new_pin'));
+                    $newPin = (string) $request->input('new_pin');
+                    if (! empty($user->password) && Hash::check($newPin, (string) $user->password)) {
+                        throw new \InvalidArgumentException('رمز PIN الجديد لا يجوز أن يطابق كلمة مرور الدخول');
+                    }
+                    $this->pins->setPin($user, $newPin);
                 } else {
-                    $user->password = Hash::make((string) $request->input('password'));
+                    $newPassword = (string) $request->input('password');
+                    if (! empty($user->transaction_pin) && Hash::check($newPassword, (string) $user->transaction_pin)) {
+                        throw new \InvalidArgumentException('كلمة المرور الجديدة لا يجوز أن تطابق رمز المعاملات (PIN)');
+                    }
+                    $user->password = Hash::make($newPassword);
                     if ($provisioned) {
                         // نجاح الرمز على هذا البريد هو إثبات ملكيته لحسابٍ أنشأه موثّق؛ وحارس الهوية لا يسمح بالتوثيق إلا ضمن تفويضه.
                         $this->identities->authorizeMutation($user, function () use ($user): void {
@@ -234,7 +242,8 @@ class EmailOtpController extends Controller
                 ]);
             });
         } catch (\InvalidArgumentException $e) {
-            return $this->error('WEAK_PIN', $e->getMessage(), 422);
+            $code = str_contains($e->getMessage(), 'يطابق') ? 'SECRET_SEPARATION_REQUIRED' : 'WEAK_PIN';
+            return $this->error($code, $e->getMessage(), 422);
         } catch (RuntimeException $e) {
             return $this->otpError($e);
         }

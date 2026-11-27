@@ -41,7 +41,7 @@ class ProgressiveCustomerMoneyController extends Controller
     public function sendMoney(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'pin' => ['required', 'digits:4'],
+            'pin' => ['required', 'digits_between:4,6'],
             'phone' => ['required', 'string'],
             'purpose' => ['nullable', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'gt:0'],
@@ -117,7 +117,7 @@ class ProgressiveCustomerMoneyController extends Controller
     public function cashOut(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'pin' => ['required', 'digits:4'],
+            'pin' => ['required', 'digits_between:4,6'],
             'phone' => ['required', 'string'],
             'amount' => ['required', 'numeric', 'gt:0'],
         ]);
@@ -252,7 +252,7 @@ class ProgressiveCustomerMoneyController extends Controller
     public function requestMoneyStatus(Request $request, string $slug): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'pin' => ['required', 'digits:4'],
+            'pin' => ['required', 'digits_between:4,6'],
             'id' => ['required', 'integer'],
             'note' => ['nullable', 'string', 'max:255'],
         ]);
