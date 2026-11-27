@@ -33,6 +33,7 @@ use Tests\TestCase;
  */
 class MerchantInvoiceFlowTest extends TestCase
 {
+    use \Tests\Concerns\ExercisesArchivedMerchantAdmin;
     use RefreshDatabase;
 
     private const PIN = '1234';
@@ -286,13 +287,12 @@ class MerchantInvoiceFlowTest extends TestCase
      *
      * (القاعدة ١٢: المسارُ المسجَّل ليس ظهوراً.)
      */
-    public function the_admin_screen_is_reachable_from_the_sidebar(): void
+    public function the_admin_screen_is_hidden_from_the_sidebar(): void
     {
         $html = $this->actingAs($this->admin(), 'user')
             ->get(route('admin.amial.workspace.index'))->assertOk()->getContent();
 
-        $this->assertStringContainsString('/admin/amial/invoices', $html,
-            'لا رابطَ إلى مركز الفواتير من أيّ صفحةٍ يمرّ بها المدير');
+        $this->assertStringNotContainsString('/admin/amial/invoices', $html);
     }
 
     /**

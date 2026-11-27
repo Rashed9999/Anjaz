@@ -76,46 +76,11 @@ void main() {
         reason: 'الفاعلُ لا يُصفَّر عند تسجيل الخروج');
   });
 
-  test('المُرسِلُ يفرّق الكاشيرَ — وقبل فروع القطاعات', () {
+  test('الجلسات التجارية المحفوظة لا تدخل مساحات التشغيل', () {
     final src = dispatcher.readAsStringSync();
-
-    final posBranch = src.indexOf('isPosStaff');
-
-    expect(posBranch, greaterThan(-1),
-        reason: '**لا فرعَ لموظّف نقطة البيع في المُرسِل** — فيسقط من '
-            'كلّ فروع `isMerchant` إلى `userHomeFallback`، وهي لوحةُ '
-            'المالك.');
-
-    expect(src.contains('PosEmployeeHomeScreen'), isTrue,
-        reason: 'الفرعُ موجودٌ ولا يفتح شاشةَ كاشير');
-
-    // ══════════════════════════════════════════════════════════════
-    // **والترتيبُ جزءٌ من الإصلاح لا زينةٌ فيه.**
-    //
-    // الكاشيرُ يرث صنفَ نشاط صاحبه (`business_type`)، فلو وقع فرعُه
-    // بعد فروع القطاعات لالتقطه أوّلُها **وفتح له لوحةَ إدارة القطاع**
-    // — `FuelOwnerConsoleScreen` مثلاً — لا شاشةَ بيعه.
-    //
-    // فيُقاس الموضعُ لا الوجود.
-    // ══════════════════════════════════════════════════════════════
-    final ownerBranch = src.indexOf('if (_access.isMerchant)');
-
-    expect(ownerBranch, greaterThan(-1),
-        reason: 'لم يُقرأ فرع مالك المنشأة المتجه إلى بوابة الويب');
-
-    expect(posBranch, lessThan(ownerBranch),
-        reason: '**فرعُ الكاشير بعد فرع المالك** — فيُحال موظف POS إلى '
-            'بوابة الويب بدل سطحه التشغيلي. والوجود وحده لا يكفي: '
-            'ترتيب الفصل بين الموظف والمالك هو الإصلاح.');
-  });
-
-  test('مالك المنشأة يُحال إلى بوابة الويب ولا تعود له لوحة داخل التطبيق', () {
-    final src = dispatcher.readAsStringSync();
-    final posBranch = src.indexOf('if (_access.isPosStaff)');
-    final ownerBranch = src.indexOf("WebPortalNoticeScreen(role: 'merchant')");
-
-    expect(ownerBranch, greaterThan(posBranch),
-        reason: 'إحالة المالك يجب أن تأتي بعد فحص POS؛ وإلا سيذهب الكاشير إلى بوابة مالكه.');
+    expect(src, contains('if (_access.isPosStaff || _access.isMerchant)'));
+    expect(src, contains("return const WebPortalNoticeScreen(role: 'merchant');"));
+    expect(src, isNot(contains('return const PosEmployeeHomeScreen();')));
     for (final legacyOwnerHome in [
       'FuelOwnerConsoleScreen',
       'PharmacyDashboardScreen',

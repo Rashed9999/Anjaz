@@ -39,4 +39,15 @@ return [
         'graph_version'   => env('META_WA_GRAPH_VERSION', 'v19.0'),
     ],
 
+    // AMIAL-SMSGATE-OTP-001 — private SMSGate server only; no public-cloud fallback.
+    // Secrets must be set in Coolify; never commit them or disclose via admin APIs.
+    'smsgate' => [
+        'enabled' => filter_var(env('AMIAL_SMSGATE_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'base_url' => env('AMIAL_SMSGATE_BASE_URL', ''),
+        'username' => env('AMIAL_SMSGATE_USERNAME', ''),
+        'password' => env('AMIAL_SMSGATE_PASSWORD', ''),
+        'sim_number' => (int) env('AMIAL_SMSGATE_SIM_NUMBER', 1),
+        'ttl_seconds' => (int) env('AMIAL_SMSGATE_TTL_SECONDS', 300),
+        'poll_attempts' => (int) env('AMIAL_SMSGATE_POLL_ATTEMPTS', 5),
+    ],
 ];

@@ -6,7 +6,6 @@ import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/favorite_number/screens/amial_favorites_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_pos_home_screen.dart';
 import 'package:amial_pay/features/me/screens/my_services_screen.dart';
 import 'package:amial_pay/features/kyc_verification/screens/customer_verification_center_screen.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
@@ -48,7 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // «حسابي» خاص بالمحفظة الشخصية. لا نستخدمه لإعدادات منشأة التاجر.
     final access = Get.find<AccessController>();
     if (access.isPos) {
-      return const MerchantPosHomeScreen();
+      return const WebPortalNoticeScreen(role: 'merchant');
     }
     if (access.isMerchantSession) {
       return const WebPortalNoticeScreen(role: 'merchant');

@@ -104,6 +104,10 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
       _err(pr.lastError.value.isEmpty ? 'الطلب غير موجود' : pr.lastError.value);
       return;
     }
+    if (widget.requestCode != null && data['requester']?['is_customer'] != true) {
+      _err('رمز الدفع غير متاح في تطبيق العملاء');
+      return;
+    }
     await _confirmAndPay(data);
   }
 
@@ -159,7 +163,7 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
         Text('$amount ر.ي',
             style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AmialColors.primary)),
         const SizedBox(height: 8),
-        Text('إلى: ${requester['name'] ?? 'تاجر'}', style: const TextStyle(fontSize: 14)),
+        Text('إلى: ${requester['name'] ?? 'طالب الدفع'}', style: const TextStyle(fontSize: 14)),
         if (req['note'] != null) ...[
           const SizedBox(height: 4),
           Text('${req['note']}', style: const TextStyle(fontSize: 12, color: AmialColors.textMuted)),
@@ -307,6 +311,15 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.requestCode != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('طلب دفع')),
+        body: Center(child: TextButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+          child: const Text('رجوع'),
+        )),
+      );
+    }
     final ctrl = Get.find<MerchantPayController>();
 
     return Scaffold(

@@ -42,6 +42,16 @@ class MuwathaqReviewerOperationsTest extends TestCase
             'submitted_at' => now(),
         ]);
 
+        $newCustomer = User::factory()->create(['type' => CUSTOMER_TYPE, 'is_active' => 0]);
+        MuwathaqAccountOpeningApplication::query()->create([
+            'application_ulid' => (string) Str::ulid(),
+            'user_id' => $newCustomer->id,
+            'subject_kind' => 'customer',
+            'verification_path' => 'customer',
+            'status' => MuwathaqAccountOpeningApplication::STATUS_SUBMITTED,
+            'submitted_at' => now(),
+        ]);
+
         $this->signedGet('/api/v1/internal/muwathaq/account-directory?list=customer_female')
             ->assertOk()
             ->assertJsonPath('meta.list', 'customer_female')
@@ -50,11 +60,13 @@ class MuwathaqReviewerOperationsTest extends TestCase
 
         $this->signedGet('/api/v1/internal/muwathaq/account-directory?list=new')
             ->assertOk()
-            ->assertJsonPath('data.0.account_type', 'merchant')
+            ->assertJsonMissing(['account_type' => 'merchant'])
+            ->assertJsonPath('data.0.account_type', 'customer')
             ->assertJsonPath('data.0.opening_status', MuwathaqAccountOpeningApplication::STATUS_SUBMITTED);
 
         $this->signedGet('/api/v1/internal/muwathaq/account-directory?list=suspended')
             ->assertOk()
+            ->assertJsonMissing(['account_type' => 'merchant'])
             ->assertJsonPath('data.0.operational_status', 'suspended');
 
         $this->signedGet('/api/v1/internal/muwathaq/account-directory?list=active')
@@ -62,6 +74,7 @@ class MuwathaqReviewerOperationsTest extends TestCase
             ->assertJsonFragment(['account_type' => 'agent'])
             ->assertJsonFragment(['account_type' => 'customer']);
 
+        $this->assertTrue(MuwathaqAccountOpeningApplication::where('user_id', $newMerchant->id)->exists());
         $this->assertSame(1, (int) $legacyAgent->fresh()->is_active);
     }
 

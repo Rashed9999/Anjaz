@@ -1,0 +1,31 @@
+name: Saher AutoFix — recipe engine safety
+
+on:
+  push:
+    branches: ['feature/anjaz/saher-*']
+  pull_request:
+    branches: ['**']
+    paths:
+      - '.github/saher/**'
+      - '.github/workflows/saher-*'
+
+permissions:
+  contents: read
+
+jobs:
+  test-recipes:
+    name: Deterministic patch safety and injection resistance
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile the recipe engine
+        run: python3 -m py_compile .github/saher/apply_recipe.py
+      - name: Run sandbox safety tests
+        run: python3 -m unittest discover -s .github/saher/tests -v
+      - name: Dry-run approved recipe against live code
+        run: |
+          python3 .github/saher/apply_recipe.py \
+            --root . --recipe merchant-note-rbac-0033 \
+            --finding SAHER-SECUR-0033
+          git diff --exit-code

@@ -33,13 +33,16 @@ class AdminCreatedAccountReviewTest extends TestCase
         foreach (['customers', 'merchants', 'agents'] as $kind) {
             $phone = '9677718'.random_int(100000, 999999);
 
-            $this->actingAs($this->admin(), 'user')
+            $response = $this->actingAs($this->admin(), 'user')
                 ->postJson('/admin/amial/hub/'.$kind.'/users', [
                     'phone' => $phone,
                     'email' => 'legacy-'.bin2hex(random_bytes(6)).'@example.test',
-                ])
-                ->assertStatus(410)
-                ->assertJsonPath('code', 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
+                ]);
+            if ($kind === 'merchants') {
+                $response->assertNotFound();
+            } else {
+                $response->assertStatus(410)->assertJsonPath('code', 'ACCOUNT_CREATION_OWNED_BY_MUWATHAQ');
+            }
 
             $this->assertDatabaseMissing('users', ['phone' => $phone]);
         }

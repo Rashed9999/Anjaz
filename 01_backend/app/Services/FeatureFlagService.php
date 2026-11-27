@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\FeatureHasFundsException;
+use App\Exceptions\FeatureBalanceUnknownException;
 use App\Models\FeatureFlag;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\DB;
  */
 class FeatureFlagService
 {
-    private const CACHE_TTL = 300; // 5 دقائق
+    private const CACHE_TTL = 5; // زمن تقارب قصير بين العُقد، مع إبطال محلي بعد التغيير
     private const CACHE_PREFIX = 'feature_flag:';
 
     public function __construct(
@@ -33,6 +34,17 @@ class FeatureFlagService
             $flag = FeatureFlag::where('key', $key)->first();
             return $flag ? (bool) $flag->enabled : true;
         });
+    }
+
+    /**
+     * Security-sensitive write guard: never read a cached decision.
+     * Missing key or failed DB read must block new writes; pending
+     * settlements/reversals need distinct routes and should not be trapped.
+     */
+    public function isEnabledFreshStrict(string $key): bool
+    {
+        $value = FeatureFlag::where('key', $key)->value('enabled');
+        return $value !== null && (bool) $value;
     }
 
     /** تشغيل ميزة — مسموح دائماً. */
@@ -66,6 +78,9 @@ class FeatureFlagService
         $flag = FeatureFlag::where('key', $key)->firstOrFail();
 
         $outstanding = $this->outstandingBalance($key);
+        if ((int) $outstanding['count'] < 0) {
+            throw new FeatureBalanceUnknownException($key);
+        }
         if (bccomp($outstanding['amount'], '0', 4) > 0) {
             throw new FeatureHasFundsException($key, $outstanding['amount'], $outstanding['count']);
         }
@@ -103,7 +118,8 @@ class FeatureFlagService
                 'has_money_source' => $f->money_source !== null,
                 'outstanding_amount' => $out['amount'],
                 'outstanding_count' => $out['count'],
-                'can_disable' => bccomp($out['amount'], '0', 4) === 0,
+                'can_disable' => $out['count'] >= 0 && bccomp($out['amount'], '0', 4) === 0,
+                'balance_verified' => $out['count'] >= 0,
                 'disabled_at' => $f->disabled_at,
                 'last_note' => $f->last_note,
             ];
@@ -147,7 +163,8 @@ class FeatureFlagService
                     'pending_transfers', 'amount',
                     fn($q) => $q->where('status', 'holding')
                 ),
-                default => ['amount' => '0.0000', 'count' => 0],
+                // Unknown money source can never be presumed to hold zero funds.
+                default => ['amount' => '-1', 'count' => -1],
             };
         } catch (\Throwable $e) {
             // فشل القراءة → نُبلّغ "غير صفر" احتياطاً (لا نسمح بإغلاق أعمى)

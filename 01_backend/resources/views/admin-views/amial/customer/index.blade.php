@@ -386,7 +386,6 @@
         const sections = [
             ['systems', 'حالة الأنظمة'],
             ['policy', 'الحركات المرفوضة'],
-            ['credits', 'الأجل والديون'],
             ['receipts', 'الإيصالات'],
             ['bill', 'السداد والمزود'],
             ['requests', 'طلبات الأموال'],
@@ -410,7 +409,6 @@
                 ${card('KYC معلّق', summary.kyc_pending ?? '—')}
                 ${card('حجب سياسة / 24س', summary.policy_blocks_24h ?? '—')}
                 ${card('استثناءات حدود', summary.limit_overrides ?? '—')}
-                ${card('أجل مستحق', summary.outstanding_credit_accounts ?? '—')}
                 ${card('طلبات أموال معلقة', summary.pending_payment_requests ?? '—')}
                 ${card('سداد معلّق', summary.pending_bill_orders ?? '—')}
                 ${card('فشل PDF', summary.receipt_pdf_failures ?? '—')}

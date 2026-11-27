@@ -79,7 +79,7 @@ class HubModalsAreNotNestedGuardTest extends TestCase
     /** @test */
     public function no_hub_modal_is_nested_inside_another(): void
     {
-        foreach (['customers', 'agents', 'merchants'] as $slug) {
+        foreach (['customers', 'agents'] as $slug) {
             $html = $this->actingAs($this->admin)
                 ->get("/admin/amial/hub/{$slug}")->assertOk()->getContent();
 
@@ -113,7 +113,7 @@ class HubModalsAreNotNestedGuardTest extends TestCase
     public function the_add_modal_closes_itself(): void
     {
         $html = $this->actingAs($this->admin)
-            ->get('/admin/amial/hub/merchants')->assertOk()->getContent();
+            ->get('/admin/amial/hub/customers')->assertOk()->getContent();
 
         $start = strpos($html, 'id="modal-add"');
         $next = strpos($html, 'id="modal-transfer"');

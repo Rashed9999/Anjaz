@@ -34,7 +34,8 @@ class AdminMiddleware
 
             $request->session()->put('admin_last_activity', time());
 
-            return $next($request);
+            // SAHER-AUTOFIX-001: enforce emergency route quarantine on every admin write.
+            return app(EnforceSaherRouteQuarantine::class)->handle($request, $next);
         }
 
         // **جلسةٌ على حارس `user` لغير مديرٍ تُنهى هنا، ولا تُترك فتُدوَّر.**

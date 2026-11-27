@@ -86,13 +86,9 @@ class SaherRulingGuardTest extends TestCase
         // **هذا هو العطلُ بعينه.** الحالاتُ والصلاحيّاتُ والترجماتُ كلُّها
         // كانت جاهزة، ولا فعلَ يبلغها.
         // ══════════════════════════════════════════════════════════════
-        $found = null;
-
-        foreach (\Illuminate\Support\Facades\Route::getRoutes() as $r) {
-            if (str_contains($r->uri(), 'saher/findings') && in_array('POST', $r->methods(), true)) {
-                $found = $r;
-            }
-        }
+        // Match by route identity; Saher has separate POST remediation actions.
+        $found = \Illuminate\Support\Facades\Route::getRoutes()
+            ->getByName('admin.amial.saher.rule');
 
         $this->assertNotNull($found,
             'لا مسارَ يضع حالةً بشريّة — فالفرزُ مبنيٌّ ولا يُوصَل إليه');

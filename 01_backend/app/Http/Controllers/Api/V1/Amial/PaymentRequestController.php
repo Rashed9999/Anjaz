@@ -251,6 +251,7 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
         return $this->ok([
             'request' => $req,
             'requester' => [
+                'is_customer' => (int) $requester->type === CUSTOMER_TYPE,
                 'name' => trim(($requester->f_name ?? '') . ' ' . ($requester->l_name ?? '')),
                 'phone' => $requester->phone,
             ],

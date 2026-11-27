@@ -70,7 +70,7 @@ class UserLimitCenterController extends Controller
     public function users(Request $request): JsonResponse
     {
         $kind = (string) $request->query('kind', 'customer');
-        $type = match ($kind) { 'customer' => 2, 'merchant' => 3, 'agent' => 1, default => null };
+        $type = match ($kind) { 'customer' => 2, 'agent' => 1, default => null };
         if ($type === null) return response()->json(['message' => 'فئة غير صالحة'], 422);
 
         $search = trim((string) $request->query('search', ''));
@@ -114,7 +114,7 @@ class UserLimitCenterController extends Controller
 
     public function update(Request $request, int $userId): JsonResponse
     {
-        $user = User::find($userId);
+        $user = User::where('type', '!=', MERCHANT_TYPE)->find($userId);
         if (!$user) return response()->json(['message' => 'الحساب غير موجود'], 404);
 
         $reason = trim((string) $request->input('reason'));

@@ -18,6 +18,7 @@ use Tests\TestCase;
 class AdminHubTest extends TestCase
 {
     use OpensAccountsFromHub;
+    use \Tests\Concerns\ExercisesArchivedMerchantAdmin;
     use RefreshDatabase;
     use EstablishesKycEvidence;
     use ProvisionsAccountsFromMuwathaq;
@@ -363,15 +364,15 @@ class AdminHubTest extends TestCase
     }
 
     /** @test AMIAL — تفاصيل التاجر تشمل موظفيه وفروعه ومبيعاته. */
-    public function merchant_account_detail_includes_staff_and_sales(): void
+    public function merchant_detail_is_hidden_and_the_profile_is_preserved(): void
     {
         $merchant = User::factory()->create(['type' => MERCHANT_TYPE, 'phone' => '967771009062']);
         \App\Models\MerchantProfile::create(['user_id' => $merchant->id, 'verification_status' => 'verified', 'business_type' => 'retail']);
 
         $this->actingAs($this->admin, 'user')
             ->getJson("/admin/amial/hub/users/{$merchant->id}/detail.json")
-            ->assertOk()
-            ->assertJsonStructure(['merchant' => ['business_type', 'staff', 'branches', 'sales_total', 'sales_count']]);
+            ->assertNotFound();
+        $this->assertDatabaseHas('merchant_profiles', ['user_id' => $merchant->id, 'verification_status' => 'verified']);
     }
 
     /** @test AMIAL — تفاصيل الوكيل تشمل التسويات وبياناته. */

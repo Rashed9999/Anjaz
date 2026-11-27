@@ -27,6 +27,7 @@ use Tests\TestCase;
  */
 class MerchantCenterGuardTest extends TestCase
 {
+    use \Tests\Concerns\ExercisesArchivedMerchantAdmin;
     use RefreshDatabase;
 
     private User $merchant;

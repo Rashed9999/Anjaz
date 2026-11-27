@@ -9,6 +9,7 @@ use App\Models\SafePaymentEvidence;
 use App\Models\User;
 use App\Services\FeeService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -108,6 +109,19 @@ class SafePaymentService
         }
 
         $payment = DB::transaction(function () use ($buyer, $seller, $title, $description, $amountNormalized, $deliveryTerms, $attachments) {
+            // Defense in depth: lock the intake policy before any debit.
+            // A concurrent PAUSE_NEW approval must serialize with this
+            // transaction; there can be no newly funded payment admitted
+            // after the pause is committed through a different PHP caller.
+            if (Schema::hasTable('control_center_policies')) {
+                $mode = DB::table('control_center_policies')
+                    ->where('feature_key', 'safe_payment')
+                    ->lockForUpdate()->value('mode');
+                if ($mode !== 'RUNNING') {
+                    throw new \DomainException('FEATURE_INTAKE_PAUSED');
+                }
+            }
+
             // 1) خصم من محفظة المشتري (مع lock + balance check)
             $debitTxId = (string) Str::ulid();
             $this->guard->debit(

@@ -11,6 +11,7 @@ use Tests\TestCase;
  */
 class AdminHubExtraPanelsTest extends TestCase
 {
+    use \Tests\Concerns\ExercisesArchivedMerchantAdmin;
     use RefreshDatabase;
 
     private User $admin;

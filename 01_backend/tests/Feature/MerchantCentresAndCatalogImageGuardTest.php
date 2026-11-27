@@ -40,6 +40,7 @@ use Tests\TestCase;
  */
 class MerchantCentresAndCatalogImageGuardTest extends TestCase
 {
+    use \Tests\Concerns\ExercisesArchivedMerchantAdmin;
     use RefreshDatabase;
 
     private User $admin;
@@ -63,31 +64,13 @@ class MerchantCentresAndCatalogImageGuardTest extends TestCase
     //  ① القائمة: فُصلت ولم تُحذف
     // ══════════════════════════════════════════════════════════════════
 
-    public function test_the_merchant_group_is_the_five_that_were_agreed(): void
+    public function test_frozen_merchant_centres_are_absent_from_the_sidebar(): void
     {
         $sidebar = $this->sidebar();
-
-        // «المتّفق سابقاً» — الحسابات والمال والباقات والكتالوج.
-        foreach (['admin.amial.hub.merchants', 'admin.amial.hub.subscriptions',
-                  'admin.amial.entitlements.page', 'admin.amial.invoices.page',
-                  'admin.amial.catalog.page'] as $route) {
-            $this->assertStringContainsString($route, $sidebar, "رابطٌ مفقود: {$route}");
+        foreach (['hub.merchants', 'hub.subscriptions', 'entitlements.page', 'invoices.page',
+                  'catalog.page', 'hub.staff', 'fuel.page', 'retail.page'] as $name) {
+            $this->assertStringNotContainsString('admin.amial.'.$name, $sidebar);
         }
-    }
-
-    public function test_no_surveillance_centre_was_lost_in_the_split(): void
-    {
-        $sidebar = $this->sidebar();
-
-        // **فُصلت ولم تُحذف** — وحذفُها يُفقد المنصّةَ عينَها على الاحتيال.
-        // (القاعدة ١٢: صفحةٌ لا يُوصل إليها ليست مبنيّة.)
-        foreach (['admin.amial.hub.staff', 'admin.amial.fuel.page',
-                  'admin.amial.retail.page'] as $route) {
-            $this->assertStringContainsString($route, $sidebar, "مركزُ رقابةٍ سقط: {$route}");
-        }
-
-        $this->assertStringContainsString('رقابة عمل التجّار', $sidebar,
-            'الثلاثةُ باقيةٌ ولا مجموعةَ تجمعها — فالشكوى قائمة');
     }
 
     // ══════════════════════════════════════════════════════════════════

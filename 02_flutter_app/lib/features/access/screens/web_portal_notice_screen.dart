@@ -57,6 +57,18 @@ class WebPortalNoticeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (_isMerchant) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('تطبيق العملاء')),
+        body: Center(
+          child: TextButton.icon(
+            onPressed: _logout,
+            icon: const Icon(Icons.logout),
+            label: const Text('تسجيل الخروج للدخول بحساب عميل'),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
@@ -148,7 +160,7 @@ class WebPortalNoticeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(
-                'تطبيق أميال باي للعملاء ونقاط البيع.',
+                'تطبيق أميال باي للعملاء.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
               ),

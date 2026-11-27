@@ -81,8 +81,8 @@ void main() {
   test('المُرسِلُ يثبت فصل المالك عن موظف POS', () {
     final destinations = dispatcherRoleDestinations();
 
-    expect(destinations, contains('PosEmployeeHomeScreen'),
-        reason: 'موظف POS فقد سطحه التشغيلي بعد تسجيل الدخول');
+    expect(destinations, isNot(contains('PosEmployeeHomeScreen')),
+        reason: 'ظهرت واجهة نقطة البيع في تطبيق العملاء');
     expect(destinations, contains('WebPortalNoticeScreen'),
         reason: 'مالك المنشأة لم يعد موجّهاً بوضوح إلى بوابة الويب');
 

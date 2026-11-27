@@ -13,6 +13,7 @@ use Tests\TestCase;
 /** SAHER-SECUR-0033: reading merchant information must never grant note creation. */
 class MerchantNoteAuthorizationTest extends TestCase
 {
+    use \Tests\Concerns\ExercisesArchivedMerchantAdmin;
     use RefreshDatabase;
 
     private User $merchant;
