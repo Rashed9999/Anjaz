@@ -11,9 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class _CapturingApiClient extends ApiClient {
-  _CapturingApiClient(SharedPreferences prefs)
-      : super(appBaseUrl: 'https://example.invalid', sharedPreferences: prefs);
+class _CapturingApiClient implements ApiClient {
+  _CapturingApiClient();
 
   final List<({String uri, dynamic body, String? idempotencyKey})> calls = [];
   Response nextResponse = const Response(
@@ -46,6 +45,9 @@ class _CapturingApiClient extends ApiClient {
       body: {'success': true, 'code': 'OK', 'meta': {'items': []}},
     );
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }
 
 void main() {
@@ -116,8 +118,7 @@ void main() {
   test(
     'CustomerWithdrawController forwards PIN and preserves Idempotency-Key across transient failures',
     () async {
-      final prefs = await SharedPreferences.getInstance();
-      final api = _CapturingApiClient(prefs);
+      final api = _CapturingApiClient();
       final repo = CustomerWithdrawRepo(apiClient: api);
       final ctrl = CustomerWithdrawController(repo: repo);
 
@@ -162,8 +163,7 @@ void main() {
   test(
     'FundsController forwards transaction PIN for contribute, proposeDisbursement, and approveDisbursement',
     () async {
-      final prefs = await SharedPreferences.getInstance();
-      final api = _CapturingApiClient(prefs);
+      final api = _CapturingApiClient();
       final repo = FundsRepo(apiClient: api);
       final ctrl = FundsController(repo: repo);
 

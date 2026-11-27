@@ -41,7 +41,7 @@ class AmialBiometricSetupScreen extends StatefulWidget {
   static Future<void> clearSavedCredentials() async {
     try {
       final s = SecureStorageHelper.instance;
-      await s.deleteSecure(kPassword);
+      await s.removeSecure(kPassword);
       await s.setSecure(kEnabled, '0');
     } catch (_) {}
   }
