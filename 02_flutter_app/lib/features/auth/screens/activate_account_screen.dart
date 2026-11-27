@@ -15,7 +15,6 @@ import 'package:get/get.dart';
 ///
 /// بعد اعتماد الطلب يصل العميلَ بريدٌ فيه رمزٌ من ست خانات. هنا يُدخل بريدَه والرمز،
 /// ويختار كلمة مرور ورمز PIN مستقلّين، فيُفتح حسابه مباشرةً.
-/// كما يتيح إعادة طلب رمز التفعيل عند انتهاء صلاحيته دون مغادرة الشاشة.
 class ActivateAccountScreen extends StatefulWidget {
   const ActivateAccountScreen({super.key, this.initialEmail = ''});
 
@@ -90,9 +89,9 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
 
   String? _validateEmail(String? v) {
     final value = (v ?? '').trim();
-    if (value.isEmpty) return 'أدخل بريدك الإلكتروني';
+    if (value.isEmpty) return 'auth_activate_email_required'.tr;
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value)) {
-      return 'أدخل بريداً إلكترونياً صحيحاً';
+      return 'auth_activate_email_invalid'.tr;
     }
     return null;
   }
@@ -135,7 +134,7 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
     }
     final message = controller.lastError.value;
     _snack(
-      message.isNotEmpty ? message : 'تعذّر تفعيل الحساب',
+      message.isNotEmpty ? message : 'auth_activate_failed'.tr,
       danger: !controller.activatedOnly.value,
     );
     if (controller.activatedOnly.value && Navigator.of(context).canPop()) {
@@ -147,7 +146,7 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AmialColors.background,
-      appBar: AppBar(title: const Text('تفعيل الحساب')),
+      appBar: AppBar(title: Text('auth_activate_title'.tr)),
       body: SafeArea(
         child: Directionality(
           textDirection: appTextDirection(),
@@ -167,20 +166,20 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
                   children: [
                     const Center(child: AmialBrandLogo(height: 72)),
                     const SizedBox(height: 16),
-                    const Text(
-                      'تم اعتماد حسابك',
+                    Text(
+                      'auth_activate_heading'.tr,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: AmialColors.primary,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'أدخل بريدك والرمز المكوّن من 6 أرقام الذي وصلك، ثم اختر كلمة مرور للدخول ورمز PIN مستقلاً للعمليات المالية.',
+                    Text(
+                      'auth_activate_subtitle'.tr,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: AmialColors.textSecondary,
                         height: 1.55,
                       ),
@@ -196,11 +195,11 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
                             keyboardType: TextInputType.emailAddress,
                             textDirection: TextDirection.ltr,
                             autofillHints: const [AutofillHints.email],
-                            decoration: const InputDecoration(
-                              labelText: 'البريد الإلكتروني',
+                            decoration: InputDecoration(
+                              labelText: 'email'.tr,
                               hintText: 'name@example.com',
-                              prefixIcon: Icon(Icons.email_outlined),
-                              border: OutlineInputBorder(),
+                              prefixIcon: const Icon(Icons.email_outlined),
+                              border: const OutlineInputBorder(),
                             ),
                             validator: _validateEmail,
                           ),
@@ -214,15 +213,15 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
                               const ArabicDigitsNormalizingFormatter(),
                               FilteringTextInputFormatter.digitsOnly,
                             ],
-                            decoration: const InputDecoration(
-                              labelText: 'رمز التفعيل (6 أرقام)',
-                              prefixIcon: Icon(Icons.verified_outlined),
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              labelText: 'auth_activate_code_label'.tr,
+                              prefixIcon: const Icon(Icons.verified_outlined),
+                              border: const OutlineInputBorder(),
                               counterText: '',
                             ),
                             validator: (v) =>
                                 (v == null || v.trim().length != 6)
-                                    ? 'الرمز من 6 أرقام'
+                                    ? 'auth_activate_code_invalid'.tr
                                     : null,
                           ),
                           Align(
@@ -240,8 +239,9 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
                                   : const Icon(Icons.refresh_rounded, size: 18),
                               label: Text(
                                 _resendCooldown > 0
-                                    ? 'إعادة إرسال الرمز خلال $_resendCooldown ثانية'
-                                    : 'لم يصلك الرمز أو انتهت صلاحيته؟ أعد الإرسال',
+                                    ? 'auth_activate_resend_wait'
+                                        .trParams({'seconds': '$_resendCooldown'})
+                                    : 'auth_activate_resend_cta'.tr,
                               ),
                             ),
                           ),
@@ -250,7 +250,7 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
                             controller: _password,
                             obscureText: _obscure,
                             decoration: InputDecoration(
-                              labelText: 'كلمة مرور الدخول (8 أحرف فأكثر)',
+                              labelText: 'auth_activate_password_label'.tr,
                               prefixIcon: const Icon(Icons.lock_outline),
                               border: const OutlineInputBorder(),
                               suffixIcon: IconButton(
@@ -263,10 +263,10 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
                             ),
                             validator: (v) {
                               if (v == null || v.length < 8) {
-                                return 'ثمانية أحرف على الأقل';
+                                return 'auth_activate_password_min'.tr;
                               }
                               if (RegExp(r'^\d+$').hasMatch(v)) {
-                                return 'كلمة المرور يجب أن تحتوي على حرف أو رمز واحد على الأقل';
+                                return 'auth_activate_password_non_numeric'.tr;
                               }
                               return null;
                             },
@@ -275,13 +275,13 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
                           TextFormField(
                             controller: _password2,
                             obscureText: _obscure,
-                            decoration: const InputDecoration(
-                              labelText: 'تأكيد كلمة المرور',
-                              prefixIcon: Icon(Icons.lock_reset_outlined),
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              labelText: 'auth_activate_password_confirm'.tr,
+                              prefixIcon: const Icon(Icons.lock_reset_outlined),
+                              border: const OutlineInputBorder(),
                             ),
                             validator: (v) => v != _password.text
-                                ? 'كلمتا المرور غير متطابقتين'
+                                ? 'auth_activate_password_mismatch'.tr
                                 : null,
                           ),
                           const SizedBox(height: 12),
@@ -294,21 +294,21 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
                               const ArabicDigitsNormalizingFormatter(),
                               FilteringTextInputFormatter.digitsOnly,
                             ],
-                            decoration: const InputDecoration(
-                              labelText: 'رمز PIN للعمليات (4 إلى 6 أرقام)',
-                              prefixIcon: Icon(Icons.pin_outlined),
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              labelText: 'auth_activate_pin_label'.tr,
+                              prefixIcon: const Icon(Icons.pin_outlined),
+                              border: const OutlineInputBorder(),
                               counterText: '',
                             ),
                             validator: (v) {
                               if (v == null || v.length < 4 || v.length > 6) {
-                                return 'من 4 إلى 6 أرقام';
+                                return 'auth_activate_pin_length'.tr;
                               }
                               if (_weakPins.contains(v)) {
-                                return 'اختر رمز PIN غير متكرر ولا متسلسل (تجنّب 1234 و0000)';
+                                return 'auth_activate_pin_weak'.tr;
                               }
                               if (v == _password.text) {
-                                return 'رمز PIN يجب أن يختلف عن كلمة المرور';
+                                return 'auth_activate_pin_distinct'.tr;
                               }
                               return null;
                             },
@@ -323,14 +323,14 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
                               const ArabicDigitsNormalizingFormatter(),
                               FilteringTextInputFormatter.digitsOnly,
                             ],
-                            decoration: const InputDecoration(
-                              labelText: 'تأكيد رمز PIN',
-                              prefixIcon: Icon(Icons.pin_outlined),
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              labelText: 'auth_activate_pin_confirm'.tr,
+                              prefixIcon: const Icon(Icons.pin_outlined),
+                              border: const OutlineInputBorder(),
                               counterText: '',
                             ),
                             validator: (v) => v != _pin.text
-                                ? 'الرمزان غير متطابقين'
+                                ? 'auth_activate_pin_mismatch'.tr
                                 : null,
                           ),
                         ],
@@ -352,7 +352,11 @@ class _ActivateAccountScreenState extends State<ActivateAccountScreen> {
                                 ),
                               )
                             : const Icon(Icons.verified_user_outlined),
-                        label: Text(loading ? 'جارٍ التفعيل…' : 'تفعيل الحساب'),
+                        label: Text(
+                          loading
+                              ? 'auth_activate_submitting'.tr
+                              : 'auth_activate_title'.tr,
+                        ),
                         style: FilledButton.styleFrom(
                           backgroundColor: AmialColors.primary,
                           foregroundColor: Colors.white,

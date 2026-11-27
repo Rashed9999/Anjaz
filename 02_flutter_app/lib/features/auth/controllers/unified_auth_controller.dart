@@ -287,19 +287,19 @@ class UnifiedAuthController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
         final meta = r.body['meta'] is Map ? r.body['meta'] as Map : const {};
         final resend = int.tryParse('${meta['resend_after_seconds']}') ?? 60;
-        final msg = (r.body['message'] ?? 'إذا كان الحساب بانتظار التفعيل فسيصلك رمز جديد.').toString();
+        final msg = (r.body['message'] ?? 'auth_activate_resend_ok'.tr).toString();
         return (ok: true, resendAfterSeconds: resend, message: msg);
       }
       return (
         ok: false,
         resendAfterSeconds: 0,
-        message: _failureMessage(r, 'تعذّر إرسال رمز التفعيل حالياً'),
+        message: _failureMessage(r, 'auth_activate_resend_failed'.tr),
       );
     } catch (_) {
       return (
         ok: false,
         resendAfterSeconds: 0,
-        message: 'تعذّر الاتصال بالخادم — تحقّق من الشبكة ثم حاول مجدداً',
+        message: 'api_error_network'.tr,
       );
     }
   }

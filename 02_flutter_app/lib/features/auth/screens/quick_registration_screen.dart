@@ -24,8 +24,8 @@ class QuickRegistrationScreen extends StatelessWidget {
     }
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تعذّر فتح بوابة موثّق — تحقّق من وجود متصفح على جهازك.'),
+        SnackBar(
+          content: Text('auth_open_browser_error'.tr),
           backgroundColor: AmialColors.danger,
         ),
       );
@@ -54,7 +54,7 @@ class QuickRegistrationScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AmialColors.background,
-      appBar: AppBar(title: const Text('فتح حساب جديد')),
+      appBar: AppBar(title: Text('auth_open_title'.tr)),
       body: SafeArea(
         child: Directionality(
           textDirection: appTextDirection(),
@@ -75,20 +75,20 @@ class QuickRegistrationScreen extends StatelessWidget {
                   children: [
                     const Center(child: AmialBrandLogo(height: 76)),
                     const SizedBox(height: 16),
-                    const Text(
-                      'فتح الحساب يتم عبر موثّق',
-                      style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: AmialColors.primary),
+                    Text(
+                      'auth_open_heading'.tr,
+                      style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: AmialColors.primary),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),
-                    _stepRow('1', 'التقديم في موثّق: أرسل بياناتك ومستنداتك بأمان.'),
-                    _stepRow('2', 'استلام الرمز: يصلك رمز تفعيل من 6 أرقام فور الاعتماد.'),
-                    _stepRow('3', 'التفعيل الفوري: أدخل الرمز هنا واختر كلمة السر والرمز المالي.'),
+                    _stepRow('1', 'auth_open_step_1'.tr),
+                    _stepRow('2', 'auth_open_step_2'.tr),
+                    _stepRow('3', 'auth_open_step_3'.tr),
                     const SizedBox(height: 20),
                     FilledButton.icon(
                       onPressed: () => _openMuwathaq(context),
                       icon: const Icon(Icons.verified_user_outlined),
-                      label: const Text('الانتقال إلى موثّق'),
+                      label: Text('auth_open_go_muwathaq'.tr),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(

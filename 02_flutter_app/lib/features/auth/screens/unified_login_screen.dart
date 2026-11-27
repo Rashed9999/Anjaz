@@ -620,8 +620,9 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
                     Expanded(
                       child: Text(
                         _lastUser!.name.trim().isNotEmpty
-                            ? 'مرحباً بعودتك، ${_lastUser!.name}'
-                            : 'رقم محفوظ على هذا الجهاز',
+                            ? 'auth_login_welcome_back'
+                                .trParams({'name': _lastUser!.name})
+                            : 'auth_login_saved_phone'.tr,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: AmialColors.textPrimary,
                               fontWeight: FontWeight.w700,
@@ -635,7 +636,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
-                      child: const Text('حساب آخر؟'),
+                      child: Text('auth_login_switch_account'.tr),
                     ),
                   ],
                 ),
@@ -1066,7 +1067,8 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             Padding(
               padding: const EdgeInsets.only(right: 32),
               child: Text(
-                'آخر دخول مسجّل: ${lastLogin.at}$zonePart',
+                'auth_login_last_recorded'
+                    .trParams({'info': '${lastLogin.at}$zonePart'}),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AmialColors.textMuted,
                       fontSize: 11.5,

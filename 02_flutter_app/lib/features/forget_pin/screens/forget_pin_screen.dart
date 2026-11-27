@@ -250,7 +250,7 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
       return;
     }
     if (_pinMode && _weakPins.contains(value)) {
-      _message('اختر رمز PIN غير متكرر ولا متسلسل (تجنّب 1234 و0000)', error: true);
+      _message('auth_activate_pin_weak'.tr, error: true);
       return;
     }
     if (value != confirm) {
