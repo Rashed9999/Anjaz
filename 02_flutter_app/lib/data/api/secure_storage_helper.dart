@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -113,6 +114,47 @@ class SecureStorageHelper {
   Future<String?> getSecure(String key) => _storage.read(key: key);
 
   Future<void> removeSecure(String key) => _storage.delete(key: key);
+
+  static const String _kInstallationDeviceId = 'amial_device_installation_id';
+
+  /// يضمن وجود معرّف جهاز ثابت للتطبيق حين لا يعيد النظام معرّفاً عتادياً
+  /// (Android 10+ المقيّد، ملفات العمل، أو المحاكيات)، فلا يُطرد العميل بعد
+  /// أول تسجيل دخول بخطأ DEVICE_ID_REQUIRED.
+  Future<String> getOrCreateInstallationDeviceId(
+    SharedPreferences prefs,
+  ) async {
+    try {
+      final fromSecure = (await _storage.read(key: _kInstallationDeviceId))?.trim();
+      if (fromSecure != null && fromSecure.isNotEmpty) {
+        if ((prefs.getString(_kInstallationDeviceId) ?? '').isEmpty) {
+          await prefs.setString(_kInstallationDeviceId, fromSecure);
+        }
+        return fromSecure;
+      }
+    } catch (_) {}
+
+    final fromPrefs = (prefs.getString(_kInstallationDeviceId) ?? '').trim();
+    if (fromPrefs.isNotEmpty) {
+      try {
+        await _storage.write(key: _kInstallationDeviceId, value: fromPrefs);
+      } catch (_) {}
+      return fromPrefs;
+    }
+
+    final rng = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final generated = 'amial-dev-${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+
+    try {
+      await _storage.write(key: _kInstallationDeviceId, value: generated);
+    } catch (_) {}
+    try {
+      await prefs.setString(_kInstallationDeviceId, generated);
+    } catch (_) {}
+    return generated;
+  }
 
   /// يمسح كل البيانات الآمنة (logout كامل، تغيير PIN، إلخ).
   Future<void> wipeAll() async {

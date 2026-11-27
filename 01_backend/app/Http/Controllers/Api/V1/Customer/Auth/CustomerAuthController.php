@@ -398,8 +398,8 @@ class CustomerAuthController extends Controller
             //
             // القديم اعتمادٌ يُتحقَّق منه لا صيغةٌ تُخزَّن، فلا يُقيَّد بطولها.
             'old_pin' => 'required|string|min:4|max:64',
-            'new_pin' => 'required|digits:4',
-            'confirm_pin' => 'required|digits:4',
+            'new_pin' => 'required|digits_between:4,6',
+            'confirm_pin' => 'required|digits_between:4,6',
         ]);
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);

@@ -26,7 +26,7 @@ import 'helper/get_di.dart' as di;
 import 'package:amial_pay/features/auth/controllers/session_guard.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
- late List<CameraDescription> cameras;
+List<CameraDescription> cameras = <CameraDescription>[];
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +55,14 @@ Future<void> main() async {
   // AMIAL-CRASH-001: أوّل ما يُهيَّأ بعد Firebase — كل ما بعده صار مرصوداً.
   await AmialCrashReporter.init();
 
-  cameras = await availableCameras();
+  // تحصين الإقلاع الأول: غياب الكاميرا أو تعذّر خدمة Camera2 في بعض الأجهزة أو
+  // الملفات المقيّدة لا يجوز أن يُسقط التطبيق قبل بناء أول شاشة.
+  try {
+    cameras = await availableCameras();
+  } catch (e, s) {
+    cameras = <CameraDescription>[];
+    AmialCrashReporter.record(e, s, reason: 'تهيئة الكاميرا عند الإقلاع');
+  }
 
   Map<String, Map<String, String>> languages = await di.init();
 

@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'package:amial_pay/util/app_direction.dart';
+import 'package:amial_pay/util/secure_screen.dart';
 import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
+import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/common/widgets/custom_logo_widget.dart';
 import 'package:amial_pay/data/api/api_client.dart';
@@ -43,10 +46,22 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
   bool _obscure = true;
   Timer? _timer;
 
+  static const Set<String> _weakPins = {
+    '0000', '1111', '2222', '3333', '4444', '5555',
+    '6666', '7777', '8888', '9999', '1234', '4321', '0123',
+  };
+
   bool get _pinMode => _purpose == 'pin_recovery';
 
   @override
+  void initState() {
+    super.initState();
+    SecureScreen.enable();
+  }
+
+  @override
   void dispose() {
+    SecureScreen.disable();
     _timer?.cancel();
     _email.dispose();
     _otp.dispose();
@@ -234,6 +249,10 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
       );
       return;
     }
+    if (_pinMode && _weakPins.contains(value)) {
+      _message('auth_activate_pin_weak'.tr, error: true);
+      return;
+    }
     if (value != confirm) {
       _message('email_otp_mismatch'.tr, error: true);
       return;
@@ -283,6 +302,7 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
       appBar: AppBar(
         title: Text(_pinMode ? 'email_otp_pin_recovery'.tr : 'email_otp_password_recovery'.tr),
         backgroundColor: Colors.white,
+        foregroundColor: AmialColors.primary,
         elevation: 0,
       ),
       body: SafeArea(
@@ -397,6 +417,10 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
             maxLength: 6,
+            inputFormatters: [
+              const ArabicDigitsNormalizingFormatter(),
+              FilteringTextInputFormatter.digitsOnly,
+            ],
             style: const TextStyle(fontSize: 26, letterSpacing: 8, fontWeight: FontWeight.w700),
             decoration: InputDecoration(
               labelText: 'email_otp_code'.tr,
@@ -449,6 +473,12 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
             keyboardType: _pinMode ? TextInputType.number : TextInputType.visiblePassword,
             obscureText: _obscure,
             maxLength: _pinMode ? 6 : 64,
+            inputFormatters: _pinMode
+                ? [
+                    const ArabicDigitsNormalizingFormatter(),
+                    FilteringTextInputFormatter.digitsOnly,
+                  ]
+                : null,
             decoration: InputDecoration(
               labelText: _pinMode ? 'email_otp_new_pin'.tr : 'email_otp_new_password'.tr,
               counterText: '',
@@ -465,6 +495,12 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
             keyboardType: _pinMode ? TextInputType.number : TextInputType.visiblePassword,
             obscureText: _obscure,
             maxLength: _pinMode ? 6 : 64,
+            inputFormatters: _pinMode
+                ? [
+                    const ArabicDigitsNormalizingFormatter(),
+                    FilteringTextInputFormatter.digitsOnly,
+                  ]
+                : null,
             decoration: InputDecoration(
               labelText: _pinMode ? 'email_otp_confirm_pin'.tr : 'email_otp_confirm_password'.tr,
               counterText: '',

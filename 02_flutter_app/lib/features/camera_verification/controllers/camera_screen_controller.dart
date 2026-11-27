@@ -43,7 +43,17 @@ class CameraScreenController extends GetxController implements GetxService{
   }
 
   Future startLiveFeed({bool isQrCodeScan = false,bool isHome = false, String? transactionType = '', bool fromSearchContact = false}) async {
-    final camera = cameras[isQrCodeScan ? 0 : 1];
+    if (cameras.isEmpty) {
+      try {
+        cameras = await availableCameras();
+      } catch (_) {}
+    }
+    if (cameras.isEmpty) {
+      update();
+      return;
+    }
+    final int cameraIndex = isQrCodeScan ? 0 : (cameras.length > 1 ? 1 : 0);
+    final camera = cameras[cameraIndex];
     controller?.dispose();
     controller = null;
     controller = CameraController(

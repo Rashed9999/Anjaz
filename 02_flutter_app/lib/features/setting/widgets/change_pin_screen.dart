@@ -60,8 +60,8 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
       };
 
   String get _hint => switch (_step) {
-        _Step.old => 'أدخل رمز المعاملات المستعمل حالياً للتأكّد من هويتك',
-        _Step.fresh => 'أربعة أرقام غير متسلسلة ولا متكرّرة — لا 1234 ولا 0000',
+        _Step.old => 'أدخل رمز المعاملات المستعمل حالياً (4 إلى 6 أرقام) للتأكّد من هويتك',
+        _Step.fresh => 'من 4 إلى 6 أرقام غير متسلسلة ولا متكرّرة — لا 1234 ولا 0000',
         _Step.confirm => 'مرّة أخرى، حتى لا يُحفظ رمز أخطأت في كتابته',
       };
 
@@ -201,7 +201,11 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                         color: AmialColors.textSecondary)),
                 const SizedBox(height: 26),
 
-                AmialPinDots(controller: _active, error: _error.isNotEmpty),
+                AmialPinDots(
+                  controller: _active,
+                  length: _active.text.length > 4 ? _active.text.length : 4,
+                  error: _error.isNotEmpty,
+                ),
                 const SizedBox(height: 10),
 
                 SizedBox(
@@ -229,12 +233,27 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                   absorbing: controller.isLoading,
                   child: AmialNumpad(
                     controller: _active,
-                    maxLength: 4,
+                    maxLength: 6,
                     compact: true,
                     onChanged: (v) {
                       setState(() {});
-                      if (v.length == 4) _onFilled(v);
+                      if (v.length == 6) _onFilled(v);
                     },
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ElevatedButton(
+                  onPressed: controller.isLoading || _active.text.length < 4
+                      ? null
+                      : () => _onFilled(_active.text),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AmialColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text(
+                    _step == _Step.confirm ? 'تأكيد وحفظ الرمز' : 'متابعة',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(height: 18),

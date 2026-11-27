@@ -251,10 +251,14 @@ class RouteHelper {
     GetPage(name: sendMoneyConfirmation, page: () => TransactionConfirmationScreen(inputBalance:double.tryParse(Get.parameters['input-balance']!),transactionType: Get.parameters['transaction-type'])),
 
     GetPage(name: choseLoginOrRegScreen, page: () => const OnBoardingScreen()),
+    GetPage(name: createAccountScreen, page: () => const AmialRegistrationWizardScreen()),
+    GetPage(name: loginScreen, page: () => const UnifiedLoginScreen()),
     GetPage(name: unifiedLoginScreen, page: () => const UnifiedLoginScreen()),  // AMIAL
     GetPage(name: verifyScreen, page: () {
-      final String? phoneNumber = Uri.decodeComponent(Get.parameters['phone_number']!)
-          != 'null' ? Uri.decodeComponent(Get.parameters['phone_number']!) : null ;
+      final rawPhone = Get.parameters['phone_number'];
+      final String? phoneNumber = (rawPhone != null && Uri.decodeComponent(rawPhone) != 'null')
+          ? Uri.decodeComponent(rawPhone)
+          : null;
       return VerificationScreen(
         phoneNumber: phoneNumber,
       );
@@ -263,16 +267,16 @@ class RouteHelper {
     GetPage(name: otherInfoScreen, page: () => const AmialRegistrationWizardScreen()),
 
     GetPage(name: welcomeScreen, page: () => WelcomeScreen(
-      countryCode: Get.parameters['country-code']!.replaceAll(' ', '+'),
+      countryCode: Get.parameters['country-code']?.replaceAll(' ', '+'),
       phoneNumber: Get.parameters['phone-number'],
       password: Get.parameters['password'],
     )),
 
-    GetPage(name: fPhoneNumberScreen, page: () => ForgetPinScreen(countryCode: Get.parameters['country-code']!.replaceAll(' ', '+'),phoneNumber: Get.parameters['phone-number'],)),
+    GetPage(name: fPhoneNumberScreen, page: () => ForgetPinScreen(countryCode: Get.parameters['country-code']?.replaceAll(' ', '+'),phoneNumber: Get.parameters['phone-number'],)),
     // GetPage(name: fVerificationScreen, page: () => PhoneVerification(phoneNumber: Get.parameters['phone-number']!.replaceAll(' ', '+'),)),
     GetPage(name: resetPassScreen, page: () => ResetPinScreen(
-      phoneNumber: Get.parameters['phone-number']!.replaceAll(' ', '+'),
-      otp: Get.parameters['otp']!.replaceAll(' ', '+'),
+      phoneNumber: Get.parameters['phone-number']?.replaceAll(' ', '+'),
+      otp: Get.parameters['otp']?.replaceAll(' ', '+'),
     )),
     GetPage(name: choseLanguageScreen, page: () => const ChooseLanguageScreen()),
     GetPage(name: editProfileScreen, page: () => const EditProfileScreen()),

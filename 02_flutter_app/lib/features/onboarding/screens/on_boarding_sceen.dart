@@ -51,7 +51,7 @@ class _OnBoardingScreenState extends State<OnBoardingScreen> {
                     if (notification is UserScrollNotification) {
                       if(onBoardingController.page == onBoardingController.onboardList.length - 1 &&
                           notification.direction == ScrollDirection.reverse){
-                        Get.offAllNamed(RouteHelper.getRegistrationRoute());
+                        Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
                       }
                     }
                     return false;
@@ -122,7 +122,7 @@ class _OnBoardingScreenState extends State<OnBoardingScreen> {
                   child: Container(
                     padding: const EdgeInsets.only(left: Dimensions.paddingSizeDefault, right: Dimensions.paddingSizeDefault, bottom: Dimensions.paddingSizeExtraExtraLarge),
                     child: CustomSmallButtonWidget(
-                      onTap: () => Get.offAllNamed(RouteHelper.getRegistrationRoute()),
+                      onTap: () => Get.offAllNamed(RouteHelper.getUnifiedLoginRoute()),
                       backgroundColor: Theme.of(context).colorScheme.secondary,
                       text: 'login_registration'.tr,
                       textStyle: rubikSemiBold.copyWith(

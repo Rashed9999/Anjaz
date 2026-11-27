@@ -27,6 +27,14 @@ class UnifiedAuthRepo {
     return apiClient.postData('/api/v1/auth/activate', body);
   }
 
+  /// إعادة طلب رمز تفعيل الحساب لحسابٍ اعتمده موثّق ولم يُفعّل بعد.
+  Future<Response> requestActivationOtp(String email) {
+    return apiClient.postData('/api/v1/auth/email-otp/request', {
+      'email': email,
+      'purpose': 'account_activation',
+    });
+  }
+
   Future<Response> verifyOtp(String otpToken, String otpCode) {
     return apiClient.postData('/api/v1/auth/agent/verify-otp', {
       'otp_token': otpToken,
@@ -215,7 +223,8 @@ class UnifiedAuthController extends GetxController implements GetxService {
         // ناجحٍ لكلّ دور. ومدخلٌ ثالثٌ يُضاف غداً يرثه بلا أن يتذكّره
         // أحد — وهذا هو المقصود.
         // ══════════════════════════════════════════════════════════════
-        final rememberedPhone = (body['phone'] ?? '').toString().trim();
+        final rememberedPhone =
+            (body['phone'] ?? user['phone'] ?? '').toString().trim();
         if (rememberedPhone.isNotEmpty) {
           await rememberLastUser(
             name: _displayName,
@@ -267,6 +276,31 @@ class UnifiedAuthController extends GetxController implements GetxService {
       return false;
     } finally {
       isSubmitting.value = false;
+    }
+  }
+
+  /// يطلب إرسال رمز تفعيل جديد لحسابٍ اعتمده موثّق (عند انتهاء صلاحية الرمز الأول).
+  Future<({bool ok, int resendAfterSeconds, String message})>
+      requestActivationCode(String email) async {
+    try {
+      final r = await repo.requestActivationOtp(email.trim());
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        final meta = r.body['meta'] is Map ? r.body['meta'] as Map : const {};
+        final resend = int.tryParse('${meta['resend_after_seconds']}') ?? 60;
+        final msg = (r.body['message'] ?? 'auth_activate_resend_ok'.tr).toString();
+        return (ok: true, resendAfterSeconds: resend, message: msg);
+      }
+      return (
+        ok: false,
+        resendAfterSeconds: 0,
+        message: _failureMessage(r, 'auth_activate_resend_failed'.tr),
+      );
+    } catch (_) {
+      return (
+        ok: false,
+        resendAfterSeconds: 0,
+        message: 'api_error_network'.tr,
+      );
     }
   }
 

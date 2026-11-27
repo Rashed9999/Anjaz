@@ -283,6 +283,7 @@ class UnifiedAuthController extends Controller
                     'id' => $result['user']->id,
                     'role' => $result['role'],
                     'name' => $this->getUserDisplayName($result['user']),
+                    'phone' => (string) ($result['user']->phone ?? ''),
                     // AMIAL-CRASH-001: يربطه التطبيق بتقارير الأعطال، فيُعرف
                     // هل العطل محصور بمنطقة — وهو ما يفرّق عطل الإعداد عن عطل
                     // الشيفرة — بدل أن يبقى «ينهار عند بعض المستخدمين».

@@ -14,6 +14,7 @@ import 'package:amial_pay/features/auth/screens/quick_receive_screen.dart';
 import 'package:amial_pay/features/forget_pin/screens/forget_pin_screen.dart';
 import 'package:amial_pay/features/language/widgets/amial_language_switch.dart';
 import 'package:amial_pay/features/merchant/screens/pos_device_activation_screen.dart';
+import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/secure_screen.dart';
@@ -101,12 +102,14 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   AccountKind _kind = AccountKind.customer;
   bool _obscure = true;
   ({String name, String phone, String kind})? _lastUser;
+  ({String at, String ip, String zone})? _lastLogin;
 
   @override
   void initState() {
     super.initState();
     _readDeviceActivation();
     SecureScreen.enable();
+    _lastLogin = UnifiedAuthController.readLastLogin();
     final last = UnifiedAuthController.readLastUser();
     if (last != null) {
       _lastUser = last;
@@ -114,6 +117,16 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       // AMIAL-CUSTOMER-ONLY-LOGIN-001 — لم يعد نوع الحساب يُستعاد من آخر دخول:
       // هذا التطبيق للعميل فقط، ودوماً AccountKind.customer (انظر الملاحظة أعلى _kindSelector).
     }
+  }
+
+  Future<void> _switchToAnotherUser() async {
+    await UnifiedAuthController.forgetLastUser();
+    if (!mounted) return;
+    setState(() {
+      _lastUser = null;
+      _phoneCtrl.clear();
+      _passwordCtrl.clear();
+    });
   }
 
   @override
@@ -584,6 +597,51 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
                     height: 1.55,
                   ),
             ),
+            if (_kind == AccountKind.customer && _lastUser != null) ...[
+              const SizedBox(height: AmialSpacing.sm),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AmialSpacing.sm,
+                  vertical: AmialSpacing.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: AmialColors.background,
+                  borderRadius: BorderRadius.circular(AmialSpacing.radiusMd),
+                  border: Border.all(color: AmialColors.border),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.person_outline_rounded,
+                      color: AmialColors.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: AmialSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        _lastUser!.name.trim().isNotEmpty
+                            ? 'auth_login_welcome_back'
+                                .trParams({'name': _lastUser!.name})
+                            : 'auth_login_saved_phone'.tr,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AmialColors.textPrimary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _switchToAnotherUser,
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: Text('auth_login_switch_account'.tr),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: AmialSpacing.lg),
             if (_kind != AccountKind.customer && _needsShopFields) ...[
               _field(
@@ -613,6 +671,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
               inputFormatters: [
+                const ArabicDigitsNormalizingFormatter(),
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
               ],
               validator: (value) {
@@ -972,26 +1031,53 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     );
   }
 
-  Widget _securityStrip(BuildContext context) => Container(
-        padding: const EdgeInsets.all(AmialSpacing.md),
-        decoration: BoxDecoration(
-          color: AmialColors.cardSurface,
-          borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-          border: Border.all(color: AmialColors.border),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.security_outlined, color: AmialColors.primary),
-            const SizedBox(width: AmialSpacing.sm),
-            Expanded(
+  Widget _securityStrip(BuildContext context) {
+    final lastLogin = _lastLogin;
+    final hasLastLogin = lastLogin != null && lastLogin.at.trim().isNotEmpty;
+    final zonePart = (hasLastLogin && lastLogin.zone.trim().isNotEmpty)
+        ? ' · ${lastLogin.zone.trim()}'
+        : '';
+
+    return Container(
+      padding: const EdgeInsets.all(AmialSpacing.md),
+      decoration: BoxDecoration(
+        color: AmialColors.cardSurface,
+        borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
+        border: Border.all(color: AmialColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.security_outlined, color: AmialColors.primary),
+              const SizedBox(width: AmialSpacing.sm),
+              Expanded(
+                child: Text(
+                  'بيانات الدخول محمية ولا تُحفظ كلمة المرور في شاشة الدخول.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AmialColors.textSecondary,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          if (hasLastLogin) ...[
+            const SizedBox(height: AmialSpacing.xs),
+            Padding(
+              padding: const EdgeInsets.only(right: 32),
               child: Text(
-                'بيانات الدخول محمية ولا تُحفظ كلمة المرور في شاشة الدخول.',
+                'auth_login_last_recorded'
+                    .trParams({'info': '${lastLogin.at}$zonePart'}),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AmialColors.textSecondary,
+                      color: AmialColors.textMuted,
+                      fontSize: 11.5,
                     ),
               ),
             ),
           ],
-        ),
-      );
+        ],
+      ),
+    );
+  }
 }
