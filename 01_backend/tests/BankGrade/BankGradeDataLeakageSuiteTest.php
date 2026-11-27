@@ -103,7 +103,7 @@ class BankGradeDataLeakageSuiteTest extends TestCase
             'fee' => '250.0000',
             'net_amount' => '75250.0000',
             'direction' => 'debit',
-            'status' => 'ready',
+            'status' => 'pdf_generated',
             'zone_code' => 'SOUTH',
             'issued_at' => now(),
         ]);
