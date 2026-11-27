@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/safe_payment/controllers/safe_payment_controller.dart';
 import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
 import 'package:amial_pay/common/widgets/amial_result_sheet.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
@@ -199,6 +201,7 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
                 TextFormField(
                   controller: _sellerPhoneCtrl,
                   keyboardType: TextInputType.phone,
+                  inputFormatters: const [ArabicDigitsNormalizingFormatter()],
                   decoration: const InputDecoration(
                     labelText: 'رقم جوال البائع *',
                     hintText: '+967700000000',
@@ -294,6 +297,10 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
                   controller: _amountCtrl,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    const ArabicDigitsNormalizingFormatter(),
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                  ],
                   decoration: const InputDecoration(
                     labelText: 'المبلغ (ر.ي) *',
                     prefixIcon: Icon(Icons.payments),

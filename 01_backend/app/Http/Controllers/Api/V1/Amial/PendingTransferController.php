@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Controller;
 use App\Models\PendingTransfer;
 use App\Models\User;
+use App\Services\FeeDiscountPolicy;
+use App\Services\FeeService;
+use App\Services\MoneyService;
 use App\Services\PendingTransferService;
 use App\Services\RecipientVerificationService;
 use Illuminate\Http\JsonResponse;
@@ -12,15 +15,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 /**
- * AMIAL-TRANSFER-COOLDOWN-001 (v2.7)
+ * AMIAL-TRANSFER-COOLDOWN-001 (v2.7) + AMIAL-TRANSFER-FEE-TRUTH-001
  *
- * تحويل بنافذة إلغاء + PIN.
+ * تحويل بنافذة إلغاء + PIN + احتساب رسم الخادم حصراً (منع تزوير حقل fee من العميل).
  */
 class PendingTransferController extends Controller
 {
     public function __construct(
         private readonly PendingTransferService $service,
         private readonly RecipientVerificationService $verifier,
+        private readonly FeeService $fees,
+        private readonly FeeDiscountPolicy $discounts,
     ) {}
 
     /** POST /api/v1/amial/transfer/initiate */
@@ -30,8 +35,7 @@ class PendingTransferController extends Controller
             'recipient_id' => 'required|integer|exists:users,id',
             'verification_token' => 'required|string',
             'amount' => 'required|numeric|min:0.01',
-            'pin' => 'required|string|min:4|max:8',
-            'fee' => 'sometimes|nullable|numeric|min:0',
+            'pin' => 'required|string|digits_between:4,6',
             'note' => 'sometimes|nullable|string|max:500',
         ]);
         if ($v->fails()) return $this->validationError($v);
@@ -47,24 +51,45 @@ class PendingTransferController extends Controller
         }
 
         $recipient = User::find($recipientId);
+        if (!$recipient) {
+            return $this->error('RECIPIENT_NOT_FOUND', 'المستلم غير موجود', 404);
+        }
+
+        $amount = MoneyService::normalize((string) $request->input('amount'));
+        $breakdown = $this->fees->calculate('SEND_MONEY', $amount, [
+            'zone_code' => $sender->zone_code ?? 'SOUTH',
+            'applies_to' => 'customer',
+        ]);
+        $discounted = $this->discounts->applyFavouriteNumber(
+            $sender,
+            (string) ($recipient->phone ?? ''),
+            $breakdown['fee'],
+            'SEND_MONEY',
+        );
 
         try {
             $pending = $this->service->initiate(
                 sender: $sender,
                 recipient: $recipient,
-                amount: (string)$request->input('amount'),
-                pin: $request->input('pin'),
-                fee: (string)$request->input('fee', '0'),
+                amount: $amount,
+                pin: (string) $request->input('pin'),
+                fee: $discounted['fee'],
                 note: $request->input('note'),
             );
+        } catch (\App\Exceptions\InsufficientBalanceException $e) {
+            return new JsonResponse($e->toApiArray(), 402);
         } catch (\RuntimeException $e) {
-            return $this->error('TRANSFER_FAILED', $e->getMessage(), 422);
+            $code = str_contains($e->getMessage(), 'PIN') ? 'PIN_INVALID' : 'TRANSFER_FAILED';
+            $httpStatus = $code === 'PIN_INVALID' ? 403 : 422;
+            return $this->error($code, $e->getMessage(), $httpStatus);
         }
 
         return $this->ok([
             'transfer_ulid' => $pending->transfer_ulid,
             'status' => $pending->status,
             'amount' => (string)$pending->amount,
+            'fee' => (string)$pending->fee,
+            'total_debited' => (string)$pending->total_debited,
             'seconds_remaining' => $pending->secondsRemaining(),
             'releasable_at' => $pending->releasable_at->toIso8601String(),
             'can_cancel' => true,
@@ -114,6 +139,8 @@ class PendingTransferController extends Controller
             'transfer_ulid' => $pending->transfer_ulid,
             'status' => $pending->status,
             'amount' => (string)$pending->amount,
+            'fee' => (string)$pending->fee,
+            'total_debited' => (string)$pending->total_debited,
             'seconds_remaining' => $pending->secondsRemaining(),
             'can_cancel' => $pending->isCancellable(),
         ]);

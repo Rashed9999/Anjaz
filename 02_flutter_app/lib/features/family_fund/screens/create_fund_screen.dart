@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/family_fund/controllers/funds_controller.dart';
+import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/common/widgets/amial_result_sheet.dart';
 
@@ -122,6 +123,7 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
                   controller: _targetCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: [
+                    const ArabicDigitsNormalizingFormatter(),
                     FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
                   ],
                   decoration: const InputDecoration(

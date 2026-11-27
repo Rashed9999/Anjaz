@@ -1,9 +1,12 @@
 import 'package:get/get.dart';
+import 'package:amial_pay/data/api/idempotent_intent.dart';
 import 'package:amial_pay/features/withdraw/domain/repositories/customer_withdraw_repo.dart';
 import 'package:amial_pay/helper/amial_errors.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — متحكّم السحب من جهة العميل.
-class CustomerWithdrawController extends GetxController implements GetxService {
+class CustomerWithdrawController extends GetxController
+    with IdempotentIntent
+    implements GetxService {
   final CustomerWithdrawRepo repo;
   CustomerWithdrawController({required this.repo});
 
@@ -20,12 +23,19 @@ class CustomerWithdrawController extends GetxController implements GetxService {
   final RxString lastErrorCode = ''.obs;
 
   /// إنشاء طلب سحب. يرجع true إن نجح.
-  Future<bool> requestWithdraw(String amount) async {
+  Future<bool> requestWithdraw(String amount, {String? pin}) async {
+    if (isSubmitting.value) return false;
+    final scope = amount.trim();
     try {
       isSubmitting.value = true;
       lastError.value = '';
       lastErrorCode.value = '';
-      final r = await repo.request(amount);
+      final r = await repo.request(
+        scope,
+        pin: pin,
+        idempotencyKey: keyFor('withdraw_request', scope: scope),
+      );
+      settleKey('withdraw_request', r, scope: scope);
       if (_ok(r)) {
         final meta = Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
         currentRequest.value = meta;

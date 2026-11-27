@@ -10,6 +10,7 @@ import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amial_pay/features/shared/widgets/amial_numpad.dart';
 import 'package:amial_pay/helper/amial_errors.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
 import 'package:amial_pay/common/widgets/amial_button.dart';
 import 'package:amial_pay/common/widgets/amial_quick_amounts.dart';
 import 'package:amial_pay/features/coverage/widgets/service_coverage_card.dart';
@@ -40,6 +41,10 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
     c = Get.find<CustomerWithdrawController>();
     // فحص: قد يكون لدى المستخدم طلب معلّق بالفعل
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await Get.find<ProfileController>().getProfileData(reload: true);
+        if (mounted) setState(() {});
+      } catch (_) {}
       await c.loadPending();
       if (c.currentRequest.value != null && mounted) {
         Get.off(() => const WithdrawPendingScreen());
@@ -77,12 +82,16 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
       _snack('الحد الأدنى للسحب 100 ر.ي');
       return;
     }
-    // AMIAL-PIN-GATE-001: رمز PIN قبل تنفيذ السحب
-    if (!await askAmialPin(title: 'تأكيد طلب السحب')) return;
+    // AMIAL-WITHDRAW-PIN-BOUND-001: رمز PIN يُرسَل مع طلب السحب نفسه للخادم
+    final pin = await askAmialPinInput(title: 'تأكيد طلب السحب');
+    if (pin == null || pin.length < 4) return;
     if (!mounted) return;
-    final ok = await c.requestWithdraw(amount);
+    final ok = await c.requestWithdraw(amount, pin: pin);
     if (!mounted) return;
     if (ok) {
+      try {
+        Get.find<ProfileController>().getProfileData(reload: true);
+      } catch (_) {}
       Get.off(() => const WithdrawPendingScreen());
     } else {
       // AMIAL-ERRORS-001: تعريب رسالة الخادم
@@ -168,7 +177,10 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
                     readOnly: true,
                     showCursor: true,
                     textAlign: TextAlign.right,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    inputFormatters: [
+                      const ArabicDigitsNormalizingFormatter(),
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
                     style: const TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,

@@ -48,11 +48,16 @@ class FundsRepo extends GetxService {
     required String fundUlid,
     required String amount,
     required String idempotencyKey,
+    String? pin,
     String? note,
   }) async {
     return apiClient.postData(
       '${AppConstants.amialFundContribute}$fundUlid/contribute',
-      {'amount': amount, 'note': ?note},
+      {
+        'amount': amount,
+        'note': ?note,
+        if (pin != null && pin.isNotEmpty) 'pin': pin,
+      },
       idempotencyKey: idempotencyKey,
     );
   }
@@ -62,6 +67,7 @@ class FundsRepo extends GetxService {
     required int beneficiaryUserId,
     required String amount,
     required String idempotencyKey,
+    String? pin,
     String? note,
   }) async {
     return apiClient.postData(
@@ -70,6 +76,7 @@ class FundsRepo extends GetxService {
         'beneficiary_user_id': beneficiaryUserId,
         'amount': amount,
         'note': ?note,
+        if (pin != null && pin.isNotEmpty) 'pin': pin,
       },
       idempotencyKey: idempotencyKey,
     );

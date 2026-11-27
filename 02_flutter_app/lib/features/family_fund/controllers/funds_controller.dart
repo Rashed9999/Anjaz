@@ -189,6 +189,7 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
   Future<bool> contribute({
     required String fundUlid,
     required String amount,
+    String? pin,
     String? note,
   }) async {
     if (isSubmitting.value) return false;
@@ -198,6 +199,7 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
       final r = await repo.contribute(
         fundUlid: fundUlid,
         amount: amount,
+        pin: pin,
         note: note,
         idempotencyKey: keyFor('fund_contribute', scope: scope),
       );
@@ -224,6 +226,7 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
     required String fundUlid,
     required int beneficiaryUserId,
     required String amount,
+    String? pin,
     String? note,
   }) async {
     if (isSubmitting.value) return null;
@@ -235,6 +238,7 @@ class FundsController extends GetxController with IdempotentIntent implements Ge
         fundUlid: fundUlid,
         beneficiaryUserId: beneficiaryUserId,
         amount: amount,
+        pin: pin,
         note: note,
         idempotencyKey: keyFor('fund_disburse', scope: scope),
       );

@@ -7,6 +7,7 @@ use App\Models\AgentProfile;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Services\CustomerWithdrawService;
+use App\Services\TransactionPinService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -24,6 +25,7 @@ class CustomerWithdrawController extends Controller
 {
     public function __construct(
         private readonly CustomerWithdrawService $service,
+        private readonly TransactionPinService $pinService,
     ) {}
 
     // ---- جهة العميل ----
@@ -32,11 +34,50 @@ class CustomerWithdrawController extends Controller
     {
         $v = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:0.01',
+            'pin' => 'sometimes|nullable|string|digits_between:4,6',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
+        $user = $request->user();
+        if ((int) $user->type === MERCHANT_TYPE) {
+            return $this->error('WITHDRAW_REQUEST_FAILED', 'حساب التاجر يسحب من «سحب نقدي عبر وكيل» في لوحة التاجر.', 422);
+        }
+
+        // AMIAL-WITHDRAW-PIN-BOUND-001: كل حساب عميل مفعَّل يملك transaction_pin
+        // يجب أن يثبت رمزه داخل طلب السحب نفسه، فلا يُنشأ op_code قابل للصرف بجلسة مسروقة.
+        if (!empty($user->transaction_pin) || $request->filled('pin')) {
+            if ($user->pin_locked_until !== null && $user->pin_locked_until->isFuture()) {
+                $mins = max(1, (int) ceil(now()->diffInMinutes($user->pin_locked_until, false)));
+                return new JsonResponse([
+                    'success' => false,
+                    'code' => 'PIN_LOCKED',
+                    'message' => "رمز المعاملات مقفل مؤقتاً بعد محاولات خاطئة — حاول بعد {$mins} دقيقة",
+                    'errors' => (object) [],
+                    'meta' => ['retry_after_minutes' => $mins],
+                ], 429);
+            }
+            $pin = (string) $request->input('pin', '');
+            if ($pin === '') {
+                return $this->error('PIN_REQUIRED', 'أدخل رمز المعاملات (PIN) لتأكيد طلب السحب', 422);
+            }
+            if (!$this->pinService->verify($user, $pin)) {
+                $fresh = $user->fresh();
+                if ($fresh && $fresh->pin_locked_until !== null && $fresh->pin_locked_until->isFuture()) {
+                    $mins = max(1, (int) ceil(now()->diffInMinutes($fresh->pin_locked_until, false)));
+                    return new JsonResponse([
+                        'success' => false,
+                        'code' => 'PIN_LOCKED',
+                        'message' => "تم قفل رمز المعاملات مؤقتاً لحماية حسابك — حاول بعد {$mins} دقيقة",
+                        'errors' => (object) [],
+                        'meta' => ['retry_after_minutes' => $mins],
+                    ], 429);
+                }
+                return $this->error('PIN_INVALID', 'رمز PIN غير صحيح', 403);
+            }
+        }
+
         try {
-            $req = $this->service->request($request->user(), (string)$request->input('amount'));
+            $req = $this->service->request($user, (string)$request->input('amount'));
         } catch (\App\Exceptions\InsufficientBalanceException $e) {
             return new JsonResponse($e->toApiArray(), 402);
         } catch (\App\Exceptions\AmlBlockedException $e) {

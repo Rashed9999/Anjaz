@@ -8,6 +8,7 @@ import 'package:amial_pay/features/transaction_money/domain/amial_transfer_api.d
 import 'package:amial_pay/features/transaction_money/screens/amial_transfer_holding_screen.dart';
 import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
 import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 import 'package:amial_pay/helper/phone_cheker_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -69,8 +70,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
     // للتاجر، ويُخرج لافتةً إنجليزيّةً لا معنى لها في شاشته.
     if (widget.balanceOverride == null) {
       try {
-        final p = Get.find<ProfileController>();
-        if (p.userInfo == null) p.getProfileData(reload: false);
+        Get.find<ProfileController>().getProfileData(reload: true);
       } catch (_) {}
     }
     try {
@@ -114,8 +114,11 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
               phoneNumber: rawPhone,
             );
 
-      // ── 1) التحقق من المستلم ──
-      final vr = await AmialTransferApi.verifyRecipient(phoneNumber);
+      // ── 1) التحقق من المستلم + تسعيرة الرسم من محرك الخادم ──
+      final vr = await AmialTransferApi.verifyRecipient(
+        phoneNumber,
+        amount: amount.toStringAsFixed(0),
+      );
       if (!mounted) return;
       setState(() => _checking = false);
 
@@ -136,14 +139,19 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
       final maskedName = '${meta['masked_name'] ?? 'مستلِم'}';
       final maskedPhone = '${meta['masked_phone'] ?? phoneNumber}';
 
-      // الرسوم (ثابتة من إعدادات الخادم — نفس منطق 6cash)
+      // AMIAL-TRANSFER-FEE-TRUTH-001: قراءة تسعيرة الخادم الموثوقة (شاملة خصم المفضّلة)
       double fee = 0;
-      try {
-        fee = Get.find<SplashController>()
-                .configModel
-                ?.sendMoneyChargeFlat ??
-            0;
-      } catch (_) {}
+      if (meta['fee_quote'] is Map) {
+        final fq = Map<String, dynamic>.from(meta['fee_quote'] as Map);
+        fee = double.tryParse('${fq['fee'] ?? 0}') ?? 0;
+      } else {
+        try {
+          fee = Get.find<SplashController>()
+                  .configModel
+                  ?.sendMoneyChargeFlat ??
+              0;
+        } catch (_) {}
+      }
 
       // ── 2) ورقة «تأكد من المستلم» ──
       final proceed = await _showRecipientConfirmSheet(
@@ -158,14 +166,13 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
       final pin = await askAmialPinInput(title: 'تأكيد التحويل');
       if (pin == null || pin.length < 4 || !mounted) return;
 
-      // ── 4) initiate ──
+      // ── 4) initiate (الخادم يحتسب الرسم الفعلي ولا يثق بقيمة العميل) ──
       setState(() => _checking = true);
       final r = await AmialTransferApi.initiate(
         recipientId: recipientId,
         verificationToken: token,
         amount: amount.toStringAsFixed(0),
         pin: pin,
-        fee: fee.toStringAsFixed(0),
         note: _noteCtrl.text.trim(),
       );
       if (!mounted) return;
@@ -179,10 +186,6 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
         } catch (_) {}
 
         // AMIAL-RECENT-FIX-001: تسجيل المستلِم في «تحويل سريع».
-        //
-        // كان القسم فارغاً دائماً: addToSuggestContact لا يُستدعى إلا من
-        // مسار التحويل القديم (bottom_sheet_with_slider) — أما هذه الشاشة،
-        // وهي المسار الفعلي من الرئيسية ومن الخدمات، فلم تكن تسجّل أحداً.
         try {
           Get.find<ContactController>().addToSuggestContact(
             ContactModel(
@@ -193,10 +196,13 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
             type: SuggestType.sendMoney,
           );
         } catch (_) {/* غير حرج — لا يمنع نجاح التحويل */}
+        final actualFee = m['fee'] != null
+            ? '${m['fee']}'
+            : fee.toStringAsFixed(0);
         Get.off(() => AmialTransferHoldingScreen(
               transferUlid: '${m['transfer_ulid']}',
               amount: '${m['amount'] ?? amount}',
-              fee: fee.toStringAsFixed(0),
+              fee: actualFee,
               secondsRemaining:
                   int.tryParse('${m['seconds_remaining'] ?? 60}') ?? 60,
               recipientName: maskedName,
@@ -414,7 +420,10 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
                     hint: 'رقم الهاتف أو رقم الحساب (8 أرقام)',
                     keyboard: TextInputType.phone,
                     ltr: true,
-                    formatters: [FilteringTextInputFormatter.digitsOnly],
+                    formatters: [
+                      const ArabicDigitsNormalizingFormatter(),
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
                   ),
                 ),
               ],
@@ -507,7 +516,8 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
                           controller: _amountCtrl,
                           keyboardType: TextInputType.number,
                           inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly
+                            const ArabicDigitsNormalizingFormatter(),
+                            FilteringTextInputFormatter.digitsOnly,
                           ],
                           textAlign: TextAlign.center,
                           style: const TextStyle(

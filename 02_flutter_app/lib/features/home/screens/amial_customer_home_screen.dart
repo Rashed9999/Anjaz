@@ -139,6 +139,17 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
+  /// فتح شاشة فرعية وإعادة تحميل الرصيد وآخر العمليات والمستلمين فور العودة.
+  Future<void> _openAndRefresh(Widget Function() page) async {
+    await Get.to(page);
+    if (mounted) {
+      await _load();
+      try {
+        Get.find<NotificationsCenterController>().refreshUnreadCount();
+      } catch (_) {}
+    }
+  }
+
   /// AMIAL-REQUEST-DIRECT-003 — «فلانٌ يطلب منك ٥٠٠٠ ر.ي».
   ///
   /// **والصفرُ لا يُعرض**: لافتةٌ تقول «لا طلبات» كلَّ يومٍ تُدرَّب العينُ
@@ -311,7 +322,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
           _circleBtn(
             child: const Icon(Icons.person_outline_rounded,
                 color: AmialColors.primary, size: 24),
-            onTap: () => Get.to(() => const ProfileScreen()),
+            onTap: () => _openAndRefresh(() => const ProfileScreen()),
           ),
           const SizedBox(width: 8),
           // AMIAL-FAVORITES-001: المفضّلة في الترويسة لا في الشبكة — الشبكة
@@ -500,7 +511,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       children: [
         _sectionHeader('تحويل سريع',
             trailing: 'المزيد',
-            onTrailing: () => Get.to(() => const AmialSendMoneyScreen())),
+            onTrailing: () => _openAndRefresh(() => const AmialSendMoneyScreen())),
         const SizedBox(height: 12),
         GetBuilder<ContactController>(builder: (c) {
           // **الخادمُ أوّلاً، والمحلّيُّ احتياطاً.**
@@ -542,7 +553,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(left: 14),
                     child: InkWell(
-                      onTap: () => Get.to(() =>
+                      onTap: () => _openAndRefresh(() =>
                           AmialSendMoneyScreen(initialPhone: phone)),
                       borderRadius: BorderRadius.circular(14),
                       child: Column(
@@ -592,7 +603,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   /// حالة «لا مستلمين بعد» — بطاقة دعوة بعرض القسم بدل زرّ يتيم.
   Widget _quickSendEmpty() {
     return InkWell(
-      onTap: () => Get.to(() => const AmialSendMoneyScreen()),
+      onTap: () => _openAndRefresh(() => const AmialSendMoneyScreen()),
       borderRadius: BorderRadius.circular(18),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -641,7 +652,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
 
   Widget _quickSendAdd() {
     return InkWell(
-      onTap: () => Get.to(() => const AmialSendMoneyScreen()),
+      onTap: () => _openAndRefresh(() => const AmialSendMoneyScreen()),
       borderRadius: BorderRadius.circular(14),
       child: Column(
         children: [
@@ -867,20 +878,20 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   Widget _buildServicesGrid() {
     final services = <_Svc>[
       _Svc('إرسال أموال', Icons.north_east_rounded,
-          () => Get.to(() => const AmialSendMoneyScreen())),
+          () => _openAndRefresh(() => const AmialSendMoneyScreen())),
       _Svc('استلام', Icons.qr_code_2_rounded, _openReceiveQr),
       _Svc('طلب المال', Icons.request_page_outlined,
-          () => Get.to(() => const PaymentRequestCreateScreen())),
+          () => _openAndRefresh(() => const PaymentRequestCreateScreen())),
       _Svc('الخدمات', Icons.apps_rounded,
-          () => Get.to(() => const CustomerServicesHubScreen())),
+          () => _openAndRefresh(() => const CustomerServicesHubScreen())),
       _Svc('سحب نقدي', Icons.account_balance_outlined,
-          () => Get.to(() => const WithdrawRequestScreen())),
+          () => _openAndRefresh(() => const WithdrawRequestScreen())),
       _Svc('الإيصالات', Icons.description_outlined,
-          () => Get.to(() => const ReceiptsListScreen())),
+          () => _openAndRefresh(() => const ReceiptsListScreen())),
       _Svc('التقارير'.tr, Icons.bar_chart_rounded,
-          () => Get.to(() => const AmialReportsScreen())),
+          () => _openAndRefresh(() => const AmialReportsScreen())),
       _Svc('المزيد', Icons.grid_view_rounded,
-          () => Get.to(() => const MyServicesScreen())),
+          () => _openAndRefresh(() => const MyServicesScreen())),
     ];
 
     return Container(

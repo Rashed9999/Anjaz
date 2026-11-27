@@ -33,7 +33,8 @@ class PasswordResetController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $customer = $this->user->where(['phone' => $request->phone])->first();
+        $rawPhone = (string) $request->phone;
+        $customer = $this->user->whereIn('phone', \App\Support\Phone::variants($rawPhone))->first();
 
         if(isset($customer) && $customer->type != CUSTOMER_TYPE) {
             return response()->json(['errors' => [
@@ -42,8 +43,12 @@ class PasswordResetController extends Controller
         }
 
         if (isset($customer)) {
+            $canonicalPhone = (string) $customer->phone;
             $OTPIntervalTime= Helpers::get_business_settings('otp_resend_time') ?? 60;
-            $passwordVerificationData= DB::table('password_resets')->where('phone', $request['phone'])->first();
+            $passwordVerificationData= DB::table('password_resets')
+                ->whereIn('phone', array_values(array_unique([$rawPhone, $canonicalPhone])))
+                ->orderByDesc('created_at')
+                ->first();
 
             if(isset($passwordVerificationData) && Carbon::parse($passwordVerificationData->created_at)->DiffInSeconds() < $OTPIntervalTime){
                 $time = $OTPIntervalTime - Carbon::parse($passwordVerificationData->created_at)->DiffInSeconds();
@@ -72,9 +77,9 @@ class PasswordResetController extends Controller
             //
             // فصار الرمزُ من `OtpPolicy` — البابِ الواحد: رقمُ العرض يأخذ
             // الثابت، وكلُّ رقمٍ حقيقيّ يأخذ عشوائيّاً **مهما كانت البيئة**.
-            $otp = (string) app(\App\Services\Otp\OtpPolicy::class)->codeFor((string) $request->phone);
+            $otp = (string) app(\App\Services\Otp\OtpPolicy::class)->codeFor($canonicalPhone);
 
-            DB::table('password_resets')->updateOrInsert(['phone' => $request->phone], [
+            DB::table('password_resets')->updateOrInsert(['phone' => $canonicalPhone], [
                 'token' => \App\Services\Otp\PasswordResetGuard::digest($otp),
                 'otp_hit_count' => 0,
                 'is_temp_blocked' => 0,
@@ -207,12 +212,31 @@ class PasswordResetController extends Controller
                 ['code' => 'mismatch', 'message' => "Password didn't match!"]
             ]], 401);
         }
-        $customer = $this->user->where(['phone' => $request->phone])->first();
-        if ($customer && app(\App\Services\Otp\PasswordResetGuard::class)->consume((string) $request->phone, (string) $request['otp'])) {
+        $rawPhone = (string) $request->phone;
+        $customer = $this->user->whereIn('phone', \App\Support\Phone::variants($rawPhone))->first();
+        if ($customer && ! empty($customer->transaction_pin)
+            && \Illuminate\Support\Facades\Hash::check((string) $request['confirm_password'], (string) $customer->transaction_pin)) {
+            return response()->json(['errors' => [
+                ['code' => 'secret_separation', 'message' => 'كلمة المرور لا يجوز أن تطابق رمز المعاملات (PIN).']
+            ]], 422);
+        }
+        $guard = app(\App\Services\Otp\PasswordResetGuard::class);
+        $otpCode = (string) $request['otp'];
+        $consumed = $customer
+            && ($guard->consume($rawPhone, $otpCode)
+                || ($customer->phone !== $rawPhone && $guard->consume((string) $customer->phone, $otpCode)));
+        if ($consumed) {
             $customer->password = bcrypt($request['confirm_password']);
             $customer->save();
-            // جلسات ما قبل الاستعادة تُبطل: من سرق توكناً لا يبقى بعد تغيير كلمة المرور.
+            // جلسات ما قبل الاستعادة تُبطل كاملةً (access + refresh + user_log_histories).
+            $tokenIds = DB::table('oauth_access_tokens')->where('user_id', $customer->id)->pluck('id');
+            if ($tokenIds->isNotEmpty()) {
+                DB::table('oauth_refresh_tokens')->whereIn('access_token_id', $tokenIds)->update(['revoked' => true]);
+            }
             $customer->tokens()->delete();
+            if (\Illuminate\Support\Facades\Schema::hasTable('user_log_histories')) {
+                DB::table('user_log_histories')->where('user_id', $customer->id)->update(['is_active' => 0]);
+            }
 
             return response()->json(['message' => 'Password changed successfully.'], 200);
         }

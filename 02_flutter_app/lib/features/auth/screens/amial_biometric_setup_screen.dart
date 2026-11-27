@@ -36,6 +36,16 @@ class AmialBiometricSetupScreen extends StatefulWidget {
     return (p, w);
   }
 
+  /// مسح كلمة المرور الحيوية المخزّنة محلياً عند استعادة/تغيير كلمة المرور
+  /// لمنع إرسال كلمة المرور القديمة والتسبّب في قفل الحساب.
+  static Future<void> clearSavedCredentials() async {
+    try {
+      final s = SecureStorageHelper.instance;
+      await s.deleteSecure(kPassword);
+      await s.setSecure(kEnabled, '0');
+    } catch (_) {}
+  }
+
   @override
   State<AmialBiometricSetupScreen> createState() =>
       _AmialBiometricSetupScreenState();
