@@ -156,7 +156,7 @@ Route::prefix('safe-payments')->name('safe-payments.')->middleware(['amial.idemp
 
 // ============ AMIAL-DONATIONS-001 (v1.2) ============
 // AMIAL-SURFACE-002 — لوحات الأنظمة اليتيمة الأربع
-Route::prefix('surface')->name('surface.')->group(function () {
+Route::prefix('surface')->name('surface.')->middleware('amial.idempotency')->group(function () {
     $sc = App\Http\Controllers\Admin\AdminSurfaceController::class;
     Route::get('/bill-providers', [$sc, 'billProviders'])
         ->middleware('platform:platform.audit.view')->name('bill-providers');

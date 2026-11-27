@@ -217,6 +217,7 @@
                             <hr class="my-3">
                             <form method="POST" action="{{ route('admin.amial.surface.payment-requests.cancel', $r->id) }}">
                                 @csrf
+                                <input type="hidden" name="idempotency_key" value="{{ (string) \Illuminate\Support\Str::ulid() }}">
                                 <div class="mb-2">
                                     <label class="form-label small fw-bold text-danger" for="cancel-reason-{{ $r->id }}">{{ translate('إلغاء إداري للطلب المعلّق') }}</label>
                                     <input type="text" id="cancel-reason-{{ $r->id }}" name="reason" class="form-control form-control-sm" required minlength="5" maxlength="500" placeholder="{{ translate('أدخل سبب الإلغاء الإداري (5 أحرف على الأقل)') }}">

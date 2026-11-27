@@ -172,6 +172,7 @@
             @if($fundStatus === 'active')
                 <form method="POST" action="{{ route('admin.amial.surface.funds.status', $fund->id) }}" class="border-top pt-3">
                     @csrf
+                    <input type="hidden" name="idempotency_key" value="{{ (string) \Illuminate\Support\Str::ulid() }}">
                     <input type="hidden" name="action" value="freeze">
                     <input type="hidden" name="status" value="frozen">
                     <div class="row g-2 align-items-end">
@@ -191,6 +192,7 @@
             @elseif($fundStatus === 'frozen')
                 <form method="POST" action="{{ route('admin.amial.surface.funds.status', $fund->id) }}" class="border-top pt-3">
                     @csrf
+                    <input type="hidden" name="idempotency_key" value="{{ (string) \Illuminate\Support\Str::ulid() }}">
                     <input type="hidden" name="action" value="unfreeze">
                     <input type="hidden" name="status" value="active">
                     <div class="row g-2 align-items-end">
