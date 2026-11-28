@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 import 'package:flutter/widgets.dart';
+import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// AMIAL-RESUME-001 — استئناف آمن بعد أن يقتل أندرويد عملية Flutter في الخلفية.
@@ -99,6 +103,15 @@ class AppResumeState extends NavigatorObserver with WidgetsBindingObserver {
           _preferences.remove(_backgroundedAtKey);
           _backgroundedInCurrentProcess = false;
         }
+        try {
+          if (Get.isRegistered<AuthController>() &&
+              Get.find<AuthController>().isLoggedIn() &&
+              Get.isRegistered<NotificationsCenterController>()) {
+            unawaited(
+              Get.find<NotificationsCenterController>().refreshUnreadCount(),
+            );
+          }
+        } catch (_) {}
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:

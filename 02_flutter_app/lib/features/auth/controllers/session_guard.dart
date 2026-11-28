@@ -114,7 +114,11 @@ class SessionGuard with WidgetsBindingObserver {
       // المستخدم لا لخروجه، وهو يريد الدخول السريع عند عودته.
       final auth = Get.find<AuthController>();
       try { Get.find<AppResumeState>().clear(); } catch (_) {}
-      auth.updateToken(isLogOut: true);
+      try {
+        await auth
+            .updateToken(isLogOut: true)
+            .timeout(const Duration(seconds: 2));
+      } catch (_) {}
       auth.logout();
     } catch (_) {/* الأولوية للخروج من الشاشة حتى لو فشل إبطال الرمز */}
 

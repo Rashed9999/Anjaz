@@ -150,6 +150,9 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
     Route::prefix('me')->name('amial.me.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\MeController::class, 'show'])->name('show');
         Route::get('/account-number', [\App\Http\Controllers\Api\V1\Amial\MeController::class, 'accountNumber'])->name('account-number');
+        Route::match(['POST', 'PUT', 'DELETE'], '/fcm-token', [\App\Http\Controllers\Api\V1\Amial\MeController::class, 'updateFcmToken'])
+            ->middleware('amial.rate-limit:me_fcm_token,30,1')
+            ->name('fcm-token');
 
         // AMIAL-ACCOUNT-SECURITY-001 — شاشةُ فصل كلمة الدخول عن رمز المال.
         // هذه المسارات تخصّ صاحب الجلسة وحده؛ لا تحتاج رقم جهاز أو دوراً،

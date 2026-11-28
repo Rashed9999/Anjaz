@@ -61,24 +61,59 @@ class MainActivity : FlutterFragmentActivity() {
     @Volatile
     private var arabicSpeech = false
 
+    @Volatile
+    private var speechInitCompleted = false
+
+    @Volatile
+    private var pendingSpeech: String? = null
+
+    private fun speechAudioAttributes(): AudioAttributes =
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+
     private fun initSpeech() {
         if (tts != null) return
         tts = TextToSpeech(applicationContext) { status ->
             arabicSpeech = if (status == TextToSpeech.SUCCESS) {
                 val engine = tts ?: return@TextToSpeech
-                val code = engine.setLanguage(Locale("ar"))
+                engine.setAudioAttributes(speechAudioAttributes())
+                var code = engine.setLanguage(Locale.forLanguageTag("ar-SA"))
+                if (code == TextToSpeech.LANG_MISSING_DATA ||
+                    code == TextToSpeech.LANG_NOT_SUPPORTED
+                ) {
+                    code = engine.setLanguage(Locale("ar"))
+                }
                 // MISSING_DATA / NOT_SUPPORTED كلاهما «لا صوتَ عربيّ».
                 code != TextToSpeech.LANG_MISSING_DATA &&
                     code != TextToSpeech.LANG_NOT_SUPPORTED
             } else {
                 false
             }
+            speechInitCompleted = true
+            val queued = pendingSpeech
+            pendingSpeech = null
+            if (arabicSpeech && !queued.isNullOrBlank()) {
+                tts?.speak(queued, TextToSpeech.QUEUE_FLUSH, null, "amial_pay_queued")
+            }
         }
     }
 
     private fun say(text: String) {
+        val clean = text.trim()
+        if (clean.isEmpty()) return
+        if (tts == null) {
+            pendingSpeech = clean
+            initSpeech()
+            return
+        }
+        if (!speechInitCompleted) {
+            pendingSpeech = clean
+            return
+        }
         if (!arabicSpeech) return
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "amial_pay_result")
+        tts?.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "amial_pay_result")
     }
 
     private fun play(resId: Int, speech: String? = null) {
@@ -162,13 +197,26 @@ class MainActivity : FlutterFragmentActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, soundChannel)
             .setMethodCallHandler { call, result ->
+                val customSpeech = call.argument<String>("speech")?.trim()
                 when (call.method) {
                     "success" -> {
-                        play(R.raw.pay_success, "تم الدفع بنجاح")
+                        val phrase = if (!customSpeech.isNullOrEmpty()) customSpeech else "تم الدفع بنجاح"
+                        play(R.raw.pay_success, phrase)
                         result.success(true)
                     }
                     "failure" -> {
-                        play(R.raw.pay_failed, "فشل الدفع")
+                        val phrase = if (!customSpeech.isNullOrEmpty()) customSpeech else "فشل الدفع"
+                        play(R.raw.pay_failed, phrase)
+                        result.success(true)
+                    }
+                    "notify" -> {
+                        play(R.raw.notification, customSpeech)
+                        result.success(true)
+                    }
+                    "speak" -> {
+                        if (!customSpeech.isNullOrEmpty()) {
+                            say(customSpeech)
+                        }
                         result.success(true)
                     }
                     // تقول الشاشةُ إن كان الجهازُ ينطق العربيّة أصلاً،

@@ -93,6 +93,39 @@ class MeController extends Controller
         ]);
     }
 
+    /**
+     * AMIAL-FCM-UNIFIED-001 — تسجيل أو مسح رمز جهاز FCM لكل الأدوار المصادقة
+     * (عميل، تاجر، موظف POS، وكيل، مدير) مع عزل الرمز عن أي حساب سابق على نفس الجهاز.
+     */
+    public function updateFcmToken(Request $request): JsonResponse
+    {
+        $request->validate([
+            'token' => 'nullable|string|max:512',
+        ]);
+
+        $user = $request->user();
+        if (! $user) {
+            return $this->error('UNAUTHENTICATED', 'الجلسة غير صالحة', 401);
+        }
+
+        $rawToken = $request->isMethod('DELETE') ? null : $request->input('token');
+        $cleanToken = is_string($rawToken) ? trim($rawToken) : '';
+
+        if ($cleanToken === '' || $cleanToken === '@') {
+            $user->forceFill(['fcm_token' => null])->save();
+            return $this->ok(['fcm_registered' => false], 'FCM_CLEARED', 'تم إلغاء ربط إشعارات الجهاز');
+        }
+
+        // عزل الجهاز: إذا كان الرمز مربوطاً بحساب آخر سبق دخوله على نفس الهاتف يُفكّ عنه فوراً.
+        \App\Models\User::where('fcm_token', $cleanToken)
+            ->where('id', '!=', $user->id)
+            ->update(['fcm_token' => null]);
+
+        $user->forceFill(['fcm_token' => $cleanToken])->save();
+
+        return $this->ok(['fcm_registered' => true], 'FCM_UPDATED', 'تم تحديث رمز الإشعارات بنجاح');
+    }
+
     private function ok(array $meta, string $code = 'OK', string $message = 'OK'): JsonResponse
     {
         return new JsonResponse([

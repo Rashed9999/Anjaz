@@ -1317,5 +1317,14 @@
   "auth_login_welcome_back": "Welcome back, @name",
   "auth_login_saved_phone": "Saved number on this device",
   "auth_login_switch_account": "Different account?",
-  "auth_login_last_recorded": "Last recorded login: @info"
+  "auth_login_last_recorded": "Last recorded login: @info",
+  "notif_voice_tooltip_on": "Mute voice notifications",
+  "notif_voice_tooltip_off": "Enable voice notifications",
+  "notif_voice_enabled_msg": "Arabic voice notifications enabled",
+  "notif_voice_disabled_msg": "Voice notifications muted",
+  "notif_spoken_transfer_ok": "Transfer completed successfully",
+  "notif_spoken_withdraw_ok": "Withdrawal request submitted",
+  "notif_spoken_donation_ok": "Donation completed successfully",
+  "notif_spoken_fund_contribute_ok": "Fund contribution completed",
+  "notif_default_body": "You have a new notification from Amial Pay"
 }

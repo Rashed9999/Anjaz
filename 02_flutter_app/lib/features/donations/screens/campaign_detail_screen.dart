@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/donations/controllers/donations_controller.dart';
 import 'package:amial_pay/features/donations/domain/models/donation_models.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
+import 'package:amial_pay/helper/payment_feedback.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
 
@@ -201,6 +204,12 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
     }
 
     if (ok == true && mounted) {
+      unawaited(PaymentFeedback.success(speech: 'notif_spoken_donation_ok'.tr));
+      try {
+        if (Get.isRegistered<NotificationsCenterController>()) {
+          unawaited(Get.find<NotificationsCenterController>().refreshUnreadCount());
+        }
+      } catch (_) {}
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(

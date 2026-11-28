@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/helper/date_converter_helper.dart';
+import 'package:amial_pay/helper/notification_helper.dart';
+import 'package:amial_pay/helper/payment_feedback.dart';
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 
 /// AMIAL-NOTIFICATIONS-001 — شاشة مركز الإشعارات.
@@ -15,17 +17,38 @@ class NotificationsCenterScreen extends StatefulWidget {
 class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
   late final NotificationsCenterController c;
   final ScrollController _scroll = ScrollController();
+  late bool _voiceEnabled;
 
   @override
   void initState() {
     super.initState();
     c = Get.find<NotificationsCenterController>();
+    _voiceEnabled = PaymentFeedback.isVoiceNotificationsEnabled();
     WidgetsBinding.instance.addPostFrameCallback((_) => c.load());
     _scroll.addListener(() {
       if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 200) {
         c.loadMore();
       }
     });
+  }
+
+  Future<void> _toggleVoice() async {
+    final next = !_voiceEnabled;
+    await PaymentFeedback.setVoiceNotificationsEnabled(next);
+    if (!mounted) return;
+    setState(() => _voiceEnabled = next);
+    if (next) {
+      await PaymentFeedback.notify(speech: 'notif_voice_enabled_msg'.tr);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+            next ? 'notif_voice_enabled_msg'.tr : 'notif_voice_disabled_msg'.tr),
+        backgroundColor: AmialColors.primary,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -41,6 +64,18 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
       appBar: AppBar(
         title: const Text('الإشعارات'),
         actions: [
+          IconButton(
+            onPressed: _toggleVoice,
+            tooltip: _voiceEnabled
+                ? 'notif_voice_tooltip_on'.tr
+                : 'notif_voice_tooltip_off'.tr,
+            icon: Icon(
+              _voiceEnabled
+                  ? Icons.volume_up_rounded
+                  : Icons.volume_off_rounded,
+              color: Colors.white,
+            ),
+          ),
           Obx(() => c.unreadCount.value > 0
               ? TextButton.icon(
                   onPressed: c.isSubmitting.value ? null : c.markAllRead,
@@ -127,7 +162,10 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
 
     return InkWell(
       onTap: () async {
-        if (unread) await c.markRead(n['id'] as int);
+        if (unread && n['id'] is int) {
+          await c.markRead(n['id'] as int);
+        }
+        await NotificationHelper.routeNotificationData(n);
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
@@ -170,8 +208,12 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
   }
 
   Color _typeColor(String type) {
-    if (type.contains('transfer')) return Colors.blue;
-    if (type.contains('withdrawal')) return Colors.green;
+    if (type.contains('transfer') || type == 'money_received') return Colors.blue;
+    if (type.contains('withdrawal') || type == 'cash_in') return Colors.green;
+    if (type == 'cash_out') return Colors.teal;
+    if (type.contains('safe_payment')) return Colors.indigo;
+    if (type.contains('family_fund')) return Colors.deepOrange;
+    if (type.contains('donation')) return Colors.pink;
     if (type == 'credit_over_limit') return AmialColors.red;
     if (type.contains('credit')) return AmialColors.yellowDark;
     if (type == 'promo') return Colors.purple;
@@ -182,6 +224,11 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
     switch (key) {
       case 'swap_horiz': return Icons.swap_horiz;
       case 'arrow_downward': return Icons.arrow_downward;
+      case 'arrow_upward': return Icons.arrow_upward;
+      case 'shield': return Icons.shield_outlined;
+      case 'groups': return Icons.groups_outlined;
+      case 'volunteer_activism': return Icons.volunteer_activism_outlined;
+      case 'undo': return Icons.undo_rounded;
       case 'receipt_long': return Icons.receipt_long;
       case 'store': return Icons.store;
       case 'local_offer': return Icons.local_offer;

@@ -1317,5 +1317,14 @@
   "auth_login_welcome_back": "مرحباً بعودتك، @name",
   "auth_login_saved_phone": "رقم محفوظ على هذا الجهاز",
   "auth_login_switch_account": "حساب آخر؟",
-  "auth_login_last_recorded": "آخر دخول مسجّل: @info"
+  "auth_login_last_recorded": "آخر دخول مسجّل: @info",
+  "notif_voice_tooltip_on": "إيقاف القراءة الصوتية للإشعارات",
+  "notif_voice_tooltip_off": "تفعيل القراءة الصوتية للإشعارات",
+  "notif_voice_enabled_msg": "تم تفعيل الإشعارات الصوتية باللغة العربية",
+  "notif_voice_disabled_msg": "تم كتم القراءة الصوتية للإشعارات",
+  "notif_spoken_transfer_ok": "تم التحويل بنجاح",
+  "notif_spoken_withdraw_ok": "تم إرسال طلب السحب بنجاح",
+  "notif_spoken_donation_ok": "تم التبرع بنجاح",
+  "notif_spoken_fund_contribute_ok": "تمت المساهمة في الصندوق بنجاح",
+  "notif_default_body": "لديك إشعار جديد من أميال باي"
 }

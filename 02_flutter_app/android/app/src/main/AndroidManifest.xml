@@ -74,6 +74,12 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="*/*" />
         </intent>
+        <!-- AMIAL-PAY-VOICE-002: منذ أندرويد 11 (API 30) لا يرى TextToSpeech
+             محرّكات النطق (Google Speech Services / Samsung TTS) إلّا بإعلان
+             TTS_SERVICE داخل <queries>؛ وبدونه تفشل التهيئة دائماً بصمت. -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
     </queries>
 
     <application

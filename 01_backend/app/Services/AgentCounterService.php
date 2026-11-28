@@ -302,6 +302,25 @@ class AgentCounterService
                 $net, $q['fee'], $reference, $shift, $note,
             );
 
+            $this->notifyCustomerSafe(
+                customer: $customer,
+                type: 'cash_in',
+                title: 'تم إيداع نقدي في محفظتك',
+                body: sprintf(
+                    'تم إيداع صافي %s ر.ي في محفظتك عبر فرع %s.',
+                    \App\CentralLogics\Helpers::money($net),
+                    $branch->name,
+                ),
+                data: [
+                    'reference' => $reference,
+                    'receipt_number' => $receiptNumber,
+                    'amount' => $net,
+                    'gross_amount' => $amount,
+                    'fee' => $q['fee'],
+                    'branch_name' => $branch->name,
+                ],
+            );
+
             return [
                 'reference' => $reference,
                 'receipt_number' => $receiptNumber,
@@ -372,6 +391,30 @@ class AgentCounterService
             report($e);
 
             return null;
+        }
+    }
+
+    /**
+     * إشعار العميل داخل التطبيق + Push بعد commit المعاملة دون إسقاط العملية لو تعثّر.
+     */
+    private function notifyCustomerSafe(
+        User $customer,
+        string $type,
+        string $title,
+        string $body,
+        array $data = [],
+    ): void {
+        try {
+            app(NotificationService::class)->dispatch(
+                user: $customer,
+                type: $type,
+                title: $title,
+                body: $body,
+                actionUrl: '/receipts',
+                data: $data,
+            );
+        } catch (\Throwable $e) {
+            report($e);
         }
     }
 
@@ -539,6 +582,25 @@ class AgentCounterService
             $receiptNumber = $this->issueReceipt(
                 $branch, $customer, 'cash_out', 'debit',
                 $amount, $q['fee'], $reference, $shift, $note,
+            );
+
+            $this->notifyCustomerSafe(
+                customer: $customer,
+                type: 'cash_out',
+                title: 'تم السحب النقدي من محفظتك',
+                body: sprintf(
+                    'تم سحب مبلغ %s ر.ي نقداً عبر فرع %s.',
+                    \App\CentralLogics\Helpers::money($amount),
+                    $branch->name,
+                ),
+                data: [
+                    'reference' => $reference,
+                    'receipt_number' => $receiptNumber,
+                    'amount' => $amount,
+                    'fee' => $q['fee'],
+                    'total_debited' => $total,
+                    'branch_name' => $branch->name,
+                ],
             );
 
             return [

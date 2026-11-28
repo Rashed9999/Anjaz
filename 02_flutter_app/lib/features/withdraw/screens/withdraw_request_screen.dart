@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
 import 'package:amial_pay/features/withdraw/screens/withdraw_history_screen.dart';
@@ -11,6 +13,7 @@ import 'package:amial_pay/features/shared/widgets/amial_numpad.dart';
 import 'package:amial_pay/helper/amial_errors.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/helper/arabic_digits_input_formatter.dart';
+import 'package:amial_pay/helper/payment_feedback.dart';
 import 'package:amial_pay/common/widgets/amial_button.dart';
 import 'package:amial_pay/common/widgets/amial_quick_amounts.dart';
 import 'package:amial_pay/features/coverage/widgets/service_coverage_card.dart';
@@ -89,11 +92,18 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
     final ok = await c.requestWithdraw(amount, pin: pin);
     if (!mounted) return;
     if (ok) {
+      unawaited(PaymentFeedback.success(speech: 'notif_spoken_withdraw_ok'.tr));
       try {
         Get.find<ProfileController>().getProfileData(reload: true);
       } catch (_) {}
+      try {
+        if (Get.isRegistered<NotificationsCenterController>()) {
+          unawaited(Get.find<NotificationsCenterController>().refreshUnreadCount());
+        }
+      } catch (_) {}
       Get.off(() => const WithdrawPendingScreen());
     } else {
+      unawaited(PaymentFeedback.failure());
       // AMIAL-ERRORS-001: تعريب رسالة الخادم
       _snack(AmialErrors.arabize(c.lastError.value,
           code: c.lastErrorCode.value, fallback: 'فشل الطلب'));

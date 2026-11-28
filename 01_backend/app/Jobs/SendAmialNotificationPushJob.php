@@ -52,14 +52,18 @@ class SendAmialNotificationPushJob implements ShouldQueue
             return;
         }
 
-        if (empty($user->fcm_token)) {
+        $fcmToken = trim((string) ($user->fcm_token ?? ''));
+        if ($fcmToken === '' || $fcmToken === '@') {
+            if ($fcmToken === '@') {
+                $user->forceFill(['fcm_token' => null])->save();
+            }
             $delivery->skipped(
                 $this->userId, 'FCM_TOKEN_MISSING', $this->type, null, $attempt, $this->notificationId,
             );
             return;
         }
 
-        $serviceKey = Helpers::get_business_settings('push_notification_service_file_content');
+        $serviceKey = \App\Services\NotificationService::resolveFcmServiceKey();
         if (empty($serviceKey)) {
             $delivery->skipped(
                 $this->userId, 'FCM_SERVICE_KEY_MISSING', $this->type, null, $attempt, $this->notificationId,
@@ -67,7 +71,6 @@ class SendAmialNotificationPushJob implements ShouldQueue
             return;
         }
 
-        $serviceKey = (array) $serviceKey;
         $projectId = trim((string) ($serviceKey['project_id'] ?? ''));
         if ($projectId === '') {
             $delivery->skipped(
@@ -95,7 +98,7 @@ class SendAmialNotificationPushJob implements ShouldQueue
         $url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
         $payload = [
             'message' => [
-                'token' => $user->fcm_token,
+                'token' => $fcmToken,
                 'data' => [
                     'title' => $this->title,
                     'body' => $this->body,
@@ -140,6 +143,21 @@ class SendAmialNotificationPushJob implements ShouldQueue
                 $this->notificationId,
             );
             throw new \RuntimeException('FCM returned 401');
+        }
+
+        if (\App\Services\NotificationService::isUnregisteredFcmResponse($response->status(), $response->body())) {
+            \App\Models\User::where('id', $user->id)
+                ->where('fcm_token', $fcmToken)
+                ->update(['fcm_token' => null]);
+            $delivery->skipped(
+                $this->userId,
+                'FCM_TOKEN_UNREGISTERED',
+                $this->type,
+                null,
+                $attempt,
+                $this->notificationId,
+            );
+            return;
         }
 
         if (!$response->successful()) {

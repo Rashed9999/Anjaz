@@ -185,8 +185,23 @@ class SafePaymentService
             return $payment;
         });
 
-        // post-commit: الإيصال وحده
+        // post-commit: الإيصال + إشعار البائع والمشتري
         $this->safeIssueReceipt($payment, 'debit', $buyer->id, $seller->id, 'safe_payment_funded');
+        $amtFmt = \App\CentralLogics\Helpers::money((string) $payment->amount);
+        $this->notifySafePaymentUser(
+            $seller,
+            'safe_payment_created',
+            'وصلك طلب دفع آمن جديد',
+            "أنشأ المشتري طلب دفع آمن «{$payment->title}» بمبلغ {$amtFmt} ر.ي بانتظار قبولك.",
+            $payment,
+        );
+        $this->notifySafePaymentUser(
+            $buyer,
+            'safe_payment_created',
+            'تم حجز مبلغ الدفع الآمن',
+            "تم حجز مبلغ {$amtFmt} ر.ي لطلب «{$payment->title}» بانتظار موافقة البائع.",
+            $payment,
+        );
 
         return $payment;
     }
@@ -343,7 +358,16 @@ class SafePaymentService
             $this->deliveryCodeForBuyer = $plainCode;
         });
 
-        return $payment->fresh();
+        $fresh = $payment->fresh();
+        $this->notifySafePaymentUserById(
+            (int) $fresh->buyer_user_id,
+            'safe_payment_accepted',
+            'قبل البائع طلب الدفع الآمن',
+            "وافق البائع على طلب «{$fresh->title}» وأصبح جاهزاً للتسليم.",
+            $fresh,
+        );
+
+        return $fresh;
     }
 
     public function sellerReject(SafePayment $payment, User $seller, string $reason): SafePayment
@@ -372,6 +396,14 @@ class SafePaymentService
         $payment = $payment->fresh();
         // receipt للمشتري عن الاسترداد
         $this->safeIssueReceipt($payment, 'credit', $payment->buyer_user_id, $payment->seller_user_id, 'safe_payment_refunded');
+        $amtFmt = \App\CentralLogics\Helpers::money((string) $payment->amount);
+        $this->notifySafePaymentUserById(
+            (int) $payment->buyer_user_id,
+            'safe_payment_rejected',
+            'رفض البائع طلب الدفع الآمن واستُرد المبلغ',
+            "رفض البائع طلب «{$payment->title}» وعاد مبلغ {$amtFmt} ر.ي إلى محفظتك.",
+            $payment,
+        );
 
         return $payment;
     }
@@ -402,7 +434,15 @@ class SafePaymentService
                 actorType: 'seller', actorUserId: $seller->id, note: $note);
         });
 
-        return $payment->fresh();
+        $fresh = $payment->fresh();
+        $this->notifySafePaymentUserById(
+            (int) $fresh->buyer_user_id,
+            'safe_payment_delivery',
+            'بدأ البائع تسليم الطلب',
+            "بدأ البائع بتجهيز وتسليم طلب «{$fresh->title}».",
+            $fresh,
+        );
+        return $fresh;
     }
 
     public function sellerMarkDelivered(SafePayment $payment, User $seller, ?string $note = null): SafePayment
@@ -427,7 +467,16 @@ class SafePaymentService
                 actorType: 'seller', actorUserId: $seller->id, note: $note);
         });
 
-        return $payment->fresh();
+        $fresh = $payment->fresh();
+        $this->notifySafePaymentUserById(
+            (int) $fresh->buyer_user_id,
+            'safe_payment_delivery',
+            'أكّد البائع تسليم الطلب',
+            "أكّد البائع تسليم طلب «{$fresh->title}» — يرجى مراجعة الاستلام وتأكيده.",
+            $fresh,
+        );
+
+        return $fresh;
     }
 
     // ============================================================
@@ -461,6 +510,14 @@ class SafePaymentService
 
         $payment = $payment->fresh();
         $this->safeIssueReceipt($payment, 'credit', $payment->seller_user_id, $payment->buyer_user_id, 'safe_payment_released');
+        $releasedFmt = \App\CentralLogics\Helpers::money((string) ($payment->released_to_seller_amount ?: $payment->amount));
+        $this->notifySafePaymentUserById(
+            (int) $payment->seller_user_id,
+            'safe_payment_released',
+            'تم الإفراج عن مبلغ الدفع الآمن',
+            "أكّد المشتري استلام «{$payment->title}» وأُودع مبلغ {$releasedFmt} ر.ي في محفظتك.",
+            $payment,
+        );
         return $payment;
     }
 
@@ -495,6 +552,13 @@ class SafePaymentService
 
         $payment = $payment->fresh();
         $this->safeIssueReceipt($payment, 'credit', $payment->buyer_user_id, $payment->seller_user_id, 'safe_payment_refunded');
+        $this->notifySafePaymentUserById(
+            (int) $payment->seller_user_id,
+            'safe_payment_refunded',
+            'ألغى المشتري طلب الدفع الآمن',
+            "تم إلغاء طلب الدفع الآمن «{$payment->title}» قبل بدء التسليم.",
+            $payment,
+        );
         return $payment;
     }
 
@@ -549,7 +613,56 @@ class SafePaymentService
             ]);
         });
 
-        return $payment->fresh();
+        $fresh = $payment->fresh();
+        $this->notifySafePaymentUserById(
+            (int) $fresh->seller_user_id,
+            'safe_payment_disputed',
+            'فُتح نزاع على طلب الدفع الآمن',
+            "فتح المشتري نزاعاً على طلب «{$fresh->title}» وستتم مراجعته من الإدارة.",
+            $fresh,
+        );
+        return $fresh;
+    }
+
+    private function notifySafePaymentUserById(
+        int $userId,
+        string $type,
+        string $title,
+        string $body,
+        SafePayment $payment,
+    ): void {
+        $u = User::find($userId);
+        if ($u) {
+            $this->notifySafePaymentUser($u, $type, $title, $body, $payment);
+        }
+    }
+
+    private function notifySafePaymentUser(
+        User $user,
+        string $type,
+        string $title,
+        string $body,
+        SafePayment $payment,
+    ): void {
+        try {
+            app(NotificationService::class)->dispatch(
+                user: $user,
+                type: $type,
+                title: $title,
+                body: $body,
+                actionUrl: '/safe-payments/' . $payment->payment_ulid,
+                data: [
+                    'payment_ulid' => $payment->payment_ulid,
+                    'status' => $payment->status,
+                    'amount' => (string) $payment->amount,
+                ],
+            );
+        } catch (\Throwable $e) {
+            Log::warning('SafePayment notification skipped', [
+                'payment_ulid' => $payment->payment_ulid,
+                'error' => mb_substr($e->getMessage(), 0, 200),
+            ]);
+        }
     }
 
     // ============================================================

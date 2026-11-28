@@ -209,11 +209,16 @@ class ProfileController extends GetxController implements GetxService {
           falseButtonColor: AmialColors.textMuted,
           onTapFalse: () => Get.back(),
           onTapTrue: () {
-            Get.find<AuthController>().removeBiometricPin().then((_) {
-              Get.find<AuthController>().updateToken(isLogOut: true);
-              Get.find<AuthController>().logout();
-            });
             Navigator.of(context).pop(true);
+            Get.find<AuthController>().removeBiometricPin().then((_) async {
+              final auth = Get.find<AuthController>();
+              try {
+                await auth
+                    .updateToken(isLogOut: true)
+                    .timeout(const Duration(seconds: 2));
+              } catch (_) {}
+              auth.logout();
+            });
           },
         ),
         dismissible: true,

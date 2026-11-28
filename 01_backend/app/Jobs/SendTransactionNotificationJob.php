@@ -55,24 +55,41 @@ class SendTransactionNotificationJob implements ShouldQueue
             $delivery->skipped($this->userId, 'USER_NOT_FOUND', $this->notificationType ?? $this->transactionType, $this->transactionId, $attempt);
             return;
         }
-        if (empty($user->fcm_token)) {
+
+        // AMIAL-NOTIF-INAPP-SYNC-001: ضمان إنشاء إشعار داخل التطبيق (amial_notifications)
+        // لكل حركة مالية تمرّ عبر TransactionTrait حتى لو لم يكن لدى المستخدم fcm_token بعد،
+        // وبلا تكرار إن سبق للخدمة الطالبة إنشاء الإشعار (مثل PaymentRequestService مع push:false).
+        $inApp = $this->ensureInAppNotification($user);
+
+        $fcmToken = trim((string) ($user->fcm_token ?? ''));
+        if ($fcmToken === '' || $fcmToken === '@') {
+            if ($fcmToken === '@') {
+                $user->forceFill(['fcm_token' => null])->save();
+            }
             $delivery->skipped($this->userId, 'FCM_TOKEN_MISSING', $this->notificationType ?? $this->transactionType, $this->transactionId, $attempt);
             return;
         }
 
         $messageBody = Helpers::order_status_update_message($this->transactionType);
-        if (!$messageBody) {
+        $description = null;
+        if ($messageBody) {
+            $displayAmount = \App\Services\MoneyService::display($this->amount);
+            $description = Helpers::set_symbol((float) $displayAmount) . ' ' . $messageBody;
+        } elseif ($inApp !== null) {
+            $description = $inApp->body;
+        }
+
+        if (!$description) {
             $delivery->skipped($this->userId, 'NOTIFICATION_MESSAGE_DISABLED', $this->notificationType ?? $this->transactionType, $this->transactionId, $attempt);
             return;
         }
 
-        $serviceKey = Helpers::get_business_settings('push_notification_service_file_content');
+        $serviceKey = \App\Services\NotificationService::resolveFcmServiceKey();
         if (empty($serviceKey)) {
             Log::warning('SendTransactionNotificationJob: missing FCM service key');
             $delivery->skipped($this->userId, 'FCM_SERVICE_KEY_MISSING', $this->notificationType ?? $this->transactionType, $this->transactionId, $attempt);
             return;
         }
-        $serviceKey = (array)$serviceKey;
 
         $accessToken = $tokenService->getAccessToken($serviceKey);
         if (!$accessToken) {
@@ -92,23 +109,22 @@ class SendTransactionNotificationJob implements ShouldQueue
 
         $projectId = $serviceKey['project_id'];
         $url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
-
-        // نضع الرقم بتنسيق العرض (2 منازل عشرية)
-        $displayAmount = \App\Services\MoneyService::display($this->amount);
-        $description = Helpers::set_symbol((float)$displayAmount) . ' ' . $messageBody;
+        $title = $inApp?->title ?: 'أميال باي';
 
         $payload = [
             'message' => [
-                'token' => $user->fcm_token,
+                'token' => $fcmToken,
                 'data' => [
-                    'title' => 'أميال باي',
+                    'title' => $title,
                     'body' => $description,
                     'image' => '',
                     'type' => $this->notificationType ?? $this->transactionType,
                     'transaction_id' => $this->transactionId ?? '',
+                    'notification_id' => $inApp ? (string) $inApp->id : '',
+                    'action_url' => $inApp?->action_url ?? '/receipts',
                 ],
                 'notification' => [
-                    'title' => 'أميال باي',
+                    'title' => $title,
                     'body' => $description,
                 ],
                 'android' => [
@@ -144,6 +160,20 @@ class SendTransactionNotificationJob implements ShouldQueue
             throw new \RuntimeException('FCM returned 401, token invalidated, retrying');
         }
 
+        if (\App\Services\NotificationService::isUnregisteredFcmResponse($response->status(), $response->body())) {
+            \App\Models\User::where('id', $user->id)
+                ->where('fcm_token', $fcmToken)
+                ->update(['fcm_token' => null]);
+            $delivery->skipped(
+                $this->userId,
+                'FCM_TOKEN_UNREGISTERED',
+                $this->notificationType ?? $this->transactionType,
+                $this->transactionId,
+                $attempt,
+            );
+            return;
+        }
+
         if (!$response->successful()) {
             Log::warning('FCM send failed', [
                 'status' => $response->status(),
@@ -172,6 +202,119 @@ class SendTransactionNotificationJob implements ShouldQueue
             $response->status(),
             $attempt,
         );
+    }
+
+    private function ensureInAppNotification(\App\Models\User $user): ?\App\Models\AmialNotification
+    {
+        try {
+            if (!\Illuminate\Support\Facades\Schema::hasTable('amial_notifications')) {
+                return null;
+            }
+
+            $recent = \App\Models\AmialNotification::where('user_id', $user->id)
+                ->orderByDesc('id')
+                ->limit(8)
+                ->get();
+
+            if ($this->transactionId !== null && $this->transactionId !== '') {
+                foreach ($recent as $item) {
+                    $data = is_array($item->data) ? $item->data : [];
+                    if (($data['transaction_id'] ?? null) === $this->transactionId) {
+                        return $item;
+                    }
+                }
+            }
+
+            [$type, $title, $fallbackBody] = $this->resolveInAppTemplate();
+            $customMsg = Helpers::order_status_update_message($this->transactionType);
+            $displayAmount = \App\Services\MoneyService::display($this->amount);
+            $body = $customMsg
+                ? (Helpers::set_symbol((float) $displayAmount) . ' ' . $customMsg)
+                : $fallbackBody;
+
+            // حماية إضافية من التكرار عند غياب transactionId (مثل PaymentRequestService مع push:false)
+            foreach ($recent as $item) {
+                if (
+                    $item->created_at !== null
+                    && $item->created_at->gt(now()->subSeconds(90))
+                    && ($item->type === $type || $item->type === ($this->notificationType ?? ''))
+                ) {
+                    return $item;
+                }
+            }
+
+            return app(\App\Services\NotificationService::class)->dispatch(
+                user: $user,
+                type: $type,
+                title: $title,
+                body: $body,
+                actionUrl: '/receipts',
+                data: array_filter([
+                    'transaction_id' => $this->transactionId,
+                    'transaction_type' => $this->transactionType,
+                    'amount' => (string) $this->amount,
+                ], fn ($v) => $v !== null && $v !== ''),
+                push: false, // هذا الـ Job نفسه يتكفّل بإرسال FCM مباشرةً دون إقحام Job ثانٍ
+            );
+        } catch (\Throwable $e) {
+            Log::warning('SendTransactionNotificationJob: in-app notification skipped', [
+                'user_id' => $user->id,
+                'error' => mb_substr($e->getMessage(), 0, 200),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * @return array{0: string, 1: string, 2: string}
+     */
+    private function resolveInAppTemplate(): array
+    {
+        $amt = \App\CentralLogics\Helpers::money((string) $this->amount);
+        $raw = strtolower($this->notificationType ?? $this->transactionType);
+
+        return match ($raw) {
+            'received_money', 'money_received' => [
+                'money_received',
+                'استلمت حوالة مالية',
+                "وصلك مبلغ {$amt} ر.ي إلى محفظتك.",
+            ],
+            'send_money', 'transfer_sent' => [
+                'transfer_sent',
+                'تم إرسال الحوالة',
+                "تم تحويل مبلغ {$amt} ر.ي من محفظتك بنجاح.",
+            ],
+            'cash_in', 'add_money' => [
+                'cash_in',
+                'تم إيداع رصيد في محفظتك',
+                "تمت إضافة مبلغ {$amt} ر.ي إلى رصيد محفظتك.",
+            ],
+            'cash_out', 'withdraw' => [
+                'cash_out',
+                'تم السحب النقدي',
+                "تم تنفيذ سحب نقدي بمبلغ {$amt} ر.ي من محفظتك.",
+            ],
+            'merchant_received', 'merchant_payment_received' => [
+                'merchant_payment_received',
+                'استلمت دفعة مبيعات',
+                "تم تحصيل مبلغ {$amt} ر.ي في حساب التاجر.",
+            ],
+            'merchant_payment' => [
+                'transfer_sent',
+                'تم الدفع للتاجر بنجاح',
+                "تم خصم مبلغ {$amt} ر.ي مقابل عملية شراء.",
+            ],
+            'credit_payment' => [
+                'credit_payment',
+                'تسديد مديونية',
+                "تم تسجيل سداد بمبلغ {$amt} ر.ي.",
+            ],
+            default => [
+                $this->notificationType ?: 'system',
+                'إشعار عملية مالية',
+                "تم تسجيل عملية مالية بمبلغ {$amt} ر.ي في حسابك.",
+            ],
+        };
     }
 
     /**

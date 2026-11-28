@@ -2,8 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/features/transaction_money/domain/amial_transfer_api.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/payment_feedback.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
@@ -65,6 +67,19 @@ class _AmialTransferHoldingScreenState
     });
   }
 
+  bool _announcedCompletion = false;
+
+  void _onCompletedUi() {
+    if (_announcedCompletion) return;
+    _announcedCompletion = true;
+    unawaited(PaymentFeedback.success(speech: 'notif_spoken_transfer_ok'.tr));
+    try {
+      if (Get.isRegistered<NotificationsCenterController>()) {
+        unawaited(Get.find<NotificationsCenterController>().refreshUnreadCount());
+      }
+    } catch (_) {}
+  }
+
   /// عند انتهاء النافذة: استعلم عن الحالة (قد يتأخر المجدول ثوانيَ قليلة).
   Future<void> _refreshStatus() async {
     for (var attempt = 0; attempt < 6; attempt++) {
@@ -74,6 +89,7 @@ class _AmialTransferHoldingScreenState
           final st = '${r.body['meta']?['status'] ?? ''}';
           if (st == 'completed') {
             if (mounted) setState(() => _phase = _Phase.completed);
+            _onCompletedUi();
             return;
           }
           if (st == 'cancelled') {
@@ -87,6 +103,7 @@ class _AmialTransferHoldingScreenState
     }
     // لم تتأكد الحالة بعد — نعتبره مكتملاً بصرياً (المجدول سيسلّمه)
     if (mounted) setState(() => _phase = _Phase.completed);
+    _onCompletedUi();
   }
 
   Future<void> _cancel() async {
