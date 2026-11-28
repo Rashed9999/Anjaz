@@ -56,8 +56,21 @@ class NotificationHelper {
         'bill_payment_failed',
       }.contains(type?.toString());
 
+  static const Set<String> _directAudibleTypes = {
+    'payment_request_received',
+    'payment_request_declined',
+    'payment_request_paid',
+    'money_received',
+    'transfer_completed',
+    'transfer_refunded',
+    'cash_in',
+    'cash_out',
+    'donation_completed',
+  };
+
   static bool isAudibleFinancialEvent(String? type) {
     if (type == null || type.isEmpty) return false;
+    if (_directAudibleTypes.contains(type)) return true;
     final t = type.toLowerCase();
     return t.contains('received') ||
         t.contains('transfer') ||
@@ -229,6 +242,14 @@ class NotificationHelper {
     }
 
     // 2) حسب نوع الإشعار الحديث في أميال
+    if (type == 'payment_request_received') {
+      Get.to(() => const IncomingRequestsScreen());
+      return;
+    }
+    if (type == 'payment_request_declined') {
+      Get.to(() => const OutgoingRequestsScreen());
+      return;
+    }
     if (type.startsWith('safe_payment')) {
       final ulid = (nestedData['payment_ulid'] ?? raw['payment_ulid'] ?? '').toString().trim();
       if (ulid.isNotEmpty) {
